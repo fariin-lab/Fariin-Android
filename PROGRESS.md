@@ -10,6 +10,8 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
   bottom right (with a small camera button for stories above it), top app bar with search/overflow
   menu, system back and predictive back, bottom sheets and snackbars, Android share sheet,
   Android-style dialogs and pickers, edge-to-edge. When iOS and Android conventions differ, Android wins.
+  EXCEPT ICONS (owner 2026-11-02): use Fariin's own icons from the iOS app (tab bar: stacked cards,
+  filled phone, filled bubble, Settings = my profile photo, labels shown), never stock Material icons.
 - No brand names of other messengers in code or commits ("the reference app").
 - Never type passwords or sign in on the emulator. ⛔ NOT review1/review2 either while Apple's review of
   iOS 1.0 is open (one phone per account: an Android sign-in would sign out the reviewer's phone and
