@@ -42,6 +42,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -116,7 +117,6 @@ private val BarMargin = 12.dp
  * Android 12+ when the phone is not LOW and Power Saving allows blur; else a solid translucent
  * surface with a hairline border, which costs nothing extra to draw.
  *
- * TODO: the Calls tab's missed-calls badge; tapping the open tab again to scroll to top.
  */
 @Composable
 fun MainShell(
@@ -132,6 +132,24 @@ fun MainShell(
     val glass = power.glass()
     var tab by rememberSaveable { mutableIntStateOf(TAB_CHATS) }
     val unread = unreadChatsBadge(chats.chats, me)
+    // The call history, read here so the Calls tab's missed badge counts from any tab (iOS
+    // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.
+    val callsRepo = remember { com.fariin.app.data.CallsRepository() }
+    var calls by remember { mutableStateOf<List<com.fariin.app.data.CallEntry>?>(null) }
+    if (me != DemoChats.ME) {
+        val callKey = chats.chats.joinToString(",") { it.id + ":" + it.updatedAtMillis }
+        LaunchedEffect(me, callKey) { if (!chats.loading) calls = callsRepo.load(me, chats.chats) }
+    }
+    var callsMark by remember { mutableStateOf(com.fariin.app.data.CallsSeen.load(context)) }
+    // On the Calls tab every loaded missed call is seen (iOS markCallsSeen).
+    LaunchedEffect(tab, calls) {
+        val list = calls
+        if (tab == TAB_CALLS && list != null) {
+            val m = com.fariin.app.data.CallsSeen.seen(list, me, callsMark)
+            if (m != callsMark) { callsMark = m; com.fariin.app.data.CallsSeen.save(context, m) }
+        }
+    }
+    val missed = calls?.let { com.fariin.app.data.CallsSeen.count(it, me, callsMark) } ?: 0
     val demo = me == DemoChats.ME   // debug demo mode: made-up data in every tab
 
     // The chat list's camera button opens the Stories tab straight into its photo picker.
@@ -163,7 +181,7 @@ fun MainShell(
                 when (tab) {
                     TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest)
                     // The calls list scrolls under the bar and lifts its New Call button by the inset.
-                    TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null)
+                    TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls)
                     TAB_CHATS -> ChatListScreen(chats, me, decryptor,
                         onSettings = { select(TAB_SETTINGS) },
                         onNewStory = { storyRequest++; select(TAB_STORIES) })
@@ -178,7 +196,7 @@ fun MainShell(
             flow.collectAsState(initial = null).value?.photoUrl
         }
         FloatingTabBar(
-            tab = tab, unread = unread, myPhoto = myPhoto, glass = glass, haze = haze, animate = power.animations, onSelect = select,
+            tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, animate = power.animations, onSelect = select,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 24.dp, vertical = BarMargin),
         )
     }
@@ -201,7 +219,7 @@ private val Tabs = listOf(
 
 @Composable
 private fun FloatingTabBar(
-    tab: Int, unread: Int, myPhoto: String?, glass: Boolean, haze: HazeState, animate: Boolean,
+    tab: Int, unread: Int, missed: Int, myPhoto: String?, glass: Boolean, haze: HazeState, animate: Boolean,
     onSelect: (Int) -> Unit, modifier: Modifier = Modifier,
 ) {
     val c = Fariin.colors
@@ -229,7 +247,7 @@ private fun FloatingTabBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Tabs.forEach { t ->
-            TabItem(t, selected = tab == t.id, badge = if (t.id == TAB_CHATS) unread else 0, photo = myPhoto, animate = animate,
+            TabItem(t, selected = tab == t.id, badge = when (t.id) { TAB_CHATS -> unread; TAB_CALLS -> missed; else -> 0 }, photo = myPhoto, animate = animate,
                 onClick = { onSelect(t.id) }, modifier = Modifier.weight(1f))
         }
     }
@@ -251,7 +269,7 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
     LaunchedEffect(selected) {
         if (selected && animate) { pop.snapTo(0.86f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
     }
-    val desc = if (badge > 0) "${t.label}, $badge unread" else t.label
+    val desc = if (badge > 0) "${t.label}, $badge ${if (t.id == TAB_CALLS) "missed" else "unread"}" else t.label
     Box(
         modifier.fillMaxHeight()
             .semantics { contentDescription = desc; this.selected = selected }

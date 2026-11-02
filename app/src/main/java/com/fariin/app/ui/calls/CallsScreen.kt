@@ -77,7 +77,9 @@ import java.util.Locale
  * TODO: Edit to delete calls, the live row of a call in progress, ad-hoc group calls.
  */
 @Composable
-fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?) {
+fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?, shared: List<CallEntry>? = null) {
+    // The shell already reads the history for the missed badge: shown as is, not read twice.
+    if (demoCalls == null && shared != null) { CallsScreen(me, shared, true); return }
     val repo = remember { CallsRepository() }
     var calls by remember { mutableStateOf(demoCalls ?: emptyList()) }
     var loaded by remember { mutableStateOf(demoCalls != null) }
