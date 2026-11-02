@@ -23,6 +23,7 @@ import com.fariin.app.data.FirestorePeople
 import com.fariin.app.data.MyProfile
 import com.fariin.app.data.MyProfileRepository
 import com.fariin.app.data.SavedAccounts
+import com.fariin.app.data.TwoStepGate
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import com.google.firebase.storage.FirebaseStorage
@@ -32,6 +33,8 @@ import kotlinx.coroutines.tasks.await
  * The signed-in half of Kulan-iOS RootView.route(), before the app proper starts:
  *  1. an email-only account that never proved its address: "Confirm your email" (once);
  *  2. after "Forgot password?" logged in with a code: "Create a new password" (or Not now);
+ *  2b. a two-step account whose sign-in has not entered the additional password: its page;
+ *  2c. an account scheduled for deletion: the restore page;
  *  3. no name or no username yet (a new account): "Create your profile";
  *  4. ready: [content], and this account's card on the Log In page is refreshed
  *     (LastAccount.remember) with its one-tap key (DeviceSessionKeys.ensureIssued).
@@ -42,15 +45,30 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
     val ctx = LocalContext.current
     val newPasswordFor by AuthHandoff.newPasswordFor.collectAsState()
     var phase by remember(me) { mutableStateOf<Phase>(Phase.Loading) }
+    var recheckTwoStep by remember(me) { mutableStateOf(false) }
+    LaunchedEffect(me, recheckTwoStep, phase == Phase.Ready) {
+        if (recheckTwoStep && phase == Phase.Ready && TwoStepGate.needsPassword(20_000) == true) { recheckTwoStep = false; phase = Phase.TwoStep }
+    }
 
     LaunchedEffect(me, phase) {
         if (phase != Phase.Loading) return@LaunchedEffect
         // The email check runs on a Cloud Function, which the local test backend does not have:
         // there it could never finish, so fake accounts skip it. Real builds always ask.
         if (!isLocalBackend(ctx)) auth.unprovenEmailCached?.let { phase = Phase.ProveEmail(it); return@LaunchedEffect }
+        // iOS decision D1: a sign-in on a two-step account that has not entered the additional
+        // password stops here (the rules refuse its token everything). A short local token read;
+        // null = the token did not come in time, asked again below once the app is open.
+        val twoStep = TwoStepGate.needsPassword()
+        if (twoStep == true) { phase = Phase.TwoStep; return@LaunchedEffect }
+        if (twoStep == null) recheckTwoStep = true
         val doc = try { FirebaseFirestore.getInstance().collection("users").document(me).get(Source.SERVER).await() }
         catch (_: Exception) { try { FirebaseFirestore.getInstance().collection("users").document(me).get(Source.CACHE).await() } catch (_: Exception) { null } }
         val p = doc?.data?.let { MyProfile.fromFirestore(me, it) } ?: MyProfile(me)
+        // Scheduled for deletion: the restore page, never the app. No phone-clock test (iOS audit):
+        // the profile still existing is the server's word that the purge has not run.
+        (doc?.get("deletionScheduledFor") as? com.google.firebase.Timestamp)?.let {
+            phase = Phase.Restore(p.handle, it.toDate().time); return@LaunchedEffect
+        }
         phase = if (p.name.isNotBlank() && p.handle.isNotEmpty()) Phase.Ready else Phase.Onboarding(p.handle)
     }
 
@@ -66,6 +84,11 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
             CodePage(auth, CodePurpose.Unproven, (phase as Phase.ProveEmail).address, onBack = null, onAuthed = { phase = Phase.Loading })
             // iOS: the way out of a page that replaces the app is Log Out (the gate stays the gate).
             TextLink("Log Out", color = com.fariin.app.ui.theme.Fariin.colors.accent) { auth.signOut() }
+        }
+        phase == Phase.TwoStep -> Box(box) { TwoStepSignInPage(onPassed = { phase = Phase.Loading }) }
+        phase is Phase.Restore -> Box(box) {
+            val r = phase as Phase.Restore
+            RestoreAccountPage(r.handle, r.dueMs, onRestored = { phase = Phase.Loading })
         }
         phase is Phase.Onboarding -> {
             val crypto = remember { CryptoHub.get(ctx) }
@@ -84,6 +107,8 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
 private sealed interface Phase {
     data object Loading : Phase
     data object Ready : Phase
+    data object TwoStep : Phase
+    data class Restore(val handle: String, val dueMs: Long) : Phase
     data class ProveEmail(val address: String) : Phase
     data class Onboarding(val handle: String) : Phase
 }

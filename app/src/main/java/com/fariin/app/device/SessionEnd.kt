@@ -35,6 +35,14 @@ object SessionEnd {
         wipe(c)
     }
 
+    /** "Delete it now" finished on the server (iOS RestoreAccountView): nothing to remove first. */
+    suspend fun deletedNow(c: Context) {
+        DeviceRegistry.stopWatching()
+        Push.clearAccount(c)
+        FirebaseAuth.getInstance().signOut()
+        wipe(c)
+    }
+
     private fun wipe(c: Context) {
         NotifStore.clearAccount(c)
         NotificationPoster.clearAll(c)

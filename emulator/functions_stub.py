@@ -372,11 +372,259 @@ HANDLERS = {"discoverChannels": discover, "publicGroupPreview": preview, "makeCh
             "makeChannelAdmin": make_admin, "dismissChannelAdmin": dismiss_admin}
 
 
+# ---------------------------------------------------------------------------------------------
+# ACCOUNT TEST STUBS (Android account worker, 2026-11-02). Copies of what Kulan/functions-account
+# answers for two-step verification and the email change, and functions-loginalert purgeAccountNow
+# refusing, so the Android Settings > Account pages and the two-step sign-in door can be driven
+# locally. NOT the real server: the hash is a salted sha256, codes are printed to this process's
+# output instead of mailed, and refresh tokens are NOT revoked (the emulator session stays).
+# The claim shape and the per-sign-in authTimes test are the real ones (setTwoStepClaim,
+# twoStepSessionPassed), because the emulator's firestore.rules read them.
+import hashlib, os, random, threading, time
+
+_REQ = threading.local()
+AUTH = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-fariin"
+GENERIC_CODE = "That code is not right, or it has expired. Ask for a new one."
+GENERIC_PASSWORD = "That password is not right."
+
+
+class Refuse(Refusal):
+    def __init__(self, status, message, details=None):
+        super().__init__(status, message)
+        self.details = details
+
+
+def _token():
+    auth = (_REQ.headers or {}).get("Authorization", "")
+    try:
+        part = auth[7:].split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+    except Exception:
+        return {}
+
+
+def _require_fresh():
+    t = _token().get("auth_time", 0)
+    if not t:
+        raise Refuse("FAILED_PRECONDITION", "Sign in again to continue.")
+    if time.time() - t > 5 * 60:
+        raise Refuse("FAILED_PRECONDITION", "For your security, sign in again to continue.", {"reauth": True})
+
+
+def _auth_post(op, body):
+    req = urllib.request.Request(f"{AUTH}/{op}", data=json.dumps(body).encode(), method="POST", headers=ADMIN)
+    with urllib.request.urlopen(req) as r:
+        return json.loads(r.read() or b"{}")
+
+
+def _user(uid):
+    return (_auth_post("accounts:lookup", {"localId": [uid]}).get("users") or [{}])[0]
+
+
+def _claims(uid):
+    raw = _user(uid).get("customAttributes") or "{}"
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def _set_claims(uid, claims):
+    _auth_post("accounts:update", {"localId": uid, "customAttributes": json.dumps(claims)})
+
+
+def _set_two_step_claim(uid, state, auth_time=0):
+    claims = _claims(uid)
+    if state == "off":
+        claims.pop("twoStep", None)
+    else:
+        old = claims.get("twoStep") or {}
+        base = [] if state == "reset" else list(old.get("authTimes") or [])
+        claims["twoStep"] = {"required": True, "ok": True, "at": int(time.time() * 1000),
+                             "authTimes": sorted(set(base + [int(auth_time)]))[-40:]}
+    _set_claims(uid, claims)
+
+
+def _passed(tok):
+    c = tok.get("twoStep") or None
+    if not c or c.get("required") is not True:
+        return True
+    if c.get("ok") is not True:
+        return False
+    t = tok.get("auth_time", 0)
+    if isinstance(c.get("authTimes"), list):
+        return t in c["authTimes"] or (bool(c.get("legacyAt")) and t * 1000 <= c["legacyAt"])
+    return bool(c.get("at")) and t * 1000 <= c["at"]
+
+
+def _custom_token(uid):
+    """An unsigned custom token: the Auth emulator accepts these (the real server signs one)."""
+    enc = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").decode()
+    now = int(time.time())
+    return enc({"alg": "none", "typ": "JWT"}) + "." + enc({
+        "iss": "stub@demo-fariin.iam.gserviceaccount.com", "sub": "stub@demo-fariin.iam.gserviceaccount.com",
+        "aud": "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit",
+        "iat": now, "exp": now + 3600, "uid": uid}) + "."
+
+
+def _hash(pw, salt):
+    return hashlib.sha256((salt + pw).encode()).hexdigest()
+
+
+def _mask(e):
+    name, _, domain = str(e).partition("@")
+    return f"{name[:1]}{'*' * max(1, min(6, len(name) - 1))}@{domain}" if name and domain else ""
+
+
+def _looks_like_email(e):
+    return "@" in e and "." in e.split("@")[-1] and " " not in e
+
+
+def _mint(uid, purpose, target):
+    code = f"{random.randint(0, 999999):06d}"
+    patch(f"accountCodes/{uid}_{purpose}", {"code": code, "target": target, "exp": int(time.time()) + 600})
+    print(f"CODE {purpose} {uid} -> {target}: {code}", flush=True)
+    return code
+
+
+def _redeem(uid, purpose, code):
+    rec = get(f"accountCodes/{uid}_{purpose}") or {}
+    if not rec or str(rec.get("code")) != str(code or "") or int(rec.get("exp", 0)) < time.time():
+        raise Refuse("PERMISSION_DENIED", GENERIC_CODE)
+    urllib.request.urlopen(urllib.request.Request(f"{FS}/accountCodes/{uid}_{purpose}", method="DELETE", headers=ADMIN)).read()
+    return rec.get("target", "")
+
+
+def two_step_status(uid, data):
+    d = get(f"twoStep/{uid}")
+    if not d:
+        return {"enabled": False, "passed": True}
+    return {"enabled": True, "hint": d.get("hint", ""), "recoveryEmail": _mask(d["recoveryEmail"]) if d.get("recoveryEmail") else "",
+            "hasRecovery": bool(d.get("recoveryEmail")), "passed": _passed(_token())}
+
+
+def set_additional_password(uid, data):
+    _require_fresh()
+    data = data or {}
+    pw = data.get("password")
+    if not isinstance(pw, str) or not 6 <= len(pw) <= 128:
+        raise Refuse("INVALID_ARGUMENT", "Use between 6 and 128 characters.")
+    hint = str(data.get("hint") or "").strip()[:120]
+    if hint and hint.lower() == pw.lower():
+        raise Refuse("INVALID_ARGUMENT", "Your hint cannot be your password.")
+    rec = str(data.get("recoveryEmail") or "").strip().lower()
+    if rec and not _looks_like_email(rec):
+        raise Refuse("INVALID_ARGUMENT", "That does not look like an email address.")
+    old = get(f"twoStep/{uid}")
+    if old and _hash(str(data.get("current") or ""), old.get("salt", "")) != old.get("hash"):
+        raise Refuse("PERMISSION_DENIED", GENERIC_PASSWORD)
+    salt = os.urandom(16).hex()
+    patch(f"twoStep/{uid}", {"hash": _hash(pw, salt), "salt": salt, "hint": hint,
+                             "recoveryEmail": rec or ((old or {}).get("recoveryEmail") or "")})
+    _set_two_step_claim(uid, "reset", _token().get("auth_time", 0))
+    return {"ok": True, "refreshToken": True}
+
+
+def verify_additional_password(uid, data):
+    d = get(f"twoStep/{uid}")
+    if not d:
+        return {"ok": True, "refreshToken": False}
+    if _hash(str((data or {}).get("password") or ""), d.get("salt", "")) != d.get("hash"):
+        raise Refuse("PERMISSION_DENIED", GENERIC_PASSWORD)
+    _set_two_step_claim(uid, "passed", _token().get("auth_time", 0))
+    return {"ok": True, "refreshToken": True}
+
+
+def renew_two_step_session(uid, data):
+    if _passed(_token()):
+        return {"ok": True, "refreshToken": False}
+    raw = str((data or {}).get("idToken") or "")
+    try:
+        part = raw.split(".")[1]
+        prev = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+    except Exception:
+        raise Refuse("PERMISSION_DENIED", GENERIC_PASSWORD)
+    if (prev.get("user_id") or prev.get("sub")) != uid or not _passed(prev) or prev.get("exp", 0) < time.time():
+        raise Refuse("PERMISSION_DENIED", GENERIC_PASSWORD)
+    _set_two_step_claim(uid, "passed", _token().get("auth_time", 0))
+    return {"ok": True, "refreshToken": True}
+
+
+def _delete_two_step(uid):
+    urllib.request.urlopen(urllib.request.Request(f"{FS}/twoStep/{uid}", method="DELETE", headers=ADMIN)).read()
+    _set_two_step_claim(uid, "off")
+
+
+def disable_additional_password(uid, data):
+    _require_fresh()
+    d = get(f"twoStep/{uid}")
+    if not d:
+        return {"ok": True}
+    if _hash(str((data or {}).get("password") or ""), d.get("salt", "")) != d.get("hash"):
+        raise Refuse("PERMISSION_DENIED", GENERIC_PASSWORD)
+    _delete_two_step(uid)
+    return {"ok": True, "refreshToken": True, "customToken": _custom_token(uid)}
+
+
+def start_two_step_recovery(uid, data):
+    d = get(f"twoStep/{uid}")
+    if not d:
+        raise Refuse("FAILED_PRECONDITION", "Two-step verification is not on.")
+    address = (d.get("recoveryEmail") or _user(uid).get("email") or "").lower()
+    if not _looks_like_email(address):
+        raise Refuse("FAILED_PRECONDITION", "This account has no recovery email, so the additional password cannot be reset.")
+    _mint(uid, "twoStepRecovery", address)
+    return {"sent": True, "maskedEmail": _mask(address)}
+
+
+def confirm_two_step_recovery(uid, data):
+    _redeem(uid, "twoStepRecovery", (data or {}).get("code"))
+    _delete_two_step(uid)
+    return {"ok": True, "refreshToken": True, "customToken": _custom_token(uid)}
+
+
+def start_email_change(uid, data):
+    _require_fresh()
+    target = str((data or {}).get("newEmail") or "").strip().lower()
+    if not _looks_like_email(target):
+        raise Refuse("INVALID_ARGUMENT", "That does not look like an email address.")
+    if (_user(uid).get("email") or "").lower() == target:
+        raise Refuse("FAILED_PRECONDITION", "That is already your email address.")
+    taken = bool(_auth_post("accounts:lookup", {"email": [target]}).get("users"))
+    if not taken:
+        _mint(uid, "emailChange", target)
+    return {"sent": True}
+
+
+def confirm_email_change(uid, data):
+    _require_fresh()
+    target = _redeem(uid, "emailChange", (data or {}).get("code"))
+    _auth_post("accounts:update", {"localId": uid, "email": target, "emailVerified": True})
+    return {"email": target, "refreshToken": True, "customToken": _custom_token(uid)}
+
+
+def purge_account_now(uid, data):
+    """Refuses only: a local run never purges a test account."""
+    prof = get(f"users/{uid}") or {}
+    if not prof.get("deletionScheduledFor"):
+        raise Refuse("FAILED_PRECONDITION", "This account is not waiting to be deleted.")
+    raise Refuse("FAILED_PRECONDITION", "Not emulated locally: the test account is kept.")
+
+
+ACCOUNT_STUBS = {"twoStepStatus": two_step_status, "setAdditionalPassword": set_additional_password,
+                 "verifyAdditionalPassword": verify_additional_password, "renewTwoStepSession": renew_two_step_session,
+                 "disableAdditionalPassword": disable_additional_password, "startTwoStepRecovery": start_two_step_recovery,
+                 "confirmTwoStepRecovery": confirm_two_step_recovery, "startEmailChange": start_email_change,
+                 "confirmEmailChange": confirm_email_change, "purgeAccountNow": purge_account_now}
+HANDLERS.update(ACCOUNT_STUBS)
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         name = self.path.rstrip("/").split("/")[-1]
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         uid = caller(self.headers)
+        _REQ.headers = self.headers   # account test stubs read auth_time and the claims from it
         try:
             if name not in HANDLERS:
                 raise Refusal("NOT_FOUND", "Not emulated locally.")
@@ -386,6 +634,8 @@ class Handler(BaseHTTPRequestHandler):
         except Refusal as r:
             code, out = {"NOT_FOUND": 404, "PERMISSION_DENIED": 403, "FAILED_PRECONDITION": 400, "UNAUTHENTICATED": 401, "ALREADY_EXISTS": 409, "INVALID_ARGUMENT": 400}.get(r.status, 400), \
                 {"error": {"status": r.status, "message": r.message}}
+            if getattr(r, "details", None):
+                out["error"]["details"] = r.details
         raw = json.dumps(out).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")

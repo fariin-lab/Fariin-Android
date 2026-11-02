@@ -218,7 +218,10 @@ class AuthRepository(
         val user = auth.currentUser ?: throw AuthFlowError(AuthFlowError.Kind.NotSignedIn)
         val address = user.providerData.firstOrNull { it.providerId == "password" }?.email ?: passwordAddress
             ?: throw AuthFlowError(AuthFlowError.Kind.NotSignedIn)
+        val before = TwoStepGate.tokenBefore()
         user.reauthenticate(EmailAuthProvider.getCredential(address, password)).await()
+        // A new auth_time; keep a two-step session through the door (iOS TwoStepGate.renewAfterReauth).
+        TwoStepGate.renewAfterReauth(before)
     }
 
     /** startPasswordReset (signed in): mails a code, answers the masked address. */

@@ -72,7 +72,7 @@ import com.fariin.app.ui.theme.Fariin
  * Real pages: Account (Security notifications, Your Account Data, Delete Account, Log out), Devices,
  * Notifications, Appearance > Night Mode / Quick Reaction, Chats, Stories, Privacy & Security
  * (PrivacyPages.kt), Storage and Data (MorePages.kt), Help & About and Safety. Pages outside
- * Settings' scope (Search, Share profile, Invite Friends, Email address, Username, wallpaper,
+ * Settings' scope (Search, Share profile, Invite Friends, wallpaper,
  * chat colour, app icon) still open a "Coming soon on Android" page.
  *
  * TODO: Subscriptions (iOS shows it to @v only), the admin sections, Settings search, my QR.
@@ -112,6 +112,8 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             page.startsWith(PAGE_RESET) == true -> com.fariin.app.ui.auth.ResetCodePage(remember { AuthRepository() }, page.removePrefix(PAGE_RESET), pop,
                 onDone = { stack = stack.dropLast(2) }, demo = demoProfile != null)
             page == PAGE_DELETE -> DeleteAccountPage(profile, pop, onSignOut)
+            page == PAGE_USERNAME -> UsernamePage(me, profile, pop)
+            accountSecurityRoute(page, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             privacyRoute(page, push, pop) -> Unit
             moreRoute(page, push, pop) -> Unit
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
@@ -218,6 +220,7 @@ private fun AccountPage(
     val exportScope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    val hasTwoStep = !demo && rememberHasTwoStep()
     // iOS shows Password only when the account has an address a person can type.
     val hasEmail = demo || runCatching {
         !com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.isNullOrEmpty()
@@ -238,7 +241,7 @@ private fun AccountPage(
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection(header = "Sign-in") {
-                SettingsRow("Email address", last = !hasEmail) { push(soon("Email address")) }
+                SettingsRow("Email address", last = !hasEmail) { push(PAGE_EMAIL) }
                 if (hasEmail) SettingsRow("Password", last = true) { push(PAGE_PASSWORD) }
             }
             SettingsSection(
@@ -249,8 +252,11 @@ private fun AccountPage(
                 SettingsRow(
                     "Username",
                     value = when { profile == null -> ""; handle.isNullOrEmpty() -> "Not set"; else -> "@$handle" },
-                ) { push(soon("Username")) }
+                ) { push(PAGE_USERNAME) }
                 SettingsRow("Passkeys") { push(PAGE_PASSKEYS) }
+                // iOS: hidden while the feature is off (Flags.twoStepEnabled), except for an account
+                // that already has it on, so it can be turned off again.
+                if (hasTwoStep) SettingsRow("Two-step verification") { push(PAGE_TWOSTEP) }
                 SettingsRow("Security notifications", last = true) { push(PAGE_SEC_NOTIFS) }
             }
             SettingsSection(
@@ -413,3 +419,12 @@ internal fun ComingSoonPage(title: String, pop: () -> Unit) {
     }
 }
 
+/** Settings > Account > Username: the people module's username page (claimUsername). */
+@Composable
+private fun UsernamePage(me: String, profile: MyProfile?, pop: () -> Unit) {
+    val ctx = LocalContext.current
+    val api = remember(me) { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(ctx)) }
+    Box(Modifier.fillMaxSize().padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+        com.fariin.app.ui.people.UsernameScreen(api, profile?.handle.orEmpty(), onBack = pop)
+    }
+}
