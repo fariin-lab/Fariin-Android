@@ -6,8 +6,9 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 
 ## Rules
 - No brand names of other messengers in code or commits ("the reference app").
-- Never type passwords or sign in on the emulator (he signs in tomorrow with review1/review2, never kream:
-  one phone per account would sign out his iPhone).
+- Never type passwords or sign in on the emulator. ⛔ NOT review1/review2 either while Apple's review of
+  iOS 1.0 is open (one phone per account: an Android sign-in would sign out the reviewer's phone and
+  publish a new key). NOT kream (signs out his iPhone). Use a NEW test account made for Android.
 - Commit small, with the Co-Authored-By + Claude-Session lines. Local git in this folder.
 - Encryption MUST match iOS byte for byte (Kulan-iOS/Kulan/Services/Crypto.swift), or iPhone and
   Android users cannot read each other.
