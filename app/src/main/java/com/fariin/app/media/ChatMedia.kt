@@ -1,0 +1,105 @@
+package com.fariin.app.media
+
+import android.content.Context
+import com.fariin.app.crypto.EncMeta
+import com.fariin.app.crypto.FariinCrypto
+import com.fariin.app.crypto.Wire
+import com.google.firebase.storage.FirebaseStorage
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+
+/**
+ * The files of one chat: download, open (EncMeta), and keep the plain copy in this app's private
+ * cache (iOS DiskImageCache / AudioCache keep the plain copy too), so a bubble scrolled back into
+ * view does not download again.
+ *
+ * - `asset://demo/x.jpg` is a file bundled with debug builds, for the demo chat. No network.
+ * - An absolute path is a file this phone made (an optimistic bubble of mine).
+ * - Anything else is a Storage download URL. A missing `enc` is only accepted in a group (a plain
+ *   group's file); in a 1:1 it is refused, as iOS refuses a plain 1:1 file.
+ */
+class ChatMedia(
+    private val context: Context,
+    private val cid: String,
+    private val crypto: FariinCrypto?,
+) {
+    private val dir: File get() = File(context.cacheDir, "chat-media").also { it.mkdirs() }
+    private val inflight = ConcurrentHashMap<String, Deferred<File?>>()
+
+    /** Where my own outgoing files wait (cleared with the cache, as iOS's temp folder is). */
+    fun localDir(): File = File(context.cacheDir, "outgoing").also { it.mkdirs() }
+
+    fun cached(url: String): File? = if (isLocal(url)) null else key(url).takeIf { it.exists() && it.length() > 0 }
+
+    /** Seed the cache with what I just sent, under its URL (iOS stores the plain image the same way). */
+    fun store(url: String, plain: ByteArray) {
+        runCatching { atomicWrite(key(url), plain) }
+    }
+
+    suspend fun bytes(url: String, enc: EncMeta?): ByteArray? = file(url, enc)?.let { f ->
+        withContext(Dispatchers.IO) { runCatching { f.readBytes() }.getOrNull() }
+    }
+
+    /** A readable file with the plain bytes, or null when it cannot be had or opened. */
+    suspend fun file(url: String, enc: EncMeta?): File? = withContext(Dispatchers.IO) {
+        when {
+            url.startsWith(ASSET) -> assetFile(url)
+            url.startsWith("/") -> File(url).takeIf { it.exists() }
+            else -> {
+                cached(url)?.let { return@withContext it }
+                coroutineScope {
+                    val job = inflight.getOrPut(url) { async { download(url, enc) } }
+                    try { job.await() } finally { inflight.remove(url, job) }
+                }
+            }
+        }
+    }
+
+    private suspend fun download(url: String, enc: EncMeta?): File? {
+        val cipher = try {
+            FirebaseStorage.getInstance().getReferenceFromUrl(url).getBytes(MediaRules.MAX_DOWNLOAD).await()
+        } catch (_: Exception) { return null }
+        val plain = open(cipher, enc) ?: return null
+        val f = key(url)
+        atomicWrite(f, plain)
+        return f
+    }
+
+    private suspend fun open(cipher: ByteArray, enc: EncMeta?): ByteArray? {
+        if (enc == null) return if (Wire.isGroupCid(cid)) cipher else null
+        val c = crypto ?: return null
+        return c.decryptBytes(cid, cipher, enc)
+    }
+
+    private fun assetFile(url: String): File? {
+        val path = url.removePrefix(ASSET)
+        val f = File(dir, "asset-" + path.replace('/', '_'))
+        if (f.exists()) return f
+        return runCatching {
+            context.assets.open(path).use { atomicWrite(f, it.readBytes()) }
+            f
+        }.getOrNull()
+    }
+
+    private fun key(url: String): File = File(dir, sha(url))
+
+    private fun atomicWrite(f: File, b: ByteArray) {
+        val tmp = File(f.parentFile, f.name + ".tmp" + System.nanoTime())
+        tmp.writeBytes(b)
+        if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+    }
+
+    companion object {
+        const val ASSET = "asset://"
+        fun isLocal(url: String) = url.startsWith(ASSET) || url.startsWith("/")
+        fun sha(s: String): String = MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+    }
+}

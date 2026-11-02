@@ -1,6 +1,18 @@
 package com.fariin.app.data
 
+import android.content.Context
+import android.net.Uri
+import com.fariin.app.crypto.EncMeta
 import com.fariin.app.crypto.FariinCrypto
+import com.fariin.app.media.ChatMedia
+import com.fariin.app.media.MediaMessages
+import com.fariin.app.media.MediaRules
+import com.fariin.app.media.PhotoPrep
+import com.fariin.app.media.VoiceRecorder
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import java.io.File
+import kotlinx.coroutines.delay
 import com.fariin.app.crypto.Wire
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
@@ -29,7 +41,7 @@ import kotlinx.coroutines.tasks.await
  * the same rules.
  *
  * TODO (iOS has these): the disk cache for an instant open, the send queue that survives a kill,
- * delete, edit, reactions, typing, presence, pins, disappearing timers, media, link previews,
+ * delete, edit, reactions, typing, presence, pins, disappearing timers, video/file/album send, link previews,
  * mentions, blocking, the knock counter for a first message to a stranger.
  */
 class ThreadRepository(
@@ -38,6 +50,8 @@ class ThreadRepository(
     private val crypto: FariinCrypto,
     private val scope: CoroutineScope,
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    /** The chat's files (download, open, cache); null where media is not wired (tests). */
+    val media: ChatMedia? = null,
 ) {
     data class State(
         val messages: List<Message> = emptyList(),
@@ -59,6 +73,11 @@ class ThreadRepository(
     private val olderDocs = LinkedHashMap<String, DocumentSnapshot>()
     /** Sends this phone has started, by clientId, until the server echo carries the same clientId. */
     private val pending = ConcurrentHashMap<String, Message>()
+    /** My own media files by clientId: drawn and played locally until the server copy has its URL. */
+    private val localFiles = ConcurrentHashMap<String, String>()
+    /** What a failed media send needs to go again, by clientId. */
+    private val retryPhoto = ConcurrentHashMap<String, PhotoPrep>()
+    private val retryVoice = ConcurrentHashMap<String, VoiceRecorder.Result>()
     private var msgReg: ListenerRegistration? = null
     private var convReg: ListenerRegistration? = null
 
@@ -138,7 +157,10 @@ class ThreadRepository(
     private fun rebuild(loaded: Boolean? = null) {
         val all = LinkedHashMap<String, Message>()
         for (d in olderDocs.values + liveDocs.values) {
-            val m = parse(d)
+            var m = parse(d)
+            // My note or photo whose file is still going up: the copy on this phone draws it.
+            val local = m.clientId?.let { localFiles[it] }
+            if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
             all[m.rowId] = m
         }
         // A pending copy shows until its echo arrives (same clientId).
@@ -196,8 +218,139 @@ class ThreadRepository(
     fun retry(m: Message) {
         val id = m.clientId ?: return
         pending.remove(id)
+        retryPhoto.remove(id)?.let { sendPreparedPhoto(it); return }
+        retryVoice.remove(id)?.let { sendVoice(it); return }
+        if (m.mediaKind != null) { rebuild(); return }
         sendText(m.text)
     }
+
+    // ------------------------------------------------------------------ media (ChatService.sendImage / sendAudio)
+
+    /** A photo from the system picker: made ready like iOS (sendJPEG), then sent. */
+    fun sendPhoto(context: Context, uri: Uri) {
+        scope.launch(Dispatchers.IO) {
+            val prep = PhotoPrep.fromUri(context, uri) ?: return@launch
+            sendPreparedPhoto(prep)
+        }
+    }
+
+    private fun sendPreparedPhoto(prep: PhotoPrep) {
+        val m = media ?: return
+        val tap = System.currentTimeMillis().toDouble()
+        val clientId = UUID.randomUUID().toString().uppercase()
+        val local = File(m.localDir(), "send-$clientId.jpg")
+        runCatching { local.writeBytes(prep.jpeg) }
+        localFiles[clientId] = local.absolutePath
+        pending[clientId] = Message(
+            id = clientId, authorId = me, text = "", type = "image", createdAtMillis = tap, hasServerTime = false,
+            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+            width = prep.width.toDouble(), height = prep.height.toDouble(), thumb = prep.thumbB64,
+            localPath = local.absolutePath,
+        )
+        rebuild()
+        scope.launch(Dispatchers.IO) {
+            try {
+                photoNow(prep, clientId, tap)
+            } catch (e: Exception) {
+                retryPhoto[clientId] = prep
+                pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
+                rebuild()
+            }
+        }
+    }
+
+    private suspend fun photoNow(prep: PhotoPrep, clientId: String, clientTs: Double) {
+        val members = if (Wire.isGroupCid(cid)) freshMembers() else null
+        val other = Wire.otherUid(cid, me)
+        val (cipher, meta) = sealBytes(prep.jpeg, members)
+        if (members == null) seedDirect(other)
+        val msgRef = convRef.collection("messages").document()
+        // The message is written only once the bytes are up (iOS, owner 2026-10-10).
+        val url = upload(cipher, MediaRules.imagePath(cid, msgRef.id))
+        media?.store(url, prep.jpeg)
+        val blur = prep.blurhash?.let { runCatching { seal(it, members) }.getOrNull() }
+        val thumb = prep.thumbB64?.let { runCatching { seal(it, members) }.getOrNull() }
+        val batch = db.batch()
+        batch.set(msgRef, MediaMessages.image(me, url, meta, "", clientTs, clientId, prep.width, prep.height,
+            blur, thumb, FieldValue.serverTimestamp()))
+        batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.PHOTO_PREVIEW, members ?: listOf(other),
+            FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = url, lastImageEnc = meta))
+        batch.commit().await()
+    }
+
+    /** A recorded note: the message goes out first (with `uploading`), the file follows (iOS). */
+    fun sendVoice(r: VoiceRecorder.Result) {
+        val tap = System.currentTimeMillis().toDouble()
+        val clientId = UUID.randomUUID().toString().uppercase()
+        localFiles[clientId] = r.file.absolutePath
+        pending[clientId] = Message(
+            id = clientId, authorId = me, text = "", type = "audio", createdAtMillis = tap, hasServerTime = false,
+            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+            duration = r.duration, waveform = r.waveform, localPath = r.file.absolutePath,
+        )
+        rebuild()
+        scope.launch(Dispatchers.IO) {
+            try {
+                voiceNow(r, clientId, tap)
+            } catch (e: Exception) {
+                retryVoice[clientId] = r
+                pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
+                rebuild()
+            }
+        }
+    }
+
+    private suspend fun voiceNow(r: VoiceRecorder.Result, clientId: String, clientTs: Double) {
+        val data = r.file.readBytes()
+        val members = if (Wire.isGroupCid(cid)) freshMembers() else null
+        val other = Wire.otherUid(cid, me)
+        val (cipher, meta) = sealBytes(data, members)
+        if (members == null) seedDirect(other)
+        // One fixed address (iOS textMessageRef): a retried note is never a second note.
+        val msgRef = convRef.collection("messages").document(clientId)
+        val batch = db.batch()
+        batch.set(msgRef, MediaMessages.audio(me, meta, r.duration, r.waveform, clientTs, clientId, FieldValue.serverTimestamp()))
+        batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.voicePreview(r.duration), members ?: listOf(other),
+            FieldValue.serverTimestamp(), FieldValue.increment(1)))
+        batch.commit().await()
+        val path = MediaRules.audioPath(cid, msgRef.id)
+        var url: String? = null
+        var attempt = 0
+        while (url == null) {
+            try { url = upload(cipher, path) } catch (e: Exception) {
+                if (++attempt >= 6) throw e
+                delay(minOf(60_000L, 2_000L shl attempt))
+            }
+        }
+        media?.store(url, data)
+        msgRef.update(MediaMessages.attachAudio(url, FieldValue.delete())).await()
+    }
+
+    private suspend fun sealBytes(data: ByteArray, members: List<String>?): Pair<ByteArray, EncMeta> =
+        if (members != null) crypto.sealBytesForGroup(data, members, cid) else crypto.encryptBytes(cid, data)
+
+    private suspend fun seal(text: String, members: List<String>?): String =
+        if (members != null) crypto.sealForGroup(text, members, cid) else crypto.encryptForConversation(cid, text)
+
+    /** iOS sendImage / sendAudio always make sure the 1:1 doc has both of us and a time. */
+    private suspend fun seedDirect(other: String) {
+        convRef.set(mapOf("users" to listOf(me, other), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
+    }
+
+    /** End-to-end encrypted bytes go up as application/octet-stream (storage.rules `chat/`). */
+    private suspend fun upload(cipher: ByteArray, path: String): String {
+        require(cipher.size < MediaRules.STORAGE_CHAT_LIMIT) { "file too large" }
+        val ref = FirebaseStorage.getInstance().reference.child(path)
+        ref.putBytes(cipher, StorageMetadata.Builder().setContentType("application/octet-stream").build()).await()
+        return ref.downloadUrl.await().toString()
+    }
+
+    /** iOS freshGroupMembers: the member list from the SERVER; the cached one when offline. */
+    private suspend fun freshMembers(): List<String> = try {
+        val snap = convRef.get(Source.SERVER).await()
+        if (snap.getBoolean("e2ee") == false) CryptoHub.notePlainGroup(cid)
+        (snap.get("users") as? List<*>)?.filterIsInstance<String>()
+    } catch (_: Exception) { null } ?: memberUids()
 
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double) {
         val other = Wire.otherUid(cid, me)
@@ -230,13 +383,8 @@ class ThreadRepository(
     }
 
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double) {
-        // iOS freshGroupMembers: the member list from the SERVER, so a member removed elsewhere is
-        // not wrapped for; the cached list when offline.
-        val members = try {
-            val snap = convRef.get(Source.SERVER).await()
-            if (snap.getBoolean("e2ee") == false) CryptoHub.notePlainGroup(cid)
-            (snap.get("users") as? List<*>)?.filterIsInstance<String>()
-        } catch (_: Exception) { null } ?: memberUids()
+        // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
+        val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
         val batch = db.batch()
         batch.set(convRef.collection("messages").document(clientId), mapOf(

@@ -1,5 +1,6 @@
 package com.fariin.app.data
 
+import com.fariin.app.crypto.EncMeta
 import com.fariin.app.crypto.Wire
 
 /**
@@ -7,8 +8,12 @@ import com.fariin.app.crypto.Wire
  * reads it. Text fields arrive already opened by the caller's [open] (the crypto port), so this
  * type stays plain and testable.
  *
- * TODO (iOS has these): media bodies (photo, video, voice, file, album, gif, sticker) beyond a
- * label, link previews, polls, contact and location cards, reactions, view-once, story replies
+ * Media (photo, video, voice) carries its iOS fields: `enc` (the file's EncMeta), `width` and
+ * `height` in pixels, the sealed `blurhash` and `thumb` (opened here like the caption), the
+ * video's poster (`thumbUrl` + `thumbEnc`), `duration`, `waveform`, `uploading`, and an album's
+ * `album` items.
+ *
+ * TODO (iOS has these): file, gif and sticker bodies beyond a label, link previews, polls, contact and location cards, reactions, view-once, story replies
  * and mentions, forwarded-from-channel, disappearing timers, delete-for-me.
  */
 data class Message(
@@ -34,12 +39,49 @@ data class Message(
     val audioUrl: String? = null,
     val fileUrl: String? = null,
     val fileName: String? = null,
+    /** The file's envelope (`enc`): sealed for a 1:1 or group, `v: 0` in a plain group. */
+    val enc: EncMeta? = null,
+    /** Pixel size of the photo or video (iOS writes Doubles). */
+    val width: Double? = null,
+    val height: Double? = null,
+    /** Opened BlurHash string, or null when absent or unreadable. */
+    val blurhash: String? = null,
+    /** Opened base64 of the ~40 px inline JPEG, or null. */
+    val thumb: String? = null,
+    /** A video's poster frame and its envelope. */
+    val thumbUrl: String? = null,
+    val thumbEnc: EncMeta? = null,
+    /** Seconds, for voice and video. */
+    val duration: Double? = null,
+    /** Voice bars, 0...100 each. */
+    val waveform: List<Int> = emptyList(),
+    /** The message is out but its file is still on the way (voice, video). */
+    val uploading: Boolean = false,
+    val viewOnce: Boolean = false,
+    val album: List<AlbumItem> = emptyList(),
+    /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
+    val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
     val sendState: SendState? = null,
 ) {
     enum class SendState { SENDING, FAILED }
 
     data class ReplyRef(val id: String, val authorId: String, val text: String)
+
+    data class AlbumItem(val imageUrl: String, val enc: EncMeta?, val width: Double?, val height: Double?)
+
+    enum class MediaKind { PHOTO, VIDEO, VOICE, ALBUM }
+
+    /** Which media bubble draws this message, or null for a text-style bubble. */
+    val mediaKind: MediaKind?
+        get() = when {
+            deleted -> null
+            type == "album" && album.isNotEmpty() -> MediaKind.ALBUM
+            type == "image" || (type == null && imageUrl != null) -> MediaKind.PHOTO
+            type == "video" -> MediaKind.VIDEO
+            type == "audio" -> MediaKind.VOICE
+            else -> null
+        }
 
     /** An optimistic copy and its server echo share the clientId, so the row updates in place. */
     val rowId: String get() = clientId ?: id
@@ -90,6 +132,19 @@ data class Message(
                     text = (r["text"] as? String)?.let { if (it.isEmpty()) "" else open(it, author) } ?: "",
                 )
             }
+            // Sealed like the caption; a sentinel (key not warm, tampered) is no placeholder at all.
+            fun openOptional(key: String): String? {
+                val v = data[key] as? String ?: return null
+                if (v.isEmpty()) return null
+                val clear = open(v, author)
+                return clear.takeUnless { it.isEmpty() || it == Wire.NOT_READY || it == Wire.LOCKED }
+            }
+            val album = (data["album"] as? List<*>)?.mapNotNull { item ->
+                val m = item as? Map<*, *> ?: return@mapNotNull null
+                val url = m["imageUrl"] as? String ?: return@mapNotNull null
+                AlbumItem(url, EncMeta.fromMap(m["enc"] as? Map<*, *>),
+                    (m["width"] as? Number)?.toDouble(), (m["height"] as? Number)?.toDouble())
+            } ?: emptyList()
             return Message(
                 id = id,
                 authorId = author,
@@ -110,6 +165,18 @@ data class Message(
                 audioUrl = data["audioUrl"] as? String,
                 fileUrl = data["fileUrl"] as? String,
                 fileName = data["fileName"] as? String,
+                enc = EncMeta.fromMap(data["enc"] as? Map<*, *>),
+                width = (data["width"] as? Number)?.toDouble(),
+                height = (data["height"] as? Number)?.toDouble(),
+                blurhash = openOptional("blurhash"),
+                thumb = openOptional("thumb"),
+                thumbUrl = data["thumbUrl"] as? String,
+                thumbEnc = EncMeta.fromMap(data["thumbEnc"] as? Map<*, *>),
+                duration = (data["duration"] as? Number)?.toDouble(),
+                waveform = (data["waveform"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList(),
+                uploading = data["uploading"] as? Boolean ?: false,
+                viewOnce = data["viewOnce"] as? Boolean ?: false,
+                album = album,
             )
         }
     }

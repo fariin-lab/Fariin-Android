@@ -1,6 +1,10 @@
 package com.fariin.app.ui.thread
 
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
+import com.fariin.app.media.ChatMedia
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,15 +24,16 @@ import com.fariin.app.data.ThreadRepository
 /** Opens a chat from anywhere under the signed-in shell (the chat list's rows use it). */
 val LocalOpenChat = staticCompositionLocalOf<(Conversation) -> Unit> { {} }
 
-class ThreadViewModel(cid: String, me: String, crypto: FariinCrypto) : ViewModel() {
-    val repo = ThreadRepository(cid, me, crypto, viewModelScope).also { it.start() }
+class ThreadViewModel(cid: String, me: String, crypto: FariinCrypto, context: Context) : ViewModel() {
+    val repo = ThreadRepository(cid, me, crypto, viewModelScope, media = ChatMedia(context, cid, crypto)).also { it.start() }
     override fun onCleared() { repo.stop() }
 }
 
 /** The live chat for [cid]: listener, receipts, send, and mark read like iOS. */
 @Composable
 fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Unit) {
-    val vm: ThreadViewModel = viewModel(key = "thread-$cid") { ThreadViewModel(cid, me, crypto) }
+    val app = LocalContext.current.applicationContext
+    val vm: ThreadViewModel = viewModel(key = "thread-$cid") { ThreadViewModel(cid, me, crypto, app) }
     val s by vm.repo.state.collectAsState()
     val keys by CryptoHub.keysEpoch.collectAsState()
     val listed = remember(s.conv, keys) { CryptoHub.listedConversation(cid) }
@@ -48,6 +53,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         loaded = s.loaded,
         loadingOlder = s.loadingOlder,
         sendBlocked = vm.repo.sendBlockedReason(listed ?: conv),
+        cid = cid,
     )
     // iOS: on open, once the first page is in, my badge goes to 0 and the read receipt goes out;
     // while the chat stays open and in front, every new message from them does the same.
@@ -62,6 +68,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             }
         }
     }
-    ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlder, onRetry = vm.repo::retry)
+    CompositionLocalProvider(LocalChatMedia provides vm.repo.media) {
+        ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlder, onRetry = vm.repo::retry,
+            onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice)
+    }
 }
 

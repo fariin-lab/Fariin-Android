@@ -63,6 +63,9 @@ dependencies {
     implementation(libs.coil.compose)
     // Group photos can be plain https links; profile photos go through FariinPhotoFetcher.
     implementation(libs.coil.network.okhttp)
+    // Voice notes, videos and the full-screen video player (Media3, the Android media stack).
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.lazysodium.java)

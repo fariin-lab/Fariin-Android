@@ -26,8 +26,26 @@ object DemoThread {
             receipts = if (conv.isGroup) Receipts(otherLastReadMillis = nowMs - 2 * DAY)
             else Receipts(otherLastReadMillis = nowMs - 30 * MIN, otherDeliveredMillis = nowMs - 10 * MIN),
             names = conv.names,
+            cid = cid,
         )
     }
+
+    // Bundled with debug builds only (app/src/debug/assets/demo), opened by ChatMedia: no network.
+    private const val A = "asset://demo/"
+    private val WAVE = listOf(8, 14, 30, 52, 61, 44, 25, 12, 30, 58, 72, 66, 40, 18, 9, 22, 47, 63, 55, 31,
+        14, 8, 26, 49, 70, 64, 38, 20, 11, 28, 51, 60, 42, 24, 12, 7, 18, 35, 22, 10)
+
+    private fun photo(id: String, author: String, at: Double, file: String, w: Double, h: Double, caption: String = "") =
+        Message(id = id, authorId = author, text = caption, type = "image", createdAtMillis = at, clientTs = at,
+            imageUrl = A + file, width = w, height = h, blurhash = "LKO2?U%2Tw=w]~RBVZRi};RPxuwH")
+
+    private fun voice(id: String, author: String, at: Double, file: String, seconds: Double) =
+        Message(id = id, authorId = author, text = "", type = "audio", createdAtMillis = at, clientTs = at,
+            audioUrl = A + file, duration = seconds, waveform = WAVE)
+
+    private fun video(id: String, author: String, at: Double) =
+        Message(id = id, authorId = author, text = "", type = "video", createdAtMillis = at, clientTs = at,
+            videoUrl = A + "video.mp4", thumbUrl = A + "video_poster.jpg", width = 640.0, height = 426.0, duration = 3.0)
 
     private fun m(id: String, author: String, text: String, at: Double, reply: Message.ReplyRef? = null,
                   state: Message.SendState? = null, edited: Boolean = false) =
@@ -46,6 +64,11 @@ object DemoThread {
         m("t3", ME, "Sure", now - 60 * MIN, reply = Message.ReplyRef("t2", other, "Can you also bring the history book?")),
         m("t4", ME, "Anything else?", now - 59 * MIN),
         m("t5", other, "See you at 6, I will bring the books", now - 20 * MIN),
+        photo("p1", other, now - 19 * MIN, "photo_landscape.jpg", 1280.0, 853.0, "The view from the library"),
+        voice("v1", other, now - 18 * MIN, "voice.caf", 7.0),
+        photo("p2", ME, now - 12 * MIN, "photo_portrait.jpg", 720.0, 1280.0),
+        voice("v2", ME, now - 11 * MIN, "voice2.m4a", 4.0),
+        video("vd1", other, now - 8 * MIN),
         m("t6", ME, "Great, see you then", now - 5 * MIN),
         m("t7", ME, "On my way", now - 1 * MIN, state = Message.SendState.SENDING),
     )

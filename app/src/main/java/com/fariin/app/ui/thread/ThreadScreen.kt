@@ -1,6 +1,27 @@
 package com.fariin.app.ui.thread
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.text.format.DateFormat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontFamily
+import androidx.core.content.ContextCompat
+import com.fariin.app.media.MediaRules
+import com.fariin.app.media.VoicePlayer
+import com.fariin.app.media.VoiceRecorder
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.AlignmentLine
@@ -85,6 +107,8 @@ data class ThreadUi(
     val loadingOlder: Boolean = false,
     /** Shown instead of the composer when sending is not possible here. */
     val sendBlocked: String? = null,
+    /** The chat id (voice speed is per chat, as on iOS). */
+    val cid: String = "",
 )
 
 /**
@@ -95,7 +119,10 @@ data class ThreadUi(
  *
  * TODO (iOS has these): reply by swipe, long-press menu, reactions, the jump-to-bottom arrow
  * with its unread count, the unread divider, typing and presence in the header, wallpapers, chat
- * colours, media bubbles, voice recording, attachments, the floating "Today" pill.
+ * colours, albums beyond a 2 x 2 grid, files, video send, the floating "Today" pill.
+ *
+ * Media: photo, video and voice bubbles (MediaBubbles.kt), the full-screen viewer, the attach
+ * button (the system photo picker, no storage permission) and hold-to-record on the mic.
  */
 @Composable
 fun ThreadScreen(
@@ -104,8 +131,14 @@ fun ThreadScreen(
     onSend: (String) -> Unit,
     onLoadOlder: () -> Unit = {},
     onRetry: (Message) -> Unit = {},
+    onSendPhoto: (Uri) -> Unit = {},
+    onSendVoice: (VoiceRecorder.Result) -> Unit = {},
 ) {
     val c = Fariin.colors
+    var viewing by remember { mutableStateOf<Viewing?>(null) }
+    viewing?.let { v -> MediaViewer(v) { viewing = null } }
+    // Leaving the chat stops its note (iOS stops playback when the thread goes away).
+    DisposableEffect(ui.cid) { onDispose { VoicePlayer.stop() } }
     val context = LocalContext.current
     val is24h = remember { DateFormat.is24HourFormat(context) }
     val now = remember(ui.messages) { System.currentTimeMillis().toDouble() }
@@ -147,7 +180,7 @@ fun ThreadScreen(
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
                         when {
                             m.isSystem || m.isCall -> NoticePill(noticeText(m))
-                            else -> MessageRow(ui, m, g, is24h, onRetry)
+                            else -> MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                         }
                     }
                 }
@@ -163,7 +196,7 @@ fun ThreadScreen(
             Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
                 modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
         } else {
-            Composer(onSend)
+            Composer(onSend, onSendPhoto, onSendVoice)
         }
     }
 }
@@ -226,7 +259,8 @@ private val senderPalette = listOf(
 private fun senderColor(uid: String): Color = senderPalette[uid.sumOf { it.code } % senderPalette.size]
 
 @Composable
-private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is24h: Boolean, onRetry: (Message) -> Unit) {
+private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is24h: Boolean, onRetry: (Message) -> Unit,
+                       onView: (Viewing) -> Unit) {
     val c = Fariin.colors
     val isMe = m.authorId == ui.me
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
@@ -255,9 +289,14 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 contentAlignment = Alignment.Center,
             ) { Text("!", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
+        val kind = m.mediaKind
+        if (kind != null && kind != Message.MediaKind.VOICE) {
+            MediaRow(ui, m, g, is24h, shape, maxW, tick, isMe, showSender, kind, onView)
+            return@Row
+        }
         Column(
             Modifier.widthIn(max = maxW).clip(shape).background(if (isMe) myFill() else receivedFill())
-                .padding(horizontal = 14.dp, vertical = 7.dp),
+                .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp),
         ) {
             if (showSender && g.first) {
                 Text(ui.names[m.authorId] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
@@ -269,6 +308,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                     color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
             }
             m.replyTo?.takeIf { !m.deleted }?.let { ReplyQuote(it, ui, isMe) }
+            if (kind == Message.MediaKind.VOICE) {
+                VoiceBody(m, ui.cid, isMe, maxW * 0.89f - 26.dp) { Meta(m, tick, isMe, is24h) }
+                return@Column
+            }
             val ink = if (isMe) Color.White else c.label
             val body = when {
                 m.deleted -> if (isMe && m.deletedBy == null) "You deleted this message" else "This message was deleted"
@@ -280,6 +323,91 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 meta = { Meta(m, tick, isMe, is24h) },
             )
         }
+    }
+}
+
+/**
+ * A photo, video or album: the picture fills the bubble; the sender's name, "Forwarded" and the
+ * reply quote sit above it, the caption under it with the time; with no caption the time floats
+ * on the picture in a dark capsule (iOS).
+ */
+@Composable
+private fun MediaRow(
+    ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is24h: Boolean, shape: androidx.compose.ui.graphics.Shape,
+    maxW: Dp, tick: Tick, isMe: Boolean, showSender: Boolean, kind: Message.MediaKind,
+    onView: (Viewing) -> Unit,
+) {
+    val c = Fariin.colors
+    val caption = m.text.takeIf { it.isNotEmpty() }
+    val header = (showSender && g.first) || m.forwarded || m.replyTo != null
+    val ink = if (isMe) Color.White else c.label
+    // A rough caption width, only so a short picture does not squeeze a caption (iOS minW).
+    val captionW = caption?.let { it.length.coerceAtMost(40) * 8.5f } ?: 0f
+    val busy = m.sendState == Message.SendState.SENDING
+    Column(Modifier.widthIn(max = maxW).clip(shape).background(if (isMe) myFill() else receivedFill())) {
+        if (header) {
+            Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
+                if (showSender && g.first) {
+                    Text(ui.names[m.authorId] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        color = senderColor(m.authorId), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (m.forwarded) Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
+                m.replyTo?.let { ReplyQuote(it, ui, isMe) }
+            }
+        }
+        val capsule: @Composable () -> Unit = {
+            if (caption == null) Box(Modifier.fillMaxSize().padding(6.dp), contentAlignment = Alignment.BottomEnd) {
+                MetaCapsule { Meta(m, tick, isMe, is24h, onMedia = true) }
+            }
+        }
+        when (kind) {
+            Message.MediaKind.PHOTO -> {
+                val url = m.localPath ?: m.imageUrl
+                PictureBox(m, url, m.enc, maxW, RectangleShape, captionW, busy, onOpen = {
+                    url?.let { onView(Viewing.Photo(it, if (m.localPath != null) null else m.enc)) }
+                }, overlay = capsule)
+            }
+            Message.MediaKind.VIDEO -> {
+                val ready = m.videoUrl != null
+                PictureBox(m, m.thumbUrl, m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
+                    m.videoUrl?.let { onView(Viewing.Video(it, m.enc)) }
+                }, overlay = { VideoOverlay(m, ready); capsule() })
+            }
+            else -> AlbumGrid(m, maxW, onView, capsule)
+        }
+        if (caption != null) {
+            Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                TextWithMeta(caption, TextStyle(fontSize = 17.sp, color = ink, lineHeight = 22.sp)) { Meta(m, tick, isMe, is24h) }
+            }
+        }
+    }
+}
+
+/** Up to four album pictures in a 2 x 2 grid (iOS lays out more shapes; TODO). */
+@Composable
+private fun AlbumGrid(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsule: @Composable () -> Unit) {
+    val side = minOf(maxW.value, 350f).dp
+    Box(Modifier.width(side)) {
+        Column {
+            m.album.take(4).chunked(2).forEach { row ->
+                Row {
+                    row.forEach { item ->
+                        val file = rememberPlainFile(item.imageUrl, item.enc)
+                        val bmp = rememberBitmap(file, 400)
+                        Box(
+                            Modifier.width(if (row.size == 1) side else side / 2).aspectRatio(1f).padding(1.dp)
+                                .background(Fariin.colors.secondary.copy(alpha = 0.18f))
+                                .clickable(enabled = bmp != null) { onView(Viewing.Photo(item.imageUrl, item.enc)) },
+                        ) {
+                            if (bmp != null) androidx.compose.foundation.Image(bmp, null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                }
+            }
+        }
+        Box(Modifier.matchParentSize()) { capsule() }
     }
 }
 
@@ -303,8 +431,8 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
 
 /** Time, "edited", and for my own bubble the tick: faded for sent and delivered, solid for read. */
 @Composable
-private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean) {
-    val metaColor = if (isMe) Color.White.copy(alpha = 0.7f) else Fariin.colors.secondary
+private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia: Boolean = false) {
+    val metaColor = if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
     Row(verticalAlignment = Alignment.CenterVertically) {
         val time = ThreadLogic.timeLabel(m.clientTs?.takeIf { isMe && !m.hasServerTime } ?: m.createdAtMillis, is24h)
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
@@ -375,30 +503,67 @@ private fun TextWithMeta(text: String, style: TextStyle, meta: @Composable () ->
     }
 }
 
+/**
+ * The composer, in the iOS order: attach on the left, the field, and on the right the send arrow
+ * when there are words, else the mic. Hold the mic to record, slide left to cancel, let go to
+ * send (iOS hold-to-record). The microphone permission is asked on the first hold.
+ */
 @Composable
-private fun Composer(onSend: (String) -> Unit) {
+private fun Composer(onSend: (String) -> Unit, onSendPhoto: (Uri) -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit) {
     val c = Fariin.colors
+    val context = LocalContext.current
     var draft by rememberSaveable { mutableStateOf("") }
+    val recorder = remember { VoiceRecorder(context.applicationContext) }
+    DisposableEffect(Unit) { onDispose { recorder.cancel() } }
+    var recording by remember { mutableStateOf(false) }
+    var slide by remember { mutableStateOf(0f) }
+    val elapsed by recorder.elapsed.collectAsState()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onSendPhoto(uri)
+    }
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val cancelAt = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
+
     Column(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding()) {
         HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.Bottom) {
-            Box(
-                Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp))
-                    .border(0.5.dp, c.separator, RoundedCornerShape(18.dp))
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                if (draft.isEmpty()) Text("Message", fontSize = 17.sp, color = c.secondary)
-                BasicTextField(
-                    value = draft, onValueChange = { draft = it },
-                    textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                    cursorBrush = SolidColor(c.blue),
-                    maxLines = 6,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 7.dp), verticalAlignment = Alignment.Bottom) {
+            if (recording) {
+                Row(Modifier.weight(1f).height(36.dp).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(c.red))
+                    Spacer(Modifier.width(8.dp))
+                    Text(MediaRules.durationLabel(kotlin.math.floor(elapsed)), style = TextStyle(fontSize = 17.sp, color = c.label,
+                        fontFeatureSettings = "tnum"))
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    Text("Slide to cancel", fontSize = 15.sp, color = c.secondary,
+                        modifier = Modifier.graphicsLayer { translationX = slide.coerceAtMost(0f) / 2 })
+                    Spacer(Modifier.width(12.dp))
+                }
+            } else {
+                IconButton(onClick = {
+                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Filled.AttachFile, contentDescription = "Attach", tint = c.secondary, modifier = Modifier.size(24.dp))
+                }
+                Spacer(Modifier.width(4.dp))
+                Box(
+                    Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp))
+                        .border(0.5.dp, c.separator, RoundedCornerShape(18.dp))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (draft.isEmpty()) Text("Message", fontSize = 17.sp, color = c.secondary)
+                    BasicTextField(
+                        value = draft, onValueChange = { draft = it },
+                        textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                        cursorBrush = SolidColor(c.blue),
+                        maxLines = 6,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
-            if (draft.isNotBlank()) {
-                Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(8.dp))
+            if (draft.isNotBlank() && !recording) {
                 Box(
                     Modifier.size(36.dp).clip(CircleShape).background(c.blue).clickable {
                         val t = draft
@@ -408,6 +573,39 @@ private fun Composer(onSend: (String) -> Unit) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+            } else {
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape).background(if (recording) c.blue else Color.Transparent)
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown()
+                                val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                                    PackageManager.PERMISSION_GRANTED
+                                if (!granted) {
+                                    askMic.launch(Manifest.permission.RECORD_AUDIO)
+                                    return@awaitEachGesture
+                                }
+                                VoicePlayer.stop()
+                                if (!recorder.start()) return@awaitEachGesture
+                                recording = true; slide = 0f
+                                var cancelled = false
+                                while (true) {
+                                    val e = awaitPointerEvent()
+                                    val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                                    slide = ch.position.x - down.position.x
+                                    ch.consume()
+                                    if (slide < -cancelAt) { cancelled = true; break }
+                                    if (!ch.pressed) break
+                                }
+                                recording = false; slide = 0f
+                                if (cancelled) recorder.cancel() else recorder.finish()?.let(onSendVoice)
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Mic, contentDescription = "Hold to record a voice message",
+                        tint = if (recording) Color.White else c.secondary, modifier = Modifier.size(24.dp))
                 }
             }
         }
