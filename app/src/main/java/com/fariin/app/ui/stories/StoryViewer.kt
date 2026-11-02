@@ -518,7 +518,8 @@ private fun StoryMedia(
         }
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                // From res/layout/story_player.xml: the TextureView surface can only be chosen there.
+                (android.view.LayoutInflater.from(ctx).inflate(com.fariin.app.R.layout.story_player, null) as PlayerView).apply {
                     useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)

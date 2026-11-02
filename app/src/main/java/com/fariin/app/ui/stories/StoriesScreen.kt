@@ -79,9 +79,10 @@ import kotlinx.coroutines.delay
  * to blue ring while unseen, grey once seen. Read only.
  *
  * A row opens the viewer (StoryViewer.kt) on that ring and walks on through the ones below it;
- * the camera button and Add Story pick a photo or video for the composer (StoryComposer.kt).
+ * the camera button and Add Story open the story camera (StoryCamera.kt), whose gallery button picks
+ * a photo or video; either way the composer (StoryComposer.kt) follows.
  *
- * TODO: Posted Stories, the more menu, Hidden Stories, the per-story ring segments, the camera.
+ * TODO: Posted Stories, the more menu, Hidden Stories, the per-story ring segments.
  */
 @Composable
 fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0) {
@@ -128,12 +129,19 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 .onFailure { pickError = it.message ?: "Couldn't open this file." }
         }
     }
-    val addStory: () -> Unit = {
+    // The story camera (StoryCamera.kt); its gallery button opens the picker, as iOS onLibrary.
+    var camera by rememberSaveable { mutableStateOf(false) }
+    val openLibrary: () -> Unit = {
         if (live) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
     }
-    // The chat list's camera button: open the picker once per press (not again on recomposition).
-    var handledRequest by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(addRequest) { if (addRequest > handledRequest) { handledRequest = addRequest; addStory() } }
+    val addStory: () -> Unit = { if (live) camera = true }
+    // The chat list's camera button: open the camera once per press (not again on recomposition).
+    // The count lives outside the tab: the tab's own saved state is dropped when another tab is
+    // open, and coming back to Stories must not open the camera again. A smaller count = a new shell.
+    LaunchedEffect(addRequest) {
+        if (addRequest < AddRequests.handled) AddRequests.handled = addRequest
+        if (addRequest > AddRequests.handled) { AddRequests.handled = addRequest; addStory() }
+    }
     LaunchedEffect(pickError) { if (pickError != null) { delay(3000); pickError = null } }
     // "Xm ago" moves once a minute.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -218,7 +226,21 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         if (live) StoryViewerDialog(me, groups, start, conversations, onClose = { viewing = null })
         else viewing = null
     }
-    composing?.let { m -> StoryComposerDialog(me, m, conversations, onClose = { composing = null }) }
+    if (camera) {
+        // A capture goes through the same prepare and composer as a picked item.
+        StoryCameraDialog(
+            active = composing == null, error = pickError,
+            onCaptured = { uri ->
+                scope.launch {
+                    prepareStoryMedia(context, uri)
+                        .onSuccess { composing = it; pickError = null }
+                        .onFailure { pickError = it.message ?: "Couldn't open this file." }
+                }
+            },
+            onLibrary = openLibrary, onClose = { camera = false },
+        )
+    }
+    composing?.let { m -> StoryComposerDialog(me, m, conversations, onClose = { composing = null }, onPosted = { composing = null; camera = false }) }
 }
 
 @Composable
@@ -337,3 +359,6 @@ private fun StoryRow(
 
 private fun demoColor(url: String): Color =
     runCatching { Color(android.graphics.Color.parseColor(url.removePrefix("demo:"))) }.getOrDefault(Color.Gray)
+
+/** The last New Story press (chat list button, launcher shortcut) the Stories tab acted on. */
+private object AddRequests { var handled = 0 }

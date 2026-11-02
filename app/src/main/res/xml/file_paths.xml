@@ -4,4 +4,6 @@
     <cache-path name="open" path="open/" />
     <!-- Items shared INTO Fariin, copied before sending (system/ShareActivity). -->
     <cache-path name="shared" path="shared-in/" />
+    <!-- Story camera photos and clips, read back through the same path as a picked item (ui/stories/StoryCamera). -->
+    <cache-path name="camera" path="story-camera/" />
 </paths>

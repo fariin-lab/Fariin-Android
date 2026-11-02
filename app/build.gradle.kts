@@ -136,6 +136,11 @@ dependencies {
     // Chat video send: 540p H.264 like iOS VideoTranscoder (media worker).
     implementation("androidx.media3:media3-transformer:1.8.0")
     implementation("androidx.media3:media3-effect:1.8.0")
+    // Story camera (ui/stories/StoryCamera.kt): CameraX preview, photo and video capture.
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-video:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
     // Calls: LiveKit for group rooms, and its bundled WebRTC build (package livekit.org.webrtc) for
     // 1:1 calls too, so the app carries one WebRTC engine, not two.
     implementation(libs.livekit.android)

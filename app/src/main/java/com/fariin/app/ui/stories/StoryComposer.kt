@@ -109,14 +109,16 @@ fun StoryComposerDialog(
     media: StoryMedia.Prepared,
     conversations: List<Conversation>,
     onClose: () -> Unit,
+    /** After Post Story; the camera closes with it (iOS closeAfterPost). Close alone goes back to the camera. */
+    onPosted: () -> Unit = onClose,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        StoryComposer(me, media, conversations, onClose)
+        StoryComposer(me, media, conversations, onClose, onPosted)
     }
 }
 
 @Composable
-private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit) {
+private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit, onPosted: () -> Unit) {
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
     var hoursMenu by remember { mutableStateOf(false) }
@@ -177,7 +179,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         if (audience) {
             AudiencePage(me, conversations, onBack = { audience = false }) { choice, picked ->
                 StoryUploads.start(me, media, caption, choice, picked, hours, conversations)
-                onClose()
+                onPosted()
             }
         }
     }
