@@ -97,7 +97,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.sp
+import com.fariin.app.R
 import com.fariin.app.data.ChatList
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.CryptoHub
@@ -186,9 +188,22 @@ fun ChatListScreen(
 
     val barState = rememberTopAppBarState()
     val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior(barState)
+    // The floating buttons step aside while the list scrolls down and come back on the way up.
+    var fabShown by remember { mutableStateOf(true) }
+    val fabScroll = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset,
+                                     source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y < -6f) fabShown = false else if (available.y > 6f) fabShown = true
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+    val anim = com.fariin.app.ui.components.animationsOn()
+    val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
+        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection).nestedScroll(fabScroll),
         containerColor = c.bg,
         // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
         contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
@@ -282,13 +297,14 @@ fun ChatListScreen(
             }
         },
         floatingActionButton = {
-            AnimatedVisibility(!selecting && !searching && !showArchive, enter = scaleIn(), exit = scaleOut()) {
+            AnimatedVisibility(fabShown && !selecting && !searching && !showArchive,
+                enter = com.fariin.app.ui.components.Motion.fabIn(), exit = com.fariin.app.ui.components.Motion.fabOut()) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     SmallFloatingActionButton(
                         onClick = onNewStory,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         contentColor = c.label,
-                    ) { Icon(Icons.Outlined.PhotoCamera, contentDescription = "New Story") }
+                    ) { Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story") }
                     FloatingActionButton(
                         onClick = people.newChat,
                         containerColor = c.blue,
@@ -300,12 +316,11 @@ fun ChatListScreen(
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding())) {
             if (!showArchive && !searching && filter == FILTER_ALL && state.requests.isNotEmpty()) {
-                ListRow("Message Requests", Icons.Outlined.Inbox, trailing = "${state.requests.size}", onClick = people.requests)
+                ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", onClick = people.requests)
             }
             when {
-                state.loading && source.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                }
+                // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
+                state.loading && source.isEmpty() -> com.fariin.app.ui.components.ChatListSkeleton()
                 state.error != null && source.isEmpty() -> Centered(state.error)
                 shown.isEmpty() -> Centered(when {
                     query.isNotBlank() -> "No results"
@@ -318,7 +333,7 @@ fun ChatListScreen(
                 else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                     if (!showArchive && !searching && filter == FILTER_ALL && state.archived.isNotEmpty()) {
                         item(key = "archive") {
-                            ListRow("Archived", Icons.Outlined.Archive, trailing = "${state.archived.size}") { showArchive = true }
+                            ListRow("Archived", fi(R.drawable.ic_archive), trailing = "${state.archived.size}") { showArchive = true }
                         }
                     }
                     val row: @Composable (Conversation) -> Unit = { conv ->
@@ -329,10 +344,15 @@ fun ChatListScreen(
                     }
                     if (pinned.isNotEmpty()) {
                         item(key = "h-pinned") { SectionHeader("Pinned") }
-                        items(pinned, key = { it.id }, contentType = { "chat" }) { row(it) }
+                        items(pinned, key = { it.id }, contentType = { "chat" }) {
+                            Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                        }
                         item(key = "h-chats") { SectionHeader("Chats") }
                     }
-                    items(rest, key = { it.id }, contentType = { "chat" }) { row(it) }
+                    // A chat that gets a new message glides to its new place instead of jumping.
+                    items(rest, key = { it.id }, contentType = { "chat" }) {
+                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                    }
                 }
             }
         }
@@ -380,17 +400,17 @@ private fun SelectionBar(
                 Icon(if (allPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, contentDescription = if (allPinned) "Unpin" else "Pin")
             }
             IconButton(onClick = onMute) {
-                Icon(if (allMuted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff, contentDescription = if (allMuted) "Unmute" else "Mute")
+                Icon(if (allMuted) fi(R.drawable.ic_menu_unmute) else fi(R.drawable.ic_menu_mute), contentDescription = if (allMuted) "Unmute" else "Mute")
             }
             IconButton(onClick = onArchive) {
-                Icon(if (archive) Icons.Outlined.Unarchive else Icons.Outlined.Archive, contentDescription = if (archive) "Unarchive" else "Archive")
+                Icon(if (archive) Icons.Outlined.Unarchive else fi(R.drawable.ic_archive), contentDescription = if (archive) "Unarchive" else "Archive")
             }
             IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = "Delete") }
             Box {
                 IconButton(onClick = { more = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                 DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                     DropdownMenuItem(text = { Text(if (allUnread) "Mark as Read" else "Mark as Unread") },
-                        leadingIcon = { Icon(if (allUnread) Icons.Outlined.MarkChatRead else Icons.Outlined.MarkChatUnread, null) },
+                        leadingIcon = { Icon(if (allUnread) fi(R.drawable.ic_menu_read) else fi(R.drawable.ic_menu_unread), null) },
                         onClick = { more = false; onReadToggle() })
                     DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) },
                         onClick = { more = false; onSelectAll() })
@@ -441,13 +461,13 @@ private fun OverflowMenu(
                     onClick = { open = false; onClick() },
                 )
             }
-            item("All", Icons.Outlined.MarkChatRead, filter == FILTER_ALL) { onFilter(FILTER_ALL) }
-            item("Unread", Icons.Outlined.MarkChatUnread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) }
-            item("Groups", Icons.Outlined.Group, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) }
+            item("All", fi(R.drawable.ic_menu_read), filter == FILTER_ALL) { onFilter(FILTER_ALL) }
+            item("Unread", fi(R.drawable.ic_menu_unread), filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) }
+            item("Groups", fi(R.drawable.ic_gs_group_type), filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) }
             item("Channels", Icons.Outlined.Campaign, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) }
             HorizontalDivider()
-            if (requests > 0) item("Message Requests ($requests)", Icons.Outlined.Inbox, false, onRequests)
-            item("Archive", Icons.Outlined.Archive, false, onArchive)
+            if (requests > 0) item("Message Requests ($requests)", fi(R.drawable.ic_message_request), false, onRequests)
+            item("Archive", fi(R.drawable.ic_archive), false, onArchive)
             item("New Group", Icons.Outlined.Group, false, onNewGroup)
             item("New Channel", Icons.Outlined.Campaign, false, onNewChannel)
             item("Find Channels", Icons.Outlined.Explore, false, onFindChannels)
@@ -647,3 +667,7 @@ object ChatListRules {
     fun lastSendPending(conv: Conversation, me: String, queued: () -> Boolean): Boolean =
         conv.lastIsMine(me) && !conv.isChannel && conv.localPending && queued()
 }
+
+/** Fariin's own drawings (converted from the iOS assets) where iOS has one; stock icons elsewhere. */
+@Composable
+private fun fi(@androidx.annotation.DrawableRes id: Int): ImageVector = ImageVector.vectorResource(id)

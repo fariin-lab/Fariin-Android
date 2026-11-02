@@ -23,15 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.DonutLarge
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.DonutLarge
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -51,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -61,6 +51,9 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.fariin.app.data.MessageDecryptor
 import com.fariin.app.perf.PowerSaving
 import com.fariin.app.perf.rememberPowerState
@@ -94,13 +87,12 @@ private val BarMargin = 12.dp
  * the number of unread chats.
  *
  * The bar is a floating pill above the content with a margin from the screen edges and the system
- * navigation bar; the content runs to the bottom of the screen and scrolls behind it. Icons only,
- * the open tab filled on a tinted pill. Glass (a blur of only the strip behind the pill) on
+ * navigation bar; the content runs to the bottom of the screen and scrolls behind it. Fariin's own
+ * icons with their labels under them (as iOS), the open tab on a soft grey pill. Glass (a blur of only the strip behind the pill) on
  * Android 12+ when the phone is not LOW and Power Saving allows blur; else a solid translucent
  * surface with a hairline border, which costs nothing extra to draw.
  *
- * TODO: the Calls tab's missed-calls badge; my own photo as the Settings icon; tapping the open
- * tab again to scroll to top; the Calls list still stops above the bar (ui/calls owns its list).
+ * TODO: the Calls tab's missed-calls badge; tapping the open tab again to scroll to top.
  */
 @Composable
 fun MainShell(
@@ -137,10 +129,8 @@ fun MainShell(
             CompositionLocalProvider(LocalBottomBarInset provides inset) {
                 when (tab) {
                     TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest)
-                    // ui/calls draws its own list; it stops above the bar until it reads the inset.
-                    TAB_CALLS -> Box(Modifier.fillMaxSize().padding(bottom = inset)) {
-                        CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null)
-                    }
+                    // The calls list scrolls under the bar and lifts its New Call button by the inset.
+                    TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null)
                     TAB_CHATS -> ChatListScreen(chats, me, decryptor,
                         onSettings = { select(TAB_SETTINGS) },
                         onNewStory = { storyRequest++; select(TAB_STORIES) })
@@ -148,25 +138,37 @@ fun MainShell(
                 }
             }
         }
+        // My own photo is the Settings tab's icon (iOS settingsTabLabel).
+        val myPhoto = if (demo) DemoSettings.profile.photoUrl else {
+            val repo = remember { com.fariin.app.data.MyProfileRepository() }
+            val flow = remember(me) { repo.listen(me) }
+            flow.collectAsState(initial = null).value?.photoUrl
+        }
         FloatingTabBar(
-            tab = tab, unread = unread, glass = glass, haze = haze, animate = power.animations, onSelect = select,
+            tab = tab, unread = unread, myPhoto = myPhoto, glass = glass, haze = haze, animate = power.animations, onSelect = select,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 24.dp, vertical = BarMargin),
         )
     }
 }
 
-private class TabSpec(val id: Int, val label: String, val filled: ImageVector, val outlined: ImageVector)
+/**
+ * Fariin's own tab glyphs, the same drawings iOS uses (owner 2026-11-02: not the stock icons).
+ * Like iOS, each is drawn filled whether or not its tab is open; the open tab is marked by the
+ * soft pill behind icon and label. Settings has no glyph: it is my own photo (null = [Avatar]'s
+ * grey silhouette).
+ */
+private class TabSpec(val id: Int, val label: String, @androidx.annotation.DrawableRes val icon: Int?)
 
 private val Tabs = listOf(
-    TabSpec(TAB_CHATS, "Chats", Icons.AutoMirrored.Filled.Chat, Icons.AutoMirrored.Outlined.Chat),
-    TabSpec(TAB_STORIES, "Stories", Icons.Filled.DonutLarge, Icons.Outlined.DonutLarge),
-    TabSpec(TAB_CALLS, "Calls", Icons.Filled.Call, Icons.Outlined.Call),
-    TabSpec(TAB_SETTINGS, "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
+    TabSpec(TAB_CHATS, "Chats", com.fariin.app.R.drawable.ic_chat),
+    TabSpec(TAB_STORIES, "Stories", com.fariin.app.R.drawable.ic_stories_stack_fill),
+    TabSpec(TAB_CALLS, "Calls", com.fariin.app.R.drawable.ic_tab_calls),
+    TabSpec(TAB_SETTINGS, "Settings", null),
 )
 
 @Composable
 private fun FloatingTabBar(
-    tab: Int, unread: Int, glass: Boolean, haze: HazeState, animate: Boolean,
+    tab: Int, unread: Int, myPhoto: String?, glass: Boolean, haze: HazeState, animate: Boolean,
     onSelect: (Int) -> Unit, modifier: Modifier = Modifier,
 ) {
     val c = Fariin.colors
@@ -181,7 +183,7 @@ private fun FloatingTabBar(
             noiseFactor = 0f
             tints = listOf(HazeTint(surface.copy(alpha = if (c.dark) 0.62f else 0.70f)))
         }
-    } else Modifier.background(surface.copy(alpha = 0.92f))
+    } else Modifier.background(surface.copy(alpha = 0.97f))
     Row(
         modifier
             .widthIn(max = 420.dp).fillMaxWidth().height(BarHeight)
@@ -189,24 +191,26 @@ private fun FloatingTabBar(
             .clip(shape)
             .then(fill)
             .border(1.dp, border, shape)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Tabs.forEach { t ->
-            TabItem(t, selected = tab == t.id, badge = if (t.id == TAB_CHATS) unread else 0, animate = animate,
+            TabItem(t, selected = tab == t.id, badge = if (t.id == TAB_CHATS) unread else 0, photo = myPhoto, animate = animate,
                 onClick = { onSelect(t.id) }, modifier = Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, animate: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, animate: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fariin.colors
-    val scheme = MaterialTheme.colorScheme
     val spec = if (animate) tween<Color>(180) else snap()
-    val pill by animateColorAsState(if (selected) scheme.secondaryContainer else Color.Transparent, spec, label = "tabPill")
-    val tint by animateColorAsState(if (selected) scheme.onSecondaryContainer else c.secondary, spec, label = "tabTint")
+    // iOS: a soft grey pill behind the open tab, its icon and label in the text colour; the
+    // others in grey.
+    val pillOn = if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
+    val pill by animateColorAsState(if (selected) pillOn else Color.Transparent, spec, label = "tabPill")
+    val tint by animateColorAsState(if (selected) c.label else c.secondary, spec, label = "tabTint")
     val desc = if (badge > 0) "${t.label}, $badge unread" else t.label
     Box(
         modifier.fillMaxHeight()
@@ -218,14 +222,26 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, animate: Boolean,
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(width = 64.dp, height = 40.dp).clip(RoundedCornerShape(20.dp)).background(pill), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.layout.Column(
+            Modifier.widthIn(min = 64.dp).height(52.dp).clip(RoundedCornerShape(26.dp)).background(pill)
+                .padding(horizontal = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
             BadgedBox(badge = {
                 if (badge > 0) Badge(containerColor = c.red, contentColor = Color.White) {
                     Text(if (badge > 99) "99+" else "$badge")
                 }
             }) {
-                Icon(if (selected) t.filled else t.outlined, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                if (t.icon != null) {
+                    Icon(androidx.compose.ui.res.painterResource(t.icon), contentDescription = null, tint = tint, modifier = Modifier.size(25.dp))
+                } else {
+                    com.fariin.app.ui.components.Avatar(photo, 26.dp,
+                        modifier = if (selected) Modifier.border(1.5.dp, c.label, androidx.compose.foundation.shape.CircleShape) else Modifier)
+                }
             }
+            Text(t.label, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = tint, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }

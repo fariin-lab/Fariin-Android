@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -241,9 +242,22 @@ internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (Stri
         Modifier.fillMaxWidth().padding(start = if (ui.isGroup && !isMe) 52.dp else 12.dp, end = 12.dp, top = 2.dp),
         horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
     ) {
+        val anim = com.fariin.app.ui.components.animationsOn()
         chips.forEach { chip ->
+            // Reaction pop: a chip that changes (my tap, someone else's) springs from small back to
+            // full size; chips already there when the chat opens stay still.
+            val scale = remember(chip.emoji) { androidx.compose.animation.core.Animatable(1f) }
+            val seen = remember(chip.emoji) { intArrayOf(-1) }
+            LaunchedEffect(chip.emoji, chip.count, chip.mine) {
+                val key = chip.count * 2 + if (chip.mine) 1 else 0
+                if (seen[0] != -1 && seen[0] != key && anim) {
+                    scale.snapTo(0.7f)
+                    scale.animateTo(1f, com.fariin.app.ui.components.Motion.pop())
+                }
+                seen[0] = key
+            }
             Row(
-                Modifier.padding(end = 4.dp).clip(CircleShape)
+                Modifier.padding(end = 4.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value }.clip(CircleShape)
                     .background(if (chip.mine) c.blue.copy(alpha = 0.18f) else if (c.dark) Color(0xFF26262B) else Color(0xFFF2F2F2))
                     .border(1.dp, c.bg, CircleShape)
                     .clickable { onTap(chip.emoji) }

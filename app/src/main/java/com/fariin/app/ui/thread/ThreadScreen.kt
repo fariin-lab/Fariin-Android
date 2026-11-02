@@ -231,12 +231,15 @@ fun ThreadScreen(
         if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) listState.scrollToItem(0)
     }
 
+    val anim = com.fariin.app.ui.components.animationsOn()
+    val rowFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(220, delayMillis = 40) else null }
+    val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
         Header(ui, onBack, actions.onTitleClick)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (!ui.loaded) {
-                CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp,
-                    modifier = Modifier.size(24.dp).align(Alignment.Center))
+                // iOS ThreadSkeleton: bubble shapes while the first page comes.
+                com.fariin.app.ui.components.ThreadSkeleton()
             } else if (ui.messages.isEmpty()) {
                 Text("No messages here yet", fontSize = 15.sp, color = c.secondary, modifier = Modifier.align(Alignment.Center))
             }
@@ -247,7 +250,10 @@ fun ThreadScreen(
                 itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId }) { _, i ->
                     val m = ui.messages[i]
                     val g = geometry[i]
-                    Column(Modifier.fillMaxWidth().padding(top = g.gapDp.dp)) {
+                    // A message that arrives fades in and the rows above glide up to make room;
+                    // with Power Saving > Animations off it just appears.
+                    Column(Modifier.animateItem(fadeInSpec = rowFade, placementSpec = rowPlace, fadeOutSpec = null)
+                        .fillMaxWidth().padding(top = g.gapDp.dp)) {
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
                         if (m.rowId == dividerId) UnreadDivider()
                         when {

@@ -218,7 +218,9 @@ class MainActivity : ComponentActivity() {
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
             com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav),
             com.fariin.app.ui.channels.LocalChannelNav provides com.fariin.app.ui.channels.channelNav(nav)) {
-            NavHost(nav, startDestination = "main") {
+            NavHost(nav, startDestination = "main",
+                enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),
+                popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
                 peopleRoutes(nav, people, chats = { chats.chats }, requests = { chats.requests },
                     groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
                 channelRoutes(nav, me)
@@ -280,7 +282,9 @@ class MainActivity : ComponentActivity() {
         val demoPeople = com.fariin.app.ui.debug.DemoPeople
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
             com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav)) {
-            NavHost(nav, startDestination = startThread?.let { if (it.startsWith("p:")) it.removePrefix("p:") else "thread/$it" } ?: "main") {
+            NavHost(nav, startDestination = startThread?.let { if (it.startsWith("p:")) it.removePrefix("p:") else "thread/$it" } ?: "main",
+                enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),
+                popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
                 peopleRoutes(nav, demoPeople, chats = { DemoChats.chats() }, requests = { demoPeople.requests() },
                     groupDoc = { demoPeople.groupDoc(it) })
                 composable("main") {

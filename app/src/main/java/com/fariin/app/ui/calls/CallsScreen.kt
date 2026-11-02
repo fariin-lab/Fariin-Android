@@ -130,11 +130,13 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
             }
         }
         when {
-            !loaded -> Unit
+            // iOS CallListSkeleton while the history is read.
+            !loaded -> com.fariin.app.ui.components.CallListSkeleton()
             calls.isEmpty() && allLinks.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
             rows.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
             rows.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> LazyColumn(Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                 items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r ->
                     if (r is com.fariin.app.call.SavedCallLink) {
                         CallLinkRow(r, callTimeLabel(r.createdAtMs, DateFormat.is24HourFormat(ctx), now),
@@ -151,7 +153,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
     androidx.compose.material3.FloatingActionButton(
         onClick = { nav.newCall() },
         containerColor = c.blue, contentColor = androidx.compose.ui.graphics.Color.White,
-        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp + com.fariin.app.ui.shell.bottomBarInset()),
     ) { Icon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call", modifier = Modifier.size(24.dp)) }
     }
 }
@@ -231,7 +233,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, onInfo: () -> Unit) {
             }
             Spacer(Modifier.width(8.dp))
             Text(callTimeLabel(call.dateMs, DateFormat.is24HourFormat(ctx), now), fontSize = 14.sp, color = c.secondary)
-            Box(Modifier.size(44.dp).clickable(onClick = onInfo), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onInfo), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.Info, contentDescription = "Info", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
