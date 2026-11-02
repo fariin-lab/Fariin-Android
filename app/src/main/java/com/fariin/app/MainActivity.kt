@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
         DeviceRegistry.init(this)
         NotificationPoster.ensureChannels(this)
         takeOpenCid(intent)
+        takeCallLink(intent)
         // Debug builds only: `--ez notifDemo true` posts made-up notifications through the real
         // builder (push/DebugNotifs), no sign-in and no Firebase.
         if (debuggable && intent.getBooleanExtra("notifDemo", false)) com.fariin.app.push.DebugNotifs.post(this)
@@ -207,6 +208,12 @@ class MainActivity : ComponentActivity() {
             PushRouter.pendingOpen.value = null
             nav.navigate("thread/$cid") { launchSingleTop = true }
         }
+        val linkAsk by com.fariin.app.call.CallLinkRouter.pending.collectAsState()
+        LaunchedEffect(linkAsk) {
+            val (key, video) = linkAsk ?: return@LaunchedEffect
+            com.fariin.app.call.CallLinkRouter.pending.value = null
+            nav.navigate("joinlink/$key/${if (video) "video" else "voice"}") { launchSingleTop = true }
+        }
         val people = remember(me) { com.fariin.app.data.FirestorePeople(me, crypto) }
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
             com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav),
@@ -249,6 +256,14 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         takeOpenCid(intent)
+        takeCallLink(intent)
+    }
+
+    /** A tapped call link (https://call.fariin.com/video/..., fariin.com/call/#key=...). */
+    private fun takeCallLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        if (com.fariin.app.call.CallLinkRouter.take(intent.dataString)) intent.data = null
+        else if (intent.data != null) android.widget.Toast.makeText(this, "This call link is no longer valid", android.widget.Toast.LENGTH_LONG).show()
     }
 
     /** A notification tap (or its conversation shortcut) carries the chat to open. */

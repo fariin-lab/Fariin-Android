@@ -45,6 +45,7 @@ class CallActivity : ComponentActivity() {
         private const val EXTRA_VIDEO = "dial.video"
         private const val EXTRA_GROUP = "group.cid"
         private const val EXTRA_START = "group.start"
+        private const val EXTRA_LINK = "link.key"
         const val EXTRA_DEMO = "callScreen"
 
         fun startDial(c: Context, uid: String, name: String, photo: String?, video: Boolean) {
@@ -56,6 +57,12 @@ class CallActivity : ComponentActivity() {
         fun startGroup(c: Context, cid: String, title: String, video: Boolean, start: Boolean = false) {
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(EXTRA_GROUP, cid).putExtra(EXTRA_NAME, title).putExtra(EXTRA_VIDEO, video).putExtra(EXTRA_START, start))
+        }
+
+        /** A call link (its key in the text form): the join screen's Join. */
+        fun startLink(c: Context, key: String, video: Boolean) {
+            c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(EXTRA_LINK, key).putExtra(EXTRA_VIDEO, video))
         }
 
         fun startRing(c: Context) {
@@ -186,6 +193,15 @@ class CallActivity : ComponentActivity() {
             CallNotifications.ACTION_HANGUP -> CallManager.hangUp()
         }
         i.action = null
+        i.getStringExtra(EXTRA_LINK)?.let { text ->
+            groupMode = true
+            val video = i.getBooleanExtra(EXTRA_VIDEO, false)
+            i.removeExtra(EXTRA_LINK)
+            val key = com.fariin.app.call.CallLinkKey.ofText(text)
+            if (key == null) { Toast.makeText(this, "This call link is no longer valid", Toast.LENGTH_LONG).show(); finish(); return }
+            withMic(video, { GroupCall.joinLink(this, key, video) }, { finish() })
+            return
+        }
         i.getStringExtra(EXTRA_GROUP)?.let { cid ->
             groupMode = true
             val video = i.getBooleanExtra(EXTRA_VIDEO, false)

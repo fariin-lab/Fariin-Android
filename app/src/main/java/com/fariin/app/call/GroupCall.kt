@@ -120,6 +120,10 @@ data class GroupCallUi(
     val cameraOn: Boolean = false,
     val members: List<GroupMember> = emptyList(),
     val notice: String? = null,
+    /** A call link's room (callLinks/{roomId}); null for a group chat's call. */
+    val linkRoom: String? = null,
+    /** The link needs the host's yes and it has not come yet. */
+    val waiting: Boolean = false,
 )
 
 /**
@@ -173,6 +177,81 @@ object GroupCall {
                 fail(GroupCallWire.joinNotice(e.message)); return@launch
             }
             if (pass == null) { fail("Call failed"); return@launch }
+            connectRoom(app, cid, title, video, requireLive, pass)
+        }
+    }
+
+    private var requestReg: ListenerRegistration? = null
+
+    /**
+     * A call link (iOS joinLink): groupCallToken {roomId, link: true}. A link that needs the host's
+     * yes answers {pending: true}; the screen then says "Waiting for the host to let you in" and
+     * my own request doc (callLinks/{roomId}/requests/{me}, the rules let me read it) is watched:
+     * approved asks for the pass again, denied ends with "Request denied". The title is opened
+     * from the link doc's sealed name alongside. Never writes a group chat's call doc.
+     */
+    fun joinLink(context: Context, key: CallLinkKey, video: Boolean) {
+        if (_ui.value.cid != null || CallManager.ui.value.status.live) return
+        recordId = null; startedHere = false; someoneCame = true; startedAtMs = null
+        val roomId = key.roomId
+        val tag = "link:$roomId"
+        _ui.value = GroupCallUi(cid = tag, title = CallLinkDefaults.NAME, connecting = true, cameraOn = video, linkRoom = roomId)
+        val app = context.applicationContext
+        appContext = app
+        scope.launch {
+            val d = try { db.collection("callLinks").document(roomId).get().await().data } catch (_: Exception) { null }
+            val enc = d?.get("encName") as? String
+            val name = if (!enc.isNullOrEmpty()) key.decryptName(enc) else null
+            if (!name.isNullOrEmpty() && _ui.value.cid == tag) _ui.value = _ui.value.copy(title = name)
+        }
+        scope.launch { askLinkPass(app, tag, roomId, video) }
+    }
+
+    private suspend fun askLinkPass(app: Context, tag: String, roomId: String, video: Boolean) {
+        val reply = try {
+            functions.getHttpsCallable("groupCallToken").call(CallLinkWire.tokenRequest(roomId)).await().data
+        } catch (e: Exception) {
+            if (_ui.value.cid == tag) fail(linkNotice(e))
+            return
+        }
+        if (_ui.value.cid != tag) return
+        if ((reply as? Map<*, *>)?.get("pending") == true) { waitForYes(app, tag, roomId, video); return }
+        val pass = GroupCallWire.parsePass(reply)
+        if (pass == null) { fail("Call failed"); return }
+        _ui.value = _ui.value.copy(waiting = false)
+        connectRoom(app, tag, _ui.value.title, video, requireLive = true, pass = pass)
+    }
+
+    private fun waitForYes(app: Context, tag: String, roomId: String, video: Boolean) {
+        val me = FirebaseAuth.getInstance().currentUser?.uid
+        if (me == null) { fail("Call failed"); return }
+        _ui.value = _ui.value.copy(waiting = true)
+        requestReg?.remove()
+        requestReg = db.collection("callLinks").document(roomId).collection("requests").document(me)
+            .addSnapshotListener { s, _ ->
+                if (_ui.value.cid != tag || s == null || !s.exists()) return@addSnapshotListener
+                when (s.getString("status")) {
+                    "approved" -> { requestReg?.remove(); requestReg = null; scope.launch { askLinkPass(app, tag, roomId, video) } }
+                    "denied" -> { requestReg?.remove(); requestReg = null; fail("Request denied") }
+                }
+            }
+    }
+
+    /** iOS joinNotice for a link: gone, full, turned away, blocked by the host. */
+    private fun linkNotice(e: Exception): String {
+        val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
+        val m = e.message ?: ""
+        return when {
+            code == com.google.firebase.functions.FirebaseFunctionsException.Code.NOT_FOUND -> "This call link is no longer valid"
+            m.contains("full") -> "This call is full."
+            m.contains("denied") -> "Request denied"
+            m.contains("removed") -> "You can't join this call."
+            else -> "Call failed"
+        }
+    }
+
+    private suspend fun connectRoom(app: Context, cid: String, title: String, video: Boolean, requireLive: Boolean, pass: GroupPass) {
+        run {
             try {
                 val r = LiveKit.create(app)
                 room = r
@@ -183,6 +262,7 @@ object GroupCall {
                 if (video && !pass.voiceOnly) r.localParticipant.setCameraEnabled(true)
                 _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = !pass.micBlocked, cameraOn = video && !pass.voiceOnly)
                 refresh()
+                if (_ui.value.linkRoom != null) return@run
                 if (!requireLive && r.remoteParticipants.isEmpty()) start(cid, title, video, r)
                 else noteJoined(cid)
             } catch (e: Exception) {
@@ -292,7 +372,15 @@ object GroupCall {
     fun leave() {
         val cid = _ui.value.cid
         val r = room
-        if (cid != null && r != null && _ui.value.joined) closeIfLast(cid, wasAlone = r.remoteParticipants.isEmpty())
+        val link = _ui.value.linkRoom
+        if (cid != null && r != null && _ui.value.joined && link == null) closeIfLast(cid, wasAlone = r.remoteParticipants.isEmpty())
+        requestReg?.remove(); requestReg = null
+        if (link != null && _ui.value.waiting) {
+            // Giving up while still waiting withdraws the request (the rules allow it only while pending).
+            FirebaseAuth.getInstance().currentUser?.uid?.let { me ->
+                db.collection("callLinks").document(link).collection("requests").document(me).delete()
+            }
+        }
         events?.cancel(); events = null
         room?.let { try { it.disconnect(); it.release() } catch (_: Exception) {} }
         room = null

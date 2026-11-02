@@ -36,6 +36,11 @@ data class Conversation(
     val markedUnread: Map<String, Boolean> = emptyMap(),
     val delivered: Map<String, Double> = emptyMap(),
     val lastHeld: Boolean = false,
+    /** Group admins and "Start group call: Admins only" (for the New Call page's group rows). */
+    val admins: List<String> = emptyList(),
+    val onlyAdminsCall: Boolean = false,
+    /** This phone's own write to the chat doc (a send made offline) has not reached the server yet. */
+    val localPending: Boolean = false,
     /** Firestore `type`: "group" for a group chat, "" or "direct" for a 1:1. */
     val convType: String = "",
     val title: String = "",
@@ -120,6 +125,10 @@ data class Conversation(
         return (delivered[otherUid(me)] ?: 0.0) >= updatedAtMillis
     }
 
+    /** A group call I may start here, as GroupCallWire.mayStart (the server checks again). */
+    fun mayStartCall(me: String): Boolean =
+        isGroup && !isChannel && users.contains(me) && (!onlyAdminsCall || admins.contains(me))
+
     fun lastReadByOther(me: String): Boolean {
         if (isGroup) return others(me).all { (unreadCount[it] ?: 0) <= 0 }
         if (lastHeld) return false
@@ -195,6 +204,8 @@ data class Conversation(
                 markedUnread = boolMap(data["markedUnread"]),
                 delivered = doubleMap(data["delivered"]),
                 lastHeld = data["lastHeld"] as? Boolean ?: false,
+                admins = stringList(data["admins"]),
+                onlyAdminsCall = data["onlyAdminsCall"] as? Boolean ?: false,
                 convType = type,
                 title = data["title"] as? String ?: "",
                 avatarUrl = data["avatarUrl"] as? String,

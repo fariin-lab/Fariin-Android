@@ -8,6 +8,7 @@ Answers:
     discoverChannels   channelDirectory/all rows (seed.py --channel), each checked live: channel and public
     publicGroupPreview the channel's header by cid or @name (followers + admins count, isMember, createdAt)
     makeChannel        a group of mine, alone in it, gets the channel fields (channels.channelFields)
+    createCallLink / updateCallLink / deleteCallLink / peekCallLink   call links (no media server: nobody is ever in the call)
 Every other callable answers NOT_FOUND, exactly as before this stub existed (follow, react and views
 are NOT emulated here: those stay untested locally).
 Reads and writes go to 127.0.0.1:8080 with the emulator's admin token; nothing leaves this PC.
@@ -136,7 +137,66 @@ def make_channel(uid, data):
     return {"ok": True, "cid": cid}
 
 
-HANDLERS = {"discoverChannels": discover, "publicGroupPreview": preview, "makeChannel": make_channel}
+# Call links, in the shape of Kulan/functions index.js createCallLink / updateCallLink /
+# deleteCallLink / peekCallLink, so the Android create / list / details / join pages can be driven
+# locally. No media server here: peek says nobody is in the call, and groupCallToken stays
+# NOT_FOUND (joining is not emulated).
+def _room(data):
+    r = str((data or {}).get("roomId") or "")
+    if len(r) != 64 or any(ch not in "0123456789abcdef" for ch in r):
+        raise Refusal("INVALID_ARGUMENT", "roomId required")
+    return r
+
+
+def create_link(uid, data):
+    r = _room(data)
+    cur = get(f"callLinks/{r}")
+    if cur and cur.get("creatorUid") != uid:
+        raise Refusal("ALREADY_EXISTS", "Link already exists")
+    if not cur:
+        patch(f"callLinks/{r}", {"creatorUid": uid, "encName": str(data.get("encName") or ""),
+                                 "restrictions": str(data.get("restrictions") or "adminApproval"),
+                                 "video": data.get("video") is not False, "revoked": False, "active": False})
+    return {"ok": True}
+
+
+def update_link(uid, data):
+    r = _room(data)
+    cur = get(f"callLinks/{r}")
+    if not cur:
+        raise Refusal("NOT_FOUND", "This call link is no longer valid")
+    if cur.get("creatorUid") != uid:
+        raise Refusal("PERMISSION_DENIED", "Only the link creator can do this")
+    f = {k: data[k] for k in ("encName", "restrictions", "video", "revoked") if k in data}
+    if f:
+        patch(f"callLinks/{r}", f)
+    return {"ok": True}
+
+
+def delete_link(uid, data):
+    r = _room(data)
+    cur = get(f"callLinks/{r}")
+    if not cur:
+        raise Refusal("NOT_FOUND", "This call link is no longer valid")
+    if cur.get("creatorUid") != uid:
+        raise Refusal("PERMISSION_DENIED", "Only the link creator can do this")
+    urllib.request.urlopen(urllib.request.Request(f"{FS}/callLinks/{r}", method="DELETE", headers=ADMIN)).read()
+    return {"ok": True}
+
+
+def peek_link(uid, data):
+    r = _room(data)
+    cur = get(f"callLinks/{r}")
+    if not cur or cur.get("revoked") is True:
+        return {"gone": True, "approval": False, "video": True, "count": 0, "names": [], "full": False,
+                "creator": bool(cur and cur.get("creatorUid") == uid), "encName": ""}
+    return {"gone": False, "approval": cur.get("restrictions") == "adminApproval", "video": cur.get("video") is not False,
+            "count": 0, "names": [], "full": False, "creator": cur.get("creatorUid") == uid, "encName": cur.get("encName") or ""}
+
+
+HANDLERS = {"discoverChannels": discover, "publicGroupPreview": preview, "makeChannel": make_channel,
+            "createCallLink": create_link, "updateCallLink": update_link, "deleteCallLink": delete_link,
+            "peekCallLink": peek_link}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -151,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise Refusal("UNAUTHENTICATED", "Sign in required.")
             code, out = 200, {"result": HANDLERS[name](uid, body.get("data"))}
         except Refusal as r:
-            code, out = {"NOT_FOUND": 404, "PERMISSION_DENIED": 403, "FAILED_PRECONDITION": 400, "UNAUTHENTICATED": 401}.get(r.status, 400), \
+            code, out = {"NOT_FOUND": 404, "PERMISSION_DENIED": 403, "FAILED_PRECONDITION": 400, "UNAUTHENTICATED": 401, "ALREADY_EXISTS": 409}.get(r.status, 400), \
                 {"error": {"status": r.status, "message": r.message}}
         raw = json.dumps(out).encode()
         self.send_response(code)

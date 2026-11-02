@@ -38,6 +38,20 @@ fun NavGraphBuilder.peopleRoutes(
     }
     composable("newgroup") { NewGroupScreen(api, chats(), onBack = { nav.popBackStack() }, onCreated = openChat) }
     composable("editprofile") { EditProfileScreen(api, onBack = { nav.popBackStack() }) }
+    // Calls tab: New Call, call links (ui/calls).
+    composable("newcall") {
+        com.fariin.app.ui.calls.NewCallScreen(api.me, chats(), onBack = { nav.popBackStack() },
+            onCreateLink = { nav.navigate("calllink/new") { popUpTo("newcall") { inclusive = true } } })
+    }
+    composable("calllink/new") { com.fariin.app.ui.calls.CreateCallLinkScreen(onClose = { nav.popBackStack() }) }
+    composable("calllink/{roomId}") { e ->
+        val id = e.arguments?.getString("roomId") ?: return@composable
+        com.fariin.app.ui.calls.CallLinkDetailsScreen(id, onBack = { nav.popBackStack() })
+    }
+    composable("joinlink/{key}/{video}") { e ->
+        val key = e.arguments?.getString("key") ?: return@composable
+        com.fariin.app.ui.calls.JoinLinkScreen(key, e.arguments?.getString("video") != "voice", onBack = { nav.popBackStack() })
+    }
 }
 
 fun peopleNav(nav: NavHostController) = PeopleNav(
@@ -47,6 +61,10 @@ fun peopleNav(nav: NavHostController) = PeopleNav(
     group = { nav.navigate("group/$it") { launchSingleTop = true } },
     newGroup = { nav.navigate("newgroup") { launchSingleTop = true } },
     editProfile = { nav.navigate("editprofile") { launchSingleTop = true } },
+    newCall = { nav.navigate("newcall") { launchSingleTop = true } },
+    newCallLink = { nav.navigate("calllink/new") { launchSingleTop = true } },
+    callLink = { nav.navigate("calllink/$it") { launchSingleTop = true } },
+    joinLink = { key, video -> nav.navigate("joinlink/$key/${if (video) "video" else "voice"}") { launchSingleTop = true } },
 )
 
 /** The live group document (read only), for Group Info. */

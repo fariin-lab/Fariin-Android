@@ -35,11 +35,39 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.Fariin.Starting"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Call links (call/CallLinks.kt). App Links: https://call.fariin.com/video/<id> and
+                 /voice/<id>, the same paths on fariin.com, and the old fariin.com/call/#key=...
+                 Verified only once https://call.fariin.com and https://fariin.com serve
+                 /.well-known/assetlinks.json naming com.fariin.app (see PROGRESS.md). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="call.fariin.com" />
+                <data android:host="fariin.com" />
+                <data android:host="www.fariin.com" />
+                <data android:pathPrefix="/video/" />
+                <data android:pathPrefix="/voice/" />
+                <data android:path="/call" />
+                <data android:path="/call/" />
+            </intent-filter>
+            <!-- The web landing page's "Open" button: kulan://video/<id>, kulan://voice/<id>, kulan://call/<key>. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kulan" />
+                <data android:host="video" />
+                <data android:host="voice" />
+                <data android:host="call" />
             </intent-filter>
         </activity>
         <!-- App Lock cover (security/AppLock.kt). -->

@@ -287,7 +287,7 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(16.dp))
             Text(g.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            Text(if (g.connecting) "Connecting…" else "${g.members.size} in call", color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp)
+            Text(if (g.waiting) "Waiting for the host to let you in" else if (g.connecting) "Connecting…" else "${g.members.size} in call", color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp)
             Spacer(Modifier.height(16.dp))
             LazyVerticalGrid(GridCells.Fixed(2), Modifier.weight(1f).padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

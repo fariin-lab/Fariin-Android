@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,8 +71,10 @@ import java.util.Locale
  * Missed calls from someone else are red. A row's tap calls back the same way (video stays
  * video; a group row joins or starts that group's call); (i) opens the call info page.
  *
- * TODO: the new-call button, Edit to delete calls, call links, the live row of a call in
- * progress, ad-hoc group calls.
+ * My call links sit among the calls at the time they were made (iOS mergedRows), not under
+ * Missed. The floating button opens New Call.
+ *
+ * TODO: Edit to delete calls, the live row of a call in progress, ad-hoc group calls.
  */
 @Composable
 fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?) {
@@ -99,6 +102,12 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
     val shown = CallHistory.filter(calls, me, missedOnly, now).filter { q.isEmpty() || it.name.lowercase().contains(q) }
     val runs = CallHistory.runs(shown, me, now)
     val ctx = LocalContext.current
+    val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+    LaunchedEffect(me) { if (me.isNotEmpty() && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) com.fariin.app.call.CallLinks.watch(me) }
+    val allLinks by com.fariin.app.call.CallLinks.links.collectAsState()
+    val links = if (missedOnly) emptyList() else allLinks.filter { q.isEmpty() || it.title.lowercase().contains(q) }
+    val rows: List<Any> = (links.map { it.createdAtMs to (it as Any) } + runs.map { it.latest.dateMs to (it as Any) })
+        .sortedByDescending { it.first }.map { it.second }
     var info by remember { mutableStateOf<CallRun?>(null) }
     info?.let { r ->
         CallInfoScreen(r, me, onBack = { info = null }, onCall = { video -> callBack(ctx, r.latest, video) })
@@ -122,18 +131,25 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
         }
         when {
             !loaded -> Unit
-            calls.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
-            runs.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
-            runs.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
+            calls.isEmpty() && allLinks.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
+            rows.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
+            rows.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
             else -> LazyColumn(Modifier.fillMaxSize()) {
-                items(runs, key = { it.id }) { run ->
-                    CallRow(run, me, now, onInfo = { info = run })
+                items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r ->
+                    if (r is com.fariin.app.call.SavedCallLink) {
+                        CallLinkRow(r, callTimeLabel(r.createdAtMs, DateFormat.is24HourFormat(ctx), now),
+                            onOpen = { if (com.fariin.app.call.CallManager.ui.value.status.live) CallActivity.startRing(ctx) else nav.joinLink(r.key, true) },
+                            onInfo = { nav.callLink(r.roomId) })
+                    } else {
+                        val run = r as CallRun
+                        CallRow(run, me, now, onInfo = { info = run })
+                    }
                 }
             }
         }
     }
     androidx.compose.material3.FloatingActionButton(
-        onClick = { com.fariin.app.ui.components.Snack.show("New Call is coming soon on Android.") },
+        onClick = { nav.newCall() },
         containerColor = c.blue, contentColor = androidx.compose.ui.graphics.Color.White,
         modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
     ) { Icon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call", modifier = Modifier.size(24.dp)) }
