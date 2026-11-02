@@ -37,6 +37,13 @@ class FariinMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
+        // A ring for a call (data-only `kind: "call"`, see PROGRESS "Server changes needed"): start the
+        // ring watcher, which reads the call document and shows the incoming screen.
+        if (message.data["kind"] == "call") {
+            val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+            com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, me)
+            return
+        }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)
         runBlocking { handle(applicationContext, p) }
     }
