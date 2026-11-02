@@ -906,6 +906,11 @@ private fun Composer(
         if (prefill != null) { draft = prefill.second; wasEditing = true }
         else if (wasEditing) { draft = kept; wasEditing = false }
     }
+    // The box's text with its cursor. Words put in from outside (an edit, the draft coming back,
+    // a clear after send) get the cursor at their end; before, an edit started with the cursor in
+    // front of the old words.
+    var boxValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))) }
+    if (boxValue.text != draft) boxValue = androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))
     // Every change outside an edit is the chat's draft (sent = cleared below).
     LaunchedEffect(draft) { if (prefill == null && !wasEditing) { kept = draft; onDraft(draft) } }
 
@@ -966,10 +971,11 @@ private fun Composer(
                 ) {
                     if (draft.isEmpty()) Text("Message", style = MaterialTheme.typography.bodyLarge, color = c.secondary)
                     BasicTextField(
-                        value = draft, onValueChange = {
+                        value = boxValue, onValueChange = {
                             val now = System.currentTimeMillis()
                             if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
-                            draft = it
+                            boxValue = it
+                            draft = it.text
                         },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label),
                         cursorBrush = SolidColor(c.blue),

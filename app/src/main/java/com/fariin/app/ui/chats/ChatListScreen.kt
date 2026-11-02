@@ -184,14 +184,6 @@ fun ChatListScreen(
         .toList()
     val pinned = if (showArchive) emptyList() else shown.filter { it.isPinned(me) }
     val rest = shown.filter { showArchive || !it.isPinned(me) }
-    // A chat that arrives at the top (a new group, a new message in an old chat) while I am at the
-    // top comes into view. The list keeps its old first row in place, so the new row landed just
-    // above the screen and showed only after scrolling up. Old first row at index 1 with no offset
-    // means I was at the top a moment ago.
-    val topKey = (pinned + rest).firstOrNull()?.id
-    LaunchedEffect(topKey) {
-        if (listState.firstVisibleItemIndex == 1 && listState.firstVisibleItemScrollOffset == 0) listState.scrollToItem(0)
-    }
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
 
     val toggle: (Conversation) -> Unit = { conv ->
@@ -355,6 +347,11 @@ fun ChatListScreen(
                     else -> "No chats yet"
                 }, action = if (filter == FILTER_CHANNELS && query.isBlank()) ("Find Channels" to channels.find) else null)
                 else -> LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
+                    // An invisible first row. At the top the list keeps this row in place, so anything new
+                    // above the old first chat (a new group, a chat moved up by a message, the Pinned
+                    // section after a pin, the Archived row) shows at once instead of landing just above
+                    // the screen. Scrolled down, the list keeps the row I am looking at, so nothing jumps.
+                    item(key = "top-anchor", contentType = "anchor") { Spacer(Modifier.fillMaxWidth().height(1.dp)) }
                     if (!showArchive && !searching && filter == FILTER_ALL && state.archived.isNotEmpty()) {
                         item(key = "archive") {
                             ListRow("Archived", fi(R.drawable.ic_archive), trailing = "${state.archived.size}") { showArchive = true }
