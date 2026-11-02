@@ -7,6 +7,12 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
+import android.util.Rational
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.fariin.app.call.CallRouting
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -38,6 +44,7 @@ class CallActivity : ComponentActivity() {
         private const val EXTRA_PHOTO = "dial.photo"
         private const val EXTRA_VIDEO = "dial.video"
         private const val EXTRA_GROUP = "group.cid"
+        private const val EXTRA_START = "group.start"
         const val EXTRA_DEMO = "callScreen"
 
         fun startDial(c: Context, uid: String, name: String, photo: String?, video: Boolean) {
@@ -45,9 +52,10 @@ class CallActivity : ComponentActivity() {
                 .putExtra(EXTRA_UID, uid).putExtra(EXTRA_NAME, name).putExtra(EXTRA_PHOTO, photo).putExtra(EXTRA_VIDEO, video))
         }
 
-        fun startGroup(c: Context, cid: String, title: String, video: Boolean) {
+        /** [start] true: the call button (joins a running call or starts one); false: the Join bar. */
+        fun startGroup(c: Context, cid: String, title: String, video: Boolean, start: Boolean = false) {
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .putExtra(EXTRA_GROUP, cid).putExtra(EXTRA_NAME, title).putExtra(EXTRA_VIDEO, video))
+                .putExtra(EXTRA_GROUP, cid).putExtra(EXTRA_NAME, title).putExtra(EXTRA_VIDEO, video).putExtra(EXTRA_START, start))
         }
 
         fun startRing(c: Context) {
@@ -72,6 +80,8 @@ class CallActivity : ComponentActivity() {
         cameraAfterAsk = false
     }
     private var groupMode = false
+    /** Picture in picture: a video call shrinks into a small window when I leave the app. */
+    private var inPip by mutableStateOf(false)
     private var demoGroup: GroupCallUi? = null
 
     private fun granted(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
@@ -111,12 +121,15 @@ class CallActivity : ComponentActivity() {
                 } else {
                     val ui by CallManager.ui.collectAsState()
                     LaunchedEffect(ui.status.phase) { if (ui.status.phase == CallPhase.IDLE) finish() }
+                    val pip = CallRouting.pipWanted(ui.status.phase, ui.cameraOn, ui.remoteCameraOn)
+                    LaunchedEffect(pip) { updatePip(pip) }
+                    if (inPip) { PipScreen(ui); return@FariinTheme }
                     CallScreen(ui,
                         onAccept = { withMic(ui.status.video, { CallManager.accept() }, { CallManager.micDenied() }) },
                         onDecline = { CallManager.decline() },
                         onEnd = { CallManager.hangUp() },
                         onMute = { CallManager.toggleMute() },
-                        onSpeaker = { CallManager.toggleSpeaker() },
+                        onRoute = { CallManager.setRoute(it) },
                         onCamera = { cameraToggle(ui.cameraOn) },
                         onFlip = { CallManager.flipCamera() })
                 }
@@ -128,6 +141,34 @@ class CallActivity : ComponentActivity() {
         if (on || granted(Manifest.permission.CAMERA)) {
             if (groupMode) GroupCall.toggleCamera() else CallManager.toggleCamera()
         } else { cameraAfterAsk = true; askCamera.launch(Manifest.permission.CAMERA) }
+    }
+
+    private fun pipParams(auto: Boolean): PictureInPictureParams {
+        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setAutoEnterEnabled(auto).setSeamlessResizeEnabled(true)
+        return b.build()
+    }
+
+    private fun pipAllowed() = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    /** Android 12 and later go into the window by themselves on Home; older ones in [onUserLeaveHint]. */
+    private fun updatePip(wanted: Boolean) {
+        if (!pipAllowed()) return
+        try { setPictureInPictureParams(pipParams(wanted)) } catch (_: Exception) {}
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (groupMode || !pipAllowed() || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        val u = CallManager.ui.value
+        if (CallRouting.pipWanted(u.status.phase, u.cameraOn, u.remoteCameraOn)) {
+            try { enterPictureInPictureMode(pipParams(false)) } catch (_: Exception) {}
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -149,8 +190,9 @@ class CallActivity : ComponentActivity() {
             groupMode = true
             val video = i.getBooleanExtra(EXTRA_VIDEO, false)
             val title = i.getStringExtra(EXTRA_NAME) ?: ""
+            val start = i.getBooleanExtra(EXTRA_START, false)
             i.removeExtra(EXTRA_GROUP)
-            withMic(video, { GroupCall.join(this, cid, title, video) }, { finish() })
+            withMic(video, { GroupCall.join(this, cid, title, video, requireLive = !start) }, { finish() })
             return
         }
         val uid = i.getStringExtra(EXTRA_UID) ?: return
@@ -171,6 +213,12 @@ class CallActivity : ComponentActivity() {
             "calling" -> CallManager.demo(this, CallPhase.OUTGOING, video = false)
             "video" -> CallManager.demo(this, CallPhase.ACTIVE, video = true)
             "ended" -> CallManager.demo(this, CallPhase.ENDED, video = false)
+            // A car or headset connected: the speaker button opens the route list.
+            "bluetooth" -> CallManager.demo(this, CallPhase.ACTIVE, video = false, route = com.fariin.app.call.RouteState(
+                com.fariin.app.call.AudioRoute.BLUETOOTH,
+                setOf(com.fariin.app.call.AudioRoute.EARPIECE, com.fariin.app.call.AudioRoute.SPEAKER, com.fariin.app.call.AudioRoute.BLUETOOTH),
+                "Car Kit"))
+            "held" -> CallManager.demo(this, CallPhase.ACTIVE, video = false, held = true)
             "group" -> {
                 groupMode = true
                 demoGroup = GroupCallUi(cid = "demo", title = "Family", joined = true, members = listOf(

@@ -1,6 +1,10 @@
 package com.fariin.app.call
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.util.Log
@@ -41,6 +45,10 @@ data class CallUi(
     val localVideo: VideoTrack? = null,
     /** A sentence to show over the ended screen ("Can't call right now." ...). */
     val notice: String? = null,
+    /** Where the sound goes and what else this phone offers (Telecom, or the speaker switch alone). */
+    val route: RouteState = RouteState(),
+    /** A phone call was answered over this one: the mic is off until it ends. */
+    val held: Boolean = false,
 )
 
 /**
@@ -48,9 +56,12 @@ data class CallUi(
  * same relay rule and the same chat row, so it interoperates with the iPhone app. One call at a
  * time; everything runs on the main thread (WebRTC callbacks hop over).
  *
+ * The system side (headset / car / Bluetooth buttons, audio routes, hold, busy while a phone call
+ * can not be held) goes through [CallTelecom]; the proximity sensor follows the route.
+ *
  * Left out for now (iOS has them): the early answer before Accept, screen sharing, moving a call
- * into a group room (`moveTo`), call waiting / glare between two crossing dials, hold, the data
- * saver, network-change restarts on a timer, Opus DTX/RED munging and telemetry.
+ * into a group room (`moveTo`), glare between two crossing dials, the data saver,
+ * network-change restarts on a timer, Opus DTX/RED munging and telemetry.
  */
 object CallManager {
     private const val TAG = "CallManager"
@@ -89,8 +100,16 @@ object CallManager {
     private var restartRequestsSeen = 0
     private var restartRequestsSent = 0
     private var lastPeerBeat = 0.0
+    private var ringShown: String? = null
 
-    fun init(context: Context) { if (!::app.isInitialized) app = context.applicationContext }
+    fun init(context: Context) {
+        if (::app.isInitialized) return
+        app = context.applicationContext
+        // The screen goes dark at the ear during a voice call on the earpiece.
+        main.launch {
+            ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn, u.route.current)) }
+        }
+    }
 
     private val status get() = _ui.value.status
     private fun move(e: CallEvent) { _ui.value = _ui.value.copy(status = CallMachine.reduce(status, e)) }
@@ -114,6 +133,8 @@ object CallManager {
         CallAudio.start(app, speaker = video)
         val id = signaling.newCallId()
         callId = id
+        setStartRoute(video)
+        CallTelecom.placeOutgoing(app, id, name, video)
         after(CallWire.NO_ANSWER_MS) { if (callId == id && status.phase == CallPhase.OUTGOING) ringOut(id) }
         main.launch {
             val servers = awaitIceServers()
@@ -212,11 +233,15 @@ object CallManager {
             _ui.value = CallUi(peerUid = d.caller, peerName = d.callerName ?: "Caller", peerPhoto = d.callerPhoto,
                 cameraOn = d.video, speaker = d.video, remoteCameraOn = d.cams[d.caller] ?: d.video)
             move(CallEvent.Ring(d.video))
+            when (CallTelecom.reportIncoming(app, d.id, _ui.value.peerName, d.video)) {
+                // A phone call in another app that can not be held: busy, as iOS does while CallKit
+                // refuses the report.
+                CallTelecom.Report.BUSY -> { finish(EndReason.BUSY, updateRemote = true, byUser = false); return@launch }
+                // Telecom shows the ring through onShowIncomingCallUi; this is the safety net.
+                CallTelecom.Report.STARTED -> after(2500) { showRingUi(d.id) }
+                CallTelecom.Report.UNAVAILABLE -> showRingUi(d.id)
+            }
             signaling.update(d.id, CallWire.ringingFields(signaling.serverTime))   // their "Ringing…"
-            startRingtone()
-            CallNotifications.showIncoming(app, d.id, _ui.value.peerName, d.video)
-            // In front: open the ring screen at once (a full-screen intent only shows a banner then).
-            if (appInFront()) try { com.fariin.app.ui.call.CallActivity.startRing(app) } catch (_: Exception) {}
             listeners += signaling.listen(d.id) { onCallDoc(it) }
             after(CallWire.CALLEE_RING_MS) { if (callId == d.id && status.phase == CallPhase.INCOMING) finish(EndReason.MISSED, true, byUser = false) }
             // Warm what Accept needs: relay list, contact check, the caller's key, the offer.
@@ -236,6 +261,7 @@ object CallManager {
         move(CallEvent.Accept)
         CallService.start(app, CallService.Mode.CALL, _ui.value.cameraOn)
         CallAudio.start(app, speaker = _ui.value.speaker)
+        CallTelecom.setActive(id)
         signaling.update(id, CallWire.acceptFields(signaling.serverTime))
         after(30_000) { if (callId == id && status.connectedAtMs == null && status.live) finish(EndReason.FAILED, true, byUser = false) }
         main.launch {
@@ -442,6 +468,7 @@ object CallManager {
                 val first = status.connectedAtMs == null
                 move(if (status.phase == CallPhase.RECONNECTING) CallEvent.MediaBack else CallEvent.MediaUp(System.currentTimeMillis()))
                 if (first && status.connectedAtMs != null) {
+                    CallTelecom.setActive(id)
                     if (!status.isCaller) engine?.sendAccept()
                     if (status.isCaller && ringRowWritten) signaling.markOngoing(cid, id)
                     startHeartbeat(id)
@@ -494,10 +521,81 @@ object CallManager {
         callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.mutedField(me, m)) }
     }
 
+    /** The speaker button with only the phone and the speaker to choose from. */
     fun toggleSpeaker() {
-        val s = !_ui.value.speaker
-        edit { it.copy(speaker = s) }
-        if (::app.isInitialized) CallAudio.setSpeaker(app, s)
+        val r = _ui.value.route
+        setRoute(if (r.current == AudioRoute.SPEAKER) CallRouting.quietRoute(r) else AudioRoute.SPEAKER)
+    }
+
+    /** A route from the speaker button or its list: through Telecom when the system call is up. */
+    fun setRoute(to: AudioRoute) {
+        if (CallTelecom.setRoute(to)) return
+        edit { it.copy(route = it.route.copy(current = to), speaker = to == AudioRoute.SPEAKER) }
+        CallTelecom.setLocalRoute(to)
+        if (::app.isInitialized && (to == AudioRoute.SPEAKER || to == AudioRoute.EARPIECE)) CallAudio.setSpeaker(app, to == AudioRoute.SPEAKER)
+    }
+
+    private fun setStartRoute(video: Boolean) {
+        edit { it.copy(route = RouteState(current = if (video) AudioRoute.SPEAKER else AudioRoute.EARPIECE), speaker = video) }
+    }
+
+    // ================================================================== the system call (CallTelecom)
+
+    /** Telecom asks whether this call still exists before it makes the system call. */
+    fun isCurrent(id: String) = id == callId && status.live
+
+    /** The ring's sound and screen: once, from Telecom's go-ahead or the fallback timer. */
+    fun showRingUi(id: String) {
+        if (id != callId || status.phase != CallPhase.INCOMING || ringShown == id) return
+        ringShown = id
+        startRingtone()
+        CallNotifications.showIncoming(app, id, _ui.value.peerName, status.video)
+        // In front: open the ring screen at once (a full-screen intent only shows a banner then).
+        if (appInFront()) try { com.fariin.app.ui.call.CallActivity.startRing(app) } catch (_: Exception) {}
+    }
+
+    /** Answer from a headset, the car or a watch: the call screen asks for the mic when it must. */
+    fun answerFromSystem(id: String) {
+        if (id != callId || status.phase != CallPhase.INCOMING) return
+        val ready = granted(Manifest.permission.RECORD_AUDIO) && (!status.video || granted(Manifest.permission.CAMERA))
+        if (ready) accept()
+        try {
+            val i = Intent(app, com.fariin.app.ui.call.CallActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            if (!ready) i.action = CallNotifications.ACTION_ACCEPT
+            app.startActivity(i)
+        } catch (_: Exception) {}
+    }
+
+    private fun granted(p: String) = ContextCompat.checkSelfPermission(app, p) == PackageManager.PERMISSION_GRANTED
+
+    /** Hang up or decline from the system (headset button, car screen, the notification shade). */
+    fun endFromSystem(id: String) {
+        if (id != callId) return
+        if (status.phase == CallPhase.INCOMING) decline() else hangUp()
+    }
+
+    /** Telecom could not take this ring (a call elsewhere that can not be held): busy. */
+    fun onSystemBusy(id: String?) {
+        if (id == null || id != callId || status.phase != CallPhase.INCOMING) return
+        finish(EndReason.BUSY, updateRemote = true, byUser = false)
+    }
+
+    /** A phone call answered over this one puts it on hold: my mic goes off until it ends. */
+    fun onSystemHold(id: String, on: Boolean) {
+        if (id != callId || !status.live) return
+        edit { it.copy(held = on) }
+        engine?.setMic(!on && !_ui.value.muted)
+    }
+
+    /** The volume key or the system's silence while ringing: the ring stays, the sound stops. */
+    fun silenceRing(id: String) { if (id == callId) stopRingtone() }
+
+    /** The routes from Telecom, and the system mute (a car's or a headset's mute button). */
+    fun onSystemAudio(id: String, r: RouteState, systemMuted: Boolean) {
+        if (id != callId) return
+        edit { it.copy(route = r, speaker = CallRouting.speakerLit(r)) }
+        if (status.phase != CallPhase.INCOMING && systemMuted && !_ui.value.muted) toggleMute()
     }
 
     /** The camera button; the call screen asks for the camera permission first. */
@@ -540,6 +638,8 @@ object CallManager {
             CallWire.recordOutcome(s.endReason, before.isCaller, before.callDocCreated, connected, before.accepted) else null
         recordWritten = true
         val hadRow = ringRowWritten
+        CallTelecom.end(CallRouting.disconnectCode(s.endReason, byUser, before.isCaller,
+            wasIncomingRing = !before.isCaller && !before.accepted))
         main.launch {
             if (id == null) return@launch
             val caller = if (before.isCaller) myUid else peerUid
@@ -577,6 +677,7 @@ object CallManager {
     private fun reset() {
         _ui.value = CallUi()
         callId = null
+        ringShown = null
     }
 
     private fun resetCallVars() {
@@ -630,9 +731,8 @@ object CallManager {
         d?.getString("name") to d?.getString("photoUrl")
     } catch (_: Exception) { null to null }
 
-    /** Privacy > Always Relay Calls (iOS `calls.alwaysRelay`); no switch on Android yet, so off. */
-    private fun alwaysRelay(): Boolean =
-        app.getSharedPreferences("fariin_calls", Context.MODE_PRIVATE).getBoolean("calls.alwaysRelay", false)
+    /** Privacy > Always Relay Calls, the setting iOS keeps under `calls.alwaysRelay`. */
+    private fun alwaysRelay(): Boolean = CallPrefs.alwaysRelay(app)
 
     private fun startRingtone() {
         try {
@@ -652,9 +752,9 @@ object CallManager {
     // ================================================================== debug demo
 
     /** Debug builds only: a made-up call on screen, no Firebase, no WebRTC. */
-    fun demo(context: Context, phase: CallPhase, video: Boolean) {
+    fun demo(context: Context, phase: CallPhase, video: Boolean, route: RouteState = RouteState(), held: Boolean = false) {
         init(context)
-        _ui.value = CallUi(
+        _ui.value = CallUi(route = route, speaker = CallRouting.speakerLit(route), held = held,
             status = CallStatus(phase = phase, isCaller = phase != CallPhase.INCOMING, video = video, accepted = phase == CallPhase.ACTIVE,
                 calleeRinging = true, connectedAtMs = if (phase == CallPhase.ACTIVE) System.currentTimeMillis() - 83_000 else null),
             peerUid = "demo", peerName = "Amina Yusuf", cameraOn = video, remoteCameraOn = video, remoteMuted = phase == CallPhase.ACTIVE && !video,

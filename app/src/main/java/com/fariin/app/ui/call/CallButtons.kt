@@ -14,14 +14,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.fariin.app.call.GroupCall
+import com.fariin.app.call.GroupCallWire
+import com.google.firebase.firestore.FirebaseFirestore
 import com.fariin.app.crypto.Wire
 import com.fariin.app.ui.theme.Fariin
 import com.google.firebase.auth.FirebaseAuth
 
 /**
- * The chat header's call buttons, as iOS: video and voice for a 1:1. In a group they show only
- * while the group's call is going, and join it (starting one is not on Android yet). Nothing in a
- * debug demo chat (no Firebase there).
+ * The chat header's call buttons, as iOS: video and voice for a 1:1. In a group: Join while the
+ * group's call is going; otherwise video and voice that start one, for whoever the rules let start
+ * a call (a member; only admins when the group says "Admins only"). Nothing in a debug demo chat
+ * (no Firebase there).
  */
 @Composable
 fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, photoUrl: String?) {
@@ -42,12 +45,26 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         return
     }
     var live by remember(cid) { mutableStateOf(false) }
+    var mayStart by remember(cid) { mutableStateOf(false) }
     DisposableEffect(cid) {
         val reg = GroupCall.watchActive(cid) { live = it }
-        onDispose { reg.remove() }
+        val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid)
+            .addSnapshotListener { snap, _ -> mayStart = GroupCallWire.mayStart(snap?.data, me) }
+        onDispose { reg.remove(); conv.remove() }
     }
-    if (!live) return
-    IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }) {
-        Icon(Icons.Filled.Call, contentDescription = "Join call", tint = tint)
+    if (live) {
+        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }) {
+            Icon(Icons.Filled.Call, contentDescription = "Join call", tint = tint)
+        }
+        return
+    }
+    if (!mayStart) return
+    Row {
+        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }) {
+            Icon(Icons.Filled.Videocam, contentDescription = "Group video call", tint = tint)
+        }
+        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false, start = true) }) {
+            Icon(Icons.Filled.Call, contentDescription = "Group voice call", tint = tint)
+        }
     }
 }

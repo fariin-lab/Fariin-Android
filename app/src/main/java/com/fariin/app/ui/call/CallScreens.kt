@@ -52,7 +52,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.fariin.app.call.AudioRoute
 import com.fariin.app.call.CallMachine
+import com.fariin.app.call.CallRouting
+import androidx.compose.material.icons.filled.BluetoothAudio
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
 import com.fariin.app.call.CallPhase
 import com.fariin.app.call.CallUi
 import com.fariin.app.call.GroupCall
@@ -81,7 +90,7 @@ private val GlassOn = Color.White
 fun CallScreen(
     ui: CallUi,
     onAccept: () -> Unit, onDecline: () -> Unit, onEnd: () -> Unit,
-    onMute: () -> Unit, onSpeaker: () -> Unit, onCamera: () -> Unit, onFlip: () -> Unit,
+    onMute: () -> Unit, onRoute: (AudioRoute) -> Unit, onCamera: () -> Unit, onFlip: () -> Unit,
 ) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(ui.status.connectedAtMs) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
@@ -102,7 +111,7 @@ fun CallScreen(
             Text(ui.peerName, color = Color.White, fontSize = if (showFace) 28.sp else 20.sp, fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
             Spacer(Modifier.height(6.dp))
-            Text(CallMachine.label(s, now), color = Color.White.copy(alpha = 0.75f), fontSize = 17.sp)
+            Text(if (ui.held && s.live) "On hold" else CallMachine.label(s, now), color = Color.White.copy(alpha = 0.75f), fontSize = 17.sp)
             if (ui.remoteMuted && s.phase == CallPhase.ACTIVE) {
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.clip(RoundedCornerShape(50)).background(Glass).padding(horizontal = 12.dp, vertical = 6.dp)
@@ -117,7 +126,7 @@ fun CallScreen(
             when (s.phase) {
                 CallPhase.INCOMING -> IncomingButtons(s.video, onAccept, onDecline)
                 CallPhase.ENDED -> Spacer(Modifier.height(96.dp))
-                else -> ControlBar(ui, onEnd, onMute, onSpeaker, onCamera, onFlip)
+                else -> ControlBar(ui, onEnd, onMute, onRoute, onCamera, onFlip)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -158,7 +167,7 @@ private fun LabeledCircle(icon: ImageVector, label: String, color: Color, onClic
 }
 
 @Composable
-private fun ControlBar(ui: CallUi, onEnd: () -> Unit, onMute: () -> Unit, onSpeaker: () -> Unit, onCamera: () -> Unit, onFlip: () -> Unit) {
+private fun ControlBar(ui: CallUi, onEnd: () -> Unit, onMute: () -> Unit, onRoute: (AudioRoute) -> Unit, onCamera: () -> Unit, onFlip: () -> Unit) {
     Row(
         Modifier.padding(horizontal = 12.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.35f)).padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
@@ -169,10 +178,64 @@ private fun ControlBar(ui: CallUi, onEnd: () -> Unit, onMute: () -> Unit, onSpea
         if (ui.cameraOn) Circle(Icons.Filled.Cameraswitch, active = false, label = "Flip camera", size = size, onClick = onFlip)
         Circle(if (ui.muted) Icons.Filled.MicOff else Icons.Filled.Mic, active = ui.muted,
             label = if (ui.muted) "Unmute" else "Mute", size = size, onClick = onMute)
-        Circle(Icons.AutoMirrored.Filled.VolumeUp, active = ui.speaker, label = "Speaker", size = size, onClick = onSpeaker)
+        SpeakerButton(ui, size, onRoute)
         Box(Modifier.size(size).clip(CircleShape).background(Red).clickable(onClick = onEnd)
             .semantics { contentDescription = "End call" }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.CallEnd, null, tint = Color.White, modifier = Modifier.size(size * 0.42f))
+        }
+    }
+}
+
+/**
+ * The speaker button. With only the phone and the speaker it switches between them; with a
+ * headset or Bluetooth in, it opens the list of places the sound can go (the iOS route picker).
+ */
+@Composable
+private fun SpeakerButton(ui: CallUi, size: Dp, onRoute: (AudioRoute) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val r = ui.route
+    val icon = when (r.current) {
+        AudioRoute.BLUETOOTH -> Icons.Filled.BluetoothAudio
+        AudioRoute.HEADSET -> Icons.Filled.Headphones
+        else -> Icons.AutoMirrored.Filled.VolumeUp
+    }
+    val label = if (CallRouting.speakerTap(r) is CallRouting.Tap.Picker) "Audio: " + CallRouting.label(r.current, r.bluetoothName) else "Speaker"
+    Box {
+        Circle(icon, active = CallRouting.speakerLit(r), label = label, size = size, onClick = {
+            when (val t = CallRouting.speakerTap(r)) {
+                is CallRouting.Tap.Switch -> onRoute(t.to)
+                CallRouting.Tap.Picker -> open = true
+            }
+        })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (route in CallRouting.pickerList(r)) {
+                DropdownMenuItem(
+                    text = { Text(CallRouting.label(route, r.bluetoothName)) },
+                    leadingIcon = { Icon(when (route) {
+                        AudioRoute.BLUETOOTH -> Icons.Filled.BluetoothAudio
+                        AudioRoute.HEADSET -> Icons.Filled.Headphones
+                        AudioRoute.EARPIECE -> Icons.Filled.PhoneInTalk
+                        AudioRoute.SPEAKER -> Icons.AutoMirrored.Filled.VolumeUp
+                    }, null) },
+                    trailingIcon = { if (route == r.current) Icon(Icons.Filled.Check, "In use") },
+                    onClick = { open = false; onRoute(route) },
+                )
+            }
+        }
+    }
+}
+
+/** The small picture-in-picture window: their video, else mine, else their photo. */
+@Composable
+fun PipScreen(ui: CallUi) {
+    Box(Modifier.fillMaxSize().background(Backdrop), contentAlignment = Alignment.Center) {
+        val remote = ui.remoteVideo.takeIf { ui.remoteCameraOn }
+        val local = ui.localVideo.takeIf { ui.cameraOn }
+        when {
+            remote != null -> VideoView(remote, mirror = false, modifier = Modifier.fillMaxSize())
+            ui.peerUid == "demo" && ui.remoteCameraOn -> DemoVideo(Modifier.fillMaxSize(), Color(0xFF3A5A40), Color(0xFF1B2B1F))
+            local != null -> VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize())
+            else -> Avatar(ui.peerPhoto, 64.dp)
         }
     }
 }

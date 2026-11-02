@@ -55,6 +55,8 @@ import com.fariin.app.data.CallHistory
 import com.fariin.app.data.CallRun
 import com.fariin.app.data.CallsRepository
 import com.fariin.app.data.Conversation
+import com.fariin.app.ui.call.CallActivity
+import com.fariin.app.ui.call.CallInfoScreen
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import java.text.SimpleDateFormat
@@ -65,10 +67,11 @@ import java.util.Locale
 /**
  * The Calls tab, as iOS CallsView: the All / Missed switch at the top, a large "Calls" title,
  * "Search calls", then the history with consecutive same-kind calls folded into "name (3)".
- * Missed calls from someone else are red. Read only.
+ * Missed calls from someone else are red. A row's tap calls back the same way (video stays
+ * video; a group row joins or starts that group's call); (i) opens the call info page.
  *
- * TODO: placing a call from a row or the new-call button, the (i) contact page, Edit to
- * delete calls, call links, the live row of a call in progress, ad-hoc group calls.
+ * TODO: the new-call button, Edit to delete calls, call links, the live row of a call in
+ * progress, ad-hoc group calls.
  */
 @Composable
 fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?) {
@@ -95,6 +98,12 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
     val q = search.trim().lowercase()
     val shown = CallHistory.filter(calls, me, missedOnly, now).filter { q.isEmpty() || it.name.lowercase().contains(q) }
     val runs = CallHistory.runs(shown, me, now)
+    val ctx = LocalContext.current
+    var info by remember { mutableStateOf<CallRun?>(null) }
+    info?.let { r ->
+        CallInfoScreen(r, me, onBack = { info = null }, onCall = { video -> callBack(ctx, r.latest, video) })
+        return
+    }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp)) {
@@ -120,7 +129,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
             runs.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(runs, key = { it.id }) { run ->
-                    CallRow(run, me, now)
+                    CallRow(run, me, now, onInfo = { info = run })
                 }
             }
         }
@@ -186,14 +195,14 @@ private fun Empty(title: String, text: String) {
 
 /** iOS CallHistoryRow: avatar 46, name (red when I missed it), arrow + direction, time, (i). */
 @Composable
-private fun CallRow(run: CallRun, me: String, now: Long) {
+private fun CallRow(run: CallRun, me: String, now: Long, onInfo: () -> Unit) {
     val c = Fariin.colors
     val call = run.latest
     val count = run.entries.size
     val ctx = LocalContext.current
     Column {
         Row(
-            Modifier.fillMaxWidth().clickable { /* TODO: call back */ }.padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
+            Modifier.fillMaxWidth().clickable { callBack(ctx, call, call.video) }.padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(call.photoUrl, 46.dp, squircle = false)
@@ -223,12 +232,24 @@ private fun CallRow(run: CallRun, me: String, now: Long) {
             }
             Spacer(Modifier.width(8.dp))
             Text(callTimeLabel(call.dateMs, DateFormat.is24HourFormat(ctx), now), fontSize = 14.sp, color = c.secondary)
-            Box(Modifier.size(44.dp).clickable { /* TODO: contact info */ }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clickable(onClick = onInfo), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.Info, contentDescription = "Info", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 74.dp))
     }
+}
+
+/**
+ * Call back from a row (iOS onCall): a call already on comes forward instead; a group row
+ * joins or starts that group's call; a person's row dials them.
+ */
+private fun callBack(ctx: android.content.Context, call: CallEntry, video: Boolean) {
+    if (com.fariin.app.call.CallManager.ui.value.status.live) { CallActivity.startRing(ctx); return }
+    val g = call.groupCid
+    if (g != null) { CallActivity.startGroup(ctx, g, call.name, video, start = true); return }
+    if (call.otherUid.isEmpty()) return
+    CallActivity.startDial(ctx, call.otherUid, call.name, call.photoUrl, video)
 }
 
 /** Today: the time. Yesterday. This week: the weekday. Older: "Oct 3" (iOS timeLabel). */
