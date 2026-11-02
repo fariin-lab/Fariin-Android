@@ -66,6 +66,6 @@ class AccountSecurityTest {
         assertEquals("@carol, your chats and your photos. Nothing has been deleted.", RestoreRules.body("carol"))
         assertEquals("Your chats, your photos and your name. Nothing has been deleted.", RestoreRules.body(""))
         for (s in listOf(RestoreRules.FOOT, RestoreRules.deleteNowText("3 December"), AccountCallError.REAUTH, TwoStepRules.recoveryFooter("")))
-            assertFalse(s.contains('—'))
+            assertFalse(s.contains('\u2014'))
     }
 }
