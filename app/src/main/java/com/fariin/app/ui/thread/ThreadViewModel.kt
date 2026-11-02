@@ -81,10 +81,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
     var notice by remember { mutableStateOf<String?>(null) }
     notice?.let { n -> LaunchedEffect(n) { android.widget.Toast.makeText(ctx, n, android.widget.Toast.LENGTH_SHORT).show(); notice = null } }
+    val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, s.conv, s.messages) { notice = it }
+    val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val ui = ThreadUi(
-        title = conv?.displayName(me) ?: "",
-        subtitle = typingLine ?: if (conv?.isGroup == true) "${conv.users.size} members" else presenceLine ?: "",
-        photoUrl = conv?.displayPhoto(me),
+        title = channel?.info?.title?.ifEmpty { null } ?: conv?.displayName(me) ?: "",
+        subtitle = channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
+            ?: typingLine ?: if (conv?.isGroup == true) "${conv.users.size} members" else presenceLine ?: "",
+        photoUrl = channel?.info?.avatarUrl ?: conv?.displayPhoto(me),
         isGroup = conv?.isGroup == true,
         me = me,
         messages = s.messages,
@@ -102,6 +105,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         }?.toMap() ?: emptyMap(),
         myPhoto = conv?.photos?.get(me),
         unreadAtOpen = unreadAtOpen,
+        channel = channel,
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
@@ -117,7 +121,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onTyping = { on -> vm.repo.setTyping(on) },
         onAtBottom = { atBottom.value = it },
         onTitleClick = {
-            if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
+            if (channel != null) channelNav.page(cid) else if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
         },
         onNotice = { notice = it },
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.

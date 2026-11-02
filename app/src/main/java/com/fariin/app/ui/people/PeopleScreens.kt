@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -154,6 +156,21 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                         }
                         Spacer(Modifier.width(12.dp))
                         Text("New Group", fontSize = 17.sp, color = c.blue)
+                    }
+                    // Channels (iOS NewChatView: New channel, and Find Channels on the same page).
+                    val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+                    for ((label, open, icon) in listOf(
+                        Triple("New Channel", channelNav.create, Icons.Filled.Campaign),
+                        Triple("Find Channels", channelNav.find, Icons.Filled.Explore),
+                    )) {
+                        Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                                Icon(icon, null, tint = c.blue)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(label, fontSize = 17.sp, color = c.blue)
+                        }
                     }
                     HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                     Text("Find people by their @username.", fontSize = 13.sp, color = c.secondary,

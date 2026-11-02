@@ -120,6 +120,8 @@ data class ThreadUi(
     val myPhoto: String? = null,
     /** My unread count when the chat opened, which places the "Unread Messages" divider. */
     val unreadAtOpen: Int = 0,
+    /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
+    val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
 )
 
 /**
@@ -149,6 +151,7 @@ fun ThreadScreen(
     val c = Fariin.colors
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
     var menuFor by remember { mutableStateOf<Message?>(null) }
+    var postMenuFor by remember { mutableStateOf<Message?>(null) }
     var deleteFor by remember { mutableStateOf<Message?>(null) }
     var infoFor by remember { mutableStateOf<Message?>(null) }
     var replyTo by remember { mutableStateOf<Message?>(null) }
@@ -171,6 +174,12 @@ fun ThreadScreen(
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it })
+    }
+    val ch = ui.channel
+    postMenuFor?.let { m ->
+        if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
+            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
+            onDelete = { deleteFor = it })
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
     infoFor?.let { m -> MessageInfoDialog(m, ui, is24h) { infoFor = null } }
@@ -215,7 +224,16 @@ fun ThreadScreen(
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
                         if (m.rowId == dividerId) UnreadDivider()
                         when {
-                            m.isSystem || m.isCall -> NoticePill(noticeText(m))
+                            m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else noticeText(m))
+                            ch != null -> androidx.compose.runtime.CompositionLocalProvider(
+                                com.fariin.app.ui.channels.LocalPostViews provides
+                                    if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
+                            ) {
+                                Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
+                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
+                                    com.fariin.app.ui.channels.ChannelChips(ch, m)
+                                }
+                            }
                             else -> SwipeRow(enabled = MessageRules.canReply(m), onReply = { replyTo = m; editing = null }) {
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { menuFor = m }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
@@ -239,7 +257,10 @@ fun ThreadScreen(
                 }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp))
             }
         }
-        if (ui.sendBlocked != null) {
+        if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
+            HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+            com.fariin.app.ui.channels.ChannelBottomBar(ch, ui.sendBlocked)
+        } else if (ui.sendBlocked != null) {
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
                 modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
@@ -284,8 +305,9 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                     Text(ui.subtitle, fontSize = 12.sp, color = c.secondary, maxLines = 1)
                 }
             }
-            com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
-            Avatar(ui.photoUrl, 36.dp, modifier = Modifier.padding(horizontal = 8.dp))
+            if (ui.channel == null) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
+            Avatar(ui.photoUrl, 36.dp, modifier = Modifier.padding(horizontal = 8.dp).clickable(onClick = onTitleClick),
+                squircle = ui.channel != null)
         }
         HorizontalDivider(thickness = 0.5.dp, color = c.separator)
     }
@@ -326,7 +348,8 @@ private fun senderColor(uid: String): Color = senderPalette[uid.sumOf { it.code 
 private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is24h: Boolean, onRetry: (Message) -> Unit,
                        onView: (Viewing) -> Unit) {
     val c = Fariin.colors
-    val isMe = m.authorId == ui.me
+    // In a channel nobody's post is "mine" on screen: every post is the channel speaking.
+    val isMe = m.authorId == ui.me && ui.channel == null
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
     val big = 18.dp
     val small = 6.dp
@@ -334,7 +357,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         bottomEnd = if (g.last) big else small, bottomStart = big)
     else RoundedCornerShape(topStart = if (g.first) big else small, topEnd = big,
         bottomEnd = big, bottomStart = if (g.last) big else small)
-    val showSender = ui.isGroup && !isMe
+    val showSender = ui.isGroup && !isMe && ui.channel == null
     val tick = ThreadLogic.tick(m, ui.me, ui.receipts)
     val failed = tick == Tick.FAILED
 
@@ -356,6 +379,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         val kind = m.mediaKind
         if (kind != null && kind != Message.MediaKind.VOICE) {
             MediaRow(ui, m, g, is24h, shape, maxW, tick, isMe, showSender, kind, onView)
+            ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
             return@Row
         }
         Column(
@@ -387,6 +411,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 meta = { Meta(m, tick, isMe, is24h) },
             )
         }
+        ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
     }
 }
 
@@ -498,6 +523,7 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
 private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia: Boolean = false) {
     val metaColor = if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
     Row(verticalAlignment = Alignment.CenterVertically) {
+        com.fariin.app.ui.channels.PostViews(metaColor)
         val time = ThreadLogic.timeLabel(m.clientTs?.takeIf { isMe && !m.hasServerTime } ?: m.createdAtMillis, is24h)
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
         if (isMe && !m.deleted) {

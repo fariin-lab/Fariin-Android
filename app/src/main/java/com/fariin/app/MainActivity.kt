@@ -36,6 +36,7 @@ import com.fariin.app.ui.thread.LocalOpenChat
 import com.fariin.app.ui.thread.ThreadRoute
 import com.fariin.app.ui.thread.ThreadScreen
 import com.fariin.app.ui.people.peopleRoutes
+import com.fariin.app.ui.channels.channelRoutes
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
@@ -139,6 +140,11 @@ class MainActivity : ComponentActivity() {
         // Key bootstrap as iOS RootView does it: load (or, only when this phone has none, make and
         // store) the keypair, then publish it if the server copy differs. A key store that cannot be
         // read is never taken as "no key", so a readable key is never replaced.
+        // Channels I follow (their own list: followers are not in a channel's `users`).
+        androidx.compose.runtime.DisposableEffect(me) {
+            com.fariin.app.channel.ChannelFollows.start(me)
+            onDispose { com.fariin.app.channel.ChannelFollows.stop() }
+        }
         LaunchedEffect(me) {
             try { crypto.ensureReady() } catch (_: Exception) {}
             crypto.publishPublicKey()
@@ -181,10 +187,12 @@ class MainActivity : ComponentActivity() {
         }
         val people = remember(me) { com.fariin.app.data.FirestorePeople(me, crypto) }
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
-            com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav)) {
+            com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav),
+            com.fariin.app.ui.channels.LocalChannelNav provides com.fariin.app.ui.channels.channelNav(nav)) {
             NavHost(nav, startDestination = "main") {
                 peopleRoutes(nav, people, chats = { chats.chats }, requests = { chats.requests },
                     groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
+                channelRoutes(nav, me)
                 composable("main") {
                     MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } })
                 }

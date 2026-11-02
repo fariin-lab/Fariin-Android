@@ -61,6 +61,10 @@ data class Message(
     val album: List<AlbumItem> = emptyList(),
     /** uid to opened emoji (each sealed by its reactor; an unopened one is left out). */
     val reactions: Map<String, String> = emptyMap(),
+    /** A channel post's views, counted by the server (functions-groups channelViews). */
+    val views: Int = 0,
+    /** A channel post's reactions as counts only: who picked what is never on the post. */
+    val reactionCounts: Map<String, Int> = emptyMap(),
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
@@ -178,6 +182,11 @@ data class Message(
                 waveform = (data["waveform"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList(),
                 uploading = data["uploading"] as? Boolean ?: false,
                 viewOnce = data["viewOnce"] as? Boolean ?: false,
+                views = maxOf(0, (data["views"] as? Number)?.toInt() ?: 0),
+                reactionCounts = (data["reactionCounts"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
+                    val n = (v as? Number)?.toInt() ?: 0
+                    if (k is String && n > 0) k to n else null
+                }?.toMap() ?: emptyMap(),
                 album = album,
                 reactions = (data["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     val uid = k as? String ?: return@mapNotNull null

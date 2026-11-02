@@ -51,6 +51,12 @@ data class Conversation(
     val deletedUsers: List<String> = emptyList(),
     /** `rk`: keys a member released for old sealed group items (nonce b64 to key b64). */
     val releasedKeys: Map<String, String> = emptyMap(),
+    /** Channel: posts so far (server), and the numbers of posts deleted lately. */
+    val postCount: Int = 0,
+    val deletedPostSeqs: List<Int> = emptyList(),
+    /** Mine as a follower (ChannelFollows, users/{me}/channels/{cid}); null when I am not one. */
+    val followerRead: Int? = null,
+    val followerMuted: Boolean = false,
 ) {
     val isGroup: Boolean get() = convType == "group"
 
@@ -80,7 +86,7 @@ data class Conversation(
         if (isGroup) avatarUrl?.takeIf { it.isNotEmpty() } else photoUrl(me)
 
     // Channel followers (users/{me}/channels) are not ported yet, so nobody is a follower here.
-    fun isFollower(me: String): Boolean = false
+    fun isFollower(me: String): Boolean = isChannel && followerRead != null && !users.contains(me)
 
     fun isPinned(me: String): Boolean = pinnedBy[me] ?: false
     fun isArchived(me: String): Boolean = archivedBy[me] ?: false
@@ -99,11 +105,13 @@ data class Conversation(
     fun lastIsMine(me: String): Boolean = lastSender.isNotEmpty() && lastSender == me
 
     /** Never negative: a negative count is the old manual "mark as unread" flag. */
-    fun unread(me: String): Int = maxOf(0, unreadCount[me] ?: 0)
+    fun unread(me: String): Int =
+        if (isFollower(me)) com.fariin.app.channel.ChannelRules.unread(postCount, followerRead ?: 0, deletedPostSeqs)
+        else maxOf(0, unreadCount[me] ?: 0)
     fun manuallyUnread(me: String): Boolean = (markedUnread[me] ?: false) || (unreadCount[me] ?: 0) < 0
     fun hasUnreadMark(me: String): Boolean = unread(me) > 0 || manuallyUnread(me)
     fun hasUnreadReply(me: String): Boolean = isGroup && unread(me) > 0 && (replyUnread[me] ?: 0) > 0
-    fun isMuted(me: String, nowMillis: Double): Boolean = (mutedBy[me] ?: 0.0) > nowMillis
+    fun isMuted(me: String, nowMillis: Double): Boolean = if (isFollower(me)) followerMuted else (mutedBy[me] ?: 0.0) > nowMillis
 
     fun lastDeliveredToOther(me: String): Boolean {
         if (isGroup || updatedAtMillis <= 0 || lastHeld) return false
@@ -197,6 +205,8 @@ data class Conversation(
                 reqOff = data["reqOff"] as? Boolean ?: false,
                 deletedUsers = stringList(data["deletedUsers"]),
                 releasedKeys = stringMap(data["rk"]),
+                postCount = maxOf(0, (data["postCount"] as? Number)?.toInt() ?: 0),
+                deletedPostSeqs = (data["deletedPostSeqs"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList(),
             )
         }
 

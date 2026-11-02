@@ -8,6 +8,7 @@ import com.fariin.app.data.ConversationsRepository
 import com.fariin.app.data.CryptoHub
 import com.fariin.app.crypto.FariinCrypto
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,14 @@ class ChatsViewModel(
     private val preloaded = HashSet<String>()
 
     val state: StateFlow<ChatsUiState> = repo.listen(me)
+        // Channels I follow are not in their `users`, so they come from my follow list (iOS
+        // ConversationsRepository merges ChannelFollows.conversations the same way).
+        .combine(com.fariin.app.channel.ChannelFollows.docs.combine(com.fariin.app.channel.ChannelFollows.entries) { _, _ -> Unit }) { s, _ ->
+            if (s is ConversationsRepository.State.Loaded) {
+                val followed = com.fariin.app.channel.ChannelFollows.conversations().filter { f -> s.conversations.none { it.id == f.id } }
+                if (followed.isEmpty()) s else s.copy(conversations = s.conversations + followed)
+            } else s
+        }
         .onEach { s ->
             if (s is ConversationsRepository.State.Loaded) {
                 warmKeys(s.conversations)

@@ -1,0 +1,314 @@
+package com.fariin.app.ui.channels
+
+import android.content.Intent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Forward
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.fariin.app.channel.ChannelInfo
+import com.fariin.app.channel.ChannelRules
+import com.fariin.app.channel.ChannelRules.Role
+import com.fariin.app.data.Message
+import com.fariin.app.ui.theme.Fariin
+
+/**
+ * What a channel adds to the chat page (Kulan-iOS ThreadView channel parts, MessageRowModelBuilder
+ * channel rows, ChannelFollowerBar). Every post is the channel speaking, drawn as received for
+ * everyone, with its eye count, counts-only reactions and a share button beside it.
+ */
+data class ChannelThreadUi(
+    val info: ChannelInfo,
+    val role: Role,
+    /** Looking from outside (not following, not an admin). */
+    val guest: Boolean,
+    val muted: Boolean,
+    val canReact: Boolean,
+    val offered: List<String>,
+    val pickable: List<String>,
+    /** My pick on a post (one on its way first) and the one the server already holds. */
+    val mine: (String) -> String? = { null },
+    val held: (String) -> String? = { null },
+    /** The counts a post shows (the server's last answer while newer than the post). */
+    val counts: (Message) -> Map<String, Int> = { it.reactionCounts },
+    val onFollow: () -> Unit = {},
+    /** null = unmute; 0 = forever; else the end in ms. */
+    val onMute: (Double?) -> Unit = {},
+    val onReact: (Message, String?) -> Unit = { _, _ -> },
+    val onReport: (Message) -> Unit = {},
+    /** The follow's own problem in the server's words, shown over the bar. */
+    val problem: String? = null,
+    /** Follow tapped, the server's answer on its way: drawn as followed already. */
+    val joining: Boolean = false,
+)
+
+/** A post's eye count for the meta line (null = not a channel post). */
+val LocalPostViews = compositionLocalOf<Int?> { null }
+
+@Composable
+fun PostViews(color: Color) {
+    val v = LocalPostViews.current ?: return
+    Icon(Icons.Filled.Visibility, contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
+    Spacer(Modifier.width(2.dp))
+    Text(ChannelRules.compactCount(v) + "  ", fontSize = 11.sp, color = color, maxLines = 1,
+        modifier = Modifier.semantics { contentDescription = "$v views" })
+}
+
+/** The round share button beside a post (hidden under Protect Content). */
+@Composable
+fun PostShareButton(ch: ChannelThreadUi, m: Message) {
+    if (m.deleted || ch.info.restricted || m.isSystem) return
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    Box(
+        Modifier.padding(start = 6.dp).size(32.dp).clip(CircleShape)
+            .background(if (c.dark) Color(0xFF26262B) else Color(0xFFEDEDEF))
+            .clickable { sharePost(ctx, ch.info, m) },
+        contentAlignment = Alignment.Center,
+    ) { Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = "Share", tint = c.secondary, modifier = Modifier.size(18.dp)) }
+}
+
+fun sharePost(ctx: android.content.Context, info: ChannelInfo, m: Message) {
+    val link = if (info.username.isEmpty()) "" else "https://fariin.com/${info.username}"
+    val text = listOf(m.bodyText.takeIf { it.isNotBlank() }, link.ifEmpty { null }).filterNotNull().joinToString("\n\n")
+    if (text.isEmpty()) return
+    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+    ctx.startActivity(Intent.createChooser(send, "Share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/** Counts-only chips under a post; nobody yet = nothing. Tapping one picks (or takes back) it. */
+@Composable
+fun ChannelChips(ch: ChannelThreadUi, m: Message) {
+    if (ch.info.reactMode == "off" || m.isSystem || m.deleted) return
+    val chips = ChannelRules.chips(ch.counts(m), ch.mine(m.id), ch.held(m.id))
+    if (chips.isEmpty()) return
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 3.dp), horizontalArrangement = Arrangement.Start) {
+        chips.forEach { chip ->
+            Row(
+                Modifier.padding(end = 4.dp).clip(CircleShape)
+                    .background(if (chip.mine) c.blue.copy(alpha = 0.18f) else if (c.dark) Color(0xFF26262B) else Color(0xFFF2F2F2))
+                    .then(if (chip.mine) Modifier.border(1.dp, c.blue.copy(alpha = 0.5f), CircleShape) else Modifier)
+                    .clickable(enabled = ch.canReact) { ch.onReact(m, ChannelRules.nextPick(ch.mine(m.id), chip.emoji)) }
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .semantics { contentDescription = "${chip.emoji}, ${chip.count}" },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(chip.emoji, fontSize = 15.sp)
+                Spacer(Modifier.width(4.dp))
+                Text(ChannelRules.compactCount(chip.count), fontSize = 13.sp, color = if (chip.mine) c.blue else c.label)
+            }
+        }
+    }
+}
+
+private data class PostItem(val title: String, val icon: ImageVector, val destructive: Boolean = false, val run: () -> Unit)
+
+/**
+ * Long press on a post: the channel's reactions (its own list, or the first six of the 73, with
+ * a "more" button that opens the whole set), then Copy, Share, Report, and Delete for an admin.
+ */
+@Composable
+fun ChannelPostMenu(
+    ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit,
+    onCopy: (String) -> Unit, onDelete: (Message) -> Unit,
+) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    var more by remember { mutableStateOf(false) }
+    val mine = ch.mine(m.id)
+    val items = buildList {
+        if (!m.deleted) {
+            if (!ch.info.restricted && m.bodyText.isNotEmpty()) add(PostItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.bodyText) })
+            if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward) { sharePost(ctx, ch.info, m) })
+            if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true) { ch.onReport(m) })
+        }
+        if (ch.role == Role.ADMIN) add(PostItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                if (ch.canReact && !m.deleted && !m.isSystem && m.sendState == null) {
+                    if (more) {
+                        LazyVerticalGrid(
+                            GridCells.Fixed(7),
+                            Modifier.fillMaxWidth().heightIn(max = 320.dp).shadow(8.dp, RoundedCornerShape(18.dp))
+                                .clip(RoundedCornerShape(18.dp)).background(c.card).padding(8.dp),
+                        ) {
+                            items(ch.pickable) { e ->
+                                Box(
+                                    Modifier.size(44.dp).clip(CircleShape)
+                                        .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
+                                        .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
+                                    contentAlignment = Alignment.Center,
+                                ) { Text(e, fontSize = 26.sp) }
+                            }
+                        }
+                    } else Row(
+                        Modifier.shadow(8.dp, CircleShape).clip(CircleShape).background(c.card).padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        for (e in ch.offered) {
+                            Box(
+                                Modifier.size(44.dp).clip(CircleShape)
+                                    .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
+                                    .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
+                                contentAlignment = Alignment.Center,
+                            ) { Text(e, fontSize = 26.sp) }
+                        }
+                        if (ch.pickable.size > ch.offered.size) {
+                            Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "More reactions", tint = c.secondary)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                Text(
+                    if (m.deleted) "This post was deleted" else m.bodyText.ifEmpty { "Post" },
+                    fontSize = 15.sp, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp))
+                        .background(if (c.dark) Color(0xFF26262B) else Color(0xFFF2F2F2)).padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                if (items.isNotEmpty()) Column(Modifier.width(250.dp).shadow(8.dp, RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(14.dp)).background(c.card)) {
+                    items.forEachIndexed { i, it ->
+                        if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+                        Row(Modifier.fillMaxWidth().clickable { onDismiss(); it.run() }.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(it.title, fontSize = 17.sp, color = if (it.destructive) c.red else c.label, modifier = Modifier.weight(1f))
+                            Icon(it.icon, null, tint = if (it.destructive) c.red else c.label, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The follower's bar where the composer would be (ChannelFollowerBar): one capsule that is blue
+ * Follow while I do not follow and becomes Mute / Unmute the moment Follow is tapped. A tap mutes
+ * or unmutes for good; a long press offers 1 hour, 8 hours, 1 day, 1 week and Mute Forever.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
+    val c = Fariin.colors
+    val joined = ch.role != Role.VISITOR || ch.joining
+    var menu by remember { mutableStateOf(false) }
+    val banned = ch.info.bannedUids.isNotEmpty() && ch.role == Role.VISITOR && ch.info.bannedUids.contains(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid)
+    Column(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        (ch.problem ?: notice)?.let {
+            Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 8.dp))
+        }
+        if (banned) {
+            Text("You're banned from this channel.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(c.card).padding(14.dp))
+            return@Column
+        }
+        val fill by animateColorAsState(if (joined) (if (c.dark) Color(0xFF26262B) else Color(0xFFEDEDEF)) else c.blue, label = "bar")
+        Box {
+            Box(
+                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(25.dp)).background(fill)
+                    .combinedClickable(
+                        onClick = {
+                            if (!joined) ch.onFollow()
+                            else ch.onMute(if (ch.muted) null else 0.0)
+                        },
+                        onLongClick = { if (joined) menu = true },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                val label = when { !joined -> "Follow"; ch.muted -> "Unmute"; else -> "Mute" }
+                AnimatedContent(label, transitionSpec = {
+                    (fadeIn() + slideInVertically { it / 3 }) togetherWith (fadeOut() + slideOutVertically { -it / 3 })
+                }, label = "barText") { t ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (t != "Follow") {
+                            Icon(if (t == "Unmute") Icons.Filled.Notifications else Icons.Filled.NotificationsOff, null,
+                                tint = c.label, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(t, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (t == "Follow") Color.White else c.label)
+                    }
+                }
+            }
+            DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
+                if (ch.muted) DropdownMenuItem(text = { Text("Unmute") }, onClick = { menu = false; ch.onMute(null) })
+                else {
+                    for ((label, hours) in listOf("1 hour" to 1, "8 hours" to 8, "1 day" to 24, "1 week" to 168)) {
+                        DropdownMenuItem(text = { Text("Mute for $label") }, onClick = {
+                            menu = false; ch.onMute(System.currentTimeMillis() + hours * 3_600_000.0)
+                        })
+                    }
+                    DropdownMenuItem(text = { Text("Mute Forever", color = c.red) }, onClick = { menu = false; ch.onMute(0.0) })
+                }
+            }
+        }
+    }
+}
