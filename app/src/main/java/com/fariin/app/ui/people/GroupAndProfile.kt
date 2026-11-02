@@ -297,19 +297,24 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                     }
                 }
             })
-            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(64.dp).clip(CircleShape).background(c.fieldFill).clickable(onClick = pick), contentAlignment = Alignment.Center) {
-                    val p = photo
-                    if (p != null) {
-                        val bmp = remember(p) { android.graphics.BitmapFactory.decodeByteArray(p, 0, p.size)?.asImageBitmap() }
-                        if (bmp != null) androidx.compose.foundation.Image(bmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    } else Text("Photo", fontSize = 13.sp, color = c.blue)
+            // iOS NewGroupView: the photo and the name side by side in one rounded card.
+            SettingsSection {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(64.dp).clip(CircleShape).background(c.fieldFill).clickable(onClick = pick), contentAlignment = Alignment.Center) {
+                        val p = photo
+                        if (p != null) {
+                            val bmp = remember(p) { android.graphics.BitmapFactory.decodeByteArray(p, 0, p.size)?.asImageBitmap() }
+                            if (bmp != null) androidx.compose.foundation.Image(bmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        } else Text("Photo", fontSize = 13.sp, color = c.blue)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Box(Modifier.weight(1f)) { Field(title, "Group Name") { title = it.take(100) } }
                 }
-                Spacer(Modifier.width(12.dp))
-                Box(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(c.card)) { Field(title, "Group Name") { title = it.take(100) } }
             }
-            Header("Members · ${picked.size + 1}")   // iOS NewGroupView: me included
-            people.filter { it.uid in picked }.forEach { p -> PersonRow(p.photoUrl, p.shownName, "", onClick = null) }
+            val members = people.filter { it.uid in picked }
+            SettingsSection(header = "Members · ${picked.size + 1}") {   // iOS NewGroupView: me included
+                members.forEach { p -> PersonRow(p.photoUrl, p.shownName, "", onClick = null) }
+            }
         }
     }
 }
