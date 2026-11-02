@@ -759,7 +759,7 @@ private fun Composer(
                                     if (!ch.pressed) break
                                 }
                                 recording = false; slide = 0f
-                                if (cancelled) recorder.cancel() else recorder.finish()?.let(onSendVoice)
+                                if (cancelled) recorder.cancel() else recorder.finish { it?.let(onSendVoice) }
                             }
                         },
                     contentAlignment = Alignment.Center,
