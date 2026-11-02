@@ -513,7 +513,7 @@ class ThreadRepository(
             "clientId" to clientId,
         )
         // iOS replyEnc: {id, authorId, text sealed like the message}.
-        if (reply != null) msg["replyTo"] = mapOf("id" to reply.id, "authorId" to reply.authorId, "text" to crypto.encryptForConversation(cid, reply.text))
+        if (reply != null) msg["replyTo"] = replyMap(reply, crypto.encryptForConversation(cid, reply.text))
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,
@@ -524,6 +524,26 @@ class ThreadRepository(
         if (answering) conv["accepted"] = true
         batch.update(convRef, conv)
         batch.commit().await()
+    }
+
+    /** iOS replyEnc: {id, authorId, text sealed like the message}, plus a story quote's flags. */
+    private fun replyMap(r: Message.ReplyRef, sealed: String): Map<String, Any> {
+        val e = hashMapOf<String, Any>("id" to r.id, "authorId" to r.authorId, "text" to sealed)
+        if (r.isStatus) e["isStatus"] = true
+        if (r.isReaction) e["isReaction"] = true
+        if (!r.storyThumb.isNullOrEmpty()) e["storyThumb"] = r.storyThumb   // plain story URL, not sealed
+        return e
+    }
+
+    /**
+     * A reply from the story viewer (iOS StoryViewer reply: ChatService.sendText with a status
+     * quote). Sent straight away, not through the offline queue; a failure is thrown to the caller.
+     */
+    suspend fun sendStoryReply(text: String, ref: Message.ReplyRef) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        val clientId = UUID.randomUUID().toString().uppercase()
+        turn.withLock { sendDirect(t, clientId, System.currentTimeMillis().toDouble(), ref) }
     }
 
     private fun isKnock(startedBy: String, accepted: Boolean, lastSender: String) =
@@ -557,7 +577,7 @@ class ThreadRepository(
             "clientId" to clientId,
         )
         // iOS replyEnc: {id, authorId, text sealed like the message}.
-        if (reply != null) msg["replyTo"] = mapOf("id" to reply.id, "authorId" to reply.authorId, "text" to crypto.sealForGroup(reply.text, members, cid))
+        if (reply != null) msg["replyTo"] = replyMap(reply, crypto.sealForGroup(reply.text, members, cid))
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,

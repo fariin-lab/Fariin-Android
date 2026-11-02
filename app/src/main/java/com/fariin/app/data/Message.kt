@@ -72,7 +72,15 @@ data class Message(
 ) {
     enum class SendState { SENDING, FAILED }
 
-    data class ReplyRef(val id: String, val authorId: String, val text: String)
+    /** [isStatus]: the quote points at a story; [storyThumb] its plain picture URL (iOS ReplyRef). */
+    data class ReplyRef(
+        val id: String,
+        val authorId: String,
+        val text: String,
+        val isStatus: Boolean = false,
+        val storyThumb: String? = null,
+        val isReaction: Boolean = false,
+    )
 
     data class AlbumItem(val imageUrl: String, val enc: EncMeta?, val width: Double?, val height: Double?)
 
@@ -136,6 +144,9 @@ data class Message(
                     id = r["id"] as? String ?: "",
                     authorId = r["authorId"] as? String ?: "",
                     text = (r["text"] as? String)?.let { if (it.isEmpty()) "" else open(it, author) } ?: "",
+                    isStatus = r["isStatus"] as? Boolean ?: false,
+                    storyThumb = (r["storyThumb"] as? String)?.ifEmpty { null },
+                    isReaction = r["isReaction"] as? Boolean ?: false,
                 )
             }
             // Sealed like the caption; a sentinel (key not warm, tampered) is no placeholder at all.

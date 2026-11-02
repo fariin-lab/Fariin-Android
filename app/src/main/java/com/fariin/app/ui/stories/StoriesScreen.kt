@@ -28,7 +28,15 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.fariin.app.data.StoryMedia
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -68,8 +76,10 @@ import kotlinx.coroutines.delay
  * folds. Each row is the newest story's picture with the author's face in the corner, a green
  * to blue ring while unseen, grey once seen. Read only.
  *
- * TODO: opening a story (the viewer, marking seen), posting one (camera button, Add Story),
- * Posted Stories, the more menu, Hidden Stories, the per-story ring segments, upload progress.
+ * A row opens the viewer (StoryViewer.kt) on that ring and walks on through the ones below it;
+ * the camera button and Add Story pick a photo or video for the composer (StoryComposer.kt).
+ *
+ * TODO: Posted Stories, the more menu, Hidden Stories, the per-story ring segments, the camera.
  */
 @Composable
 fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?) {
@@ -88,7 +98,7 @@ fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfi
             repo.listen(me, { convs }, { prof?.name?.ifEmpty { null } ?: "You" }, { prof?.photoUrl })
         }.collectFlow(StoriesState())
     }
-    StoriesScreen(profile, state)
+    StoriesScreen(me, conversations, profile, state, live = demo == null)
 }
 
 @Composable
@@ -99,8 +109,27 @@ private fun <T> kotlinx.coroutines.flow.Flow<T>.collectFlow(initial: T): T {
 }
 
 @Composable
-private fun StoriesScreen(profile: MyProfile?, state: StoriesState) {
+private fun StoriesScreen(me: String, conversations: List<Conversation>, profile: MyProfile?, state: StoriesState, live: Boolean) {
     val c = Fariin.colors
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // The viewer: which rings it walks through and where it starts.
+    var viewing by remember { mutableStateOf<Pair<List<StoryGroup>, Int>?>(null) }
+    var composing by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
+    var pickError by remember { mutableStateOf<String?>(null) }
+    val upload by StoryUploads.state.collectAsState()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            prepareStoryMedia(context, uri)
+                .onSuccess { composing = it; pickError = null }
+                .onFailure { pickError = it.message ?: "Couldn't open this file." }
+        }
+    }
+    val addStory: () -> Unit = {
+        if (live) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+    }
+    LaunchedEffect(pickError) { if (pickError != null) { delay(3000); pickError = null } }
     // "Xm ago" moves once a minute.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
@@ -108,6 +137,8 @@ private fun StoriesScreen(profile: MyProfile?, state: StoriesState) {
     val myName = profile?.name?.ifEmpty { null } ?: "You"
     val recent = state.others.filter { it.hasUnseen }
     val viewed = state.others.filter { !it.hasUnseen }
+    val ordered = recent + viewed
+    val openRing: (StoryGroup) -> Unit = { g -> viewing = ordered to ordered.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(52.dp)) {
@@ -135,22 +166,30 @@ private fun StoriesScreen(profile: MyProfile?, state: StoriesState) {
             item {
                 val mine = state.mine
                 val newest = mine?.stories?.lastOrNull()
+                val uploadLine = when (val u = upload) {
+                    StoryUploads.State.Uploading -> "Uploading…"
+                    is StoryUploads.State.Failed -> u.message
+                    null -> null
+                }
                 if (mine != null && newest != null) {
                     StoryRow(
-                        thumbUrl = newest.listThumb, title = "My Story", subtitle = StoryList.ago(newest.createdAtMs, now),
+                        thumbUrl = newest.listThumb, title = "My Story", subtitle = uploadLine ?: StoryList.ago(newest.createdAtMs, now),
                         authorPhoto = profile?.photoUrl, seen = !mine.hasUnseen, camera = true,
                         backThumbUrl = mine.stories.getOrNull(mine.stories.size - 2)?.listThumb,
+                        onClick = { viewing = listOf(mine) to 0 }, onCamera = addStory,
                     )
                 } else {
                     StoryRow(
-                        thumbUrl = "", title = "Add Story", subtitle = "Disappears after 24 hours",
+                        thumbUrl = "", title = "Add Story", subtitle = uploadLine ?: "Disappears after 24 hours",
                         authorPhoto = profile?.photoUrl, seen = true, camera = true, addBadge = true,
+                        onClick = addStory, onCamera = addStory,
                     )
                 }
+                pickError?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp)) }
             }
             if (recent.isNotEmpty()) {
                 item { Heading("Recent Stories") }
-                items(recent, key = { "r" + it.key }) { g -> FriendRow(g, now) }
+                items(recent, key = { "r" + it.key }) { g -> FriendRow(g, now) { openRing(g) } }
             }
             if (viewed.isNotEmpty()) {
                 item {
@@ -168,11 +207,17 @@ private fun StoriesScreen(profile: MyProfile?, state: StoriesState) {
                         )
                     }
                 }
-                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }) { g -> FriendRow(g, now) }
+                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }) { g -> FriendRow(g, now) { openRing(g) } }
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
     }
+    viewing?.let { (groups, start) ->
+        // Live copies of the rings, so a story posted or deleted meanwhile is not stale when opened.
+        if (live) StoryViewerDialog(me, groups, start, conversations, onClose = { viewing = null })
+        else viewing = null
+    }
+    composing?.let { m -> StoryComposerDialog(me, m, conversations, onClose = { composing = null }) }
 }
 
 @Composable
@@ -184,13 +229,13 @@ private fun Heading(title: String) {
 }
 
 @Composable
-private fun FriendRow(g: StoryGroup, now: Long) {
+private fun FriendRow(g: StoryGroup, now: Long, onClick: () -> Unit) {
     val newest = g.stories.lastOrNull()
     StoryRow(
         thumbUrl = newest?.listThumb ?: "", title = g.name.ifEmpty { "Fariin user" },
         subtitle = newest?.let { StoryList.ago(it.createdAtMs, now) } ?: "",
         authorPhoto = g.photoUrl, seen = !g.hasUnseen,
-        squircle = false,
+        squircle = false, onClick = onClick,
     )
 }
 
@@ -208,11 +253,13 @@ private fun StoryRow(
     addBadge: Boolean = false,
     backThumbUrl: String? = null,
     squircle: Boolean = false,
+    onClick: () -> Unit = {},
+    onCamera: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.fillMaxWidth().clickable { /* TODO: open the story viewer */ }
+        Modifier.fillMaxWidth().clickable { onClick() }
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -276,7 +323,7 @@ private fun StoryRow(
         if (camera) {
             Spacer(Modifier.width(8.dp))
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { /* TODO: post a story */ },
+                Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { onCamera() },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(painterResource(R.drawable.ic_story_camera), contentDescription = "Add Story", tint = c.label,

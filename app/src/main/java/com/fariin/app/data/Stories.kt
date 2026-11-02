@@ -23,10 +23,29 @@ data class Story(
     val groupId: String? = null,
     val groupName: String? = null,
     val groupPhoto: String? = null,
+    val caption: String = "",
+    /** "everyone" | "friends" | "glowers" | "custom" | "oneTime" | "group" (iOS StoryAudienceTag). */
+    val audienceLabel: String = "",
+    val oneTime: Boolean = false,
+    val allowsReplies: Boolean = true,
+    val isPublic: Boolean = false,
+    /** Seconds, video only (0 = unknown). */
+    val durationSec: Double = 0.0,
+    val blurThumb: String = "",
+    /** How many people are still in the audience; -1 when it is not mine to see. */
+    val recipientsLeft: Int = -1,
 ) {
     /** The ring a story belongs to: its author, or "g:" + the group for a group's story. */
     val ringKey: String get() = groupId?.takeIf { it.isNotEmpty() }?.let { StoryGroup.GROUP_PREFIX + it } ?: authorUid
     val listThumb: String get() = thumbUrl.ifEmpty { mediaUrl }
+    /** What a reply quote shows (iOS `previewUrl`): the poster frame of a video, else the photo. */
+    val previewUrl: String get() = if (isVideo) thumbUrl.ifEmpty { mediaUrl } else mediaUrl
+    /** Shown for this long: a video its own length, a photo 5 s (iOS StoryUIModel duration). */
+    val showMs: Long get() = if (isVideo && durationSec > 0.5) (durationSec * 1000).toLong() else PHOTO_MS
+
+    companion object {
+        const val PHOTO_MS = 5_000L
+    }
 }
 
 /** One person's (or group's) stories, oldest first, as iOS StoryGroup. */
@@ -71,6 +90,14 @@ object StoryList {
             groupId = (data["groupId"] as? String)?.takeIf { it.isNotEmpty() },
             groupName = data["groupName"] as? String,
             groupPhoto = data["groupPhoto"] as? String,
+            caption = data["caption"] as? String ?: "",
+            audienceLabel = data["audienceLabel"] as? String ?: "",
+            oneTime = data["oneTime"] as? Boolean ?: false,
+            allowsReplies = data["allowsReplies"] as? Boolean ?: true,
+            isPublic = data["public"] as? Boolean ?: false,
+            durationSec = (data["duration"] as? Number)?.toDouble() ?: 0.0,
+            blurThumb = data["blurThumb"] as? String ?: "",
+            recipientsLeft = (data["recipientUids"] as? List<*>)?.size ?: -1,
         )
     }
 

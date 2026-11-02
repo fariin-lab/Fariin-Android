@@ -512,8 +512,14 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
         Box(Modifier.width(3.dp).height(38.dp).background(bar))
         Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (isMe) Color.White else bar, maxLines = 1)
-            Text(r.text, fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.85f) else c.label,
+            // A story reply quotes the story itself (iOS status quote): "Story" and its picture.
+            Text(if (r.isStatus) "Story" else r.text, fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.85f) else c.label,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (r.isStatus && !r.storyThumb.isNullOrEmpty()) {
+            coil3.compose.AsyncImage(r.storyThumb, contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.padding(end = 4.dp, top = 3.dp, bottom = 3.dp).width(24.dp).height(32.dp).clip(RoundedCornerShape(4.dp)))
         }
     }
 }
