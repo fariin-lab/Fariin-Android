@@ -92,7 +92,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
     BackHandler(enabled = stack.isNotEmpty(), onBack = pop)
 
     val page = stack.lastOrNull()
-    Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
+    Box(Modifier.fillMaxSize().background(Fariin.colors.bg)) {
         when {
             page == null -> SettingsHome(profile, push)
             page == PAGE_ACCOUNT -> AccountPage(profile, demoProfile != null, push, pop, onSignOut)
@@ -142,7 +142,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
             ProfileHeader(profile, onEdit = people.editProfile, onShare = { push(soon("Share profile")) })
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(8.dp))
             SettingsSection {
                 SettingsRow("Account", painterResource(R.drawable.ic_account)) { push(PAGE_ACCOUNT) }
                 SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true) { push(PAGE_DEVICES) }
@@ -169,24 +169,25 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
     }
 }
 
-/** Avatar 120, name in bold, @username, then the two capsules (iOS profileHeader). */
+/** Android profile header: photo at the start, name and @username beside it, then the two
+ *  iOS actions (Edit profile, Share profile) as tonal buttons. */
 @Composable
 private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Avatar(profile?.photoUrl, 120.dp, modifier = Modifier.clickable(onClick = onEdit))
-        Spacer(Modifier.height(8.dp))
-        Text(
-            profile?.name?.ifEmpty { null } ?: "You", fontSize = 22.sp, fontWeight = FontWeight.Bold,
-            color = c.label, modifier = Modifier.clickable(onClick = onEdit),
-        )
-        val h = profile?.handle.orEmpty()
-        if (h.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text("@$h", fontSize = 17.sp, color = c.secondary)
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Avatar(profile?.photoUrl, 72.dp)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(profile?.name?.ifEmpty { null } ?: "You", style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = c.label)
+                val h = profile?.handle.orEmpty()
+                if (h.isNotEmpty()) Text("@$h", style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = c.secondary)
+            }
         }
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Capsule("Edit profile", onEdit, Modifier.weight(1f))
             Capsule("Share profile", onShare, Modifier.weight(1f))
         }
@@ -195,13 +196,7 @@ private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -
 
 @Composable
 private fun Capsule(title: String, onClick: () -> Unit, modifier: Modifier) {
-    val c = Fariin.colors
-    Box(
-        modifier.height(44.dp).clip(CircleShape).background(c.card).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
-    }
+    androidx.compose.material3.FilledTonalButton(onClick = onClick, modifier = modifier) { Text(title) }
 }
 
 /** iOS AccountSettingsView: Sign-in, Security, Account (Your Account Data, Log out). */

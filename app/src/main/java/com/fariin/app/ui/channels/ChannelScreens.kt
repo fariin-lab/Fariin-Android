@@ -87,7 +87,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
         loading = false
     }
     toast?.let { t -> LaunchedEffect(t) { delay(2500); toast = null } }
-    Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    Box(Modifier.fillMaxSize().background(c.bg)) {
         Column(Modifier.fillMaxSize()) {
             PageBar("Find Channels", onBack)
             when {
@@ -268,7 +268,7 @@ private fun Field(value: String, placeholder: String, single: Boolean, onChange:
 private fun Details(name: String, about: String, creating: Boolean, error: String?, onName: (String) -> Unit,
                     onAbout: (String) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding().navigationBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(c.bg).imePadding().navigationBarsPadding()) {
         PageBar("New Channel", onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Column(Modifier.padding(16.dp).clip(RoundedCornerShape(12.dp)).background(c.card)) {
@@ -309,7 +309,7 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
         linkNote = r ?: "fariin.com/$link is available."
         linkOk = r == null
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding().navigationBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(c.bg).imePadding().navigationBarsPadding()) {
         PageBar("Channel Type", null)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             SectionTitle("CHANNEL TYPE")

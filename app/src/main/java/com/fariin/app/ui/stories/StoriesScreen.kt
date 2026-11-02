@@ -161,9 +161,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     Modifier.clickable { /* TODO: Posted Stories */ }.padding(start = 20.dp, end = 20.dp, top = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("My Story", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label.copy(alpha = 0.7f))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary,
-                        modifier = Modifier.size(20.dp))
+                    Text("My Story", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.blue)
                 }
             }
             item {
@@ -201,7 +199,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Viewed Stories", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label.copy(alpha = 0.7f))
+                        Text("Viewed Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.blue)
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             if (viewedCollapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
@@ -226,7 +224,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
 @Composable
 private fun Heading(title: String) {
     Text(
-        title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label.copy(alpha = 0.7f),
+        title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Fariin.colors.blue,
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
     )
 }

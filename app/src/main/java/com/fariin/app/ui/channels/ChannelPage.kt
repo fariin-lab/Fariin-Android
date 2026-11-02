@@ -97,7 +97,7 @@ fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> 
     val base = if (doc["channel"] == true) ChannelInfo.from(cid, doc) else preview?.let { ChannelInfo.fromPreview(it) }
     val c = Fariin.colors
     if (base == null) {
-        Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        Column(Modifier.fillMaxSize().background(c.bg)) {
             PageBar("", onBack)
             Text(refused ?: "", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(32.dp))
@@ -173,7 +173,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         confirmButton = { TextButton({ confirmLeave = false; leave(fromUndo = false) }) { Text("Leave Channel", color = c.red) } },
         dismissButton = { TextButton({ confirmLeave = false }) { Text("Cancel", color = c.blue) } })
 
-    Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    Box(Modifier.fillMaxSize().background(c.bg)) {
         Column(Modifier.fillMaxSize()) {
             PageBar("", onBack)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),

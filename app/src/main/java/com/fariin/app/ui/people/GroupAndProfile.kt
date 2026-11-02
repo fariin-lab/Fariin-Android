@@ -118,7 +118,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    Column(Modifier.fillMaxSize().background(c.bg)) {
         PageBar("Edit Profile", onBack = onBack, action = {
             TextAction("Done", enabled = name.isNotBlank() && !busy) {
                 scope.launch {
@@ -183,7 +183,7 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
             }.filterNotNull().take(3)
         }
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    Column(Modifier.fillMaxSize().background(c.bg)) {
         PageBar("Username", onBack = onBack, action = {
             TextAction("Done", enabled = !claiming && (Usernames.isValid(draft) && status !is NameStatus.Taken && status !is NameStatus.Problem)) {
                 if (unchanged) { onBack(); return@TextAction }
@@ -275,7 +275,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     val pick = rememberPhotoPicker { photo = it }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
-    Column(Modifier.fillMaxSize().background(if (step == 1) c.bg else c.bgSecondary)) {
+    Column(Modifier.fillMaxSize().background(c.bg)) {
         if (step == 1) {
             PageBar("Add Members", onBack = onBack, action = { TextAction("Next", picked.isNotEmpty()) { step = 2 } })
             Text("${picked.size} of 1024 selected", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp))
@@ -358,7 +358,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         }
         return
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    Column(Modifier.fillMaxSize().background(c.bg)) {
         PageBar("Group Info", onBack = onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(conv["avatarUrl"] as? String, 100.dp)
