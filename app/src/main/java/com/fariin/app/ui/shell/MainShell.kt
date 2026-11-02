@@ -11,7 +11,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
-import kotlinx.coroutines.launch
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,7 +37,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -197,18 +197,6 @@ private fun FloatingTabBar(
             tints = listOf(HazeTint(surface.copy(alpha = if (c.dark) 0.62f else 0.70f)))
         }
     } else Modifier.background(surface.copy(alpha = 0.97f))
-    // One pill slides under the open tab. Its two edges follow on different springs, so it
-    // stretches toward the new tab and then settles, the liquid look. Only the draw phase reads
-    // the edges: no recomposition while it moves. Snaps when Power Saving turns animations off.
-    val target = Tabs.indexOfFirst { it.id == tab }.coerceAtLeast(0).toFloat()
-    val lead = remember { Animatable(target) }
-    val trail = remember { Animatable(target) }
-    LaunchedEffect(target, animate) {
-        if (!animate) { lead.snapTo(target); trail.snapTo(target); return@LaunchedEffect }
-        launch { lead.animateTo(target, spring(dampingRatio = 0.72f, stiffness = 700f)) }
-        launch { trail.animateTo(target, spring(dampingRatio = 0.86f, stiffness = 260f)) }
-    }
-    val pillColor = if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
     Row(
         modifier
             .widthIn(max = 420.dp).fillMaxWidth().height(BarHeight)
@@ -216,15 +204,6 @@ private fun FloatingTabBar(
             .clip(shape)
             .then(fill)
             .border(1.dp, border, shape)
-            .drawBehind {
-                val pad = 6.dp.toPx(); val gap = 4.dp.toPx(); val h = 52.dp.toPx()
-                val slot = (size.width - pad * 2) / Tabs.size
-                val from = minOf(lead.value, trail.value); val to = maxOf(lead.value, trail.value)
-                drawRoundRect(pillColor,
-                    topLeft = Offset(pad + from * slot + gap, (size.height - h) / 2),
-                    size = Size((to - from + 1) * slot - gap * 2, h),
-                    cornerRadius = CornerRadius(h / 2))
-            }
             .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
@@ -240,9 +219,14 @@ private fun FloatingTabBar(
 private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, animate: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fariin.colors
     val spec = if (animate) tween<Color>(180) else snap()
-    // iOS: the open tab's icon and label in the text colour, the others in grey (the pill behind
-    // it is drawn once by the bar and slides). The icon gives a small pop when its tab opens.
+    // iOS: the open tab's icon and label in the text colour, the others in grey. Its pill grows
+    // in place from 60% while it fades in (decelerating, 320 ms) and the old tab's pill shrinks
+    // away, so a tap never smears across the tabs in between. Drawn in drawBehind: the draw phase
+    // alone reads the value. The icon gives a small pop when its tab opens.
     val tint by animateColorAsState(if (selected) c.label else c.secondary, spec, label = "tabTint")
+    val on by animateFloatAsState(if (selected) 1f else 0f,
+        if (animate) tween(320, easing = LinearOutSlowInEasing) else snap(), label = "tabPill")
+    val pillColor = if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
     val pop = remember { Animatable(1f) }
     LaunchedEffect(selected) {
         if (selected && animate) { pop.snapTo(0.86f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
@@ -253,13 +237,23 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
             .semantics { contentDescription = desc; this.selected = selected }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = false, radius = 28.dp),
+                // No ripple: the sliding pill is the tap's feedback (a ripple left a second blob).
+                indication = null,
                 role = Role.Tab, onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
         androidx.compose.foundation.layout.Column(
-            Modifier.widthIn(min = 64.dp).height(52.dp).padding(horizontal = 10.dp),
+            Modifier.widthIn(min = 64.dp).height(52.dp)
+                .drawBehind {
+                    if (on <= 0f) return@drawBehind
+                    val s = 0.6f + 0.4f * on
+                    val w = size.width * s; val h = size.height * s
+                    drawRoundRect(pillColor.copy(alpha = pillColor.alpha * on),
+                        topLeft = Offset((size.width - w) / 2, (size.height - h) / 2),
+                        size = Size(w, h), cornerRadius = CornerRadius(h / 2))
+                }
+                .padding(horizontal = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
