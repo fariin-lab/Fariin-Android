@@ -1,3 +1,6 @@
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -18,11 +21,54 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    // On-device tests run against the debug build. `-PtestRelease` runs them against the minified
+    // release build instead, to prove R8 kept what libsodium/JNA and WebRTC need:
+    // ./gradlew connectedReleaseAndroidTest -PtestRelease
+    testBuildType = if (project.hasProperty("testRelease")) "release" else "debug"
+
+    // Release signing: read from keystore.properties (git-ignored, never committed) when it exists.
+    // Today it points at a TEST upload key in %USERPROFILE%\.fariin; drop the real upload key's
+    // four lines in later. With no file, the release build comes out unsigned.
+    val keystoreProps = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (keystoreProps.getProperty("storeFile") != null) {
+            create("upload") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
 
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (project.hasProperty("testRelease")) proguardFile("proguard-release-test.pro")
+            signingConfigs.findByName("upload")?.let { signingConfig = it }
+            // The R8 mapping goes to Crashlytics only when asked: ./gradlew bundleRelease -PuploadMapping=true
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = project.hasProperty("uploadMapping")
+            }
+        }
+    }
+
+    // One APK per CPU type for release side-loading (Play uses the AAB and splits by itself).
+    // Debug builds keep the single app-debug.apk the scripts install. AGP cannot shrink resources
+    // for split APKs and an AAB in the same run, so `assembleRelease bundleRelease` together gives
+    // one universal APK + the AAB; `assembleRelease` alone gives the per-CPU APKs.
+    val startTasks = gradle.startParameter.taskNames.map { it.lowercase() }
+    splits {
+        abi {
+            isEnable = startTasks.any { "assemble" in it && "release" in it } && startTasks.none { "bundle" in it }
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
         }
     }
     compileOptions {

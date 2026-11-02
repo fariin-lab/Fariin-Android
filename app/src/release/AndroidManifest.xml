@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release only. LiveKit's AAR declares a screen-sharing service (mediaProjection foreground
+     service). Fariin on Android has no screen sharing, and Play asks every app with that service
+     type for a declaration and a video, so the release build drops both lines. When screen sharing
+     comes to Android, delete this file and declare the type in Play Console. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
+        tools:node="remove" />
+    <application>
+        <service android:name="io.livekit.android.room.track.screencapture.ScreenCaptureService"
+            tools:node="remove" />
+    </application>
+</manifest>
