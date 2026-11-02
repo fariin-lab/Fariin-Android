@@ -2,8 +2,16 @@ package com.fariin.app.ui.shell
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -189,6 +197,18 @@ private fun FloatingTabBar(
             tints = listOf(HazeTint(surface.copy(alpha = if (c.dark) 0.62f else 0.70f)))
         }
     } else Modifier.background(surface.copy(alpha = 0.97f))
+    // One pill slides under the open tab. Its two edges follow on different springs, so it
+    // stretches toward the new tab and then settles, the liquid look. Only the draw phase reads
+    // the edges: no recomposition while it moves. Snaps when Power Saving turns animations off.
+    val target = Tabs.indexOfFirst { it.id == tab }.coerceAtLeast(0).toFloat()
+    val lead = remember { Animatable(target) }
+    val trail = remember { Animatable(target) }
+    LaunchedEffect(target, animate) {
+        if (!animate) { lead.snapTo(target); trail.snapTo(target); return@LaunchedEffect }
+        launch { lead.animateTo(target, spring(dampingRatio = 0.72f, stiffness = 700f)) }
+        launch { trail.animateTo(target, spring(dampingRatio = 0.86f, stiffness = 260f)) }
+    }
+    val pillColor = if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
     Row(
         modifier
             .widthIn(max = 420.dp).fillMaxWidth().height(BarHeight)
@@ -196,6 +216,15 @@ private fun FloatingTabBar(
             .clip(shape)
             .then(fill)
             .border(1.dp, border, shape)
+            .drawBehind {
+                val pad = 6.dp.toPx(); val gap = 4.dp.toPx(); val h = 52.dp.toPx()
+                val slot = (size.width - pad * 2) / Tabs.size
+                val from = minOf(lead.value, trail.value); val to = maxOf(lead.value, trail.value)
+                drawRoundRect(pillColor,
+                    topLeft = Offset(pad + from * slot + gap, (size.height - h) / 2),
+                    size = Size((to - from + 1) * slot - gap * 2, h),
+                    cornerRadius = CornerRadius(h / 2))
+            }
             .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
@@ -211,11 +240,13 @@ private fun FloatingTabBar(
 private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, animate: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fariin.colors
     val spec = if (animate) tween<Color>(180) else snap()
-    // iOS: a soft grey pill behind the open tab, its icon and label in the text colour; the
-    // others in grey.
-    val pillOn = if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
-    val pill by animateColorAsState(if (selected) pillOn else Color.Transparent, spec, label = "tabPill")
+    // iOS: the open tab's icon and label in the text colour, the others in grey (the pill behind
+    // it is drawn once by the bar and slides). The icon gives a small pop when its tab opens.
     val tint by animateColorAsState(if (selected) c.label else c.secondary, spec, label = "tabTint")
+    val pop = remember { Animatable(1f) }
+    LaunchedEffect(selected) {
+        if (selected && animate) { pop.snapTo(0.86f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
+    }
     val desc = if (badge > 0) "${t.label}, $badge unread" else t.label
     Box(
         modifier.fillMaxHeight()
@@ -228,12 +259,11 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
         contentAlignment = Alignment.Center,
     ) {
         androidx.compose.foundation.layout.Column(
-            Modifier.widthIn(min = 64.dp).height(52.dp).clip(RoundedCornerShape(26.dp)).background(pill)
-                .padding(horizontal = 10.dp),
+            Modifier.widthIn(min = 64.dp).height(52.dp).padding(horizontal = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            BadgedBox(badge = {
+            BadgedBox(modifier = Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }, badge = {
                 if (badge > 0) Badge(containerColor = c.red, contentColor = Color.White) {
                     Text(if (badge > 99) "99+" else "$badge")
                 }
