@@ -27,7 +27,23 @@ object StoryMedia {
     fun preparePhoto(context: Context, uri: Uri): Prepared? {
         // 2400 on the long side covers the 1080-wide story of a tall photo without holding all 12 MP.
         val src = com.fariin.app.media.BitmapDecode.fromUri(context, uri, 2400) ?: return null
-        val bmp = flatten(src)
+        return encodePhoto(flatten(src))
+    }
+
+    /**
+     * The edited photo (text and pen burned in, iOS flatten): drawn onto a copy of the prepared
+     * picture by [draw], which gets the canvas and the pixels per edit-space unit, then encoded the
+     * same way as a picked photo. Call off the main thread.
+     */
+    fun bake(prepared: Prepared, draw: (android.graphics.Canvas, Float) -> Unit): Prepared? {
+        val opts = android.graphics.BitmapFactory.Options().apply { inMutable = true; inPreferredConfig = Bitmap.Config.ARGB_8888 }
+        val bmp = android.graphics.BitmapFactory.decodeByteArray(prepared.jpeg, 0, prepared.jpeg.size, opts) ?: return null
+        draw(android.graphics.Canvas(bmp), bmp.width / StoryEditRules.SPACE)
+        return encodePhoto(bmp)
+    }
+
+    /** The ladder; recycles [bmp]. */
+    private fun encodePhoto(bmp: Bitmap): Prepared {
         var out = ByteArray(0)
         var w = bmp.width; var h = bmp.height
         for (width in StoryRules.PHOTO_WIDTHS) {

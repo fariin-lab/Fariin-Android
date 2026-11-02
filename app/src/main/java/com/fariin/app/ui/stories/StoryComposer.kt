@@ -55,6 +55,27 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.material.icons.filled.Draw
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
+import com.fariin.app.data.StoryEditRules
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.StoryAudienceChoice
 import com.fariin.app.data.StoryMedia
@@ -126,22 +147,109 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val bmp = remember(media) { BitmapFactory.decodeByteArray(media.jpeg, 0, media.jpeg.size)?.asImageBitmap() }
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    // The editor tools (iOS StoryEditorView Aa and pen). Photos only: iOS burns them into a video
+    // by re-encoding it, which Android does not do yet.
+    val canEdit = media.video == null && bmp != null
+    val edits = remember { StoryEdits() }
+    var editingId by remember { mutableLongStateOf(-1L) }
+    var drawing by remember { mutableStateOf(false) }
+    var penSnapshot by remember { mutableStateOf<List<StoryStroke>>(emptyList()) }
+    var penHue by remember { mutableFloatStateOf(StoryEditRules.PEN_START_HUE) }
+    var penWidth by remember { mutableFloatStateOf(StoryEditRules.PEN_START_WIDTH) }
+    var highlighter by remember { mutableStateOf(false) }
+    var stroking by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
+    var trashHot by remember { mutableStateOf(false) }
+    var askClearAll by remember { mutableStateOf(false) }
+    var askDiscardPen by remember { mutableStateOf(false) }
+    var askDiscard by remember { mutableStateOf(false) }
+    var baking by remember { mutableStateOf(false) }
+    var posted by remember { mutableStateOf(media) }
+    var box by remember { mutableStateOf(IntSize.Zero) }
+    var captionArmed by remember { mutableStateOf(true) }
+    val img = remember(box, bmp) {
+        if (bmp == null || box.width == 0) Rect.Zero else {
+            val k = minOf(box.width / bmp.width.toFloat(), box.height / bmp.height.toFloat())
+            val w = bmp.width * k; val h = bmp.height * k
+            Rect(Offset((box.width - w) / 2, (box.height - h) / 2), androidx.compose.ui.geometry.Size(w, h))
+        }
+    }
+    val navBottom = WindowInsets.navigationBars.getBottom(density)
+    val bin = with(density) { Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx()) }
+    val binSlop = with(density) { 12.dp.toPx() }
+    val binSize = with(density) { 52.dp.toPx() }
+
+    fun finishText() {
+        // Focus off first: dropped with the field still focused, it lands on the caption.
+        focus.clearFocus(force = true); keyboard?.hide()
+        edits.texts.firstOrNull { it.id == editingId }?.let { if (it.text.isBlank()) edits.texts.remove(it) }
+        editingId = -1L
+        // The caption comes back in the same frame and the window would hand it the focus (and the
+        // keyboard). It can take focus again once a finger is on it.
+        captionArmed = false
+    }
+    fun addText() {
+        val k = StoryEditRules.SPACE / img.width.coerceAtLeast(1f)
+        val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, img.height * k / 2)
+        edits.drawingOnTop = false
+        edits.texts.add(t)
+        editingId = t.id
+    }
+    fun openPen() { penSnapshot = edits.strokes.toList(); drawing = true }
+    fun closePen(discard: Boolean) {
+        if (discard) { edits.strokes.clear(); edits.strokes.addAll(penSnapshot) }
+        drawing = false
+    }
+    fun cancelPen() { if (edits.strokes.toList() != penSnapshot) askDiscardPen = true else closePen(false) }
+    fun close() { if (!edits.isEmpty) askDiscard = true else onClose() }
+
+    BackHandler(enabled = editingId >= 0) { finishText() }
+    BackHandler(enabled = drawing && editingId < 0) { cancelPen() }
+    BackHandler(enabled = !drawing && editingId < 0 && !audience && !edits.isEmpty) { askDiscard = true }
+
+    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { box = it }) {
         if (bmp != null) Image(bmp, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        if (canEdit) StoryEditCanvas(
+            edits, img, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
+            onStroke = { stroking = it },
+            onTapText = { editingId = it.id },
+            onDrag = { _, p ->
+                dragging = true
+                val hot = StoryEditRules.isOverTrash(p.x, p.y, bin.x, bin.y, binSize, binSlop)
+                if (hot != trashHot) trashHot = hot
+            },
+            onDrop = { t, p ->
+                if (StoryEditRules.isOverTrash(p.x, p.y, bin.x, bin.y, binSize, binSlop)) edits.texts.remove(t)
+                dragging = false; trashHot = false
+            },
+        )
         if (media.video != null) {
             Text("Video · ${media.video.info.durationSec.toInt()} s", color = Color.White, fontSize = 13.sp,
                 modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.5f))
                     .padding(horizontal = 10.dp, vertical = 6.dp))
         }
-        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clickable { onClose() }, contentAlignment = Alignment.Center) {
+        val chrome = !drawing && !dragging && editingId < 0
+        if (chrome) Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { close() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
             }
             Spacer(Modifier.weight(1f))
+            if (canEdit) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { addText() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.TextFields, contentDescription = "Add text", tint = Color.White)
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { openPen() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White)
+                }
+            }
             Box {
                 Box(
-                    Modifier.size(44.dp).clickable { hoursMenu = true }, contentAlignment = Alignment.Center,
+                    Modifier.padding(start = 8.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { hoursMenu = true },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Box(Modifier.size(24.dp).border(1.3.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
                         Text("$hours", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -160,32 +268,79 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 }
             }
         }
+        if (drawing && !stroking && editingId < 0) {
+            StoryPenTopBar(edits, onClearAll = { askClearAll = true }, modifier = Modifier.align(Alignment.TopCenter))
+            StoryPenBar(
+                penHue, { penHue = it }, highlighter, { highlighter = it }, penWidth, { penWidth = StoryEditRules.nextPenWidth(penWidth) },
+                onCancel = { cancelPen() }, onDone = { closePen(false) }, modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+        if (dragging) StoryTrash(trashHot, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 36.dp))
         // Gone while the audience page shows: a caption field left behind kept the keyboard up
         // over Post Story.
-        if (!audience) Row(
+        if (chrome && !audience) Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.4f))
                 .navigationBarsPadding().imePadding().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.weight(1f).padding(vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+            Box(
+                Modifier.weight(1f).padding(vertical = 8.dp).pointerInput(Unit) {
+                    awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); captionArmed = true }
+                },
+                contentAlignment = Alignment.CenterStart,
+            ) {
                 if (caption.isEmpty()) Text("Add a caption…", color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp)
                 BasicTextField(caption, { caption = it.take(1000) }, textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                    cursorBrush = SolidColor(Color.White), maxLines = 4, modifier = Modifier.fillMaxWidth())
+                    cursorBrush = SolidColor(Color.White), maxLines = 4,
+                    modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed })
             }
             Spacer(Modifier.width(8.dp))
             Text(
                 "Next", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).clickable { focus.clearFocus(); keyboard?.hide(); audience = true }
-                    .padding(horizontal = 18.dp, vertical = 9.dp),
+                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).clickable(enabled = !baking) {
+                    focus.clearFocus(); keyboard?.hide()
+                    if (!canEdit || !StoryEditRules.needsBake(edits.texts.size, edits.strokes.size)) {
+                        posted = media; audience = true; return@clickable
+                    }
+                    // iOS flatten: the text and the lines are burned into the photo, off the main thread.
+                    baking = true
+                    scope.launch {
+                        val baked = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                            runCatching { StoryMedia.bake(media) { c, k -> bakeStoryEdits(c, k, edits) } }.getOrNull()
+                        }
+                        baking = false
+                        if (baked != null) { posted = baked; audience = true }
+                    }
+                }.padding(horizontal = 18.dp, vertical = 9.dp),
             )
+        }
+        if (editingId >= 0) edits.texts.firstOrNull { it.id == editingId }?.let { StoryTextEditor(it, img, onDone = { finishText() }) }
+        if (baking) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)).clickable {}, contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color.White)
         }
         if (audience) {
             AudiencePage(me, conversations, onBack = { audience = false }) { choice, picked ->
-                StoryUploads.start(me, media, caption, choice, picked, hours, conversations)
+                StoryUploads.start(me, posted, caption, choice, picked, hours, conversations)
                 onPosted()
             }
         }
     }
+    val red = Color(0xFFE5484D)
+    if (askClearAll) AlertDialog(
+        onDismissRequest = { askClearAll = false }, title = { Text("Clear all drawing?") },
+        confirmButton = { TextButton({ edits.strokes.clear(); askClearAll = false }) { Text("Clear All", color = red) } },
+        dismissButton = { TextButton({ askClearAll = false }) { Text("Cancel") } },
+    )
+    if (askDiscardPen) AlertDialog(
+        onDismissRequest = { askDiscardPen = false }, title = { Text("Discard your drawing?") },
+        confirmButton = { TextButton({ askDiscardPen = false; closePen(true) }) { Text("Discard", color = red) } },
+        dismissButton = { TextButton({ askDiscardPen = false }) { Text("Keep Drawing") } },
+    )
+    if (askDiscard) AlertDialog(
+        onDismissRequest = { askDiscard = false }, title = { Text("Discard this story?") },
+        confirmButton = { TextButton({ askDiscard = false; onClose() }) { Text("Discard", color = red) } },
+        dismissButton = { TextButton({ askDiscard = false }) { Text("Cancel") } },
+    )
 }
 
 /** "Who can see your story": Everyone, My Chats, Custom and One-Time Story, then Post Story. */
