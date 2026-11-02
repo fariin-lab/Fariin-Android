@@ -50,11 +50,15 @@ object ChatList {
             c.isGroup && c.e2eeOff && c.lastIsPlainText -> c.lastMessageCipher
             else -> decryptor.previewText(c, me)
         } ?: if (!c.lastImageUrl.isNullOrEmpty()) "Photo" else "Message"
-        // In a group the line starts with who said it, as on iOS (never for my own lines).
-        // TODO: iOS leaves the name off system notices ("X added Y"); that needs the decrypted kind.
+        // In a group the line starts with who said it, as on iOS (never for my own lines), first name
+        // only. System notices ("X created the group") stay bare (iOS lastSenderPrefix): they are
+        // plain words, not a sealed "enc" line, a media marker or a member's plain-text line.
         if (c.isGroup && !c.isChannel && c.lastSender.isNotEmpty() && c.lastSender != me) {
+            val raw = c.lastMessageCipher
+            val spoken = raw.startsWith("enc") || c.lastIsPlainText || raw.isEmpty() ||
+                !raw.first().isLetterOrDigit()
             val who = senderName(c.lastSender) ?: c.names[c.lastSender]
-            if (!who.isNullOrEmpty()) return "$who: $text"
+            if (spoken && !who.isNullOrEmpty()) return "${who.split(" ").first()}: $text"
         }
         return text
     }

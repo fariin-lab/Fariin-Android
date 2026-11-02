@@ -301,7 +301,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(c.card)) { Field(title, "Group Name") { title = it.take(100) } }
             }
-            Header("${picked.size} members")
+            Header("Members · ${picked.size + 1}")   // iOS NewGroupView: me included
             people.filter { it.uid in picked }.forEach { p -> PersonRow(p.photoUrl, p.shownName, "", onClick = null) }
         }
     }
