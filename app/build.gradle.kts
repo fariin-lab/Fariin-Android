@@ -69,6 +69,10 @@ dependencies {
     // Calls: LiveKit for group rooms, and its bundled WebRTC build (package livekit.org.webrtc) for
     // 1:1 calls too, so the app carries one WebRTC engine, not two.
     implementation(libs.livekit.android)
+    // Sign-in: passkeys and Sign in with Google through the system Credential Manager (auth/).
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.lazysodium.java)

@@ -6,9 +6,13 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />
         <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
+        <exclude domain="sharedpref" path="fariin_accounts.xml" />
+        <exclude domain="sharedpref" path="fariin_device_sessions.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />
         <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
+        <exclude domain="sharedpref" path="fariin_accounts.xml" />
+        <exclude domain="sharedpref" path="fariin_device_sessions.xml" />
     </device-transfer>
 </data-extraction-rules>

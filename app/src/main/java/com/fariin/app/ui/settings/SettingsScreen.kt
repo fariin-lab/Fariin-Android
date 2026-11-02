@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.R
 import com.fariin.app.data.AppAppearance
+import com.fariin.app.data.AuthRepository
 import com.fariin.app.data.AppearancePrefs
 import com.fariin.app.data.MyProfile
 import com.fariin.app.data.MyProfileRepository
@@ -93,6 +94,11 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             page == PAGE_APPEARANCE -> AppearancePage(push, pop)
             page == PAGE_NIGHT -> NightModePage(pop)
             page == PAGE_ABOUT -> HelpAboutPage(pop)
+            // Sign-in pages (ui/auth/PasswordPages.kt).
+            page == PAGE_PASSWORD -> com.fariin.app.ui.auth.PasswordPage(remember { AuthRepository() }, pop, onForgot = { push(PAGE_RESET + it) }, demoOpen = demoProfile != null)
+            page.startsWith(PAGE_RESET) == true -> com.fariin.app.ui.auth.ResetCodePage(remember { AuthRepository() }, page.removePrefix(PAGE_RESET), pop,
+                onDone = { stack = stack.dropLast(2) }, demo = demoProfile != null)
+            page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
         }
     }
@@ -102,6 +108,9 @@ private const val PAGE_ACCOUNT = "account"
 private const val PAGE_APPEARANCE = "appearance"
 private const val PAGE_NIGHT = "night"
 private const val PAGE_ABOUT = "about"
+private const val PAGE_PASSWORD = "auth:password"
+private const val PAGE_RESET = "auth:reset:"
+private const val PAGE_PASSKEYS = "auth:passkeys"
 private const val SOON = "soon:"
 private fun soon(title: String) = SOON + title
 
@@ -216,7 +225,7 @@ private fun AccountPage(
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
             SettingsSection(header = "Sign-in") {
                 SettingsRow("Email address", last = !hasEmail) { push(soon("Email address")) }
-                if (hasEmail) SettingsRow("Password", last = true) { push(soon("Password")) }
+                if (hasEmail) SettingsRow("Password", last = true) { push(PAGE_PASSWORD) }
             }
             SettingsSection(
                 header = "Security",
@@ -227,7 +236,7 @@ private fun AccountPage(
                     "Username",
                     value = when { profile == null -> ""; handle.isNullOrEmpty() -> "Not set"; else -> "@$handle" },
                 ) { push(soon("Username")) }
-                SettingsRow("Passkeys") { push(soon("Passkeys")) }
+                SettingsRow("Passkeys") { push(PAGE_PASSKEYS) }
                 SettingsRow("Security notifications", last = true) { push(soon("Security notifications")) }
             }
             SettingsSection(

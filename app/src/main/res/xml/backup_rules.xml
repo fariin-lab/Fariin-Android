@@ -3,4 +3,6 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />
     <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
+    <exclude domain="sharedpref" path="fariin_accounts.xml" />
+    <exclude domain="sharedpref" path="fariin_device_sessions.xml" />
 </full-backup-content>

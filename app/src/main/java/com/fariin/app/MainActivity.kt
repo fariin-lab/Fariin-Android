@@ -82,7 +82,10 @@ class MainActivity : ComponentActivity() {
                     .build()
             }
             FariinTheme {
-                if (demo) {
+                // Debug builds only: `--es authPage <name>` draws one sign-in page with made-up state (ui/auth/AuthDemo.kt).
+                if (debuggable && intent.getStringExtra("authPage") != null) {
+                    com.fariin.app.ui.auth.AuthDemo(intent.getStringExtra("authPage")!!)
+                } else if (demo) {
                     DemoApp(demoThread)
                 } else {
                     val initial = remember { auth.currentUser?.uid }
@@ -106,7 +109,7 @@ class MainActivity : ComponentActivity() {
                         DeviceRegistry.clearRevoked()
                         notice = r
                     }
-                    if (me == null) SignInFlow(auth) else SignedIn(me)
+                    if (me == null) SignInFlow(auth) else com.fariin.app.ui.auth.AccountGate(me, auth) { SignedIn(me) }
                     notice?.let { SignedOutNotice(it) { notice = null } }
                 }
             }
