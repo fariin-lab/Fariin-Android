@@ -82,6 +82,9 @@ interface PeopleApi {
     suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?): String
     suspend fun addMembers(cid: String, uids: List<String>): String?
     suspend fun leaveGroup(cid: String)
+    suspend fun renameGroup(cid: String, title: String)
+    suspend fun setGroupPhoto(cid: String, photo: ByteArray)
+    suspend fun removeGroupPhoto(cid: String)
 }
 
 class FirestorePeople(
@@ -327,6 +330,32 @@ class FirestorePeople(
         }.await()
     }
 
+    /** ChatService.renameGroup: `title` + updatedAt, then "<me> renamed the group to ..." (best effort, as iOS). */
+    override suspend fun renameGroup(cid: String, title: String) {
+        val t = GroupRules.cleanTitle(title)
+        if (t.isEmpty()) return
+        conv(cid).update(mapOf("title" to t, "updatedAt" to FieldValue.serverTimestamp())).await()
+        try { systemMessage(cid, GroupRules.renamedLine(profile(me)?.name ?: "", t)) } catch (_: Exception) {}
+    }
+
+    /**
+     * ChatService.uploadGroupAvatar: a plain JPEG (iOS crops to a circle and sends at most 1024 px)
+     * to `profiles/group_{cid}.jpg`, its download link as `avatarUrl`. No chat line, as iOS.
+     */
+    override suspend fun setGroupPhoto(cid: String, photo: ByteArray) {
+        val jpeg = squareJpeg(photo, 1024, 80) ?: error("unreadable photo")
+        val sref = FirebaseStorage.getInstance().reference.child("profiles/group_$cid.jpg")
+        sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+        conv(cid).update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
+    }
+
+    /** ChatService.removeGroupAvatar: the field goes, the file is tried, then "<me> removed the group photo". */
+    override suspend fun removeGroupPhoto(cid: String) {
+        conv(cid).update(mapOf("avatarUrl" to FieldValue.delete(), "updatedAt" to FieldValue.serverTimestamp())).await()
+        try { FirebaseStorage.getInstance().reference.child("profiles/group_$cid.jpg").delete().await() } catch (_: Exception) {}
+        try { systemMessage(cid, GroupRules.photoRemovedLine(profile(me)?.name ?: "")) } catch (_: Exception) {}
+    }
+
     private suspend fun ok(block: suspend () -> Unit): Boolean = try { block(); true } catch (_: Exception) { false }
 
     companion object {
@@ -410,6 +439,42 @@ object GroupRules {
         update["lastSender"] = me
         return LeavePlan(update, notices, ownerHeir)
     }
+
+    /**
+     * GroupInfoView.canEditInfo: may [me] change the name and photo? Never in a group Fariin closed
+     * (`mod.state` disabled, or suspended and not over) or one its owner ended. The owner always;
+     * an admin with Change group info (a legacy admin with no `adminRights` entry has it); a
+     * member when `membersCanEditInfo` is on and no live `changeInfo` restriction stops them.
+     */
+    fun canEditInfo(me: String, data: Map<String, Any?>, nowMs: Double = System.currentTimeMillis().toDouble()): Boolean {
+        if (me.isEmpty()) return false
+        val mod = data["mod"] as? Map<*, *>
+        val state = mod?.get("state") as? String ?: "ok"
+        if (state == "ended" || state == "disabled") return false
+        if (state == "suspended") {
+            val until = (mod?.get("until") as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble() ?: 0.0
+            if (until <= 0 || until > nowMs) return false
+        }
+        val owner = data["createdBy"] as? String ?: ""
+        if (owner.isNotEmpty() && owner == me) return true
+        val admins = (data["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        if (me in admins) {
+            val granted = (data["adminRights"] as? Map<*, *>)?.get(me) as? List<*> ?: return true
+            return "changeInfo" in granted
+        }
+        val users = (data["users"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        if (me !in users || data["membersCanEditInfo"] != true) return false
+        val until = ((data["restrictedUntil"] as? Map<*, *>)?.get(me) as? Number)?.toDouble() ?: 0.0
+        val flags = (data["restrictedFlags"] as? Map<*, *>)?.get(me) as? List<*> ?: emptyList<Any>()
+        return !(until > nowMs && "changeInfo" in flags)
+    }
+
+    /** ChatService.renameGroup: trimmed, at most 100 characters. */
+    fun cleanTitle(s: String): String = s.trim().take(100)
+
+    /** The system lines iOS writes (ChatService.renameGroup / removeGroupAvatar; "Someone" when nameless). */
+    fun renamedLine(myName: String, title: String) = "${myName.ifEmpty { "Someone" }} renamed the group to “$title”"
+    fun photoRemovedLine(myName: String) = "${myName.ifEmpty { "Someone" }} removed the group photo"
 
     /** The line under Leave Group for the owner (iOS LeaveGroupAlert). */
     fun ownerLeaveLine(heirName: String?): String =

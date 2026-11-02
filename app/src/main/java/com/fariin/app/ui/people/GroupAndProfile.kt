@@ -1,6 +1,7 @@
 package com.fariin.app.ui.people
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -52,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.data.Conversation
+import com.fariin.app.data.FirestorePeople
 import com.fariin.app.data.GroupRules
 import com.fariin.app.data.PeopleApi
 import com.fariin.app.data.Person
@@ -67,6 +71,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 @Composable
 private fun Field(value: String, placeholder: String, onChange: (String) -> Unit) {
@@ -324,6 +330,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val names = (conv["names"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap()
     val photos = (conv["photos"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap()
     val iAmAdmin = me in admins || me == owner
+    val canEdit = GroupRules.canEditInfo(me, conv)
+    var editing by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     var picked by remember { mutableStateOf(setOf<String>()) }
     var askLeave by remember { mutableStateOf(false) }
@@ -358,10 +366,17 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         }
         return
     }
+    if (editing && canEdit) {
+        EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
+            onClose = { editing = false })
+        return
+    }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Group Info", onBack = onBack)
+        // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19).
+        PageBar("Group Info", onBack = onBack, action = if (canEdit) ({ TextAction("Edit", enabled = true) { editing = true } }) else null)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(conv["avatarUrl"] as? String, 100.dp)
+            Avatar(conv["avatarUrl"] as? String, 100.dp,
+                modifier = if (canEdit) Modifier.clickable { editing = true } else Modifier)
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Text("Group · ${users.size} members", fontSize = 15.sp, color = c.secondary)
@@ -386,5 +401,95 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
             Spacer(Modifier.height(30.dp))
         }
+    }
+}
+
+/**
+ * Edit Group (iOS EditGroupView): the photo with a small minus badge to remove it (after a yes) and
+ * the "Set New Photo" pill under it, the name in its card, Save at the top end. Save renames first,
+ * then sets or removes the photo; a refusal is said and the page stays. The system back gesture
+ * and the up arrow close it without saving.
+ */
+@Composable
+internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUrl: String?, onClose: () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf(title) }
+    var newPhoto by remember { mutableStateOf<ByteArray?>(null) }
+    var removePhoto by remember { mutableStateOf(false) }
+    var confirmRemove by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    // What a Save already wrote, so a retry after a failed photo step does not rename twice (iOS).
+    var savedName by remember { mutableStateOf<String?>(null) }
+    val trimmed = GroupRules.cleanTitle(name)
+    val changed = newPhoto != null || removePhoto || trimmed != title
+    val hasPhoto = newPhoto != null || (!removePhoto && !photoUrl.isNullOrEmpty())
+    BackHandler(onBack = onClose)
+    val pick = rememberPhotoPicker { bytes ->
+        scope.launch {
+            val jpeg = withContext(Dispatchers.Default) { FirestorePeople.squareJpeg(bytes, 1024, 80) }
+            if (jpeg != null) { newPhoto = jpeg; removePhoto = false } else error = "Couldn't open this photo."
+        }
+    }
+    if (confirmRemove) AlertDialog(onDismissRequest = { confirmRemove = false }, title = { Text("Remove group photo?") },
+        confirmButton = { TextButton({ confirmRemove = false; newPhoto = null; removePhoto = true }) { Text("Remove", color = c.red) } },
+        dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Edit Group", onBack = onClose, action = {
+            if (saving) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+            else TextAction("Save", enabled = trimmed.isNotEmpty() && changed) {
+                saving = true; error = null
+                scope.launch {
+                    try {
+                        if (trimmed != (savedName ?: title)) { api.renameGroup(cid, trimmed); savedName = trimmed }
+                        val p = newPhoto
+                        if (p != null) { api.setGroupPhoto(cid, p); forgetImage(ctx, photoUrl) }
+                        else if (removePhoto && !photoUrl.isNullOrEmpty()) api.removeGroupPhoto(cid)
+                        saving = false
+                        onClose()
+                    } catch (e: Exception) {
+                        saving = false
+                        error = e.message?.takeIf { it.isNotBlank() } ?: "Couldn't save. Try again."
+                    }
+                }
+            }
+        })
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(8.dp))
+            Box {
+                Box(Modifier.size(120.dp).clip(CircleShape).clickable(onClick = pick), contentAlignment = Alignment.Center) {
+                    val p = newPhoto
+                    val bmp = remember(p) { p?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+                    when {
+                        bmp != null -> androidx.compose.foundation.Image(bmp, "Group photo", contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        removePhoto -> Avatar(null, 120.dp)
+                        else -> Avatar(photoUrl, 120.dp)
+                    }
+                }
+                if (hasPhoto) Box(
+                    Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(30.dp).clip(CircleShape)
+                        .background(c.card).clickable { confirmRemove = true },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Remove, "Remove Photo", tint = c.label, modifier = Modifier.size(18.dp)) }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("Set New Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                modifier = Modifier.clip(CircleShape).background(c.card).clickable(onClick = pick).padding(horizontal = 20.dp, vertical = 9.dp))
+            Spacer(Modifier.height(8.dp))
+            SettingsSection { Field(name, "Group Name") { name = it.take(100) } }
+            error?.let { Text(it, fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)) }
+        }
+    }
+}
+
+/** Drops a picture from the image caches, so a replaced group photo at the same link is fetched again. */
+private fun forgetImage(ctx: android.content.Context, url: String?) {
+    if (url.isNullOrEmpty()) return
+    runCatching {
+        val loader = coil3.SingletonImageLoader.get(ctx)
+        loader.memoryCache?.let { m -> m.keys.filter { it.key == url }.forEach { m.remove(it) } }
+        loader.diskCache?.remove(url)
     }
 }

@@ -58,6 +58,9 @@ object DemoPeople : PeopleApi {
     override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?) = "d3"
     override suspend fun addMembers(cid: String, uids: List<String>): String? = null
     override suspend fun leaveGroup(cid: String) {}
+    override suspend fun renameGroup(cid: String, title: String) {}
+    override suspend fun setGroupPhoto(cid: String, photo: ByteArray) {}
+    override suspend fun removeGroupPhoto(cid: String) {}
 
     /** A request from someone new, for the Message Requests page. */
     fun requests(nowMs: Long = System.currentTimeMillis()) = listOf(
