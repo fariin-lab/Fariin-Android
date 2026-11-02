@@ -81,7 +81,7 @@ import kotlinx.coroutines.launch
  * and Report / Leave with the "Created ..." line.
  */
 @Composable
-fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> Unit) {
+fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> Unit, manage: ChannelManageNav = ChannelManageNav()) {
     val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
     val entries by ChannelFollows.entries.collectAsState()
     val bias by ChannelFollows.biasFlow.collectAsState()
@@ -108,11 +108,14 @@ fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> 
     // The visitor's preview already carries the admins in its count; the document does not.
     val shown = if (doc["channel"] == true) ChannelRules.subscriberCount(ChannelFollows.adjusted(cid, base.followerCount), base.users.size)
     else ChannelFollows.adjusted(cid, preview?.shownCount ?: base.followerCount)
-    ChannelPage(base, shown, ChannelRules.role(base, me, entries.containsKey(cid)), entries[cid]?.isMuted() ?: false, onBack, onLeft)
+    ChannelPage(base, shown, ChannelRules.role(base, me, entries.containsKey(cid)), entries[cid]?.isMuted() ?: false, onBack, onLeft,
+        team = com.fariin.app.channel.ChannelAdmins.Team.from(doc), me = me, manage = manage)
 }
 
 @Composable
-fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, onBack: () -> Unit, onLeft: () -> Unit) {
+fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, onBack: () -> Unit, onLeft: () -> Unit,
+                team: com.fariin.app.channel.ChannelAdmins.Team? = null, me: String = "", manage: ChannelManageNav = ChannelManageNav()) {
+    val canEdit = role == Role.ADMIN && team?.can(me, com.fariin.app.channel.ChannelAdmins.Right.CHANGE_INFO) == true
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -175,10 +178,13 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
         Column(Modifier.fillMaxSize()) {
-            PageBar("", onBack)
+            // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
+            PageBar("", onBack, action = if (canEdit) ({
+                TextButton({ manage.edit(info.cid) }) { Text("Edit", color = c.blue, fontSize = 17.sp) }
+            }) else null)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Avatar(info.avatarUrl, 132.dp, squircle = true)
+                Avatar(info.avatarUrl, 132.dp, squircle = true, modifier = if (canEdit) Modifier.clickable { manage.edit(info.cid) } else Modifier)
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(info.title.ifEmpty { "Channel" }, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label,
@@ -223,7 +229,11 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     }
                 }
                 if (role == Role.ADMIN) {
-                    Spacer(Modifier.height(20.dp))
+                    if (team != null) {
+                        Spacer(Modifier.height(12.dp))
+                        ChannelManageSection(info, team, me, shownCount, manage)
+                    }
+                    Spacer(Modifier.height(12.dp))
                     AdminCard(info)
                 }
                 Spacer(Modifier.height(20.dp))

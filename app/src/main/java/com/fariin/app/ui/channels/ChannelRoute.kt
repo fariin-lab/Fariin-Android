@@ -51,7 +51,30 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String) {
     }
     composable("channelpage/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@composable
-        ChannelPageRoute(cid, me, onBack = { nav.popBackStack() }, onLeft = { nav.popBackStack("main", false) })
+        ChannelPageRoute(cid, me, onBack = { nav.popBackStack() }, onLeft = { nav.popBackStack("main", false) },
+            manage = ChannelManageNav(
+                edit = { nav.navigate("channeledit/$it") { launchSingleTop = true } },
+                followers = { nav.navigate("channelfollowers/$it") { launchSingleTop = true } },
+                admins = { nav.navigate("channeladmins/$it") { launchSingleTop = true } },
+            ))
+    }
+    // Channel management for its owner and admins (ChannelManage.kt).
+    composable("channeledit/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        ChannelEditRoute(cid, me, onClose = { nav.popBackStack() })
+    }
+    composable("channelfollowers/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        ChannelFollowersScreen(cid, me, onBack = { nav.popBackStack() })
+    }
+    composable("channeladmins/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        ChannelAdminsScreen(cid, me, onBack = { nav.popBackStack() }, onOpen = { uid -> nav.navigate("channeladmin/$cid/$uid") { launchSingleTop = true } })
+    }
+    composable("channeladmin/{cid}/{uid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        val uid = e.arguments?.getString("uid") ?: return@composable
+        ChannelAdminScreen(cid, me, uid, onBack = { nav.popBackStack() })
     }
 }
 

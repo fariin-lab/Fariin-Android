@@ -440,7 +440,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
  */
 @Composable
 internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUrl: String?, onClose: () -> Unit,
-                             description: String = "", focusDescription: Boolean = false) {
+                             description: String = "", focusDescription: Boolean = false, channel: Boolean = false) {
+    // A channel's words and its squircle photo (iOS EditGroupView with ChannelWords.forChat).
+    fun w(s: String) = if (channel) com.fariin.app.channel.ChannelRules.words(s) else s
+    val shape = if (channel) RoundedCornerShape(36.dp) else CircleShape
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -462,14 +465,14 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
     // The picked photo goes to the circle cropper (iOS: the same move-and-scale a profile photo uses).
     val picker = rememberCirclePhotoPicker { jpeg -> newPhoto = jpeg; removePhoto = false }
     val pick = picker.launch
-    if (picker.pending != null) { picker.Host("Group photo", "Shown in chats and on the group page"); return }
+    if (picker.pending != null) { picker.Host(w("Group photo"), w("Shown in chats and on the group page")); return }
     val descFocus = remember { FocusRequester() }
     LaunchedEffect(focusDescription) { if (focusDescription) { delay(350); runCatching { descFocus.requestFocus() } } }
-    if (confirmRemove) AlertDialog(onDismissRequest = { confirmRemove = false }, title = { Text("Remove group photo?") },
+    if (confirmRemove) AlertDialog(onDismissRequest = { confirmRemove = false }, title = { Text(w("Remove group photo?")) },
         confirmButton = { TextButton({ confirmRemove = false; newPhoto = null; removePhoto = true }) { Text("Remove", color = c.red) } },
         dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Edit Group", onBack = onClose, action = {
+        PageBar(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = {
             if (saving) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
             else TextAction("Save", enabled = trimmed.isNotEmpty() && changed) {
                 saving = true; error = null
@@ -492,13 +495,13 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(8.dp))
             Box {
-                Box(Modifier.size(120.dp).clip(CircleShape).clickable(onClick = pick), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(120.dp).clip(shape).clickable(onClick = pick), contentAlignment = Alignment.Center) {
                     val p = newPhoto
                     val bmp = remember(p) { p?.let { com.fariin.app.media.BitmapDecode.fromBytes(it, 360)?.asImageBitmap() } }
                     when {
-                        bmp != null -> androidx.compose.foundation.Image(bmp, "Group photo", contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        removePhoto -> Avatar(null, 120.dp)
-                        else -> Avatar(photoUrl, 120.dp)
+                        bmp != null -> androidx.compose.foundation.Image(bmp, w("Group photo"), contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        removePhoto -> Avatar(null, 120.dp, squircle = channel)
+                        else -> Avatar(photoUrl, 120.dp, squircle = channel)
                     }
                 }
                 if (hasPhoto) Box(
@@ -512,8 +515,8 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 modifier = Modifier.clip(CircleShape).background(c.card).clickable(onClick = pick).padding(horizontal = 20.dp, vertical = 9.dp))
             Spacer(Modifier.height(8.dp))
             // Name and description in ONE card, a line between them (iOS EditGroupView).
-            SettingsSection(footer = "Optional. Shown on the group's info page.") {
-                Field(name, "Group Name") { name = it.take(100) }
+            SettingsSection(footer = w("Optional. Shown on the group's info page.")) {
+                Field(name, w("Group Name")) { name = it.take(100) }
                 Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
                 DescriptionField(desc, descFocus) { desc = GroupRules.oneParagraph(it) }
             }

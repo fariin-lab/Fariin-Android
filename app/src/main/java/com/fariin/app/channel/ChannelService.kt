@@ -21,6 +21,10 @@ import java.util.concurrent.TimeUnit
  *   reactChannelPost {cid, mid, emoji?}     -> {counts:{emoji:n}}   (no emoji = take mine back)
  *   channelViews {cid, mids:[<=100]}        -> {counted}
  *   makeChannel {cid, country?}             -> {ok, cid}
+ *   listChannelFollowers {cid, after?}      -> {followers:[{uid, name, photoUrl, at}], more}
+ *   removeChannelFollower {cid, uid, ban}   -> {ok}
+ *   makeChannelAdmin {cid, uid}             -> {state: admin|already}
+ *   dismissChannelAdmin {cid, uid}          -> {ok}
  *
  * Direct writes (firestore.rules allow them): users/{me}/channels/{cid} read / muted / mutedUntil,
  * reports, a channel's restrictedBy (Protect Content, admins).
@@ -178,6 +182,42 @@ object ChannelService {
 
     /** Public under `name`, or private with "" (setGroupUsername). */
     suspend fun setLink(cid: String, name: String) { call("setGroupUsername", mapOf("cid" to cid, "username" to name)) }
+
+    // ---- Followers and admins (ChannelService.followers / removeFollower / dismissAdmin, ChannelAdminInvites.makeAdmin)
+
+    data class Follower(val uid: String, val name: String, val photoUrl: String?)
+    data class FollowerPage(val rows: List<Follower>, val more: Boolean)
+
+    /** listChannelFollowers {cid, after?} -> {followers:[{uid, name, photoUrl, at}], more}: 50 a page, newest first. Admins only. */
+    suspend fun followers(cid: String, after: String?): FollowerPage {
+        val d = call("listChannelFollowers", buildMap { put("cid", cid); if (!after.isNullOrEmpty()) put("after", after) })
+        val rows = (d?.get("followers") as? List<*>)?.mapNotNull { f ->
+            val m = f as? Map<*, *> ?: return@mapNotNull null
+            val uid = m["uid"] as? String ?: return@mapNotNull null
+            if (uid.isEmpty()) return@mapNotNull null
+            Follower(uid, m["name"] as? String ?: "Fariin user", (m["photoUrl"] as? String)?.takeIf { it.isNotEmpty() })
+        } ?: emptyList()
+        return FollowerPage(rows, d?.get("more") as? Boolean ?: false)
+    }
+
+    /** removeChannelFollower {cid, uid, ban}: they stop following; `ban` keeps them out (bannedUids). */
+    suspend fun removeFollower(cid: String, uid: String, ban: Boolean) {
+        call("removeChannelFollower", mapOf("cid" to cid, "uid" to uid, "ban" to ban))
+    }
+
+    /** makeChannelAdmin {cid, uid}: a follower becomes an admin at once, with the default rights. */
+    suspend fun makeAdmin(cid: String, uid: String) { call("makeChannelAdmin", mapOf("cid" to cid, "uid" to uid)) }
+
+    /** dismissChannelAdmin {cid, uid}: they stop being an admin and follow the channel again. */
+    suspend fun dismissAdmin(cid: String, uid: String) { call("dismissChannelAdmin", mapOf("cid" to cid, "uid" to uid)) }
+
+    /** ChatService.setAdminRights: a direct write, `adminRights.<uid>` with `adminEdit` naming who (firestore.rules). */
+    suspend fun setAdminRights(cid: String, uid: String, rights: List<String>) {
+        db.collection("conversations").document(cid).update(mapOf(
+            "adminRights.$uid" to rights, "adminEdit" to mapOf("uid" to uid, "by" to me),
+            "updatedAt" to FieldValue.serverTimestamp(),
+        )).await()
+    }
 
     // ---- Direct writes ------------------------------------------------------------------------
 

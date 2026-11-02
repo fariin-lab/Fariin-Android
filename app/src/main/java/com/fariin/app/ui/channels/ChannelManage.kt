@@ -1,0 +1,434 @@
+package com.fariin.app.ui.channels
+
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PersonRemove
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.fariin.app.R
+import com.fariin.app.channel.ChannelAdmins
+import com.fariin.app.channel.ChannelAdmins.Right
+import com.fariin.app.channel.ChannelAdmins.Team
+import com.fariin.app.channel.ChannelInfo
+import com.fariin.app.channel.ChannelRules
+import com.fariin.app.channel.ChannelService
+import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.people.SearchField
+import com.fariin.app.ui.settings.PageBar
+import com.fariin.app.ui.settings.SettingsRow
+import com.fariin.app.ui.settings.SettingsSection
+import com.fariin.app.ui.settings.Trailing
+import com.fariin.app.ui.theme.Fariin
+import kotlinx.coroutines.launch
+
+/*
+ * Channel management for its owner and admins (Kulan-iOS GroupSettingsView channel parts,
+ * ChannelFollowersView, GroupAdminsView, ChannelAdminPicker, AdminRightsView, EditGroupView):
+ * Edit Channel, Followers, Administrators, an admin's rights and Dismiss Admin. The Android way:
+ * pushed pages with the up arrow and the back gesture, a row's overflow menu where iOS swipes,
+ * toasts where iOS shows its capsule. iOS words.
+ */
+
+private fun toast(ctx: android.content.Context, text: String) = Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show()
+
+/**
+ * The admin's management rows on the channel page: Edit Channel, Followers, Administrators. One
+ * rounded card like the page's others (the page already has its side gutter).
+ */
+@Composable
+internal fun ChannelManageSection(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Fariin.colors.card)) {
+        if (team.can(me, Right.CHANGE_INFO)) {
+            SettingsRow("Edit Channel", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Edit)) { nav.edit(info.cid) }
+        }
+        SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
+        SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sorted().size}", last = true) {
+            nav.admins(info.cid)
+        }
+    }
+}
+
+/** Where the management pages open (set by [channelRoutes]). */
+data class ChannelManageNav(
+    val edit: (String) -> Unit = {},
+    val followers: (String) -> Unit = {},
+    val admins: (String) -> Unit = {},
+)
+
+/** Edit Channel: the group editor in a channel's words and squircle (iOS EditGroupView). */
+@Composable
+fun ChannelEditRoute(cid: String, me: String, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
+    val api = remember(me) { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(ctx.applicationContext)) }
+    if (doc.isEmpty()) { Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)); return }
+    // The editor keeps its own copy once open, so a live update never resets what is being typed.
+    val start = remember(doc.isNotEmpty()) { ChannelInfo.from(cid, doc) }
+    com.fariin.app.ui.people.EditGroupScreen(api, cid, start.title.ifEmpty { "Channel" }, start.avatarUrl, onClose,
+        description = start.description, channel = true)
+}
+
+// ---- Followers (iOS ChannelFollowersView) -------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
+    val team = Team.from(doc)
+    val info = ChannelInfo.from(cid, doc)
+    // The count as the page opened, held once (iOS): this page alone adjusts it.
+    var countAtOpen by remember(cid) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(doc.isNotEmpty()) { if (doc.isNotEmpty() && countAtOpen == null) countAtOpen = info.followerCount }
+    var removed by remember(cid) { mutableIntStateOf(0) }
+    var rows by remember(cid) { mutableStateOf<List<ChannelService.Follower>>(emptyList()) }
+    var more by remember(cid) { mutableStateOf(true) }
+    var loading by remember(cid) { mutableStateOf(false) }
+    var failed by remember(cid) { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<Pair<ChannelService.Follower, Boolean>?>(null) }
+    val mayRemove = team.can(me, Right.BAN_USERS)
+
+    suspend fun load() {
+        if (loading || !more) return
+        loading = true; failed = false
+        try {
+            val page = ChannelService.followers(cid, rows.lastOrNull()?.uid)
+            val seen = rows.map { it.uid }.toSet()
+            rows = rows + page.rows.filter { it.uid !in seen }
+            more = page.more
+        } catch (_: Exception) { failed = true }
+        loading = false
+    }
+    LaunchedEffect(cid) { load() }
+
+    confirm?.let { (f, ban) ->
+        AlertDialog(onDismissRequest = { confirm = null }, containerColor = c.card,
+            title = { Text(ChannelAdmins.removeTitle(ban)) }, text = { Text(ChannelAdmins.removeBody(ban)) },
+            confirmButton = { TextButton({
+                confirm = null
+                scope.launch {
+                    try {
+                        ChannelService.removeFollower(cid, f.uid, ban)
+                        rows = rows.filter { it.uid != f.uid }
+                        removed += 1
+                    } catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
+                }
+            }) { Text(if (ban) "Ban" else "Remove", color = c.red) } },
+            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = c.blue) } })
+    }
+
+    val admins = team.sorted()
+    val followerRows = rows.filter { it.uid !in admins }
+    val shown = ChannelAdmins.shownCount(countAtOpen ?: info.followerCount, removed, admins.size)
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Followers", onBack)
+        PullToRefreshBox(refreshing, onRefresh = {
+            refreshing = true
+            scope.launch { rows = emptyList(); more = true; load(); refreshing = false }
+        }, modifier = Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+                SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
+                    admins.forEach { uid ->
+                        PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "") {
+                            Text(if (uid == team.owner) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
+                        }
+                    }
+                    followerRows.forEach { f ->
+                        PersonLine(f.photoUrl, f.name) {
+                            if (mayRemove) RowMenu(listOf("Remove" to { confirm = f to false }, "Ban" to { confirm = f to true }))
+                        }
+                        if (f == rows.lastOrNull() && more) LaunchedEffect(f.uid) { load() }
+                    }
+                    when {
+                        loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        }
+                        failed -> Note(ChannelAdmins.FOLLOWERS_FAILED)
+                        followerRows.isEmpty() && !more -> Note(ChannelAdmins.NO_FOLLOWERS)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---- Administrators (iOS GroupAdminsView, channel) ----------------------------------------------
+
+@Composable
+fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
+    val c = Fariin.colors
+    val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
+    val team = Team.from(doc)
+    var picking by remember { mutableStateOf(false) }
+    if (picking) {
+        ChannelAdminPicker(cid, exclude = team.sorted().toSet(), onClose = { picking = false })
+        return
+    }
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Administrators", onBack)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+            SettingsSection(footer = ChannelAdmins.ADMINS_FOOTER) {
+                if (team.can(me, Right.ADD_ADMINS)) {
+                    SettingsRow("Add Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonAdd),
+                        titleColor = c.blue, trailing = Trailing.NONE) { picking = true }
+                }
+                team.sorted().forEach { uid ->
+                    // Tap an admin for what they can do (and Dismiss Admin, where I may).
+                    PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "Admin", onClick = { onOpen(uid) }) {
+                        Text(if (uid == team.owner) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Choose Follower (iOS ChannelAdminPicker): a follower, a search, and a yes makes them an admin at once. */
+@Composable
+private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    BackHandler(onBack = onClose)
+    var rows by remember { mutableStateOf<List<ChannelService.Follower>>(emptyList()) }
+    var more by remember { mutableStateOf(true) }
+    var loading by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var asking by remember { mutableStateOf<ChannelService.Follower?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    suspend fun load() {
+        if (!more || loading) return
+        loading = true
+        try {
+            val page = ChannelService.followers(cid, rows.lastOrNull()?.uid)
+            val have = rows.map { it.uid }.toSet()
+            rows = rows + page.rows.filter { it.uid !in have }
+            more = page.more; failed = false
+        } catch (_: Exception) { failed = true; more = false }
+        loading = false
+    }
+    LaunchedEffect(cid) { load() }
+    asking?.let { f ->
+        AlertDialog(onDismissRequest = { asking = null }, containerColor = c.card,
+            title = { Text("Make ${f.name} an admin?") }, text = { Text(ChannelAdmins.MAKE_ADMIN_BODY) },
+            confirmButton = { TextButton({
+                asking = null; busy = true
+                scope.launch {
+                    try { ChannelService.makeAdmin(cid, f.uid); toast(ctx, "${f.name} is now an admin."); onClose() }
+                    catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
+                    busy = false
+                }
+            }) { Text("Make Admin", color = c.blue) } },
+            dismissButton = { TextButton({ asking = null }) { Text("Cancel", color = c.blue) } })
+    }
+    val q = query.trim()
+    val list = rows.filter { it.uid !in exclude }
+    val shown = if (q.isEmpty()) list else list.filter { it.name.contains(q, ignoreCase = true) }
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Choose Follower", onClose, action = {
+            if (busy) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+        })
+        SearchField(query, "Search") { query = it }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+            SettingsSection {
+                shown.forEach { f ->
+                    PersonLine(f.photoUrl, f.name, onClick = { if (!busy) asking = f })
+                    if (f.uid == rows.lastOrNull()?.uid && more) LaunchedEffect(f.uid) { load() }
+                }
+                when {
+                    loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                    }
+                    shown.isEmpty() -> Note(if (failed) ChannelAdmins.PICK_FAILED else if (q.isEmpty()) ChannelAdmins.PICK_EMPTY else ChannelAdmins.PICK_NONE)
+                }
+            }
+        }
+    }
+}
+
+// ---- One admin: rights and Dismiss (iOS AdminRightsView + the member card's Dismiss Admin) -----
+
+@Composable
+fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
+    val team = Team.from(doc)
+    val name = if (uid == me) "You" else team.names[uid] ?: "Admin"
+    val editable = team.canEditRights(me, uid)
+    // The owner sees every right; an admin with Add admins only what they hold (they cannot give more).
+    val shown = if (editable) team.grantable(me) else Right.entries
+    var draft by remember(uid) { mutableStateOf<Set<String>?>(null) }
+    val held = draft ?: team.rightsOf(uid).map { it.slug }.toSet()
+    var saving by remember { mutableStateOf(false) }
+    var confirmDismiss by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    // Once dismissed (here or elsewhere) the page has nothing left to show. Leave once only.
+    var left by remember { mutableStateOf(false) }
+    fun leave() { if (!left) { left = true; onBack() } }
+    LaunchedEffect(doc, uid) { if (doc.isNotEmpty() && !team.isAdmin(uid)) leave() }
+
+    fun save(next: Set<String>) {
+        val old = held
+        draft = next; saving = true
+        scope.launch {
+            try { ChannelService.setAdminRights(cid, uid, ChannelAdmins.toWrite(next, shown)); draft = null }
+            catch (e: Exception) { draft = old; problem = e.message?.takeIf { it.isNotBlank() } ?: "Couldn't save. Try again." }
+            saving = false
+        }
+    }
+    problem?.let { p ->
+        AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
+            text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } })
+    }
+    if (confirmDismiss) AlertDialog(onDismissRequest = { confirmDismiss = false }, containerColor = c.card,
+        title = { Text("Dismiss $name as admin?") },
+        confirmButton = { TextButton({
+            confirmDismiss = false; saving = true
+            scope.launch {
+                try { ChannelService.dismissAdmin(cid, uid); toast(ctx, "$name is no longer an admin"); leave() }
+                catch (e: Exception) { problem = ChannelService.errorText(e) }
+                saving = false
+            }
+        }) { Text("Dismiss Admin", color = c.red) } },
+        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.blue) } })
+
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = {
+            if (saving) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+        })
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Avatar(team.photos[uid], 80.dp, modifier = Modifier.padding(top = 8.dp))
+            Text(name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp))
+            Text(if (uid == team.owner) "Owner" else "Admin", fontSize = 15.sp, color = c.secondary)
+            if (uid == team.owner) {
+                SettingsSection {
+                    Note("You are the owner of this channel, so you can do everything in it, including adding admins and transferring ownership."
+                        .let { if (uid == me) it else "$name is the owner of this channel and can do everything in it." })
+                }
+            } else {
+                if (editable) SettingsSection {
+                    SwitchLine("All rights", ChannelAdmins.allOn(held, shown), bold = true, enabled = !saving, last = true) { on ->
+                        save(if (on) held + shown.map { it.slug } else held - shown.map { it.slug }.toSet())
+                    }
+                }
+                SettingsSection(header = if (uid == me) "What you can do" else "What $name can do", footer = if (editable) ChannelAdmins.rightsFooter(name) else null) {
+                    shown.forEachIndexed { i, r ->
+                        SwitchLine(r.label, r.slug in held, enabled = editable && !saving, last = i == shown.lastIndex) { on ->
+                            save(if (on) held + r.slug else held - r.slug)
+                        }
+                    }
+                }
+                if (team.canDismiss(me, uid)) SettingsSection {
+                    SettingsRow("Dismiss Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonRemove),
+                        titleColor = c.red, trailing = Trailing.NONE, last = true) { if (!saving) confirmDismiss = true }
+                }
+            }
+        }
+    }
+}
+
+// ---- Small pieces -----------------------------------------------------------------------------
+
+@Composable
+private fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar(photo, 40.dp)
+        Spacer(Modifier.width(12.dp))
+        Text(name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        trailing()
+    }
+}
+
+@Composable
+private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
+    val c = Fariin.colors
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton({ open = true }) { Icon(Icons.Filled.MoreVert, "More", tint = c.secondary) }
+        DropdownMenu(open, onDismissRequest = { open = false }, containerColor = c.card) {
+            items.forEach { (label, act) ->
+                DropdownMenuItem(text = { Text(label, color = c.red) }, onClick = { open = false; act() })
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabled: Boolean = true, last: Boolean = false, onChange: (Boolean) -> Unit) {
+    val c = Fariin.colors
+    // The whole row flips the switch (Android settings rows).
+    Row(Modifier.fillMaxWidth().toggleable(on, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange)
+        .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = 17.sp, color = c.label, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+        Switch(on, onCheckedChange = null, enabled = enabled,
+            colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White))
+    }
+    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+}
+
+@Composable
+private fun Note(text: String) {
+    Text(text, fontSize = 15.sp, color = Fariin.colors.secondary, textAlign = TextAlign.Start,
+        modifier = Modifier.fillMaxWidth().padding(16.dp))
+}

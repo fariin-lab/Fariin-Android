@@ -9,11 +9,12 @@ Answers:
     publicGroupPreview the channel's header by cid or @name (followers + admins count, isMember, createdAt)
     makeChannel        a group of mine, alone in it, gets the channel fields (channels.channelFields)
     createCallLink / updateCallLink / deleteCallLink / peekCallLink   call links (no media server: nobody is ever in the call)
+    listChannelFollowers / removeChannelFollower / makeChannelAdmin / dismissChannelAdmin   channel followers and admins (test stub, see below)
 Every other callable answers NOT_FOUND, exactly as before this stub existed (follow, react and views
 are NOT emulated here: those stay untested locally).
 Reads and writes go to 127.0.0.1:8080 with the emulator's admin token; nothing leaves this PC.
 """
-import base64, json, urllib.request
+import base64, json, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 FS = "http://127.0.0.1:8080/v1/projects/demo-fariin/databases/(default)/documents"
@@ -194,9 +195,181 @@ def peek_link(uid, data):
             "count": 0, "names": [], "full": False, "creator": cur.get("creatorUid") == uid, "encName": cur.get("encName") or ""}
 
 
+
+# ---- Channel followers and admins: a TEST STUB of functions-groups listChannelFollowers /
+# removeChannelFollower / makeChannelAdmin / dismissChannelAdmin (index.js, lib/channels.js), so the
+# Android Followers and Administrators pages can be driven locally. It writes the same documents the
+# real functions write, without a transaction, and moves followerCount at once (the real ones go
+# through the count buffer, flushChannelCounts, which lands it within a minute). Reactions carried
+# between the follow entry and channelRx (rxHandover) are left out. Never deployed.
+CHANNEL_ADMIN_RIGHTS = ["changeInfo", "deleteMessages", "banUsers", "inviteUsers", "pinMessages", "postStories"]
+DELETE = object()
+
+
+class Ts:
+    """A server timestamp (now) for wval."""
+
+
+def wval(v):
+    import datetime
+    if v is None: return {"nullValue": None}
+    if isinstance(v, Ts):
+        return {"timestampValue": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")}
+    if isinstance(v, dict) and "__ts" in v: return {"timestampValue": v["__ts"]}
+    if isinstance(v, bool): return {"booleanValue": v}
+    if isinstance(v, int): return {"integerValue": str(v)}
+    if isinstance(v, float): return {"doubleValue": v}
+    if isinstance(v, list): return {"arrayValue": {"values": [wval(x) for x in v]}}
+    if isinstance(v, dict): return {"mapValue": {"fields": {k: wval(x) for k, x in v.items()}}}
+    return {"stringValue": str(v)}
+
+
+def write(path, fields):
+    """PATCH with field paths ("a" or "a.b"); DELETE drops that path."""
+    body, mask = {}, []
+    for k, v in fields.items():
+        parts = k.split(".")
+        mask.append("updateMask.fieldPaths=" + ".".join("`" + x + "`" for x in parts))
+        if v is DELETE:
+            continue
+        if len(parts) == 1:
+            body[k] = wval(v)
+        else:
+            m = body.setdefault(parts[0], {"mapValue": {"fields": {}}})
+            m["mapValue"]["fields"][parts[1]] = wval(v)
+    data = json.dumps({"fields": body}).encode()
+    q = "&".join(urllib.parse.quote(m, safe="=.") for m in mask)
+    urllib.request.urlopen(urllib.request.Request(f"{FS}/{path}?{q}", data=data, method="PATCH", headers=ADMIN)).read()
+
+
+def remove(path):
+    try:
+        urllib.request.urlopen(urllib.request.Request(f"{FS}/{path}", method="DELETE", headers=ADMIN)).read()
+    except urllib.error.HTTPError:
+        pass
+
+
+def list_docs(path):
+    with urllib.request.urlopen(urllib.request.Request(f"{FS}/{path}?pageSize=1000", headers=ADMIN)) as r:
+        docs = json.loads(r.read()).get("documents", [])
+    return [(d["name"].rsplit("/", 1)[-1], {a: unval(b) for a, b in d.get("fields", {}).items()}) for d in docs]
+
+
+def rights_of(cd, uid):
+    if not cd or not uid: return []
+    if cd.get("createdBy") == uid: return CHANNEL_ADMIN_RIGHTS + ["addAdmins"]
+    if uid not in cd.get("admins", []): return []
+    r = (cd.get("adminRights") or {}).get(uid)
+    return [str(x) for x in r] if isinstance(r, list) else list(CHANNEL_ADMIN_RIGHTS)
+
+
+def channel_admin(cd, uid):
+    return bool(cd) and cd.get("channel") is True and (uid in cd.get("admins", []) or cd.get("createdBy") == uid)
+
+
+def _cid_uid(data, key="uid"):
+    cid, who = str((data or {}).get("cid") or ""), str((data or {}).get(key) or "")
+    if not cid or "/" in cid or not who or "/" in who:
+        raise Refusal("INVALID_ARGUMENT", "Missing cid or uid.")
+    return cid, who
+
+
+def _profile(uid):
+    u = get(f"users/{uid}")
+    gone = not u or u.get("banned") is True or bool(u.get("deletionScheduledFor"))
+    if gone:
+        return "Deleted Account", ""
+    return str(u.get("name") or u.get("handle") or "Fariin user")[:64], str(u.get("photoUrl") or "")
+
+
+def _bump_followers(cid, cd, delta):
+    write(f"conversations/{cid}", {"followerCount": max(0, int(cd.get("followerCount", 0)) + delta)})
+
+
+def list_followers(uid, data):
+    cid = str((data or {}).get("cid") or "")
+    after = str((data or {}).get("after") or "")
+    if not cid or "/" in cid: raise Refusal("INVALID_ARGUMENT", "Missing cid.")
+    if not channel_admin(get(f"conversations/{cid}"), uid):
+        raise Refusal("PERMISSION_DENIED", "Only admins can see followers.")
+    rows = sorted(list_docs(f"conversations/{cid}/followers"), key=lambda r: -ms(r[1].get("at")))
+    if after:
+        ids = [r[0] for r in rows]
+        if after in ids: rows = rows[ids.index(after) + 1:]
+    page = rows[:50]
+    out = []
+    for fid, f in page:
+        name, photo = _profile(fid)
+        out.append({"uid": fid, "name": name, "photoUrl": photo, "at": ms(f.get("at"))})
+    return {"followers": out, "more": len(page) == 50}
+
+
+def remove_follower(uid, data):
+    cid, who = _cid_uid(data)
+    ban = (data or {}).get("ban") is True
+    cd = get(f"conversations/{cid}")
+    if not (cd and cd.get("channel") is True and "banUsers" in rights_of(cd, uid)):
+        raise Refusal("PERMISSION_DENIED", "Only admins who can ban users can remove followers.")
+    if who in cd.get("users", []):
+        raise Refusal("FAILED_PRECONDITION", "That's an admin, not a follower.")
+    remove(f"users/{who}/channels/{cid}")
+    if get(f"conversations/{cid}/followers/{who}") is not None:
+        remove(f"conversations/{cid}/followers/{who}")
+        _bump_followers(cid, cd, -1)
+    if ban and who not in cd.get("bannedUids", []):
+        write(f"conversations/{cid}", {"bannedUids": cd.get("bannedUids", []) + [who]})
+    return {"ok": True}
+
+
+def make_admin(uid, data):
+    cid, target = _cid_uid(data)
+    if target == uid: raise Refusal("INVALID_ARGUMENT", "Missing channel or person.")
+    cd = get(f"conversations/{cid}")
+    if not cd or cd.get("channel") is not True: raise Refusal("NOT_FOUND", "This channel no longer exists.")
+    if "addAdmins" not in rights_of(cd, uid):
+        raise Refusal("PERMISSION_DENIED", "Only the owner, or an admin allowed to add admins, can add admins.")
+    if target in cd.get("users", []): return {"state": "already"}
+    if target in cd.get("bannedUids", []): raise Refusal("PERMISSION_DENIED", "This person is banned from the channel.")
+    if get(f"conversations/{cid}/followers/{target}") is None:
+        raise Refusal("FAILED_PRECONDITION", "Only a follower of the channel can be made an admin.")
+    name, photo = _profile(target)
+    held = set(rights_of(cd, uid))
+    upd = {"users": cd.get("users", []) + [target], "admins": [a for a in cd.get("admins", []) if a != target] + [target],
+           f"adminRights.{target}": [r for r in CHANNEL_ADMIN_RIGHTS if r in held], f"adminBy.{target}": uid,
+           f"names.{target}": name, f"unreadCount.{target}": 0}
+    if photo: upd[f"photos.{target}"] = photo
+    remove(f"users/{target}/channels/{cid}")
+    remove(f"conversations/{cid}/followers/{target}")
+    write(f"conversations/{cid}", upd)
+    _bump_followers(cid, cd, -1)
+    return {"state": "admin"}
+
+
+def dismiss_admin(uid, data):
+    cid, who = _cid_uid(data)
+    cd = get(f"conversations/{cid}")
+    ok = bool(cd) and cd.get("channel") is True and uid != who and cd.get("createdBy") != who and who in cd.get("admins", []) \
+        and (cd.get("createdBy") == uid or ("addAdmins" in rights_of(cd, uid) and (cd.get("adminBy") or {}).get(who) == uid))
+    if not ok: raise Refusal("PERMISSION_DENIED", "You can't dismiss this admin.")
+    upd = {"users": [u for u in cd.get("users", []) if u != who], "admins": [a for a in cd.get("admins", []) if a != who],
+           "updatedAt": Ts()}
+    for k in ("adminRights", "adminBy", "unreadCount", "roles"):
+        upd[f"{k}.{who}"] = DELETE
+    remove(f"users/{who}/channelRx/{cid}")
+    had = get(f"conversations/{cid}/followers/{who}") is not None
+    if not had: write(f"conversations/{cid}/followers/{who}", {"at": Ts()})
+    if get(f"users/{who}/channels/{cid}") is None:
+        write(f"users/{who}/channels/{cid}", {"at": Ts(), "read": int(cd.get("postCount", 0)), "muted": False, "mutedUntil": 0})
+    write(f"conversations/{cid}", upd)
+    if not had: _bump_followers(cid, cd, 1)
+    return {"ok": True}
+
+
 HANDLERS = {"discoverChannels": discover, "publicGroupPreview": preview, "makeChannel": make_channel,
             "createCallLink": create_link, "updateCallLink": update_link, "deleteCallLink": delete_link,
-            "peekCallLink": peek_link}
+            "peekCallLink": peek_link,
+            "listChannelFollowers": list_followers, "removeChannelFollower": remove_follower,
+            "makeChannelAdmin": make_admin, "dismissChannelAdmin": dismiss_admin}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -211,7 +384,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise Refusal("UNAUTHENTICATED", "Sign in required.")
             code, out = 200, {"result": HANDLERS[name](uid, body.get("data"))}
         except Refusal as r:
-            code, out = {"NOT_FOUND": 404, "PERMISSION_DENIED": 403, "FAILED_PRECONDITION": 400, "UNAUTHENTICATED": 401, "ALREADY_EXISTS": 409}.get(r.status, 400), \
+            code, out = {"NOT_FOUND": 404, "PERMISSION_DENIED": 403, "FAILED_PRECONDITION": 400, "UNAUTHENTICATED": 401, "ALREADY_EXISTS": 409, "INVALID_ARGUMENT": 400}.get(r.status, 400), \
                 {"error": {"status": r.status, "message": r.message}}
         raw = json.dumps(out).encode()
         self.send_response(code)
