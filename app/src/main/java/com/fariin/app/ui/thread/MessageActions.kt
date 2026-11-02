@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -88,11 +90,22 @@ data class ThreadActions(
     /** The words left in the box last time (iOS Drafts), and where new ones are kept. */
     val draft: String = "",
     val onDraft: (String) -> Unit = {},
+    /** Pin / unpin (iOS togglePin, ChatService.unpin). */
+    val onPin: (Message) -> Unit = {},
+    val onUnpin: (String) -> Unit = {},
+    /** Pages older history until the message is loaded (iOS ensureLoaded); false when out of reach. */
+    val onEnsureLoaded: suspend (String) -> Boolean = { false },
+    /** Earlier versions of an edited message, oldest first (text, at ms). Throws when unreadable. */
+    val onEditHistory: suspend (Message) -> List<Pair<String, Double>> = { emptyList() },
+    /** Select mode: the delete plan run at once, and several messages forwarded to the chats picked. */
+    val onDeleteMany: (com.fariin.app.data.SelectRules.Plan) -> Unit = {},
+    val onForwardManyTo: (List<Message>, List<String>) -> Unit = { _, _ -> },
 )
 
 
 /** One row of the menu. */
-private data class MenuItem(val title: String, val icon: ImageVector, val destructive: Boolean = false, val run: () -> Unit)
+private data class MenuItem(val title: String, val icon: ImageVector?, val destructive: Boolean = false,
+                            val iconRes: Int = 0, val run: () -> Unit)
 
 /**
  * The long-press menu, after iOS customMenuActions: the quick reaction bar on top (the six
@@ -105,6 +118,7 @@ internal fun MessageMenu(
     m: Message, ui: ThreadUi, onDismiss: () -> Unit, actions: ThreadActions,
     onReply: (Message) -> Unit, onStartEdit: (Message) -> Unit, onCopy: (String) -> Unit,
     onInfo: (Message) -> Unit, onDelete: (Message) -> Unit,
+    onSelect: (Message) -> Unit = {}, onEditHistory: (Message) -> Unit = {},
 ) {
     val c = Fariin.colors
     val now = System.currentTimeMillis().toDouble()
@@ -115,7 +129,16 @@ internal fun MessageMenu(
             if (canSaveToGallery(m)) add(MenuItem("Save", Icons.Filled.Download) { actions.onSave(m) })
             if (MessageRules.canCopy(m)) add(MenuItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.text) })
             if (MessageRules.canEdit(m, ui.me, now)) add(MenuItem("Edit", Icons.Filled.Edit) { onStartEdit(m) })
+            if (m.edited) add(MenuItem("Edit History", Icons.Filled.History) { onEditHistory(m) })
+        }
+        if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) })
+        if (!m.deleted) {
             if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", Icons.Filled.Info) { onInfo(m) })
+            if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) {
+                val pinnedNow = m.id in ui.pinnedIds
+                if (pinnedNow) add(MenuItem("Unpin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu) { actions.onUnpin(m.id) })
+                else add(MenuItem("Pin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu) { actions.onPin(m) })
+            }
         }
         if (MessageRules.canDeleteHere(m, ui.me, ui.isGroup, ui.adminMayDelete)) {
             add(MenuItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
@@ -160,7 +183,10 @@ internal fun MessageMenu(
                 val tint = if (it.destructive) c.red else c.label
                 androidx.compose.material3.ListItem(
                     headlineContent = { Text(it.title, color = tint) },
-                    leadingContent = { Icon(it.icon, null, tint = tint) },
+                    leadingContent = {
+                        if (it.icon != null) Icon(it.icon, null, tint = tint)
+                        else Icon(androidx.compose.ui.res.painterResource(it.iconRes), null, tint = tint, modifier = Modifier.size(24.dp))
+                    },
                     colors = androidx.compose.material3.ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.clickable { onDismiss(); it.run() },
                 )

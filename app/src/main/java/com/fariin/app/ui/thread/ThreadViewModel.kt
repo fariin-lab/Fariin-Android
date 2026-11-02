@@ -46,6 +46,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val app = LocalContext.current.applicationContext
     val vm: ThreadViewModel = viewModel(key = "thread-$cid") { ThreadViewModel(cid, me, crypto, app) }
     val s by vm.repo.state.collectAsState()
+    val pinnedMsgs by vm.repo.pinned.collectAsState()
     val keys by CryptoHub.keysEpoch.collectAsState()
     val listed = remember(s.conv, keys) { CryptoHub.listedConversation(cid) }
     val conv = remember(s.conv, listed) {
@@ -113,6 +114,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         myPhoto = conv?.photos?.get(me),
         unreadAtOpen = unreadAtOpen,
         channel = channel,
+        pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),
+        pinned = pinnedMsgs,
+        canPin = channel == null && com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
@@ -152,6 +156,45 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
         draft = remember(cid) { Drafts.text(cid) },
         onDraft = { Drafts.set(cid, it) },
+        onPin = { m ->
+            vm.viewModelScope.launch {
+                when (vm.repo.pin(m)) {
+                    null -> notice = "You can pin up to ${com.fariin.app.data.PinRules.MAX_PINS} messages."
+                    false -> notice = "Couldn't pin this message. Try again."
+                    true -> {}
+                }
+            }
+        },
+        onUnpin = { id ->
+            vm.viewModelScope.launch {
+                try { vm.repo.unpin(id) } catch (e: Exception) { notice = "Couldn't unpin: ${e.localizedMessage ?: "try again"}" }
+            }
+        },
+        onEnsureLoaded = { id -> vm.repo.ensureLoaded(id) },
+        onEditHistory = { m -> vm.repo.editHistory(m) },
+        onDeleteMany = { plan ->
+            for (m in plan.forMe) vm.repo.hideForMe(app, m)
+            if (plan.forEveryone.isNotEmpty()) vm.viewModelScope.launch {
+                var refused = 0
+                for (m in plan.forEveryone) if (!vm.repo.deleteForEveryone(m)) refused++
+                if (refused > 0) notice = if (refused == 1) "The server refused one delete. That message is still there."
+                    else "The server refused $refused deletes. Those messages are still there."
+            }
+        },
+        onForwardManyTo = { msgs, targets ->
+            vm.viewModelScope.launch {
+                var failedChats = 0
+                for (m in msgs) {
+                    val f = com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets)
+                    failedChats += f.size
+                }
+                notice = when {
+                    failedChats == 0 -> if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
+                    failedChats == msgs.size * targets.size -> "Couldn't forward. Try again."
+                    else -> "Some messages couldn't be forwarded."
+                }
+            }
+        },
     )
     // iOS: on open, once the first page is in, my badge goes to 0 and the read receipt goes out;
     // while the chat stays open and in front, every new message from them does the same.

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From the iOS asset ic_pin_menu.svg (the long-press menu's Pin). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <group android:scaleX="1.33333" android:scaleY="1.33333">
+        <path android:pathData="M9,16.25L9,12.25"
+            android:strokeColor="#FF000000" android:strokeWidth="1.5"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M14.25,12.25c-0.089,-0.699 -0.318,-1.76 -0.969,-2.875 -0.335,-0.574 -0.703,-1.028 -1.031,-1.375V3.75c0,-1.105 -0.895,-2 -2,-2h-2.5c-1.105,0 -2,0.895 -2,2v4.25c-0.329,0.347 -0.697,0.801 -1.031,1.375 -0.65,1.115 -0.88,2.176 -0.969,2.875H14.25Z"
+            android:strokeColor="#FF000000" android:strokeWidth="1.5"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+</vector>

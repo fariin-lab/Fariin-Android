@@ -131,6 +131,12 @@ data class ThreadUi(
     val unreadAtOpen: Int = 0,
     /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
     val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
+    /** Pinned message ids in pin order (conversations/{cid}.pinnedMessageIds), and the pinned
+     *  messages fetched by id for pins older than the loaded page. */
+    val pinnedIds: List<String> = emptyList(),
+    val pinned: Map<String, Message> = emptyMap(),
+    /** May I pin and unpin here (a 1:1 always; a group the Pin messages right). */
+    val canPin: Boolean = false,
 )
 
 /**
@@ -168,6 +174,18 @@ fun ThreadScreen(
     var infoFor by remember { mutableStateOf<Message?>(null) }
     var replyTo by remember { mutableStateOf<Message?>(null) }
     var editing by remember { mutableStateOf<Message?>(null) }
+    var historyFor by remember { mutableStateOf<Message?>(null) }
+    // Select mode (iOS uiMode .selection): the ticked rows by rowId; empty = not selecting.
+    val selected = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    val selecting = selected.isNotEmpty()
+    var bulkDelete by remember { mutableStateOf(false) }
+    var bulkForward by remember { mutableStateOf<List<Message>?>(null) }
+    BackHandler(enabled = selecting) { selected.clear() }
+    fun toggle(m: Message) { if (m.rowId in selected) selected.remove(m.rowId) else selected.add(m.rowId) }
+    // The row a jump landed on, lit for a moment (iOS flashAndScroll).
+    var flashId by remember { mutableStateOf<String?>(null) }
+    var pinIndex by remember { mutableStateOf(0) }
+    val uiNow = androidx.compose.runtime.rememberUpdatedState(ui)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var viewing by remember { mutableStateOf<Viewing?>(null) }
@@ -184,11 +202,23 @@ fun ThreadScreen(
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
     forwardFor?.let { m -> ForwardSheet(ui.me, onDismiss = { forwardFor = null }) { targets -> actions.onForwardTo(m, targets) } }
+    bulkForward?.let { msgs ->
+        ForwardSheet(ui.me, onDismiss = { bulkForward = null }) { targets -> actions.onForwardManyTo(msgs, targets); selected.clear() }
+    }
     menuFor?.let { m ->
         MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions.copy(onForward = { forwardFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
-            onInfo = { infoFor = it }, onDelete = { deleteFor = it })
+            onInfo = { infoFor = it }, onDelete = { deleteFor = it },
+            onSelect = { selected.clear(); selected.add(it.rowId); replyTo = null },
+            onEditHistory = { historyFor = it })
+    }
+    historyFor?.let { m -> EditHistorySheet(ui.messages.firstOrNull { it.id == m.id } ?: m, actions) { historyFor = null } }
+    // What the ticks point at, from the live list (iOS liveSelection): a row that went away drops out.
+    val picked = ui.messages.filter { it.rowId in selected }
+    LaunchedEffect(ui.messages) { selected.retainAll(ui.messages.map { it.rowId }.toSet()) }
+    if (bulkDelete) BulkDeleteDialog(picked, ui, onDismiss = { bulkDelete = false }) { plan ->
+        actions.onDeleteMany(plan); selected.clear()
     }
     val ch = ui.channel
     postMenuFor?.let { m ->
@@ -234,8 +264,32 @@ fun ThreadScreen(
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(220, delayMillis = 40) else null }
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
+    // A jump to a pinned message (iOS pinned bar tap): page back until it is loaded, scroll it into
+    // view and light it; then the bar moves on to the next pin.
+    fun jumpTo(id: String, advance: Boolean) {
+        scope.launch {
+            val found = actions.onEnsureLoaded(id)
+            val list = uiNow.value.messages
+            val i = list.indexOfFirst { it.id == id }
+            if (!found || i < 0) {
+                val gone = list.none { it.id == id } && uiNow.value.pinned[id] == null
+                actions.onNotice(if (gone) "Pinned message was deleted" else "Couldn't reach this message.")
+                return@launch
+            }
+            listState.animateScrollToItem(list.size - 1 - i)
+            val row = list[i].rowId
+            flashId = row
+            if (advance) pinIndex = com.fariin.app.data.PinRules.nextIndex(pinIndex, visiblePins(uiNow.value).size)
+            kotlinx.coroutines.delay(2000)
+            if (flashId == row) flashId = null
+        }
+    }
+    val pins = visiblePins(ui)
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
-        Header(ui, onBack, actions.onTitleClick)
+        if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
+        PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
+            onJump = { jumpTo(it, advance = true) },
+            onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- })
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes.
@@ -256,7 +310,14 @@ fun ThreadScreen(
                         .fillMaxWidth().padding(top = g.gapDp.dp)) {
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
                         if (m.rowId == dividerId) UnreadDivider()
+                        val pinNote = com.fariin.app.data.PinRules.notice(m.text)
+                        val lit by androidx.compose.animation.animateColorAsState(
+                            if (m.rowId == flashId || (selecting && m.rowId in selected)) c.blue.copy(alpha = 0.14f) else Color.Transparent,
+                            label = "flash")
                         when {
+                            pinNote != null && !m.deleted -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) { jumpTo(pinNote.messageId, advance = false) }) {
+                                NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${pinNote.label}")
+                            }
                             m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else noticeText(m))
                             ch != null -> androidx.compose.runtime.CompositionLocalProvider(
                                 com.fariin.app.ui.channels.LocalPostViews provides
@@ -267,8 +328,33 @@ fun ThreadScreen(
                                     com.fariin.app.ui.channels.ChannelChips(ch, m)
                                 }
                             }
+                            selecting -> Row(
+                                Modifier.fillMaxWidth().background(lit),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                SelectTick(m.rowId in selected)
+                                // The bubble takes no taps of its own while ticking (a photo would open).
+                                Box(Modifier.weight(1f)) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        MessageRow(ui, m, g, is24h, {}) {}
+                                        ReactionChips(m, ui, m.authorId == ui.me) {}
+                                    }
+                                    Box(Modifier.matchParentSize().pointerInput(m.rowId) {
+                                        awaitEachGesture {
+                                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).consume()
+                                            var up = false
+                                            while (!up) {
+                                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                                e.changes.forEach { it.consume() }
+                                                up = e.changes.none { it.pressed }
+                                            }
+                                            toggle(m)
+                                        }
+                                    })
+                                }
+                            }
                             else -> SwipeRow(enabled = MessageRules.canReply(m), onReply = { replyTo = m; editing = null }) {
-                                Column(Modifier.fillMaxWidth().combinedClickableLong { menuFor = m }) {
+                                Column(Modifier.fillMaxWidth().background(lit).combinedClickableLong { menuFor = m }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     ReactionChips(m, ui, m.authorId == ui.me) { e ->
                                         actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], e))
@@ -290,7 +376,23 @@ fun ThreadScreen(
                 }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp))
             }
         }
-        if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
+        if (selecting) {
+            val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
+                picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete) })
+            SelectionBar(
+                deleteEnabled = canDelete,
+                forwardEnabled = com.fariin.app.data.SelectRules.forwardable(picked),
+                copyEnabled = picked.any(MessageRules::canCopy),
+                busy = false,
+                onDelete = { bulkDelete = true },
+                onForward = { bulkForward = picked.sortedBy { it.createdAtMillis } },
+                onCopy = {
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(com.fariin.app.data.SelectRules.copyText(picked)))
+                    if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied")
+                    selected.clear()
+                },
+            )
+        } else if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             com.fariin.app.ui.channels.ChannelBottomBar(ch, ui.sendBlocked)
         } else if (ui.receipts.iBlocked && !ui.isGroup) {
@@ -326,6 +428,24 @@ fun ThreadScreen(
             Composer(send, { attachOpen = true }, onSendVoice, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
                 initialDraft = actions.draft, onDraft = actions.onDraft)
         }
+    }
+}
+
+/** iOS visiblePinIds: pins I can see (not hidden for me, not a tombstone), in pin order. */
+private fun visiblePins(ui: ThreadUi): List<String> = ui.pinnedIds.filter { id ->
+    !com.fariin.app.data.HiddenMessages.isHidden(id) &&
+        (ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id])?.deleted != true
+}
+
+/** The round tick at the start of a row in select mode. */
+@Composable
+private fun SelectTick(on: Boolean) {
+    val c = Fariin.colors
+    Box(Modifier.padding(start = 12.dp).size(24.dp).clip(CircleShape)
+        .background(if (on) c.blue else Color.Transparent)
+        .border(1.5.dp, if (on) c.blue else c.secondary.copy(alpha = 0.6f), CircleShape),
+        contentAlignment = Alignment.Center) {
+        if (on) Icon(Icons.Filled.Done, null, tint = Color.White, modifier = Modifier.size(16.dp))
     }
 }
 

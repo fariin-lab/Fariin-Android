@@ -165,6 +165,7 @@ class ThreadRepository(
             val data = snap?.data ?: return@addSnapshotListener
             _state.update { it.copy(receipts = Receipts.from(data, me, cid), conv = data) }
             if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
+            syncPins(PinRules.pinnedIds(data))
         }
         if (!Wire.isGroupCid(cid)) attachPresence(Wire.otherUid(cid, me))
         // A block or unblock made while the chat is open re-filters what shows.
@@ -659,7 +660,7 @@ class ThreadRepository(
     } catch (_: Exception) { null } ?: memberUids()
 
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
-                                   forwarded: Boolean = false) {
+                                   forwarded: Boolean = false, countsAsUnread: Boolean = true) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         val local = CryptoHub.listedConversation(cid)
@@ -698,8 +699,9 @@ class ThreadRepository(
             "lastMessage" to cipher,
             "lastSender" to me,
             "updatedAt" to FieldValue.serverTimestamp(),
-            "unreadCount.$other" to FieldValue.increment(1),
         )
+        // iOS countsAsUnread: a pin notice is a notice, not a message, so no badge for it.
+        if (countsAsUnread) conv["unreadCount.$other"] = FieldValue.increment(1)
         if (answering) conv["accepted"] = true
         batch.update(convRef, conv)
         batch.commit().await()
@@ -744,7 +746,7 @@ class ThreadRepository(
     }
 
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
-                                  forwarded: Boolean = false) {
+                                  forwarded: Boolean = false, countsAsUnread: Boolean = true) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
@@ -767,7 +769,7 @@ class ThreadRepository(
         )
         // Words in the clear say they are a member's (Conversation.lastPlainTag).
         if (!cipher.startsWith("enc")) conv["lastPlainTag"] = Conversation.plainTag(cipher)
-        for (m in members) if (m != me) conv["unreadCount.$m"] = FieldValue.increment(1)
+        if (countsAsUnread) for (m in members) if (m != me) conv["unreadCount.$m"] = FieldValue.increment(1)
         batch.update(convRef, conv)
         batch.commit().await()
     }
@@ -831,6 +833,8 @@ class ThreadRepository(
             }
             for (u in blobs) try { FirebaseStorage.getInstance().getReferenceFromUrl(u).delete().await() } catch (_: Exception) {}
             if (!marked) ref.delete().await()
+            // iOS deleteMessage -> removePinnedMessage: a pin must not outlive what it points at.
+            if (m.id in PinRules.pinnedIds(_state.value.conv)) try { unpin(m.id) } catch (_: Exception) {}
             rewriteSummaryAfterDelete()
             true
         } catch (_: Exception) { false }
@@ -883,6 +887,81 @@ class ThreadRepository(
                 else if (video) "📹 Video call" else "📞 Call"
             }
             else -> text
+        }
+    }
+
+    // ------------------------------------------------------------------ pins (iOS ChatService pins)
+
+    /** The pinned messages by id, fetched on their own so a pin older than the loaded page still
+     *  draws in the bar (iOS pinnedPreviews). A tombstone or a missing document is left out. */
+    private val _pinned = MutableStateFlow<Map<String, Message>>(emptyMap())
+    val pinned: StateFlow<Map<String, Message>> = _pinned.asStateFlow()
+    private val pinFetching = ConcurrentHashMap.newKeySet<String>()
+
+    private fun syncPins(ids: List<String>) {
+        _pinned.update { cur -> cur.filterKeys { it in ids } }
+        for (id in ids) {
+            if (_pinned.value.containsKey(id) || !pinFetching.add(id)) continue
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val d = msgRef(id).get().await()
+                    if (d.exists()) {
+                        val m = parse(d)
+                        if (!m.deleted) _pinned.update { it + (id to m) }
+                    }
+                } catch (_: Exception) {
+                } finally { pinFetching.remove(id) }
+            }
+        }
+    }
+
+    /** ThreadView.togglePin's pin half: arrayUnion, then the sealed "pinned" notice (no badge).
+     *  False when the server refused; null when the chat already holds [PinRules.MAX_PINS]. */
+    suspend fun pin(m: Message): Boolean? {
+        if (PinRules.pinnedIds(_state.value.conv).size >= PinRules.MAX_PINS) return null
+        return try {
+            convRef.set(mapOf("pinnedMessageIds" to FieldValue.arrayUnion(m.id)), SetOptions.merge()).await()
+            try {
+                val text = PinRules.markerText(m.id, PinRules.label(m))
+                val clientId = UUID.randomUUID().toString().uppercase()
+                val ts = System.currentTimeMillis().toDouble()
+                turn.withLock {
+                    if (Wire.isGroupCid(cid)) sendGroup(text, clientId, ts, countsAsUnread = false)
+                    else sendDirect(text, clientId, ts, countsAsUnread = false)
+                }
+            } catch (_: Exception) {}
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /** ChatService.unpin: arrayRemove (the reference app posts no unpin notice). Throws on refusal. */
+    suspend fun unpin(id: String) {
+        convRef.set(mapOf("pinnedMessageIds" to FieldValue.arrayRemove(id)), SetOptions.merge()).await()
+    }
+
+    /** iOS ensureLoaded: page older history until [id] is in the window (at most 12 pages). */
+    suspend fun ensureLoaded(id: String): Boolean {
+        repeat(12) {
+            if (_state.value.messages.any { it.id == id }) return true
+            if (!_state.value.canLoadOlder) return false
+            loadOlder()
+            // loadOlder runs on its own; wait for that page to land.
+            var waited = 0
+            while ((_state.value.loadingOlder || waited == 0) && waited < 100) { delay(50); waited++ }
+        }
+        return _state.value.messages.any { it.id == id }
+    }
+
+    /** ChatService.editHistory: the earlier versions (oldest first), opened on this phone. Throws
+     *  when the document cannot be read. Each is (text, at ms; 0 when unknown). */
+    suspend fun editHistory(m: Message): List<Pair<String, Double>> {
+        val data = msgRef(m.id).get().await().data ?: emptyMap()
+        if (data["deleted"] == true) return emptyList()
+        val author = data["authorId"] as? String ?: m.authorId
+        return ((data["edits"] as? List<*>) ?: emptyList<Any>()).mapNotNull { it as? Map<*, *> }.map { e ->
+            val raw = e["t"] as? String ?: ""
+            val clear = if (raw.isEmpty()) "" else try { crypto.decrypt(raw, cid, author) } catch (_: Exception) { "" }
+            clear to ((e["at"] as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble() ?: 0.0)
         }
     }
 
