@@ -41,6 +41,10 @@ import androidx.compose.ui.unit.sp
 import com.fariin.app.data.ChatList
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.MessageDecryptor
+import com.fariin.app.data.CryptoHub
+import com.fariin.app.ui.thread.LocalOpenChat
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import java.text.SimpleDateFormat
@@ -61,7 +65,7 @@ fun ChatListScreen(
     state: ChatsUiState,
     me: String,
     decryptor: MessageDecryptor,
-    onOpen: (Conversation) -> Unit = {},
+    onOpen: (Conversation) -> Unit = LocalOpenChat.current,
 ) {
     val c = Fariin.colors
     val pinned = state.chats.filter { it.isPinned(me) }
@@ -113,7 +117,8 @@ fun ChatRow(conv: Conversation, me: String, decryptor: MessageDecryptor, onOpen:
     val unread = if (conv.isBlockedByMe(me)) 0 else conv.unread(me)
     val now = System.currentTimeMillis().toDouble()
     val muted = conv.isMuted(me, now)
-    val preview = remember(conv, me) { ChatList.previewLine(conv, me, decryptor) { null } }
+    val keys by CryptoHub.keysEpoch.collectAsState()
+    val preview = remember(conv, me, keys) { ChatList.previewLine(conv, me, decryptor) { null } }
     val time = remember(conv.displayUpdatedAt(me)) { timeLabel(conv.displayUpdatedAt(me), DateFormat.is24HourFormat(context)) }
 
     Column(Modifier.fillMaxWidth().clickable { onOpen(conv) }) {

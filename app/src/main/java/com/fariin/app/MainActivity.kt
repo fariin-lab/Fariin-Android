@@ -6,36 +6,47 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import com.fariin.app.data.AuthRepository
-import com.fariin.app.data.MessageDecryptor
-import com.fariin.app.data.NoDecryptor
+import com.fariin.app.data.CryptoDecryptor
+import com.fariin.app.data.CryptoHub
+import com.fariin.app.data.Message
 import com.fariin.app.ui.auth.SignInFlow
 import com.fariin.app.ui.chats.ChatsUiState
 import com.fariin.app.ui.chats.ChatsViewModel
 import com.fariin.app.ui.debug.DemoChats
+import com.fariin.app.ui.debug.DemoThread
 import com.fariin.app.ui.photo.FariinPhotoFetcher
 import com.fariin.app.ui.shell.MainShell
 import com.fariin.app.ui.theme.FariinTheme
+import com.fariin.app.ui.thread.LocalOpenChat
+import com.fariin.app.ui.thread.ThreadRoute
+import com.fariin.app.ui.thread.ThreadScreen
 
 class MainActivity : ComponentActivity() {
     private val auth by lazy { AuthRepository() }
-
-    /** TODO: the crypto package's decryptor, once it is ported. */
-    private val decryptor: MessageDecryptor = NoDecryptor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // Debug builds only: `adb shell am start -n com.fariin.app/.MainActivity --ez demo true`
-        // shows the shell with made-up chats, no sign-in and no Firebase.
+        // shows the shell with made-up chats, no sign-in and no Firebase. Add `--es thread d1`
+        // (a 1:1) or `--es thread d3` (a group) to open straight into a made-up chat.
         val demo = debuggable && intent.getBooleanExtra("demo", false)
+        val demoThread = if (demo) intent.getStringExtra("thread") else null
         setContent {
             setSingletonImageLoaderFactory { ctx ->
                 ImageLoader.Builder(ctx)
@@ -44,12 +55,13 @@ class MainActivity : ComponentActivity() {
             }
             FariinTheme {
                 if (demo) {
-                    MainShell(DemoChats.ME, ChatsUiState(loading = false, chats = DemoChats.chats()),
-                        DemoChats.decryptor, onSignOut = { finish() })
+                    DemoApp(demoThread)
                 } else {
                     val initial = remember { auth.currentUser?.uid }
                     val uid by auth.uid.collectAsState(initial = initial)
                     val me = uid
+                    // Sign-out: the keys leave memory (the stored key stays, keys are per uid).
+                    LaunchedEffect(me) { if (me == null) CryptoHub.signedOut() }
                     if (me == null) SignInFlow(auth) else SignedIn(me)
                 }
             }
@@ -58,8 +70,52 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun SignedIn(me: String) {
-        val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me) }
+        val crypto = remember { CryptoHub.get(applicationContext) }
+        // Key bootstrap as iOS RootView does it: load (or, only when this phone has none, make and
+        // store) the keypair, then publish it if the server copy differs. A key store that cannot be
+        // read is never taken as "no key", so a readable key is never replaced.
+        LaunchedEffect(me) {
+            try { crypto.ensureReady() } catch (_: Exception) {}
+            crypto.publishPublicKey()
+            CryptoHub.bumpKeys()
+        }
+        val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
+        val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
         val chats by vm.state.collectAsState()
-        MainShell(me, chats, decryptor, onSignOut = { auth.signOut() })
+        val nav = rememberNavController()
+        CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } }) {
+            NavHost(nav, startDestination = "main") {
+                composable("main") { MainShell(me, chats, decryptor, onSignOut = { auth.signOut() }) }
+                composable("thread/{cid}") { entry ->
+                    val cid = entry.arguments?.getString("cid") ?: return@composable
+                    ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
+                }
+            }
+        }
+    }
+
+    /** The made-up shell, with its chats opening made-up threads. */
+    @Composable
+    private fun DemoApp(startThread: String?) {
+        val nav = rememberNavController()
+        CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } }) {
+            NavHost(nav, startDestination = if (startThread != null) "thread/$startThread" else "main") {
+                composable("main") {
+                    MainShell(DemoChats.ME, ChatsUiState(loading = false, chats = DemoChats.chats()),
+                        DemoChats.decryptor, onSignOut = { finish() })
+                }
+                composable("thread/{cid}") { entry ->
+                    val cid = entry.arguments?.getString("cid") ?: return@composable
+                    var ui by remember(cid) { mutableStateOf(DemoThread.ui(cid)) }
+                    val u = ui ?: return@composable
+                    ThreadScreen(u, onBack = { if (!nav.popBackStack()) nav.navigate("main") }, onSend = { t ->
+                        val now = System.currentTimeMillis().toDouble()
+                        ui = u.copy(messages = u.messages + Message(
+                            id = "local-$now", authorId = DemoChats.ME, text = t.trim(), createdAtMillis = now, clientTs = now,
+                        ))
+                    })
+                }
+            }
+        }
     }
 }
