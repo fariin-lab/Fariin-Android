@@ -1,0 +1,141 @@
+package com.fariin.app.push
+
+import android.content.Context
+import com.fariin.app.crypto.Wire
+import com.fariin.app.data.CryptoHub
+import com.fariin.app.device.DeviceRegistry
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
+import com.google.firebase.storage.FirebaseStorage
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+
+/**
+ * Every push for this app lands here when Fariin draws it itself: always for a data-only push, and
+ * for a push with a `notification` block only while the app is in front (Android draws those itself
+ * in the background, title and body as sent; see PROGRESS.md "Server changes needed").
+ *
+ * Same two jobs as the iOS NotificationService extension:
+ * 1. The delivered tick: post the signed token to `ackDelivered` (1:1 pushes carry it).
+ * 2. The readable notification: open `ct` with this account's key, the sender's name and face.
+ * Any miss (no key yet, sender key unknown, photo slow) shows the server's hint, never nothing.
+ *
+ * This runs in the app's own process, so unlike iOS it can use the signed-in Firebase: the crypto
+ * from the Keystore, a missing sender key fetched, a `fariin-photo://` face downloaded under the
+ * storage rules. Each with a short limit: FCM gives a high-priority push about 10 seconds.
+ */
+class FariinMessagingService : FirebaseMessagingService() {
+
+    override fun onNewToken(token: String) {
+        Push.onNewToken(applicationContext, token)
+    }
+
+    override fun onMessageReceived(message: RemoteMessage) {
+        val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)
+        runBlocking { handle(applicationContext, p) }
+    }
+
+    companion object {
+        private const val ACK_URL = "https://me-central1-kulan-2ef85.cloudfunctions.net/ackDelivered"
+        private const val PHOTO_TIMEOUT_MS = 4_000L
+        private const val KEY_TIMEOUT_MS = 3_000L
+
+        suspend fun handle(c: Context, p: PushData) {
+            DeviceRegistry.init(c)
+            val ack = kotlinx.coroutines.coroutineScope { async(kotlinx.coroutines.Dispatchers.IO) { sendAck(p) } }
+            val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+            val opened = HashMap<String, String?>()
+            // A sender whose key this phone has not seen yet: one short fetch, then open again.
+            p.cipher?.let { ct ->
+                val cid = p.cid ?: return@let
+                val aid = p.aid ?: return@let
+                if (me.isEmpty()) return@let
+                var text = open(c, ct, cid, aid)
+                if (text == null) {
+                    val crypto = CryptoHub.get(c)
+                    if (!crypto.hasCachedKey(aid)) {
+                        withTimeoutOrNull(KEY_TIMEOUT_MS) { crypto.preloadKey(aid) }
+                        text = open(c, ct, cid, aid)
+                    }
+                }
+                opened[ct] = text
+            }
+            val decision = NotifBuilder.decide(
+                p, me,
+                chats = { NotifStore.chat(c, it) },
+                open = { ct, _, _ -> opened[ct] },
+                activeChat = PushRouter.activeChatId,
+                pushOn = Push.pushOn(c),
+            )
+            if (decision is NotifDecision.Show) {
+                val s = decision.spec
+                val photos = if (s.plain) listOf(null, null) else kotlinx.coroutines.coroutineScope {
+                    listOf(s.senderPhoto, s.groupPhoto).map { url -> async(kotlinx.coroutines.Dispatchers.IO) { url?.let { loadAvatar(c, it) } } }
+                        .map { it.await() }
+                }
+                NotificationPoster.post(c, s, photos[0], photos[1], me)
+            }
+            ack.await()
+        }
+
+        /** The crypto's decrypt, the "could not open" answers turned into null. */
+        private fun open(c: Context, ct: String, cid: String, aid: String): String? = try {
+            val crypto = CryptoHub.get(c)
+            val raw = if (ct.startsWith(Wire.ENCG1)) crypto.decryptGroup(ct, aid, cid) else crypto.decrypt(ct, cid)
+            NotifBuilder.usable(raw)
+        } catch (_: Exception) { null }
+
+        /** The copy the app saved, then a download with a short limit (saved for next time). */
+        suspend fun loadAvatar(c: Context, url: String): ByteArray? {
+            NotifStore.cachedAvatar(c, url)?.let { return it }
+            val bytes = withTimeoutOrNull(PHOTO_TIMEOUT_MS) {
+                try {
+                    val path = NotifStore.storagePath(url)
+                    when {
+                        path != null -> FirebaseStorage.getInstance().reference.child(path).getBytes(2_000_000).await()
+                        url.startsWith("https://") -> download(url)
+                        else -> null
+                    }
+                } catch (_: Exception) { null }
+            } ?: return null
+            NotifStore.saveAvatar(c, url, bytes)
+            return bytes
+        }
+
+        private fun download(url: String): ByteArray? {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            return try {
+                conn.connectTimeout = PHOTO_TIMEOUT_MS.toInt(); conn.readTimeout = PHOTO_TIMEOUT_MS.toInt()
+                if (conn.responseCode != 200) return null
+                val len = conn.contentLengthLong
+                if (len > 2_000_000) return null
+                conn.inputStream.use { it.readBytes() }.takeIf { it.isNotEmpty() && it.size <= 2_000_000 }
+            } finally { conn.disconnect() }
+        }
+
+        /** The delivered tick (NotificationService.sendAck): 1:1 pushes only. */
+        private fun sendAck(p: PushData) {
+            val cid = p.cid ?: return
+            val uid = p.ackUid ?: return
+            val ack = p.ack ?: return
+            try {
+                val conn = URL(ACK_URL).openConnection() as HttpURLConnection
+                try {
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    conn.connectTimeout = 8_000; conn.readTimeout = 8_000
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    val body = JSONObject().put("cid", cid).put("uid", uid).put("ack", ack).toString()
+                    conn.outputStream.use { it.write(body.toByteArray()) }
+                    conn.responseCode
+                } finally { conn.disconnect() }
+            } catch (_: Exception) {}
+        }
+    }
+}

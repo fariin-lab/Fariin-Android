@@ -27,8 +27,8 @@ interface KeyDirectory {
 
 /**
  * [mayPublish] is the hook for the iOS "a phone a newer sign-in replaced publishes nothing" check
- * (Crypto.swift:320-331, needs this install's device record in `users/{uid}/devices`). The device
- * registry is not ported yet, so it defaults to always publishing.
+ * (Crypto.swift:320-331, needs this install's device record in `users/{uid}/devices`). The app
+ * passes DeviceRegistry.mayPublish (CryptoHub); the default (always) is for tests.
  */
 class FirestoreKeyDirectory(
     private val db: FirebaseFirestore,

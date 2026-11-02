@@ -29,10 +29,14 @@ import okio.Buffer
 class FariinPhotoFetcher(
     private val path: String,
     private val options: Options,
+    private val url: String? = null,
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult {
         val bytes = FirebaseStorage.getInstance().reference.child(path).getBytes(MAX_BYTES).await()
+        // A copy for the notifications (iOS NotifShared.saveAvatarSoon): the face of a person this
+        // account was allowed to see, under the photo's own name.
+        url?.let { com.fariin.app.push.NotifStore.saveAvatarSoon(options.context, it, bytes) }
         return SourceFetchResult(
             source = ImageSource(source = Buffer().write(bytes), fileSystem = options.fileSystem),
             mimeType = "image/jpeg",
@@ -43,7 +47,7 @@ class FariinPhotoFetcher(
     class Factory : Fetcher.Factory<Uri> {
         override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
             val path = storagePath(data) ?: return null
-            return FariinPhotoFetcher(path, options)
+            return FariinPhotoFetcher(path, options, data.toString())
         }
     }
 

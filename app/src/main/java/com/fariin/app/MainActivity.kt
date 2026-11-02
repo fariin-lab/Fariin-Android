@@ -34,6 +34,22 @@ import com.fariin.app.ui.theme.FariinTheme
 import com.fariin.app.ui.thread.LocalOpenChat
 import com.fariin.app.ui.thread.ThreadRoute
 import com.fariin.app.ui.thread.ThreadScreen
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.fariin.app.device.DeviceRecord
+import com.fariin.app.device.DeviceRegistry
+import com.fariin.app.device.SessionEnd
+import com.fariin.app.device.SignedOutNotice
+import com.fariin.app.push.NotificationPoster
+import com.fariin.app.push.NotificationsExplainer
+import com.fariin.app.push.NotifStore
+import com.fariin.app.push.Push
+import com.fariin.app.push.PushRouter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private val auth by lazy { AuthRepository() }
@@ -47,6 +63,12 @@ class MainActivity : ComponentActivity() {
         // (a 1:1) or `--es thread d3` (a group) to open straight into a made-up chat.
         val demo = debuggable && intent.getBooleanExtra("demo", false)
         val demoThread = if (demo) intent.getStringExtra("thread") else null
+        DeviceRegistry.init(this)
+        NotificationPoster.ensureChannels(this)
+        takeOpenCid(intent)
+        // Debug builds only: `--ez notifDemo true` posts made-up notifications through the real
+        // builder (push/DebugNotifs), no sign-in and no Firebase.
+        if (debuggable && intent.getBooleanExtra("notifDemo", false)) com.fariin.app.push.DebugNotifs.post(this)
         setContent {
             setSingletonImageLoaderFactory { ctx ->
                 ImageLoader.Builder(ctx)
@@ -62,7 +84,18 @@ class MainActivity : ComponentActivity() {
                     val me = uid
                     // Sign-out: the keys leave memory (the stored key stays, keys are per uid).
                     LaunchedEffect(me) { if (me == null) CryptoHub.signedOut() }
+                    // The server removed this phone's device record: the same teardown as Log out,
+                    // then the front door with the iOS notice saying why.
+                    val revoked by DeviceRegistry.revoked.collectAsState()
+                    var notice by remember { mutableStateOf<DeviceRecord.Reason?>(null) }
+                    LaunchedEffect(revoked) {
+                        val r = revoked ?: return@LaunchedEffect
+                        SessionEnd.revokedSignOut(applicationContext)
+                        DeviceRegistry.clearRevoked()
+                        notice = r
+                    }
                     if (me == null) SignInFlow(auth) else SignedIn(me)
+                    notice?.let { SignedOutNotice(it) { notice = null } }
                 }
             }
         }
@@ -78,20 +111,77 @@ class MainActivity : ComponentActivity() {
             try { crypto.ensureReady() } catch (_: Exception) {}
             crypto.publishPublicKey()
             CryptoHub.bumpKeys()
+            // iOS RootView order: push token, then this phone's device record (and its watcher).
+            Push.register(applicationContext)
+            DeviceRegistry.start(applicationContext)   // its first beat starts the heartbeat
         }
+        // The first-run notifications page, right after sign-in, as iOS asks.
+        val ctx = LocalContext.current
+        var explain by remember { mutableStateOf(Push.needsExplainer(ctx)) }
+        if (explain) { NotificationsExplainer { explain = false }; return }
         val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
         val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
         val chats by vm.state.collectAsState()
         val nav = rememberNavController()
+        // Notifications: the chat list's names and photos for the push service, the open chat
+        // (no notification for it), and a tapped notification opening its chat.
+        LaunchedEffect(chats.chats) {
+            val list = chats.chats
+            if (list.isNotEmpty()) withContext(Dispatchers.Default) { NotifStore.saveChats(applicationContext, me, list) }
+        }
+        val entry by nav.currentBackStackEntryAsState()
+        val openCid = if (entry?.destination?.route == "thread/{cid}") entry?.arguments?.getString("cid") else null
+        LaunchedEffect(openCid) {
+            openChat = openCid
+            PushRouter.activeChatId = if (started) openCid else null
+            openCid?.let { NotificationPoster.clear(applicationContext, it) }
+        }
+        val pending by PushRouter.pendingOpen.collectAsState()
+        LaunchedEffect(pending) {
+            val cid = pending ?: return@LaunchedEffect
+            PushRouter.pendingOpen.value = null
+            nav.navigate("thread/$cid") { launchSingleTop = true }
+        }
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } }) {
             NavHost(nav, startDestination = "main") {
-                composable("main") { MainShell(me, chats, decryptor, onSignOut = { auth.signOut() }) }
+                composable("main") {
+                    MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } })
+                }
                 composable("thread/{cid}") { entry ->
                     val cid = entry.arguments?.getString("cid") ?: return@composable
                     ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
                 }
             }
         }
+    }
+
+    @Volatile private var started = false
+    @Volatile private var openChat: String? = null
+
+    override fun onStart() {
+        super.onStart()
+        started = true
+        PushRouter.activeChatId = openChat
+        DeviceRegistry.startHeartbeat()
+    }
+
+    override fun onStop() {
+        started = false
+        PushRouter.activeChatId = null   // a chat open behind the home screen still gets its notification
+        DeviceRegistry.stopHeartbeat()
+        super.onStop()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeOpenCid(intent)
+    }
+
+    /** A notification tap (or its conversation shortcut) carries the chat to open. */
+    private fun takeOpenCid(intent: Intent?) {
+        val cid = intent?.getStringExtra(PushRouter.EXTRA_OPEN_CID)?.takeIf { it.isNotEmpty() } ?: return
+        intent.removeExtra(PushRouter.EXTRA_OPEN_CID)
+        PushRouter.pendingOpen.value = cid
     }
 
     /** The made-up shell, with its chats opening made-up threads. */
