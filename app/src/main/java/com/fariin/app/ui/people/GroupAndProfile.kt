@@ -402,7 +402,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 modifier = if (canEdit) Modifier.clickable { editing = true } else Modifier)
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
-            Text("Group · ${users.size} members", fontSize = 15.sp, color = c.secondary)
+            Text("Group · ${com.fariin.app.data.GroupRules.memberCount(users.size)}", fontSize = 15.sp, color = c.secondary)
             // No description yet: whoever may edit is offered one, in grey; it opens Edit Group (iOS).
             if (desc.isEmpty() && canEdit) Text("Add group description...", fontSize = 17.sp, color = c.secondary,
                 textAlign = TextAlign.Center,
@@ -419,7 +419,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
             }
-            SettingsSection(header = "${users.size} members") {
+            SettingsSection(header = com.fariin.app.data.GroupRules.memberCount(users.size)) {
                 if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) SettingsRow("Add Members", titleColor = c.blue, trailing = Trailing.NONE) { adding = true }
                 users.sortedWith(compareBy({ it != owner }, { it !in admins }, { names[it] ?: "" })).forEach { u ->
                     PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "Member", "",

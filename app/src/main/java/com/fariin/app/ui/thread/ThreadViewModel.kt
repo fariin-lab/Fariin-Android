@@ -93,7 +93,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val ui = ThreadUi(
         title = channel?.info?.title?.ifEmpty { null } ?: conv?.displayName(me) ?: "",
         subtitle = channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
-            ?: typingLine ?: if (conv?.isGroup == true) "${conv.users.size} members" else presenceLine ?: "",
+            ?: typingLine ?: if (conv?.isGroup == true) com.fariin.app.data.GroupRules.memberCount(conv.users.size) else presenceLine ?: "",
         photoUrl = channel?.info?.avatarUrl ?: conv?.displayPhoto(me),
         isGroup = conv?.isGroup == true,
         me = me,

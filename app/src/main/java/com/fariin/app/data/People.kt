@@ -425,6 +425,9 @@ object ChatKey {
 
 /** Group rules from ChatService (leaveGroup, addGroupMembers, refusedSentence). */
 object GroupRules {
+    /** "1 member", "5 members". */
+    fun memberCount(n: Int): String = if (n == 1) "1 member" else "$n members"
+
     data class LeavePlan(val update: Map<String, Any>, val notices: List<String>, val heir: String?)
 
     fun refusedSentence(names: List<String>): String {
