@@ -62,6 +62,8 @@ class ThreadRepository(
         val messages: List<Message> = emptyList(),
         val receipts: Receipts = Receipts(),
         val loaded: Boolean = false,
+        /** The server has answered once (not the phone's copy): the unread divider waits for it. */
+        val synced: Boolean = false,
         val canLoadOlder: Boolean = true,
         val loadingOlder: Boolean = false,
         val conv: Map<String, Any?> = emptyMap(),
@@ -146,7 +148,7 @@ class ThreadRepository(
             .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, err ->
                 if (snap == null) {
                     msgFailed = true
-                    _state.update { it.copy(loaded = true, error = err?.message) }
+                    _state.update { it.copy(loaded = true, synced = true, error = err?.message) }
                     return@addSnapshotListener
                 }
                 // Never blank an open thread on an empty offline snapshot (iOS), nor the saved copy.
@@ -157,6 +159,7 @@ class ThreadRepository(
                 for (d in snap.documents) liveDocs[d.id] = d
                 if (!snap.metadata.isFromCache && snap.size() < PAGE_SIZE) _state.update { it.copy(canLoadOlder = false) }
                 rebuild(loaded = true)
+                if (!snap.metadata.isFromCache && !_state.value.synced) _state.update { it.copy(synced = true) }
             }
         convReg = convRef.addSnapshotListener { snap, _ ->
             val data = snap?.data ?: return@addSnapshotListener

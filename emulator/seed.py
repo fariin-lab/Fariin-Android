@@ -62,6 +62,8 @@ def seed_profile(uid, handle, name):
     patch_doc(f"usernames/{handle}", {"uid": uid, "kind": "user", "state": "held", "username": handle,
                                       "claimedAt": now, "releasedAt": None, "prevUid": None,
                                       "reservedFor": None, "reason": None})
+    # The server makes this counter on sign-up; the story rules read it, so a story post fails without it.
+    patch_doc(f"users/{uid}/limits/storiesActive", {"count": 0})
 
 
 def iso(dt):

@@ -95,6 +95,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         names = conv?.names ?: emptyMap(),
         photos = conv?.photos ?: emptyMap(),
         loaded = s.loaded,
+        synced = s.synced,
         loadingOlder = s.loadingOlder,
         sendBlocked = vm.repo.sendBlockedReason(listed ?: conv),
         cid = cid,

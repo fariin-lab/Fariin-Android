@@ -66,6 +66,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -107,6 +108,7 @@ data class ThreadUi(
     val names: Map<String, String> = emptyMap(),
     val photos: Map<String, String> = emptyMap(),
     val loaded: Boolean = true,
+    val synced: Boolean = true,
     val loadingOlder: Boolean = false,
     /** Shown instead of the composer when sending is not possible here. */
     val sendBlocked: String? = null,
@@ -190,7 +192,11 @@ fun ThreadScreen(
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
     infoFor?.let { m -> MessageInfoDialog(m, ui, is24h) { infoFor = null } }
     // The divider is placed once, from the unread count at open (iOS anchors it the same way).
-    val dividerId = remember(ui.loaded) { if (ui.loaded) MessageRules.unreadDividerId(ui.messages, ui.me, ui.unreadAtOpen) else null }
+    // Counted only on the server's first answer: the phone's saved copy can lack the very messages
+    // that are unread, and counting back through it put the divider on old, read rows.
+    val dividerId = remember(ui.loaded && ui.synced) {
+        if (ui.loaded && ui.synced) MessageRules.unreadDividerId(ui.messages, ui.me, ui.unreadAtOpen) else null
+    }
     // At the bottom = the newest row in view (the list is reversed). Read receipts follow it.
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
     LaunchedEffect(atBottom) { actions.onAtBottom(atBottom) }
@@ -206,8 +212,16 @@ fun ThreadScreen(
     }
     LaunchedEffect(nearTop, ui.messages.size) { if (nearTop && ui.messages.isNotEmpty()) onLoadOlder() }
     // A message I send, or one that lands while I am at the bottom, keeps the newest in view.
+    // Whether the reader sits at the bottom, settled only when a scroll ends: a row added at the
+    // bottom of a reversed, keyed list keeps the old row in place and shifts the index past 1
+    // before this effect runs, so reading the index here let new arrivals push the chat upward
+    // (the open showed old rows with the unread ones under the arrow; iOS opens at the newest).
+    var stick by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { if (!it) stick = listState.firstVisibleItemIndex <= 1 }
+    }
     LaunchedEffect(ui.messages.lastOrNull()?.rowId) {
-        if (listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
+        if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) listState.scrollToItem(0)
     }
 
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
