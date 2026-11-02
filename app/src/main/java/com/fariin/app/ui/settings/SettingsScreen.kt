@@ -40,6 +40,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,8 +68,11 @@ import com.fariin.app.ui.theme.Fariin
  * profile / Share profile under them, then Account and Devices; Notifications, Appearance,
  * Chats, Stories, Privacy & Security, Storage and Data; Invite Friends, Safety, Help & About.
  *
- * Pages that need flows not built on Android yet open a "Coming soon on Android" page. Real
- * now: Account (Log out), Appearance > Night Mode, Help & About and Safety (web links).
+ * Real pages: Account (Security notifications, Your Account Data, Delete Account, Log out), Devices,
+ * Notifications, Appearance > Night Mode / Quick Reaction, Chats, Stories, Privacy & Security
+ * (PrivacyPages.kt), Storage and Data (MorePages.kt), Help & About and Safety. Pages outside
+ * Settings' scope (Search, Share profile, Invite Friends, Email address, Username, wallpaper,
+ * chat colour, app icon) still open a "Coming soon on Android" page.
  *
  * TODO: Subscriptions (iOS shows it to @v only), the admin sections, Settings search, my QR.
  */
@@ -98,6 +103,9 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             page == PAGE_PASSWORD -> com.fariin.app.ui.auth.PasswordPage(remember { AuthRepository() }, pop, onForgot = { push(PAGE_RESET + it) }, demoOpen = demoProfile != null)
             page.startsWith(PAGE_RESET) == true -> com.fariin.app.ui.auth.ResetCodePage(remember { AuthRepository() }, page.removePrefix(PAGE_RESET), pop,
                 onDone = { stack = stack.dropLast(2) }, demo = demoProfile != null)
+            page == PAGE_DELETE -> DeleteAccountPage(profile, pop, onSignOut)
+            privacyRoute(page, push, pop) -> Unit
+            moreRoute(page, push, pop) -> Unit
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
         }
@@ -137,15 +145,15 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
             Spacer(Modifier.height(20.dp))
             SettingsSection {
                 SettingsRow("Account", painterResource(R.drawable.ic_account)) { push(PAGE_ACCOUNT) }
-                SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true) { push(soon("Devices")) }
+                SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true) { push(PAGE_DEVICES) }
             }
             SettingsSection {
-                SettingsRow("Notifications", painterResource(R.drawable.ic_notifications)) { push(soon("Notifications")) }
+                SettingsRow("Notifications", painterResource(R.drawable.ic_notifications)) { push(PAGE_NOTIFS) }
                 SettingsRow("Appearance", vec(Icons.Outlined.Brush)) { push(PAGE_APPEARANCE) }
-                SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats)) { push(soon("Chats")) }
-                SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack)) { push(soon("Stories")) }
-                SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy)) { push(soon("Privacy & Security")) }
-                SettingsRow("Storage and Data", vec(Icons.Outlined.Dns), last = true) { push(soon("Storage and Data")) }
+                SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats)) { push(PAGE_CHATS) }
+                SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack)) { push(PAGE_STORIES) }
+                SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy)) { push(PAGE_PRIVACY) }
+                SettingsRow("Storage and Data", vec(Icons.Outlined.Dns), last = true) { push(PAGE_STORAGE) }
             }
             SettingsSection {
                 SettingsRow("Invite Friends", painterResource(R.drawable.ic_invite_friends), trailing = Trailing.NONE) {
@@ -202,6 +210,8 @@ private fun AccountPage(
     profile: MyProfile?, demo: Boolean, push: (String) -> Unit, pop: () -> Unit, onSignOut: () -> Unit,
 ) {
     val c = Fariin.colors
+    val ctx = LocalContext.current
+    val exportScope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     // iOS shows Password only when the account has an address a person can type.
@@ -217,7 +227,7 @@ private fun AccountPage(
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text("Delete Account", color = c.red) },
-                        onClick = { menu = false; push(soon("Delete Account")) },
+                        onClick = { menu = false; push(PAGE_DELETE) },
                     )
                 }
             }
@@ -237,14 +247,17 @@ private fun AccountPage(
                     value = when { profile == null -> ""; handle.isNullOrEmpty() -> "Not set"; else -> "@$handle" },
                 ) { push(soon("Username")) }
                 SettingsRow("Passkeys") { push(PAGE_PASSKEYS) }
-                SettingsRow("Security notifications", last = true) { push(soon("Security notifications")) }
+                SettingsRow("Security notifications", last = true) { push(PAGE_SEC_NOTIFS) }
             }
             SettingsSection(
                 header = "Account",
                 footer = "Saves your profile, devices and privacy settings to a text file you can share or keep. Messages are not included.",
             ) {
-                // TODO: the export itself (iOS DataExport writes the text file and opens the share sheet).
-                SettingsRow("Your Account Data", trailing = Trailing.NONE) { push(soon("Your Account Data")) }
+                SettingsRow("Your Account Data", trailing = Trailing.NONE) {
+                    exportScope.launch {
+                        try { AccountReport.share(ctx) } catch (e: Exception) { toast(ctx, e.message ?: "Could not load everything. Check your connection and try again.") }
+                    }
+                }
                 SettingsRow("Log out", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirm = true }
             }
         }
@@ -279,7 +292,7 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
                 SettingsRow("Chat Wallpaper") { push(soon("Chat Wallpaper")) }
                 SettingsRow("Chat Color") { push(soon("Chat Color")) }
                 SettingsRow("App Icon") { push(soon("App Icon")) }
-                SettingsRow("Quick Reaction", last = true) { push(soon("Quick Reaction")) }
+                SettingsRow("Quick Reaction", last = true) { push(PAGE_QUICK) }
             }
             SettingsSection {
                 SettingsRow("Night Mode", value = AppearancePrefs.current(ctx).label, last = true) { push(PAGE_NIGHT) }

@@ -155,6 +155,8 @@ class ThreadRepository(
             if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
         }
         if (!Wire.isGroupCid(cid)) attachPresence(Wire.otherUid(cid, me))
+        // A block or unblock made while the chat is open re-filters what shows.
+        scope.launch { BlockList.state.collect { if (msgReg != null) rebuild() } }
         // Keys in the background, then re-open what drew as "…" (iOS keyPreloadTask).
         scope.launch(Dispatchers.IO) {
             try { crypto.ensureReady() } catch (_: Exception) {}
@@ -242,6 +244,8 @@ class ThreadRepository(
             val local = m.clientId?.let { localFiles[it] }
             if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
             if (HiddenMessages.isHidden(m.id)) continue
+            // Sent while I had them blocked (now or in a past block): never shown (iOS BlockList.hides).
+            if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
             all[m.rowId] = m
             if (d.metadata.hasPendingWrites()) unconfirmed.add(m.rowId)
         }
@@ -749,6 +753,8 @@ class ThreadRepository(
 
     /** ChatService.setTyping: `typing.<me>` = "text-<seconds>" while typing, false after. */
     fun setTyping(on: Boolean) {
+        // Privacy > Messages > Typing Indicators off: I send none (an "off" still goes out).
+        if (on && !PrivacySettings.typingIndicators()) return
         scope.launch {
             try {
                 val v = MessageRules.typingValue(on, System.currentTimeMillis())
@@ -767,7 +773,7 @@ class ThreadRepository(
      * `lastRead.<me>` stamped, which turns the other side's ticks solid. No timer: while one write
      * is in flight, newer calls fold into one trailing write.
      */
-    fun markRead(readReceipts: Boolean = true) {
+    fun markRead(readReceipts: Boolean = PrivacySettings.readReceipts()) {
         if (readMutex.isLocked) { readOwed = true; return }
         scope.launch {
             readMutex.withLock {

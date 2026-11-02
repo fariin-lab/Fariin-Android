@@ -124,8 +124,9 @@ data class Conversation(
         return (unreadCount[otherUid(me)] ?: 0) <= 0
     }
 
-    /** Only the old shared copy for now; TODO the private BlockList (users/{me} side). */
-    fun isBlockedByMe(me: String): Boolean = !isGroup && (blockedBy[me] ?: false)
+    /** The old shared copy, or my private BlockList (users/{me}/blocked) once it has loaded. */
+    fun isBlockedByMe(me: String): Boolean = !isGroup && ((blockedBy[me] ?: false) ||
+        (BlockList.snapshot.owner == me && BlockList.contains(otherUid(me))))
 
     /** Freezes the list time while the newest message is one a block holds back. */
     private fun hiddenLastSince(me: String): Double? {

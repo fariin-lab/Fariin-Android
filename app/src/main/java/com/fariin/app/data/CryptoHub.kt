@@ -63,6 +63,9 @@ object CryptoHub {
 
     fun listedConversation(cid: String): Conversation? = listed[cid]
 
+    /** Every chat the list holds now (Settings: Hide From, Blocked Users names, the account file). */
+    fun listedAll(): List<Conversation> = listed.values.toList()
+
     fun bumpKeys() { _epoch.value = _epoch.value + 1 }
 
     /** Sign-out: forget the keys in memory (the stored key stays, keys are per uid). */

@@ -60,6 +60,16 @@ class FariinApp : Application() {
         com.fariin.app.local.Drafts.init(this)
         com.fariin.app.local.SendQueue.init(this)
         AppLifecycle.install(this)
+        // Settings that the rest of the app reads: my privacy map (presence, read receipts, typing)
+        // and my private block list follow whoever is signed in; App Lock and Screen Security
+        // watch every activity.
+        com.fariin.app.data.PrivacySettings.init(this)
+        FirebaseAuth.getInstance().addAuthStateListener { a ->
+            val uid = a.currentUser?.uid
+            com.fariin.app.data.PrivacySettings.follow(uid)
+            com.fariin.app.data.BlockList.follow(uid)
+        }
+        com.fariin.app.security.AppLock.install(this)
     }
 
     companion object {
