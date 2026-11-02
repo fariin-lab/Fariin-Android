@@ -1,0 +1,4 @@
+firestore.rules
+storage.rules
+*.log
+test-accounts.json
