@@ -124,6 +124,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     var hoursMenu by remember { mutableStateOf(false) }
     var audience by remember { mutableStateOf(false) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val bmp = remember(media) { BitmapFactory.decodeByteArray(media.jpeg, 0, media.jpeg.size)?.asImageBitmap() }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -159,7 +160,9 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 }
             }
         }
-        Row(
+        // Gone while the audience page shows: a caption field left behind kept the keyboard up
+        // over Post Story.
+        if (!audience) Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.4f))
                 .navigationBarsPadding().imePadding().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -172,7 +175,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             Spacer(Modifier.width(8.dp))
             Text(
                 "Next", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).clickable { focus.clearFocus(); audience = true }
+                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).clickable { focus.clearFocus(); keyboard?.hide(); audience = true }
                     .padding(horizontal = 18.dp, vertical = 9.dp),
             )
         }
