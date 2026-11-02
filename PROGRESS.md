@@ -209,3 +209,28 @@ full notification. To get readable notifications when closed (what iOS gets from
 - VERIFIED on the local backend (alice emulator-5554, bobby emulator-5556): video alice->bobby (960x540 transcode, poster, caption decrypted, plays full screen on bobby), PDF alice->bobby (preview, 26 KB, opens in the Drive PDF viewer on bobby), album of 6 bobby->alice (ring while uploading, grid 3+3, caption), captioned photo bobby->alice, view-once photo bobby->alice (opens once on ALICE, then "Viewed", still Viewed after a force-stop; roles swapped from the brief because 5554 was busy with other workers), Save to Photos (file landed in /sdcard/Pictures/Fariin), forward of the captioned photo from alice's 1:1 into Test Group (plain group: enc v 0 as the rules expect, forwarded true, "Forwarded" tag on bobby, chat list thumbnail). Firestore (Bearer owner): 1:1 captions/blurhash/thumb are enc1, every Storage object (photo, album tile, view-once, video, poster, file) is opaque ciphertext (no JPEG/PDF/MP4 magic). Shots md_*.png in the session scratchpad.
 - NOT verified: the consumeOnceImage burn (functions not emulated, so on the local backend the file stays on the server and only this phone's record stops a second view), forwarding text/voice/video/album/file (only a photo was forwarded), video and album in an e2ee group, a mixed album with a video, retry after a failed media send, save of a video, a real iPhone reading these messages. Tests: MediaSendTest (10). 198 unit tests green, assembleDebug green.
 - TODO media: voice notes in the SendQueue (still in-memory retry only), tap-to-cancel on the ring, video bitrate cap (a 5 s test clip came out 1.5 MB at the Transformer default), photo/video/voice auto-download rules, HD quality switch, the poster's blurhash for album video tiles, the forward sheet's iOS look (recent chats row), sending a picked item that is neither photo nor video type.
+
+## QA pass on the local backend (2026-11-02 09:00-10:00, alice emulator-5554, bobby emulator-5556)
+Screenshots: %TEMP%\claude\C--Users-abdik\34c340df-...\scratchpad\shots\qa_*.png. Unit tests 205 green after the last fix.
+
+| Item | Result | Commit |
+|---|---|---|
+| 1 Text both ways, Sent/Delivered/Read ticks, typing, reply, reaction, edit, Delete for Everyone | pass | |
+| 1 Unread divider | fixed: it was counted from the saved copy (landed on old rows or not at all) and new arrivals pushed the open chat up; now waits for the server, chat opens at the newest. It stays after I reply, which is what iOS does (placed once per visit) | 3657e7e |
+| 2 Read Receipts off (bobby stays Delivered), Typing off (no "typing…") | pass | |
+| 2 Block bobby | fixed: chat kept his online line, typing and composer, wrote lastRead, and the chat list wrote delivered for him (he saw Delivered); iBlocked now reads BlockList, Unblock bar as iOS. His new messages hidden on alice's side, also after unblock | 548651e |
+| 2 Calls refused while blocked | not testable locally (the call screen closes before any calls/ doc: iceServers is a callable) | |
+| 3 Voice notes both ways, playback | pass. Seen once: an ANR on the very first mic hold (MediaRecorder.start runs on the main thread inside the gesture; the emulator's first audio init); not seen again after a restart | |
+| 3 Video with caption, playback, Save to Photos (Movies/Fariin), file (PDF), forward TEXT and VIDEO (Forwarded label) | pass | |
+| 3 Long press on a photo/video | fixed: opened the viewer, never the menu | b43143c |
+| 3 Photo with caption, album, view-once | pass (bubbles from the media worker's sends draw on both; not re-sent) | |
+| 4 Offline send, kill, back online | pass: "Sending" while offline, sent once after relaunch, Read | |
+| 5 Video story: post, bobby plays, like, reply (pauses while typing), alice 1 View / 1 Like, still after viewing bobby's story and back | pass (seed: limits/storiesActive added) | 3657e7e |
+| 6 Channel: alice posts from the app, bobby sees it live | pass; views / reactions are callables, not testable locally | |
+| 7 New group with bobby, owner leaves, "Bobby Test is now the owner" | pass | |
+| 7 Chat list preview of a notice ("Alice Test: Alice Test left"), "1 MEMBERS" header | fixed | 9bd2468 |
+| 7 Rename / group photo | not built on Android (Group Info has no edit) | |
+| 8 Log out bobby, saved-account card, log back in; Delete Account reaches "Confirm it's you" | pass (not finished) | |
+| 9 App Lock with a device PIN: lock on return, PIN unlock, off | pass | |
+
+Still open: the main-thread MediaRecorder.start (move off the main thread if the ANR shows on a phone); a message sent while blocked turns Read for the sender after the unblock (lastRead covers it); emulator/seed.py has uncommitted changes from another worker (Carol / Photo Test), left alone.
