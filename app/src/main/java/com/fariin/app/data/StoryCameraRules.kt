@@ -54,4 +54,60 @@ object StoryCameraRules {
 
     /** A finished recording is posted only when it is long enough to be a clip. */
     fun keepClip(recordedMs: Long): Boolean = recordedMs >= MIN_VIDEO_MS
+
+    // Slide to lock (iOS shutter drag): sideways is the lock, upward is the zoom.
+
+    /** How far right (dp) the finger slides from the shutter before the recording runs hands free. */
+    const val LOCK_SLIDE_DP = 60f
+
+    /** 0 to 1, how close the finger is to the lock; drives the lock's growth while sliding. */
+    fun lockProgress(dxDp: Float): Float = (dxDp / LOCK_SLIDE_DP).coerceIn(0f, 1f)
+
+    fun reachesLock(dxDp: Float): Boolean = dxDp > LOCK_SLIDE_DP
+
+    /**
+     * Does lifting the finger stop the recording? Not locked: yes, an ordinary hold. Locked by this
+     * same touch: no, that is the tail of the slide onto the lock. Locked earlier: yes, this touch
+     * was a press on the stop button.
+     */
+    fun stopsOnRelease(locked: Boolean, lockedByThisTouch: Boolean): Boolean = !locked || !lockedByThisTouch
+
+    /** Zoom in the pill's units goes no further than this (past 8x a hand-held phone films its shake). */
+    fun maxZoom(lensMaxRatio: Float): Float = lensMaxRatio.coerceAtLeast(1f).coerceAtMost(8f)
+
+    /**
+     * Drag up from the held shutter to zoom: past 10 dp up, one step (1x) per 60 dp, from the zoom
+     * the recording started at, up to [maxZoom]. Null while the finger is not going up, or is
+     * going sideways (40 dp or more) towards the lock.
+     */
+    fun dragZoom(startZoom: Float, upDp: Float, dxDp: Float, lensMaxRatio: Float): Float? {
+        if (upDp <= 10f || kotlin.math.abs(dxDp) >= 40f) return null
+        return minOf(maxZoom(lensMaxRatio), startZoom + (upDp - 10f) / 60f)
+    }
+
+    /**
+     * The zoom pill's stops (iOS .5 / 1 / 3), only those this lens can reach: .5 needs a wide lens
+     * behind the camera (a zoom ratio range starting at about 0.5), 3 needs a range up to 3. A pill
+     * with only "1" in it does nothing, so then there is no pill (empty list).
+     */
+    fun zoomStops(lensMinRatio: Float, lensMaxRatio: Float): List<Float> {
+        val stops = buildList {
+            if (lensMinRatio <= 0.55f) add(0.5f)
+            add(1f)
+            if (lensMaxRatio >= 3f) add(3f)
+        }
+        return if (stops.size < 2) emptyList() else stops
+    }
+
+    /** ".5", "1", "3"; the stop in use gets the "×" (iOS zoomButton). */
+    fun zoomLabel(stop: Float, selected: Boolean): String {
+        val n = if (stop < 1f) ".5" else stop.toInt().toString()
+        return if (selected) "$n×" else n
+    }
+
+    /** The front lens with the flash on and no flash unit: the screen lights the photo (white, full brightness). */
+    fun needsScreenFlash(flashOn: Boolean, front: Boolean, lensHasFlash: Boolean): Boolean = flashOn && front && !lensHasFlash
+
+    /** The flash button is drawn for a lens with a flash unit, and for the front lens (the screen is its flash). */
+    fun showsFlashButton(front: Boolean, lensHasFlash: Boolean): Boolean = lensHasFlash || front
 }

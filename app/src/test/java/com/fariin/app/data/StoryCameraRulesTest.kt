@@ -46,4 +46,45 @@ class StoryCameraRulesTest {
         assertTrue(StoryCameraRules.photoLongSide(true) < StoryCameraRules.photoLongSide(false))
         assertTrue(StoryCameraRules.photoLongSide(true) >= 1080)
     }
+
+    @Test fun slideToLockThreshold() {
+        assertEquals(0f, StoryCameraRules.lockProgress(-20f))
+        assertEquals(0.5f, StoryCameraRules.lockProgress(30f))
+        assertEquals(1f, StoryCameraRules.lockProgress(200f))
+        assertFalse(StoryCameraRules.reachesLock(60f))
+        assertTrue(StoryCameraRules.reachesLock(61f))
+    }
+
+    @Test fun releaseStopsUnlessThisTouchLocked() {
+        assertTrue(StoryCameraRules.stopsOnRelease(locked = false, lockedByThisTouch = false))
+        assertFalse(StoryCameraRules.stopsOnRelease(locked = true, lockedByThisTouch = true))   // slid onto the lock
+        assertTrue(StoryCameraRules.stopsOnRelease(locked = true, lockedByThisTouch = false))   // pressed stop
+    }
+
+    @Test fun dragUpZoomMapping() {
+        assertEquals(null, StoryCameraRules.dragZoom(1f, upDp = 10f, dxDp = 0f, lensMaxRatio = 10f))
+        assertEquals(null, StoryCameraRules.dragZoom(1f, upDp = 200f, dxDp = 40f, lensMaxRatio = 10f))  // going for the lock
+        assertEquals(2f, StoryCameraRules.dragZoom(1f, upDp = 70f, dxDp = 5f, lensMaxRatio = 10f)!!, 0.001f)
+        assertEquals(4f, StoryCameraRules.dragZoom(3f, upDp = 70f, dxDp = -5f, lensMaxRatio = 10f)!!, 0.001f)
+        assertEquals(8f, StoryCameraRules.dragZoom(1f, upDp = 2000f, dxDp = 0f, lensMaxRatio = 10f)!!, 0.001f)  // capped at 8
+        assertEquals(2.5f, StoryCameraRules.dragZoom(1f, upDp = 2000f, dxDp = 0f, lensMaxRatio = 2.5f)!!, 0.001f)
+    }
+
+    @Test fun zoomPillStops() {
+        assertEquals(listOf(0.5f, 1f, 3f), StoryCameraRules.zoomStops(0.5f, 10f))
+        assertEquals(listOf(1f, 3f), StoryCameraRules.zoomStops(1f, 10f))
+        assertEquals(emptyList<Float>(), StoryCameraRules.zoomStops(1f, 2f))   // only "1": no pill
+        assertEquals("1×", StoryCameraRules.zoomLabel(1f, true))
+        assertEquals(".5", StoryCameraRules.zoomLabel(0.5f, false))
+        assertEquals("3", StoryCameraRules.zoomLabel(3f, false))
+    }
+
+    @Test fun screenFlashOnlyOnTheFrontLensWithoutAFlash() {
+        assertTrue(StoryCameraRules.needsScreenFlash(flashOn = true, front = true, lensHasFlash = false))
+        assertFalse(StoryCameraRules.needsScreenFlash(flashOn = false, front = true, lensHasFlash = false))
+        assertFalse(StoryCameraRules.needsScreenFlash(flashOn = true, front = false, lensHasFlash = false))
+        assertFalse(StoryCameraRules.needsScreenFlash(flashOn = true, front = true, lensHasFlash = true))
+        assertTrue(StoryCameraRules.showsFlashButton(front = true, lensHasFlash = false))
+        assertFalse(StoryCameraRules.showsFlashButton(front = false, lensHasFlash = false))
+    }
 }
