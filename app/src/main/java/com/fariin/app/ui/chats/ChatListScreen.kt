@@ -181,6 +181,14 @@ fun ChatListScreen(
         .toList()
     val pinned = if (showArchive) emptyList() else shown.filter { it.isPinned(me) }
     val rest = shown.filter { showArchive || !it.isPinned(me) }
+    // A chat that arrives at the top (a new group, a new message in an old chat) while I am at the
+    // top comes into view. The list keeps its old first row in place, so the new row landed just
+    // above the screen and showed only after scrolling up. Old first row at index 1 with no offset
+    // means I was at the top a moment ago.
+    val topKey = (pinned + rest).firstOrNull()?.id
+    LaunchedEffect(topKey) {
+        if (listState.firstVisibleItemIndex == 1 && listState.firstVisibleItemScrollOffset == 0) listState.scrollToItem(0)
+    }
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
 
     val toggle: (Conversation) -> Unit = { conv ->
