@@ -156,6 +156,7 @@ class ThreadRepository(
     @Synchronized
     private fun rebuild(loaded: Boolean? = null) {
         val all = LinkedHashMap<String, Message>()
+        val unconfirmed = HashSet<String>()
         for (d in olderDocs.values + liveDocs.values) {
             var m = parse(d)
             // My note or photo whose file is still going up: the copy on this phone draws it.
@@ -163,10 +164,16 @@ class ThreadRepository(
             if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
             if (HiddenMessages.isHidden(m.id)) continue
             all[m.rowId] = m
+            if (d.metadata.hasPendingWrites()) unconfirmed.add(m.rowId)
         }
-        // A pending copy shows until its echo arrives (same clientId).
+        // A pending copy shows until its echo arrives (same clientId). It is dropped only once the
+        // SERVER has the message: a refused write rolls the local echo back, and the copy must still
+        // be there to turn into a failed bubble (it used to vanish without a word).
         for ((cidKey, p) in pending) {
-            if (all.containsKey(cidKey)) pending.remove(cidKey) else all[cidKey] = p
+            when {
+                !all.containsKey(cidKey) -> all[cidKey] = p
+                cidKey !in unconfirmed -> pending.remove(cidKey)
+            }
         }
         val sorted = order.sort(all.values)
         _state.update { it.copy(messages = sorted, loaded = loaded ?: it.loaded) }
