@@ -425,9 +425,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 
 @Composable
 internal fun ActionTile(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val c = Fariin.colors
-    Box(modifier.clip(RoundedCornerShape(12.dp)).background(c.card).clickable(onClick = onClick).padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
+    // Android: a Material outlined button in the brand blue (iOS drew a white tile).
+    androidx.compose.material3.OutlinedButton(onClick = onClick, modifier = modifier) {
+        Text(text, color = Fariin.colors.blue)
     }
 }

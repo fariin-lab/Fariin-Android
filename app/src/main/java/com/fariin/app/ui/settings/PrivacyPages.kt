@@ -108,7 +108,7 @@ internal fun ScrollPage(title: String, pop: () -> Unit, action: (@Composable () 
     }
 }
 
-internal fun toast(c: Context, s: String) = Toast.makeText(c, s, Toast.LENGTH_SHORT).show()
+internal fun toast(@Suppress("UNUSED_PARAMETER") c: Context, s: String) = com.fariin.app.ui.components.Snack.show(s)
 
 internal const val PAGE_PRIVACY = "privacy"
 internal const val PAGE_AUDIENCE = "privacy:aud:"
@@ -247,7 +247,7 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
                 Text(name, fontSize = 17.sp, color = c.label, maxLines = 1)
                 if (sub != null) Text(sub, fontSize = 13.sp, color = c.secondary, maxLines = 1)
             }
-            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = SwitchGreen, modifier = Modifier.size(22.dp))
+            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.blue, modifier = Modifier.size(22.dp))
             trailing?.invoke()
         }
         if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 64.dp))

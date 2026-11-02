@@ -57,8 +57,9 @@ import com.fariin.app.ui.stories.StoriesTab
 import com.fariin.app.ui.theme.Fariin
 
 /**
- * The four tabs in the iOS order (MainShell.swift, owner 2026-08-30): Stories, Calls, Chats,
- * Settings. Chats opens first. The Chats tab carries the number of unread chats.
+ * The four tabs in the Android order (owner 2026-11-02, after the big Android messengers):
+ * Chats on the far left and opened first, then Stories, Calls, Settings (iOS keeps Stories, Calls,
+ * Chats, Settings). The Chats tab carries the number of unread chats.
  *
  * TODO: the Calls tab's missed-calls badge; my own photo as the Settings icon (iOS draws it
  * there, with the person circle until it loads); tapping the open tab again to scroll to top.
@@ -99,16 +100,6 @@ fun MainShell(
                     indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
                 )
                 NavigationBarItem(
-                    selected = tab == TAB_STORIES, onClick = { select(TAB_STORIES) }, colors = colors,
-                    icon = { Icon(if (tab == TAB_STORIES) Icons.Filled.DonutLarge else Icons.Outlined.DonutLarge, contentDescription = null) },
-                    label = { TabLabel("Stories") },
-                )
-                NavigationBarItem(
-                    selected = tab == TAB_CALLS, onClick = { select(TAB_CALLS) }, colors = colors,
-                    icon = { Icon(if (tab == TAB_CALLS) Icons.Filled.Call else Icons.Outlined.Call, contentDescription = null) },
-                    label = { TabLabel("Calls") },
-                )
-                NavigationBarItem(
                     selected = tab == TAB_CHATS, onClick = { select(TAB_CHATS) }, colors = colors,
                     icon = {
                         BadgedBox(badge = {
@@ -120,6 +111,16 @@ fun MainShell(
                         }
                     },
                     label = { TabLabel("Chats") },
+                )
+                NavigationBarItem(
+                    selected = tab == TAB_STORIES, onClick = { select(TAB_STORIES) }, colors = colors,
+                    icon = { Icon(if (tab == TAB_STORIES) Icons.Filled.DonutLarge else Icons.Outlined.DonutLarge, contentDescription = null) },
+                    label = { TabLabel("Stories") },
+                )
+                NavigationBarItem(
+                    selected = tab == TAB_CALLS, onClick = { select(TAB_CALLS) }, colors = colors,
+                    icon = { Icon(if (tab == TAB_CALLS) Icons.Filled.Call else Icons.Outlined.Call, contentDescription = null) },
+                    label = { TabLabel("Calls") },
                 )
                 NavigationBarItem(
                     selected = tab == TAB_SETTINGS, onClick = { select(TAB_SETTINGS) }, colors = colors,
@@ -179,7 +180,7 @@ private fun LargeTitle(text: String) {
     )
 }
 
-const val TAB_STORIES = 0
-const val TAB_CALLS = 1
-const val TAB_CHATS = 2
+const val TAB_CHATS = 0
+const val TAB_STORIES = 1
+const val TAB_CALLS = 2
 const val TAB_SETTINGS = 3

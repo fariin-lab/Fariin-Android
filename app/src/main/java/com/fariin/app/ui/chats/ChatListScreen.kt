@@ -234,7 +234,8 @@ fun ChatListScreen(
                             showArchive -> "Archive"
                             !online -> "Waiting for network…"
                             state.loading -> "Connecting…"
-                            else -> "Chats"
+                            // The brand name at the top left (owner 2026-11-02, Android messengers).
+                            else -> "Fariin"
                         }
                         TopAppBar(
                             title = { Text(title, style = MaterialTheme.typography.titleLarge) },

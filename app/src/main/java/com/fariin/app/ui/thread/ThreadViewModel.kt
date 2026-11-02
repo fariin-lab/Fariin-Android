@@ -86,7 +86,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val ctx = LocalContext.current
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
     var notice by remember { mutableStateOf<String?>(null) }
-    notice?.let { n -> LaunchedEffect(n) { android.widget.Toast.makeText(ctx, n, android.widget.Toast.LENGTH_SHORT).show(); notice = null } }
+    notice?.let { n -> LaunchedEffect(n) { com.fariin.app.ui.components.Snack.show(n); notice = null } }
     val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, s.conv, s.messages) { notice = it }
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val ui = ThreadUi(

@@ -186,13 +186,13 @@ fun ThreadScreen(
     menuFor?.let { m ->
         MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions.copy(onForward = { forwardFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
-            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
+            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it })
     }
     val ch = ui.channel
     postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
-            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
+            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it })
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }

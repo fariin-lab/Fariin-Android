@@ -388,6 +388,6 @@ private fun ToggleRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card)
         .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-        Switch(on, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF34C759)))
+        Switch(on, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.blue, checkedThumbColor = Color.White))
     }
 }

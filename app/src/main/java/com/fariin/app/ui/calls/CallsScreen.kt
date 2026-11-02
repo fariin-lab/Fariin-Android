@@ -105,23 +105,21 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
         return
     }
 
+    // Android: top app bar, search, All / Missed as filter chips, New Call as a floating button.
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp)) {
-            Segmented(missedOnly, { missedOnly = it }, Modifier.align(Alignment.Center))
-            Box(
-                Modifier.align(Alignment.CenterEnd).size(40.dp).clip(CircleShape).background(c.accent)
-                    .clickable { /* TODO: New Call */ },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call",
-                    tint = c.onAccent, modifier = Modifier.size(22.dp))
+        com.fariin.app.ui.components.FariinTopBar("Calls")
+        SearchField(search, { search = it }, "Search calls")
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((label, value) in listOf("All" to false, "Missed" to true)) {
+                androidx.compose.material3.FilterChip(
+                    selected = missedOnly == value, onClick = { missedOnly = value },
+                    label = { Text(label) },
+                    colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer),
+                )
             }
         }
-        Text(
-            "Calls", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = c.label,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
-        )
-        SearchField(search, { search = it }, "Search calls")
         when {
             !loaded -> Unit
             calls.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
@@ -134,26 +132,11 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
             }
         }
     }
-}
-
-/** The compact All / Missed pill (iOS: a segmented picker 150 wide). */
-@Composable
-private fun Segmented(missedOnly: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier) {
-    val c = Fariin.colors
-    Row(
-        modifier.width(150.dp).height(32.dp).clip(RoundedCornerShape(16.dp)).background(c.fieldFill).padding(2.dp),
-    ) {
-        for ((label, value) in listOf("All" to false, "Missed" to true)) {
-            val sel = missedOnly == value
-            Box(
-                Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(14.dp))
-                    .background(if (sel) c.card else c.fieldFill.copy(alpha = 0f))
-                    .clickable { onChange(value) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, fontSize = 13.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, color = c.label)
-            }
-        }
+    androidx.compose.material3.FloatingActionButton(
+        onClick = { com.fariin.app.ui.components.Snack.show("New Call is coming soon on Android.") },
+        containerColor = c.blue, contentColor = androidx.compose.ui.graphics.Color.White,
+        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+    ) { Icon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call", modifier = Modifier.size(24.dp)) }
     }
 }
 

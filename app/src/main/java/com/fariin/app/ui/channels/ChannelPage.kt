@@ -312,7 +312,7 @@ private fun AdminCard(info: ChannelInfo) {
                 Switch(protect, onCheckedChange = { v ->
                     protect = v; problem = null
                     scope.launch { try { ChannelService.setProtected(info.cid, v) } catch (e: Exception) { protect = !v; problem = "Couldn't save. Try again." } }
-                }, colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF34C759)))
+                }, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.blue, checkedThumbColor = Color.White))
             }
         }
         Text(problem ?: ChannelRules.protectFooter(protect), fontSize = 13.sp, color = if (problem != null) c.red else c.secondary,
