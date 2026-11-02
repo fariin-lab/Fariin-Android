@@ -1,0 +1,418 @@
+package com.fariin.app.data
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import com.fariin.app.crypto.B64
+import com.fariin.app.crypto.FariinCrypto
+import com.fariin.app.crypto.SafetyNumber
+import com.fariin.app.crypto.Wire
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** A person as the people pages show them (`users/{uid}`, iOS UserProfile's fields used here). */
+data class Person(
+    val uid: String,
+    val name: String = "",
+    val handle: String = "",
+    val photoUrl: String? = null,
+    val about: String = "",
+    val privacy: Map<String, String> = emptyMap(),
+    val hasKey: Boolean = true,
+) {
+    val shownName: String get() = name.ifEmpty { handle.ifEmpty { "Fariin user" } }
+
+    companion object {
+        fun from(uid: String, d: Map<String, Any?>): Person = Person(
+            uid = uid,
+            name = d["name"] as? String ?: "",
+            handle = d["handle"] as? String ?: "",
+            photoUrl = (d["photoUrl"] as? String)?.takeIf { it.isNotEmpty() },
+            about = d["about"] as? String ?: "",
+            privacy = (d["privacy"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap(),
+            hasKey = !(d["publicKey"] as? String).isNullOrEmpty(),
+        )
+
+        /** Awaiting deletion or banned: never findable (iOS findByHandle filters). */
+        fun hidden(d: Map<String, Any?>): Boolean =
+            ((d["deletionScheduledFor"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: 0L) > System.currentTimeMillis() || d["banned"] == true
+
+        /** PrivacyPrefs.allows: everyone, contacts (an accepted 1:1 with me), nobody. */
+        fun allows(privacy: Map<String, String>, key: String, contactOfMine: Boolean): Boolean = when (privacy[key]) {
+            "nobody" -> false
+            "contacts" -> contactOfMine
+            else -> true
+        }
+    }
+}
+
+/**
+ * Everything the new-chat, requests, profile, edit-profile and group pages read and write. The
+ * live one is [FirestorePeople]; the debug demo has its own that never touches the network.
+ */
+interface PeopleApi {
+    val me: String
+    suspend fun search(query: String): List<Person>
+    suspend fun profile(uid: String): Person?
+    suspend fun chatKeyExists(uid: String): Boolean?
+    /** The chat id the key opened, or the failure sentence. */
+    suspend fun verifyChatKey(uid: String, pin: String): Result<String>
+    suspend fun openChat(p: Person): String
+    suspend fun acceptRequest(cid: String): Boolean
+    suspend fun declineRequest(cid: String): Boolean
+    suspend fun isBlocked(uid: String): Boolean
+    suspend fun setBlocked(uid: String, on: Boolean): Boolean
+    suspend fun setMuted(cid: String, on: Boolean): Boolean
+    suspend fun report(uid: String, cid: String, reason: String): Boolean
+    suspend fun safetyNumber(uid: String): String?
+    suspend fun checkUsername(h: String): Pair<Boolean, String?>
+    suspend fun claimUsername(h: String)
+    suspend fun saveName(name: String)
+    suspend fun uploadPhoto(jpegOrAny: ByteArray)
+    suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?): String
+    suspend fun addMembers(cid: String, uids: List<String>): String?
+    suspend fun leaveGroup(cid: String)
+}
+
+class FirestorePeople(
+    override val me: String,
+    private val crypto: FariinCrypto,
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+) : PeopleApi {
+    private val fn get() = FirebaseFunctions.getInstance("me-central1")
+    private fun conv(cid: String) = db.collection("conversations").document(cid)
+
+    private suspend fun call(name: String, data: Map<String, Any?>, seconds: Long = 10): Map<*, *>? {
+        val c = fn.getHttpsCallable(name).withTimeout(seconds, TimeUnit.SECONDS)
+        return c.call(data).await().getData() as? Map<*, *>
+    }
+
+    /** ChatService.findByHandle: `usernames/{h}` then the owner's profile (released names lead nowhere). */
+    private suspend fun findByHandle(typed: String): Person? {
+        val h = Usernames.lookupKey(typed) ?: return null
+        val nd = db.collection("usernames").document(h).get().await().data ?: return null
+        val owner = nd["uid"] as? String ?: return null
+        if (owner.isEmpty() || nd["releasedAt"] != null || owner == me) return null
+        val d = db.collection("users").document(owner).get().await().data ?: return null
+        return if (Person.hidden(d)) null else Person.from(owner, d)
+    }
+
+    /** ChatService.searchUsers: under 3 letters the exact handle; else `searchUsernames` (8 s), else exact. */
+    override suspend fun search(query: String): List<Person> {
+        var q = query.trim().lowercase()
+        if (q.startsWith("@")) q = q.drop(1)
+        if (q.isEmpty()) return emptyList()
+        return try {
+            if (q.length < 3) return listOfNotNull(findByHandle(q))
+            val rows = try { call("searchUsernames", mapOf("query" to q), 8)?.get("results") as? List<*> } catch (_: Exception) { null }
+                ?: return listOfNotNull(findByHandle(q))
+            val uids = rows.mapNotNull { (it as? Map<*, *>)?.get("uid") as? String }.filter { it != me }
+            coroutineScope {
+                uids.map { u -> async { withTimeoutOrNull(5_000) { db.collection("users").document(u).get().await() } } }.awaitAll()
+            }.mapNotNull { s -> s?.data?.takeUnless(Person::hidden)?.let { Person.from(s.id, it) } }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    override suspend fun profile(uid: String): Person? = try {
+        db.collection("users").document(uid).get().await().data?.let { Person.from(uid, it) }
+    } catch (_: Exception) { null }
+
+    override suspend fun chatKeyExists(uid: String): Boolean? = try {
+        call("chatKeyExists", mapOf("uid" to uid), 8)?.get("exists") as? Boolean
+    } catch (_: Exception) { null }
+
+    override suspend fun verifyChatKey(uid: String, pin: String): Result<String> = try {
+        val r = call("verifyChatPin", mapOf("uid" to uid, "pin" to pin), 10)
+        val cid = r?.get("cid") as? String
+        if (r?.get("ok") == true && !cid.isNullOrEmpty()) Result.success(cid) else Result.failure(Exception(ChatKey.GENERIC_FAILURE))
+    } catch (e: Exception) { Result.failure(Exception(ChatKey.sentence(e))) }
+
+    /** ChatService.openConversation: the 1:1 seed, a request (startedBy, accepted false) when new. */
+    override suspend fun openChat(p: Person): String {
+        val cid = Wire.directCid(me, p.uid)
+        val mine = profile(me)
+        val photos = buildMap { mine?.photoUrl?.let { put(me, it) }; p.photoUrl?.let { put(p.uid, it) } }
+        val ref = conv(cid)
+        val snap = try { ref.get().await() } catch (_: Exception) { null }
+        val exists = snap?.exists() == true
+        val seed = hashMapOf<String, Any>(
+            "users" to listOf(me, p.uid),
+            "names" to mapOf(me to (mine?.name?.ifEmpty { null } ?: "Me"), p.uid to p.name.ifEmpty { p.handle }),
+            "photos" to photos,
+        )
+        if (!exists) {
+            seed["updatedAt"] = FieldValue.serverTimestamp()
+            seed["unreadCount"] = mapOf(me to 0, p.uid to 0)
+            seed["typing"] = mapOf(me to false, p.uid to false)
+            if (snap != null) { seed["startedBy"] = me; seed["accepted"] = false }
+        }
+        try { ref.set(seed, SetOptions.merge()).await() } catch (e: Exception) {
+            if (seed["unreadCount"] == null) throw e
+            for (k in listOf("startedBy", "accepted", "unreadCount", "typing")) seed.remove(k)
+            ref.set(seed, SetOptions.merge()).await()
+        }
+        return cid
+    }
+
+    override suspend fun acceptRequest(cid: String): Boolean = ok { conv(cid).set(mapOf("accepted" to true), SetOptions.merge()).await() }
+
+    /** MessageRequests.decline: a 7-day decline mark for the sender, and the chat deleted. */
+    override suspend fun declineRequest(cid: String): Boolean = ok {
+        val batch = db.batch()
+        val sender = Wire.otherUid(cid, me)
+        if (sender.isNotEmpty()) batch.set(db.collection("requestDeclines").document(me).collection("from").document(sender),
+            mapOf("at" to FieldValue.serverTimestamp(), "sender" to sender))
+        batch.delete(conv(cid))
+        batch.commit().await()
+    }
+
+    private fun blockedRef(uid: String) = db.collection("users").document(me).collection("blocked").document(uid)
+
+    override suspend fun isBlocked(uid: String): Boolean = try { blockedRef(uid).get().await().exists() } catch (_: Exception) { false }
+
+    /** BlockList.write: `users/{me}/blocked/{uid}` {at}; unblock deletes it and records the span. */
+    override suspend fun setBlocked(uid: String, on: Boolean): Boolean = ok {
+        if (uid.isEmpty() || uid == me || uid.contains('/')) error("bad uid")
+        val ref = blockedRef(uid)
+        if (on) { ref.set(mapOf("at" to FieldValue.serverTimestamp())).await(); return@ok }
+        val since = ref.get().await().getTimestamp("at")?.toDate()?.time ?: System.currentTimeMillis()
+        val batch = db.batch()
+        batch.set(db.collection("users").document(me).collection("blockHistory").document("${uid}_$since"), mapOf(
+            "other" to uid, "from" to com.google.firebase.Timestamp(java.util.Date(since)), "to" to FieldValue.serverTimestamp()))
+        batch.delete(ref)
+        batch.commit().await()
+        try {
+            conv(Wire.directCid(me, uid)).update(mapOf("blockedBy.$me" to FieldValue.delete(),
+                "blockedAt.$me" to FieldValue.delete(), "blockClearedAt.$me" to FieldValue.delete())).await()
+        } catch (_: Exception) {}
+    }
+
+    /** ChatService.setMuted: `mutedBy.<me>` = forever (9 999 999 999 999) or 0. */
+    override suspend fun setMuted(cid: String, on: Boolean): Boolean = ok {
+        conv(cid).set(mapOf("mutedBy" to mapOf(me to if (on) 9_999_999_999_999.0 else 0.0)), SetOptions.merge()).await()
+    }
+
+    /** ChatService.report: a `reports` doc, never any message contents. */
+    override suspend fun report(uid: String, cid: String, reason: String): Boolean = ok {
+        db.collection("reports").add(mapOf("reporterUid" to me, "reportedUid" to uid, "cid" to cid, "reason" to reason,
+            "createdAt" to System.currentTimeMillis().toDouble(), "handled" to false)).await()
+    }
+
+    override suspend fun safetyNumber(uid: String): String? {
+        val mine = crypto.myPublicKeyB64?.let { B64.decode(it) } ?: return null
+        val theirs = crypto.publicKey(uid) ?: return null
+        return SafetyNumber.compute(me, mine, uid, theirs)
+    }
+
+    override suspend fun checkUsername(h: String): Pair<Boolean, String?> {
+        val d = call("checkUsername", mapOf("username" to h))
+        return (d?.get("available") as? Boolean ?: false) to (d?.get("reason") as? String)
+    }
+
+    override suspend fun claimUsername(h: String) { call("claimUsername", mapOf("username" to h)) }
+
+    /** ProfileStore name save: `users/{me}.name`, then `names.<me>` in every chat I am in. */
+    override suspend fun saveName(name: String) {
+        val n = name.trim()
+        db.collection("users").document(me).set(mapOf("name" to n), SetOptions.merge()).await()
+        updateMyConvs(mapOf("names.$me" to n))
+    }
+
+    private suspend fun updateMyConvs(fields: Map<String, Any>) {
+        try {
+            val docs = db.collection("conversations").whereArrayContains("users", me).get().await().documents
+            for (chunk in docs.chunked(450)) {
+                val b = db.batch()
+                for (d in chunk) b.update(d.reference, fields)
+                try { b.commit().await() } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * ProfileStore.uploadProfileImages: a square JPEG (640, 0.8) to `profiles/{me}.jpg`, the
+     * reference `fariin-photo://profiles/{me}.jpg?v=<ms>` on my profile and in every chat.
+     * The audience tag is "checked" (Android does not publish the blurred cover yet).
+     */
+    override suspend fun uploadPhoto(jpegOrAny: ByteArray) {
+        val jpeg = squareJpeg(jpegOrAny, 640, 80) ?: error("unreadable photo")
+        val path = "profiles/$me.jpg"
+        FirebaseStorage.getInstance().reference.child(path).putBytes(jpeg,
+            StorageMetadata.Builder().setContentType("image/jpeg").setCustomMetadata("audience", "checked").build()).await()
+        val refStr = PhotoRef.reference(path, System.currentTimeMillis())
+        db.collection("users").document(me).set(mapOf("photoUrl" to refStr, "photoThumb" to ""), SetOptions.merge()).await()
+        updateMyConvs(mapOf("photos.$me" to refStr))
+    }
+
+    private suspend fun isContact(uid: String): Boolean =
+        CryptoHub.listedConversation(Wire.directCid(me, uid))?.let { !it.isGroup && (it.startedBy.isEmpty() || it.accepted) } ?: false
+
+    /** ChatService.createGroup (a plain group, e2ee false, as iOS makes them now). */
+    override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?): String {
+        val people = members.filter { it != me }.mapNotNull { profile(it) }
+        val allowed = people.filter { Person.allows(it.privacy, "groups", isContact(it.uid)) }
+        val users = (allowed.map { it.uid } + me).distinct()
+        val mine = profile(me)
+        val names = HashMap<String, String>(); val photos = HashMap<String, String>()
+        for (p in allowed + listOfNotNull(mine)) { names[p.uid] = p.name.ifEmpty { p.handle }; p.photoUrl?.let { photos[p.uid] = it } }
+        val ref = db.collection("conversations").document()
+        val data = hashMapOf<String, Any>(
+            "type" to "group", "title" to title.trim().take(100), "users" to users, "admins" to listOf(me),
+            "createdBy" to me, "createdAt" to FieldValue.serverTimestamp(), "names" to names, "photos" to photos,
+            "unreadCount" to users.associateWith { 0 }, "typing" to users.associateWith { false },
+            "updatedAt" to FieldValue.serverTimestamp(), "e2ee" to false,
+        )
+        ref.set(data).await()
+        CryptoHub.notePlainGroup(ref.id)
+        systemMessage(ref.id, "${mine?.name?.ifEmpty { null } ?: "Someone"} created the group")
+        if (photo != null) try {
+            val jpeg = squareJpeg(photo, 640, 80)
+            if (jpeg != null) {
+                val sref = FirebaseStorage.getInstance().reference.child("profiles/group_${ref.id}.jpg")
+                sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+                ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
+            }
+        } catch (_: Exception) {}
+        return ref.id
+    }
+
+    private suspend fun systemMessage(cid: String, text: String) {
+        val batch = db.batch()
+        batch.set(conv(cid).collection("messages").document(), mapOf("text" to text, "authorId" to me, "type" to "system",
+            "createdAt" to FieldValue.serverTimestamp()))
+        batch.update(conv(cid), mapOf("lastMessage" to text, "lastSender" to me, "updatedAt" to FieldValue.serverTimestamp()))
+        batch.commit().await()
+    }
+
+    /** ChatService.addGroupMembers: arrayUnion, names/photos/unread per member, the "added" line. */
+    override suspend fun addMembers(cid: String, uids: List<String>): String? {
+        val people = uids.mapNotNull { profile(it) }
+        val ok = people.filter { Person.allows(it.privacy, "groups", isContact(it.uid)) }
+        val refused = people - ok.toSet()
+        if (ok.isEmpty()) return GroupRules.refusedSentence(refused.map { it.shownName })
+        val update = hashMapOf<String, Any>("users" to FieldValue.arrayUnion(*ok.map { it.uid }.toTypedArray()),
+            "updatedAt" to FieldValue.serverTimestamp())
+        for (p in ok) { update["names.${p.uid}"] = p.name.ifEmpty { p.handle }; p.photoUrl?.let { update["photos.${p.uid}"] = it }; update["unreadCount.${p.uid}"] = 0 }
+        val text = "${profile(me)?.shownName ?: "Someone"} added ${GroupRules.addedWho(ok.map { it.shownName })}"
+        val batch = db.batch()
+        batch.set(conv(cid).collection("messages").document(), mapOf("text" to text, "authorId" to me, "type" to "system",
+            "createdAt" to FieldValue.serverTimestamp()))
+        update["lastMessage"] = text; update["lastSender"] = me
+        batch.update(conv(cid), update)
+        batch.commit().await()
+        return if (refused.isEmpty()) null else GroupRules.refusedSentence(refused.map { it.shownName })
+    }
+
+    /** ChatService.leaveGroup: one transaction, the owner hands over to an admin (else the first member). */
+    override suspend fun leaveGroup(cid: String) {
+        val myName = profile(me)?.shownName ?: "Someone"
+        val ref = conv(cid)
+        db.runTransaction { txn ->
+            val data = txn.get(ref).data ?: emptyMap()
+            val plan = GroupRules.leavePlan(me, myName, data)
+            for (line in plan.notices) txn.set(ref.collection("messages").document(), mapOf("text" to line, "authorId" to me,
+                "type" to "system", "createdAt" to FieldValue.serverTimestamp()))
+            txn.update(ref, plan.update)
+            null
+        }.await()
+    }
+
+    private suspend fun ok(block: suspend () -> Unit): Boolean = try { block(); true } catch (_: Exception) { false }
+
+    companion object {
+        /** iOS squareJPEG: centre crop to a square, at most [side] px, JPEG at [quality]. */
+        fun squareJpeg(bytes: ByteArray, side: Int, quality: Int): ByteArray? {
+            val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+            val s = minOf(src.width, src.height)
+            val crop = Bitmap.createBitmap(src, (src.width - s) / 2, (src.height - s) / 2, s, s)
+            val out = if (s > side) Bitmap.createScaledBitmap(crop, side, side, true) else crop
+            return ByteArrayOutputStream().also { out.compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
+        }
+    }
+}
+
+/** ProfilePhotoURLProtocol.reference: `fariin-photo://<path>?v=<ms>`. */
+object PhotoRef {
+    fun reference(path: String, version: Long) = "fariin-photo://$path?v=$version"
+}
+
+/** ChatPin: 4 to 6 digits, the verify failure sentences. */
+object ChatKey {
+    const val MIN = 4
+    const val MAX = 6
+    const val GENERIC_FAILURE = "Unable to verify Chat Key."
+    fun isValid(pin: String) = pin.length in MIN..MAX && pin.all { it.isDigit() }
+    /** Paste keeps the digits only, at most six. */
+    fun fromPaste(text: String) = text.filter { it.isDigit() }.take(MAX)
+    fun sentence(e: Exception): String {
+        val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
+        return when (code) {
+            com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED,
+            com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT -> e.message ?: GENERIC_FAILURE
+            com.google.firebase.functions.FirebaseFunctionsException.Code.UNAVAILABLE,
+            com.google.firebase.functions.FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> "Try again in a moment."
+            else -> GENERIC_FAILURE
+        }
+    }
+}
+
+/** Group rules from ChatService (leaveGroup, addGroupMembers, refusedSentence). */
+object GroupRules {
+    data class LeavePlan(val update: Map<String, Any>, val notices: List<String>, val heir: String?)
+
+    fun refusedSentence(names: List<String>): String {
+        val who = if (names.size <= 2) names.joinToString(" and ") else "${names[0]} and ${names.size - 1} others"
+        return "$who can't be added because of their privacy settings. You can send them the group link instead."
+    }
+
+    fun addedWho(names: List<String>): String =
+        if (names.size <= 3) names.joinToString(", ") else "${names.take(2).joinToString(", ")} and ${names.size - 2} others"
+
+    /**
+     * leaveGroup's plan: me out of users and admins; when no other admin is left the first other
+     * member becomes one; when I own the group, an admin (else the first member) becomes the owner
+     * with "<name> is now the owner"; then "<me> left".
+     */
+    fun leavePlan(me: String, myName: String, data: Map<String, Any?>): LeavePlan {
+        val users = (data["users"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        val admins = (data["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        val names = (data["names"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap()
+        val owner = data["createdBy"] as? String ?: ""
+        val notices = mutableListOf<String>()
+        val update = hashMapOf<String, Any>(
+            "users" to FieldValue.arrayRemove(me), "admins" to FieldValue.arrayRemove(me), "updatedAt" to FieldValue.serverTimestamp())
+        val ownerHeir = if (owner.isNotEmpty() && owner == me)
+            admins.firstOrNull { it != me && it in users } ?: users.firstOrNull { it != me } else null
+        if (admins.none { it != me }) users.firstOrNull { it != me }?.let { heir ->
+            update["admins"] = listOf(heir)
+            if (ownerHeir != heir) notices.add("${names[heir] ?: "A member"} is now an admin")
+        }
+        if (ownerHeir != null) {
+            update["createdBy"] = ownerHeir
+            if (ownerHeir !in admins) update["admins"] = admins.filter { it != me } + ownerHeir
+            update["adminRights.$ownerHeir"] = FieldValue.delete()
+            update["adminBy.$ownerHeir"] = FieldValue.delete()
+            notices.add("${names[ownerHeir] ?: "A member"} is now the owner")
+        }
+        val left = "$myName left"
+        notices.add(left)
+        update["lastMessage"] = left
+        update["lastSender"] = me
+        return LeavePlan(update, notices, ownerHeir)
+    }
+
+    /** The line under Leave Group for the owner (iOS LeaveGroupAlert). */
+    fun ownerLeaveLine(heirName: String?): String =
+        if (heirName == null) "You're the only member. The group will be empty."
+        else "You own this group. If you leave, $heirName becomes the owner."
+}

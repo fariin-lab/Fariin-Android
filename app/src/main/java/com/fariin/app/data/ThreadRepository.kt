@@ -161,6 +161,7 @@ class ThreadRepository(
             // My note or photo whose file is still going up: the copy on this phone draws it.
             val local = m.clientId?.let { localFiles[it] }
             if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
+            if (HiddenMessages.isHidden(m.id)) continue
             all[m.rowId] = m
         }
         // A pending copy shows until its echo arrives (same clientId).
@@ -192,20 +193,24 @@ class ThreadRepository(
         }
     }
 
-    fun sendText(text: String) {
+    fun sendText(text: String) = sendText(text, null)
+
+    /** A text, optionally a reply ([reply] is the quoted message; its words are sealed again). */
+    fun sendText(text: String, reply: Message?) {
         val t = text.trim()
         if (t.isEmpty()) return
+        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, it.bodyText.take(200)) }
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
         pending[clientId] = Message(
             id = clientId, authorId = me, text = t, createdAtMillis = tap, hasServerTime = false,
-            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
         )
         rebuild()
         scope.launch {
             try {
                 turn.withLock {
-                    if (Wire.isGroupCid(cid)) sendGroup(t, clientId, tap) else sendDirect(t, clientId, tap)
+                    if (Wire.isGroupCid(cid)) sendGroup(t, clientId, tap, ref) else sendDirect(t, clientId, tap, ref)
                 }
             } catch (e: Exception) {
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
@@ -352,7 +357,7 @@ class ThreadRepository(
         (snap.get("users") as? List<*>)?.filterIsInstance<String>()
     } catch (_: Exception) { null } ?: memberUids()
 
-    private suspend fun sendDirect(t: String, clientId: String, clientTs: Double) {
+    private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         val local = CryptoHub.listedConversation(cid)
@@ -364,13 +369,16 @@ class ThreadRepository(
             convRef.set(mapOf("users" to listOf(me, other), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
         }
         val batch = db.batch()
-        batch.set(convRef.collection("messages").document(clientId), mapOf(
+        val msg = hashMapOf<String, Any>(
             "text" to cipher,
             "authorId" to me,
             "createdAt" to FieldValue.serverTimestamp(),
             "clientTs" to clientTs,
             "clientId" to clientId,
-        ))
+        )
+        // iOS replyEnc: {id, authorId, text sealed like the message}.
+        if (reply != null) msg["replyTo"] = mapOf("id" to reply.id, "authorId" to reply.authorId, "text" to crypto.encryptForConversation(cid, reply.text))
+        batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,
             "lastSender" to me,
@@ -382,18 +390,21 @@ class ThreadRepository(
         batch.commit().await()
     }
 
-    private suspend fun sendGroup(t: String, clientId: String, clientTs: Double) {
+    private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
         val batch = db.batch()
-        batch.set(convRef.collection("messages").document(clientId), mapOf(
+        val msg = hashMapOf<String, Any>(
             "text" to cipher,
             "authorId" to me,
             "createdAt" to FieldValue.serverTimestamp(),
             "clientTs" to clientTs,
             "clientId" to clientId,
-        ))
+        )
+        // iOS replyEnc: {id, authorId, text sealed like the message}.
+        if (reply != null) msg["replyTo"] = mapOf("id" to reply.id, "authorId" to reply.authorId, "text" to crypto.sealForGroup(reply.text, members, cid))
+        batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,
             "lastSender" to me,
@@ -404,6 +415,172 @@ class ThreadRepository(
         for (m in members) if (m != me) conv["unreadCount.$m"] = FieldValue.increment(1)
         batch.update(convRef, conv)
         batch.commit().await()
+    }
+
+    // ------------------------------------------------------------------ message actions (iOS ChatService)
+
+    private fun msgRef(id: String) = convRef.collection("messages").document(id)
+
+    /** ChatService.editMessage: re-sealed, the replaced text appended to `edits` (at most 10). */
+    suspend fun editMessage(m: Message, newText: String): Boolean {
+        val t = newText.trim()
+        if (t.isEmpty()) return false
+        return try {
+            val members = if (Wire.isGroupCid(cid)) freshMembers() else null
+            val cipher = seal(t, members)
+            val ref = msgRef(m.id)
+            val data = ref.get().await().data ?: return false
+            if (data["deleted"] == true) return false
+            val edits = ((data["edits"] as? List<*>)?.mapNotNull { it as? Map<*, *> } ?: emptyList()).toMutableList()
+            (data["text"] as? String)?.let { cur ->
+                val at = data["editedAt"] ?: data["createdAt"] ?: com.google.firebase.Timestamp.now()
+                edits.add(mapOf("t" to cur, "at" to at))
+            }
+            fun size() = edits.sumOf { ((it["t"] as? String)?.length ?: 0) } + cipher.length
+            while (edits.size > 10 || (edits.size > 1 && size() > 700_000)) edits.removeAt(0)
+            val update = hashMapOf<String, Any>("text" to cipher, "edited" to true, "editedAt" to FieldValue.serverTimestamp())
+            if (size() <= 700_000) update["edits"] = edits
+            ref.update(update).await()
+            // The list still shows the old words when this was the newest message.
+            val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get().await()
+            if (newest.documents.firstOrNull()?.id == m.id) {
+                val sum = hashMapOf<String, Any>("lastMessage" to cipher)
+                if (Wire.isGroupCid(cid) && !cipher.startsWith("enc")) sum["lastPlainTag"] = Conversation.plainTag(cipher)
+                try { convRef.update(sum).await() } catch (_: Exception) {}
+            }
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /**
+     * ChatService.deleteMessage: a tombstone (content stripped, type back to text), falling back to
+     * a hard delete when refused; a second delete on a tombstone removes it. Storage files go while
+     * the doc still exists; then the chat list summary is re-pointed at the newest message.
+     */
+    suspend fun deleteForEveryone(m: Message): Boolean {
+        return try {
+            val ref = msgRef(m.id)
+            val snap = ref.get().await()
+            if (!snap.exists()) return true
+            val data = snap.data ?: emptyMap()
+            val blobs = buildList {
+                for (k in listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl")) (data[k] as? String)?.let(::add)
+                (data["album"] as? List<*>)?.forEach { ((it as? Map<*, *>)?.get("imageUrl") as? String)?.let(::add) }
+            }.filter { it.startsWith("https://") || it.startsWith("gs://") }
+            var marked = false
+            if (data["deleted"] != true) {
+                val strip = hashMapOf<String, Any>("deleted" to true, "text" to "", "type" to "text", "enc" to FieldValue.delete())
+                for (k in TOMBSTONE_STRIP) strip[k] = FieldValue.delete()
+                if (data["authorId"] as? String != me) strip["deletedBy"] = me
+                marked = try { ref.update(strip).await(); true } catch (_: Exception) { false }
+            }
+            for (u in blobs) try { FirebaseStorage.getInstance().getReferenceFromUrl(u).delete().await() } catch (_: Exception) {}
+            if (!marked) ref.delete().await()
+            rewriteSummaryAfterDelete()
+            true
+        } catch (_: Exception) { false }
+    }
+
+    private suspend fun rewriteSummaryAfterDelete() {
+        try {
+            val group = Wire.isGroupCid(cid)
+            val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(if (group) 25 else 1).get().await().documents
+            val d = (if (group) newest.firstOrNull { it.getBoolean("deleted") != true } else newest.firstOrNull())?.data
+            val update = hashMapOf<String, Any>()
+            if (d == null) {
+                update["lastMessage"] = ""; update["lastSender"] = ""
+                update["lastImageUrl"] = FieldValue.delete(); update["lastImageEnc"] = FieldValue.delete()
+            } else {
+                val gone = d["deleted"] == true
+                val line = if (gone) "This message was deleted" else summaryText(d)
+                update["lastMessage"] = line
+                update["lastSender"] = d["authorId"] as? String ?: ""
+                val kind = d["type"] as? String ?: ""
+                if (group && !gone && kind != "system" && kind != "call" && line.isNotEmpty() && !line.startsWith("enc")) {
+                    update["lastPlainTag"] = Conversation.plainTag(line)
+                }
+                val u = d["imageUrl"] as? String
+                val e = d["enc"]
+                if (u != null && e is Map<*, *> && d["viewOnce"] != true) { update["lastImageUrl"] = u; update["lastImageEnc"] = e }
+                else { update["lastImageUrl"] = FieldValue.delete(); update["lastImageEnc"] = FieldValue.delete() }
+            }
+            convRef.update(update).await()
+        } catch (_: Exception) {}
+    }
+
+    /** iOS summaryText: the sealed words, else a label for the kind. */
+    private fun summaryText(d: Map<String, Any?>): String {
+        val text = d["text"] as? String ?: ""
+        val type = d["type"] as? String ?: ""
+        val once = d["viewOnce"] == true
+        if (text.isNotEmpty() && (!once || type == "text" || type.isEmpty())) return text
+        return when (type) {
+            "image" -> if (once) "View-once photo" else "📷 Photo"
+            "album" -> ((d["album"] as? List<*>)?.size ?: 0).let { if (it > 1) "📷 $it Photos" else "📷 Photo" }
+            "video" -> "🎥 Video"
+            "audio" -> if (once) "🎤 One-time voice message" else "🎤 Voice message"
+            "file" -> "📄 File"
+            "gif" -> "GIF"
+            "call" -> {
+                val video = d["callVideo"] == true
+                if (d["callOutcome"] == "missed") (if (video) "📹 Missed video call" else "📞 Missed call")
+                else if (video) "📹 Video call" else "📞 Call"
+            }
+            else -> text
+        }
+    }
+
+    /** Delete for Me: hidden on this phone only (an unsent one of mine is also dropped). */
+    fun hideForMe(context: Context, m: Message) {
+        m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it) }
+        HiddenMessages.hide(context, m.id)
+        rebuild()
+    }
+
+    /**
+     * ChatService.setReaction: `reactions.<me>` sealed like text (for all members in a group),
+     * or deleted; then the chat list's "Reacted" preview (best effort, never bumps updatedAt).
+     */
+    suspend fun setReaction(m: Message, emoji: String?): Boolean {
+        val ref = msgRef(m.id)
+        if (emoji == null) {
+            return try {
+                ref.update("reactions.$me", FieldValue.delete()).await()
+                val cs = convRef.get().await()
+                if (cs.getString("lastReactionBy") == me) convRef.update(mapOf(
+                    "lastReactionEnc" to FieldValue.delete(), "lastReactionBy" to FieldValue.delete(),
+                    "lastReactionToAuthor" to FieldValue.delete(), "lastReactionAt" to FieldValue.delete(),
+                    "lastReactionToEnc" to FieldValue.delete(), "lastReactionToImages" to FieldValue.delete(),
+                )).await()
+                true
+            } catch (_: Exception) { false }
+        }
+        return try {
+            val members = if (Wire.isGroupCid(cid)) freshMembers() else null
+            val enc = seal(emoji, members)
+            ref.update("reactions.$me", enc).await()
+            val snippet = m.bodyText.trim().take(60).takeIf { it.isNotEmpty() }
+            try {
+                convRef.update(mapOf(
+                    "lastReactionEnc" to enc, "lastReactionBy" to me, "lastReactionToAuthor" to m.authorId,
+                    "lastReactionAt" to FieldValue.serverTimestamp(),
+                    "lastReactionToEnc" to (snippet?.let { seal(it, members) } ?: FieldValue.delete()),
+                    "lastReactionToImages" to FieldValue.delete(),
+                )).await()
+            } catch (_: Exception) {}
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /** ChatService.setTyping: `typing.<me>` = "text-<seconds>" while typing, false after. */
+    fun setTyping(on: Boolean) {
+        scope.launch {
+            try {
+                val v = MessageRules.typingValue(on, System.currentTimeMillis())
+                convRef.set(mapOf("typing" to mapOf(me to v)), SetOptions.merge()).await()
+            } catch (_: Exception) {}
+        }
     }
 
     // ------------------------------------------------------------------ read state
@@ -439,5 +616,10 @@ class ThreadRepository(
 
     companion object {
         const val PAGE_SIZE = 60L
+        /** Every content field a tombstone drops (iOS deleteMessage `strip`). */
+        val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
+            "fileName", "fileSize", "waveform", "duration", "blurhash", "linkPreview", "poll", "locationCard",
+            "contactCard", "replyTo", "reactions", "videoEnc", "thumbEnc", "viewOnce", "mentions", "forwarded",
+            "fwdChannel", "thumb", "edits", "editedAt")
     }
 }

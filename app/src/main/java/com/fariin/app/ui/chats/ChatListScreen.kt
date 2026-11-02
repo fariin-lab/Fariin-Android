@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import androidx.compose.material.icons.filled.Edit
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,11 +72,26 @@ fun ChatListScreen(
     val pinned = state.chats.filter { it.isPinned(me) }
     val rest = state.chats.filter { !it.isPinned(me) }
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        Text(
-            "Chats",
-            fontSize = 34.sp, fontWeight = FontWeight.Bold, color = c.label,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-        )
+        val people = com.fariin.app.ui.people.LocalPeopleNav.current
+        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Chats",
+                fontSize = 34.sp, fontWeight = FontWeight.Bold, color = c.label,
+                modifier = Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+            )
+            androidx.compose.material3.IconButton(onClick = people.newChat) {
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Edit, contentDescription = "New Chat", tint = c.blue)
+            }
+        }
+        if (state.requests.isNotEmpty()) {
+            androidx.compose.foundation.layout.Row(
+                Modifier.clickable(onClick = people.requests).fillMaxSize().height(44.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Message Requests", fontSize = 17.sp, color = c.blue, modifier = Modifier.weight(1f))
+                Text("${state.requests.size}", fontSize = 15.sp, color = c.secondary)
+            }
+        }
         when {
             state.loading && state.chats.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))

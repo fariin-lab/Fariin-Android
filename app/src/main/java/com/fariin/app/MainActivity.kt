@@ -34,6 +34,7 @@ import com.fariin.app.ui.theme.FariinTheme
 import com.fariin.app.ui.thread.LocalOpenChat
 import com.fariin.app.ui.thread.ThreadRoute
 import com.fariin.app.ui.thread.ThreadScreen
+import com.fariin.app.ui.people.peopleRoutes
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
@@ -83,7 +84,13 @@ class MainActivity : ComponentActivity() {
                     val uid by auth.uid.collectAsState(initial = initial)
                     val me = uid
                     // Sign-out: the keys leave memory (the stored key stays, keys are per uid).
-                    LaunchedEffect(me) { if (me == null) CryptoHub.signedOut() }
+                    LaunchedEffect(me) {
+                        if (me == null) {
+                            CryptoHub.signedOut()
+                            com.fariin.app.data.HiddenMessages.clear(applicationContext)
+                            com.fariin.app.data.DeliveryReceipts.reset()
+                        }
+                    }
                     // The server removed this phone's device record: the same teardown as Log out,
                     // then the front door with the iOS notice saying why.
                     val revoked by DeviceRegistry.revoked.collectAsState()
@@ -142,8 +149,12 @@ class MainActivity : ComponentActivity() {
             PushRouter.pendingOpen.value = null
             nav.navigate("thread/$cid") { launchSingleTop = true }
         }
-        CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } }) {
+        val people = remember(me) { com.fariin.app.data.FirestorePeople(me, crypto) }
+        CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
+            com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav)) {
             NavHost(nav, startDestination = "main") {
+                peopleRoutes(nav, people, chats = { chats.chats }, requests = { chats.requests },
+                    groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
                 composable("main") {
                     MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } })
                 }
@@ -188,17 +199,25 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun DemoApp(startThread: String?) {
         val nav = rememberNavController()
-        CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } }) {
-            NavHost(nav, startDestination = if (startThread != null) "thread/$startThread" else "main") {
+        val demoPeople = com.fariin.app.ui.debug.DemoPeople
+        CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
+            com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav)) {
+            NavHost(nav, startDestination = startThread?.let { if (it.startsWith("p:")) it.removePrefix("p:") else "thread/$it" } ?: "main") {
+                peopleRoutes(nav, demoPeople, chats = { DemoChats.chats() }, requests = { demoPeople.requests() },
+                    groupDoc = { demoPeople.groupDoc(it) })
                 composable("main") {
-                    MainShell(DemoChats.ME, ChatsUiState(loading = false, chats = DemoChats.chats()),
+                    MainShell(DemoChats.ME, ChatsUiState(loading = false, chats = DemoChats.chats(), requests = demoPeople.requests()),
                         DemoChats.decryptor, onSignOut = { finish() })
                 }
                 composable("thread/{cid}") { entry ->
                     val cid = entry.arguments?.getString("cid") ?: return@composable
-                    var ui by remember(cid) { mutableStateOf(DemoThread.ui(cid)) }
+                    var ui by remember(cid) { mutableStateOf(DemoThread.ui(cid)?.let(demoPeople::decorate)) }
                     val u = ui ?: return@composable
-                    ThreadScreen(u, onBack = { if (!nav.popBackStack()) nav.navigate("main") }, onSend = { t ->
+                    val acts = remember(cid) { demoPeople.threadActions({ ui!! }, { ui = it }) {
+                        val conv = DemoChats.chats().firstOrNull { it.id == cid }
+                        if (conv?.isGroup == true) nav.navigate("group/$cid") else conv?.let { nav.navigate("contact/${it.otherUid(DemoChats.ME)}") }
+                    } }
+                    ThreadScreen(u, actions = acts, onBack = { if (!nav.popBackStack()) nav.navigate("main") }, onSend = { t ->
                         val now = System.currentTimeMillis().toDouble()
                         ui = u.copy(messages = u.messages + Message(
                             id = "local-$now", authorId = DemoChats.ME, text = t.trim(), createdAtMillis = now, clientTs = now,

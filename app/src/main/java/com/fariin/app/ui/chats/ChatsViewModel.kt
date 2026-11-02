@@ -19,6 +19,8 @@ data class ChatsUiState(
     val loading: Boolean = true,
     val chats: List<Conversation> = emptyList(),
     val error: String? = null,
+    /** Incoming message requests (they live on their own page, iOS MessageRequestsView). */
+    val requests: List<Conversation> = emptyList(),
 )
 
 class ChatsViewModel(
@@ -29,12 +31,19 @@ class ChatsViewModel(
     private val preloaded = HashSet<String>()
 
     val state: StateFlow<ChatsUiState> = repo.listen(me)
-        .onEach { s -> if (s is ConversationsRepository.State.Loaded) warmKeys(s.conversations) }
+        .onEach { s ->
+            if (s is ConversationsRepository.State.Loaded) {
+                warmKeys(s.conversations)
+                // iOS: delivered marks only from a server answer, for the chats the list shows.
+                if (!s.fromCache && crypto != null) com.fariin.app.data.DeliveryReceipts.mark(ChatList.visible(s.conversations, me), me)
+            }
+        }
         .map { s ->
             when (s) {
                 ConversationsRepository.State.Loading -> ChatsUiState(loading = true)
                 is ConversationsRepository.State.Loaded ->
-                    ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me))
+                    ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me),
+                        requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) })
                 is ConversationsRepository.State.Failed -> ChatsUiState(loading = false, error = s.message)
             }
         }

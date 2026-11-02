@@ -85,6 +85,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.data.Message
+import com.fariin.app.data.MessageRules
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.launch
 import com.fariin.app.data.Receipts
 import com.fariin.app.data.ThreadLogic
 import com.fariin.app.data.Tick
@@ -109,6 +112,14 @@ data class ThreadUi(
     val sendBlocked: String? = null,
     /** The chat id (voice speed is per chat, as on iOS). */
     val cid: String = "",
+    /** Group: I hold the admin "Delete messages" right. */
+    val adminMayDelete: Boolean = false,
+    /** Group members and when each last read (ms), for Message Info. */
+    val members: List<String> = emptyList(),
+    val memberReads: Map<String, Double> = emptyMap(),
+    val myPhoto: String? = null,
+    /** My unread count when the chat opened, which places the "Unread Messages" divider. */
+    val unreadAtOpen: Int = 0,
 )
 
 /**
@@ -133,8 +144,17 @@ fun ThreadScreen(
     onRetry: (Message) -> Unit = {},
     onSendPhoto: (Uri) -> Unit = {},
     onSendVoice: (VoiceRecorder.Result) -> Unit = {},
+    actions: ThreadActions = ThreadActions(),
 ) {
     val c = Fariin.colors
+    // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
+    var menuFor by remember { mutableStateOf<Message?>(null) }
+    var deleteFor by remember { mutableStateOf<Message?>(null) }
+    var infoFor by remember { mutableStateOf<Message?>(null) }
+    var replyTo by remember { mutableStateOf<Message?>(null) }
+    var editing by remember { mutableStateOf<Message?>(null) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var viewing by remember { mutableStateOf<Viewing?>(null) }
     viewing?.let { v -> MediaViewer(v) { viewing = null } }
     // Leaving the chat stops its note (iOS stops playback when the thread goes away).
@@ -146,6 +166,21 @@ fun ThreadScreen(
     // Newest at the bottom: the list is reversed, so index 0 is the newest message.
     val reversed = remember(ui.messages) { ui.messages.indices.reversed().toList() }
     val listState = rememberLazyListState()
+    menuFor?.let { m ->
+        MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions,
+            onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
+            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
+            onInfo = { infoFor = it }, onDelete = { deleteFor = it })
+    }
+    deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
+    infoFor?.let { m -> MessageInfoDialog(m, ui, is24h) { infoFor = null } }
+    // The divider is placed once, from the unread count at open (iOS anchors it the same way).
+    val dividerId = remember(ui.loaded) { if (ui.loaded) MessageRules.unreadDividerId(ui.messages, ui.me, ui.unreadAtOpen) else null }
+    // At the bottom = the newest row in view (the list is reversed). Read receipts follow it.
+    val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
+    LaunchedEffect(atBottom) { actions.onAtBottom(atBottom) }
+    var seenCount by remember { mutableStateOf(ui.messages.size) }
+    LaunchedEffect(atBottom, ui.messages.size) { if (atBottom) seenCount = ui.messages.size }
 
     // Near the top of the history: fetch the page before it (iOS loadOlder).
     val nearTop by remember {
@@ -161,7 +196,7 @@ fun ThreadScreen(
     }
 
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
-        Header(ui, onBack)
+        Header(ui, onBack, actions.onTitleClick)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (!ui.loaded) {
                 CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp,
@@ -178,9 +213,17 @@ fun ThreadScreen(
                     val g = geometry[i]
                     Column(Modifier.fillMaxWidth().padding(top = g.gapDp.dp)) {
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
+                        if (m.rowId == dividerId) UnreadDivider()
                         when {
                             m.isSystem || m.isCall -> NoticePill(noticeText(m))
-                            else -> MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
+                            else -> SwipeRow(enabled = MessageRules.canReply(m), onReply = { replyTo = m; editing = null }) {
+                                Column(Modifier.fillMaxWidth().combinedClickableLong { menuFor = m }) {
+                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
+                                    ReactionChips(m, ui, m.authorId == ui.me) { e ->
+                                        actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], e))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -190,13 +233,32 @@ fun ThreadScreen(
                     }
                 }
             }
+            if (!atBottom) {
+                JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
+                    scope.launch { listState.animateScrollToItem(0) }
+                }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp))
+            }
         }
         if (ui.sendBlocked != null) {
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
                 modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
         } else {
-            Composer(onSend, onSendPhoto, onSendVoice)
+            replyTo?.let { r ->
+                ComposerBar(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
+                    r.bodyText) { replyTo = null }
+            }
+            editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
+            val send: (String) -> Unit = { t ->
+                val r = replyTo
+                val e = editing
+                when {
+                    e != null -> { editing = null; if (t.trim() != e.text.trim()) actions.onEdit(e, t) }
+                    r != null -> { replyTo = null; actions.onSendReply(t, r) }
+                    else -> onSend(t)
+                }
+            }
+            Composer(send, onSendPhoto, onSendVoice, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping)
         }
     }
 }
@@ -207,14 +269,14 @@ private fun noticeText(m: Message): String = when {
 }
 
 @Composable
-private fun Header(ui: ThreadUi, onBack: () -> Unit) {
+private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label)
             }
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.weight(1f).clickable(onClick = onTitleClick), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(ui.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (ui.subtitle.isNotEmpty()) {
@@ -509,10 +571,25 @@ private fun TextWithMeta(text: String, style: TextStyle, meta: @Composable () ->
  * send (iOS hold-to-record). The microphone permission is asked on the first hold.
  */
 @Composable
-private fun Composer(onSend: (String) -> Unit, onSendPhoto: (Uri) -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit) {
+private fun Composer(
+    onSend: (String) -> Unit, onSendPhoto: (Uri) -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
+    prefill: Pair<String, String>? = null, onTyping: (Boolean) -> Unit = {},
+) {
     val c = Fariin.colors
     val context = LocalContext.current
     var draft by rememberSaveable { mutableStateOf("") }
+    // Edit puts the message's words in the field (keyed by message id, so it happens once).
+    LaunchedEffect(prefill?.first) { prefill?.let { draft = it.second } }
+    // iOS typing: on while there are words (refreshed every 10 s so the 15 s expiry stays armed),
+    // off when the field empties, after 5 s without a keystroke, or when the composer goes.
+    var lastKey by remember { mutableStateOf(0L) }
+    LaunchedEffect(draft.isNotBlank(), lastKey) {
+        if (draft.isBlank()) { onTyping(false); return@LaunchedEffect }
+        onTyping(true)
+        kotlinx.coroutines.delay(5_000)
+        onTyping(false)
+    }
+    DisposableEffect(Unit) { onDispose { onTyping(false) } }
     val recorder = remember { VoiceRecorder(context.applicationContext) }
     DisposableEffect(Unit) { onDispose { recorder.cancel() } }
     var recording by remember { mutableStateOf(false) }
@@ -554,7 +631,11 @@ private fun Composer(onSend: (String) -> Unit, onSendPhoto: (Uri) -> Unit, onSen
                 ) {
                     if (draft.isEmpty()) Text("Message", fontSize = 17.sp, color = c.secondary)
                     BasicTextField(
-                        value = draft, onValueChange = { draft = it },
+                        value = draft, onValueChange = {
+                            val now = System.currentTimeMillis()
+                            if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
+                            draft = it
+                        },
                         textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                         cursorBrush = SolidColor(c.blue),
                         maxLines = 6,
@@ -611,3 +692,7 @@ private fun Composer(onSend: (String) -> Unit, onSendPhoto: (Uri) -> Unit, onSen
         }
     }
 }
+
+/** Long press only (a tap still reaches the photo and voice bubbles inside). */
+private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier =
+    this.pointerInput(Unit) { detectTapGestures(onLongPress = { onLong() }) }

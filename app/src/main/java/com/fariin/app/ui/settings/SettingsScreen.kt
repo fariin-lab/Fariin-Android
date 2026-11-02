@@ -123,7 +123,8 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
             }
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            ProfileHeader(profile, onEdit = { push(soon("Edit profile")) }, onShare = { push(soon("Share profile")) })
+            val people = com.fariin.app.ui.people.LocalPeopleNav.current
+            ProfileHeader(profile, onEdit = people.editProfile, onShare = { push(soon("Share profile")) })
             Spacer(Modifier.height(20.dp))
             SettingsSection {
                 SettingsRow("Account", painterResource(R.drawable.ic_account)) { push(PAGE_ACCOUNT) }

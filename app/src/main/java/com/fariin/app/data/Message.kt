@@ -59,6 +59,8 @@ data class Message(
     val uploading: Boolean = false,
     val viewOnce: Boolean = false,
     val album: List<AlbumItem> = emptyList(),
+    /** uid to opened emoji (each sealed by its reactor; an unopened one is left out). */
+    val reactions: Map<String, String> = emptyMap(),
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
@@ -177,6 +179,12 @@ data class Message(
                 uploading = data["uploading"] as? Boolean ?: false,
                 viewOnce = data["viewOnce"] as? Boolean ?: false,
                 album = album,
+                reactions = (data["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    val uid = k as? String ?: return@mapNotNull null
+                    val raw = v as? String ?: return@mapNotNull null
+                    val e = if (raw.startsWith("enc")) open(raw, uid) else raw
+                    if (e.isEmpty() || e == Wire.NOT_READY || e == Wire.LOCKED) null else uid to e
+                }?.toMap() ?: emptyMap(),
             )
         }
     }

@@ -20,11 +20,20 @@ import com.fariin.app.crypto.FariinCrypto
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.CryptoHub
 import com.fariin.app.data.ThreadRepository
+import com.fariin.app.data.HiddenMessages
+import com.fariin.app.data.MessageRules
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 /** Opens a chat from anywhere under the signed-in shell (the chat list's rows use it). */
 val LocalOpenChat = staticCompositionLocalOf<(Conversation) -> Unit> { {} }
 
 class ThreadViewModel(cid: String, me: String, crypto: FariinCrypto, context: Context) : ViewModel() {
+    init { HiddenMessages.load(context) }
     val repo = ThreadRepository(cid, me, crypto, viewModelScope, media = ChatMedia(context, cid, crypto)).also { it.start() }
     override fun onCleared() { repo.stop() }
 }
@@ -40,9 +49,28 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val conv = remember(s.conv, listed) {
         if (s.conv.isNotEmpty()) Conversation.fromFirestore(cid, s.conv) else listed
     }
+    // Typing: theirs from `typing.<uid>`, cleared 15 s after the value last changed (iOS expiry).
+    val typingMap = s.conv["typing"] as? Map<*, *> ?: emptyMap<String, Any>()
+    val typers = typingMap.filter { (k, v) -> k != me && MessageRules.isTyping(v) }.keys.mapNotNull { it as? String }
+    var typingTick by remember { mutableStateOf(0) }
+    LaunchedEffect(typingMap) { if (typers.isNotEmpty()) { delay(MessageRules.TYPING_EXPIRY_MS); typingTick++ } }
+    val typingSince = remember(typingMap) { System.currentTimeMillis() }
+    val typingNow = typers.isNotEmpty() && System.currentTimeMillis() - typingSince < MessageRules.TYPING_EXPIRY_MS && typingTick >= 0
+    val typingLine = when {
+        !typingNow -> null
+        conv?.isGroup != true -> "typing…"
+        typers.size == 1 -> "${conv.names[typers[0]] ?: "Someone"} is typing…"
+        else -> "${typers.size} people are typing…"
+    }
+    val unreadAtOpen = remember(cid) { CryptoHub.listedConversation(cid)?.unread(me) ?: 0 }
+    val admins = (s.conv["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+    val ctx = LocalContext.current
+    val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+    var notice by remember { mutableStateOf<String?>(null) }
+    notice?.let { n -> LaunchedEffect(n) { android.widget.Toast.makeText(ctx, n, android.widget.Toast.LENGTH_SHORT).show(); notice = null } }
     val ui = ThreadUi(
         title = conv?.displayName(me) ?: "",
-        subtitle = if (conv?.isGroup == true) "${conv.users.size} members" else "",
+        subtitle = typingLine ?: if (conv?.isGroup == true) "${conv.users.size} members" else "",
         photoUrl = conv?.displayPhoto(me),
         isGroup = conv?.isGroup == true,
         me = me,
@@ -54,6 +82,31 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         loadingOlder = s.loadingOlder,
         sendBlocked = vm.repo.sendBlockedReason(listed ?: conv),
         cid = cid,
+        adminMayDelete = conv?.isGroup == true && me in admins,
+        members = conv?.users ?: emptyList(),
+        memberReads = (s.conv["lastRead"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+            (k as? String)?.let { it to com.fariin.app.data.Conversation.millis(v) }
+        }?.toMap() ?: emptyMap(),
+        myPhoto = conv?.photos?.get(me),
+        unreadAtOpen = unreadAtOpen,
+    )
+    val atBottom = remember { MutableStateFlow(true) }
+    val actions = ThreadActions(
+        onReact = { m, e -> vm.viewModelScope.launch { if (!vm.repo.setReaction(m, e)) notice = "Couldn't react. Try again." } },
+        onSendReply = { t, r -> vm.repo.sendText(t, r) },
+        onEdit = { m, t -> vm.viewModelScope.launch { if (!vm.repo.editMessage(m, t)) notice = "Couldn't edit this message." } },
+        onDeleteForEveryone = { m ->
+            vm.viewModelScope.launch {
+                if (!vm.repo.deleteForEveryone(m)) notice = "The server refused the delete. The message is still there for both of you."
+            }
+        },
+        onDeleteForMe = { m -> vm.repo.hideForMe(app, m) },
+        onTyping = { on -> vm.repo.setTyping(on) },
+        onAtBottom = { atBottom.value = it },
+        onTitleClick = {
+            if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
+        },
+        onNotice = { notice = it },
     )
     // iOS: on open, once the first page is in, my badge goes to 0 and the read receipt goes out;
     // while the chat stays open and in front, every new message from them does the same.
@@ -61,8 +114,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     LaunchedEffect(cid) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             var handled: String? = null
-            vm.repo.state.collect { st ->
-                if (!st.loaded) return@collect
+            combine(vm.repo.state, atBottom) { st, bottom -> st to bottom }.collect { (st, bottom) ->
+                if (!st.loaded || !bottom) return@collect
                 val newest = st.messages.lastOrNull { it.authorId != me }?.rowId ?: ""
                 if (newest != handled) { handled = newest; vm.repo.markRead() }
             }
@@ -70,7 +123,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     CompositionLocalProvider(LocalChatMedia provides vm.repo.media) {
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlder, onRetry = vm.repo::retry,
-            onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice)
+            onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice, actions = actions)
     }
 }
 
