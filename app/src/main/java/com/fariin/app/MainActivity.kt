@@ -70,6 +70,11 @@ class MainActivity : ComponentActivity() {
         // Debug builds only: `--ez notifDemo true` posts made-up notifications through the real
         // builder (push/DebugNotifs), no sign-in and no Firebase.
         if (debuggable && intent.getBooleanExtra("notifDemo", false)) com.fariin.app.push.DebugNotifs.post(this)
+        // Debug builds only: `--ez callDemo true --es callScreen incoming|calling|voice|video|ended|group`
+        // shows a made-up call screen (ui/call/CallActivity), no Firebase and no WebRTC.
+        if (debuggable && intent.getBooleanExtra("callDemo", false)) {
+            com.fariin.app.ui.call.CallActivity.startDemo(this, intent.getStringExtra("callScreen") ?: "voice")
+        }
         setContent {
             setSingletonImageLoaderFactory { ctx ->
                 ImageLoader.Builder(ctx)
@@ -86,7 +91,7 @@ class MainActivity : ComponentActivity() {
                     // Sign-out: the keys leave memory (the stored key stays, keys are per uid).
                     LaunchedEffect(me) {
                         if (me == null) {
-                            CryptoHub.signedOut()
+                            CryptoHub.signedOut(); com.fariin.app.call.IncomingCallWatcher.stop()
                             com.fariin.app.data.HiddenMessages.clear(applicationContext)
                             com.fariin.app.data.DeliveryReceipts.reset()
                         }
@@ -121,6 +126,8 @@ class MainActivity : ComponentActivity() {
             // iOS RootView order: push token, then this phone's device record (and its watcher).
             Push.register(applicationContext)
             DeviceRegistry.start(applicationContext)   // its first beat starts the heartbeat
+            // Calls ringing me while the app is alive (iOS observeIncoming), and a warm relay list.
+            com.fariin.app.call.IncomingCallWatcher.start(applicationContext, me)
         }
         // The first-run notifications page, right after sign-in, as iOS asks.
         val ctx = LocalContext.current

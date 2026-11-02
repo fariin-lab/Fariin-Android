@@ -283,6 +283,7 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                     Text(ui.subtitle, fontSize = 12.sp, color = c.secondary, maxLines = 1)
                 }
             }
+            com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
             Avatar(ui.photoUrl, 36.dp, modifier = Modifier.padding(horizontal = 8.dp))
         }
         HorizontalDivider(thickness = 0.5.dp, color = c.separator)

@@ -66,6 +66,9 @@ dependencies {
     // Voice notes, videos and the full-screen video player (Media3, the Android media stack).
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    // Calls: LiveKit for group rooms, and its bundled WebRTC build (package livekit.org.webrtc) for
+    // 1:1 calls too, so the app carries one WebRTC engine, not two.
+    implementation(libs.livekit.android)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.lazysodium.java)
