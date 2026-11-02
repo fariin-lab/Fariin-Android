@@ -41,7 +41,7 @@ fun channelNav(nav: NavHostController) = ChannelNav(
 )
 
 /** The channel pages' routes, added to the signed-in NavHost. */
-fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String) {
+fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () -> List<com.fariin.app.data.Conversation> = { emptyList() }) {
     composable("findchannels") {
         FindChannelsScreen(me, onBack = { nav.popBackStack() }, onOpen = { cid -> nav.navigate("thread/$cid") })
     }
@@ -56,6 +56,9 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String) {
                 edit = { nav.navigate("channeledit/$it") { launchSingleTop = true } },
                 followers = { nav.navigate("channelfollowers/$it") { launchSingleTop = true } },
                 admins = { nav.navigate("channeladmins/$it") { launchSingleTop = true } },
+                links = { nav.navigate("channellinks/$it") { launchSingleTop = true } },
+                banned = { nav.navigate("channelbanned/$it") { launchSingleTop = true } },
+                reactions = { nav.navigate("channelreactions/$it") { launchSingleTop = true } },
             ))
     }
     // Channel management for its owner and admins (ChannelManage.kt).
@@ -65,11 +68,24 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String) {
     }
     composable("channelfollowers/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@composable
-        ChannelFollowersScreen(cid, me, onBack = { nav.popBackStack() })
+        ChannelFollowersScreen(cid, me, onBack = { nav.popBackStack() }, chats = chats)
     }
     composable("channeladmins/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@composable
         ChannelAdminsScreen(cid, me, onBack = { nav.popBackStack() }, onOpen = { uid -> nav.navigate("channeladmin/$cid/$uid") { launchSingleTop = true } })
+    }
+    // The group pages a channel shares (iOS: Invite Link and Banned Users are the same pages).
+    composable("channellinks/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        com.fariin.app.ui.people.GroupPagesHost(cid, me, com.fariin.app.ui.people.GroupPage.Links, onExit = { nav.popBackStack() })
+    }
+    composable("channelbanned/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        com.fariin.app.ui.people.GroupPagesHost(cid, me, com.fariin.app.ui.people.GroupPage.Banned, onExit = { nav.popBackStack() })
+    }
+    composable("channelreactions/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        ChannelReactionsScreen(cid, onBack = { nav.popBackStack() })
     }
     composable("channeladmin/{cid}/{uid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@composable

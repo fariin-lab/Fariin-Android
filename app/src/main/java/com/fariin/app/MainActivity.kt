@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
                 popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
                 peopleRoutes(nav, people, chats = { chats.chats }, requests = { chats.requests },
                     groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
-                channelRoutes(nav, me)
+                channelRoutes(nav, me, chats = { chats.chats })
                 composable("main") {
                     MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } })
                 }

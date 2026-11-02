@@ -123,6 +123,9 @@ sealed interface GroupPage {
     data class LinkEdit(val link: GroupLink?) : GroupPage
     data object Members : GroupPage
     data object Banned : GroupPage
+    data object JoinRequests : GroupPage
+    /** The owner's Choose Another Owner from the Leave dialog. */
+    data object ChooseOwner : GroupPage
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
@@ -134,7 +137,7 @@ private fun failText(e: Exception, fallback: String = "Couldn't save. Try again.
  * Type (the owner), Invite Links (Add members right), Administrators, Permissions.
  */
 @Composable
-internal fun GroupManageRows(conv: Map<String, Any?>, me: String, open: (GroupPage) -> Unit) {
+internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = "", open: (GroupPage) -> Unit) {
     val team = Team.from(conv)
     if (!team.isStaff(me)) return
     val isPublic = conv["isPublic"] == true && !(conv["username"] as? String).isNullOrEmpty()
@@ -144,6 +147,10 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, open: (GroupPa
     if (team.may(me, Right.INVITE_USERS)) {
         SettingsRow("Invite Links", icon = rememberVectorPainter(Icons.Filled.Link),
             value = if ((conv["inviteCode"] as? String).isNullOrEmpty()) "Off" else "On") { open(GroupPage.Links) }
+        // iOS GroupSettingsView joining section: the people waiting through a link with Approve New Members.
+        val reqs = rememberJoinRequests(cid, allowed = cid.isNotEmpty() && !team.closed)
+        if (cid.isNotEmpty()) SettingsRow("Join Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
+            value = com.fariin.app.data.JoinRequests.rowValue(reqs.size)) { open(GroupPage.JoinRequests) }
     }
     // iOS GroupSettingsView people section: Members, Administrators, Banned Users (Remove members right).
     SettingsRow("Members", icon = painterResource(R.drawable.ic_gs_members), value = "${team.users.size}") { open(GroupPage.Members) }
@@ -159,7 +166,7 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, open: (GroupPa
 /** Draws the page on top of the stack; back pops it. False when nothing is pushed. */
 @Composable
 internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, onOpenPerson: (String) -> Unit,
-                        onAddMembers: () -> Unit = {}): Boolean {
+                        onAddMembers: () -> Unit = {}, onHandedOver: () -> Unit = {}): Boolean {
     val top = stack.lastOrNull() ?: return false
     val pop: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
     val push: (GroupPage) -> Unit = { stack.add(it) }
@@ -175,8 +182,24 @@ internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, 
         is GroupPage.LinkEdit -> LinkEditPage(cid, top.link, pop)
         GroupPage.Members -> GroupMembersPage(cid, me, pop, push, onOpenPerson, onAddMembers)
         GroupPage.Banned -> BannedUsersPage(cid, pop)
+        GroupPage.JoinRequests -> JoinRequestsPage(cid, pop)
+        GroupPage.ChooseOwner -> {
+            val doc = liveGroupDoc(cid)
+            if (doc.isEmpty()) Loading() else ChooseNewOwnerPage(cid, me, doc, pop) { stack.clear(); onHandedOver() }
+        }
     }
     return true
+}
+
+/**
+ * One of these pages on its own, as a channel route opens it (Invite Links, Banned Users): its own
+ * stack, and [onExit] when the last page is closed.
+ */
+@Composable
+internal fun GroupPagesHost(cid: String, me: String, start: GroupPage, onExit: () -> Unit) {
+    val stack = remember(cid) { androidx.compose.runtime.mutableStateListOf(start) }
+    LaunchedEffect(stack.isEmpty()) { if (stack.isEmpty()) onExit() }
+    if (!GroupPages(cid, me, stack, onOpenPerson = {})) Loading()
 }
 
 @Composable
@@ -392,7 +415,11 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
     var confirmPromote by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
     var confirmBan by remember { mutableStateOf(false) }
+    var transferring by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    // iOS: the password dialog is the confirm; after a hand-over the card closes (I am no longer its owner).
+    if (transferring) TransferOwnership(cid, conv["channel"] == true, uid, name, onDone = { transferring = false; onClose() },
+        onEnd = { transferring = false })
     fun run(block: suspend () -> Unit) {
         scope.launch {
             try { block(); onClose() } catch (e: Exception) { problem = failText(e) }
@@ -441,6 +468,8 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                     if (manage && !team.isAdmin(uid)) add(Triple("Make Group Admin", rememberVectorPainter(Icons.Filled.VerifiedUser)) { confirmPromote = true })
                     if (manage && team.isAdmin(uid)) add(Triple("Edit Admin Rights", rememberVectorPainter(Icons.Filled.Tune)) { onClose(); open(GroupPage.Rights(uid)) })
                     if (uid == me && team.isStaff(me)) add(Triple("My Admin Rights", rememberVectorPainter(Icons.Filled.VerifiedUser)) { onClose(); open(GroupPage.Rights(uid)) })
+                    if (!team.closed && com.fariin.app.data.OwnerTransfer.canTransfer(me, team.owner, uid, team.users))
+                        add(Triple(com.fariin.app.data.OwnerTransfer.ROW, painterResource(R.drawable.ic_crown)) { transferring = true })
                     if (uid != me) add(Triple("Open Profile", rememberVectorPainter(Icons.Filled.Person)) { onClose(); onProfile(uid) })
                 }
                 val red = buildList<Triple<String, Painter, () -> Unit>> {
@@ -559,7 +588,7 @@ private fun BannedUsersPage(cid: String, onBack: () -> Unit) {
         PageBar("Banned Users", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection {
-                if (banned.isEmpty()) Note(com.fariin.app.data.GroupMembers.NOBODY_BANNED)
+                if (banned.isEmpty()) Note(if (doc["channel"] == true) "Nobody is banned from this channel." else com.fariin.app.data.GroupMembers.NOBODY_BANNED)
                 banned.forEach { uid ->
                     val name = team.names[uid]?.ifEmpty { null } ?: fetched[uid]?.first ?: "User"
                     val photo = team.photos[uid]?.ifEmpty { null } ?: fetched[uid]?.second
@@ -797,6 +826,8 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
     var heldApproval by remember { mutableStateOf<Boolean?>(null) }
     var triedAuto by remember { mutableStateOf(false) }
     val now = System.currentTimeMillis().toDouble()
+    // A channel shares this page in its own words (iOS ChannelWords.forChat).
+    val w: (String) -> String = { com.fariin.app.data.ChannelWords.forChat(doc["channel"] == true, it) }
     suspend fun reload() {
         try {
             val fresh = GroupManage.listLinks(cid)
@@ -820,7 +851,8 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
             reload(); working = false; heldApproval = null
         }
     }
-    LaunchedEffect(cid) { reload() }
+    // Only once the group is known: an empty doc read as "not public" and made a link for a public one.
+    LaunchedEffect(cid, doc.isNotEmpty()) { if (doc.isNotEmpty() && list == null) reload() }
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't change the link") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } })
     if (confirmReset) AlertDialog(onDismissRequest = { confirmReset = false }, containerColor = c.card, title = { Text("Reset Link") },
@@ -868,14 +900,14 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
             when {
                 l != null -> {
                     if (publicName.isNotEmpty()) {
-                        SettingsSection(header = "Public Link", footer = "Anyone can find this group and join it with this link. Change it under Group Type.") {
+                        SettingsSection(header = "Public Link", footer = w("Anyone can find this group and join it with this link. Change it under Group Type.")) {
                             LinkPill("fariin.com/$publicName") { copy(ctx, "https://fariin.com/$publicName") }
                             LinkButtons({ copy(ctx, "https://fariin.com/$publicName") }, { share(ctx, "https://fariin.com/$publicName") })
                         }
                     } else {
                         val p = l.primary
-                        SettingsSection(header = "Invite Link", footer = if (p == null) "This group has no invite link. People can only be added by its members."
-                            else "Anyone with Fariin who has this link can join the group.") {
+                        SettingsSection(header = "Invite Link", footer = w(if (p == null) "This group has no invite link. People can only be added by its members."
+                            else "Anyone with Fariin who has this link can join the group.")) {
                             if (p != null) {
                                 LinkPill(p.shortUrl) { copy(ctx, p.url) }
                                 LinkButtons({ copy(ctx, p.url) }, { share(ctx, p.url) })
@@ -898,7 +930,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                                 }
                             }
                             SettingsSection(footer = "When this is on, an admin approves each person before they join with this link.") {
-                                SwitchLine("Approve New Members", heldApproval ?: p.requestApproval, enabled = !working, last = true) { on ->
+                                SwitchLine(w("Approve New Members"), heldApproval ?: p.requestApproval, enabled = !working, last = true) { on ->
                                     heldApproval = on
                                     change("The setting was not changed. Try again.") { GroupManage.editLink(cid, p.code, mapOf("requestApproval" to on)) }
                                 }
@@ -993,6 +1025,7 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
     var uses by remember { mutableStateOf(if (keptUses != null) useOpts.lastIndex else 0) }
     var saving by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    val isChannel = liveGroupDoc(cid)["channel"] == true
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't save the link") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
@@ -1023,7 +1056,7 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
                 }
             }
             SettingsSection(footer = "An admin approves each person who asks to join with this link.") {
-                SwitchLine("Approve New Members", approval, last = true) { approval = it }
+                SwitchLine(com.fariin.app.data.ChannelWords.forChat(isChannel, "Approve New Members"), approval, last = true) { approval = it }
             }
             val tFooter = when (timeOpts[time].first) {
                 "None" -> "The link works until you turn it off."

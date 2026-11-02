@@ -848,6 +848,217 @@ HANDLERS.update({"createGroupLink": create_group_link, "editGroupLink": edit_gro
                  "checkGroupUsername": check_group_username, "setGroupUsername": set_group_username})
 
 
+# ---------------------------------------------------------------------------------------------
+# OWNERSHIP, JOIN REQUEST, REACTIONS AND ADD FOLLOWERS TEST STUBS (Android owner worker, 2026-11-02).
+# APPENDED. Copies of what Kulan/functions-groups writes for transferGroupOwnership
+# (lib/ownertransfer.js decide + transferWrite + handoffRecord + ownerNotice), approveJoinRequest /
+# denyJoinRequest, setChannelReactions (channels.normReactSet) and addChannelFollowers, so the
+# Android pages can be driven locally. NOT the real server: no transaction, no groups-owned cap, no
+# admin log (groupAdminLog), the follower count moves at once, addChannelFollowers checks only an
+# accepted 1:1 chat, members and bans (not blocks or "Who can add me"). Never deployed.
+OT_FIVE_HOURS = 5 * 60 * 60 * 1000
+OT_DEFAULT_RIGHTS = ["changeInfo", "deleteMessages", "banUsers", "inviteUsers", "pinMessages", "manageCalls", "postStories"]
+OT_MSG = {
+    "noPassword": "Create a password for your account first. You need it to transfer group ownership.",
+    "createdRecently": "You can transfer group ownership after 5 hours because you recently created your password.",
+    "changedRecently": "You can transfer group ownership after 5 hours because you recently changed your password.",
+    "reauth": "Enter your password again to transfer ownership.",
+    "notOwner": "Only the group owner can transfer ownership.",
+    "notMember": "That person is no longer in this group.",
+    "self": "You already own this group.",
+    "noGroup": "This group no longer exists.",
+    "closed": "Ownership of this group cannot be transferred right now.",
+}
+
+
+def _ot_refuse(status, reason, key):
+    raise Refuse(status, OT_MSG[key], {"reason": reason})
+
+
+def _ot_now():
+    return int(time.time() * 1000)
+
+
+def _ot_add(collection_path, fields):
+    """A new document with an automatic id (the server's .doc())."""
+    body = json.dumps({"fields": {k: wval(v) for k, v in fields.items()}}).encode()
+    with urllib.request.urlopen(urllib.request.Request(f"{FS}/{collection_path}", data=body, method="POST", headers=ADMIN)) as r:
+        return json.loads(r.read())["name"].rsplit("/", 1)[-1]
+
+
+def transfer_group_ownership(uid, data):
+    d = data or {}
+    cid, to, check = str(d.get("cid") or ""), str(d.get("to") or ""), d.get("check") is True
+    if not cid or not to or "/" in cid or "/" in to:
+        raise Refuse("INVALID_ARGUMENT", "Missing group or member.")
+    conv = get(f"conversations/{cid}")
+    if not conv or conv.get("type") != "group":
+        _ot_refuse("NOT_FOUND", "no-group", "noGroup")
+    users = conv.get("users") or []
+    if conv.get("createdBy", "") != uid or uid not in users:
+        _ot_refuse("PERMISSION_DENIED", "not-owner", "notOwner")
+    if to == uid:
+        _ot_refuse("FAILED_PRECONDITION", "self", "self")
+    if to not in users:
+        _ot_refuse("FAILED_PRECONDITION", "not-member", "notMember")
+    mod = conv.get("mod") or {}
+    if conv.get("endedAt") or mod.get("state") in ("ended", "suspended", "disabled"):
+        _ot_refuse("FAILED_PRECONDITION", "closed", "closed")
+    acct = _user(uid)
+    has_pw = any((p or {}).get("providerId") == "password" for p in acct.get("providerUserInfo") or []) or bool(acct.get("passwordHash"))
+    if not has_pw:
+        _ot_refuse("FAILED_PRECONDITION", "no-password", "noPassword")
+    at = acct.get("passwordUpdatedAt")
+    at = int(at) if at not in (None, "") else None
+    if at is not None and _ot_now() - at < OT_FIVE_HOURS:
+        created = int(acct.get("createdAt") or 0)
+        if created and abs(at - created) < 10 * 60 * 1000:
+            _ot_refuse("FAILED_PRECONDITION", "password-created-recently", "createdRecently")
+        _ot_refuse("FAILED_PRECONDITION", "password-changed-recently", "changedRecently")
+    if check:
+        return {"ok": True, "ready": True, "transferred": False}
+    tok = _token()
+    provider = (tok.get("firebase") or {}).get("sign_in_provider")
+    if provider != "password" or not tok.get("auth_time") or _ot_now() - int(tok["auth_time"]) * 1000 > 5 * 60 * 1000:
+        _ot_refuse("UNAUTHENTICATED", "reauth", "reauth")
+    names = conv.get("names") or {}
+    text = (str(names.get(to) or "")[:64] or "A member") + " is now the owner"
+    admins = list(conv.get("admins") or [])
+    if to not in admins: admins.append(to)
+    if uid not in admins: admins.append(uid)
+    old_rights = (conv.get("adminRights") or {}).get(to)
+    old_by = (conv.get("adminBy") or {}).get(to)
+    write(f"conversations/{cid}", {
+        "createdBy": to, "admins": admins,
+        f"adminRights.{to}": DELETE, f"adminBy.{to}": DELETE, f"restrictedFlags.{to}": DELETE, f"restrictedUntil.{to}": DELETE,
+        f"adminRights.{uid}": CHANNEL_ADMIN_RIGHTS[:] if conv.get("channel") is True else OT_DEFAULT_RIGHTS[:],
+        f"adminBy.{uid}": DELETE,
+        "lastMessage": text, "lastSender": uid, "updatedAt": Ts(),
+    })
+    _ot_add(f"conversations/{cid}/messages", {"text": text, "authorId": uid, "type": "system", "createdAt": Ts()})
+    now = _ot_now()
+    until = now + 48 * 60 * 60 * 1000
+    group = str(conv.get("title") or "")[:128] or "the group"
+    giver = str(names.get(uid) or "")[:64] or "The previous owner"
+    note = _ot_add(f"users/{to}/announcements", {
+        "kind": "security", "title": f"You now own {group}",
+        "body": f"{giver} has handed {group} over to you, so you are now its owner. From here on you answer for what is posted in it and you decide who runs it.\n\n"
+                "If this was a mistake, or you would rather not take it on, tap Reject Ownership within 48 hours to give it back. "
+                "If you are happy to keep it, there is nothing you need to do.",
+        "buttons": [{"label": "Reject Ownership", "action": "rejectOwnership", "value": cid, "until": until}],
+        "createdBy": "system", "deleted": False, "publishAt": Ts(), "createdAt": Ts()})
+    write(f"groupOwnerHandoffs/{cid}", {"from": uid, "to": to, "at": now, "until": until,
+                                        "toWasAdmin": to in (conv.get("admins") or []),
+                                        "toRights": old_rights if isinstance(old_rights, list) else None,
+                                        "toAdminBy": old_by or None, "noticeId": note})
+    return {"ok": True, "ready": False, "transferred": True}
+
+
+def _can_manage_joins(conv, uid):
+    if uid not in (conv.get("admins") or []): return False
+    if conv.get("createdBy") == uid: return True
+    r = (conv.get("adminRights") or {}).get(uid)
+    return not isinstance(r, list) or "inviteUsers" in r
+
+
+def approve_join_request(uid, data):
+    cid, target = _cid_uid(data)
+    conv = get(f"conversations/{cid}")
+    if not conv: raise Refuse("NOT_FOUND", "Group gone.")
+    if not _can_manage_joins(conv, uid): raise Refuse("PERMISSION_DENIED", "Admins only.")
+    req = get(f"conversations/{cid}/joinRequests/{target}")
+    if req is None: raise Refuse("NOT_FOUND", "No such join request.")
+    prof = get(f"users/{target}")
+    if not prof:
+        remove(f"conversations/{cid}/joinRequests/{target}")
+        raise Refuse("NOT_FOUND", "This account no longer exists.")
+    if target in (conv.get("bannedUids") or []):
+        remove(f"conversations/{cid}/joinRequests/{target}")
+        raise Refuse("FAILED_PRECONDITION", "This person was removed from the group.")
+    name = prof.get("name") or prof.get("handle") or "New member"
+    if conv.get("channel") is True:
+        if get(f"conversations/{cid}/followers/{target}") is None and target not in (conv.get("users") or []):
+            write(f"conversations/{cid}/followers/{target}", {"at": Ts(), "approvedBy": uid})
+            write(f"users/{target}/channels/{cid}", {"at": Ts(), "read": int(conv.get("postCount", 0)), "muted": False})
+            _bump_followers(cid, conv, 1)
+    elif target not in (conv.get("users") or []):
+        text = str(name).strip()[:64] + " joined the group"
+        upd = {"users": (conv.get("users") or []) + [target], "lastMessage": text, "lastSender": target, "updatedAt": Ts(),
+               f"names.{target}": name, f"unreadCount.{target}": 0}
+        if prof.get("photoUrl"): upd[f"photos.{target}"] = prof["photoUrl"]
+        write(f"conversations/{cid}", upd)
+        _ot_add(f"conversations/{cid}/messages", {"text": text, "authorId": target, "type": "system", "createdAt": Ts()})
+    remove(f"conversations/{cid}/joinRequests/{target}")
+    return {"ok": True}
+
+
+def deny_join_request(uid, data):
+    cid, target = _cid_uid(data)
+    conv = get(f"conversations/{cid}")
+    if not conv: raise Refuse("NOT_FOUND", "Group gone.")
+    if not _can_manage_joins(conv, uid): raise Refuse("PERMISSION_DENIED", "Admins only.")
+    if get(f"conversations/{cid}/joinRequests/{target}") is None: raise Refuse("NOT_FOUND", "No such join request.")
+    remove(f"conversations/{cid}/joinRequests/{target}")
+    return {"ok": True}
+
+
+def set_channel_reactions(uid, data):
+    d = data or {}
+    cid = str(d.get("cid") or "")
+    mode = d.get("mode") if d.get("mode") in ("some", "off") else "all"
+    seen, lst = set(), []
+    for e in d.get("list") or []:
+        e = str(e)
+        if e and len(e) <= 16 and e not in seen:
+            seen.add(e); lst.append(e)
+    lst = lst[:6]
+    if mode == "some" and not lst: mode = "off"
+    out = {"mode": mode, "list": lst if mode == "some" else []}
+    cd = get(f"conversations/{cid}")
+    if not cd or cd.get("channel") is not True: raise Refuse("NOT_FOUND", "This channel no longer exists.")
+    if "changeInfo" not in rights_of(cd, uid):
+        raise Refuse("PERMISSION_DENIED", "Only admins who can change the channel's info can do this.")
+    write(f"conversations/{cid}", {"reactSet": out})
+    return out
+
+
+def add_channel_followers(uid, data):
+    d = data or {}
+    cid = str(d.get("cid") or "")
+    uids = list(dict.fromkeys(str(u) for u in (d.get("uids") or []) if u and u != uid))
+    if not uids: return {"added": [], "refused": []}
+    cd = get(f"conversations/{cid}")
+    if not cd or cd.get("channel") is not True: raise Refuse("NOT_FOUND", "This channel no longer exists.")
+    if "inviteUsers" not in rights_of(cd, uid):
+        raise Refuse("PERMISSION_DENIED", "Only admins who can add people can add followers.")
+    adds = get(f"channelAdds/{cid}") or {}
+    used = int(adds.get("n") or 0)
+    if used >= 10:
+        raise Refuse("RESOURCE_EXHAUSTED", "This channel has added 10 people, the most it can. Others can follow it with its link.")
+    added, refused, capped = [], [], []
+    for u in uids:
+        if u in (cd.get("users") or []): continue
+        if u in (cd.get("bannedUids") or []): refused.append(u); continue
+        chat = get(f"conversations/{'_'.join(sorted([u, uid]))}")
+        if not get(f"users/{u}") or not chat or (chat.get("startedBy") and chat.get("accepted") is not True):
+            refused.append(u); continue
+        if get(f"conversations/{cid}/followers/{u}") is not None: continue
+        if used >= 10: capped.append(u); continue
+        used += 1
+        write(f"channelAdds/{cid}", {"cid": cid, "n": used})
+        write(f"conversations/{cid}/followers/{u}", {"at": Ts(), "addedBy": uid})
+        write(f"users/{u}/channels/{cid}", {"at": Ts(), "read": int(cd.get("postCount", 0)), "muted": False})
+        _bump_followers(cid, cd, 1)
+        cd = get(f"conversations/{cid}")
+        added.append(u)
+    return {"added": added, "refused": refused, "linkOnly": [], "capped": capped}
+
+
+HANDLERS.update({"transferGroupOwnership": transfer_group_ownership, "approveJoinRequest": approve_join_request,
+                 "denyJoinRequest": deny_join_request, "setChannelReactions": set_channel_reactions,
+                 "addChannelFollowers": add_channel_followers})
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         name = self.path.rstrip("/").split("/")[-1]

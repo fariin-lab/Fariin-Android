@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
@@ -92,10 +94,23 @@ internal fun ChannelManageSection(info: ChannelInfo, team: Team, me: String, sho
         if (team.can(me, Right.CHANGE_INFO)) {
             SettingsRow("Edit Channel", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Edit)) { nav.edit(info.cid) }
         }
+        // iOS Channel Settings joining section: the invite links (Add users right).
+        if (team.can(me, Right.INVITE_USERS)) {
+            SettingsRow("Invite Links", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link)) { nav.links(info.cid) }
+        }
         SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
-        SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sorted().size}", last = true) {
+        val canBan = team.can(me, Right.BAN_USERS)
+        val canReact = team.can(me, Right.CHANGE_INFO)
+        SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sorted().size}", last = !canBan && !canReact) {
             nav.admins(info.cid)
         }
+        if (canBan) SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "${info.bannedUids.size}", last = !canReact) {
+            nav.banned(info.cid)
+        }
+        // What followers may react with (iOS channelPostsSection): the picks themselves, else Any / Off.
+        if (canReact) SettingsRow("Reactions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.EmojiEmotions),
+            value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
+            else com.fariin.app.data.ChannelReactions.value(info.reactMode), last = true) { nav.reactions(info.cid) }
     }
 }
 
@@ -104,6 +119,9 @@ data class ChannelManageNav(
     val edit: (String) -> Unit = {},
     val followers: (String) -> Unit = {},
     val admins: (String) -> Unit = {},
+    val links: (String) -> Unit = {},
+    val banned: (String) -> Unit = {},
+    val reactions: (String) -> Unit = {},
 )
 
 /** Edit Channel: the group editor in a channel's words and squircle (iOS EditGroupView). */
@@ -123,7 +141,7 @@ fun ChannelEditRoute(cid: String, me: String, onClose: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit) {
+fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: () -> List<com.fariin.app.data.Conversation> = { emptyList() }) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -141,6 +159,21 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit) {
     var refreshing by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Pair<ChannelService.Follower, Boolean>?>(null) }
     val mayRemove = team.can(me, Right.BAN_USERS)
+    // Add Followers / Invite via Link (iOS): admins with "Add users", people from my chats.
+    val mayInvite = team.can(me, Right.INVITE_USERS)
+    var added by remember(cid) { mutableIntStateOf(0) }
+    var picking by remember { mutableStateOf(false) }
+    var adding by remember { mutableStateOf(false) }
+    var linkInstead by remember { mutableStateOf<List<String>>(emptyList()) }
+    fun shareLink() {
+        scope.launch {
+            val link = com.fariin.app.data.ChannelAddFollowers.link(cid, doc)
+            if (link == null) { toast(ctx, com.fariin.app.data.ChannelAddFollowers.NO_LINK); return@launch }
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(android.content.Intent.EXTRA_TEXT, com.fariin.app.data.ChannelAddFollowers.shareText(info.title, link))
+            ctx.startActivity(android.content.Intent.createChooser(send, null))
+        }
+    }
 
     suspend fun load() {
         if (loading || !more) return
@@ -173,7 +206,31 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit) {
 
     val admins = team.sorted()
     val followerRows = rows.filter { it.uid !in admins }
-    val shown = ChannelAdmins.shownCount(countAtOpen ?: info.followerCount, removed, admins.size)
+    val shown = ChannelAdmins.shownCount((countAtOpen ?: info.followerCount) + added, removed, admins.size)
+    if (picking) {
+        val have = (admins + rows.map { it.uid }).toSet()
+        val people = remember { com.fariin.app.ui.people.contactsFrom(chats(), me).filter { it.uid !in have } }
+        com.fariin.app.ui.people.PickPeoplePage("Add Followers", "Add", people, onBack = { picking = false }) { picked ->
+            picking = false
+            adding = true
+            scope.launch {
+                try {
+                    val r = com.fariin.app.data.ChannelAddFollowers.add(cid, picked)
+                    added += r.added.size
+                    com.fariin.app.data.ChannelAddFollowers.toasts(r, picked.size).forEach { toast(ctx, it) }
+                    if (r.added.isNotEmpty()) { rows = emptyList(); more = true; load() }
+                    val via = com.fariin.app.data.ChannelAddFollowers.viaLink(r)
+                    linkInstead = people.filter { it.uid in via }.map { it.shownName }
+                } catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
+                adding = false
+            }
+        }
+        return
+    }
+    if (linkInstead.isNotEmpty()) AlertDialog(onDismissRequest = { linkInstead = emptyList() }, containerColor = c.card,
+        title = { Text("Send Invite Link") }, text = { Text(com.fariin.app.data.ChannelAddFollowers.inviteInstead(linkInstead)) },
+        confirmButton = { TextButton({ linkInstead = emptyList(); shareLink() }) { Text("Share Link", color = c.blue) } },
+        dismissButton = { TextButton({ linkInstead = emptyList() }) { Text("Cancel", color = c.blue) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Followers", onBack)
         PullToRefreshBox(refreshing, onRefresh = {
@@ -181,6 +238,12 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit) {
             scope.launch { rows = emptyList(); more = true; load(); refreshing = false }
         }, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+                if (mayInvite) SettingsSection {
+                    SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonAdd),
+                        titleColor = c.blue, trailing = Trailing.NONE) { if (!adding) picking = true }
+                    SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link),
+                        titleColor = c.blue, trailing = Trailing.NONE, last = true) { shareLink() }
+                }
                 SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
                     admins.forEach { uid ->
                         PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "") {
@@ -319,6 +382,10 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
     var saving by remember { mutableStateOf(false) }
     var confirmDismiss by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    var transferring by remember { mutableStateOf(false) }
+    val info = ChannelInfo.from(cid, doc)
+    if (transferring) com.fariin.app.ui.people.TransferOwnership(cid, isChannel = true, heir = uid, name = name,
+        onDone = { transferring = false }, onEnd = { transferring = false })
     // Once dismissed (here or elsewhere) the page has nothing left to show. Leave once only.
     var left by remember { mutableStateOf(false) }
     fun leave() { if (!left) { left = true; onBack() } }
@@ -376,6 +443,11 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
                             save(if (on) held + r.slug else held - r.slug)
                         }
                     }
+                }
+                // iOS member card: the owner hands the channel to another admin (the server checks it is a member).
+                if (com.fariin.app.data.OwnerTransfer.canTransfer(me, team.owner, uid, info.users)) SettingsSection {
+                    SettingsRow(com.fariin.app.data.OwnerTransfer.ROW, icon = painterResource(R.drawable.ic_crown), trailing = Trailing.NONE,
+                        last = true) { if (!saving) transferring = true }
                 }
                 if (team.canDismiss(me, uid)) SettingsSection {
                     SettingsRow("Dismiss Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonRemove),

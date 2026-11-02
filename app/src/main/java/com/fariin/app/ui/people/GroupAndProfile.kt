@@ -240,6 +240,17 @@ internal fun contactsFrom(chats: List<Conversation>, me: String): List<Person> =
         Person(u, name = it.names[u] ?: "", photoUrl = it.photos[u])
     }.filter { it.uid.isNotEmpty() }.distinctBy { it.uid }
 
+/** A whole page of [PickPeople] with its action in the top bar (a channel's Add Followers). */
+@Composable
+internal fun PickPeoplePage(title: String, action: String, people: List<Person>, onBack: () -> Unit, onDone: (List<String>) -> Unit) {
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    Column(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
+        PageBar(title, onBack = onBack, action = { TextAction(action, picked.isNotEmpty()) { onDone(picked.toList()) } })
+        PickPeople(people, picked) { u -> picked = if (u in picked) picked - u else picked + u }
+    }
+}
+
 @Composable
 private fun PickPeople(people: List<Person>, picked: Set<String>, onToggle: (String) -> Unit) {
     val c = Fariin.colors
@@ -370,16 +381,26 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         val plan = GroupRules.leavePlan(me, "", conv)
         AlertDialog(onDismissRequest = { askLeave = false }, title = { Text("Leave Group?") },
             text = { if (owner == me) Text(GroupRules.ownerLeaveLine(plan.heir?.let { names[it] ?: "a member" })) else Text("You won't get messages from this group any more.") },
-            confirmButton = { TextButton({
-                askLeave = false
-                // iOS LeaveGroupUndo: out of the list and the screen at once, Undo for 5 s, then the real leave.
-                com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
-                com.fariin.app.ui.components.Snack.show("You left the group.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
-                    com.fariin.app.data.LeaveUndo.undo()
+            confirmButton = {
+                // iOS: the owner may pick the next owner instead (Choose Another Owner), stacked as Android does three choices.
+                Column(horizontalAlignment = Alignment.End) {
+                    if (com.fariin.app.data.OwnerTransfer.offersChooseAnother(me, owner, users)) {
+                        TextButton({ askLeave = false; pages.add(GroupPage.ChooseOwner) }) {
+                            Text(com.fariin.app.data.OwnerTransfer.CHOOSE_ANOTHER, color = c.blue)
+                        }
+                    }
+                    TextButton({
+                        askLeave = false
+                        // iOS LeaveGroupUndo: out of the list and the screen at once, Undo for 5 s, then the real leave.
+                        com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
+                        com.fariin.app.ui.components.Snack.show("You left the group.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
+                            com.fariin.app.data.LeaveUndo.undo()
+                        }
+                        onLeft()
+                    }) { Text("Leave", color = c.red) }
+                    TextButton({ askLeave = false }) { Text("Cancel", color = c.blue) }
                 }
-                onLeft()
-            }) { Text("Leave", color = c.red) } },
-            dismissButton = { TextButton({ askLeave = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+            }, containerColor = c.card)
     }
     if (adding) {
         val people = remember(chats) { contactsFrom(chats, me).filter { it.uid !in users } }
@@ -397,7 +418,12 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         return
     }
     if (DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
-    if (GroupPages(cid, me, pages, onOpenPerson, onAddMembers = { adding = true })) return
+    if (GroupPages(cid, me, pages, onOpenPerson, onAddMembers = { adding = true }, onHandedOver = {
+            // No Undo after a hand-over (iOS): the transfer is done, so the leave runs now.
+            com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
+            com.fariin.app.data.LeaveUndo.commit()
+            onLeft()
+        })) return
     card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) }) }
     if (editing && canEdit) {
         EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
@@ -422,7 +448,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
             if (iAmMember) SettingsSection {
                 // The owner's and admins' settings (iOS Group Settings); members do not see them.
-                GroupManageRows(conv, me) { pages.add(it) }
+                GroupManageRows(conv, me, cid) { pages.add(it) }
                 // Who may change it: the owner and admins with Change info (iOS GroupSettingsView).
                 DisappearingRow(timer, short = false, last = true) {
                     if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
