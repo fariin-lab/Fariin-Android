@@ -1,6 +1,10 @@
 package com.fariin.app.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import android.app.Activity
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import com.fariin.app.data.AppearancePrefs
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -12,8 +16,8 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Colours from Kulan-iOS/Kulan/DesignSystem/Theme.swift, plus the iOS system colours that file
- * leans on (label, secondaryLabel, separator, secondarySystemFill). Follows the phone's
- * light/dark setting.
+ * leans on (label, secondaryLabel, separator, secondarySystemFill). Light or dark follows
+ * Settings > Appearance > Night Mode (System by default).
  */
 @Immutable
 data class FariinColors(
@@ -87,7 +91,7 @@ object Fariin {
 }
 
 @Composable
-fun FariinTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable () -> Unit) {
     val c = if (dark) Dark else Light
     val scheme = if (dark) {
         darkColorScheme(
@@ -109,6 +113,19 @@ fun FariinTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -
             outline = c.separator, outlineVariant = c.separator,
             error = c.red,
         )
+    }
+    // Night Mode can differ from the phone's setting, so the status and navigation bar icons
+    // follow the app's choice rather than the system's.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            (view.context as? Activity)?.window?.let { w ->
+                WindowCompat.getInsetsController(w, view).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
+        }
     }
     CompositionLocalProvider(LocalFariinColors provides c) {
         MaterialTheme(colorScheme = scheme, content = content)

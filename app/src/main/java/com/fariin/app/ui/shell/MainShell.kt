@@ -37,7 +37,12 @@ import com.fariin.app.data.MessageDecryptor
 import com.fariin.app.ui.chats.ChatListScreen
 import com.fariin.app.ui.chats.ChatsUiState
 import com.fariin.app.ui.chats.unreadChatsBadge
+import com.fariin.app.ui.calls.CallsTab
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.debug.DemoChats
+import com.fariin.app.ui.debug.DemoSettings
+import com.fariin.app.ui.settings.SettingsTab
+import com.fariin.app.ui.stories.StoriesTab
 import com.fariin.app.ui.theme.Fariin
 
 /**
@@ -57,6 +62,7 @@ fun MainShell(
     val c = Fariin.colors
     var tab by rememberSaveable { mutableIntStateOf(TAB_CHATS) }
     val unread = unreadChatsBadge(chats.chats, me)
+    val demo = me == DemoChats.ME   // debug demo mode: made-up data in every tab
 
     Scaffold(
         containerColor = c.bg,
@@ -108,10 +114,10 @@ fun MainShell(
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
             when (tab) {
-                TAB_STORIES -> Placeholder("Stories", "Stories are coming to Android soon.", null)
-                TAB_CALLS -> Placeholder("Calls", "Calls are coming to Android soon.", Icons.Filled.Call)
+                TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null)
+                TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null)
                 TAB_CHATS -> ChatListScreen(chats, me, decryptor)
-                else -> SettingsPlaceholder(onSignOut)
+                else -> SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut)
             }
         }
     }
