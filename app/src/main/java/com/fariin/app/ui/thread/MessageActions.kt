@@ -99,6 +99,7 @@ private data class MenuItem(val title: String, val icon: ImageVector, val destru
  * Info (my own message in a group), and Delete under a divider. A tombstone offers Delete only.
  */
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 internal fun MessageMenu(
     m: Message, ui: ThreadUi, onDismiss: () -> Unit, actions: ThreadActions,
     onReply: (Message) -> Unit, onStartEdit: (Message) -> Unit, onCopy: (String) -> Unit,
@@ -119,52 +120,49 @@ internal fun MessageMenu(
             add(MenuItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
         }
     }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().clickable(interactionSource = null, indication = null, onClick = onDismiss),
-            contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = if (m.authorId == ui.me) Alignment.End else Alignment.Start,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                val reactable = !m.deleted && m.sendState == null && !m.isSystem
-                if (reactable) {
-                    val mine = m.reactions[ui.me]
-                    Row(
-                        Modifier.shadow(8.dp, CircleShape).clip(CircleShape).background(c.card).padding(horizontal = 6.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        for (e in MessageRules.QUICK_REACTIONS) {
-                            Box(
-                                Modifier.size(44.dp).clip(CircleShape)
-                                    .background(if (mine == e) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
-                                    .clickable { actions.onReact(m, MessageRules.nextReaction(mine, e)); onDismiss() },
-                                contentAlignment = Alignment.Center,
-                            ) { Text(e, fontSize = 26.sp) }
-                        }
+    // Android: a modal bottom sheet (reaction bar on top, the message, then the actions as a
+    // Material list) in place of the iOS popover beside the bubble.
+    val sheet = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = sheet,
+        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            val reactable = !m.deleted && m.sendState == null && !m.isSystem
+            if (reactable) {
+                val mine = m.reactions[ui.me]
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    for (e in MessageRules.QUICK_REACTIONS) {
+                        Box(
+                            Modifier.size(48.dp).clip(CircleShape)
+                                .background(if (mine == e) androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                                .clickable { actions.onReact(m, MessageRules.nextReaction(mine, e)); onDismiss() },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(e, fontSize = 28.sp) }
                     }
-                    Spacer(Modifier.height(10.dp))
                 }
-                // A short preview of the message being acted on.
-                Text(
-                    if (m.deleted) "This message was deleted" else m.bodyText.ifEmpty { "Message" },
-                    fontSize = 15.sp, color = if (m.authorId == ui.me) Color.White else c.label, maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp))
-                        .background(if (m.authorId == ui.me) c.blue else if (c.dark) Color(0xFF26262B) else Color(0xFFF2F2F2))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                Spacer(Modifier.height(8.dp))
+            }
+            // A one-line preview of the message being acted on.
+            Text(
+                if (m.deleted) "This message was deleted" else m.bodyText.ifEmpty { "Message" },
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            )
+            HorizontalDivider(color = c.separator.copy(alpha = 0.4f))
+            items.forEach {
+                val tint = if (it.destructive) c.red else c.label
+                androidx.compose.material3.ListItem(
+                    headlineContent = { Text(it.title, color = tint) },
+                    leadingContent = { Icon(it.icon, null, tint = tint) },
+                    colors = androidx.compose.material3.ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable { onDismiss(); it.run() },
                 )
-                Spacer(Modifier.height(10.dp))
-                Column(Modifier.width(250.dp).shadow(8.dp, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(c.card)) {
-                    items.forEachIndexed { i, it ->
-                        if (i > 0) HorizontalDivider(thickness = if (it.destructive) 6.dp else 0.5.dp,
-                            color = if (it.destructive) c.bgSecondary else c.separator)
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onDismiss(); it.run() }.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(it.title, fontSize = 17.sp, color = if (it.destructive) c.red else c.label, modifier = Modifier.weight(1f))
-                            Icon(it.icon, null, tint = if (it.destructive) c.red else c.label, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
             }
         }
     }

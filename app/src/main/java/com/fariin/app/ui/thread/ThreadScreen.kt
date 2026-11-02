@@ -13,6 +13,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Mic
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.RectangleShape
@@ -181,13 +187,13 @@ fun ThreadScreen(
     menuFor?.let { m ->
         MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions.copy(onForward = { forwardFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
-            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
+            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it })
     }
     val ch = ui.channel
     postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
-            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
+            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it })
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
@@ -326,22 +332,25 @@ private fun noticeText(m: Message): String = when {
 private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label)
             }
-            Column(Modifier.weight(1f).clickable(onClick = onTitleClick), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(ui.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (ui.subtitle.isNotEmpty()) {
-                    Text(ui.subtitle, fontSize = 12.sp, color = c.secondary, maxLines = 1)
+            // Android: photo and name at the start, beside the up arrow; the whole block opens the profile.
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Avatar(ui.photoUrl, 40.dp, squircle = ui.channel != null)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(ui.title, style = MaterialTheme.typography.titleMedium, color = c.label,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (ui.subtitle.isNotEmpty()) {
+                        Text(ui.subtitle, style = MaterialTheme.typography.bodySmall, color = c.secondary, maxLines = 1)
+                    }
                 }
             }
             if (ui.channel == null) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
-            Avatar(ui.photoUrl, 36.dp, modifier = Modifier.padding(horizontal = 8.dp).clickable(onClick = onTitleClick),
-                squircle = ui.channel != null)
         }
-        HorizontalDivider(thickness = 0.5.dp, color = c.separator)
     }
 }
 
@@ -656,11 +665,17 @@ private fun Composer(
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val cancelAt = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
 
+    // Android composer: one rounded field holding the emoji button, the words and the paperclip,
+    // and a round button beside it that is the mic until there are words, then Send.
+    var emojiOpen by rememberSaveable { mutableStateOf(false) }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val field = MaterialTheme.colorScheme.surfaceContainerHigh
     Column(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding()) {
-        HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 7.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
             if (recording) {
-                Row(Modifier.weight(1f).height(36.dp).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(field).padding(start = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(c.red))
                     Spacer(Modifier.width(8.dp))
                     Text(MediaRules.durationLabel(kotlin.math.floor(elapsed)), style = TextStyle(fontSize = 17.sp, color = c.label,
@@ -672,45 +687,55 @@ private fun Composer(
                     Spacer(Modifier.width(12.dp))
                 }
             } else {
-                IconButton(onClick = onAttach, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.AttachFile, contentDescription = "Attach", tint = c.secondary, modifier = Modifier.size(24.dp))
+                Row(
+                    Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(field),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                IconButton(onClick = {
+                    emojiOpen = !emojiOpen
+                    if (emojiOpen) keyboard?.hide() else keyboard?.show()
+                }) {
+                    Icon(if (emojiOpen) Icons.Filled.Keyboard else Icons.Outlined.EmojiEmotions,
+                        contentDescription = if (emojiOpen) "Keyboard" else "Emoji", tint = c.secondary)
                 }
-                Spacer(Modifier.width(4.dp))
                 Box(
-                    Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp))
-                        .border(0.5.dp, c.separator, RoundedCornerShape(18.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    Modifier.weight(1f).heightIn(min = 48.dp).padding(vertical = 12.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (draft.isEmpty()) Text("Message", fontSize = 17.sp, color = c.secondary)
+                    if (draft.isEmpty()) Text("Message", style = MaterialTheme.typography.bodyLarge, color = c.secondary)
                     BasicTextField(
                         value = draft, onValueChange = {
                             val now = System.currentTimeMillis()
                             if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
                             draft = it
                         },
-                        textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label),
                         cursorBrush = SolidColor(c.blue),
                         maxLines = 6,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false },
                     )
                 }
+                IconButton(onClick = onAttach) {
+                    Icon(Icons.Filled.AttachFile, contentDescription = "Attach", tint = c.secondary,
+                        modifier = Modifier.graphicsLayer { rotationZ = -45f })
+                }
+                }
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             if (draft.isNotBlank() && !recording) {
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(c.blue).clickable {
+                    Modifier.size(48.dp).clip(CircleShape).background(c.blue).clickable {
                         val t = draft
                         draft = ""
                         onSend(t)
                     },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else {
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(if (recording) c.blue else Color.Transparent)
+                    Modifier.size(48.dp).clip(CircleShape).background(c.blue)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
@@ -722,6 +747,7 @@ private fun Composer(
                                 }
                                 VoicePlayer.stop()
                                 if (!recorder.start()) return@awaitEachGesture
+                                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                 recording = true; slide = 0f
                                 var cancelled = false
                                 while (true) {
@@ -739,12 +765,35 @@ private fun Composer(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.Mic, contentDescription = "Hold to record a voice message",
-                        tint = if (recording) Color.White else c.secondary, modifier = Modifier.size(24.dp))
+                        tint = Color.White, modifier = Modifier.size(24.dp))
                 }
+            }
+        }
+        if (emojiOpen && !recording) {
+            BackHandler { emojiOpen = false }
+            EmojiPanel { draft += it }
+        }
+    }
+}
+
+/** The emoji panel that replaces the keyboard (Android messengers keep one under the field). */
+@Composable
+private fun EmojiPanel(onPick: (String) -> Unit) {
+    val list = remember { EMOJI.split(' ').filter { it.isNotBlank() } }
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(48.dp),
+        modifier = Modifier.fillMaxWidth().height(280.dp).background(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+    ) {
+        items(list.size) { i ->
+            Box(Modifier.size(48.dp).clip(CircleShape).clickable { onPick(list[i]) }, contentAlignment = Alignment.Center) {
+                Text(list[i], fontSize = 28.sp)
             }
         }
     }
 }
+
+private const val EMOJI = "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 👍 👎 👌 ✌️ 🤞 🤝 🙏 👏 🙌 👋 💪 ✋ 👀 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💯 🔥 ✨ 🎉 🎂 🎁 🌹 🌸 ☀️ 🌙 ⭐ ⚡ ☕ 🍵 🍕 🍰 🍎 🏠 🚗 ✈️ 📞 📷 🎵 ⚽ 📚 ✅ ❌ ❓ ❗"
 
 /** Long press only (a tap still reaches the photo and voice bubbles inside). Watched in the
  *  Initial pass, so a photo or video that takes taps itself still opens the menu on a long press

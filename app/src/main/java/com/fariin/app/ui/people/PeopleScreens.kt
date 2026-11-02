@@ -215,7 +215,7 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding().padding(20.dp),
+        Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Icon(Icons.Filled.Close, "Close", tint = c.secondary, modifier = Modifier.size(28.dp).clickable(onClick = onDismiss))
@@ -392,7 +392,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
 
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    Column(Modifier.fillMaxSize().background(c.bg)) {
         PageBar("", onBack = onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
@@ -425,9 +425,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 
 @Composable
 internal fun ActionTile(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val c = Fariin.colors
-    Box(modifier.clip(RoundedCornerShape(12.dp)).background(c.card).clickable(onClick = onClick).padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
+    // Android: a Material outlined button in the brand blue (iOS drew a white tile).
+    androidx.compose.material3.OutlinedButton(onClick = onClick, modifier = modifier) {
+        Text(text, color = Fariin.colors.blue)
     }
 }

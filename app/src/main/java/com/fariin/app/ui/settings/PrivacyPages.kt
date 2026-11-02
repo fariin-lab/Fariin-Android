@@ -60,38 +60,37 @@ import kotlinx.coroutines.tasks.await
 
 internal val SwitchGreen = Color(0xFF34C759)
 
-/** A row with a switch on the right (SwiftUI Toggle tinted green). */
+/** A Material switch row: the title at the start, the switch at the end, the whole row toggles it. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true, last: Boolean = false, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
-    Column {
-        Row(
-            Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.heightIn(min = 52.dp).padding(start = 16.dp, end = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(title, fontSize = 17.sp, color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f).padding(vertical = 13.dp))
-            Switch(
-                checked = checked, onCheckedChange = onChange, enabled = enabled,
-                colors = SwitchDefaults.colors(checkedTrackColor = SwitchGreen, checkedThumbColor = Color.White, checkedBorderColor = SwitchGreen),
-            )
-        }
-        if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+    Row(
+        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+            color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f))
+        Switch(
+            checked = checked, onCheckedChange = onChange, enabled = enabled,
+            colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White, checkedBorderColor = c.blue),
+        )
     }
 }
 
-/** A choice row with a green check when chosen (iOS audience rows). */
+/** A single-choice row, Android style: a radio button at the start (iOS drew a check at the end). */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun CheckRow(title: String, selected: Boolean, last: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
-    Column {
-        Row(
-            Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(start = 16.dp, end = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f).padding(vertical = 13.dp))
-            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = SwitchGreen, modifier = Modifier.size(22.dp))
-        }
-        if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.RadioButton(selected = selected, onClick = onClick,
+            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.blue))
+        Spacer(Modifier.width(16.dp))
+        Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge, color = c.label, modifier = Modifier.weight(1f))
     }
 }
 
@@ -109,7 +108,7 @@ internal fun ScrollPage(title: String, pop: () -> Unit, action: (@Composable () 
     }
 }
 
-internal fun toast(c: Context, s: String) = Toast.makeText(c, s, Toast.LENGTH_SHORT).show()
+internal fun toast(@Suppress("UNUSED_PARAMETER") c: Context, s: String) = com.fariin.app.ui.components.Snack.show(s)
 
 internal const val PAGE_PRIVACY = "privacy"
 internal const val PAGE_AUDIENCE = "privacy:aud:"
@@ -248,7 +247,7 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
                 Text(name, fontSize = 17.sp, color = c.label, maxLines = 1)
                 if (sub != null) Text(sub, fontSize = 13.sp, color = c.secondary, maxLines = 1)
             }
-            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = SwitchGreen, modifier = Modifier.size(22.dp))
+            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.blue, modifier = Modifier.size(22.dp))
             trailing?.invoke()
         }
         if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 64.dp))

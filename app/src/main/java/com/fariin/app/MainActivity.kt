@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -108,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     .build()
             }
             FariinTheme {
+              androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                 // Debug builds only: `--es authPage <name>` draws one sign-in page with made-up state (ui/auth/AuthDemo.kt).
                 if (debuggable && intent.getStringExtra("authPage") != null) {
                     LaunchedEffect(Unit) { keepSplash = false }
@@ -140,6 +142,9 @@ class MainActivity : ComponentActivity() {
                     if (me == null) { LaunchedEffect(Unit) { keepSplash = false }; SignInFlow(auth) } else com.fariin.app.ui.auth.AccountGate(me, auth, onOwnPage = { keepSplash = false }) { SignedIn(me) }
                     notice?.let { SignedOutNotice(it) { notice = null } }
                 }
+                // One snackbar for the whole app (Android toasts and banners).
+                com.fariin.app.ui.components.SnackHost()
+              }
             }
         }
     }

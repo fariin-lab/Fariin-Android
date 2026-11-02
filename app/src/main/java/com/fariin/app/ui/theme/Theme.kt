@@ -100,6 +100,12 @@ fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable (
             surface = c.bg, onSurface = c.label,
             surfaceVariant = c.card, onSurfaceVariant = c.secondary,
             surfaceContainer = c.bg,
+            // Material 3 surfaces: menus, sheets, dialogs and the selection bar sit one step up.
+            surfaceContainerLowest = c.bg, surfaceContainerLow = Color(0xFF1A1A1D),
+            surfaceContainerHigh = Color(0xFF232327), surfaceContainerHighest = Color(0xFF2C2C31),
+            secondaryContainer = Color(0xFF1E3A5F), onSecondaryContainer = Color(0xFFD6E4FF),
+            primaryContainer = Color(0xFF1E3A5F), onPrimaryContainer = Color(0xFFD6E4FF),
+            tertiary = c.blue, onTertiary = Color.White,
             outline = c.separator, outlineVariant = c.separator,
             error = c.red,
         )
@@ -110,6 +116,11 @@ fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable (
             surface = c.bg, onSurface = c.label,
             surfaceVariant = c.bgSecondary, onSurfaceVariant = c.secondary,
             surfaceContainer = c.bg,
+            surfaceContainerLowest = c.bg, surfaceContainerLow = Color(0xFFF7F7FA),
+            surfaceContainerHigh = Color(0xFFF0F0F4), surfaceContainerHighest = Color(0xFFE8E8ED),
+            secondaryContainer = Color(0xFFD6E4FF), onSecondaryContainer = Color(0xFF001B3E),
+            primaryContainer = Color(0xFFD6E4FF), onPrimaryContainer = Color(0xFF001B3E),
+            tertiary = c.blue, onTertiary = Color.White,
             outline = c.separator, outlineVariant = c.separator,
             error = c.red,
         )

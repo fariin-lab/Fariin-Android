@@ -98,7 +98,7 @@ internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable ()
                         intent == null -> "Couldn't open this file."
                         else -> try { ctx.startActivity(intent); null } catch (_: ActivityNotFoundException) { "No app on this phone opens this file." }
                     }
-                    msg?.let { android.widget.Toast.makeText(ctx, it, android.widget.Toast.LENGTH_SHORT).show() }
+                    msg?.let { com.fariin.app.ui.components.Snack.show(it) }
                 }
             }.padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
