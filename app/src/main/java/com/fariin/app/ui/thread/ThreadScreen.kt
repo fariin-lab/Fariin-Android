@@ -139,6 +139,8 @@ data class ThreadUi(
     val canPin: Boolean = false,
     /** The chat's disappearing timer in seconds (`disappearSeconds`, 0 = off). */
     val disappearSeconds: Int = 0,
+    /** A group's own document, for what its members may send (GroupAdmins: memberSend, slow mode). */
+    val groupDoc: Map<String, Any?> = emptyMap(),
 )
 
 /** The timer in force and since when, for the bubble's timer mark (iOS MessageRowContext.timer). */
@@ -437,9 +439,33 @@ fun ThreadScreen(
                 }
             }
             var attachOpen by remember { mutableStateOf(false) }
+            // What a group's members may send (iOS heldBackText / attachMediaOffText / slow mode):
+            // said in a snackbar before the send, the rules refuse it anyway.
+            val resolver = androidx.compose.ui.platform.LocalContext.current.contentResolver
+            val doc = ui.groupDoc
+            fun held(kind: com.fariin.app.data.GroupAdmins.SendKind): String? =
+                if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.heldBack(doc, ui.me, kind) else null
+            fun slow(): String? = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
+                ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
+            val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
+            val gatedSend: (String) -> Unit = { t ->
+                val links = if (com.fariin.app.data.GroupAdmins.hasLink(t)) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
+                val stop = slow() ?: links
+                if (stop != null && editing == null) actions.onNotice(stop) else send(t)
+            }
             if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false },
-                onSendMedia = onSendPick, onSendFile = onSendFile)
-            Composer(send, { attachOpen = true }, onSendVoice, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
+                onSendMedia = { uris, cap, once ->
+                    val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
+                        else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
+                    val stop = slow() ?: kinds.firstNotNullOfOrNull { held(it) }
+                    if (stop != null) actions.onNotice(stop) else onSendPick(uris, cap, once)
+                },
+                onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
+                mediaOff = mediaOff)
+            Composer(gatedSend, { attachOpen = true }, { r ->
+                    val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
+                    if (stop != null) actions.onNotice(stop) else onSendVoice(r)
+                }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
                 initialDraft = actions.draft, onDraft = actions.onDraft)
         }
     }

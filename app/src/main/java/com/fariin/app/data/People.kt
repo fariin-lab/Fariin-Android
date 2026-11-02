@@ -319,6 +319,16 @@ class FirestorePeople(
         val update = hashMapOf<String, Any>("users" to FieldValue.arrayUnion(*ok.map { it.uid }.toTypedArray()),
             "updatedAt" to FieldValue.serverTimestamp())
         for (p in ok) { update["names.${p.uid}"] = p.name.ifEmpty { p.handle }; p.photoUrl?.let { update["photos.${p.uid}"] = it }; update["unreadCount.${p.uid}"] = 0 }
+        // iOS: re-adding a removed (banned) person lifts the ban, and only an admin who may remove
+        // members may do that; an arrayRemove is written only when someone here really is banned.
+        val d = runCatching { conv(cid).get().await().data }.getOrNull() ?: emptyMap()
+        val banned = (d["bannedUids"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        val lifted = ok.map { it.uid }.filter { it in banned }
+        if (lifted.isNotEmpty()) {
+            if (!GroupAdmins.Team.from(d).can(me, GroupAdmins.Right.BAN_USERS))
+                return "An admin removed this person. Only an admin who can remove members can add them back."
+            update["bannedUids"] = FieldValue.arrayRemove(*lifted.toTypedArray())
+        }
         val text = "${profile(me)?.shownName ?: "Someone"} added ${GroupRules.addedWho(ok.map { it.shownName })}"
         val batch = db.batch()
         batch.set(conv(cid).collection("messages").document(), mapOf("text" to text, "authorId" to me, "type" to "system",

@@ -389,7 +389,7 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
 // ---- Small pieces -----------------------------------------------------------------------------
 
 @Composable
-private fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
+internal fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
         .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -415,7 +415,7 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
 }
 
 @Composable
-private fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabled: Boolean = true, last: Boolean = false, onChange: (Boolean) -> Unit) {
+internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabled: Boolean = true, last: Boolean = false, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
     // The whole row flips the switch (Android settings rows).
     Row(Modifier.fillMaxWidth().toggleable(on, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange)

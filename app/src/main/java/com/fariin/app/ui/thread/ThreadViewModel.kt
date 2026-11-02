@@ -104,7 +104,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         loaded = s.loaded,
         synced = s.synced,
         loadingOlder = s.loadingOlder,
-        sendBlocked = vm.repo.sendBlockedReason(listed ?: conv),
+        sendBlocked = (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupAdmins.announcementBlock(s.conv, me) else null)
+            ?: vm.repo.sendBlockedReason(listed ?: conv),
         cid = cid,
         adminMayDelete = conv?.isGroup == true && me in admins,
         members = conv?.users ?: emptyList(),
@@ -118,6 +119,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         pinned = pinnedMsgs,
         canPin = channel == null && com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),
         disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
+        groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(

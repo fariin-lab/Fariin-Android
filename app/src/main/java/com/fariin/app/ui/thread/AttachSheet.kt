@@ -80,6 +80,8 @@ internal fun AttachSheet(
     onDismiss: () -> Unit,
     onSendMedia: (uris: List<Uri>, caption: String, viewOnce: Boolean) -> Unit,
     onSendFile: (Uri) -> Unit,
+    /** A group where members may send neither photos nor videos: the grid is closed and says why. */
+    mediaOff: String? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -96,9 +98,12 @@ internal fun AttachSheet(
             if ((context.contentResolver.getType(u) ?: "").startsWith("video/")) videos += u
         }
     }
-    val openGallery = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
-    // The library opens with the sheet (iOS shows recents at once).
-    LaunchedEffect(Unit) { openGallery() }
+    val openGallery = {
+        if (mediaOff != null) com.fariin.app.ui.components.Snack.show(mediaOff)
+        else gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+    }
+    // The library opens with the sheet (iOS shows recents at once), unless the group has media off.
+    LaunchedEffect(Unit) { if (mediaOff == null) openGallery() }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { onSendFile(uri); onDismiss() }
     }
@@ -108,7 +113,11 @@ internal fun AttachSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.bg) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(bottom = 8.dp)) {
             Box(Modifier.fillMaxWidth().height(330.dp)) {
-                if (picked.isEmpty()) {
+                if (picked.isEmpty() && mediaOff != null) {
+                    Box(Modifier.fillMaxSize().background(c.secondary.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+                        Text(mediaOff, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(24.dp))
+                    }
+                } else if (picked.isEmpty()) {
                     AddTile(Modifier.fillMaxSize(), openGallery)
                 } else {
                     LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(),

@@ -619,6 +619,235 @@ ACCOUNT_STUBS = {"twoStepStatus": two_step_status, "setAdditionalPassword": set_
 HANDLERS.update(ACCOUNT_STUBS)
 
 
+# ---------------------------------------------------------------------------------------------
+# GROUP LINK AND GROUP NAME TEST STUBS (Android groups worker, 2026-11-02). Copies of what
+# Kulan/functions-groups createGroupLink / editGroupLink / revokeGroupLink / deleteGroupLink /
+# listGroupLinks / getShareLink (lib/grouplinks.js) and functions-username checkGroupUsername /
+# setGroupUsername write, so the Android Invite Links and Group Type pages can be driven locally.
+# NOT the real server: no transaction, no rate limit, no admin log, no reserved-name or
+# look-alike checks, no public-group cap. Never deployed.
+import secrets as _secrets
+import time as _time
+_LINK_CHARS = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _gl_now():
+    return int(_time.time() * 1000)
+
+
+def _gl_group(uid, data):
+    cid = str((data or {}).get("cid") or "")
+    if not cid or "/" in cid: raise Refusal("INVALID_ARGUMENT", "Missing group.")
+    conv = get(f"conversations/{cid}")
+    if not conv: raise Refusal("NOT_FOUND", "This group no longer exists.")
+    if conv.get("type") != "group": raise Refusal("FAILED_PRECONDITION", "Not a group.")
+    admins = conv.get("admins") or []
+    rights = (conv.get("adminRights") or {}).get(uid)
+    if uid not in admins or not (conv.get("createdBy") == uid or not isinstance(rights, list) or "inviteUsers" in rights):
+        raise Refusal("PERMISSION_DENIED", "Only admins who can add members can manage invite links.")
+    return cid, conv
+
+
+def _gl_num(v):
+    try:
+        n = float(v)
+        return int(n) if n > 0 else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _gl_links(cid):
+    try:
+        return list_docs(f"conversations/{cid}/links")
+    except urllib.error.HTTPError:
+        return []
+
+
+def _gl_client(code, rec, conv, now):
+    names = conv.get("names") or {}
+    st = "revoked" if rec.get("revoked") else "expired" if 0 < _gl_num(rec.get("expireAt")) <= now else \
+        "usedUp" if 0 < _gl_num(rec.get("usageLimit")) <= _gl_num(rec.get("usedCount")) else "active"
+    return {"code": code, "name": rec.get("name") or "", "isPrimary": rec.get("isPrimary") is True,
+            "createdBy": rec.get("createdBy") or "", "createdByName": str(names.get(rec.get("createdBy"), ""))[:64],
+            "createdAt": _gl_num(rec.get("createdAt")), "expireAt": _gl_num(rec.get("expireAt")),
+            "usageLimit": _gl_num(rec.get("usageLimit")), "usedCount": _gl_num(rec.get("usedCount")),
+            "requestApproval": rec.get("requestApproval") is True, "revoked": rec.get("revoked") is True,
+            "status": st, "joined": []}
+
+
+def _gl_options(d, now, base):
+    base = base or {}
+    out = {"name": base.get("name") or "", "expireAt": _gl_num(base.get("expireAt")),
+           "usageLimit": _gl_num(base.get("usageLimit")), "requestApproval": base.get("requestApproval") is True}
+    if d.get("name") is not None:
+        n = " ".join(str(d["name"]).split())
+        if len(n) > 32: raise Refusal("INVALID_ARGUMENT", "A link name can be at most 32 characters.")
+        out["name"] = n
+    if d.get("expireAt") is not None:
+        e = _gl_num(d["expireAt"])
+        if 0 < e <= now: raise Refusal("INVALID_ARGUMENT", "The time limit has already passed.")
+        out["expireAt"] = e
+    if d.get("usageLimit") is not None:
+        out["usageLimit"] = _gl_num(d["usageLimit"])
+    if d.get("requestApproval") is not None:
+        out["requestApproval"] = d["requestApproval"] is True
+    if out["requestApproval"]: out["usageLimit"] = 0
+    return out
+
+
+def _gl_mirror(cid, conv, rec):
+    return {"cid": cid, "groupTitle": str(conv.get("title") or "Group")[:128], "expireAt": rec["expireAt"],
+            "usageLimit": rec["usageLimit"], "usedCount": rec.get("usedCount", 0), "requestApproval": rec["requestApproval"],
+            "revoked": rec.get("revoked") is True, "createdBy": rec.get("createdBy", ""), "createdAt": rec.get("createdAt", 0)}
+
+
+def create_group_link(uid, data):
+    cid, conv = _gl_group(uid, data)
+    d = data or {}
+    now = _gl_now()
+    code = "".join(_secrets.choice(_LINK_CHARS) for _ in range(10))
+    primary = d.get("primary") is True
+    olds = [(c, r) for c, r in _gl_links(cid) if r.get("isPrimary") is True and not r.get("revoked")] if primary else []
+    if primary:
+        keep = olds[0][1].get("requestApproval") is True if olds else False
+        ask = keep if d.get("requestApproval") is None else d.get("requestApproval") is True
+        opts = {"name": "", "expireAt": 0, "usageLimit": 0, "requestApproval": ask}
+    else:
+        opts = _gl_options(d, now, None)
+    for c, _ in olds:
+        write(f"conversations/{cid}/links/{c}", {"revoked": True, "revokedAt": now})
+        write(f"invites/{c}", {"revoked": True})
+    rec = dict(code=code, cid=cid, createdBy=uid, createdAt=now, usedCount=0, revoked=False,
+               isPrimary=primary, joinedSample=[], **opts)
+    write(f"conversations/{cid}/links/{code}", rec)
+    write(f"invites/{code}", _gl_mirror(cid, conv, rec))
+    if primary:
+        write(f"conversations/{cid}", {"inviteCode": code, "updatedAt": Ts()})
+    return {"link": _gl_client(code, rec, conv, now)}
+
+
+def _gl_find(cid, data):
+    code = str((data or {}).get("code") or "")
+    if not code or "/" in code: raise Refusal("INVALID_ARGUMENT", "Missing link.")
+    rec = get(f"conversations/{cid}/links/{code}")
+    if not rec: raise Refusal("NOT_FOUND", "This link no longer exists.")
+    return code, rec
+
+
+def _gl_can_edit(conv, uid, rec):
+    return conv.get("createdBy") == uid or rec.get("isPrimary") is True or rec.get("createdBy") == uid
+
+
+def edit_group_link(uid, data):
+    cid, conv = _gl_group(uid, data)
+    code, rec = _gl_find(cid, data)
+    if not _gl_can_edit(conv, uid, rec): raise Refusal("PERMISSION_DENIED", "Only the group's owner can change this link.")
+    if rec.get("revoked"): raise Refusal("FAILED_PRECONDITION", "This link was revoked and can't be changed.")
+    now = _gl_now()
+    src = {"requestApproval": (data or {}).get("requestApproval")} if rec.get("isPrimary") else (data or {})
+    opts = _gl_options(src, now, rec)
+    if rec.get("isPrimary"): opts.update(name="", expireAt=0, usageLimit=0)
+    write(f"conversations/{cid}/links/{code}", opts)
+    write(f"invites/{code}", {"expireAt": opts["expireAt"], "usageLimit": opts["usageLimit"], "requestApproval": opts["requestApproval"]})
+    return {"link": _gl_client(code, {**rec, **opts}, conv, now)}
+
+
+def revoke_group_link(uid, data):
+    cid, conv = _gl_group(uid, data)
+    code, rec = _gl_find(cid, data)
+    if not _gl_can_edit(conv, uid, rec): raise Refusal("PERMISSION_DENIED", "Only the group's owner can revoke this link.")
+    now = _gl_now()
+    write(f"conversations/{cid}/links/{code}", {"revoked": True, "revokedAt": now})
+    write(f"invites/{code}", {"revoked": True})
+    if conv.get("inviteCode") == code:
+        write(f"conversations/{cid}", {"inviteCode": "", "updatedAt": Ts()})
+    return {"link": _gl_client(code, {**rec, "revoked": True}, conv, now)}
+
+
+def delete_group_link(uid, data):
+    cid, conv = _gl_group(uid, data)
+    d = data or {}
+    codes = [c for c, r in _gl_links(cid) if r.get("revoked")] if d.get("allRevoked") is True else [_gl_find(cid, d)[0]]
+    deleted = 0
+    for c in codes:
+        rec = get(f"conversations/{cid}/links/{c}") or {}
+        if not rec.get("revoked"):
+            if d.get("allRevoked") is True: continue
+            raise Refusal("FAILED_PRECONDITION", "Revoke the link before deleting it.")
+        if not _gl_can_edit(conv, uid, rec):
+            if d.get("allRevoked") is True: continue
+            raise Refusal("PERMISSION_DENIED", "Only the group's owner can delete this link.")
+        remove(f"conversations/{cid}/links/{c}")
+        remove(f"invites/{c}")
+        deleted += 1
+    return {"deleted": deleted}
+
+
+def list_group_links(uid, data):
+    cid, conv = _gl_group(uid, data)
+    now = _gl_now()
+    owner = conv.get("createdBy") == uid
+    out = [_gl_client(c, r, conv, now) for c, r in _gl_links(cid)
+           if owner or r.get("isPrimary") is True or r.get("createdBy") == uid]
+    live = sorted([l for l in out if not l["revoked"]], key=lambda l: -l["createdAt"])
+    primary = next((l for l in live if l["isPrimary"]), None)
+    return {"primary": primary, "links": [l for l in live if l is not primary],
+            "revoked": sorted([l for l in out if l["revoked"]], key=lambda l: -l["createdAt"]), "isOwner": owner}
+
+
+def get_share_link(uid, data):
+    cid = str((data or {}).get("cid") or "")
+    conv = get(f"conversations/{cid}") if cid and "/" not in cid else None
+    if not conv: raise Refusal("NOT_FOUND", "This group no longer exists.")
+    if uid not in (conv.get("admins") or []) and conv.get("createdBy") != uid:
+        raise Refusal("PERMISSION_DENIED", "Only admins can share this group's link.")
+    live = sorted([(c, r) for c, r in _gl_links(cid) if r.get("isPrimary") and not r.get("revoked")],
+                  key=lambda x: -_gl_num(x[1].get("createdAt")))
+    return {"code": live[0][0] if live else None}
+
+
+def _gn_owner(uid, data):
+    cid = str((data or {}).get("cid") or "")
+    conv = get(f"conversations/{cid}") if cid and "/" not in cid else None
+    if not conv: raise Refusal("NOT_FOUND", "This group no longer exists.")
+    if conv.get("createdBy") != uid: raise Refusal("PERMISSION_DENIED", "Only the owner can do this.")
+    return cid, conv
+
+
+def check_group_username(uid, data):
+    if (data or {}).get("warm") is True: return {"ok": True}
+    cid, _ = _gn_owner(uid, data)
+    lower = str((data or {}).get("username") or "").strip().lower()
+    held = get(f"usernames/{lower}") if lower else None
+    if held and held.get("cid") != cid and held.get("state", "held") == "held":
+        return {"available": False, "code": "USERNAME_TAKEN", "reason": "taken"}
+    return {"available": True, "code": None, "reason": None}
+
+
+def set_group_username(uid, data):
+    if (data or {}).get("warm") is True: return {"ok": True}
+    cid, conv = _gn_owner(uid, data)
+    raw = str((data or {}).get("username") or "").strip()
+    lower = raw.lower()
+    prev = conv.get("usernameLower") or ""
+    if prev and prev != lower:
+        write(f"usernames/{prev}", {"state": "released"})
+    if not lower:
+        write(f"conversations/{cid}", {"isPublic": False, "username": DELETE, "usernameLower": DELETE})
+        return {"isPublic": False}
+    held = get(f"usernames/{lower}")
+    if held and held.get("cid") != cid and held.get("state", "held") == "held":
+        raise Refusal("ALREADY_EXISTS", "This link is already taken.")
+    write(f"usernames/{lower}", {"kind": "group", "cid": cid, "username": raw, "by": uid, "state": "held"})
+    write(f"conversations/{cid}", {"isPublic": True, "username": raw, "usernameLower": lower})
+    return {"isPublic": True, "username": raw}
+
+
+HANDLERS.update({"createGroupLink": create_group_link, "editGroupLink": edit_group_link, "revokeGroupLink": revoke_group_link,
+                 "deleteGroupLink": delete_group_link, "listGroupLinks": list_group_links, "getShareLink": get_share_link,
+                 "checkGroupUsername": check_group_username, "setGroupUsername": set_group_username})
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         name = self.path.rstrip("/").split("/")[-1]

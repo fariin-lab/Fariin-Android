@@ -329,7 +329,8 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
 
 /**
  * Group Info (iOS GroupInfoView): photo, name, "Group · N members"; Add Members (admins), the
- * member list with Owner / Admin tags, the settings iOS has (coming soon here), Leave Group with
+ * member list with Owner / Admin tags (an admin taps one for the member card), the owner's and
+ * admins' settings (Group Type, Invite Links, Administrators, Permissions; GroupManage.kt), Leave Group with
  * the owner hand-over line.
  */
 @Composable
@@ -351,14 +352,15 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var adding by remember { mutableStateOf(false) }
     var picked by remember { mutableStateOf(setOf<String>()) }
     var askLeave by remember { mutableStateOf(false) }
-    var soon by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var timerOpen by remember { mutableStateOf(false) }
     val timer = (conv["disappearSeconds"] as? Number)?.toInt() ?: 0
+    // The management pages pushed over this one (Administrators, Permissions, Group Type, Invite Links).
+    val pages = remember(cid) { androidx.compose.runtime.mutableStateListOf<GroupPage>() }
+    var card by remember { mutableStateOf<String?>(null) }
+    val team = com.fariin.app.data.GroupAdmins.Team.from(conv)
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
-    soon?.let { s -> AlertDialog(onDismissRequest = { soon = null }, title = { Text(s) }, text = { Text("Coming soon on Android.") },
-        confirmButton = { TextButton({ soon = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
     if (askLeave) {
         val plan = GroupRules.leavePlan(me, "", conv)
         AlertDialog(onDismissRequest = { askLeave = false }, title = { Text("Leave this group?") },
@@ -385,6 +387,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         return
     }
     if (DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
+    if (GroupPages(cid, me, pages, onOpenPerson)) return
+    card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) }) }
     if (editing && canEdit) {
         EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
             onClose = { editing = false; editAtDescription = false }, description = desc, focusDescription = editAtDescription)
@@ -407,7 +411,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Spacer(Modifier.height(20.dp))
             if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
             SettingsSection {
-                for (s in listOf("Group Type", "Permissions", "Administrators", "Invite Links")) SettingsRow(s) { soon = s }
+                // The owner's and admins' settings (iOS Group Settings); members do not see them.
+                GroupManageRows(conv, me) { pages.add(it) }
                 // Who may change it: the owner and admins with Change info (iOS GroupSettingsView).
                 DisappearingRow(timer, short = false, last = true) {
                     if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
@@ -415,10 +420,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 }
             }
             SettingsSection(header = "${users.size} members") {
-                if (iAmAdmin) SettingsRow("Add Members", titleColor = c.blue, trailing = Trailing.NONE) { adding = true }
+                if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) SettingsRow("Add Members", titleColor = c.blue, trailing = Trailing.NONE) { adding = true }
                 users.sortedWith(compareBy({ it != owner }, { it !in admins }, { names[it] ?: "" })).forEach { u ->
                     PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "Member", "",
-                        onClick = if (u == me) null else ({ onOpenPerson(u) })) {
+                        // An admin opens the member card (Make Group Admin, Ban from Group...); others the profile.
+                        onClick = if (iAmAdmin) ({ card = u }) else if (u == me) null else ({ onOpenPerson(u) })) {
                         val tag = when { u == owner -> "Owner"; u in admins -> "Admin"; else -> "" }
                         if (tag.isNotEmpty()) Text(tag, fontSize = 14.sp, color = c.secondary)
                     }
