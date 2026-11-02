@@ -5,6 +5,8 @@
         <!-- Debug only: no FCM token is made at start-up; Push.register asks for it explicitly, and
              skips it on the local test backend, so a local run never registers with the real project. -->
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <!-- Debug only: no crash report ever leaves a debug build (CrashReports.start). -->
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
         <!-- Debug only: FariinApp starts Firebase itself, so the local test backend can use the
              emulators' project id (demo-fariin) instead of the real one. -->
         <provider android:name="com.google.firebase.provider.FirebaseInitProvider"

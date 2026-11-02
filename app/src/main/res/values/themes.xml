@@ -1,3 +1,11 @@
 <resources>
     <style name="Theme.Fariin" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- The launch screen (AndroidX SplashScreen): the Fariin mark on the phone's light or dark
+         ground, kept until the first frame is ready (MainActivity). -->
+    <style name="Theme.Fariin.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_mark</item>
+        <item name="postSplashScreenTheme">@style/Theme.Fariin</item>
+    </style>
 </resources>

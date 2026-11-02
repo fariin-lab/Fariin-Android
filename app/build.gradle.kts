@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -50,6 +51,11 @@ dependencies {
     implementation(libs.firebase.storage)
     implementation(libs.firebase.functions)
     implementation(libs.firebase.messaging)
+    // Crash reports, as iOS (Telemetry.swift): stack traces and phone facts only, never message text.
+    implementation(libs.firebase.crashlytics)
+    // The launch screen (Android 12 API, back-ported), and the app-wide foreground/background signal.
+    implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.kotlinx.coroutines.play.services)
     // libsodium, the library the iOS app's Crypto.swift uses (swift-sodium), so both sides speak
     // the same box/secretbox formats.
@@ -75,6 +81,8 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
+    // The real org.json for the local-cache codec tests (Android ships it; plain JVM tests do not).
+    testImplementation("org.json:json:20240303")
     testImplementation(libs.lazysodium.java)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
