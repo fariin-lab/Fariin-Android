@@ -44,6 +44,14 @@ class FariinMessagingService : FirebaseMessagingService() {
             com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, me)
             return
         }
+        // "Posted a new story" (server notifyStoryFollowers; no cid, so it is not a chat push). With
+        // the app closed the system draws it from the notification part; with the app open it comes
+        // here and is drawn the same way. A tap opens the Stories tab.
+        if (message.data["kind"] == "story") {
+            if (Push.pushOn(applicationContext)) NotificationPoster.postStory(applicationContext,
+                message.notification?.title ?: "Fariin", message.notification?.body ?: "New story.", message.data["aid"].orEmpty())
+            return
+        }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)
         runBlocking { handle(applicationContext, p) }
     }

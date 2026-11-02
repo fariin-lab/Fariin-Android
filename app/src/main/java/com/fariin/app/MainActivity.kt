@@ -230,6 +230,7 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.system.SystemRouter.pending.value = null
             nav.popBackStack("main", inclusive = false)
             if (ask == com.fariin.app.system.SystemRouter.NEW_CHAT) nav.navigate("newchat") { launchSingleTop = true }
+            else if (ask == com.fariin.app.system.SystemRouter.OPEN_STORIES) com.fariin.app.system.SystemRouter.storiesTabRequests.value += 1
             else com.fariin.app.system.SystemRouter.storyRequests.value += 1
         }
         val linkAsk by com.fariin.app.call.CallLinkRouter.pending.collectAsState()

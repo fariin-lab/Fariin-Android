@@ -140,6 +140,10 @@ fun MainShell(
     val launcherStory by com.fariin.app.system.SystemRouter.storyRequests.collectAsState()
     var launcherSeen by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(launcherStory) { if (launcherStory > launcherSeen) { launcherSeen = launcherStory; storyRequest++; tab = TAB_STORIES } }
+    // A story notification tapped: the Stories tab, without the picker.
+    val storiesAsk by com.fariin.app.system.SystemRouter.storiesTabRequests.collectAsState()
+    var storiesSeen by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(storiesAsk) { if (storiesAsk > storiesSeen) { storiesSeen = storiesAsk; tab = TAB_STORIES } }
     val haptics = LocalHapticFeedback.current
     var reselect by rememberSaveable { mutableIntStateOf(0) }
     val select: (Int) -> Unit = { t ->

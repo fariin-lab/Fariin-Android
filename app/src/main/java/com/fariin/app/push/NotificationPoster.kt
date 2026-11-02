@@ -203,6 +203,28 @@ object NotificationPoster {
         nmc.notify(cid, ID, n)
     }
 
+    /** "Posted a new story" with the app open: one per author (tag), a tap opens the Stories tab. */
+    @SuppressLint("MissingPermission")
+    fun postStory(c: Context, title: String, body: String, author: String) {
+        ensureChannels(c)
+        val nmc = NotificationManagerCompat.from(c)
+        if (!nmc.areNotificationsEnabled()) return
+        val open = android.content.Intent(c, com.fariin.app.MainActivity::class.java)
+            .putExtra(com.fariin.app.system.SystemRouter.EXTRA_ACTION, com.fariin.app.system.SystemRouter.OPEN_STORIES)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val tap = PendingIntent.getActivity(c, ("s$author").hashCode(), open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(c, NotifChannel.MESSAGES.id)
+            .setSmallIcon(R.drawable.ic_stories_stack_fill)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build()
+        nmc.notify("story-$author", ID, n)
+    }
+
     /** iOS Push.clear(cid): the chat was opened, its notification goes. */
     fun clear(c: Context, cid: String) = NotificationManagerCompat.from(c).cancel(cid, ID)
 

@@ -11,17 +11,25 @@ object SystemRouter {
     const val EXTRA_ACTION = "fariin.launcher"
     const val NEW_CHAT = "newChat"
     const val NEW_STORY = "newStory"
+    /** A "posted a new story" notification: open the Stories tab (no picker). */
+    const val OPEN_STORIES = "openStories"
 
-    /** Waiting for the signed-in shell: [NEW_CHAT] or [NEW_STORY]. */
+    /** Waiting for the signed-in shell: [NEW_CHAT], [NEW_STORY] or [OPEN_STORIES]. */
     val pending = MutableStateFlow<String?>(null)
 
     /** Bumped for each New Story request; the shell's Stories tab opens its picker once per bump. */
     val storyRequests = MutableStateFlow(0)
 
+    /** Bumped for each story notification tap; the shell switches to the Stories tab. */
+    val storiesTabRequests = MutableStateFlow(0)
+
     fun take(intent: Intent?) {
+        // A story push tapped while the app was closed: the system's notification hands its data
+        // keys to the launcher activity (server notifyStoryFollowers: kind "story", no cid).
+        if (intent?.getStringExtra("kind") == "story") { intent.removeExtra("kind"); pending.value = OPEN_STORIES; return }
         val a = intent?.getStringExtra(EXTRA_ACTION) ?: return
         intent.removeExtra(EXTRA_ACTION)
-        if (a == NEW_CHAT || a == NEW_STORY) pending.value = a
+        if (a == NEW_CHAT || a == NEW_STORY || a == OPEN_STORIES) pending.value = a
     }
 }
 
