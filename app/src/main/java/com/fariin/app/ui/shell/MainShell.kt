@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,6 +88,20 @@ import dev.chrisbanes.haze.hazeSource
  */
 val LocalBottomBarInset = staticCompositionLocalOf { 0.dp }
 
+/** Counts taps on the tab that is already open; the open tab reads it through [OnTabReselect]. */
+val LocalTabReselect = compositionLocalOf { 0 }
+
+/**
+ * A second tap on the open tab (iOS, and the big Android apps): [action] runs, which goes back to
+ * the tab's first page and scrolls to the top. Not run when the tab first shows.
+ */
+@Composable
+fun OnTabReselect(action: suspend () -> Unit) {
+    val n = LocalTabReselect.current
+    val seen = remember { n }
+    LaunchedEffect(n) { if (n != seen) action() }
+}
+
 private val BarHeight = 64.dp
 private val BarMargin = 12.dp
 
@@ -126,8 +141,9 @@ fun MainShell(
     var launcherSeen by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(launcherStory) { if (launcherStory > launcherSeen) { launcherSeen = launcherStory; storyRequest++; tab = TAB_STORIES } }
     val haptics = LocalHapticFeedback.current
+    var reselect by rememberSaveable { mutableIntStateOf(0) }
     val select: (Int) -> Unit = { t ->
-        if (t != tab) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        if (t != tab) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick) else reselect++
         tab = t
     }
     // System back on another tab goes to Chats first, then leaves the app (Android tab apps).
@@ -139,7 +155,7 @@ fun MainShell(
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
         Box(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)) {
-            CompositionLocalProvider(LocalBottomBarInset provides inset) {
+            CompositionLocalProvider(LocalBottomBarInset provides inset, LocalTabReselect provides reselect) {
                 when (tab) {
                     TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest)
                     // The calls list scrolls under the bar and lifts its New Call button by the inset.

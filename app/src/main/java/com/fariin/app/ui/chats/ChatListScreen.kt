@@ -146,6 +146,15 @@ fun ChatListScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var showArchive by rememberSaveable { mutableStateOf(false) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // A second tap on Chats: out of Archived or search first, then to the top.
+    com.fariin.app.ui.shell.OnTabReselect {
+        when {
+            showArchive -> showArchive = false
+            searching -> { searching = false; query = "" }
+            else -> listState.animateScrollToItem(0)
+        }
+    }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val selecting = selected.isNotEmpty()
@@ -330,7 +339,7 @@ fun ChatListScreen(
                     filter == FILTER_CHANNELS -> "No channels yet"
                     else -> "No chats yet"
                 }, action = if (filter == FILTER_CHANNELS && query.isBlank()) ("Find Channels" to channels.find) else null)
-                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
+                else -> LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                     if (!showArchive && !searching && filter == FILTER_ALL && state.archived.isNotEmpty()) {
                         item(key = "archive") {
                             ListRow("Archived", fi(R.drawable.ic_archive), trailing = "${state.archived.size}") { showArchive = true }

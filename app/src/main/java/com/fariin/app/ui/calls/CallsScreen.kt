@@ -97,6 +97,9 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
     val c = Fariin.colors
     var missedOnly by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // A second tap on Calls: to the top.
+    com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
     val now = System.currentTimeMillis()
     val q = search.trim().lowercase()
     val shown = CallHistory.filter(calls, me, missedOnly, now).filter { q.isEmpty() || it.name.lowercase().contains(q) }
@@ -135,7 +138,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
             calls.isEmpty() && allLinks.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
             rows.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
             rows.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
-            else -> LazyColumn(Modifier.fillMaxSize(),
+            else -> LazyColumn(Modifier.fillMaxSize(), state = listState,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                 items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r ->
                     if (r is com.fariin.app.call.SavedCallLink) {

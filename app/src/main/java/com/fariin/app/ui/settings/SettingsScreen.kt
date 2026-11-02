@@ -91,12 +91,17 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
     val push: (String) -> Unit = { stack = stack + it }
     val pop: () -> Unit = { stack = stack.dropLast(1) }
     BackHandler(enabled = stack.isNotEmpty(), onBack = pop)
+    // A second tap on Settings: back to the first page, then to the top.
+    val homeScroll = rememberScrollState()
+    com.fariin.app.ui.shell.OnTabReselect {
+        if (stack.isNotEmpty()) stack = emptyList() else homeScroll.animateScrollTo(0)
+    }
 
     val page = stack.lastOrNull()
     // The grey page under the white section cards (iOS grouped background).
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
         when {
-            page == null -> SettingsHome(profile, push)
+            page == null -> SettingsHome(profile, push, homeScroll)
             page == PAGE_ACCOUNT -> AccountPage(profile, demoProfile != null, push, pop, onSignOut)
             page == PAGE_APPEARANCE -> AppearancePage(push, pop)
             page == PAGE_NIGHT -> NightModePage(pop)
@@ -133,7 +138,7 @@ internal fun openWeb(context: Context, url: String) {
 }
 
 @Composable
-private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
+private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: androidx.compose.foundation.ScrollState) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     Column(Modifier.fillMaxSize()) {
@@ -142,7 +147,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
                 Icon(Icons.Filled.Search, contentDescription = "Search settings", tint = c.label)
             }
         })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
             ProfileHeader(profile, onEdit = people.editProfile, onShare = { push(soon("Share profile")) })
             Spacer(Modifier.height(8.dp))
