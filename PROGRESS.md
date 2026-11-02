@@ -404,3 +404,20 @@ Still open: the main-thread MediaRecorder.start (move off the main thread if the
 - VERIFIED on 5560 (carol, local backend): both story reactions (😍, 🔥) drawn on the card corner in the Alice chat, typed reply unchanged (cl_story_reactions.png); pinned three, bar menu Unpin / See All (cl_pin_menu.png), sheet (cl_pins_sheet.png), long-press Unpin of one row (cl_pins_after_unpin.png), arrow jumped and lit "hi alice" with the bar at 1/2 (cl_pins_jump.png), Unpin All cleared the bar and `pinnedMessageIds` is [] in Firestore (cl_pins_unpin_all.png); expiresAt written by REST: Delete showed "Disappears in 3:07" then 3:02 (cl_countdown_a/b.png), "1 day" for 1.5 days (cl_countdown_days.png), a stamp written while the chat was open showed at once on a reaction's menu (cl_countdown_reaction.png); the message vanished at its stamp (cl_expired_gone.png); Family notification with the push expiresAt went at its time (cl_notif_family_before/after.png); Weekend Plans notification with no stamp in the push went 2 s after the chat's lastExpiresAt with the chat list open (cl_notif_list_before/after.png).
 - NOT verified: an incoming story reaction (only carol's own exist), dark mode of the card, the "Disappearing" row for someone who cannot delete (channel follower), the app-to-front prune alone, a group's See All with a non-admin. 6 tests (ChatLeftoversTest).
 - 2026-11-02 15:55 BUG FIXED (seen by two workers, "new chat shows only after a restart"): the chat did arrive live, but LazyColumn keeps the old first row anchored, so a row inserted at the top sat just above the screen. ChatListScreen now scrolls to 0 when the top key changes and the old first row is at index 1 with no offset (I was at the top). Checked on 5554: a group written on the server appears at the top within 5 s; when scrolled down, the list does not jump. Test groups liveListTest1-5 deleted.
+
+## QA pass 2: regression check of today's work (2026-11-02 15:50-16:25, alice emulator-5554, bobby emulator-5556)
+Narrow pass over the core flows after ~35 commits. Shots %TEMP%\claude\C--Users-abdik\34c340df-...\scratchpad\shots\qa2_*.png. testDebugUnitTest (354) and assembleDebug green, no entries in `logcat -b crash` on either phone.
+
+| Flow | Result | Commit |
+|---|---|---|
+| 1 1:1 text both ways, Sent / Delivered / Read, reply, heart reaction, edit, Delete for Everyone, photo, voice note (0:02, Read), forward into Weekend Trip | pass | |
+| 2 Weekend Trip: both send text and a photo; Group Info for owner (Group Type, Invite Links, Join Requests, Members, Administrators, Banned Users, Permissions) and member (members list, Leave Group); Disappearing Messages row shows and opens | pass | |
+| 3 Story from the gallery path (editor, Share Story, Post), bobby sees the ring, opens it, text reply lands in alice's chat as a Story reply | pass | |
+| 4 Chat list: unread badge, pin / unpin, archive / unarchive, search, second tap on Chats | fixed: back from Archived or a search left the main list anchored on the archive's top row (newest chats above the screen), from the hoisted list state in 711627a; second tap went to the top with the app bar still hidden | 657c1d4 |
+| 5 Settings: all 14 top-level rows open and close with back (Safety opens the web page); App Lock on with a device PIN, unlock, off | pass | |
+| 6 Cold start (force-stop, start) on both: splash, list from cache, live | pass | |
+
+Seen, not fixed (not today's regressions):
+- Pinning the first chat: the Pinned header, row and Chats header land above the screen (the list keeps its old first row; 4498bea handles only one new row at index 1). Scroll up shows them. Same for the Archived row appearing.
+- Edit puts the cursor at the start of the old text (composer prefill from 5d118a6, before today), so typed words go in front.
+- Empty previews on Alice/Bobby, Weekend Trip, Study Group, Weekend Plans: local data only. Their conversations carry an old `lastExpiresAt` in the past (no onNewMessage trigger locally to move or clear it), so the burn tick blanks the preview. The real server stamps or deletes it on every message.
