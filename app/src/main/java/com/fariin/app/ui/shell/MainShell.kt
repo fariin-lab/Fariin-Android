@@ -8,8 +8,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.DonutLarge
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.DonutLarge
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
@@ -64,59 +75,67 @@ fun MainShell(
     val unread = unreadChatsBadge(chats.chats, me)
     val demo = me == DemoChats.ME   // debug demo mode: made-up data in every tab
 
+    // The chat list's camera button opens the Stories tab straight into its photo picker.
+    var storyRequest by rememberSaveable { mutableIntStateOf(0) }
+    val haptics = LocalHapticFeedback.current
+    val select: (Int) -> Unit = { t ->
+        if (t != tab) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        tab = t
+    }
+    // System back on another tab goes to Chats first, then leaves the app (Android tab apps).
+    BackHandler(enabled = tab != TAB_CHATS) { tab = TAB_CHATS }
+
     Scaffold(
         containerColor = c.bg,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            Column {
-                HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-                NavigationBar(containerColor = c.bg, tonalElevation = 0.dp) {
-                    val colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = c.label,
-                        selectedTextColor = c.label,
-                        unselectedIconColor = c.secondary,
-                        unselectedTextColor = c.secondary,
-                        indicatorColor = c.placeholderFill,
-                    )
-                    NavigationBarItem(
-                        selected = tab == TAB_STORIES, onClick = { tab = TAB_STORIES }, colors = colors,
-                        icon = {
-                            Icon(painterResource(if (tab == TAB_STORIES) R.drawable.ic_stories_fill else R.drawable.ic_stories),
-                                contentDescription = null, modifier = Modifier.size(25.dp))
-                        },
-                        label = { TabLabel("Stories") },
-                    )
-                    NavigationBarItem(
-                        selected = tab == TAB_CALLS, onClick = { tab = TAB_CALLS }, colors = colors,
-                        icon = { Icon(Icons.Filled.Call, contentDescription = null) },
-                        label = { TabLabel("Calls") },
-                    )
-                    NavigationBarItem(
-                        selected = tab == TAB_CHATS, onClick = { tab = TAB_CHATS }, colors = colors,
-                        icon = {
-                            BadgedBox(badge = {
-                                if (unread > 0) Badge(containerColor = c.red, contentColor = androidx.compose.ui.graphics.Color.White) {
-                                    Text(if (unread > 99) "99+" else "$unread")
-                                }
-                            }) {
-                                Icon(painterResource(R.drawable.ic_chat), contentDescription = null, modifier = Modifier.size(25.dp))
+            // Material 3 navigation bar: pill indicator behind the icon, filled icon when selected.
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                val colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = c.label,
+                    unselectedIconColor = c.secondary,
+                    unselectedTextColor = c.secondary,
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+                NavigationBarItem(
+                    selected = tab == TAB_STORIES, onClick = { select(TAB_STORIES) }, colors = colors,
+                    icon = { Icon(if (tab == TAB_STORIES) Icons.Filled.DonutLarge else Icons.Outlined.DonutLarge, contentDescription = null) },
+                    label = { TabLabel("Stories") },
+                )
+                NavigationBarItem(
+                    selected = tab == TAB_CALLS, onClick = { select(TAB_CALLS) }, colors = colors,
+                    icon = { Icon(if (tab == TAB_CALLS) Icons.Filled.Call else Icons.Outlined.Call, contentDescription = null) },
+                    label = { TabLabel("Calls") },
+                )
+                NavigationBarItem(
+                    selected = tab == TAB_CHATS, onClick = { select(TAB_CHATS) }, colors = colors,
+                    icon = {
+                        BadgedBox(badge = {
+                            if (unread > 0) Badge(containerColor = c.red, contentColor = androidx.compose.ui.graphics.Color.White) {
+                                Text(if (unread > 99) "99+" else "$unread")
                             }
-                        },
-                        label = { TabLabel("Chats") },
-                    )
-                    NavigationBarItem(
-                        selected = tab == TAB_SETTINGS, onClick = { tab = TAB_SETTINGS }, colors = colors,
-                        icon = { Icon(Icons.Filled.AccountCircle, contentDescription = null) },
-                        label = { TabLabel("Settings") },
-                    )
-                }
+                        }) {
+                            Icon(if (tab == TAB_CHATS) Icons.AutoMirrored.Filled.Chat else Icons.AutoMirrored.Outlined.Chat, contentDescription = null)
+                        }
+                    },
+                    label = { TabLabel("Chats") },
+                )
+                NavigationBarItem(
+                    selected = tab == TAB_SETTINGS, onClick = { select(TAB_SETTINGS) }, colors = colors,
+                    icon = { Icon(if (tab == TAB_SETTINGS) Icons.Filled.Settings else Icons.Outlined.Settings, contentDescription = null) },
+                    label = { TabLabel("Settings") },
+                )
             }
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
             when (tab) {
-                TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null)
+                TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest)
                 TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null)
-                TAB_CHATS -> ChatListScreen(chats, me, decryptor)
+                TAB_CHATS -> ChatListScreen(chats, me, decryptor,
+                    onSettings = { select(TAB_SETTINGS) },
+                    onNewStory = { storyRequest++; select(TAB_STORIES) })
                 else -> SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut)
             }
         }
@@ -124,7 +143,7 @@ fun MainShell(
 }
 
 @Composable
-private fun TabLabel(text: String) = Text(text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+private fun TabLabel(text: String) = Text(text, style = MaterialTheme.typography.labelMedium)
 
 @Composable
 private fun Placeholder(title: String, body: String, icon: ImageVector?) {

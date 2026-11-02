@@ -22,6 +22,8 @@ data class ChatsUiState(
     val error: String? = null,
     /** Incoming message requests (they live on their own page, iOS MessageRequestsView). */
     val requests: List<Conversation> = emptyList(),
+    /** Chats I archived (the overflow menu's Archive page). */
+    val archived: List<Conversation> = emptyList(),
 )
 
 class ChatsViewModel(
@@ -52,7 +54,9 @@ class ChatsViewModel(
                 ConversationsRepository.State.Loading -> ChatsUiState(loading = true)
                 is ConversationsRepository.State.Loaded ->
                     ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me),
-                        requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) })
+                        requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) },
+                        archived = s.conversations.filter { it.isArchived(me) && !it.isCleared(me) && !ChatList.isIncomingRequest(it, me) }
+                            .sortedByDescending { it.displayUpdatedAt(me) })
                 is ConversationsRepository.State.Failed -> ChatsUiState(loading = false, error = s.message)
             }
         }

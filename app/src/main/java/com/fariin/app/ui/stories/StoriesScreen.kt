@@ -24,7 +24,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -82,7 +84,7 @@ import kotlinx.coroutines.delay
  * TODO: Posted Stories, the more menu, Hidden Stories, the per-story ring segments, the camera.
  */
 @Composable
-fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?) {
+fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0) {
     val state: StoriesState
     val profile: MyProfile?
     if (demo != null) {
@@ -98,7 +100,7 @@ fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfi
             repo.listen(me, { convs }, { prof?.name?.ifEmpty { null } ?: "You" }, { prof?.photoUrl })
         }.collectFlow(StoriesState())
     }
-    StoriesScreen(me, conversations, profile, state, live = demo == null)
+    StoriesScreen(me, conversations, profile, state, live = demo == null, addRequest)
 }
 
 @Composable
@@ -109,7 +111,7 @@ private fun <T> kotlinx.coroutines.flow.Flow<T>.collectFlow(initial: T): T {
 }
 
 @Composable
-private fun StoriesScreen(me: String, conversations: List<Conversation>, profile: MyProfile?, state: StoriesState, live: Boolean) {
+private fun StoriesScreen(me: String, conversations: List<Conversation>, profile: MyProfile?, state: StoriesState, live: Boolean, addRequest: Int) {
     val c = Fariin.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -129,6 +131,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val addStory: () -> Unit = {
         if (live) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
     }
+    // The chat list's camera button: open the picker once per press (not again on recomposition).
+    var handledRequest by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(addRequest) { if (addRequest > handledRequest) { handledRequest = addRequest; addStory() } }
     LaunchedEffect(pickError) { if (pickError != null) { delay(3000); pickError = null } }
     // "Xm ago" moves once a minute.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -141,17 +146,15 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val openRing: (StoryGroup) -> Unit = { g -> viewing = ordered to ordered.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(52.dp)) {
-            Box(
-                Modifier.align(Alignment.CenterStart).padding(start = 12.dp).size(40.dp).clip(CircleShape)
-                    .background(c.fieldFill).clickable { /* TODO: more menu */ },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.MoreHoriz, contentDescription = "More", tint = c.label)
+        // Material 3 top app bar: title at the start, actions (camera, overflow) at the end.
+        com.fariin.app.ui.components.FariinTopBar("Stories", actions = {
+            androidx.compose.material3.IconButton(onClick = addStory) {
+                Icon(Icons.Outlined.PhotoCamera, contentDescription = "Add Story", tint = c.label)
             }
-            Text("Stories", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                modifier = Modifier.align(Alignment.Center))
-        }
+            androidx.compose.material3.IconButton(onClick = { /* TODO: more menu */ }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
+            }
+        })
         LazyColumn(Modifier.fillMaxSize()) {
             item {
                 Row(
