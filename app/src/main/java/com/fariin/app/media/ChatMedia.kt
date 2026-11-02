@@ -63,13 +63,35 @@ class ChatMedia(
     }
 
     private suspend fun download(url: String, enc: EncMeta?): File? {
+        val ref = try { FirebaseStorage.getInstance().getReferenceFromUrl(url) } catch (_: Exception) { null }
         val cipher = try {
-            FirebaseStorage.getInstance().getReferenceFromUrl(url).getBytes(MediaRules.MAX_DOWNLOAD).await()
-        } catch (_: Exception) { return null }
+            ref?.getBytes(MediaRules.MAX_DOWNLOAD)?.await() ?: fetchByUrl(url)
+        } catch (_: Exception) { return null } ?: return null
         val plain = open(cipher, enc) ?: return null
         val f = key(url)
         atomicWrite(f, plain)
         return f
+    }
+
+    /** A download address the Storage SDK cannot map to a bucket object (the local emulator's
+     *  http://10.0.2.2:9199 links): read it as the plain URL it is, its token included. */
+    private fun fetchByUrl(url: String): ByteArray? {
+        if (!com.fariin.app.FariinApp.usingLocalBackend || !url.startsWith("http://10.0.2.2:")) return null
+        val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        c.connectTimeout = 15_000; c.readTimeout = 30_000
+        return try {
+            if (c.responseCode != 200) return null
+            val out = java.io.ByteArrayOutputStream()
+            c.inputStream.use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf); if (n < 0) break
+                    out.write(buf, 0, n)
+                    if (out.size() > MediaRules.MAX_DOWNLOAD) return null
+                }
+            }
+            out.toByteArray()
+        } finally { c.disconnect() }
     }
 
     private suspend fun open(cipher: ByteArray, enc: EncMeta?): ByteArray? {
