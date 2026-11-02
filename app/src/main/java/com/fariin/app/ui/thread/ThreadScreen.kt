@@ -196,7 +196,9 @@ fun ThreadScreen(
     // The row a jump landed on, lit for a moment (iOS flashAndScroll).
     var flashId by remember { mutableStateOf<String?>(null) }
     var pinIndex by remember { mutableStateOf(0) }
-    var showPins by remember { mutableStateOf(false) }
+    // Read only inside OpenWhen below: opening the sheet must not redraw the whole thread (a
+    // cheap phone took 90-150 ms frames for it).
+    val showPins = remember { mutableStateOf(false) }
     val uiNow = androidx.compose.runtime.rememberUpdatedState(ui)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -305,12 +307,12 @@ fun ThreadScreen(
         PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
             onJump = { jumpTo(it, advance = true) },
             onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
-            onSeeAll = { showPins = true })
-        if (showPins) {
+            onSeeAll = { showPins.value = true })
+        OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
             val all = com.fariin.app.data.PinRules.sheetOrder(pins) { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] }
-            PinnedMessagesSheet(all, ui, onDismiss = { showPins = false },
-                onJump = { id -> showPins = false; jumpTo(id, advance = false) },
+            PinnedMessagesSheet(all, ui, onDismiss = { showPins.value = false },
+                onJump = { id -> showPins.value = false; jumpTo(id, advance = false) },
                 onUnpin = { id -> actions.onUnpin(id); pinIndex = 0 },
                 bubble = { m -> MessageRow(ui, m, ThreadLogic.RowGeometry(false, true, true, 0), is24h, {}) {} })
         }
@@ -1088,3 +1090,9 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier =
             }
         }
     }
+
+/** Shows [content] while [open] is on. The flag is read here, so flipping it redraws only this. */
+@Composable
+private fun OpenWhen(open: androidx.compose.runtime.State<Boolean>, content: @Composable () -> Unit) {
+    if (open.value) content()
+}
