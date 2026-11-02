@@ -97,6 +97,8 @@ object LocalJson {
         if (m.viewOnce) put("once", true)
         if (m.consumed) put("spent", true)
         m.fileSize?.let { put("fsize", it) }
+        m.expiresAtMillis?.let { put("exp", it) }
+        m.disappearSeconds?.let { put("dis", it) }
         if (m.album.isNotEmpty()) put("album", JSONArray().also { a ->
             for (it in m.album) a.put(JSONObject().put("u", it.imageUrl).apply {
                 enc(it.enc)?.let { e -> put("e", e) }
@@ -128,6 +130,7 @@ object LocalJson {
             waveform = o.optJSONArray("wave")?.let { a -> (0 until a.length()).map { a.getInt(it) } } ?: emptyList(),
             uploading = o.optBoolean("up"), viewOnce = o.optBoolean("once"),
             consumed = o.optBoolean("spent"), fileSize = if (o.has("fsize")) o.getLong("fsize") else null,
+            expiresAtMillis = d("exp"), disappearSeconds = if (o.has("dis")) o.getInt("dis") else null,
             album = o.optJSONArray("album")?.let { a ->
                 (0 until a.length()).mapNotNull { i ->
                     val x = a.optJSONObject(i) ?: return@mapNotNull null

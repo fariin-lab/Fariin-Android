@@ -51,6 +51,8 @@ data class Conversation(
     val e2eeOff: Boolean = false,
     val lastPlainTag: String? = null,
     val disappearSeconds: Int = 0,
+    /** When the newest message falls due on the timer (server `lastExpiresAt`, ms), or null. */
+    val lastExpiresAtMillis: Double? = null,
     val updatedAtMillis: Double = 0.0,
     val startedBy: String = "",
     val accepted: Boolean = true,
@@ -213,6 +215,7 @@ data class Conversation(
                 e2eeOff = type == "group" && (data["e2ee"] as? Boolean) == false,
                 lastPlainTag = data["lastPlainTag"] as? String,
                 disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt() ?: 0,
+                lastExpiresAtMillis = millis(data["lastExpiresAt"]).takeIf { it > 0 },
                 updatedAtMillis = millis(data["updatedAt"]),
                 startedBy = startedBy ?: "",
                 // Absent means "from before message requests existed": accepted.

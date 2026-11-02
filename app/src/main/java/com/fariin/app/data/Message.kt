@@ -14,7 +14,7 @@ import com.fariin.app.crypto.Wire
  * `album` items.
  *
  * TODO (iOS has these): file, gif and sticker bodies beyond a label, link previews, polls, contact and location cards, reactions, view-once, story replies
- * and mentions, forwarded-from-channel, disappearing timers, delete-for-me.
+ * and mentions, forwarded-from-channel, delete-for-me.
  */
 data class Message(
     val id: String,
@@ -69,6 +69,10 @@ data class Message(
     val views: Int = 0,
     /** A channel post's reactions as counts only: who picked what is never on the post. */
     val reactionCounts: Map<String, Int> = emptyMap(),
+    /** When the disappearing timer takes this message (server `expiresAt`, ms), or null. */
+    val expiresAtMillis: Double? = null,
+    /** A timer notice carries the value it set (0 = turned off); null on every other message. */
+    val disappearSeconds: Int? = null,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
@@ -217,6 +221,8 @@ data class Message(
                     if (k is String && n > 0) k to n else null
                 }?.toMap() ?: emptyMap(),
                 album = album,
+                expiresAtMillis = Conversation.millis(data["expiresAt"]).takeIf { it > 0 },
+                disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt(),
                 reactions = (data["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     val uid = k as? String ?: return@mapNotNull null
                     val raw = v as? String ?: return@mapNotNull null

@@ -16,6 +16,7 @@ import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import java.io.File
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import com.fariin.app.crypto.Wire
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
@@ -111,7 +112,10 @@ class ThreadRepository(
         // The phone's copy first (iOS ThreadMessageCache), so the chat opens full, offline too;
         // the listener's first answer replaces it.
         if (liveDocs.isEmpty() && _state.value.messages.isEmpty()) {
-            val saved = LocalCache.loadThread(me, cid).filter { !HiddenMessages.isHidden(it.id) }
+            // A disappearing message that ran out while the chat was closed never draws (iOS
+            // ThreadRepository cold open), not even for a frame.
+            val now = System.currentTimeMillis().toDouble()
+            val saved = LocalCache.loadThread(me, cid).filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
             if (saved.isNotEmpty()) {
                 seeded = true
                 _state.update { it.copy(messages = order.sort(saved), loaded = true) }
@@ -210,6 +214,7 @@ class ThreadRepository(
         myReg?.remove(); myReg = null
         msgReg?.remove(); msgReg = null
         convReg?.remove(); convReg = null
+        burnJob?.cancel(); burnJob = null
     }
 
     private suspend fun memberUids(): List<String> {
@@ -251,8 +256,17 @@ class ThreadRepository(
     private fun rebuild(loaded: Boolean? = null) {
         val all = LinkedHashMap<String, Message>()
         val unconfirmed = HashSet<String>()
+        val now = System.currentTimeMillis().toDouble()
+        val stamped = ArrayList<Message>()
+        val due = ArrayList<Message>()
         for (d in olderDocs.values + liveDocs.values) {
             var m = parse(d)
+            // The disappearing timer: the server's stamp only (iOS). Due = off the screen now, from
+            // the saved copy too; the server deletes it for both people.
+            if (m.expiresAtMillis != null) {
+                if (Disappearing.isExpired(m, now)) { due.add(m); continue }
+                stamped.add(m)
+            }
             // My note or photo whose file is still going up: the copy on this phone draws it.
             val local = m.clientId?.let { localFiles[it] }
             if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
@@ -273,10 +287,40 @@ class ThreadRepository(
         }
         // While only the saved copy is on screen, a pending send joins it instead of replacing it.
         val shown = if (seeded && liveDocs.isEmpty() && olderDocs.isEmpty())
-            _state.value.messages.filter { it.sendState == null && it.rowId !in all } + all.values else all.values
+            _state.value.messages.filter { it.sendState == null && it.rowId !in all && !Disappearing.isExpired(it, now) } + all.values else all.values
         val sorted = order.sort(shown)
         _state.update { it.copy(messages = sorted, loaded = loaded ?: it.loaded) }
         if (live) LocalCache.saveThread(me, cid, sorted)
+        scheduleBurn(Disappearing.nextExpiry(stamped, now))
+        if (due.isNotEmpty()) burn(due)
+    }
+
+    // ------------------------------------------------------------------ disappearing messages
+
+    private var burnJob: Job? = null
+    private val burned = HashSet<String>()
+
+    /** One timer for the soonest stamp still ahead, a fifth of a second past it (iOS scheduleNextBurn). */
+    private fun scheduleBurn(next: Double?) {
+        burnJob?.cancel(); burnJob = null
+        if (next == null || msgReg == null) return
+        val wait = maxOf(200L, (next - System.currentTimeMillis()).toLong() + 200L)
+        burnJob = scope.launch { delay(wait); rebuild() }
+    }
+
+    /** Due messages: the files this phone opened go, and the server is asked to delete (it re-reads
+     *  every id and refuses anything not really due). Each id once per run. */
+    private fun burn(due: List<Message>) {
+        val fresh = synchronized(burned) { due.filter { burned.add(it.id) } }
+        if (fresh.isEmpty()) return
+        media?.let { md ->
+            for (m in fresh) {
+                val urls = listOfNotNull(m.imageUrl, m.videoUrl, m.audioUrl, m.fileUrl, m.thumbUrl) +
+                    m.album.flatMap { listOfNotNull(it.imageUrl, it.videoUrl) }
+                for (u in urls) try { md.cached(u)?.delete() } catch (_: Exception) {}
+            }
+        }
+        Disappearing.askBurn(cid, fresh.map { it.id })
     }
 
     private fun parse(d: DocumentSnapshot): Message {

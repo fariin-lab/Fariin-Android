@@ -359,6 +359,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     LaunchedEffect(uid) { person = api.profile(uid); blocked = api.isBlocked(uid) }
     val name = person?.shownName ?: conv?.names?.get(uid) ?: ""
     val cid = conv?.id ?: Wire.directCid(me, uid)
+    // The chat's timer, live (either person may change it; iOS ContactInfoView).
+    val live = if (api is com.fariin.app.data.FirestorePeople) liveGroupDoc(cid) else emptyMap()
+    val timer = (live["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0
+    var timerOpen by remember { mutableStateOf(false) }
+    if (DisappearingEditor(api, cid, isGroup = false, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
     if (showSafety) AlertDialog(onDismissRequest = { showSafety = false }, title = { Text("Verify Encryption") },
         text = {
             Column {
@@ -411,6 +416,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 SettingsSection { Text(bio, fontSize = 17.sp, color = c.label, modifier = Modifier.fillMaxWidth().padding(16.dp)) }
             }
             SettingsSection {
+                DisappearingRow(timer, short = true) { timerOpen = true }
                 SettingsRow("Verify Encryption", last = false) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
                 SettingsRow("Shared Media", value = "Coming soon on Android", trailing = Trailing.NONE, last = true)
             }

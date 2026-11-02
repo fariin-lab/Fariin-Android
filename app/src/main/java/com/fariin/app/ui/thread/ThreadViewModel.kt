@@ -117,6 +117,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),
         pinned = pinnedMsgs,
         canPin = channel == null && com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),
+        disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(

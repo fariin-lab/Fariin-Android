@@ -117,6 +117,7 @@ internal const val PAGE_MESSAGES = "privacy:messages"
 internal const val PAGE_CHAT_KEY = "privacy:chatkey"
 internal const val PAGE_BLOCKED = "privacy:blocked"
 internal const val PAGE_APP_LOCK = "privacy:applock"
+internal const val PAGE_DISAPPEAR_DEFAULT = "privacy:disappear"
 
 /** Routes this file draws; false when the page is not one of them. */
 @Composable
@@ -130,6 +131,9 @@ internal fun privacyRoute(page: String, push: (String) -> Unit, pop: () -> Unit)
         page == PAGE_CHAT_KEY -> ChatKeyPage(pop)
         page == PAGE_BLOCKED -> BlockedUsersPage(pop)
         page == PAGE_APP_LOCK -> AppLockPage(pop)
+        // The default timer for new chats I start (iOS PrivacySettingsView, same key).
+        page == PAGE_DISAPPEAR_DEFAULT -> com.fariin.app.ui.people.DisappearingMessagesPage(
+            com.fariin.app.data.Disappearing.defaultSeconds, onBack = pop) { com.fariin.app.data.Disappearing.defaultSeconds = it; pop() }
         else -> return false
     }
     return true
@@ -153,6 +157,11 @@ private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
         SettingsSection { SettingsRow("Blocked Users", value = "${blocked.entries.size}", last = true) { push(PAGE_BLOCKED) } }
         SettingsSection(footer = "Send every call through Fariin's server so the people you call can't see your IP address. Call quality may be a little lower.") {
             SwitchRow("Always Relay Calls", relay, last = true) { relay = it; calls.edit().putBoolean("calls.alwaysRelay", it).apply() }
+        }
+        SettingsSection(footer = com.fariin.app.data.Disappearing.SETTINGS_FOOTER) {
+            SettingsRow("Disappearing Messages", value = com.fariin.app.data.Disappearing.label(com.fariin.app.data.Disappearing.defaultSeconds), last = true) {
+                push(PAGE_DISAPPEAR_DEFAULT)
+            }
         }
         SettingsSection(footer = "Require your fingerprint, face or phone PIN to unlock Fariin.") {
             SettingsRow("App Lock", value = if (AppLock.enabled(ctx)) "On" else "Off", last = true) { push(PAGE_APP_LOCK) }

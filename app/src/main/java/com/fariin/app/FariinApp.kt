@@ -83,6 +83,7 @@ class FariinApp : Application() {
         // and my private block list follow whoever is signed in; App Lock and Screen Security
         // watch every activity.
         com.fariin.app.data.PrivacySettings.init(this)
+        com.fariin.app.data.Disappearing.init(this)
         FirebaseAuth.getInstance().addAuthStateListener { a ->
             val uid = a.currentUser?.uid
             com.fariin.app.data.PrivacySettings.follow(uid)

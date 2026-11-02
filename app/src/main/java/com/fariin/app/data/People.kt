@@ -86,6 +86,8 @@ interface PeopleApi {
     suspend fun setGroupPhoto(cid: String, photo: ByteArray)
     suspend fun removeGroupPhoto(cid: String)
     suspend fun setGroupDescription(cid: String, text: String)
+    /** The chat's disappearing timer (iOS ChatService.setDisappear); true when it is now [seconds]. */
+    suspend fun setDisappear(cid: String, seconds: Int): Boolean = false
 }
 
 class FirestorePeople(
@@ -158,11 +160,18 @@ class FirestorePeople(
             seed["updatedAt"] = FieldValue.serverTimestamp()
             seed["unreadCount"] = mapOf(me to 0, p.uid to 0)
             seed["typing"] = mapOf(me to false, p.uid to false)
-            if (snap != null) { seed["startedBy"] = me; seed["accepted"] = false }
+            if (snap != null) {
+                seed["startedBy"] = me; seed["accepted"] = false
+                // The Settings default timer, born with the chat in its creating write (iOS): a new
+                // 1:1 is a request, and a request refuses the notice a follow-up would post.
+                val def = Disappearing.defaultSeconds
+                if (def > 0) seed["disappearSeconds"] = def
+            }
         }
         try { ref.set(seed, SetOptions.merge()).await() } catch (e: Exception) {
             if (seed["unreadCount"] == null) throw e
-            for (k in listOf("startedBy", "accepted", "unreadCount", "typing")) seed.remove(k)
+            // The chat existed: its timer is its own.
+            for (k in listOf("startedBy", "accepted", "unreadCount", "typing", "disappearSeconds")) seed.remove(k)
             ref.set(seed, SetOptions.merge()).await()
         }
         return cid
@@ -289,6 +298,9 @@ class FirestorePeople(
         } catch (_: Exception) {}
         return ref.id
     }
+
+    override suspend fun setDisappear(cid: String, seconds: Int): Boolean =
+        Disappearing.set(cid, seconds, me, profile(me)?.name ?: "", db)
 
     private suspend fun systemMessage(cid: String, text: String) {
         val batch = db.batch()

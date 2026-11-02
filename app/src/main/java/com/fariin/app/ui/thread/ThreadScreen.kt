@@ -137,7 +137,13 @@ data class ThreadUi(
     val pinned: Map<String, Message> = emptyMap(),
     /** May I pin and unpin here (a 1:1 always; a group the Pin messages right). */
     val canPin: Boolean = false,
+    /** The chat's disappearing timer in seconds (`disappearSeconds`, 0 = off). */
+    val disappearSeconds: Int = 0,
 )
+
+/** The timer in force and since when, for the bubble's timer mark (iOS MessageRowContext.timer). */
+internal data class TimerMark(val seconds: Int = 0, val sinceMs: Double? = null)
+internal val LocalTimerMark = androidx.compose.runtime.staticCompositionLocalOf { TimerMark() }
 
 /**
  * The chat page, after Kulan-iOS ThreadView + MessageList: my bubbles on the right in the chat
@@ -297,6 +303,9 @@ fun ThreadScreen(
             } else if (ui.messages.isEmpty()) {
                 Text("No messages here yet", fontSize = 15.sp, color = c.secondary, modifier = Modifier.align(Alignment.Center))
             }
+            val timerMark = TimerMark(ui.disappearSeconds,
+                remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
+            androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark) {
             LazyColumn(
                 Modifier.fillMaxSize(), state = listState, reverseLayout = true,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 8.dp),
@@ -318,6 +327,10 @@ fun ThreadScreen(
                             pinNote != null && !m.deleted -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) { jumpTo(pinNote.messageId, advance = false) }) {
                                 NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${pinNote.label}")
                             }
+                            m.isSystem && m.disappearSeconds != null -> NoticePill(
+                                com.fariin.app.data.Disappearing.noticeLine(
+                                    if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, m.disappearSeconds),
+                                icon = true)
                             m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else noticeText(m))
                             ch != null -> androidx.compose.runtime.CompositionLocalProvider(
                                 com.fariin.app.ui.channels.LocalPostViews provides
@@ -369,6 +382,7 @@ fun ThreadScreen(
                         CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                     }
                 }
+            }
             }
             if (!atBottom) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
@@ -468,8 +482,16 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                 Avatar(ui.photoUrl, 40.dp, squircle = ui.channel != null)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(ui.title, style = MaterialTheme.typography.titleMedium, color = c.label,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(ui.title, style = MaterialTheme.typography.titleMedium, color = c.label,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        // The timer is on: a small mark beside the name (iOS ChatHeaderView secondary icon).
+                        if (ui.disappearSeconds > 0) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing),
+                                contentDescription = "Disappearing messages on", tint = c.secondary, modifier = Modifier.size(16.dp))
+                        }
+                    }
                     if (ui.subtitle.isNotEmpty()) {
                         Text(ui.subtitle, style = MaterialTheme.typography.bodySmall, color = c.secondary, maxLines = 1)
                     }
@@ -485,13 +507,19 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
 private fun DatePill(text: String) = NoticePill(text, vertical = 8.dp)
 
 @Composable
-private fun NoticePill(text: String, vertical: Dp = 4.dp) {
+private fun NoticePill(text: String, vertical: Dp = 4.dp, icon: Boolean = false) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().padding(vertical = vertical), contentAlignment = Alignment.Center) {
-        Text(
-            text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-            modifier = Modifier.clip(CircleShape).background(receivedFill()).padding(horizontal = 12.dp, vertical = 5.dp),
-        )
+        Row(Modifier.clip(CircleShape).background(receivedFill()).padding(horizontal = 12.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            // The timer line leads with the timer mark (iOS NoticeRow symbol "timer").
+            if (icon) {
+                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing), null,
+                    tint = c.label, modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+        }
     }
 }
 
@@ -678,6 +706,13 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
     val metaColor = if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
     Row(verticalAlignment = Alignment.CenterVertically) {
         com.fariin.app.ui.channels.PostViews(metaColor)
+        // On a timer: the timer mark before the time (iOS footer), from the first frame.
+        val mark = LocalTimerMark.current
+        if (com.fariin.app.data.Disappearing.shownExpiry(m, mark.seconds, mark.sinceMs, System.currentTimeMillis().toDouble()) != null) {
+            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing), contentDescription = "Disappearing",
+                tint = metaColor, modifier = Modifier.size(11.dp))
+            Spacer(Modifier.width(3.dp))
+        }
         val time = ThreadLogic.timeLabel(m.clientTs?.takeIf { isMe && !m.hasServerTime } ?: m.createdAtMillis, is24h)
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
         if (isMe && !m.deleted) {

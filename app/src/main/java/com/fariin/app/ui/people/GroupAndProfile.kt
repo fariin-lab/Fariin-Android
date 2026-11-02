@@ -274,6 +274,8 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     var step by remember { mutableStateOf(1) }
     var title by remember { mutableStateOf("") }
     var photo by remember { mutableStateOf<ByteArray?>(null) }
+    // The Settings default for new chats starts the choice (iOS NewGroupView).
+    var timer by remember { mutableStateOf(com.fariin.app.data.Disappearing.defaultSeconds) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     // The picked photo goes to the circle cropper, as on Edit Group.
@@ -292,7 +294,12 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                 TextAction("Create", title.isNotBlank() && !busy) {
                     busy = true
                     scope.launch {
-                        try { onCreated(api.createGroup(title, picked.toList(), photo)) } catch (_: Exception) { error = "Could not create the group. Try again." }
+                        try {
+                            val cid = api.createGroup(title, picked.toList(), photo)
+                            // After "created the group", as iOS: the timer and its notice for everyone.
+                            if (timer > 0) api.setDisappear(cid, timer)
+                            onCreated(cid)
+                        } catch (_: Exception) { error = "Could not create the group. Try again." }
                         busy = false
                     }
                 }
@@ -311,6 +318,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                     Box(Modifier.weight(1f)) { Field(title, "Group Name") { title = it.take(100) } }
                 }
             }
+            NewGroupTimerSection(timer) { timer = it }
             val members = people.filter { it.uid in picked }
             SettingsSection(header = "Members · ${picked.size + 1}") {   // iOS NewGroupView: me included
                 members.forEach { p -> PersonRow(p.photoUrl, p.shownName, "", onClick = null) }
@@ -345,6 +353,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var askLeave by remember { mutableStateOf(false) }
     var soon by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var timerOpen by remember { mutableStateOf(false) }
+    val timer = (conv["disappearSeconds"] as? Number)?.toInt() ?: 0
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
     soon?.let { s -> AlertDialog(onDismissRequest = { soon = null }, title = { Text(s) }, text = { Text("Coming soon on Android.") },
@@ -374,6 +384,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         }
         return
     }
+    if (DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
     if (editing && canEdit) {
         EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
             onClose = { editing = false; editAtDescription = false }, description = desc, focusDescription = editAtDescription)
@@ -396,8 +407,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Spacer(Modifier.height(20.dp))
             if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
             SettingsSection {
-                for (s in listOf("Group Type", "Permissions", "Administrators", "Invite Links", "Disappearing Messages")) {
-                    SettingsRow(s, last = s == "Disappearing Messages") { soon = s }
+                for (s in listOf("Group Type", "Permissions", "Administrators", "Invite Links")) SettingsRow(s) { soon = s }
+                // Who may change it: the owner and admins with Change info (iOS GroupSettingsView).
+                DisappearingRow(timer, short = false, last = true) {
+                    if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
+                    else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
             }
             SettingsSection(header = "${users.size} members") {
