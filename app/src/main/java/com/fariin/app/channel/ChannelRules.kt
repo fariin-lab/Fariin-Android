@@ -284,7 +284,8 @@ data class ChannelInfo(
         /** The visitor's copy, from publicGroupPreview (the channel document stays members-only). */
         fun fromPreview(p: ChannelPreview) = ChannelInfo(
             cid = p.cid, isChannel = p.isChannel, title = p.title, avatarUrl = p.photoUrl, description = p.description,
-            followerCount = p.followerCount, isPublic = p.username.isNotEmpty(), username = p.username,
+            // The preview's count already holds the admins (users stays empty here).
+            followerCount = p.shownCount, isPublic = p.username.isNotEmpty(), username = p.username,
             verified = p.verified, label = p.label, createdAtMillis = p.createdAt,
         )
     }

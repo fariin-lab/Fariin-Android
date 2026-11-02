@@ -126,6 +126,7 @@ class ChannelRulesTest {
             "label" to "scam", "verified" to true, "createdAt" to 1.7e12))!!
         assertEquals(5, p.shownCount)
         assertFalse(p.verified)   // a labelled channel never shows the mark
+        assertEquals(5, ChannelInfo.fromPreview(p).shownCount)   // a visitor's header counts the admins too
     }
 
     @Test fun wordsAndLinks() {
