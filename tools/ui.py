@@ -7,6 +7,7 @@
     python -I tools/ui.py texts               # list visible texts
 """
 import os, re, subprocess, sys, time
+sys.stdout.reconfigure(encoding="utf-8")
 
 ADB = os.path.join(os.environ["LOCALAPPDATA"], "Android", "Sdk", "platform-tools", "adb.exe")
 args = sys.argv[1:]

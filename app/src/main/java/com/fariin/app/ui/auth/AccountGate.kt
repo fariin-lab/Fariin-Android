@@ -45,7 +45,9 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
 
     LaunchedEffect(me, phase) {
         if (phase != Phase.Loading) return@LaunchedEffect
-        auth.unprovenEmailCached?.let { phase = Phase.ProveEmail(it); return@LaunchedEffect }
+        // The email check runs on a Cloud Function, which the local test backend does not have:
+        // there it could never finish, so fake accounts skip it. Real builds always ask.
+        if (!isLocalBackend(ctx)) auth.unprovenEmailCached?.let { phase = Phase.ProveEmail(it); return@LaunchedEffect }
         val doc = try { FirebaseFirestore.getInstance().collection("users").document(me).get(Source.SERVER).await() }
         catch (_: Exception) { try { FirebaseFirestore.getInstance().collection("users").document(me).get(Source.CACHE).await() } catch (_: Exception) { null } }
         val p = doc?.data?.let { MyProfile.fromFirestore(me, it) } ?: MyProfile(me)
