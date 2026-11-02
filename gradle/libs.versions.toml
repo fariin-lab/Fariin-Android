@@ -38,6 +38,7 @@ lazysodium-android = { group = "com.goterl", name = "lazysodium-android", versio
 lazysodium-java = { group = "com.goterl", name = "lazysodium-java", version.ref = "lazysodium" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

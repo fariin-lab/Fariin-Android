@@ -60,6 +60,8 @@ dependencies {
     }
     implementation(libs.jna) { artifact { type = "aar" } }
     implementation(libs.coil.compose)
+    // Group photos can be plain https links; profile photos go through FariinPhotoFetcher.
+    implementation(libs.coil.network.okhttp)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.lazysodium.java)

@@ -23,13 +23,17 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 
 ## Plan (in order)
 1. [x] Hello app runs on the emulator (screenshot 05:11)
-2. [ ] Crypto port (lazysodium) with unit tests from the Swift code's formats
-3. [ ] Data models (Conversation, Message, UserProfile) from Models.swift + Firestore paths
-4. [ ] Sign-in screen (email + password, same flows as iOS FirstRunViews) and session
-5. [ ] Chat list (live Firestore), look matching iOS
+2. [x] Crypto port (lazysodium) with unit tests from the Swift code's formats
+3. [x] Data models (Conversation done; Message, UserProfile still TODO) from Models.swift + Firestore paths
+4. [x] Sign-in screen (email + password, same flows as iOS FirstRunViews) and session
+5. [x] Chat list (live Firestore), look matching iOS (previews wait for crypto; not yet seen with a real account)
 6. [ ] 1:1 thread: read + send encrypted text
 7. [ ] Groups, photos, voice, push (FCM), calls, stories, channels
 
 ## Log
 - 2026-11-02 05:00 project created, first debug APK built.
 - 2026-11-02 05:11 app installed and opened on fariin_pixel; adb works (emulator-5554).
+- 2026-11-02 05:25 crypto port committed (3ed410e): enc1/encg1/EncMeta/rk/safety number in app/.../crypto, 29 unit tests green incl. PyNaCl-built vectors; formats in crypto/WIRE_FORMAT.md. Not yet run on the emulator (SodiumAndroid load unchecked).
+- 2026-11-02 05:15 data layer: Conversation (iOS field names, isCleared group rule, pinned-first sort, request filter), ConversationsRepository (users array-contains me, updatedAt desc, 300, read only), AuthRepository (email sign-in, reset via requestPasswordReset me-central1). 5 unit tests pass.
+- 2026-11-02 05:20 sign-in pages: Welcome > Log in to Fariin > Log in with email, iOS wording; Apple/Google/passkey/sign-up are TODO. Theme from Theme.swift, follows system dark mode. Coil fetcher for fariin-photo:// via Storage getBytes.
+- 2026-11-02 05:25 main shell: tabs Stories, Calls, Chats (default, unread badge), Settings (Log Out). Chat rows: grey silhouette avatar, name, preview ("Message" until crypto is wired), time, ticks, unread badge, Pinned/Chats sections. Checked on the emulator in light and dark with debug demo data (`am start -n com.fariin.app/.MainActivity --ez demo true`). Nobody signed in.
