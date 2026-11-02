@@ -26,6 +26,10 @@ data class StoryListDoc(
     val members: List<String> = emptyList(),
     val allowReplies: Boolean = true,
     val name: String = "",
+    /** A custom list's own emoji; "" = the folder drawing (iOS StoryAudience.emoji). */
+    val emoji: String = "",
+    /** iOS createdAt: the epoch for the built-ins, the moment it was made for a custom list. */
+    val createdAtMs: Long = 0L,
 )
 
 /** Pure rules behind the story privacy pages and the post (iOS StoryAudienceStore + resolveAudience). */
@@ -46,8 +50,8 @@ object StoryPrivacyRules {
         "mode" to l.mode,
         "members" to l.members,
         "allowReplies" to l.allowReplies,
-        "emoji" to "",
-        "createdAt" to Timestamp(Date(0)),
+        "emoji" to l.emoji,
+        "createdAt" to Timestamp(Date(l.createdAtMs)),
     )
 
     /** iOS decode, with its self-heal: My Chats narrowed to nobody is just "all". */
@@ -56,8 +60,63 @@ object StoryPrivacyRules {
         val members = (data["members"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         var mode = (data["mode"] as? String)?.takeIf { it in listOf(MODE_ALL, MODE_EXCEPT, MODE_ONLY) } ?: MODE_ALL
         if (kind == "myFriends" && mode != MODE_ALL && members.isEmpty()) mode = MODE_ALL
-        return StoryListDoc(id, kind, mode, members, data["allowReplies"] as? Boolean ?: true, data["name"] as? String ?: "")
+        val at = (data["createdAt"] as? Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
+        return StoryListDoc(id, kind, mode, members, data["allowReplies"] as? Boolean ?: true, data["name"] as? String ?: "",
+            data["emoji"] as? String ?: "", at)
     }
+
+    /** iOS StoryAudience.nameLimit and StoryAudienceStore.maxCustom. */
+    const val NAME_LIMIT = 25
+    const val MAX_CUSTOM = 5
+    const val KIND_CUSTOM = "custom"
+
+    /** iOS StoryAudience.subtitle for a custom list. */
+    fun customSubtitle(l: StoryListDoc): String {
+        val n = l.members.size
+        return "Custom story · $n ${if (n == 1) "viewer" else "viewers"}"
+    }
+
+    /** iOS NameStoryView footer: the count shows once it is nearly spent. */
+    fun nameFooter(name: String): String =
+        if (name.length >= NAME_LIMIT - 5) "Only you can see the name of this story. ${NAME_LIMIT - name.length} left."
+        else "Only you can see the name of this story."
+
+    /** Clamped as it is typed (iOS onChange prefix). */
+    fun clampName(s: String): String = s.take(NAME_LIMIT)
+
+    /** iOS StoryAudienceStore.createCustom: a new list, `only` over its members. */
+    fun newCustom(id: String, name: String, members: Collection<String>, allowReplies: Boolean, emoji: String, nowMs: Long) =
+        StoryListDoc(id, KIND_CUSTOM, MODE_ONLY, members.toList(), allowReplies, name.trim(), emoji, nowMs)
+
+    /** Custom lists posted to: the union of their members within my chats (iOS postToLists). */
+    fun listsRecipients(lists: List<StoryListDoc>, contacts: Set<String>): Set<String> =
+        lists.flatMap { it.members }.toSet().intersect(contacts)
+
+    /** Replies only when every ticked list allows them (iOS: the strictest list wins). */
+    fun listsAllowReplies(lists: List<StoryListDoc>): Boolean = lists.all { it.allowReplies }
+
+    /** The name a custom story of mine shows (iOS storyName): its lists' names now, else the name at posting. */
+    fun storyName(link: StoryAudienceLink?, custom: List<StoryListDoc>): String? {
+        link ?: return null
+        val live = link.listIds.mapNotNull { id -> custom.firstOrNull { it.id == id }?.name }.filter { it.isNotEmpty() }
+        if (live.isNotEmpty() && live.size == link.listIds.size) return live.joinToString(", ")
+        return link.name.ifEmpty { null }
+    }
+
+    /**
+     * iOS SelectViewersView.sections: by first letter, A to Z, then "#" for names that do not start
+     * with a letter; names sorted inside each.
+     */
+    fun <T> letterSections(items: List<T>, name: (T) -> String): List<Pair<String, List<T>>> =
+        items.groupBy { t ->
+            val f = name(t).trim().firstOrNull()
+            if (f != null && f.isLetter()) f.uppercaseChar().toString() else "#"
+        }.toList()
+            .sortedWith(compareBy<Pair<String, List<T>>> { it.first == "#" }.thenBy { it.first })
+            .map { (k, v) -> k to v.sortedBy { name(it).lowercase() } }
+
+    /** iOS tapAudience: custom lists toggle, so a second tick adds a list. Empty = back to My Chats. */
+    fun toggleList(ticked: Set<String>, id: String): Set<String> = if (id in ticked) ticked - id else ticked + id
 
     /** The Stories settings row subtitles (iOS StoryAudience.subtitle). */
     fun everyoneSubtitle() = "All Fariin connections"
@@ -134,32 +193,98 @@ object StoryPrivacyRules {
 object StoryPrivacyStore {
     private val _myFriends = MutableStateFlow(StoryPrivacyRules.defaultMyFriends)
     private val _hidden = MutableStateFlow<Set<String>>(emptySet())
+    private val _custom = MutableStateFlow<List<StoryListDoc>>(emptyList())
+    private val _links = MutableStateFlow<Map<String, StoryAudienceLink>>(emptyMap())
     val myFriends: StateFlow<StoryListDoc> = _myFriends
     val hidden: StateFlow<Set<String>> = _hidden
+    /** My custom lists, oldest first (iOS StoryAudienceStore.custom). */
+    val custom: StateFlow<List<StoryListDoc>> = _custom
+    /** Story id > the list(s) it went to (iOS storyLinks, users/{me}/storyAudiences). */
+    val links: StateFlow<Map<String, StoryAudienceLink>> = _links
     private var reg: ListenerRegistration? = null
+    private var linkReg: ListenerRegistration? = null
     private var loadedFor = ""
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val db get() = FirebaseFirestore.getInstance()
 
     fun start(me: String) {
         if (me.isEmpty() || me == loadedFor) return
-        reg?.remove()
+        reg?.remove(); linkReg?.remove()
         loadedFor = me
         _myFriends.value = StoryPrivacyRules.defaultMyFriends
         _hidden.value = emptySet()
-        reg = db.collection("users").document(me).collection("storyLists").addSnapshotListener { snap, _ ->
+        _custom.value = emptyList()
+        _links.value = emptyMap()
+        val user = db.collection("users").document(me)
+        reg = user.collection("storyLists").addSnapshotListener { snap, _ ->
             snap ?: return@addSnapshotListener
+            // The whole snapshot each time, as iOS: a deleted list or a missing doc is its default again.
+            var friends = StoryPrivacyRules.defaultMyFriends
+            var hidden = emptySet<String>()
+            val lists = mutableListOf<StoryListDoc>()
             for (d in snap.documents) {
                 val l = StoryPrivacyRules.decode(d.id, d.data ?: continue) ?: continue
-                when (d.id) {
-                    StoryPrivacyRules.MY_FRIENDS_ID -> _myFriends.value = l
-                    StoryPrivacyRules.HIDDEN_ID -> _hidden.value = l.members.toSet()
+                when {
+                    d.id == StoryPrivacyRules.MY_FRIENDS_ID -> friends = l
+                    l.kind == "hidden" -> hidden = l.members.toSet()
+                    l.kind == StoryPrivacyRules.KIND_CUSTOM -> lists.add(l)
                 }
+            }
+            _myFriends.value = friends
+            _hidden.value = hidden
+            _custom.value = lists.sortedBy { it.createdAtMs }
+        }
+        linkReg = user.collection("storyAudiences").addSnapshotListener { snap, _ ->
+            snap ?: return@addSnapshotListener
+            _links.value = snap.documents.associate { d ->
+                d.id to StoryAudienceLink((d.get("listIds") as? List<*>)?.filterIsInstance<String>() ?: emptyList(), d.getString("name") ?: "")
             }
         }
     }
 
-    fun stop() { reg?.remove(); reg = null; loadedFor = "" }
+    fun stop() { reg?.remove(); reg = null; linkReg?.remove(); linkReg = null; loadedFor = "" }
+
+    val canAddCustom: Boolean get() = _custom.value.size < StoryPrivacyRules.MAX_CUSTOM
+
+    /** iOS createCustom: shown at once; the write is fire-and-forget and the listener confirms it. */
+    fun createCustom(name: String, members: Collection<String>, allowReplies: Boolean, emoji: String): StoryListDoc {
+        val l = StoryPrivacyRules.newCustom(java.util.UUID.randomUUID().toString().uppercase(), name, members, allowReplies, emoji,
+            System.currentTimeMillis())
+        _custom.value = _custom.value + l
+        write(l)
+        return l
+    }
+
+    fun updateCustom(l: StoryListDoc) {
+        if (_custom.value.none { it.id == l.id }) return
+        _custom.value = _custom.value.map { if (it.id == l.id) l else it }
+        write(l)
+    }
+
+    /** iOS delete: the list goes; stories already sent to it are not touched. */
+    fun deleteCustom(id: String) {
+        val me = loadedFor.ifEmpty { return }
+        _custom.value = _custom.value.filterNot { it.id == id }
+        db.collection("users").document(me).collection("storyLists").document(id).delete()
+    }
+
+    /**
+     * iOS linkStory: which custom list(s) a story went to, at users/{me}/storyAudiences/{storyId}
+     * {listIds, name, createdAt}. Any other audience removes a link the story had.
+     */
+    fun linkStory(storyId: String, label: String, listIds: List<String>, name: String) {
+        val me = loadedFor.ifEmpty { return }
+        val ref = db.collection("users").document(me).collection("storyAudiences").document(storyId)
+        if (label != StoryPrivacyRules.KIND_CUSTOM || (listIds.isEmpty() && name.isEmpty())) {
+            if (_links.value[storyId] == null) return
+            _links.value = _links.value - storyId
+            ref.delete()
+            return
+        }
+        val link = StoryAudienceLink(listIds.take(StoryPrivacyRules.MAX_CUSTOM), name.take(200))
+        _links.value = _links.value + (storyId to link)
+        ref.set(mapOf("listIds" to link.listIds, "name" to link.name, "createdAt" to FieldValue.serverTimestamp()))
+    }
 
     private fun write(l: StoryListDoc) {
         val me = loadedFor.ifEmpty { return }
@@ -191,6 +316,56 @@ object StoryPrivacyStore {
             }
         }
     }
+}
+
+/** Which custom list(s) one of my stories went to (iOS StoryAudienceLink), mine alone. */
+data class StoryAudienceLink(val listIds: List<String>, val name: String)
+
+/**
+ * Get notifications for one person's stories (iOS StoryNotifyStore): off for everybody until turned
+ * on for someone. Each one on is `users/{me}/storyNotify/{them}` {at: server time, author}. The push
+ * itself is the server's (onStoryMediaReady > notifyStoryFollowers).
+ */
+object StoryNotify {
+    private val _on = MutableStateFlow<Set<String>>(emptySet())
+    val on: StateFlow<Set<String>> = _on
+    private var loadedFor = ""
+    private val db get() = FirebaseFirestore.getInstance()
+
+    fun load(me: String) {
+        if (me.isEmpty() || me == loadedFor) return
+        loadedFor = me
+        _on.value = emptySet()
+        db.collection("users").document(me).collection("storyNotify").get().addOnSuccessListener { snap ->
+            // Union, not replace: one tapped while this was on its way is already in.
+            if (loadedFor == me) _on.value = _on.value + snap.documents.map { it.id }
+        }
+    }
+
+    /** Turns it on or off for [author] and answers the new state; a refused write puts it back. */
+    fun toggle(me: String, author: String): Boolean {
+        if (me.isEmpty() || author.isEmpty() || author == me) return false
+        val ref = db.collection("users").document(me).collection("storyNotify").document(author)
+        if (author in _on.value) {
+            _on.value = _on.value - author
+            ref.delete().addOnFailureListener { if (loadedFor == me) _on.value = _on.value + author }
+            return false
+        }
+        _on.value = _on.value + author
+        ref.set(StoryNotifyRules.doc(author, FieldValue.serverTimestamp()))
+            .addOnFailureListener { if (loadedFor == me) _on.value = _on.value - author }
+        return true
+    }
+}
+
+/** The pure half of Get notifications: the document, the menu item and the bar (iOS StoryNotifyBar). */
+object StoryNotifyRules {
+    fun doc(author: String, at: Any): Map<String, Any> = mapOf("at" to at, "author" to author)
+    fun menuTitle(on: Boolean) = if (on) "Mute notifications" else "Get notifications"
+    /** The bar's line around the bold name: before, name, after. */
+    fun barParts(on: Boolean, name: String): Triple<String, String, String> =
+        if (on) Triple("You will receive a notification whenever ", name, " posts a story.")
+        else Triple("You will no longer receive a notification when ", name, " posts a story.")
 }
 
 /**
@@ -246,8 +421,26 @@ object PostedStoriesRules {
 
     data class Folder(val key: String, val name: String, val kind: String, val stories: List<Story>)
 
+    /** iOS StoryShareRights.allows for my own story: only one that went to Everyone, not one-time, not screenshot-blocked. */
+    fun canShare(s: Story): Boolean = s.audienceLabel == "everyone" && !s.oneTime && !s.captureProtected && s.groupId == null
+
+    /** Edit Viewers: a one-time story's audience is spent as it is watched, and a group story's is its group. */
+    fun canEditViewers(s: Story): Boolean = !s.oneTime && s.groupId == null
+
+    /**
+     * iOS KulanApp.storyLink: fariin.com/<username>/s/<id>, or /s/<id> with no username yet. Android
+     * story ids are already the short 10-character form.
+     */
+    fun storyLink(id: String, handle: String?): String {
+        val i = enc(id)
+        val h = handle?.trim().orEmpty()
+        return if (h.isEmpty()) "https://fariin.com/s/$i" else "https://fariin.com/${enc(h)}/s/$i"
+    }
+
+    private fun enc(s: String): String = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+
     /** One folder per audience in the order first met (iOS PostedStoriesView.folders). */
-    fun folders(rows: List<Story>): List<Folder> {
+    fun folders(rows: List<Story>, mergeCustom: Boolean = true, customName: (Story) -> String? = { null }): List<Folder> {
         val out = LinkedHashMap<String, Triple<String, String, MutableList<Story>>>()
         for (s in rows) {
             val (kind, name) = when {
@@ -256,7 +449,8 @@ object PostedStoriesRules {
                 s.audienceLabel == "friends" -> "friends" to "My Chats"
                 s.audienceLabel == "glowers" -> "glowers" to "Glowers"
                 s.audienceLabel == "group" -> "group" to "Group Stories"
-                s.audienceLabel == "custom" -> "custom" to "Custom"
+                // All Custom tells the lists apart by name; All keeps them in one folder (iOS mergeCustom).
+                s.audienceLabel == "custom" -> "custom" to (if (mergeCustom) "Custom" else customName(s) ?: "Custom")
                 else -> "friends" to "My Chats"
             }
             out.getOrPut("$kind:$name") { Triple(kind, name, mutableListOf()) }.third.add(s)

@@ -47,6 +47,13 @@ def val(v):
     raise TypeError(v)
 
 
+def patch_missing(path, have, fields):
+    """patch_doc with only the fields the document does not have yet."""
+    missing = {k: v for k, v in fields.items() if k not in have}
+    if missing:
+        patch_doc(path, missing)
+
+
 def patch_doc(path, fields):
     body = {"fields": {k: val(v) for k, v in fields.items()}}
     mask = "&".join(f"updateMask.fieldPaths={k}" for k in fields)   # merge, never wipe other fields
@@ -247,7 +254,13 @@ def seed_carol_stories():
     for other in (alice, bobby):
         users = sorted([other["uid"], carol["uid"]])
         cid = "_".join(users)
-        patch_doc(f"conversations/{cid}", {
+        # An existing chat keeps what it has (lastMessage, lastSender, updatedAt): only missing fields are added.
+        try:
+            have = json.loads(urllib.request.urlopen(urllib.request.Request(
+                f"{FS}/conversations/{cid}", headers={"Authorization": "Bearer owner"})).read()).get("fields", {})
+        except urllib.error.HTTPError:
+            have = {}
+        patch_missing(f"conversations/{cid}", have, {
             "users": users, "names": {other["uid"]: other["name"], carol["uid"]: carol["name"]}, "photos": {},
             "startedBy": other["uid"], "accepted": True, "createdAt": iso(now - datetime.timedelta(hours=2)),
             "updatedAt": iso(now - datetime.timedelta(hours=2)), "lastMessage": "", "lastSender": "",

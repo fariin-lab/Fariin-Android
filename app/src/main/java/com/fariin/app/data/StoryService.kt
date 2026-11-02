@@ -148,6 +148,8 @@ class StoryService(
 
     class PostRefused(message: String) : Exception(message)
 
+    private val EMPTY_AUDIENCE = "Everyone in this list has been excluded or is no longer a chat. Pick another audience or add people to this one."
+
     /**
      * iOS postStory / postVideoSegment: the budget counters, the document with an empty
      * `mediaUrl`, the upload, then `mediaUrl` (and `thumbUrl`), and the public mirror for
@@ -163,16 +165,21 @@ class StoryService(
         captureSwitch: Boolean = false,
         myFriends: StoryListDoc = StoryPrivacyRules.defaultMyFriends,
         hiddenFrom: Set<String> = emptySet(),
+        lists: List<StoryListDoc> = emptyList(),
     ): String {
         if (me.isEmpty()) throw PostRefused("Not signed in.")
-        val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, picked, myFriends, hiddenFrom)
+        // A custom post names the people of its ticked lists (iOS postToLists: the union).
+        val custom = choice == StoryAudienceChoice.CUSTOM
+        val people = if (custom) lists.flatMap { it.members }.toSet() else picked
+        if (custom && lists.isEmpty()) throw PostRefused(EMPTY_AUDIENCE)
+        val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom)
         val recipients = reached
         val mode = if (choice == StoryAudienceChoice.EVERYONE) "everyone" else how
-        val replies = StoryPrivacyRules.allowsReplies(choice, myFriends)
+        val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists) else StoryPrivacyRules.allowsReplies(choice, myFriends)
         val capture = StoryPrivacyRules.captureProtected(choice, captureSwitch)
         // iOS "No one will see this": a list that resolves to nobody while I do have chats.
-        if (!choice.needsPeople && recipients.isEmpty() && StoryRules.contacts(me, convs).isNotEmpty())
-            throw PostRefused("Everyone in this list has been excluded or is no longer a chat. Pick another audience or add people to this one.")
+        if ((!choice.needsPeople || custom) && recipients.isEmpty() && StoryRules.contacts(me, convs).isNotEmpty())
+            throw PostRefused(EMPTY_AUDIENCE)
         if (choice.needsPeople && recipients.isEmpty()) throw PostRefused("Pick at least one person.")
         countAgainstBudget()
         val id = StoryRules.newStoryId()
@@ -212,10 +219,57 @@ class StoryService(
                     )).await()
                 }
             }
+            if (custom) StoryPrivacyStore.linkStory(id, StoryPrivacyRules.KIND_CUSTOM, lists.map { it.id }, lists.joinToString(", ") { it.name })
             return id
         } catch (e: Exception) {
             runCatching { doc.delete().await() }
             throw e
+        }
+    }
+
+    /**
+     * Edit Viewers (iOS updateStoryAudience): the same story, id, time, media and caption; only who
+     * can see it changes. Everyone, My Chats or custom lists, resolved the way a post is. Narrowing
+     * takes the public copy down first; widening to Everyone writes it.
+     */
+    suspend fun updateAudience(
+        story: Story,
+        choice: StoryAudienceChoice,
+        lists: List<StoryListDoc>,
+        convs: List<Conversation>,
+        myFriends: StoryListDoc,
+        hiddenFrom: Set<String>,
+    ) {
+        if (me.isEmpty() || story.authorUid != me) throw PostRefused("This isn't your story.")
+        if (story.groupId != null) throw PostRefused("A group story's viewers are its group.")
+        if (story.oneTime) throw PostRefused("A one-time story's viewers can't be changed.")
+        val custom = choice == StoryAudienceChoice.CUSTOM
+        if (custom && lists.isEmpty()) throw PostRefused(EMPTY_AUDIENCE)
+        val contacts = StoryRules.contacts(me, convs)
+        val people = if (custom) lists.flatMap { it.members }.toSet() else emptySet()
+        val (recipients, how) = StoryPrivacyRules.resolve(contacts, choice, people, myFriends, hiddenFrom)
+        val everyone = choice == StoryAudienceChoice.EVERYONE
+        if (recipients.isEmpty() && contacts.isNotEmpty()) throw PostRefused(EMPTY_AUDIENCE)
+        val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists) else StoryPrivacyRules.allowsReplies(choice, myFriends)
+        val mirror = db.collection("users").document(me).collection("publicStories").document(story.id)
+        if (!everyone) mirror.delete().await()
+        db.collection("stories").document(story.id).update(mapOf(
+            "audience" to mapOf("mode" to if (everyone) "everyone" else how, "listId" to "my-story"),
+            "audienceLabel" to choice.tagLabel,
+            "public" to everyone,
+            "allowsReplies" to replies,
+            "recipientUids" to recipients.map { StoryAudienceToken.token(it) },
+        )).await()
+        StoryPrivacyStore.linkStory(story.id, choice.tagLabel, if (custom) lists.map { it.id } else emptyList(),
+            if (custom) lists.joinToString(", ") { it.name } else "")
+        if (everyone) runCatching {
+            mirror.set(mapOf(
+                "authorUid" to me, "createdAt" to Timestamp(Date(story.createdAtMs)), "expiresAt" to Timestamp(Date(story.expiresAtMs)),
+                "mediaUrl" to story.mediaUrl, "thumbUrl" to story.thumbUrl, "blurThumb" to story.blurThumb,
+                "stickers" to emptyList<Any>(), "type" to if (story.isVideo) "video" else "image",
+                "caption" to story.caption, "duration" to story.durationSec,
+                "allowsReplies" to replies, "captureProtected" to story.captureProtected,
+            )).await()
         }
     }
 

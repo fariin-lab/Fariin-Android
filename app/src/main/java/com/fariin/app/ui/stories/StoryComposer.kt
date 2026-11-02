@@ -106,14 +106,15 @@ object StoryUploads {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start(me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
-              hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false) {
+              hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false,
+              lists: List<com.fariin.app.data.StoryListDoc> = emptyList()) {
         state.value = State.Uploading
         // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
         val myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
         val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
         scope.launch {
             state.value = try {
-                StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden)
+                StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists)
                 null
             } catch (e: StoryService.PostRefused) {
                 State.Failed(e.message ?: "Couldn't post your story.")
@@ -325,8 +326,8 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             CircularProgressIndicator(color = Color.White)
         }
         if (audience) {
-            AudiencePage(me, conversations, onBack = { audience = false }) { choice, picked, capture ->
-                StoryUploads.start(me, posted, caption, choice, picked, hours, conversations, capture)
+            ShareStoryAudiencePage(me, conversations, onBack = { audience = false }) { choice, picked, lists, capture ->
+                StoryUploads.start(me, posted, caption, choice, picked, hours, storyConvs(conversations), capture, lists)
                 onPosted()
             }
         }
@@ -347,109 +348,6 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         confirmButton = { TextButton({ askDiscard = false; onClose() }) { Text("Discard", color = red) } },
         dismissButton = { TextButton({ askDiscard = false }) { Text("Cancel") } },
     )
-}
-
-/** "Who can see your story": Everyone, My Chats, Custom and One-Time Story, then Post Story. */
-@Composable
-private fun AudiencePage(
-    me: String,
-    conversations: List<Conversation>,
-    onBack: () -> Unit,
-    onPost: (StoryAudienceChoice, Set<String>, Boolean) -> Unit,
-) {
-    val c = Fariin.colors
-    var choice by remember { mutableStateOf(StoryAudienceChoice.MY_CHATS) }
-    var blockShots by remember { mutableStateOf(false) }
-    val myFriends by com.fariin.app.data.StoryPrivacyStore.myFriends.collectAsState()
-    var picked by remember { mutableStateOf(setOf<String>()) }
-    var picking by remember { mutableStateOf(false) }
-    val contacts = remember(conversations) {
-        val ids = StoryRules.contacts(me, conversations)
-        conversations.filter { !it.isGroup && it.otherUid(me) in ids }
-    }
-    BackHandler { if (picking) picking = false else onBack() }
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clickable { if (picking) picking = false else onBack() }, contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label)
-            }
-            Text(if (picking) choice.title else "Share Story", color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-            Spacer(Modifier.size(44.dp))
-        }
-        if (!picking) Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            Text("Who can see your story", color = c.secondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 6.dp))
-            StoryAudienceChoice.entries.forEach { a ->
-                Row(
-                    Modifier.fillMaxWidth().clickable {
-                        choice = a
-                        if (a.needsPeople) picking = true
-                    }.padding(horizontal = 20.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(a.title, color = c.label, fontSize = 17.sp)
-                        val sub = when {
-                            a.needsPeople && choice == a && picked.isNotEmpty() -> if (picked.size == 1) "1 person" else "${picked.size} people"
-                            a == StoryAudienceChoice.MY_CHATS && myFriends.mode != com.fariin.app.data.StoryPrivacyRules.MODE_ALL ->
-                                com.fariin.app.data.StoryPrivacyRules.myChatsSubtitle(myFriends)
-                            a == StoryAudienceChoice.MY_CHATS -> if (contacts.size == 1) "1 person" else "${contacts.size} people"
-                            else -> null
-                        }
-                        if (sub != null) Text(sub, color = c.secondary, fontSize = 14.sp)
-                    }
-                    Icon(if (choice == a) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, contentDescription = null,
-                        tint = if (choice == a) c.accent else c.secondary)
-                }
-                HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 20.dp))
-            }
-            Text(choice.footer, color = c.secondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
-            // iOS ShareStorySheet: Block screenshots, locked on for a one-time story.
-            val oneTime = choice == StoryAudienceChoice.ONE_TIME
-            val shotsOn = com.fariin.app.data.StoryPrivacyRules.captureProtected(choice, blockShots)
-            Row(
-                Modifier.fillMaxWidth().padding(top = 12.dp).clickable(enabled = !oneTime) { blockShots = !blockShots }
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Block screenshots", color = if (oneTime) c.secondary else c.label, fontSize = 17.sp, modifier = Modifier.weight(1f))
-                androidx.compose.material3.Switch(
-                    checked = shotsOn, onCheckedChange = { if (!oneTime) blockShots = it }, enabled = !oneTime,
-                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White, checkedBorderColor = c.blue),
-                )
-            }
-            Text(com.fariin.app.data.StoryPrivacyRules.captureFooter(choice), color = c.secondary, fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-        } else {
-            LazyColumn(Modifier.weight(1f)) {
-                items(contacts.size, key = { contacts[it].id }) { i ->
-                    val conv = contacts[i]
-                    val uid = conv.otherUid(me)
-                    val on = uid in picked
-                    Row(
-                        Modifier.fillMaxWidth().clickable { picked = if (on) picked - uid else picked + uid }
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Avatar(conv.photoUrl(me), 40.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Text(conv.name(me), color = c.label, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, contentDescription = null,
-                            tint = if (on) c.accent else c.secondary)
-                    }
-                }
-            }
-        }
-        val ready = !choice.needsPeople || picked.isNotEmpty()
-        Text(
-            if (picking) "Done" else "Post Story", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                .background(if (ready || picking) c.accent else c.accent.copy(alpha = 0.4f))
-                .clickable(enabled = ready || picking) { if (picking) picking = false else onPost(choice, picked, com.fariin.app.data.StoryPrivacyRules.captureProtected(choice, blockShots)) }
-                .padding(vertical = 14.dp),
-        )
-    }
 }
 
 /** Picks a photo or video, prepares it off the main thread, then the caller opens the composer. */

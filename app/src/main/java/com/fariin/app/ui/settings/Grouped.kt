@@ -61,15 +61,18 @@ internal fun PageBar(title: String, onBack: (() -> Unit)?, action: (@Composable 
 internal fun SettingsSection(
     header: String? = null,
     footer: String? = null,
+    /** Something small at the end of the header line (the Stories page's + New). */
+    headerAction: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        if (header != null) {
+        if (header != null) Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 header, style = MaterialTheme.typography.titleSmall, color = c.blue,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+                modifier = Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
             )
+            if (headerAction != null) Box(Modifier.padding(end = 4.dp, bottom = 4.dp)) { headerAction() }
         }
         Column(Modifier.fillMaxWidth().clip(SectionShape).background(c.card), content = content)
         if (footer != null) {

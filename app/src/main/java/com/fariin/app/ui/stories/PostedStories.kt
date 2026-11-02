@@ -37,6 +37,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +77,8 @@ fun PostedStoriesPage(
     myPhoto: String?,
     onOpen: (Story) -> Unit,
     onBack: () -> Unit,
+    conversations: List<com.fariin.app.data.Conversation> = emptyList(),
+    myHandle: String? = null,
 ) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
@@ -84,11 +88,21 @@ fun PostedStoriesPage(
     var menuFor by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<Story?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    BackHandler { onBack() }
+    var editViewers by remember { mutableStateOf<Story?>(null) }
+    var updating by remember { mutableStateOf(false) }
+    var updateError by remember { mutableStateOf<String?>(null) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(me) { com.fariin.app.data.StoryPrivacyStore.start(me) }
+    val custom by com.fariin.app.data.StoryPrivacyStore.custom.collectAsState()
+    val links by com.fariin.app.data.StoryPrivacyStore.links.collectAsState()
+    BackHandler(enabled = editViewers == null) { onBack() }
     val all = remember(stories) { stories.sortedByDescending { it.createdAtMs } }
     val rows = all.filter { filter.matches(it) }
-    val folders = PostedStoriesRules.folders(rows)
+    val folders = PostedStoriesRules.folders(rows, mergeCustom = filter != PostedStoriesRules.Filter.CUSTOM) {
+        com.fariin.app.data.StoryPrivacyRules.storyName(links[it.id], custom)
+    }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label) }
@@ -138,7 +152,19 @@ fun PostedStoriesPage(
                                 .combinedClickable(onClick = { onOpen(s) }, onLongClick = { menuFor = s.id }),
                         ) {
                             AsyncImage(s.listThumb, contentDescription = "Story", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            // iOS hold menu: Edit Viewers, Share (only a story that went to Everyone), Delete.
                             DropdownMenu(expanded = menuFor == s.id, onDismissRequest = { menuFor = null }) {
+                                if (PostedStoriesRules.canEditViewers(s)) DropdownMenuItem(text = { Text("Edit Viewers") },
+                                    leadingIcon = { Icon(Icons.Filled.Group, contentDescription = null) },
+                                    onClick = { menuFor = null; editViewers = s })
+                                if (PostedStoriesRules.canShare(s)) DropdownMenuItem(text = { Text("Share") },
+                                    leadingIcon = { Icon(painterResource(R.drawable.ic_link_share), contentDescription = null, modifier = Modifier.size(24.dp)) },
+                                    onClick = {
+                                        menuFor = null
+                                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                            .putExtra(android.content.Intent.EXTRA_TEXT, PostedStoriesRules.storyLink(s.id, myHandle))
+                                        ctx.startActivity(android.content.Intent.createChooser(send, "Share"))
+                                    })
                                 DropdownMenuItem(text = { Text("Delete", color = c.red) },
                                     leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = c.red) },
                                     onClick = { menuFor = null; confirmDelete = s })
@@ -148,6 +174,34 @@ fun PostedStoriesPage(
                 }
             }
         }
+    }
+    editViewers?.let { s ->
+        // iOS ShareStorySheet(editing:): the same page, Update instead of Post Story.
+        ShareStoryAudiencePage(me, conversations, myPhoto = myPhoto, editing = s, busy = updating,
+            onBack = { editViewers = null }) { choice, _, lists, _ ->
+            updating = true
+            scope.launch {
+                try {
+                    service.updateAudience(s, choice, lists, storyConvs(conversations),
+                        com.fariin.app.data.StoryPrivacyStore.myFriends.value, com.fariin.app.data.StoryPrivacyStore.hidden.value)
+                    editViewers = null
+                } catch (e: StoryService.PostRefused) {
+                    updateError = e.message
+                } catch (e: Exception) {
+                    android.util.Log.w("StoryEdit", "update failed", e)
+                    updateError = "Who can see this story hasn't changed. Check your connection and try again."
+                }
+                updating = false
+            }
+        }
+    }
+    }
+    updateError?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { updateError = null },
+            title = { Text("Couldn't update") }, text = { Text(msg) },
+            confirmButton = { TextButton(onClick = { updateError = null }) { Text("OK") } },
+        )
     }
     confirmDelete?.let { s ->
         AlertDialog(

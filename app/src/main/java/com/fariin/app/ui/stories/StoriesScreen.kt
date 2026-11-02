@@ -314,7 +314,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     // Start the viewer on the tapped story: a watermark just before it.
                     state.mine?.let { g -> viewing = listOf(g.copy(lastViewedAtMs = s.createdAtMs - 1)) to 0 }
                 },
-                onBack = { posted = false })
+                onBack = { posted = false }, conversations = conversations, myHandle = profile?.handle)
         }
     }
     hideTarget?.let { g ->

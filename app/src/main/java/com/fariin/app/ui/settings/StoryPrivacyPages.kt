@@ -56,6 +56,8 @@ import com.google.firebase.auth.FirebaseAuth
 
 internal const val PAGE_STORY_EVERYONE = "storiesSettings:everyone"
 internal const val PAGE_STORY_MYCHATS = "storiesSettings:mychats"
+/** A custom list's page: this prefix + the list id (iOS CustomStoryDetailView). */
+internal const val PAGE_STORY_CUSTOM = "storiesSettings:custom:"
 
 /** A person a story list can name: uid, name, photo. */
 private data class StoryPerson(val uid: String, val name: String, val photo: String?)
@@ -76,10 +78,46 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
     val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
     LaunchedEffect(me) { StoryPrivacyStore.start(me) }
     val myFriends by StoryPrivacyStore.myFriends.collectAsState()
-    SettingsSection(header = "Stories", footer = "Stories disappear after 24 hours. Choose who can see them.") {
+    val custom by StoryPrivacyStore.custom.collectAsState()
+    var creating by remember { mutableStateOf(false) }
+    // iOS StorySettingsView: the same rows as Share Story, + New in the header (no One-Time or Group here).
+    SettingsSection(header = "Stories", footer = "Stories disappear after 24 hours. Choose who can see them.",
+        headerAction = { com.fariin.app.ui.stories.NewAudienceButton(StoryPrivacyStore.canAddCustom, onCustom = { creating = true }) }) {
         SettingsRow("Everyone", value = StoryPrivacyRules.everyoneSubtitle()) { push(PAGE_STORY_EVERYONE) }
-        SettingsRow("My Chats", value = StoryPrivacyRules.myChatsSubtitle(myFriends), last = true) { push(PAGE_STORY_MYCHATS) }
+        SettingsRow("My Chats", value = StoryPrivacyRules.myChatsSubtitle(myFriends), last = custom.isEmpty()) { push(PAGE_STORY_MYCHATS) }
+        for ((i, l) in custom.withIndex()) {
+            Row(
+                Modifier.fillMaxWidth().clickable { push(PAGE_STORY_CUSTOM + l.id) }.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                com.fariin.app.ui.stories.CustomListBadge(l.emoji, 36.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(l.name, style = MaterialTheme.typography.bodyLarge, color = Fariin.colors.label, maxLines = 1)
+                    Text(StoryPrivacyRules.customSubtitle(l), style = MaterialTheme.typography.bodyMedium, color = Fariin.colors.secondary, maxLines = 1)
+                }
+            }
+            if (i != custom.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = Fariin.colors.separator, modifier = Modifier.padding(start = 64.dp))
+        }
     }
+    if (creating) androidx.compose.ui.window.Dialog(
+        onDismissRequest = { creating = false },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            val people = remember { com.fariin.app.ui.stories.storyPeople(me, CryptoHub.listedAll()) }
+            com.fariin.app.ui.stories.CreateCustomStoryFlow(people, onCreated = { creating = false }, onCancel = { creating = false })
+        }
+    }
+}
+
+/** iOS CustomStoryDetailView, from Settings > Stories. */
+@Composable
+internal fun StoryCustomPage(id: String, pop: () -> Unit) {
+    val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    LaunchedEffect(me) { StoryPrivacyStore.start(me) }
+    val people = remember { com.fariin.app.ui.stories.storyPeople(me, CryptoHub.listedAll()) }
+    com.fariin.app.ui.stories.CustomStoryDetailPage(id, people, pop)
 }
 
 /** iOS EveryonePrivacyView over StoryHiddenListPage: the people my Everyone stories leave out. */

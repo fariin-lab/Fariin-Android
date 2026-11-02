@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -186,6 +188,10 @@ fun StoryViewer(
     var profileUid by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<Story?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    // iOS StoryNotifyMenuAction: the bar that confirms Get / Mute notifications, 3 s, a newer tap keeps its own.
+    var notifyBar by remember { mutableStateOf<Triple<Boolean, String, Int>?>(null) }
+    LaunchedEffect(me) { com.fariin.app.data.StoryNotify.load(me) }
+    LaunchedEffect(notifyBar) { val b = notifyBar ?: return@LaunchedEffect; delay(3000); if (notifyBar == b) notifyBar = null }
     var dragY by remember { mutableFloatStateOf(0f) }
     var replyFocused by remember { mutableStateOf(false) }
 
@@ -262,6 +268,10 @@ fun StoryViewer(
                     onShown = onShown,
                     // iOS "..." > Hide Stories: hidden at once, and the viewer closes.
                     onHide = { uid -> com.fariin.app.data.StoryMutes.setHidden(context, uid, true); onClose() },
+                    onNotify = { uid, name ->
+                        val on = com.fariin.app.data.StoryNotify.toggle(me, uid)
+                        notifyBar = Triple(on, name, (notifyBar?.third ?: 0) + 1)
+                    },
                     onLike = { s, liked ->
                         if (liked) toast = "Reacted"
                         storyScope.launch { service.setLiked(s, liked) }
@@ -271,6 +281,31 @@ fun StoryViewer(
         }
 
         flying?.let { (emoji, key) -> FlyingEmoji(emoji, key) { if (flying?.second == key) flying = null } }
+
+        AnimatedVisibility(notifyBar != null, enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 84.dp)) {
+            val b = notifyBar
+            if (b != null) {
+                val (before, name, after) = com.fariin.app.data.StoryNotifyRules.barParts(b.first, b.second)
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(RoundedCornerShape(25.dp)).background(Color(0xE6202022)),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.width(50.dp), contentAlignment = Alignment.Center) {
+                        Icon(androidx.compose.ui.res.painterResource(if (b.first) com.fariin.app.R.drawable.ic_notifications else com.fariin.app.R.drawable.ic_bell_off_outline),
+                            contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            append(before)
+                            pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold)); append(name); pop()
+                            append(after)
+                        },
+                        color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(end = 16.dp, top = 10.dp, bottom = 10.dp),
+                    )
+                }
+            }
+        }
 
         AnimatedVisibility(toast != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
             Text(
@@ -351,6 +386,7 @@ private fun StoryPage(
     receipts: Boolean,
     onShown: (Story) -> Unit,
     onHide: (String) -> Unit,
+    onNotify: (uid: String, name: String) -> Unit = { _, _ -> },
 ) {
     val stories = group.stories
     if (stories.isEmpty()) return
@@ -361,7 +397,9 @@ private fun StoryPage(
     var holding by remember { mutableStateOf(false) }
     var loaded by remember(story.id) { mutableStateOf(false) }
     var progress by remember(story.id) { mutableFloatStateOf(0f) }
-    val stopped = !active || paused || holding
+    // The ... menu holds the story still while it is open (iOS pauses under its menu).
+    var menu by remember { mutableStateOf(false) }
+    val stopped = !active || paused || holding || menu
 
     fun goNext() { if (index + 1 < stories.size) index++ else onEnd() }
     fun goBack() { if (index > 0) index-- else onBeforeStart() }
@@ -465,15 +503,26 @@ private fun StoryPage(
                             modifier = Modifier.weight(1f, fill = false))
                         Text("  " + StoryRules.timeAgo(story.createdAtMs), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp)
                     }
-                    if (mine) Text(StoryRules.audienceTitle(story), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
+                    if (mine) Text(customTitle(story) ?: StoryRules.audienceTitle(story), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
                 }
                 if (!mine) {
-                    var menu by remember { mutableStateOf(false) }
                     Box {
                         Box(Modifier.size(40.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color.White)
                         }
                         androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            // iOS: Get notifications first, for a person's story (not a group's).
+                            if (story.groupId == null) {
+                                val notifyOn = story.authorUid in com.fariin.app.data.StoryNotify.on.collectAsState().value
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(com.fariin.app.data.StoryNotifyRules.menuTitle(notifyOn)) },
+                                    leadingIcon = {
+                                        Icon(androidx.compose.ui.res.painterResource(if (notifyOn) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
+                                            contentDescription = null, modifier = Modifier.size(22.dp))
+                                    },
+                                    onClick = { menu = false; onNotify(story.authorUid, group.name.ifEmpty { "Fariin user" }) },
+                                )
+                            }
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("Hide Stories") },
                                 leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
@@ -798,4 +847,13 @@ private fun StoryViewersSheet(
             }
         }
     }
+}
+
+/** My custom story's header line: its list's name now (iOS StoryAudienceStore.storyName), else null. */
+@Composable
+private fun customTitle(s: Story): String? {
+    if (s.audienceLabel != "custom" || s.oneTime) return null
+    val links by com.fariin.app.data.StoryPrivacyStore.links.collectAsState()
+    val custom by com.fariin.app.data.StoryPrivacyStore.custom.collectAsState()
+    return com.fariin.app.data.StoryPrivacyRules.storyName(links[s.id], custom)
 }

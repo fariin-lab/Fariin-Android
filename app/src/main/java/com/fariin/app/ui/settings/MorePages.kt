@@ -73,6 +73,7 @@ internal fun moreRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
         page == PAGE_STORIES -> StoriesSettingsPage(push, pop)
         page == PAGE_STORY_EVERYONE -> StoryEveryonePage(pop)
         page == PAGE_STORY_MYCHATS -> StoryMyChatsPage(pop)
+        page.startsWith(PAGE_STORY_CUSTOM) -> StoryCustomPage(page.removePrefix(PAGE_STORY_CUSTOM), pop)
         page == PAGE_SEC_NOTIFS -> SecurityNotificationsPage(pop)
         else -> return false
     }
