@@ -141,6 +141,8 @@ dependencies {
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    // Glass bottom bar: background blur of only the strip behind the bar (RenderEffect on 12+).
+    implementation("dev.chrisbanes.haze:haze:1.6.0")
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     // The real org.json for the local-cache codec tests (Android ships it; plain JVM tests do not).

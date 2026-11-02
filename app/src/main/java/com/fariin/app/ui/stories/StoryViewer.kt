@@ -32,6 +32,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -472,6 +475,18 @@ private fun StoryMedia(
         }
         AsyncImage(story.thumbUrl.ifEmpty { null }, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
         if (!isCurrentPage) return@Box
+        // Power Saving > Autoplay videos off: the poster and a play disc until the viewer taps it
+        // (the story's timer waits, because nothing has loaded yet).
+        val autoplay = com.fariin.app.perf.rememberPowerState().autoplayVideos
+        var tapped by remember(story.id) { mutableStateOf(false) }
+        if (!autoplay && !tapped) {
+            Box(Modifier.size(72.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                .clickable { tapped = true }.semantics { contentDescription = "Play video" },
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+            }
+            return@Box
+        }
         val context = LocalContext.current
         val player = remember(story.id) {
             ExoPlayer.Builder(context).build().apply {

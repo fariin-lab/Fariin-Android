@@ -189,7 +189,8 @@ fun ChatListScreen(
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         containerColor = c.bg,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
+        contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
         topBar = {
             Column(Modifier.background(if (selecting) MaterialTheme.colorScheme.surfaceContainerHigh else c.bg).statusBarsPadding()) {
                 when {
@@ -313,7 +314,7 @@ fun ChatListScreen(
                     filter == FILTER_CHANNELS -> "No channels yet"
                     else -> "No chats yet"
                 }, action = if (filter == FILTER_CHANNELS && query.isBlank()) ("Find Channels" to channels.find) else null)
-                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 160.dp)) {
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                     if (!showArchive && !searching && filter == FILTER_ALL && state.archived.isNotEmpty()) {
                         item(key = "archive") {
                             ListRow("Archived", Icons.Outlined.Archive, trailing = "${state.archived.size}") { showArchive = true }

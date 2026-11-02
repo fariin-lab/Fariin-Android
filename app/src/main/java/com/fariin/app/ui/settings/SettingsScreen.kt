@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.BatterySaver
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Dns
@@ -98,6 +99,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             page == PAGE_ACCOUNT -> AccountPage(profile, demoProfile != null, push, pop, onSignOut)
             page == PAGE_APPEARANCE -> AppearancePage(push, pop)
             page == PAGE_NIGHT -> NightModePage(pop)
+            page == PAGE_POWER -> PowerSavingPage(pop)
             page == PAGE_ABOUT -> HelpAboutPage(pop)
             // Sign-in pages (ui/auth/PasswordPages.kt).
             page == PAGE_PASSWORD -> com.fariin.app.ui.auth.PasswordPage(remember { AuthRepository() }, pop, onForgot = { push(PAGE_RESET + it) }, demoOpen = demoProfile != null)
@@ -139,7 +141,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
                 Icon(Icons.Filled.Search, contentDescription = "Search settings", tint = c.label)
             }
         })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
             ProfileHeader(profile, onEdit = people.editProfile, onShare = { push(soon("Share profile")) })
             Spacer(Modifier.height(8.dp))
@@ -153,7 +155,8 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit) {
                 SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats)) { push(PAGE_CHATS) }
                 SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack)) { push(PAGE_STORIES) }
                 SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy)) { push(PAGE_PRIVACY) }
-                SettingsRow("Storage and Data", vec(Icons.Outlined.Dns), last = true) { push(PAGE_STORAGE) }
+                SettingsRow("Storage and Data", vec(Icons.Outlined.Dns)) { push(PAGE_STORAGE) }
+                SettingsRow("Power Saving", vec(Icons.Outlined.BatterySaver), last = true) { push(PAGE_POWER) }
             }
             SettingsSection {
                 SettingsRow("Invite Friends", painterResource(R.drawable.ic_invite_friends), trailing = Trailing.NONE) {
@@ -227,7 +230,7 @@ private fun AccountPage(
                 }
             }
         })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection(header = "Sign-in") {
                 SettingsRow("Email address", last = !hasEmail) { push(soon("Email address")) }
                 if (hasEmail) SettingsRow("Password", last = true) { push(PAGE_PASSWORD) }
@@ -282,7 +285,7 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
     val ctx = LocalContext.current
     Column(Modifier.fillMaxSize()) {
         PageBar("Appearance", onBack = pop)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection {
                 SettingsRow("Chat Wallpaper") { push(soon("Chat Wallpaper")) }
                 SettingsRow("Chat Color") { push(soon("Chat Color")) }
@@ -366,7 +369,7 @@ private fun HelpAboutPage(pop: () -> Unit) {
     }
     Column(Modifier.fillMaxSize()) {
         PageBar("Help & About", onBack = pop)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection(
                 header = "Help",
                 footer = "Fariin has zero tolerance for objectionable content or abusive behavior. Reports are reviewed within 24 hours.",

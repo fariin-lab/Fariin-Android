@@ -155,7 +155,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
             }
         })
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             item {
                 Row(
                     Modifier.clickable { /* TODO: Posted Stories */ }.padding(start = 20.dp, end = 20.dp, top = 8.dp),

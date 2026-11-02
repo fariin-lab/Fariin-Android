@@ -104,7 +104,7 @@ internal fun ErrorNote(text: String?) {
 internal fun ScrollPage(title: String, pop: () -> Unit, action: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         PageBar(title, onBack = pop, action = action)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) { content() }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) { content() }
     }
 }
 
