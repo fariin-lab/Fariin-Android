@@ -152,6 +152,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val viewed = state.others.filter { !it.hasUnseen }
     val ordered = recent + viewed
     val openRing: (StoryGroup) -> Unit = { g -> viewing = ordered to ordered.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // A second tap on Stories: to the top.
+    com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         // Material 3 top app bar: title at the start, actions (camera, overflow) at the end.
@@ -163,7 +166,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
             }
         })
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             item {
                 Row(
                     Modifier.clickable { /* TODO: Posted Stories */ }.padding(start = 20.dp, end = 20.dp, top = 8.dp),
