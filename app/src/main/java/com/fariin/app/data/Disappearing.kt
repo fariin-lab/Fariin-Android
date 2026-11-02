@@ -102,6 +102,23 @@ object Disappearing {
     /** A message the timer has taken (its server stamp has passed). Hiding only; the server deletes. */
     fun isExpired(m: Message, nowMs: Double): Boolean = m.expiresAtMillis?.let { nowMs >= it } ?: false
 
+    /**
+     * The live line under Delete in the long-press menu (iOS CMActionRow.remaining): whole days
+     * once a day or more is left (rounded), then h:mm:ss, then m:ss. Never below zero.
+     */
+    fun countdown(leftMs: Double): String {
+        val total = (maxOf(0.0, leftMs) / 1000).toLong()
+        if (total >= 86_400) {
+            val days = Math.round(total / 86_400.0)
+            return "Disappears in $days ${if (days == 1L) "day" else "days"}"
+        }
+        val h = total / 3600
+        val m = total / 60 % 60
+        val s = total % 60
+        return if (h > 0) String.format(java.util.Locale.ROOT, "Disappears in %d:%02d:%02d", h, m, s)
+            else String.format(java.util.Locale.ROOT, "Disappears in %d:%02d", m, s)
+    }
+
     /** The soonest stamp still ahead, or null. */
     fun nextExpiry(messages: Collection<Message>, nowMs: Double): Double? =
         messages.mapNotNull { it.expiresAtMillis }.filter { it > nowMs }.minOrNull()
@@ -185,6 +202,14 @@ object Disappearing {
             batch.commit().await()
         } catch (_: Exception) {}
         return true
+    }
+
+    /** The chat list's burn tick: notifications of messages past their stamp go (iOS
+     *  NotificationCleaner.pruneExpired). [due] = chats whose newest message is due, to the
+     *  chat's updatedAt and that message's stamp. */
+    fun pruneNotifications(due: Map<String, Pair<Double, Double>>) {
+        val c = appContext ?: return
+        try { com.fariin.app.push.NotificationPoster.pruneExpired(c, due) } catch (_: Exception) {}
     }
 
     private val burnAsked = ConcurrentHashMap<String, Long>()

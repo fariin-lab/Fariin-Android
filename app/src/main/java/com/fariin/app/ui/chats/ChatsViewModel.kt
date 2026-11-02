@@ -87,6 +87,7 @@ class ChatsViewModel(
         val now = System.currentTimeMillis().toDouble()
         val due = convs.filter { c -> c.lastExpiresAtMillis?.let { it <= now } == true }
         if (crypto != null) for (c in due) com.fariin.app.data.Disappearing.askBurn(c.id, emptyList())
+        com.fariin.app.data.Disappearing.pruneNotifications(due.associate { it.id to (it.updatedAtMillis to (it.lastExpiresAtMillis ?: 0.0)) })
         var next = convs.mapNotNull { it.lastExpiresAtMillis }.filter { it > now }.minOrNull()
         if (due.isNotEmpty()) next = minOf(next ?: Double.MAX_VALUE, now + 30_000)
         if (next == null) return

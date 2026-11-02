@@ -105,7 +105,7 @@ data class ThreadActions(
 
 /** One row of the menu. */
 private data class MenuItem(val title: String, val icon: ImageVector?, val destructive: Boolean = false,
-                            val iconRes: Int = 0, val run: () -> Unit)
+                            val iconRes: Int = 0, val countdownTo: Double? = null, val run: () -> Unit)
 
 /**
  * The long-press menu, after iOS customMenuActions: the quick reaction bar on top (the six
@@ -140,8 +140,22 @@ internal fun MessageMenu(
                 else add(MenuItem("Pin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu) { actions.onPin(m) })
             }
         }
+        // On a disappearing message Delete carries a live countdown from the server's stamp only
+        // (iOS deleteOrTimerRow); someone who cannot delete gets the countdown on a row of its own.
+        val expires = m.expiresAtMillis?.takeIf { !m.deleted }
         if (MessageRules.canDeleteHere(m, ui.me, ui.isGroup, ui.adminMayDelete)) {
-            add(MenuItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
+            add(MenuItem("Delete", Icons.Filled.Delete, destructive = true, countdownTo = expires) { onDelete(m) })
+        } else if (expires != null) {
+            add(MenuItem("Disappearing", null, iconRes = com.fariin.app.R.drawable.ic_disappearing, countdownTo = expires) {})
+        }
+    }
+    // One ticker for the menu, only while it is open and only when a row counts down.
+    val counting = items.any { it.countdownTo != null }
+    val clock = androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    if (counting) androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            clock.longValue = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000 - clock.longValue % 1000)
         }
     }
     // Android: a modal bottom sheet (reaction bar on top, the message, then the actions as a
@@ -181,8 +195,14 @@ internal fun MessageMenu(
             HorizontalDivider(color = c.separator.copy(alpha = 0.4f))
             items.forEach {
                 val tint = if (it.destructive) c.red else c.label
+                val until = it.countdownTo
                 androidx.compose.material3.ListItem(
                     headlineContent = { Text(it.title, color = tint) },
+                    supportingContent = if (until == null) null else {
+                        // Whole-width digits, so the line does not shiver as the seconds change.
+                        { Text(com.fariin.app.data.Disappearing.countdown(until - clock.longValue), color = tint,
+                            fontSize = 13.sp, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"), maxLines = 1) }
+                    },
                     leadingContent = {
                         if (it.icon != null) Icon(it.icon, null, tint = tint)
                         else Icon(androidx.compose.ui.res.painterResource(it.iconRes), null, tint = tint, modifier = Modifier.size(24.dp))

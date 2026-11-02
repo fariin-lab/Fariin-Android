@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -195,6 +196,7 @@ fun ThreadScreen(
     // The row a jump landed on, lit for a moment (iOS flashAndScroll).
     var flashId by remember { mutableStateOf<String?>(null) }
     var pinIndex by remember { mutableStateOf(0) }
+    var showPins by remember { mutableStateOf(false) }
     val uiNow = androidx.compose.runtime.rememberUpdatedState(ui)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -215,7 +217,10 @@ fun ThreadScreen(
     bulkForward?.let { msgs ->
         ForwardSheet(ui.me, onDismiss = { bulkForward = null }) { targets -> actions.onForwardManyTo(msgs, targets); selected.clear() }
     }
-    menuFor?.let { m ->
+    menuFor?.let { m0 ->
+        // The live copy: the long press keeps the row's first lambda, so a stamp, edit or
+        // reaction that landed since (an expiresAt, say) would be missing from a held copy.
+        val m = ui.messages.firstOrNull { it.rowId == m0.rowId } ?: m0
         MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions.copy(onForward = { forwardFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
@@ -299,7 +304,16 @@ fun ThreadScreen(
         if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
         PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
             onJump = { jumpTo(it, advance = true) },
-            onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- })
+            onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
+            onSeeAll = { showPins = true })
+        if (showPins) {
+            // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
+            val all = com.fariin.app.data.PinRules.sheetOrder(pins) { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] }
+            PinnedMessagesSheet(all, ui, onDismiss = { showPins = false },
+                onJump = { id -> showPins = false; jumpTo(id, advance = false) },
+                onUnpin = { id -> actions.onUnpin(id); pinIndex = 0 },
+                bubble = { m -> MessageRow(ui, m, ThreadLogic.RowGeometry(false, true, true, 0), is24h, {}) {} })
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes.
@@ -605,6 +619,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 contentAlignment = Alignment.Center,
             ) { Text("!", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
+        com.fariin.app.data.StoryReplyRules.reactionGlyph(m, showSender)?.let { glyph ->
+            StoryReaction(ui, m, glyph, isMe, tick, is24h)
+            return@Row
+        }
         val kind = m.mediaKind
         if (kind == Message.MediaKind.PHOTO || kind == Message.MediaKind.VIDEO || kind == Message.MediaKind.ALBUM) {
             MediaRow(ui, m, g, is24h, shape, maxW, tick, isMe, showSender, kind, onView)
@@ -710,6 +728,52 @@ private fun MediaRow(
     }
 }
 
+/**
+ * A reaction from the story's react bar (iOS MessageRowLayout, "a story reaction sits on the
+ * card's corner"): no bubble; "You replied to their story" over the 80 x 140 story card with the
+ * grey bar on the outside, the emoji big on the card's bottom corner away from the bar, and the
+ * time just under the card.
+ */
+@Composable
+private fun StoryReaction(ui: ThreadUi, m: Message, glyph: String, isMe: Boolean, tick: Tick, is24h: Boolean) {
+    val c = Fariin.colors
+    val r = m.replyTo ?: return
+    val caption = com.fariin.app.data.StoryReplyRules.caption(isMe, r.authorId == ui.me, ui.names[m.authorId] ?: ui.title)
+    // Card 80 wide, bar 5, gap 9 (iOS); the emoji's box (56) centred 6 in from the card's inner
+    // edge, so it hangs 22 past the card; the time 12 under the card.
+    val glyphBox = 56.dp
+    val overhang = 22.dp
+    val glyphSize = with(androidx.compose.ui.platform.LocalDensity.current) { 46.dp.toSp() }
+    Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
+        Text(caption, fontSize = 12.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp))
+        Spacer(Modifier.height(5.dp))
+        Box(Modifier.width(94.dp + overhang).height(168.dp)) {
+            val card: @Composable () -> Unit = {
+                coil3.compose.AsyncImage(r.storyThumb, contentDescription = "Story",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.width(80.dp).height(140.dp).clip(RoundedCornerShape(14.dp))
+                        .background(c.secondary.copy(alpha = 0.15f)))
+            }
+            val bar: @Composable () -> Unit = {
+                Box(Modifier.width(5.dp).height(140.dp).clip(RoundedCornerShape(2.5.dp)).background(c.label.copy(alpha = 0.35f)))
+            }
+            Row(Modifier.align(if (isMe) Alignment.TopEnd else Alignment.TopStart)) {
+                if (isMe) { card(); Spacer(Modifier.width(9.dp)); bar() } else { bar(); Spacer(Modifier.width(9.dp)); card() }
+            }
+            // The card's inner corner: left for mine (x = overhang), right for theirs (x = 14 + 80).
+            val glyphX = if (isMe) overhang + 6.dp - glyphBox / 2 else 94.dp - 6.dp - glyphBox / 2
+            Box(Modifier.offset(x = glyphX, y = 140.dp - glyphBox * 0.62f).size(glyphBox), contentAlignment = Alignment.Center) {
+                Text(glyph, fontSize = glyphSize, lineHeight = glyphSize, maxLines = 1, softWrap = false)
+            }
+            Box(Modifier.align(if (isMe) Alignment.TopEnd else Alignment.TopStart)
+                .offset(x = if (isMe) -(14.dp) else 14.dp, y = 152.dp)) {
+                Meta(m, tick, isMe, is24h, plain = true)
+            }
+        }
+    }
+}
+
 @Composable
 private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
     val c = Fariin.colors
@@ -736,8 +800,10 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
 
 /** Time, "edited", and for my own bubble the tick: faded for sent and delivered, solid for read. */
 @Composable
-private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia: Boolean = false) {
-    val metaColor = if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
+private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia: Boolean = false, plain: Boolean = false) {
+    // [plain]: no bubble under it (a story reaction), so the page's own secondary colour.
+    val metaColor = if (plain) Fariin.colors.secondary
+        else if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
     Row(verticalAlignment = Alignment.CenterVertically) {
         com.fariin.app.ui.channels.PostViews(metaColor)
         // On a timer: the timer mark before the time (iOS footer), from the first frame.
@@ -759,7 +825,8 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
             if (icon != null) {
                 Spacer(Modifier.width(3.dp))
                 Icon(icon, contentDescription = tickDescription(tick),
-                    tint = Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f), modifier = Modifier.size(14.dp))
+                    tint = if (plain) (if (tick == Tick.READ) Fariin.colors.blue else metaColor)
+                        else Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f), modifier = Modifier.size(14.dp))
             }
         }
     }

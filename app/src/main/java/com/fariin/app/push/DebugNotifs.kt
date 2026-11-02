@@ -59,6 +59,8 @@ object DebugNotifs {
                 val group = Wire.isGroupCid(cid)
                 val data = hashMapOf("cid" to cid, "aid" to aid, "mid" to m.id, "ct" to (m.getString("text") ?: ""))
                 if (group) data["g"] = "1"
+                // A disappearing message's stamp rides in the push as ms (the server's onNewMessage).
+                m.getTimestamp("expiresAt")?.let { data["expiresAt"] = it.toDate().time.toString() }
                 val sender = if (group) "Member" else info?.name ?: "Fariin"
                 data["sn"] = sender
                 val title = if (group) info?.name ?: "Group" else sender

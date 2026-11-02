@@ -2,6 +2,7 @@ package com.fariin.app.ui.thread
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Forward
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -127,7 +130,7 @@ private fun historyTime(ms: Double): String {
 @Composable
 internal fun PinnedBar(
     ids: List<String>, index: Int, ui: ThreadUi, msgFor: (String) -> Message?,
-    onJump: (String) -> Unit, onUnpin: (String) -> Unit,
+    onJump: (String) -> Unit, onUnpin: (String) -> Unit, onSeeAll: () -> Unit = {},
 ) {
     if (ids.isEmpty()) return
     val c = Fariin.colors
@@ -168,11 +171,105 @@ internal fun PinnedBar(
                         leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
                         onClick = { menu = false; onUnpin(pid) },
                     )
-                    DropdownMenuItem(text = { Text("Go to Message") }, onClick = { menu = false; onJump(pid) })
+                    DropdownMenuItem(
+                        text = { Text("See All") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null, Modifier.size(22.dp)) },
+                        onClick = { menu = false; onSeeAll() },
+                    )
                 }
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+    }
+}
+
+/**
+ * See All (iOS PinnedMessagesSheet): "Pinned Messages" over the chat's name, every pin oldest
+ * first under its day, each drawn as its bubble with an arrow; a tap jumps to it. Those who may
+ * pin get Unpin on a long press of a row (Android) and Unpin All at the bottom (iOS).
+ */
+@Composable
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+internal fun PinnedMessagesSheet(
+    pinned: List<Message>, ui: ThreadUi, onDismiss: () -> Unit,
+    onJump: (String) -> Unit, onUnpin: (String) -> Unit,
+    bubble: @Composable (Message) -> Unit,
+) {
+    val c = Fariin.colors
+    val now = remember { System.currentTimeMillis().toDouble() }
+    var rowMenu by remember { mutableStateOf<String?>(null) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = c.bg,
+    ) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Pinned Messages", style = MaterialTheme.typography.titleMedium, color = c.label)
+                Text(ui.title, fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (pinned.isEmpty()) {
+                Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(painterResource(R.drawable.ic_pin_bar), null, tint = c.secondary, modifier = Modifier.size(36.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Text("No pinned messages", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                    Text("Pin a message from its menu.", fontSize = 14.sp, color = c.secondary)
+                }
+            } else {
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                    pinned.forEachIndexed { i, m ->
+                        val day = com.fariin.app.data.ThreadLogic.dayLabel(m.createdAtMillis, now)
+                        if (i == 0 || day != com.fariin.app.data.ThreadLogic.dayLabel(pinned[i - 1].createdAtMillis, now)) {
+                            item(key = "day-${m.id}") {
+                                Text(day, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.secondary,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        }
+                        item(key = m.id) {
+                            Box {
+                                Row(
+                                    Modifier.fillMaxWidth()
+                                        .combinedClickable(
+                                            onClick = { onJump(m.id) },
+                                            onLongClick = if (ui.canPin) ({ rowMenu = m.id }) else null,
+                                        )
+                                        .padding(vertical = 5.dp, horizontal = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    // The bubble takes no taps of its own here (a photo would open).
+                                    Box(Modifier.weight(1f)) {
+                                        bubble(m)
+                                        Box(Modifier.matchParentSize().combinedClickable(
+                                            onClick = { onJump(m.id) },
+                                            onLongClick = if (ui.canPin) ({ rowMenu = m.id }) else null,
+                                        ))
+                                    }
+                                    IconButton(onClick = { onJump(m.id) }) {
+                                        Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Go to Message", tint = c.secondary)
+                                    }
+                                }
+                                DropdownMenu(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Unpin") },
+                                        leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
+                                        onClick = { rowMenu = null; onUnpin(m.id) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (ui.canPin && pinned.isNotEmpty()) {
+                Box(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.FilledTonalButton(onClick = {
+                        pinned.forEach { onUnpin(it.id) }
+                        onDismiss()
+                    }) { Text("Unpin All", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                }
+            }
+        }
     }
 }
 

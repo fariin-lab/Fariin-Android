@@ -49,6 +49,8 @@ object PushRouter {
 object NotificationPoster {
     private const val ID = 1
     private const val AVATAR_PX = 192
+    /** The newest line's server stamp (ms) on a disappearing message's notification and line. */
+    private const val EXTRA_EXPIRES = "fariin.expiresAt"
 
     fun ensureChannels(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java) ?: return
@@ -92,9 +94,12 @@ object NotificationPoster {
             .setShowWhen(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(if (spec.channel == NotifChannel.CALLS) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
+        // A disappearing message: the notification goes when its newest line's timer runs out
+        // (iOS NotificationCleaner.pruneExpired); the stamp rides along for the prune below.
         spec.expiresAtMs?.let { at ->
             val left = at - System.currentTimeMillis()
             if (left > 0) b.setTimeoutAfter(left)
+            b.addExtras(android.os.Bundle().apply { putLong(EXTRA_EXPIRES, at) })
         }
 
         if (spec.plain) {
@@ -111,8 +116,14 @@ object NotificationPoster {
         val earlier = nmc.activeNotifications.firstOrNull { it.tag == spec.key && it.id == ID }?.notification
             ?.let { NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(it) }
         val style = NotificationCompat.MessagingStyle(mePerson)
-        earlier?.messages?.takeLast(6)?.forEach { style.addMessage(it) }
-        style.addMessage(spec.line, System.currentTimeMillis(), sender)
+        val nowMs = System.currentTimeMillis()
+        earlier?.messages?.takeLast(6)?.forEach {
+            // A line whose timer has run out is not carried under the new one.
+            if (!NotifExpiry.lineGone(it.extras.getLong(EXTRA_EXPIRES, 0L), nowMs)) style.addMessage(it)
+        }
+        val line = NotificationCompat.MessagingStyle.Message(spec.line, nowMs, sender)
+        spec.expiresAtMs?.let { line.extras.putLong(EXTRA_EXPIRES, it) }
+        style.addMessage(line)
         if (spec.isGroup) {
             style.setConversationTitle(spec.groupName ?: spec.title)
             style.isGroupConversation = true
@@ -225,6 +236,26 @@ object NotificationPoster {
         nmc.notify("story-$author", ID, n)
     }
 
+    /**
+     * iOS NotificationCleaner.pruneExpired: a chat's notification whose newest line has run out on
+     * its timer goes. [due] = chats whose newest message is past its stamp on the chat list
+     * (cid to the chat's updatedAt and that message's stamp, ms): their notification goes too when
+     * it shows nothing newer.
+     * Run on the chat list's burn tick and when the app comes to the front.
+     */
+    fun pruneExpired(c: Context, due: Map<String, Pair<Double, Double>> = emptyMap()) {
+        val nm = c.getSystemService(NotificationManager::class.java) ?: return
+        val now = System.currentTimeMillis()
+        val active = try { nm.activeNotifications } catch (_: Exception) { return }
+        for (sbn in active) {
+            if (sbn.id != ID) continue
+            val tag = sbn.tag ?: continue
+            val exp = sbn.notification.extras.getLong(EXTRA_EXPIRES, 0L)
+            val chatDue = due[tag]?.let { (updated, stamp) -> NotifExpiry.chatGone(sbn.postTime, updated, stamp) } == true
+            if (NotifExpiry.lineGone(exp, now) || chatDue) nm.cancel(tag, ID)
+        }
+    }
+
     /** iOS Push.clear(cid): the chat was opened, its notification goes. */
     fun clear(c: Context, cid: String) = NotificationManagerCompat.from(c).cancel(cid, ID)
 
@@ -283,4 +314,19 @@ object NotificationPoster {
         while (o.outWidth / (sample * 2) >= AVATAR_PX && o.outHeight / (sample * 2) >= AVATAR_PX) sample *= 2
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
     } catch (_: Exception) { null }
+}
+
+/** When a disappearing message's notification goes (pure, tested). */
+object NotifExpiry {
+    /** A line stamped [expiresAtMs] (0 = no timer) has run out. */
+    fun lineGone(expiresAtMs: Long, nowMs: Long): Boolean = expiresAtMs in 1..nowMs
+
+    /**
+     * The chat list says the chat's newest message (written at [chatUpdatedAtMs]) is past its
+     * stamp [dueAtMs]. A notification posted before that stamp, or within 10 s of the message
+     * (the push's trip), shows only it or older lines, so it goes. One posted after both carries
+     * something newer the list has not caught up with, and stays.
+     */
+    fun chatGone(postTimeMs: Long, chatUpdatedAtMs: Double, dueAtMs: Double): Boolean =
+        postTimeMs <= maxOf(dueAtMs, if (chatUpdatedAtMs > 0) chatUpdatedAtMs + 10_000 else 0.0)
 }

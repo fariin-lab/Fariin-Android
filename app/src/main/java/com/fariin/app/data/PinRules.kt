@@ -88,6 +88,11 @@ object PinRules {
 
     /** Next pin the bar shows after a jump (it cycles, as iOS `pinIndex = (idx + 1) % count`). */
     fun nextIndex(index: Int, count: Int): Int = if (count <= 1) 0 else (index.coerceIn(0, count - 1) + 1) % count
+
+    /** The See All sheet's rows (PinnedMessagesSheet): the pins found (loaded or fetched by id),
+     *  tombstones left out, oldest first. */
+    fun sheetOrder(ids: List<String>, lookup: (String) -> Message?): List<Message> =
+        ids.mapNotNull(lookup).filter { !it.deleted }.distinctBy { it.id }.sortedBy { it.createdAtMillis }
 }
 
 /**
