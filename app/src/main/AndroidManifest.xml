@@ -112,6 +112,18 @@
         <receiver
             android:name=".system.NotifActionReceiver"
             android:exported="false" />
+        <!-- Home screen widget "Recent" (system/FariinWidget.kt, Jetpack Glance). -->
+        <receiver
+            android:name=".system.HomeWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fariin_widget_info" />
+        </receiver>
         <!-- App Lock cover (security/AppLock.kt). -->
         <activity
             android:name=".security.LockActivity"

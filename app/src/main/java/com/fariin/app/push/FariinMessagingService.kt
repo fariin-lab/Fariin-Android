@@ -87,6 +87,8 @@ class FariinMessagingService : FirebaseMessagingService() {
                         .map { it.await() }
                 }
                 NotificationPoster.post(c, s, photos[0], photos[1], me)
+                // The home screen widget: one more unread for that chat (words only as the notification showed them).
+                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key, if (s.plain) null else s.line)
             }
             ack.await()
         }

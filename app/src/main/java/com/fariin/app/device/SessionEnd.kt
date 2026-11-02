@@ -38,6 +38,7 @@ object SessionEnd {
     private fun wipe(c: Context) {
         NotifStore.clearAccount(c)
         NotificationPoster.clearAll(c)
+        com.fariin.app.system.FariinWidget.clear(c)
         Push.clearAccount(c)
         // The phone's copies of this account's chats: opened messages, the list, drafts, unsent
         // texts, opened media and faces. None of it survives into the next account (iOS SessionWipe).

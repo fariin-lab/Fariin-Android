@@ -90,6 +90,8 @@ class FariinApp : Application() {
             com.fariin.app.data.BlockList.follow(uid)
         }
         com.fariin.app.security.AppLock.install(this)
+        // The home screen widget follows App Lock and Message Preview as they are switched.
+        com.fariin.app.system.FariinWidget.init(this)
     }
 
     companion object {

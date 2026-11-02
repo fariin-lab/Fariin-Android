@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home screen widget, iOS FariinWidget wording. -->
+<resources>
+    <string name="widget_name">Recent</string>
+    <string name="widget_description">Your latest chats, one tap away.</string>
+</resources>

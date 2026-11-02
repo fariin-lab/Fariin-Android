@@ -54,6 +54,7 @@ import com.fariin.app.push.Push
 import com.fariin.app.push.PushRouter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -199,6 +200,14 @@ class MainActivity : ComponentActivity() {
             if (list.isNotEmpty()) withContext(Dispatchers.Default) { NotifStore.saveChats(applicationContext, me, list) }
             // Recent chats as conversation shortcuts: share sheet, launcher, notification settings.
             if (list.isNotEmpty()) com.fariin.app.system.ChatShortcuts.publish(applicationContext, me, list)
+        }
+        // The home screen widget: the same list, its previews opened again once a missing key lands.
+        // Collected here, not keyed on the drawn state: the list keeps changing while the app is
+        // behind the home screen, where nothing is drawn.
+        LaunchedEffect(vm, decryptor) {
+            vm.state.combine(com.fariin.app.data.CryptoHub.keysEpoch) { s, _ -> s }.collect { s ->
+                if (!s.loading) com.fariin.app.system.FariinWidget.publish(applicationContext, me, s.chats, decryptor)
+            }
         }
         val entry by nav.currentBackStackEntryAsState()
         val openCid = if (entry?.destination?.route == "thread/{cid}") entry?.arguments?.getString("cid") else null

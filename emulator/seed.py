@@ -8,6 +8,7 @@ Accounts and their generated passwords go to test-accounts.json next to this fil
     python seed.py --channel    # demo channels: alice runs them, bobby follows "Fariin News"
     python seed.py --carol      # a third fake user, carol (low-end phone tests), added to the same file
     python seed.py --photos     # plain group "Photo Test" (alice + carol) with 10 photos from alice
+    python seed.py --widget     # three plain groups with carol, newest lines unread (home screen widget tests)
 """
 import datetime, json, os, secrets, sys, urllib.request
 
@@ -200,8 +201,44 @@ def seed_photos():
     print("photo group seeded:", cid)
 
 
+def plain_tag(s):
+    """FNV-1a 64-bit hex of the UTF-8 bytes (Conversation.plainTag): marks a plain group's line as words."""
+    h = 0xcbf29ce484222325
+    for b in s.encode("utf-8"):
+        h = ((h ^ b) * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
+    return format(h, "x")
+
+
+def seed_widget_chats():
+    """Three plain groups with carol, each with a last line from someone else, so carol's chat list
+    (and the home screen widget) has a few recent chats with unread counts."""
+    accts = {a["handle"]: a for a in load_accounts()}
+    alice, bobby, carol = accts["alice"], accts["bobby"], accts["carol"]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    groups = [("demoWidgetTrip", "Weekend Plans", [alice, bobby, carol], bobby, "Bring the big tent, I have the stove", 2, 3),
+              ("demoWidgetFamily", "Family", [alice, carol], alice, "Dinner at 7 tonight?", 1, 8),
+              ("demoWidgetStudy", "Study Group", [bobby, carol], bobby, "Notes for chapter 4 are up", 0, 15)]
+    for cid, title, members, author, line, unread, mins in groups:
+        users = [m["uid"] for m in members]
+        at = now - datetime.timedelta(minutes=mins)
+        patch_doc(f"conversations/{cid}", {
+            "type": "group", "title": title, "users": users, "admins": [author["uid"]], "createdBy": author["uid"],
+            "createdAt": iso(at - datetime.timedelta(hours=1)), "updatedAt": iso(at), "e2ee": False,
+            "names": {m["uid"]: m["name"] for m in members}, "photos": {},
+            "unreadCount": {u: (unread if u == carol["uid"] else 0) for u in users}, "typing": {u: False for u in users},
+            "lastMessage": line, "lastSender": author["uid"], "lastPlainTag": plain_tag(line)})
+        patch_doc(f"conversations/{cid}/messages/w1", {
+            "type": "text", "text": line, "authorId": author["uid"], "clientId": "w1",
+            "clientTs": at.timestamp() * 1000, "createdAt": iso(at)})
+        print("seeded", cid, title)
+
+
 if sys.argv[1:] == ["--carol"]:
     seed_carol()
+    sys.exit(0)
+
+if sys.argv[1:] == ["--widget"]:
+    seed_widget_chats()
     sys.exit(0)
 
 if sys.argv[1:] == ["--photos"]:
