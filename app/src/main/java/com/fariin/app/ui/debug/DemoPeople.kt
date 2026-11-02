@@ -60,6 +60,7 @@ object DemoPeople : PeopleApi {
     override suspend fun leaveGroup(cid: String) {}
     override suspend fun renameGroup(cid: String, title: String) {}
     override suspend fun setGroupPhoto(cid: String, photo: ByteArray) {}
+    override suspend fun setGroupDescription(cid: String, text: String) {}
     override suspend fun removeGroupPhoto(cid: String) {}
 
     /** A request from someone new, for the Message Requests page. */

@@ -85,6 +85,7 @@ interface PeopleApi {
     suspend fun renameGroup(cid: String, title: String)
     suspend fun setGroupPhoto(cid: String, photo: ByteArray)
     suspend fun removeGroupPhoto(cid: String)
+    suspend fun setGroupDescription(cid: String, text: String)
 }
 
 class FirestorePeople(
@@ -349,6 +350,11 @@ class FirestorePeople(
         conv(cid).update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
     }
 
+    /** ChatService.setGroupDescription: `desc` (trimmed, at most [GroupRules.DESC_MAX]) + updatedAt. No chat line, as iOS. */
+    override suspend fun setGroupDescription(cid: String, text: String) {
+        conv(cid).update(mapOf("desc" to GroupRules.cleanDesc(text), "updatedAt" to FieldValue.serverTimestamp())).await()
+    }
+
     /** ChatService.removeGroupAvatar: the field goes, the file is tried, then "<me> removed the group photo". */
     override suspend fun removeGroupPhoto(cid: String) {
         conv(cid).update(mapOf("avatarUrl" to FieldValue.delete(), "updatedAt" to FieldValue.serverTimestamp())).await()
@@ -468,6 +474,24 @@ object GroupRules {
         val flags = (data["restrictedFlags"] as? Map<*, *>)?.get(me) as? List<*> ?: emptyList<Any>()
         return !(until > nowMs && "changeInfo" in flags)
     }
+
+    /** AppLimits.groupDescMax: the iOS fallback (the panel's `group_desc_max`, 200 since 2026-10-27). */
+    const val DESC_MAX = 200
+
+    /**
+     * Limits.oneParagraph, as the Description field types it: every whitespace (newlines too) is one
+     * space, runs of spaces fold to one, at most [max] characters.
+     */
+    fun oneParagraph(raw: String, max: Int = DESC_MAX): String {
+        val s = raw.map { if (it.isWhitespace()) ' ' else it }.joinToString("").replace(Regex(" {2,}"), " ")
+        return if (s.length > max) s.take(max) else s
+    }
+
+    /** ChatService.setGroupDescription: trimmed, at most [DESC_MAX]. */
+    fun cleanDesc(s: String): String = s.trim().take(DESC_MAX)
+
+    /** The group's description on its conversation doc (`desc`), "" when none. */
+    fun description(data: Map<String, Any?>): String = (data["desc"] as? String)?.trim() ?: ""
 
     /** ChatService.renameGroup: trimmed, at most 100 characters. */
     fun cleanTitle(s: String): String = s.trim().take(100)

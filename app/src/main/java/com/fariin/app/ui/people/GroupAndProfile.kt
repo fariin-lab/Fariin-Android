@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Remove
@@ -46,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +64,7 @@ import com.fariin.app.data.PeopleApi
 import com.fariin.app.data.Person
 import com.fariin.app.data.Usernames
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.photo.rememberCirclePhotoPicker
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsRow
 import com.fariin.app.ui.settings.SettingsSection
@@ -114,13 +118,16 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     var page by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { me = api.profile(api.me); name = me?.name ?: "" }
-    val pick = rememberPhotoPicker { bytes ->
+    // The picked photo goes to the circle cropper first (iOS ProfilePhotoCropper, its Avatar stage).
+    val picker = rememberCirclePhotoPicker { jpeg ->
         scope.launch {
             busy = true
-            try { api.uploadPhoto(bytes); me = api.profile(api.me) } catch (_: Exception) { error = "Couldn't upload the photo. Try again." }
+            try { api.uploadPhoto(jpeg); me = api.profile(api.me) } catch (_: Exception) { error = "Couldn't upload the photo. Try again." }
             busy = false
         }
     }
+    val pick = picker.launch
+    if (picker.pending != null) { picker.Host("Avatar", "Shown in chats, stories and groups"); return }
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
@@ -332,6 +339,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val iAmAdmin = me in admins || me == owner
     val canEdit = GroupRules.canEditInfo(me, conv)
     var editing by remember { mutableStateOf(false) }
+    var editAtDescription by remember { mutableStateOf(false) }
+    val desc = GroupRules.description(conv)
     var adding by remember { mutableStateOf(false) }
     var picked by remember { mutableStateOf(setOf<String>()) }
     var askLeave by remember { mutableStateOf(false) }
@@ -368,7 +377,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     }
     if (editing && canEdit) {
         EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
-            onClose = { editing = false })
+            onClose = { editing = false; editAtDescription = false }, description = desc, focusDescription = editAtDescription)
         return
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
@@ -380,7 +389,13 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Text("Group · ${users.size} members", fontSize = 15.sp, color = c.secondary)
+            // No description yet: whoever may edit is offered one, in grey; it opens Edit Group (iOS).
+            if (desc.isEmpty() && canEdit) Text("Add group description...", fontSize = 17.sp, color = c.secondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
+                    .clickable { editAtDescription = true; editing = true }.padding(horizontal = 8.dp, vertical = 4.dp))
             Spacer(Modifier.height(20.dp))
+            if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
             SettingsSection {
                 for (s in listOf("Group Type", "Permissions", "Administrators", "Invite Links", "Disappearing Messages")) {
                     SettingsRow(s, last = s == "Disappearing Messages") { soon = s }
@@ -411,7 +426,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
  * and the up arrow close it without saving.
  */
 @Composable
-internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUrl: String?, onClose: () -> Unit) {
+internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUrl: String?, onClose: () -> Unit,
+                             description: String = "", focusDescription: Boolean = false) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -423,16 +439,19 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
     var error by remember { mutableStateOf<String?>(null) }
     // What a Save already wrote, so a retry after a failed photo step does not rename twice (iOS).
     var savedName by remember { mutableStateOf<String?>(null) }
+    var desc by remember { mutableStateOf(GroupRules.oneParagraph(description)) }
+    var savedDesc by remember { mutableStateOf<String?>(null) }
     val trimmed = GroupRules.cleanTitle(name)
-    val changed = newPhoto != null || removePhoto || trimmed != title
+    val trimmedDesc = GroupRules.cleanDesc(desc)
+    val changed = newPhoto != null || removePhoto || trimmed != title || trimmedDesc != description.trim()
     val hasPhoto = newPhoto != null || (!removePhoto && !photoUrl.isNullOrEmpty())
     BackHandler(onBack = onClose)
-    val pick = rememberPhotoPicker { bytes ->
-        scope.launch {
-            val jpeg = withContext(Dispatchers.Default) { FirestorePeople.squareJpeg(bytes, 1024, 80) }
-            if (jpeg != null) { newPhoto = jpeg; removePhoto = false } else error = "Couldn't open this photo."
-        }
-    }
+    // The picked photo goes to the circle cropper (iOS: the same move-and-scale a profile photo uses).
+    val picker = rememberCirclePhotoPicker { jpeg -> newPhoto = jpeg; removePhoto = false }
+    val pick = picker.launch
+    if (picker.pending != null) { picker.Host("Group photo", "Shown in chats and on the group page"); return }
+    val descFocus = remember { FocusRequester() }
+    LaunchedEffect(focusDescription) { if (focusDescription) { delay(350); runCatching { descFocus.requestFocus() } } }
     if (confirmRemove) AlertDialog(onDismissRequest = { confirmRemove = false }, title = { Text("Remove group photo?") },
         confirmButton = { TextButton({ confirmRemove = false; newPhoto = null; removePhoto = true }) { Text("Remove", color = c.red) } },
         dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
@@ -444,6 +463,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 scope.launch {
                     try {
                         if (trimmed != (savedName ?: title)) { api.renameGroup(cid, trimmed); savedName = trimmed }
+                        if (trimmedDesc != (savedDesc ?: description.trim())) { api.setGroupDescription(cid, trimmedDesc); savedDesc = trimmedDesc }
                         val p = newPhoto
                         if (p != null) { api.setGroupPhoto(cid, p); forgetImage(ctx, photoUrl) }
                         else if (removePhoto && !photoUrl.isNullOrEmpty()) api.removeGroupPhoto(cid)
@@ -461,7 +481,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
             Box {
                 Box(Modifier.size(120.dp).clip(CircleShape).clickable(onClick = pick), contentAlignment = Alignment.Center) {
                     val p = newPhoto
-                    val bmp = remember(p) { p?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+                    val bmp = remember(p) { p?.let { com.fariin.app.media.BitmapDecode.fromBytes(it, 360)?.asImageBitmap() } }
                     when {
                         bmp != null -> androidx.compose.foundation.Image(bmp, "Group photo", contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         removePhoto -> Avatar(null, 120.dp)
@@ -478,9 +498,57 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
             Text("Set New Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.clip(CircleShape).background(c.card).clickable(onClick = pick).padding(horizontal = 20.dp, vertical = 9.dp))
             Spacer(Modifier.height(8.dp))
-            SettingsSection { Field(name, "Group Name") { name = it.take(100) } }
+            // Name and description in ONE card, a line between them (iOS EditGroupView).
+            SettingsSection(footer = "Optional. Shown on the group's info page.") {
+                Field(name, "Group Name") { name = it.take(100) }
+                Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
+                DescriptionField(desc, descFocus) { desc = GroupRules.oneParagraph(it) }
+            }
             error?.let { Text(it, fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)) }
         }
+    }
+}
+
+/**
+ * Group Info's Description card (iOS GroupAboutCard): the title with its icon, then the text,
+ * left-aligned; past three lines it stops with a blue "more" that opens the rest in place.
+ */
+@Composable
+private fun DescriptionCard(desc: String) {
+    val c = Fariin.colors
+    var expanded by remember(desc) { mutableStateOf(false) }
+    var folds by remember(desc) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clickable(enabled = folds && !expanded) { expanded = true }
+        .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.AutoMirrored.Filled.Notes, null, tint = c.label, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Description", fontSize = 17.sp, color = c.label)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(desc, fontSize = 17.sp, color = c.label, maxLines = if (expanded) Int.MAX_VALUE else 3,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            onTextLayout = { if (!expanded) folds = it.hasVisualOverflow })
+        if (folds && !expanded) Text("more", fontSize = 17.sp, color = c.blue, modifier = Modifier.align(Alignment.End))
+    }
+}
+
+/**
+ * The Description field (iOS: the bio's rules): one paragraph, up to five lines, and "used/limit"
+ * under it at the end, red at the limit.
+ */
+@Composable
+private fun DescriptionField(value: String, focus: FocusRequester, onChange: (String) -> Unit) {
+    val c = Fariin.colors
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp), horizontalAlignment = Alignment.End) {
+        Box(Modifier.fillMaxWidth()) {
+            if (value.isEmpty()) Text("Description", fontSize = 17.sp, color = c.secondary)
+            BasicTextField(value, onChange, maxLines = 5, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth().focusRequester(focus))
+        }
+        val left = GroupRules.DESC_MAX - value.length
+        Text("${value.length}/${GroupRules.DESC_MAX}", fontSize = 13.sp, color = if (left <= 0) c.red else c.secondary,
+            modifier = Modifier.padding(top = 6.dp))
     }
 }
 

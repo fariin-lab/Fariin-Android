@@ -101,14 +101,13 @@ fun OnboardingPage(
     var edited by remember { mutableStateOf(false) }
     var autoHandle by remember { mutableStateOf<String?>(null) }
     var photo by remember { mutableStateOf<ByteArray?>(null) }
-    val photoBitmap = remember(photo) { photo?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+    val photoBitmap = remember(photo) { photo?.let { com.fariin.app.media.BitmapDecode.fromBytes(it, 300)?.asImageBitmap() } }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var checkJob by remember { mutableStateOf<Job?>(null) }
     var ideaJob by remember { mutableStateOf<Job?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        if (uri != null) photo = try { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } } catch (_: Exception) { null }
-    }
+    // Picker, then the circle cropper (iOS onboarding hands the pick to ProfilePhotoCropper); held until Continue.
+    val cropPicker = com.fariin.app.ui.photo.rememberCirclePhotoPicker { photo = it }
 
     suspend fun quickLookup(h: String): HandleState? = try {
         val snap = FirebaseFirestore.getInstance().collection("usernames").document(h.lowercase()).get(Source.SERVER).await()
@@ -178,11 +177,12 @@ fun OnboardingPage(
         }
     }
 
+    if (cropPicker.pending != null) { cropPicker.Host("Avatar", "Shown in chats, stories and groups"); return }
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding()
         .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(24.dp))
-        Box(Modifier.clickable { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+        Box(Modifier.clickable { cropPicker.launch() }) {
             if (photoBitmap != null) Image(photoBitmap, "Change photo", contentScale = ContentScale.Crop, modifier = Modifier.size(96.dp).clip(CircleShape))
             else InitialAvatar(name.ifEmpty { "?" }, 96)
             Box(Modifier.align(Alignment.BottomEnd).offset(2.dp, 2.dp).size(30.dp).clip(CircleShape).background(c.bg).padding(2.5.dp)
