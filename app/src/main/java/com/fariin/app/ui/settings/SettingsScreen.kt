@@ -93,7 +93,8 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
     BackHandler(enabled = stack.isNotEmpty(), onBack = pop)
 
     val page = stack.lastOrNull()
-    Box(Modifier.fillMaxSize().background(Fariin.colors.bg)) {
+    // The grey page under the white section cards (iOS grouped background).
+    Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
         when {
             page == null -> SettingsHome(profile, push)
             page == PAGE_ACCOUNT -> AccountPage(profile, demoProfile != null, push, pop, onSignOut)

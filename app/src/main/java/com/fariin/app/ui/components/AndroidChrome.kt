@@ -47,6 +47,8 @@ fun FariinTopBar(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     insets: WindowInsets = WindowInsets(0, 0, 0, 0),
+    /** The bar's fill; Settings pages pass their grey page colour. */
+    container: androidx.compose.ui.graphics.Color = Fariin.colors.bg,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Fariin.colors
@@ -70,7 +72,7 @@ fun FariinTopBar(
         windowInsets = insets,
 
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = c.bg,
+            containerColor = container,
             scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
             titleContentColor = c.label,
             navigationIconContentColor = c.label,

@@ -39,9 +39,10 @@ import androidx.compose.ui.unit.sp
 import com.fariin.app.ui.theme.Fariin
 
 /*
- * The Android settings list (owner 2026-11-02, "Android wins"): a Material top app bar with the
- * up arrow, full-width rows with no cards, section headers in the brand blue, a value as the
- * row's second line, no chevrons. Same rows, words and order as iOS SettingsView.
+ * The Android settings list: a Material top app bar with the up arrow, a value as the row's
+ * second line, no chevrons. Each section is a rounded card on the grey page (owner 2026-11-02:
+ * keep the rounded look of iOS; the big Android messengers use cards too). Same rows, words and
+ * order as iOS SettingsView.
  */
 
 /** Kept for callers that still clip a block to a card (profile header buttons and the like). */
@@ -50,12 +51,12 @@ internal val CardShape = RoundedCornerShape(24.dp)
 /** A pushed page's bar: up arrow, the title at the start, an optional action at the end. */
 @Composable
 internal fun PageBar(title: String, onBack: (() -> Unit)?, action: (@Composable () -> Unit)? = null) {
-    Box(Modifier.fillMaxWidth().background(Fariin.colors.bg).statusBarsPadding()) {
-        com.fariin.app.ui.components.FariinTopBar(title, onBack = onBack, actions = { if (action != null) action() })
+    Box(Modifier.fillMaxWidth().background(Fariin.colors.bgSecondary).statusBarsPadding()) {
+        com.fariin.app.ui.components.FariinTopBar(title, onBack = onBack, container = Fariin.colors.bgSecondary, actions = { if (action != null) action() })
     }
 }
 
-/** One section: an optional header above, an optional footer below, a thin divider after it. */
+/** One section: an optional header above, its rows in one rounded card, an optional footer below. */
 @Composable
 internal fun SettingsSection(
     header: String? = null,
@@ -63,33 +64,33 @@ internal fun SettingsSection(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (header != null) {
             Text(
                 header, style = MaterialTheme.typography.titleSmall, color = c.blue,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
             )
         }
-        Column(Modifier.fillMaxWidth(), content = content)
+        Column(Modifier.fillMaxWidth().clip(SectionShape).background(c.card), content = content)
         if (footer != null) {
             Text(
                 footer, style = MaterialTheme.typography.bodySmall, color = c.secondary,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
             )
         }
     }
-    HorizontalDivider(Modifier.padding(vertical = 4.dp), thickness = 1.dp, color = c.separator.copy(alpha = 0.35f))
 }
+
+private val SectionShape = RoundedCornerShape(20.dp)
 
 enum class Trailing { CHEVRON, OUT_LINK, NONE }
 
 /**
  * A Material list row: 24dp icon in a 40dp slot, the title in bodyLarge and the [value] as the
  * supporting line under it (Android settings), ripple on tap. [trailing] CHEVRON draws nothing
- * (Android rows do not), OUT_LINK keeps the small arrow for pages that leave the app. [last] is
- * kept for the iOS call sites; Android rows carry no separators.
+ * (Android rows do not), OUT_LINK keeps the small arrow for pages that leave the app. A thin line
+ * under every row but the [last] of its card, starting at the title (iOS).
  */
-@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun SettingsRow(
     title: String,
@@ -125,6 +126,8 @@ internal fun SettingsRow(
             Icon(Icons.Filled.NorthEast, contentDescription = null, tint = c.secondary, modifier = Modifier.padding(start = 8.dp).size(18.dp))
         }
     }
+    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator,
+        modifier = Modifier.padding(start = if (icon != null) 72.dp else 16.dp))
 }
 
 @Composable
