@@ -67,6 +67,15 @@ class FariinApp : Application() {
         com.fariin.app.local.LocalCache.init(this)
         com.fariin.app.local.Drafts.init(this)
         com.fariin.app.local.SendQueue.init(this)
+        // The time zone rules and date formats load on first use, about 100 ms on a cheap phone,
+        // and the first use was the opening chat's day separators. Loaded here off the main thread.
+        Thread({
+            runCatching {
+                val now = System.currentTimeMillis().toDouble()
+                com.fariin.app.data.ThreadLogic.dayLabel(now, now)
+                com.fariin.app.data.ThreadLogic.timeLabel(now, false)
+            }
+        }, "warm-dates").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
         AppLifecycle.install(this)
         // "Waiting for network" / "Connecting" in the chat list title (iOS ConnectionStatus).
         com.fariin.app.data.ConnectionStatus.start(this)

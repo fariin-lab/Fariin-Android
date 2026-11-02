@@ -179,16 +179,30 @@ internal fun decodeSampled(f: File, targetPx: Int, maxLongPx: Int = 0, lowRam: B
     })?.asImageBitmap()
 }.getOrNull()
 
-/** The inline thumbnail first (a real tiny picture), else the BlurHash, else nothing. */
+/** Placeholders already made, so a bubble opened again (or scrolled back) draws one at once. */
+private val Placeholders = android.util.LruCache<String, ImageBitmap>(96)
+
+/**
+ * The inline thumbnail first (a real tiny picture), else the BlurHash, else nothing. Made off the
+ * main thread: a BlurHash or a JPEG decode per photo bubble stalled an opening chat on a cheap phone.
+ */
 @Composable
-internal fun rememberPlaceholder(thumb: String?, blurhash: String?): ImageBitmap? = remember(thumb, blurhash) {
+internal fun rememberPlaceholder(thumb: String?, blurhash: String?): ImageBitmap? {
+    val key = thumb ?: blurhash
+    val v by produceState(initialValue = key?.let { Placeholders.get(it) }, thumb, blurhash) {
+        if (value != null || key == null) return@produceState
+        value = withContext(Dispatchers.Default) { makePlaceholder(thumb, blurhash)?.also { Placeholders.put(key, it) } }
+    }
+    return v
+}
+
+private fun makePlaceholder(thumb: String?, blurhash: String?): ImageBitmap? =
     thumb?.let { t ->
         runCatching { Base64.decode(t, Base64.DEFAULT) }.getOrNull()
             ?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }?.asImageBitmap()
     } ?: blurhash?.let { h ->
         BlurHash.decode(h, 32, 32)?.let { px -> Bitmap.createBitmap(px, 32, 32, Bitmap.Config.ARGB_8888).asImageBitmap() }
     }
-}
 
 /** The time and ticks floating on a picture with no caption: a dark capsule (iOS metaCapsule). */
 @Composable
