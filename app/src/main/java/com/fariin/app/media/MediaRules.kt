@@ -46,6 +46,21 @@ object MediaRules {
         return max(1, (w * s).roundToInt()) to max(1, (h * s).roundToInt())
     }
 
+    /**
+     * inSampleSize for showing a picture: halve while the short side stays at or over [targetShort],
+     * then keep halving while the long side is over [maxLong] (0 = no cap), so a huge photo never
+     * decodes at full size on a small phone.
+     */
+    fun sampleFor(w: Int, h: Int, targetShort: Int, maxLong: Int = 0): Int {
+        if (w <= 0 || h <= 0) return 1
+        var s = 1
+        val short = min(w, h)
+        val long = max(w, h)
+        while (targetShort > 0 && short / (s * 2) >= targetShort) s *= 2
+        while (maxLong > 0 && long / s > maxLong) s *= 2
+        return s
+    }
+
     /** sendJPEG's loop: the sides tried in order until the JPEG fits under maxBytes. */
     fun sideLadder(q: PhotoQuality): List<Int> = generateSequence(q.maxSide) { nextSide(it) }.toList()
 

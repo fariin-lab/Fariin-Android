@@ -22,12 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -58,7 +62,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.crypto.EncMeta
 import com.fariin.app.data.Message
+import com.fariin.app.media.AutoDownload
 import com.fariin.app.media.BlurHash
+import com.fariin.app.media.LowEnd
 import com.fariin.app.media.ChatMedia
 import com.fariin.app.media.MediaRules
 import com.fariin.app.media.VoicePlayer
@@ -87,22 +93,90 @@ internal fun rememberPlainFile(url: String?, enc: EncMeta?): File? {
     return v
 }
 
-/** A picture decoded to about [targetPx] on its short side. */
+/**
+ * What a picture download is doing. WAITING = auto-download is off for this network, a tap starts
+ * it; FAILED = the fetch gave up (slow or no network), a tap tries again. Never an endless ring.
+ */
+internal enum class Fetch { WAITING, LOADING, FAILED, DONE }
+
+internal class GatedFile(val file: File?, val state: Fetch, val start: () -> Unit)
+
+/**
+ * [rememberPlainFile] with the Storage and Data rules (iOS AutoDownloadPrefs): a picture that is
+ * not on the phone yet only comes down by itself when [kind] may download on this network. Until
+ * then the bubble shows the inline thumbnail or BlurHash it already has (no bytes spent).
+ */
 @Composable
-internal fun rememberBitmap(file: File?, targetPx: Int): ImageBitmap? {
-    val v by produceState<ImageBitmap?>(initialValue = null, file, targetPx) {
-        value = file?.let { f -> withContext(Dispatchers.IO) { decodeSampled(f, targetPx) } }
+internal fun rememberGatedFile(url: String?, enc: EncMeta?, kind: AutoDownload.Kind?): GatedFile {
+    val media = chatMedia()
+    val ctx = LocalContext.current
+    var file by remember(url) { mutableStateOf(url?.let { media.cached(it) }) }
+    var state by remember(url) {
+        val auto = url == null || ChatMedia.isLocal(url) || kind == null || AutoDownload.allowedNow(ctx, kind)
+        mutableStateOf(when { url == null || file != null -> Fetch.DONE; auto -> Fetch.LOADING; else -> Fetch.WAITING })
+    }
+    LaunchedEffect(url, state) {
+        if (state == Fetch.LOADING && url != null) {
+            val f = media.file(url, enc)
+            file = f
+            state = if (f != null) Fetch.DONE else Fetch.FAILED
+        }
+    }
+    return GatedFile(file, state) { if (state == Fetch.WAITING || state == Fetch.FAILED) state = Fetch.LOADING }
+}
+
+/** The disc on a picture that waits for a tap: an arrow to download, or a turn arrow to try again. */
+@Composable
+internal fun FetchDisc(state: Fetch, modifier: Modifier = Modifier) {
+    Box(modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+        Icon(if (state == Fetch.FAILED) Icons.Filled.Refresh else Icons.Filled.Download,
+            if (state == Fetch.FAILED) "Try again" else "Download", tint = Color.White, modifier = Modifier.size(24.dp))
+    }
+}
+
+/**
+ * Decoded chat pictures kept in memory, so a bubble scrolled back into view draws at once instead
+ * of decoding again (less garbage, fewer dropped frames on a cheap phone). An eighth of the app's
+ * heap, a sixteenth on a low-RAM phone.
+ */
+internal object DecodedPictures {
+    private var cache: android.util.LruCache<String, ImageBitmap>? = null
+
+    fun of(lowRam: Boolean): android.util.LruCache<String, ImageBitmap> = cache ?: synchronized(this) {
+        cache ?: object : android.util.LruCache<String, ImageBitmap>(
+            (Runtime.getRuntime().maxMemory() / if (lowRam) 16 else 8).toInt().coerceAtLeast(2 * 1024 * 1024)) {
+            override fun sizeOf(key: String, value: ImageBitmap): Int = value.asAndroidBitmap().allocationByteCount
+        }.also { cache = it }
+    }
+
+    fun clear() { cache?.evictAll() }
+}
+
+/** A picture decoded to about [targetPx] on its short side, and never over [maxLongPx] on its long side. */
+@Composable
+internal fun rememberBitmap(file: File?, targetPx: Int, maxLongPx: Int = 0): ImageBitmap? {
+    val ctx = LocalContext.current
+    val lowRam = remember { LowEnd.isLowRam(ctx) }
+    val key = file?.let { "${it.absolutePath}|${it.length()}|$targetPx|$maxLongPx" }
+    val v by produceState(initialValue = key?.let { DecodedPictures.of(lowRam).get(it) }, file, targetPx) {
+        if (value != null || file == null || key == null) return@produceState
+        value = withContext(Dispatchers.IO) {
+            // Bubble-sized pictures only: the full-screen viewer (a view-once photo among them) is never kept.
+            decodeSampled(file, targetPx, maxLongPx, lowRam)?.also { if (maxLongPx == 0) DecodedPictures.of(lowRam).put(key, it) }
+        }
     }
     return v
 }
 
-internal fun decodeSampled(f: File, targetPx: Int): ImageBitmap? = runCatching {
+internal fun decodeSampled(f: File, targetPx: Int, maxLongPx: Int = 0, lowRam: Boolean = false): ImageBitmap? = runCatching {
     val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(f.absolutePath, o)
-    var sample = 1
-    val short = minOf(o.outWidth, o.outHeight)
-    while (short / (sample * 2) >= targetPx) sample *= 2
-    BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+    val sample = MediaRules.sampleFor(o.outWidth, o.outHeight, targetPx, maxLongPx)
+    BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply {
+        inSampleSize = sample
+        // Photos are JPEGs (no see-through parts): half the memory a pixel on a low-RAM phone.
+        if (lowRam && o.outMimeType == "image/jpeg") inPreferredConfig = Bitmap.Config.RGB_565
+    })?.asImageBitmap()
 }.getOrNull()
 
 /** The inline thumbnail first (a real tiny picture), else the BlurHash, else nothing. */
@@ -135,18 +209,23 @@ internal fun PictureBox(
     val (wDp, hDp) = MediaRules.photoBox(m.width, m.height, maxW.value, captionWidth)
     val px = with(LocalDensity.current) { minOf(wDp, hDp).dp.roundToPx() }
     val placeholder = rememberPlaceholder(m.thumb, m.blurhash)
-    val file = rememberPlainFile(url, enc)
-    val bmp = rememberBitmap(file, px)
+    // A video's poster is small and always comes down; the photo itself follows auto-download.
+    val kind = if (m.mediaKind == Message.MediaKind.PHOTO) AutoDownload.Kind.PHOTOS else null
+    val got = rememberGatedFile(url, enc, kind)
+    val bmp = rememberBitmap(got.file, px)
+    val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
     Box(
         Modifier.size(wDp.dp, hDp.dp).clip(shape).background(Fariin.colors.secondary.copy(alpha = 0.18f))
-            .clickable(enabled = bmp != null, onClick = onOpen),
+            .clickable(enabled = bmp != null || waits, onClick = { if (bmp != null) onOpen() else got.start() }),
     ) {
         if (bmp != null) {
             Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else if (placeholder != null) {
             Image(placeholder, null, contentScale = ContentScale.Crop, filterQuality = FilterQuality.High, modifier = Modifier.fillMaxSize())
         }
-        if (busy || (bmp == null && url != null)) {
+        if (waits && !busy) {
+            FetchDisc(got.state, Modifier.align(Alignment.Center))
+        } else if (busy || (bmp == null && url != null)) {
             // My own upload shows its progress (iOS ring); a download waits on a plain spinner.
             UploadRing(if (busy) m.clientId else null, Modifier.align(Alignment.Center))
         }

@@ -6,6 +6,8 @@ Accounts and their generated passwords go to test-accounts.json next to this fil
     python seed.py              # new accounts
     python seed.py --profiles   # refresh the existing accounts' profile fields
     python seed.py --channel    # demo channels: alice runs them, bobby follows "Fariin News"
+    python seed.py --carol      # a third fake user, carol (low-end phone tests), added to the same file
+    python seed.py --photos     # plain group "Photo Test" (alice + carol) with 10 photos from alice
 """
 import datetime, json, os, secrets, sys, urllib.request
 
@@ -126,6 +128,85 @@ def seed_channels():
     patch_doc("channelDirectory/all", {"rows": rows})
     print("channels seeded:", [c["cid"] for c in CHANNELS], "bobby follows", news)
 
+
+def load_accounts():
+    path = os.path.join(HERE, "test-accounts.json")
+    return json.load(open(path)) if os.path.exists(path) else []
+
+
+def seed_carol():
+    """A third account for the low-end phone, so alice and bobby stay on their own emulators."""
+    accts = load_accounts()
+    if any(a["handle"] == "carol" for a in accts):
+        print("carol already there"); return
+    email, pw = "carol@test.fariin.local", secrets.token_urlsafe(12)
+    r = post(f"{AUTH}/accounts:signUp?key=fake-api-key", {"email": email, "password": pw, "returnSecureToken": True})
+    uid = r["localId"]
+    # The sign-in gate wants a proved email (a function locally missing), as alice and bobby have.
+    post(f"{AUTH.replace('/v1', '/v1/projects/demo-fariin')}/accounts:update", {"localId": uid, "emailVerified": True},
+         {"Authorization": "Bearer owner"})
+    seed_profile(uid, "carol", "Carol Test")
+    accts.append({"uid": uid, "handle": "carol", "name": "Carol Test", "email": email, "password": pw})
+    json.dump(accts, open(os.path.join(HERE, "test-accounts.json"), "w"), indent=2)
+    print("seeded carol", uid)
+
+
+def upload(path, data, ctype):
+    """Firebase Storage emulator upload; returns the download link the phone can open (10.0.2.2)."""
+    import urllib.parse
+    bucket = "demo-fariin.appspot.com"
+    req = urllib.request.Request(f"http://127.0.0.1:9199/v0/b/{bucket}/o?name={urllib.parse.quote(path, safe='')}",
+                                 data=data, method="POST", headers={"Content-Type": ctype, "Authorization": "Bearer owner"})
+    with urllib.request.urlopen(req) as r:
+        meta = json.loads(r.read())
+    tok = meta.get("downloadTokens", "").split(",")[0]
+    return f"http://10.0.2.2:9199/v0/b/{bucket}/o/{urllib.parse.quote(path, safe='')}?alt=media&token={tok}"
+
+
+def seed_photos():
+    """Plain group with 10 camera-sized photos (1280 x 960, about 80 KB each at JPEG 0.6), to measure what a
+    chat with photos costs on a slow, paid connection."""
+    import base64, io, random
+    from PIL import Image, ImageDraw, ImageFilter
+    accts = {a["handle"]: a for a in load_accounts()}
+    alice, carol = accts["alice"], accts["carol"]
+    cid = "demoPhotoTest"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    users = [alice["uid"], carol["uid"]]
+    patch_doc(f"conversations/{cid}", {
+        "type": "group", "title": "Photo Test", "users": users, "admins": [alice["uid"]], "createdBy": alice["uid"],
+        "createdAt": iso(now - datetime.timedelta(hours=1)), "updatedAt": iso(now), "e2ee": False,
+        "names": {alice["uid"]: alice["name"], carol["uid"]: carol["name"]}, "photos": {},
+        "unreadCount": {alice["uid"]: 0, carol["uid"]: 10}, "typing": {u: False for u in users},
+        "lastMessage": "📷 Photo", "lastSender": alice["uid"], "lastPlainTag": ""})
+    rnd = random.Random(7)
+    for i in range(10):
+        img = Image.new("RGB", (1280, 960), tuple(rnd.randrange(40, 220) for _ in range(3)))
+        d = ImageDraw.Draw(img)
+        for _ in range(400):   # busy picture so the JPEG is camera-sized, not a flat colour
+            x, y = rnd.randrange(1280), rnd.randrange(960)
+            d.ellipse([x, y, x + rnd.randrange(10, 120), y + rnd.randrange(10, 120)], fill=tuple(rnd.randrange(256) for _ in range(3)))
+        img = img.filter(ImageFilter.GaussianBlur(1))
+        buf = io.BytesIO(); img.save(buf, "JPEG", quality=60)
+        th = img.copy(); th.thumbnail((40, 40)); tb = io.BytesIO(); th.save(tb, "JPEG", quality=45)
+        mid = f"photo{i:02d}"
+        url = upload(f"chat/{cid}/{mid}.enc", buf.getvalue(), "application/octet-stream")
+        at = now - datetime.timedelta(minutes=10 - i)
+        patch_doc(f"conversations/{cid}/messages/{mid}", {
+            "type": "image", "text": "", "authorId": alice["uid"], "imageUrl": url, "width": 1280, "height": 960,
+            "thumb": base64.b64encode(tb.getvalue()).decode(), "clientId": mid, "clientTs": at.timestamp() * 1000,
+            "createdAt": iso(at)})
+        print(mid, len(buf.getvalue()) // 1024, "KB")
+    print("photo group seeded:", cid)
+
+
+if sys.argv[1:] == ["--carol"]:
+    seed_carol()
+    sys.exit(0)
+
+if sys.argv[1:] == ["--photos"]:
+    seed_photos()
+    sys.exit(0)
 
 if sys.argv[1:] == ["--channel"]:
     seed_channels()

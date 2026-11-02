@@ -28,7 +28,12 @@ class FariinApp : Application() {
     override fun onCreate() {
         super.onCreate()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        val local = debuggable && File(filesDir, LOCAL_FLAG).exists()
+        // The benchmark build (release code, debug key, never shipped) may use the local backend too.
+        val benchmark = runCatching {
+            packageManager.getApplicationInfo(packageName, android.content.pm.PackageManager.GET_META_DATA)
+                .metaData?.getBoolean("fariin.local_backend_allowed") == true
+        }.getOrDefault(false)
+        val local = (debuggable || benchmark) && File(filesDir, LOCAL_FLAG).exists()
         // Debug builds start Firebase here (the debug manifest removes FirebaseInitProvider), so a
         // local run can use the emulators' project id. Without it every read and write went to a
         // "kulan-2ef85" namespace inside the emulator, where no seeded user exists. Release builds
@@ -53,6 +58,9 @@ class FariinApp : Application() {
             usingLocalBackend = true
             Log.i("FariinApp", "Using the LOCAL test backend at $HOST")
         }
+        // Slow networks: a photo download gives up after 2 minutes (default 10) so the bubble shows
+        // its "Try again" disc instead of a ring that never ends; uploads keep the 10 minute window.
+        runCatching { FirebaseStorage.getInstance().maxDownloadRetryTimeMillis = 120_000 }
         CrashReports.start(this, debuggable)
         // The phone's own copies (chat list, newest messages, drafts, the send queue) and the
         // app-wide front/back hooks (presence, reconnect).
@@ -60,6 +68,8 @@ class FariinApp : Application() {
         com.fariin.app.local.Drafts.init(this)
         com.fariin.app.local.SendQueue.init(this)
         AppLifecycle.install(this)
+        // "Waiting for network" / "Connecting" in the chat list title (iOS ConnectionStatus).
+        com.fariin.app.data.ConnectionStatus.start(this)
         // Settings that the rest of the app reads: my privacy map (presence, read receipts, typing)
         // and my private block list follow whoever is signed in; App Lock and Screen Security
         // watch every activity.

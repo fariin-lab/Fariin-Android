@@ -46,6 +46,7 @@ object SessionEnd {
         com.fariin.app.local.SendQueue.wipe()
         com.fariin.app.media.ChatMedia.wipe(c)
         try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
+        com.fariin.app.ui.thread.DecodedPictures.clear()   // decoded chat photos held in memory
         com.fariin.app.local.AtRest.forgetKey()
     }
 

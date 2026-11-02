@@ -192,19 +192,23 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     row.forEach { item ->
                         val w = (side - 2f * (count - 1)) / count
-                        val file = rememberPlainFile(item.imageUrl, item.enc)
-                        val bmp = rememberBitmap(file, 400)
+                        // A tile's picture follows auto-download (a video tile's poster always comes down).
+                        val got = rememberGatedFile(item.imageUrl, item.enc, if (item.isVideo) null else AutoDownload.Kind.PHOTOS)
+                        val bmp = rememberBitmap(got.file, 400)
+                        val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
                         Box(
                             Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
-                                .clickable(enabled = bmp != null && !busy) {
+                                .clickable(enabled = (bmp != null || waits) && !busy) {
                                     val v = item.videoUrl
-                                    if (v != null) onView(Viewing.Video(v, item.videoEnc)) else onView(Viewing.Photo(item.imageUrl, item.enc))
+                                    if (bmp == null) got.start()
+                                    else if (v != null) onView(Viewing.Video(v, item.videoEnc)) else onView(Viewing.Photo(item.imageUrl, item.enc))
                                 },
                         ) {
                             if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             else if (r == 0 && item === items.first()) rememberPlaceholder(m.thumb, m.blurhash)?.let {
                                 Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             }
+                            if (waits && !busy) FetchDisc(got.state, Modifier.align(Alignment.Center))
                             if (item.isVideo) {
                                 Box(Modifier.align(Alignment.Center).size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
                                     contentAlignment = Alignment.Center) {

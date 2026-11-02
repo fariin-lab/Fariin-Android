@@ -80,8 +80,12 @@ internal fun MediaViewer(v: Viewing, onClose: () -> Unit) {
 @Composable
 private fun ZoomablePhoto(v: Viewing.Photo, onClose: () -> Unit) {
     val file = rememberPlainFile(v.url, v.enc)
-    val bmp = rememberBitmap(file, 2048)
     val ctx = LocalContext.current
+    // Full screen: twice the screen's long side keeps a 2x zoom sharp; a low-RAM phone stops at
+    // 1440, so a big camera photo never needs 48 MB of pixels.
+    val longPx = ctx.resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
+    val cap = com.fariin.app.media.LowEnd.viewerSide(longPx * 2, com.fariin.app.media.LowEnd.isLowRam(ctx))
+    val bmp = rememberBitmap(file, cap, maxLongPx = cap)
     // iOS: a view-once photo is spent the moment the picture is in hand (ViewedOnce.mark, then the
     // server burn); the plain copy this phone opened is removed when the viewer closes.
     if (v.once != null && bmp != null) LaunchedEffect(v.once) {
@@ -137,14 +141,25 @@ private fun SaveButton(v: Viewing, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     val (url, enc) = when (v) { is Viewing.Photo -> v.url to v.enc; is Viewing.Video -> v.url to v.enc }
     val file = rememberPlainFile(url, enc)
-    IconButton(enabled = file != null, modifier = modifier, onClick = {
-        val f = file ?: return@IconButton
-        scope.launch {
-            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.fariin.app.media.GallerySaver.save(ctx, f, v is Viewing.Video)
+    val doSave: () -> Unit = {
+        file?.let { f ->
+            scope.launch {
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.fariin.app.media.GallerySaver.save(ctx, f, v is Viewing.Video)
+                }
+                android.widget.Toast.makeText(ctx, if (ok) "Saved to Photos" else "Couldn't save", android.widget.Toast.LENGTH_SHORT).show()
             }
-            android.widget.Toast.makeText(ctx, if (ok) "Saved to Photos" else "Couldn't save", android.widget.Toast.LENGTH_SHORT).show()
         }
+    }
+    // Android 8 and 9: the storage permission is asked the first time Save is tapped.
+    val askStorage = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) doSave()
+        else android.widget.Toast.makeText(ctx, com.fariin.app.media.GallerySaver.PERMISSION_NOTICE, android.widget.Toast.LENGTH_SHORT).show()
+    }
+    IconButton(enabled = file != null, modifier = modifier, onClick = {
+        if (com.fariin.app.media.GallerySaver.needsPermission(ctx)) askStorage.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        else doSave()
     }) { Icon(Icons.Filled.Download, "Save", tint = Color.White) }
 }
 

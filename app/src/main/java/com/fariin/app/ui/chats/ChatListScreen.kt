@@ -69,16 +69,25 @@ fun ChatListScreen(
     onOpen: (Conversation) -> Unit = LocalOpenChat.current,
 ) {
     val c = Fariin.colors
-    val pinned = state.chats.filter { it.isPinned(me) }
-    val rest = state.chats.filter { !it.isPinned(me) }
+    val pinned = remember(state.chats, me) { state.chats.filter { it.isPinned(me) } }
+    val rest = remember(state.chats, me) { state.chats.filter { !it.isPinned(me) } }
+    val link by com.fariin.app.data.ConnectionStatus.state.collectAsState()
+    val linkLabel = com.fariin.app.data.ConnectionStatus.label(link)
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         val people = com.fariin.app.ui.people.LocalPeopleNav.current
         androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Chats",
-                fontSize = 34.sp, fontWeight = FontWeight.Bold, color = c.label,
-                modifier = Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-            )
+            // No connection to the server: a small spinner and the words where the title sits
+            // (iOS ConnectionStatus), same height so the list does not jump.
+            Box(Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp).height(41.dp),
+                contentAlignment = Alignment.CenterStart) {
+                if (linkLabel == null) {
+                    Text("Chats", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = c.label)
+                } else androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    Text(linkLabel, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                        maxLines = 1, modifier = Modifier.padding(start = 10.dp))
+                }
+            }
             androidx.compose.material3.IconButton(onClick = people.newChat) {
                 androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Edit, contentDescription = "New Chat", tint = c.blue)
             }
@@ -101,10 +110,10 @@ fun ChatListScreen(
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 if (pinned.isNotEmpty()) {
                     item(key = "h-pinned") { SectionHeader("Pinned") }
-                    items(pinned, key = { it.id }) { ChatRow(it, me, decryptor, onOpen) }
+                    items(pinned, key = { it.id }, contentType = { "chat" }) { ChatRow(it, me, decryptor, onOpen) }
                     item(key = "h-chats") { SectionHeader("Chats") }
                 }
-                items(rest, key = { it.id }) { ChatRow(it, me, decryptor, onOpen) }
+                items(rest, key = { it.id }, contentType = { "chat" }) { ChatRow(it, me, decryptor, onOpen) }
             }
         }
     }

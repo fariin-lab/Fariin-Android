@@ -1,0 +1,20 @@
+# Baseline Profile: the code on the start-up path to the chat list, opening a chat and scrolling it.
+# Compiled ahead of time at install (profileinstaller), which matters most on slow, cheap phones.
+HSPLcom/fariin/app/FariinApp;->**(**)**
+HSPLcom/fariin/app/MainActivity;->**(**)**
+HSPLcom/fariin/app/AppLifecycle**;->**(**)**
+HSPLcom/fariin/app/CrashReports;->**(**)**
+HSPLcom/fariin/app/ui/chats/**;->**(**)**
+HSPLcom/fariin/app/ui/shell/**;->**(**)**
+HSPLcom/fariin/app/ui/theme/**;->**(**)**
+HSPLcom/fariin/app/ui/components/**;->**(**)**
+HSPLcom/fariin/app/ui/photo/**;->**(**)**
+HSPLcom/fariin/app/ui/thread/**;->**(**)**
+HSPLcom/fariin/app/data/**;->**(**)**
+HSPLcom/fariin/app/local/**;->**(**)**
+HSPLcom/fariin/app/crypto/**;->**(**)**
+HSPLcom/fariin/app/device/**;->**(**)**
+HSPLcom/fariin/app/media/ChatMedia**;->**(**)**
+HSPLcom/fariin/app/media/MediaRules**;->**(**)**
+HSPLcom/fariin/app/media/BlurHash**;->**(**)**
+Lcom/fariin/app/**;

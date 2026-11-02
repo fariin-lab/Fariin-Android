@@ -1,5 +1,6 @@
 package com.fariin.app
 
+import coil3.request.allowRgb565
 import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -86,8 +87,17 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             setSingletonImageLoaderFactory { ctx ->
+                val lowRam = com.fariin.app.media.LowEnd.isLowRam(ctx)
                 ImageLoader.Builder(ctx)
                     .components { add(FariinPhotoFetcher.Factory()) }
+                    // Decoded pictures kept in memory: a smaller share of the app's memory on a
+                    // low-RAM phone (Android Go, 1 GB), and 2 bytes a pixel there instead of 4.
+                    .memoryCache {
+                        coil3.memory.MemoryCache.Builder()
+                            .maxSizePercent(ctx, com.fariin.app.media.LowEnd.memoryCachePercent(lowRam))
+                            .build()
+                    }
+                    .let { if (lowRam) it.allowRgb565(true) else it }
                     // Faces and photos on disk, capped like iOS DiskImageCache (250 MB), wiped at sign-out.
                     .diskCache {
                         coil3.disk.DiskCache.Builder()
@@ -164,7 +174,14 @@ class MainActivity : ComponentActivity() {
         val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
         val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
         val chats by vm.state.collectAsState()
-        LaunchedEffect(chats.loading) { if (!chats.loading) keepSplash = false }
+        val activity = LocalContext.current as? android.app.Activity
+        LaunchedEffect(chats.loading) {
+            if (!chats.loading) {
+                keepSplash = false
+                // "Fully drawn" in the system log = the chat list is up (the start-up number we track).
+                activity?.reportFullyDrawn()
+            }
+        }
         val nav = rememberNavController()
         // Notifications: the chat list's names and photos for the push service, the open chat
         // (no notification for it), and a tapped notification opening its chat.
