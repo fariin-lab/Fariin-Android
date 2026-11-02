@@ -421,3 +421,26 @@ Seen, not fixed (not today's regressions):
 - Pinning the first chat: the Pinned header, row and Chats header land above the screen (the list keeps its old first row; 4498bea handles only one new row at index 1). Scroll up shows them. Same for the Archived row appearing.
 - Edit puts the cursor at the start of the old text (composer prefill from 5d118a6, before today), so typed words go in front.
 - Empty previews on Alice/Bobby, Weekend Trip, Study Group, Weekend Plans: local data only. Their conversations carry an old `lastExpiresAt` in the past (no onNewMessage trigger locally to move or clear it), so the burn tick blanks the preview. The real server stamps or deletes it on every message.
+
+## Low-end check 2: today's new screens (2026-11-02 16:25, low-end worker)
+- emulator-5560 (fariin_lowend, API 27, 1 GB, LOW class), carol, local backend, BENCHMARK build + speed-profile. gfxinfo reset before / read after; PSS = dumpsys meminfo TOTAL. Software-drawn emulator: compare rows, not 16 ms. Host builds by other workers skew numbers (one chat-list run during a gradle build read 90% janky; thrown out).
+
+| Screen | Frames | Janky | p90 | p99 | PSS before / on / after leaving |
+|---|---|---|---|---|---|
+| Chat list scroll, 5 fling pairs (baseline) | 408 / 412 | 15.4% / 17.0% | 21 ms | 29-32 ms | 47 MB |
+| Settings scroll, 5 fling pairs | 513 | 5.3% | 14 ms | 25 ms | 48 MB |
+| Story camera open/close x3 | 617 | 11.0% | 17 ms | 150 ms (open) | 48.6 / 54.9 / 54.5 (10 s); x6 more: 57.0, 57.4 (flat) |
+| Story editor, 12 MP photo + text + 2 strokes | 222 | 34.7% | 34 ms | 150 ms | 56.9 / 65.7 / 65.2, 60.0 after 20 s + trim |
+| Pen strokes only (6) | 259 | 36.3% | 25 ms | 38 ms | - |
+| Circle cropper, 12 MP photo, open + 6 pans | 120 | 20.8% | 24 ms | 32 ms | 60.7 / 78.4 peak, 67.2 / 67.3; 3 more cycles 68.5, 69.7, 69.9 (flat) |
+| Story viewer + react bar | 233 | 10.7% | 18 ms | 65 ms | 69.7 / 65.0 / 64.0 |
+| Pinned See All sheet (open, scroll, close) | 63 | 17.5% | 53 ms | 109 ms | 65.8 / 65.8 / 66.3 |
+| Pinned See All open/close x2 | 36-38 | 82-92% | 93-113 ms | 125-150 ms | - |
+
+- Camera: `dumpsys media.camera` shows Device 0 open with Fariin as client while the camera is up, and "Device 0 is closed, no client instance" every time after leaving. No camera leak; memory flat over 9 open/close cycles. Main thread on camera open is light (CameraX binds off it).
+- No leak found: editor and cropper leave 3-8 MB that later drops or stays flat over repeated cycles (native heap high-water, not held pictures).
+- FIXED (StoryViewer): the photo clock asked for a frame every vsync while the story was paused (finger held, reply field / react bar focused, menu), and a video's progress loop kept running while paused. Now the clock waits on the paused state without frames and restarts its timestamp on resume; the video loop runs only while it plays. Idle react bar for 6 s: main thread doFrame 250 ms -> 48 ms, Compose frame clock 137 ms -> 0. Checked: hold 3 s, release, the bar goes on from where it stopped and moves to the next story.
+- FOUND, NOT FIXED:
+  - Pinned See All: each open costs 90-150 ms frames. The profile shows the whole thread (ThreadRoute/ThreadScreen + visible rows) recomposing, a ThreadRepository.rebuild (~75 ms per open) and chat list rows recomposing, though the thread is idle (0 frames, no rebuild in 20 s idle). `showPins` is read in ThreadScreen's own scope so the toggle recomposes all of ThreadScreen; what starts the rebuild was not found. Needs the thread owner.
+  - Story editor jank (35%) is the render side: the full-screen photo is redrawn with the strokes each frame; main thread per stroke is small (gesture 160 ms over 6 strokes). Real GPUs should not see this; not changed.
+  - StoryComposer decodes the prepared JPEG (about 1080 wide) on the main thread inside remember: 7 ms on this emulator, more on a slow phone. Moving it off the main thread would show the editor buttons a frame late, so left alone.

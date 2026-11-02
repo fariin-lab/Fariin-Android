@@ -115,6 +115,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -416,8 +417,14 @@ private fun StoryPage(
             if (!active || !loaded) return@LaunchedEffect
             var last = withFrameMillis { it }
             while (elapsed < story.showMs) {
+                if (stoppedNow) {
+                    // Paused: wait without asking for a frame every vsync, then restart the clock.
+                    androidx.compose.runtime.snapshotFlow { stoppedNow }.first { !it }
+                    last = withFrameMillis { it }
+                    continue
+                }
                 val now = withFrameMillis { it }
-                if (!stoppedNow) elapsed += now - last
+                elapsed += now - last
                 last = now
                 progress = (elapsed.toFloat() / story.showMs).coerceIn(0f, 1f)
             }
@@ -606,8 +613,9 @@ private fun StoryMedia(
             onDispose { player.removeListener(l); player.release() }
         }
         LaunchedEffect(active, player) { player.playWhenReady = active }
-        LaunchedEffect(player) {
-            while (true) {
+        // Only while it plays: a paused clip does not move, so no frame each vsync for it.
+        LaunchedEffect(player, active) {
+            while (active) {
                 withFrameMillis { }
                 val d = player.duration
                 if (d > 0) onVideoProgress((player.currentPosition.toFloat() / d).coerceIn(0f, 1f))
