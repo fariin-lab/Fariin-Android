@@ -8,6 +8,9 @@ import com.fariin.app.media.ChatMedia
 import com.fariin.app.media.MediaMessages
 import com.fariin.app.media.MediaRules
 import com.fariin.app.media.PhotoPrep
+import com.fariin.app.media.FilePrep
+import com.fariin.app.media.MediaSender
+import com.fariin.app.media.VideoPrep
 import com.fariin.app.media.VoiceRecorder
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
@@ -85,6 +88,10 @@ class ThreadRepository(
     /** What a failed media send needs to go again, by clientId. */
     private val retryPhoto = ConcurrentHashMap<String, PhotoPrep>()
     private val retryVoice = ConcurrentHashMap<String, VoiceRecorder.Result>()
+    /** Video, file, album and captioned / view-once photo sends, by clientId, to go again on a tap. */
+    private val retryMedia = ConcurrentHashMap<String, suspend () -> Unit>()
+    /** The media sends (iOS ChatService media paths), see media/MediaSender. */
+    private val sender: MediaSender by lazy { MediaSender(cid, me, crypto, media, db) }
     private var msgReg: ListenerRegistration? = null
     private var convReg: ListenerRegistration? = null
     private var presenceReg: ListenerRegistration? = null
@@ -134,7 +141,9 @@ class ThreadRepository(
         msgReg = convRef.collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(PAGE_SIZE)
-            .addSnapshotListener { snap, err ->
+            // Metadata too: a media message's last write (attach the file URL, drop `uploading`)
+            // changes no value the server adds, so without this the "sending" mark never clears.
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, err ->
                 if (snap == null) {
                     msgFailed = true
                     _state.update { it.copy(loaded = true, error = err?.message) }
@@ -353,8 +362,138 @@ class ThreadRepository(
         pending.remove(id)
         retryPhoto.remove(id)?.let { sendPreparedPhoto(it); return }
         retryVoice.remove(id)?.let { sendVoice(it); return }
+        retryMedia.remove(id)?.let { work ->
+            pending[id]?.let { pending[id] = it.copy(sendState = Message.SendState.SENDING) }
+            rebuild()
+            runMediaSend(id, work)
+            return
+        }
         if (m.mediaKind != null) { rebuild(); return }
         sendText(m.text)
+    }
+
+    // ------------------------------------------------------------------ media picks (attach sheet)
+
+    /**
+     * What the attach sheet hands over: photos and videos in the order picked, one caption, and
+     * view-once (one photo only). One item = a photo or video message; more = albums of ten
+     * (Limits.albumMaxItems), in order, the caption on the first.
+     */
+    fun sendPick(context: Context, uris: List<Uri>, caption: String, viewOnce: Boolean) {
+        val m = media ?: return
+        if (uris.isEmpty()) return
+        val tap = System.currentTimeMillis().toDouble()
+        val chunks = MediaRules.albumChunks(uris.take(MediaRules.MEDIA_PER_PICK))
+        chunks.forEachIndexed { n, chunk ->
+            val clientId = UUID.randomUUID().toString().uppercase()
+            val words = if (n == 0) caption.trim() else ""
+            val ts = tap + n
+            val once = viewOnce && chunk.size == 1
+            pending[clientId] = Message(
+                id = clientId, authorId = me, text = words, type = if (chunk.size == 1) "image" else "album",
+                createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
+                sendState = Message.SendState.SENDING, viewOnce = once,
+            )
+            rebuild()
+            runMediaSend(clientId) {
+                val kinds = chunk.map { isVideoUri(context, it) }
+                if (chunk.size == 1 && kinds[0]) {
+                    val v = VideoPrep.fromUri(context, chunk[0], m.localDir(), clientId) ?: error("video not readable or over 64 MB")
+                    val poster = File(m.localDir(), "poster-$clientId.jpg").also { it.writeBytes(v.poster.jpeg) }
+                    pending[clientId]?.let { p ->
+                        pending[clientId] = p.copy(type = "video", localPath = poster.absolutePath, width = v.width.toDouble(),
+                            height = v.height.toDouble(), duration = v.duration, thumb = v.poster.thumbB64)
+                    }
+                    rebuild()
+                    val work: suspend () -> Unit = { sender.video(v, words, false, clientId, ts) }
+                    retryMedia[clientId] = work
+                    work()
+                } else if (chunk.size == 1) {
+                    val prep = PhotoPrep.fromUri(context, chunk[0]) ?: error("photo not readable")
+                    val local = File(m.localDir(), "send-$clientId.jpg").also { it.writeBytes(prep.jpeg) }
+                    pending[clientId]?.let { p ->
+                        pending[clientId] = p.copy(localPath = local.absolutePath, width = prep.width.toDouble(),
+                            height = prep.height.toDouble(), thumb = if (once) null else prep.thumbB64)
+                    }
+                    rebuild()
+                    val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts) }
+                    retryMedia[clientId] = work
+                    work()
+                } else {
+                    val parts = chunk.mapIndexed { i, u ->
+                        if (kinds[i]) MediaSender.AlbumPart.Video(VideoPrep.fromUri(context, u, m.localDir(), "$clientId-$i")
+                            ?: error("video not readable or over 64 MB"))
+                        else MediaSender.AlbumPart.Photo(PhotoPrep.fromUri(context, u) ?: error("photo not readable"))
+                    }
+                    pending[clientId]?.let { p ->
+                        pending[clientId] = p.copy(album = parts.mapIndexed { i, part ->
+                            val pp = when (part) { is MediaSender.AlbumPart.Photo -> part.prep; is MediaSender.AlbumPart.Video -> part.prep.poster }
+                            val f = File(m.localDir(), "tile-$clientId-$i.jpg").also { it.writeBytes(pp.jpeg) }
+                            val vid = (part as? MediaSender.AlbumPart.Video)?.prep
+                            Message.AlbumItem(f.absolutePath, null, pp.width.toDouble(), pp.height.toDouble(),
+                                videoUrl = vid?.file?.absolutePath, duration = vid?.duration)
+                        })
+                    }
+                    rebuild()
+                    val work: suspend () -> Unit = { sender.album(parts, words, false, clientId, ts) }
+                    retryMedia[clientId] = work
+                    work()
+                }
+            }
+        }
+    }
+
+    /** A document from the system file picker (iOS sendFile); a refusal is handed to [onRefused]. */
+    fun sendDocument(context: Context, uri: Uri, onRefused: (String) -> Unit) {
+        val m = media ?: return
+        scope.launch(Dispatchers.IO) {
+            val f = when (val r = FilePrep.fromUri(context, uri, m.localDir())) {
+                is FilePrep.Companion.Result.Ok -> r.prep
+                FilePrep.Companion.Result.TooLarge -> { onRefused("Files can be up to 25 MB."); return@launch }
+                FilePrep.Companion.Result.Unreadable -> { onRefused("Couldn't read this file."); return@launch }
+            }
+            val tap = System.currentTimeMillis().toDouble()
+            val clientId = UUID.randomUUID().toString().uppercase()
+            val local = File(m.localDir(), "file-$clientId").also { it.writeBytes(f.bytes) }
+            pending[clientId] = Message(
+                id = clientId, authorId = me, text = "", type = "file", createdAtMillis = tap, hasServerTime = false,
+                clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+                fileName = f.name, fileSize = f.bytes.size.toLong(), localPath = local.absolutePath,
+            )
+            rebuild()
+            val work: suspend () -> Unit = { sender.file(f, false, clientId, tap) }
+            retryMedia[clientId] = work
+            runMediaSend(clientId, work)
+        }
+    }
+
+    /** Runs one media send; a failure leaves a red bubble whose tap runs the same work again. */
+    private fun runMediaSend(clientId: String, work: suspend () -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                work()
+                retryMedia.remove(clientId)
+            } catch (e: Exception) {
+                if (!retryMedia.containsKey(clientId)) retryMedia[clientId] = work
+                com.fariin.app.media.UploadProgress.done(clientId)
+                pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
+                rebuild()
+            }
+        }
+    }
+
+    private fun isVideoUri(context: Context, uri: Uri): Boolean =
+        (context.contentResolver.getType(uri) ?: "").startsWith("video/")
+
+    /** A text forwarded into this chat (iOS sendText with `forwarded`), straight to the server. */
+    suspend fun sendForwardedText(text: String, forwarded: Boolean) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        val clientId = UUID.randomUUID().toString().uppercase()
+        val ts = System.currentTimeMillis().toDouble()
+        turn.withLock {
+            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded) else sendDirect(t, clientId, ts, null, forwarded)
+        }
     }
 
     // ------------------------------------------------------------------ media (ChatService.sendImage / sendAudio)
@@ -485,7 +624,8 @@ class ThreadRepository(
         (snap.get("users") as? List<*>)?.filterIsInstance<String>()
     } catch (_: Exception) { null } ?: memberUids()
 
-    private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null) {
+    private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
+                                   forwarded: Boolean = false) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         val local = CryptoHub.listedConversation(cid)
@@ -518,6 +658,7 @@ class ThreadRepository(
         )
         // iOS replyEnc: {id, authorId, text sealed like the message}.
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.encryptForConversation(cid, reply.text))
+        if (forwarded) msg["forwarded"] = true
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,
@@ -568,7 +709,8 @@ class ThreadRepository(
         } catch (_: Exception) {}
     }
 
-    private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null) {
+    private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
+                                  forwarded: Boolean = false) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
@@ -582,6 +724,7 @@ class ThreadRepository(
         )
         // iOS replyEnc: {id, authorId, text sealed like the message}.
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.sealForGroup(reply.text, members, cid))
+        if (forwarded) msg["forwarded"] = true
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,

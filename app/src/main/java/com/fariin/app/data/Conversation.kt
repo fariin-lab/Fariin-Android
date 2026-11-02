@@ -19,6 +19,8 @@ data class Conversation(
     /** Firestore `lastMessage`: sealed text (or plain words in a group with e2ee off). */
     val lastMessageCipher: String = "",
     val lastImageUrl: String? = null,
+    /** The thumbnail's envelope (`lastImageEnc`), sealed for this chat like the photo itself. */
+    val lastImageEnc: com.fariin.app.crypto.EncMeta? = null,
     val lastSender: String = "",
     val unreadCount: Map<String, Int> = emptyMap(),
     val replyUnread: Map<String, Int> = emptyMap(),
@@ -178,6 +180,7 @@ data class Conversation(
                 photos = stringMap(data["photos"]),
                 lastMessageCipher = data["lastMessage"] as? String ?: "",
                 lastImageUrl = data["lastImageUrl"] as? String,
+                lastImageEnc = com.fariin.app.crypto.EncMeta.fromMap(data["lastImageEnc"] as? Map<*, *>),
                 lastSender = data["lastSender"] as? String ?: "",
                 unreadCount = intMap(data["unreadCount"]),
                 replyUnread = intMap(data["replyUnread"]),

@@ -95,11 +95,16 @@ object LocalJson {
         if (m.waveform.isNotEmpty()) put("wave", JSONArray(m.waveform))
         if (m.uploading) put("up", true)
         if (m.viewOnce) put("once", true)
+        if (m.consumed) put("spent", true)
+        m.fileSize?.let { put("fsize", it) }
         if (m.album.isNotEmpty()) put("album", JSONArray().also { a ->
             for (it in m.album) a.put(JSONObject().put("u", it.imageUrl).apply {
                 enc(it.enc)?.let { e -> put("e", e) }
                 it.width?.let { w -> put("w", w) }
                 it.height?.let { h -> put("h", h) }
+                it.videoUrl?.let { v -> put("v", v) }
+                enc(it.videoEnc)?.let { e -> put("ve", e) }
+                it.duration?.let { d -> put("d", d) }
             })
         })
         if (m.reactions.isNotEmpty()) put("rx", JSONObject(m.reactions))
@@ -122,11 +127,14 @@ object LocalJson {
             duration = d("dur"),
             waveform = o.optJSONArray("wave")?.let { a -> (0 until a.length()).map { a.getInt(it) } } ?: emptyList(),
             uploading = o.optBoolean("up"), viewOnce = o.optBoolean("once"),
+            consumed = o.optBoolean("spent"), fileSize = if (o.has("fsize")) o.getLong("fsize") else null,
             album = o.optJSONArray("album")?.let { a ->
                 (0 until a.length()).mapNotNull { i ->
                     val x = a.optJSONObject(i) ?: return@mapNotNull null
                     Message.AlbumItem(x.optString("u"), encBack(x.optJSONObject("e")),
-                        if (x.has("w")) x.getDouble("w") else null, if (x.has("h")) x.getDouble("h") else null)
+                        if (x.has("w")) x.getDouble("w") else null, if (x.has("h")) x.getDouble("h") else null,
+                        videoUrl = if (x.has("v")) x.getString("v") else null, videoEnc = encBack(x.optJSONObject("ve")),
+                        duration = if (x.has("d")) x.getDouble("d") else null)
                 }
             } ?: emptyList(),
             reactions = o.optJSONObject("rx")?.let { r -> r.keys().asSequence().associateWith { r.getString(it) } } ?: emptyMap(),

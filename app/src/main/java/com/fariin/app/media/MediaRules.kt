@@ -60,6 +60,69 @@ object MediaRules {
     /** iOS keeps ".m4a.enc" for every note, Opus CAF and AAC alike; the player sniffs the bytes. */
     fun audioPath(cid: String, messageId: String) = "chat/$cid/$messageId.m4a.enc"
 
+    fun videoThumbPath(cid: String, messageId: String) = "chat/$cid/$messageId.thumb.enc"
+    fun videoPath(cid: String, messageId: String) = "chat/$cid/$messageId.mp4.enc"
+    fun filePath(cid: String, messageId: String) = "chat/$cid/$messageId.file.enc"
+    fun fileThumbPath(cid: String, messageId: String) = "chat/$cid/$messageId.filethumb.enc"
+    /** sendMixedAlbum tiles: "-i" (photo or poster), "-i-thumb" + "-i-video" for a clip. */
+    fun albumTilePath(cid: String, messageId: String, suffix: String) = "chat/$cid/$messageId-$suffix.enc"
+
+    // ---- Albums and forwarding (Limits.swift)
+    /** Limits.albumMaxItems: one album message holds 10; a bigger pick is sent as several albums. */
+    const val ALBUM_MAX_ITEMS = 10
+    /** Limits.mediaPerMessage: the picker's ceiling. */
+    const val MEDIA_PER_PICK = 32
+    /** Limits.forwardChatsAtOnce. */
+    const val FORWARD_CHATS_AT_ONCE = 5
+
+    /** ThreadView: a pick of more than ten goes as albums of ten, in order; a lone one stays itself. */
+    fun <T> albumChunks(items: List<T>): List<List<T>> = items.chunked(ALBUM_MAX_ITEMS)
+
+    /**
+     * Rows of the album grid: how many tiles each row holds, top to bottom. 1 = one, 2 = side by
+     * side, 3 = one wide over two, 4 = 2 + 2, then rows of 3 with a row of 2 where the count needs
+     * it (5 = 2 + 3, 6 = 3 + 3, 7 = 2 + 2 + 3, 8 = 2 + 3 + 3, 9 = 3 + 3 + 3, 10 = 2 + 2 + 3 + 3).
+     */
+    fun albumRows(n: Int): List<Int> = when {
+        n <= 0 -> emptyList()
+        n == 1 -> listOf(1)
+        n == 2 -> listOf(2)
+        n == 3 -> listOf(1, 2)
+        n == 4 -> listOf(2, 2)
+        else -> {
+            val threes = when (n % 3) { 0 -> n / 3; 1 -> (n - 4) / 3; else -> (n - 2) / 3 }
+            val twos = (n - threes * 3) / 2
+            List(twos) { 2 } + List(threes) { 3 }
+        }
+    }
+
+    // ---- Files
+    /** A name that is safe as one path part: no folders, no control characters, not empty. */
+    fun safeFileName(name: String): String {
+        val base = name.substringAfterLast('/').substringAfterLast('\\')
+            .filter { it >= ' ' && it != ':' && it != '*' && it != '?' && it != '"' && it != '<' && it != '>' && it != '|' }
+            .trim().trimStart('.')
+        return base.take(120).ifEmpty { "File" }
+    }
+
+    /** "245 KB", "3.4 MB", "980 bytes" (iOS ByteCountFormatter .file, decimal units). */
+    fun fileSizeLabel(bytes: Long): String = when {
+        bytes < 1000 -> "$bytes bytes"
+        bytes < 1_000_000 -> "${(bytes / 1000.0).roundToInt()} KB"
+        bytes < 1_000_000_000 -> String.format(java.util.Locale.US, "%.1f MB", bytes / 1_000_000.0)
+        else -> String.format(java.util.Locale.US, "%.1f GB", bytes / 1_000_000_000.0)
+    }
+
+    /** The short type word in the file icon: "PDF", "DOCX", ... or "FILE". */
+    fun fileBadge(name: String): String {
+        val ext = name.substringAfterLast('.', "").uppercase()
+        return if (ext.isEmpty() || ext.length > 4 || ext == name.uppercase()) "FILE" else ext
+    }
+
+    const val FILE_PREVIEW = "📄 File"
+    const val VIEW_ONCE_PREVIEW = "View-once photo"
+    fun videoPreview(seconds: Double) = "🎥 Video · " + durationLabel(seconds)
+
     // ---- Labels
     /** ChatService.voiceDurationLabel: rounded seconds as m:ss. */
     fun durationLabel(seconds: Double): String {

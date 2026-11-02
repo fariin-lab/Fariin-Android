@@ -15,6 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,7 +52,8 @@ import com.fariin.app.media.VoicePlayer
 
 /** What the full-screen viewer shows. */
 sealed class Viewing {
-    data class Photo(val url: String, val enc: EncMeta?) : Viewing()
+    /** [once]: a view-once photo (cid + message id): no Save, spent the moment it shows. */
+    data class Photo(val url: String, val enc: EncMeta?, val once: Pair<String, String>? = null) : Viewing()
     data class Video(val url: String, val enc: EncMeta?) : Viewing()
 }
 
@@ -61,6 +68,10 @@ internal fun MediaViewer(v: Viewing, onClose: () -> Unit) {
             IconButton(onClick = onClose, modifier = Modifier.statusBarsPadding().padding(8.dp).align(Alignment.TopStart)) {
                 Icon(Icons.Filled.Close, "Close", tint = Color.White)
             }
+            val once = (v as? Viewing.Photo)?.once
+            if (once == null) SaveButton(v, Modifier.statusBarsPadding().padding(8.dp).align(Alignment.TopEnd))
+            else Text("View once", color = Color.White, fontSize = 15.sp,
+                modifier = Modifier.statusBarsPadding().padding(16.dp).align(Alignment.TopEnd))
         }
     }
 }
@@ -70,6 +81,14 @@ internal fun MediaViewer(v: Viewing, onClose: () -> Unit) {
 private fun ZoomablePhoto(v: Viewing.Photo, onClose: () -> Unit) {
     val file = rememberPlainFile(v.url, v.enc)
     val bmp = rememberBitmap(file, 2048)
+    val ctx = LocalContext.current
+    // iOS: a view-once photo is spent the moment the picture is in hand (ViewedOnce.mark, then the
+    // server burn); the plain copy this phone opened is removed when the viewer closes.
+    if (v.once != null && bmp != null) LaunchedEffect(v.once) {
+        com.fariin.app.media.ViewedOnce.mark(ctx, v.once.second)
+        com.fariin.app.media.OnceBurn.burn(v.once.first, v.once.second)
+    }
+    if (v.once != null) DisposableEffect(file) { onDispose { file?.delete() } }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -109,6 +128,24 @@ private fun ZoomablePhoto(v: Viewing.Photo, onClose: () -> Unit) {
             )
         }
     }
+}
+
+/** Save to the phone's gallery (MediaStore, no storage permission). */
+@Composable
+private fun SaveButton(v: Viewing, modifier: Modifier) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val (url, enc) = when (v) { is Viewing.Photo -> v.url to v.enc; is Viewing.Video -> v.url to v.enc }
+    val file = rememberPlainFile(url, enc)
+    IconButton(enabled = file != null, modifier = modifier, onClick = {
+        val f = file ?: return@IconButton
+        scope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.fariin.app.media.GallerySaver.save(ctx, f, v is Viewing.Video)
+            }
+            android.widget.Toast.makeText(ctx, if (ok) "Saved to Photos" else "Couldn't save", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }) { Icon(Icons.Filled.Download, "Save", tint = Color.White) }
 }
 
 @Composable

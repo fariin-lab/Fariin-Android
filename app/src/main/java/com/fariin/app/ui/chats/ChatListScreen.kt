@@ -173,6 +173,8 @@ fun ChatRow(conv: Conversation, me: String, decryptor: MessageDecryptor, onOpen:
                     Text(time, fontSize = 15.sp, color = if (unread > 0) c.accent else c.secondary, maxLines = 1)
                 }
                 Row(verticalAlignment = Alignment.Top) {
+                    // The last photo or video poster beside the words (iOS lastImageUrl, media worker).
+                    com.fariin.app.ui.thread.ChatListThumb(conv, draft.isNullOrEmpty())
                     // Two lines tall always, so every row is the same height (iOS, the hidden " \n ").
                     Text(
                         line, fontSize = 15.sp, color = c.secondary,

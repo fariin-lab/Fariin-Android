@@ -124,6 +124,17 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             if (channel != null) channelNav.page(cid) else if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
         },
         onNotice = { notice = it },
+        onForwardTo = { m, targets ->
+            vm.viewModelScope.launch {
+                val failed = com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets)
+                notice = when {
+                    failed.isEmpty() -> if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
+                    failed.size == targets.size -> "Couldn't forward. Try again."
+                    else -> "Forwarded to ${targets.size - failed.size} of ${targets.size} chats"
+                }
+            }
+        },
+        onSave = { m -> vm.viewModelScope.launch { notice = com.fariin.app.media.GallerySaver.saveMessage(app, vm.repo.media, m) } },
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
         draft = remember(cid) { Drafts.text(cid) },
         onDraft = { Drafts.set(cid, it) },
@@ -143,7 +154,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     CompositionLocalProvider(LocalChatMedia provides vm.repo.media) {
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlder, onRetry = vm.repo::retry,
-            onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice, actions = actions)
+            onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice, actions = actions,
+            onSendPick = { uris, caption, once -> vm.repo.sendPick(app, uris, caption, once) },
+            onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } })
     }
 }
 

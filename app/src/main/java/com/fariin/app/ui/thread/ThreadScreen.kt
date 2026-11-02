@@ -147,6 +147,9 @@ fun ThreadScreen(
     onSendPhoto: (Uri) -> Unit = {},
     onSendVoice: (VoiceRecorder.Result) -> Unit = {},
     actions: ThreadActions = ThreadActions(),
+    /** The attach sheet's sends (media worker): photos/videos + caption + view-once, and a file. */
+    onSendPick: (List<Uri>, String, Boolean) -> Unit = { l, _, _ -> l.firstOrNull()?.let(onSendPhoto) },
+    onSendFile: (Uri) -> Unit = {},
 ) {
     val c = Fariin.colors
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
@@ -169,8 +172,11 @@ fun ThreadScreen(
     // Newest at the bottom: the list is reversed, so index 0 is the newest message.
     val reversed = remember(ui.messages) { ui.messages.indices.reversed().toList() }
     val listState = rememberLazyListState()
+    // Forward picker (media worker: ForwardSheet.kt).
+    var forwardFor by remember { mutableStateOf<Message?>(null) }
+    forwardFor?.let { m -> ForwardSheet(ui.me, onDismiss = { forwardFor = null }) { targets -> actions.onForwardTo(m, targets) } }
     menuFor?.let { m ->
-        MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions,
+        MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions.copy(onForward = { forwardFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it })
@@ -279,7 +285,10 @@ fun ThreadScreen(
                     else -> onSend(t)
                 }
             }
-            Composer(send, onSendPhoto, onSendVoice, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
+            var attachOpen by remember { mutableStateOf(false) }
+            if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false },
+                onSendMedia = onSendPick, onSendFile = onSendFile)
+            Composer(send, { attachOpen = true }, onSendVoice, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
                 initialDraft = actions.draft, onDraft = actions.onDraft)
         }
     }
@@ -377,7 +386,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             ) { Text("!", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
         val kind = m.mediaKind
-        if (kind != null && kind != Message.MediaKind.VOICE) {
+        if (kind == Message.MediaKind.PHOTO || kind == Message.MediaKind.VIDEO || kind == Message.MediaKind.ALBUM) {
             MediaRow(ui, m, g, is24h, shape, maxW, tick, isMe, showSender, kind, onView)
             ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
             return@Row
@@ -398,6 +407,14 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             m.replyTo?.takeIf { !m.deleted }?.let { ReplyQuote(it, ui, isMe) }
             if (kind == Message.MediaKind.VOICE) {
                 VoiceBody(m, ui.cid, isMe, maxW * 0.89f - 26.dp) { Meta(m, tick, isMe, is24h) }
+                return@Column
+            }
+            if (kind == Message.MediaKind.FILE) {
+                FileBody(m, isMe, minOf(maxW - 28.dp, 260.dp)) { Meta(m, tick, isMe, is24h) }
+                return@Column
+            }
+            if (kind == Message.MediaKind.VIEW_ONCE) {
+                ViewOnceBody(m, ui.cid, isMe, onView) { Meta(m, tick, isMe, is24h) }
                 return@Column
             }
             val ink = if (isMe) Color.White else c.label
@@ -463,40 +480,13 @@ private fun MediaRow(
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc)) }
                 }, overlay = { VideoOverlay(m, ready); capsule() })
             }
-            else -> AlbumGrid(m, maxW, onView, capsule)
+            else -> AlbumMosaic(m, maxW, onView, capsule)
         }
         if (caption != null) {
             Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                 TextWithMeta(caption, TextStyle(fontSize = 17.sp, color = ink, lineHeight = 22.sp)) { Meta(m, tick, isMe, is24h) }
             }
         }
-    }
-}
-
-/** Up to four album pictures in a 2 x 2 grid (iOS lays out more shapes; TODO). */
-@Composable
-private fun AlbumGrid(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsule: @Composable () -> Unit) {
-    val side = minOf(maxW.value, 350f).dp
-    Box(Modifier.width(side)) {
-        Column {
-            m.album.take(4).chunked(2).forEach { row ->
-                Row {
-                    row.forEach { item ->
-                        val file = rememberPlainFile(item.imageUrl, item.enc)
-                        val bmp = rememberBitmap(file, 400)
-                        Box(
-                            Modifier.width(if (row.size == 1) side else side / 2).aspectRatio(1f).padding(1.dp)
-                                .background(Fariin.colors.secondary.copy(alpha = 0.18f))
-                                .clickable(enabled = bmp != null) { onView(Viewing.Photo(item.imageUrl, item.enc)) },
-                        ) {
-                            if (bmp != null) androidx.compose.foundation.Image(bmp, null,
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        }
-                    }
-                }
-            }
-        }
-        Box(Modifier.matchParentSize()) { capsule() }
     }
 }
 
@@ -606,7 +596,7 @@ private fun TextWithMeta(text: String, style: TextStyle, meta: @Composable () ->
  */
 @Composable
 private fun Composer(
-    onSend: (String) -> Unit, onSendPhoto: (Uri) -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
+    onSend: (String) -> Unit, onAttach: () -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
     prefill: Pair<String, String>? = null, onTyping: (Boolean) -> Unit = {},
     initialDraft: String = "", onDraft: (String) -> Unit = {},
 ) {
@@ -640,9 +630,6 @@ private fun Composer(
     var recording by remember { mutableStateOf(false) }
     var slide by remember { mutableStateOf(0f) }
     val elapsed by recorder.elapsed.collectAsState()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) onSendPhoto(uri)
-    }
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val cancelAt = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
 
@@ -662,9 +649,7 @@ private fun Composer(
                     Spacer(Modifier.width(12.dp))
                 }
             } else {
-                IconButton(onClick = {
-                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onAttach, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Filled.AttachFile, contentDescription = "Attach", tint = c.secondary, modifier = Modifier.size(24.dp))
                 }
                 Spacer(Modifier.width(4.dp))

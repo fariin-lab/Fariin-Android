@@ -147,10 +147,8 @@ internal fun PictureBox(
             Image(placeholder, null, contentScale = ContentScale.Crop, filterQuality = FilterQuality.High, modifier = Modifier.fillMaxSize())
         }
         if (busy || (bmp == null && url != null)) {
-            Box(Modifier.align(Alignment.Center).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)),
-                contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-            }
+            // My own upload shows its progress (iOS ring); a download waits on a plain spinner.
+            UploadRing(if (busy) m.clientId else null, Modifier.align(Alignment.Center))
         }
         overlay()
     }

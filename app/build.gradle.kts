@@ -118,6 +118,9 @@ dependencies {
     // Voice notes, videos and the full-screen video player (Media3, the Android media stack).
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    // Chat video send: 540p H.264 like iOS VideoTranscoder (media worker).
+    implementation("androidx.media3:media3-transformer:1.8.0")
+    implementation("androidx.media3:media3-effect:1.8.0")
     // Calls: LiveKit for group rooms, and its bundled WebRTC build (package livekit.org.webrtc) for
     // 1:1 calls too, so the app carries one WebRTC engine, not two.
     implementation(libs.livekit.android)

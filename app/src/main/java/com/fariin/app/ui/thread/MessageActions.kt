@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Forward
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -75,8 +76,13 @@ data class ThreadActions(
     /** The list reached (true) or left (false) the newest message. */
     val onAtBottom: (Boolean) -> Unit = {},
     val onTitleClick: () -> Unit = {},
-    /** Shown in a small notice ("Forward is coming soon on Android"). */
+    /** Shown in a small notice ("Copied", "Saved to Photos"). */
     val onNotice: (String) -> Unit = {},
+    /** Opens the forward picker for a message (ThreadScreen sets it), then sends to the chats picked. */
+    val onForward: (Message) -> Unit = {},
+    val onForwardTo: (Message, List<String>) -> Unit = { _, _ -> },
+    /** Save a photo or video to the phone's gallery. */
+    val onSave: (Message) -> Unit = {},
     /** The words left in the box last time (iOS Drafts), and where new ones are kept. */
     val draft: String = "",
     val onDraft: (String) -> Unit = {},
@@ -102,9 +108,8 @@ internal fun MessageMenu(
     val items = buildList {
         if (!m.deleted) {
             if (MessageRules.canReply(m)) add(MenuItem("Reply", Icons.AutoMirrored.Filled.Reply) { onReply(m) })
-            if (MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Filled.Forward) {
-                actions.onNotice("Forward is coming soon on Android.")
-            })
+            if (MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Filled.Forward) { actions.onForward(m) })
+            if (canSaveToGallery(m)) add(MenuItem("Save", Icons.Filled.Download) { actions.onSave(m) })
             if (MessageRules.canCopy(m)) add(MenuItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.text) })
             if (MessageRules.canEdit(m, ui.me, now)) add(MenuItem("Edit", Icons.Filled.Edit) { onStartEdit(m) })
             if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", Icons.Filled.Info) { onInfo(m) })
@@ -334,4 +339,12 @@ internal fun UnreadDivider() {
             .padding(vertical = 5.dp),
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
     )
+}
+
+/** iOS: a photo, a video or an album can be saved; a view-once photo never. */
+internal fun canSaveToGallery(m: Message): Boolean = !m.deleted && !m.viewOnce && m.sendState == null && when (m.mediaKind) {
+    Message.MediaKind.PHOTO -> m.imageUrl != null
+    Message.MediaKind.VIDEO -> m.videoUrl != null
+    Message.MediaKind.ALBUM -> true
+    else -> false
 }

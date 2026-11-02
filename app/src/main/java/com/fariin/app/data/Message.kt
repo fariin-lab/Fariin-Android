@@ -58,6 +58,10 @@ data class Message(
     /** The message is out but its file is still on the way (voice, video). */
     val uploading: Boolean = false,
     val viewOnce: Boolean = false,
+    /** A view-once photo the server has burned (consumeOnceImage strips the file and sets this). */
+    val consumed: Boolean = false,
+    /** A file's size in bytes, written in the clear by the sender (iOS sendFile). */
+    val fileSize: Long? = null,
     val album: List<AlbumItem> = emptyList(),
     /** uid to opened emoji (each sealed by its reactor; an unopened one is left out). */
     val reactions: Map<String, String> = emptyMap(),
@@ -82,16 +86,24 @@ data class Message(
         val isReaction: Boolean = false,
     )
 
-    data class AlbumItem(val imageUrl: String, val enc: EncMeta?, val width: Double?, val height: Double?)
+    /** One album tile; for a video tile [imageUrl]/[enc] are its poster, [videoUrl]/[videoEnc] the clip. */
+    data class AlbumItem(
+        val imageUrl: String, val enc: EncMeta?, val width: Double?, val height: Double?,
+        val videoUrl: String? = null, val videoEnc: EncMeta? = null, val duration: Double? = null,
+    ) {
+        val isVideo: Boolean get() = videoUrl != null
+    }
 
-    enum class MediaKind { PHOTO, VIDEO, VOICE, ALBUM }
+    enum class MediaKind { PHOTO, VIDEO, VOICE, ALBUM, FILE, VIEW_ONCE }
 
     /** Which media bubble draws this message, or null for a text-style bubble. */
     val mediaKind: MediaKind?
         get() = when {
             deleted -> null
             type == "album" && album.isNotEmpty() -> MediaKind.ALBUM
+            viewOnce && type == "image" -> MediaKind.VIEW_ONCE
             type == "image" || (type == null && imageUrl != null) -> MediaKind.PHOTO
+            type == "file" -> MediaKind.FILE
             type == "video" -> MediaKind.VIDEO
             type == "audio" -> MediaKind.VOICE
             else -> null
@@ -159,8 +171,12 @@ data class Message(
             val album = (data["album"] as? List<*>)?.mapNotNull { item ->
                 val m = item as? Map<*, *> ?: return@mapNotNull null
                 val url = m["imageUrl"] as? String ?: return@mapNotNull null
+                val video = (m["kind"] as? String) == "video"
                 AlbumItem(url, EncMeta.fromMap(m["enc"] as? Map<*, *>),
-                    (m["width"] as? Number)?.toDouble(), (m["height"] as? Number)?.toDouble())
+                    (m["width"] as? Number)?.toDouble(), (m["height"] as? Number)?.toDouble(),
+                    videoUrl = if (video) m["videoUrl"] as? String else null,
+                    videoEnc = if (video) EncMeta.fromMap(m["videoEnc"] as? Map<*, *>) else null,
+                    duration = (m["duration"] as? Number)?.toDouble())
             } ?: emptyList()
             return Message(
                 id = id,
@@ -193,6 +209,8 @@ data class Message(
                 waveform = (data["waveform"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList(),
                 uploading = data["uploading"] as? Boolean ?: false,
                 viewOnce = data["viewOnce"] as? Boolean ?: false,
+                consumed = data["consumed"] as? Boolean ?: false,
+                fileSize = (data["fileSize"] as? Number)?.toLong(),
                 views = maxOf(0, (data["views"] as? Number)?.toInt() ?: 0),
                 reactionCounts = (data["reactionCounts"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
                     val n = (v as? Number)?.toInt() ?: 0

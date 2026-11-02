@@ -1,0 +1,250 @@
+package com.fariin.app.ui.thread
+
+import android.content.ActivityNotFoundException
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.fariin.app.data.Message
+import com.fariin.app.media.AutoDownload
+import com.fariin.app.media.FileOpener
+import com.fariin.app.media.MediaRules
+import com.fariin.app.media.UploadProgress
+import com.fariin.app.media.ViewedOnce
+import com.fariin.app.ui.theme.Fariin
+import kotlinx.coroutines.launch
+
+/**
+ * The ring on my own media while it goes up (iOS upload progress ring): a filling arc once the
+ * upload reports bytes, a spinner before that. Tap-to-cancel is a TODO.
+ */
+@Composable
+internal fun UploadRing(clientId: String?, modifier: Modifier = Modifier) {
+    val all by UploadProgress.map.collectAsState()
+    val f = clientId?.let { all[it] }
+    Box(modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+        if (f != null && f > 0f) CircularProgressIndicator(progress = { f }, color = Color.White, strokeWidth = 2.5.dp,
+            trackColor = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(30.dp))
+        else CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+    }
+}
+
+/**
+ * A document (iOS file bubble): the type badge (or the PDF's first page), the name on up to two
+ * lines, the size, and "Uploading" while it goes. Tap opens it in another app after the bytes are
+ * opened into the cache; a document over the auto-download rule waits for a tap.
+ */
+@Composable
+internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val media = chatMedia()
+    val ink = if (isMe) Color.White else c.label
+    val sub = if (isMe) Color.White.copy(alpha = 0.75f) else c.secondary
+    val name = m.fileName ?: "File"
+    var opening by remember { mutableStateOf(false) }
+    val auto = remember(m.id) {
+        (m.fileSize ?: 0L) <= AutoDownload.MAX_AUTO_BYTES && AutoDownload.allowedNow(ctx, AutoDownload.Kind.DOCUMENTS)
+    }
+    val preview = if (m.thumbUrl != null) rememberPlainFile(m.thumbUrl, m.thumbEnc) else null
+    val previewBmp = rememberBitmap(preview, 160)
+    // Prefetch per the auto-download rule, so a tap opens at once.
+    if (auto && m.fileUrl != null && m.localPath == null) rememberPlainFile(m.fileUrl, m.enc)
+    val busy = m.sendState == Message.SendState.SENDING || m.uploading
+    Column(Modifier.width(width)) {
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = !opening && (m.localPath != null || m.fileUrl != null)) {
+                opening = true
+                scope.launch {
+                    val f = m.localPath?.let { java.io.File(it) } ?: m.fileUrl?.let { media?.file(it, m.enc) }
+                    val intent = f?.let { FileOpener.intentFor(ctx, it, name) }
+                    opening = false
+                    val msg = when {
+                        intent == null -> "Couldn't open this file."
+                        else -> try { ctx.startActivity(intent); null } catch (_: ActivityNotFoundException) { "No app on this phone opens this file." }
+                    }
+                    msg?.let { android.widget.Toast.makeText(ctx, it, android.widget.Toast.LENGTH_SHORT).show() }
+                }
+            }.padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(46.dp).clip(RoundedCornerShape(8.dp))
+                    .background(if (isMe) Color.White.copy(alpha = 0.22f) else c.blue.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (previewBmp != null) Image(previewBmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else Text(MediaRules.fileBadge(name), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isMe) Color.White else c.blue)
+                if (busy || opening) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                    val all by UploadProgress.map.collectAsState()
+                    val f = m.clientId?.let { all[it] }
+                    if (f != null && f > 0f && !opening) CircularProgressIndicator(progress = { f }, color = Color.White, strokeWidth = 2.dp,
+                        trackColor = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(26.dp))
+                    else CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, fontSize = 16.sp, color = ink, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)
+                Text(
+                    (m.fileSize?.let { MediaRules.fileSizeLabel(it) } ?: "") + if (busy) " · Uploading" else "",
+                    fontSize = 13.sp, color = sub,
+                )
+            }
+        }
+        Box(Modifier.align(Alignment.End)) { meta() }
+    }
+}
+
+/**
+ * A view-once photo (iOS viewOncePill): "Photo" with the 1 mark until it is opened, then "Viewed"
+ * with the crossed mark, and never openable again on this phone. A photo the server burned
+ * (`consumed`, no file) is "Viewed" too. My own copy opens once for me as well (owner, 2026-10-03).
+ */
+@Composable
+internal fun ViewOnceBody(m: Message, cid: String, isMe: Boolean, onView: (Viewing) -> Unit, meta: @Composable () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val epoch by ViewedOnce.epoch.collectAsState()
+    val spent = remember(m.id, epoch, m.consumed) { m.consumed || ViewedOnce.contains(ctx, m.id) }
+    val url = m.imageUrl
+    val canOpen = !spent && url != null && m.sendState == null
+    val ink = if (isMe) Color.White else c.label
+    Column {
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = canOpen) {
+                url?.let { onView(Viewing.Photo(it, m.enc, once = cid to m.id)) }
+            }.padding(vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).background(if (spent) Color.Transparent else ink.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (spent) Icon(Icons.Filled.Block, null, tint = ink.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
+                else Text("1", color = ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(if (spent) "Viewed" else "Photo", fontSize = 17.sp, color = if (spent) ink.copy(alpha = 0.7f) else ink)
+            if (m.sendState == Message.SendState.SENDING) {
+                Spacer(Modifier.width(8.dp))
+                CircularProgressIndicator(color = ink, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+        }
+        Box(Modifier.align(Alignment.End)) { meta() }
+    }
+}
+
+/**
+ * An album of up to ten (iOS album grid): rows from [MediaRules.albumRows], each row one height,
+ * tiles split evenly; a video tile has the play disc and its length. Tap opens that tile.
+ */
+@Composable
+internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsule: @Composable () -> Unit) {
+    val side = minOf(maxW.value, 320f)
+    val items = m.album.take(MediaRules.ALBUM_MAX_ITEMS)
+    val rows = MediaRules.albumRows(items.size)
+    val busy = m.sendState == Message.SendState.SENDING
+    Box(Modifier.width(side.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            var start = 0
+            rows.forEachIndexed { r, count ->
+                val row = items.subList(start, start + count)
+                start += count
+                // One wide tile on top of three; the other rows square-ish.
+                val h = when { count == 1 && items.size == 1 -> side; count == 1 -> side * 0.6f; count == 2 -> side / 2f; else -> side / 3f }
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    row.forEach { item ->
+                        val w = (side - 2f * (count - 1)) / count
+                        val file = rememberPlainFile(item.imageUrl, item.enc)
+                        val bmp = rememberBitmap(file, 400)
+                        Box(
+                            Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
+                                .clickable(enabled = bmp != null && !busy) {
+                                    val v = item.videoUrl
+                                    if (v != null) onView(Viewing.Video(v, item.videoEnc)) else onView(Viewing.Photo(item.imageUrl, item.enc))
+                                },
+                        ) {
+                            if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            else if (r == 0 && item === items.first()) rememberPlaceholder(m.thumb, m.blurhash)?.let {
+                                Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
+                            if (item.isVideo) {
+                                Box(Modifier.align(Alignment.Center).size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Filled.PlayArrow, "Play video", tint = Color.White, modifier = Modifier.size(22.dp))
+                                }
+                                item.duration?.let { d ->
+                                    Text(MediaRules.durationLabel(d), fontSize = 11.sp, color = Color.White,
+                                        modifier = Modifier.padding(5.dp).clip(RoundedCornerShape(50))
+                                            .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 5.dp, vertical = 1.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (busy) UploadRing(m.clientId, Modifier.align(Alignment.Center))
+        Box(Modifier.matchParentSize()) { capsule() }
+    }
+}
+
+/**
+ * The chat list's small picture (iOS lastImageUrl + lastImageEnc): the last photo, album cover
+ * or video poster, opened with this chat's keys, 20 dp, rounded, before the preview words. Shown
+ * only while the last message is that media (a newer text clears it on iOS too).
+ */
+@Composable
+internal fun ChatListThumb(conv: com.fariin.app.data.Conversation, show: Boolean) {
+    val url = conv.lastImageUrl
+    val marker = conv.lastMessageCipher
+    val isMedia = marker.startsWith("📷") || marker.startsWith("🎥") || marker.startsWith("🎬")
+    if (!show || url.isNullOrEmpty() || conv.lastImageEnc == null || !isMedia) return
+    val ctx = LocalContext.current
+    val media = remember(conv.id) {
+        com.fariin.app.media.ChatMedia(ctx.applicationContext, conv.id, com.fariin.app.data.CryptoHub.get(ctx.applicationContext))
+    }
+    val file by androidx.compose.runtime.produceState<java.io.File?>(null, url) { value = media.file(url, conv.lastImageEnc) }
+    val bmp = rememberBitmap(file, 80)
+    if (bmp != null) {
+        Image(bmp, null, contentScale = ContentScale.Crop,
+            modifier = Modifier.padding(top = 1.dp, end = 5.dp).size(20.dp).clip(RoundedCornerShape(4.dp)))
+    }
+}
