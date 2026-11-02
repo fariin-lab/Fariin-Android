@@ -55,7 +55,7 @@ import com.fariin.app.ui.theme.Fariin
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ForwardSheet(me: String, onDismiss: () -> Unit, onSend: (List<String>) -> Unit) {
+internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Forward to", onSend: (List<String>) -> Unit) {
     val c = Fariin.colors
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
@@ -66,7 +66,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, onSend: (List<Strin
     val shown = chats.filter { query.isBlank() || it.displayName(me).contains(query.trim(), ignoreCase = true) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.bg) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-            Text("Forward to", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
             Box(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(10.dp))

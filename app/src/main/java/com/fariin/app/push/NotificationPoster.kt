@@ -20,11 +20,15 @@ import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
-import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.fariin.app.MainActivity
 import com.fariin.app.R
+import com.fariin.app.security.AppLock
+import com.fariin.app.system.BubbleActivity
+import com.fariin.app.system.ChatShortcuts
+import com.fariin.app.system.NotifActions
+import android.os.Build
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Where a notification tap should land, and which chat is open now (iOS AppRouter.activeChatId). */
@@ -115,23 +119,88 @@ object NotificationPoster {
         }
         b.setStyle(style)
 
-        // The conversation shortcut (needed for Android's Conversations section). A group's face is
-        // the group photo; a 1:1's is the person.
-        val chatIcon = if (spec.isGroup) IconCompat.createWithBitmap(circle(groupPhoto, group = true)) else senderIcon
-        val open = Intent(c, MainActivity::class.java).setAction(Intent.ACTION_VIEW)
-            .putExtra(PushRouter.EXTRA_OPEN_CID, spec.key)
-        val shortcut = ShortcutInfoCompat.Builder(c, spec.key)
-            .setShortLabel(spec.title)
-            .setLongLived(true)
-            .setIcon(chatIcon)
-            .setIntent(open)
-            .apply { if (!spec.isGroup) setPerson(sender) }
-            .build()
+        // The conversation shortcut (needed for Android's Conversations section, the share sheet
+        // and bubbles; system/ChatShortcuts). A group's face is the group photo; a 1:1's is the person.
+        val shortcut = ChatShortcuts.build(c, spec.key, spec.title, spec.isGroup, spec.senderUid,
+            if (spec.isGroup) groupPhoto else senderPhoto, person = if (spec.isGroup) null else sender)
         try { ShortcutManagerCompat.pushDynamicShortcut(c, shortcut) } catch (_: Exception) {}
         b.setShortcutId(spec.key)
         if (spec.isGroup) b.setLargeIcon(circle(groupPhoto, group = true))
+        if (spec.opensChat) {
+            val locked = AppLock.enabled(c)
+            NotifActions.addTo(b, c, spec.key, me, locked)
+            bubble(c, spec.key, circle(if (spec.isGroup) groupPhoto else senderPhoto, spec.isGroup), locked)?.let { b.setBubbleMetadata(it) }
+        }
 
         nmc.notify(spec.key, ID, b.build())
+    }
+
+    /**
+     * Android 11+ chat bubble: the chat in a small floating window (system/BubbleActivity). Not
+     * offered with App Lock on (a bubble would show the chat over other apps without the lock).
+     * Android shows it only for chats the person lets bubble (the conversation's settings).
+     */
+    private fun bubble(c: Context, cid: String, face: Bitmap, appLock: Boolean): NotificationCompat.BubbleMetadata? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || appLock) return null
+        // Bubble intents must be mutable (Android 12).
+        val pi = PendingIntent.getActivity(c, ("b$cid").hashCode(), BubbleActivity.intent(c, cid),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        return NotificationCompat.BubbleMetadata.Builder(pi, IconCompat.createWithAdaptiveBitmap(face))
+            .setDesiredHeight(640)
+            .setSuppressNotification(false)
+            .build()
+    }
+
+    /**
+     * After a Reply from the shade: the chat's notification again, quietly, with my words added
+     * as my own line (MessagingStyle with no sender = me). [text] null = only stop the spinner.
+     */
+    @SuppressLint("MissingPermission")
+    fun showMyReply(c: Context, cid: String, text: String?) {
+        val nmc = NotificationManagerCompat.from(c)
+        val n = nmc.activeNotifications.firstOrNull { it.tag == cid && it.id == ID }?.notification ?: return
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val b = NotificationCompat.Builder(c, n.channelId)
+            .setSmallIcon(R.drawable.ic_chat)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle(n.extras.getCharSequence(android.app.Notification.EXTRA_TITLE))
+            .setContentIntent(n.contentIntent)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setShowWhen(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setShortcutId(n.shortcutId)
+        n.getLargeIcon()?.let { b.setLargeIcon(it) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) n.bubbleMetadata?.let { b.setBubbleMetadata(NotificationCompat.BubbleMetadata.fromPlatform(it)) }
+        NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)?.let { style ->
+            if (text != null) style.addMessage(text, System.currentTimeMillis(), null as Person?)
+            b.setStyle(style)
+            style.messages.lastOrNull()?.text?.let { b.setContentText(it) }
+        }
+        NotifActions.addTo(b, c, cid, me, AppLock.enabled(c))
+        nmc.notify(cid, ID, b.build())
+    }
+
+    /** The rules refused a reply sent from the shade: say so, a tap opens the chat. */
+    @SuppressLint("MissingPermission")
+    fun showReplyFailed(c: Context, cid: String) {
+        ensureChannels(c)
+        val nmc = NotificationManagerCompat.from(c)
+        if (!nmc.areNotificationsEnabled()) return
+        val name = NotifStore.chat(c, cid)?.name
+        val tap = PendingIntent.getActivity(c, ("f$cid").hashCode(), ChatShortcuts.openIntent(c, cid),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(c, NotifChannel.MESSAGES.id)
+            .setSmallIcon(R.drawable.ic_chat)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle("Message not sent")
+            .setContentText(if (name != null) "Your reply to $name could not be sent. Open the chat to try again."
+                else "Your reply could not be sent. Open the chat to try again.")
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build()
+        nmc.notify(cid, ID, n)
     }
 
     /** iOS Push.clear(cid): the chat was opened, its notification goes. */
@@ -139,7 +208,7 @@ object NotificationPoster {
 
     fun clearAll(c: Context) {
         NotificationManagerCompat.from(c).cancelAll()
-        try { ShortcutManagerCompat.removeAllDynamicShortcuts(c) } catch (_: Exception) {}
+        ChatShortcuts.clear(c)
     }
 
     /** The photo cut to a circle, or the soft grey face with the person (or people) glyph, the

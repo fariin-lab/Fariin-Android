@@ -354,6 +354,32 @@ class ThreadRepository(
         }
     }
 
+    /** How a send from outside the chat screen ended (a notification Reply, system/NotifActionWorker). */
+    enum class QueuedResult { SENT, REFUSED, LATER }
+
+    /**
+     * A queued text sent now and awaited, for a caller with no chat screen (a Reply from the
+     * notification shade, with the app closed). Same writes as [sendText]; the entry was put in
+     * [SendQueue] by the caller before this runs. LATER = still queued (offline, a slow key),
+     * so the next start or reconnect drains it as usual.
+     */
+    suspend fun sendQueued(e: SendQueue.Entry): QueuedResult {
+        if (!SendQueue.begin(e.clientId)) return QueuedResult.LATER   // another driver has it
+        val ref = e.replyId?.let { Message.ReplyRef(it, e.replyAuthor ?: "", e.replyText ?: "") }
+        return try {
+            if (alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return QueuedResult.SENT }
+            turn.withLock {
+                if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref) else sendDirect(e.text, e.clientId, e.ts, ref)
+            }
+            SendQueue.remove(me, e.clientId)
+            QueuedResult.SENT
+        } catch (x: Exception) {
+            if (SendQueue.isPermanent(x)) { SendQueue.remove(me, e.clientId); QueuedResult.REFUSED } else QueuedResult.LATER
+        } finally {
+            SendQueue.end(e.clientId)
+        }
+    }
+
     /** iOS SendQueue.alreadySent: the doc (id = clientId) in Firestore's offline store means its
      *  write is already queued there; on the server means it landed before the app died. */
     private suspend fun alreadySent(clientId: String): Boolean {
@@ -926,22 +952,25 @@ class ThreadRepository(
      */
     fun markRead(readReceipts: Boolean = PrivacySettings.readReceipts()) {
         if (readMutex.isLocked) { readOwed = true; return }
-        scope.launch {
-            readMutex.withLock {
-                do {
-                    readOwed = false
-                    val local = CryptoHub.listedConversation(cid)
-                    val update = hashMapOf<String, Any>("unreadCount.$me" to 0)
-                    if (local?.markedUnread?.get(me) == true) update["markedUnread.$me"] = FieldValue.delete()
-                    try { convRef.update(update).await() } catch (_: Exception) {}
-                    val iBlocked = _state.value.receipts.iBlocked || blockedByMyList()
-                    if (readReceipts && !iBlocked) {
-                        try {
-                            convRef.set(mapOf("lastRead" to mapOf(me to FieldValue.serverTimestamp())), SetOptions.merge()).await()
-                        } catch (_: Exception) {}
-                    }
-                } while (readOwed)
-            }
+        scope.launch { markReadNow(readReceipts) }
+    }
+
+    /** [markRead] awaited (the notification's Mark as read, with no chat screen). */
+    suspend fun markReadNow(readReceipts: Boolean = PrivacySettings.readReceipts()) {
+        readMutex.withLock {
+            do {
+                readOwed = false
+                val local = CryptoHub.listedConversation(cid)
+                val update = hashMapOf<String, Any>("unreadCount.$me" to 0)
+                if (local?.markedUnread?.get(me) == true) update["markedUnread.$me"] = FieldValue.delete()
+                try { convRef.update(update).await() } catch (_: Exception) {}
+                val iBlocked = _state.value.receipts.iBlocked || blockedByMyList()
+                if (readReceipts && !iBlocked) {
+                    try {
+                        convRef.set(mapOf("lastRead" to mapOf(me to FieldValue.serverTimestamp())), SetOptions.merge()).await()
+                    } catch (_: Exception) {}
+                }
+            } while (readOwed)
         }
     }
 
@@ -961,6 +990,11 @@ class ThreadRepository(
                 for (e in list) if (!SendQueue.isInFlight(e.clientId)) repo.resend(e)
             }
         }
+
+        /** The chat's repository on screen, or a quiet one (no listeners) for work from outside it. */
+        fun openOrQuiet(cid: String, me: String, crypto: FariinCrypto, scope: CoroutineScope,
+                        media: ChatMedia? = null): ThreadRepository =
+            open[cid] ?: ThreadRepository(cid, me, crypto, scope, media = media)
 
         /** Back in front: every open chat checks its listeners and its queue. */
         fun recoverOpen() { for (r in open.values) r.recover() }

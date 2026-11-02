@@ -1,0 +1,12 @@
+<resources>
+    <!-- The share sheet's chat picker opens as a bottom sheet over the app that shared
+         (system/ShareActivity): a see-through window, no animation of its own. -->
+    <style name="Theme.Fariin.Share" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

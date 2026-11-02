@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -112,6 +113,10 @@ fun MainShell(
 
     // The chat list's camera button opens the Stories tab straight into its photo picker.
     var storyRequest by rememberSaveable { mutableIntStateOf(0) }
+    // The launcher's New Story shortcut (system/SystemRouter): the same as the camera button.
+    val launcherStory by com.fariin.app.system.SystemRouter.storyRequests.collectAsState()
+    var launcherSeen by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(launcherStory) { if (launcherStory > launcherSeen) { launcherSeen = launcherStory; storyRequest++; tab = TAB_STORIES } }
     val haptics = LocalHapticFeedback.current
     val select: (Int) -> Unit = { t ->
         if (t != tab) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)

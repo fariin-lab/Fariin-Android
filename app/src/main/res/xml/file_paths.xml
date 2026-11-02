@@ -2,4 +2,6 @@
 <!-- Only the opened copies of received documents are shared (media/FileOpener). -->
 <paths>
     <cache-path name="open" path="open/" />
+    <!-- Items shared INTO Fariin, copied before sending (system/ShareActivity). -->
+    <cache-path name="shared" path="shared-in/" />
 </paths>

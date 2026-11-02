@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press on the app icon (com.fariin.app.system.SystemRouter), and the Direct Share target
+     the recent-chat shortcuts join (system/ChatShortcuts, category SHARE_TARGET). The recent
+     chats themselves are dynamic shortcuts, published from the chat list. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_chat"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_chat"
+        android:shortcutShortLabel="@string/shortcut_new_chat_short"
+        android:shortcutLongLabel="@string/shortcut_new_chat_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.fariin.app"
+            android:targetClass="com.fariin.app.MainActivity">
+            <extra android:name="fariin.launcher" android:value="newChat" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="new_story"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_story"
+        android:shortcutShortLabel="@string/shortcut_new_story_short"
+        android:shortcutLongLabel="@string/shortcut_new_story_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.fariin.app"
+            android:targetClass="com.fariin.app.MainActivity">
+            <extra android:name="fariin.launcher" android:value="newStory" />
+        </intent>
+    </shortcut>
+
+    <share-target android:targetClass="com.fariin.app.system.ShareActivity">
+        <data android:mimeType="text/plain" />
+        <data android:mimeType="image/*" />
+        <data android:mimeType="video/*" />
+        <data android:mimeType="application/*" />
+        <data android:mimeType="audio/*" />
+        <category android:name="com.fariin.app.category.SHARE_TARGET" />
+    </share-target>
+</shortcuts>

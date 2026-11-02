@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcuts and the share sheet (com.fariin.app.system). -->
+<resources>
+    <string name="shortcut_new_chat_short">New Chat</string>
+    <string name="shortcut_new_chat_long">Start a new chat</string>
+    <string name="shortcut_new_story_short">New Story</string>
+    <string name="shortcut_new_story_long">Post a new story</string>
+    <string name="share_label">Fariin</string>
+</resources>

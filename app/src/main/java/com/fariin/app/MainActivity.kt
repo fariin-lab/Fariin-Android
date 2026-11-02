@@ -79,9 +79,12 @@ class MainActivity : ComponentActivity() {
         NotificationPoster.ensureChannels(this)
         takeOpenCid(intent)
         takeCallLink(intent)
+        com.fariin.app.system.SystemRouter.take(intent)
         // Debug builds only: `--ez notifDemo true` posts made-up notifications through the real
         // builder (push/DebugNotifs), no sign-in and no Firebase.
         if (debuggable && intent.getBooleanExtra("notifDemo", false)) com.fariin.app.push.DebugNotifs.post(this)
+        // Debug builds only: `--es notifChat <cid>` = a real notification for a real chat (local backend).
+        if (debuggable) intent.getStringExtra("notifChat")?.let { com.fariin.app.push.DebugNotifs.postReal(this, it) }
         // Debug builds only: `--ez callDemo true --es callScreen incoming|calling|voice|video|ended|group`
         // shows a made-up call screen (ui/call/CallActivity), no Firebase and no WebRTC.
         if (debuggable && intent.getBooleanExtra("callDemo", false)) {
@@ -194,6 +197,8 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(chats.chats) {
             val list = chats.chats
             if (list.isNotEmpty()) withContext(Dispatchers.Default) { NotifStore.saveChats(applicationContext, me, list) }
+            // Recent chats as conversation shortcuts: share sheet, launcher, notification settings.
+            if (list.isNotEmpty()) com.fariin.app.system.ChatShortcuts.publish(applicationContext, me, list)
         }
         val entry by nav.currentBackStackEntryAsState()
         val openCid = if (entry?.destination?.route == "thread/{cid}") entry?.arguments?.getString("cid") else null
@@ -207,6 +212,15 @@ class MainActivity : ComponentActivity() {
             val cid = pending ?: return@LaunchedEffect
             PushRouter.pendingOpen.value = null
             nav.navigate("thread/$cid") { launchSingleTop = true }
+        }
+        // The launcher's long-press New Chat / New Story (system/SystemRouter).
+        val launcherAsk by com.fariin.app.system.SystemRouter.pending.collectAsState()
+        LaunchedEffect(launcherAsk) {
+            val ask = launcherAsk ?: return@LaunchedEffect
+            com.fariin.app.system.SystemRouter.pending.value = null
+            nav.popBackStack("main", inclusive = false)
+            if (ask == com.fariin.app.system.SystemRouter.NEW_CHAT) nav.navigate("newchat") { launchSingleTop = true }
+            else com.fariin.app.system.SystemRouter.storyRequests.value += 1
         }
         val linkAsk by com.fariin.app.call.CallLinkRouter.pending.collectAsState()
         LaunchedEffect(linkAsk) {
@@ -259,6 +273,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         takeOpenCid(intent)
         takeCallLink(intent)
+        com.fariin.app.system.SystemRouter.take(intent)
     }
 
     /** A tapped call link (https://call.fariin.com/video/..., fariin.com/call/#key=...). */

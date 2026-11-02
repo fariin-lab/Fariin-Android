@@ -69,7 +69,49 @@
                 <data android:host="voice" />
                 <data android:host="call" />
             </intent-filter>
+            <!-- Launcher long-press shortcuts and the Direct Share target (system/). -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- Fariin in the share sheet: text, links, photos, videos, files (system/ShareActivity). -->
+        <activity
+            android:name=".system.ShareActivity"
+            android:exported="true"
+            android:label="@string/share_label"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.fariin.app.share"
+            android:theme="@style/Theme.Fariin.Share"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+        <!-- A chat in an Android 11+ bubble (system/BubbleActivity). -->
+        <activity
+            android:name=".system.BubbleActivity"
+            android:exported="false"
+            android:allowEmbedded="true"
+            android:resizeableActivity="true"
+            android:documentLaunchMode="always"
+            android:theme="@style/Theme.Fariin"
+            android:windowSoftInputMode="adjustResize" />
+        <!-- Reply / Mark as read on a chat notification (system/NotifActionReceiver). -->
+        <receiver
+            android:name=".system.NotifActionReceiver"
+            android:exported="false" />
         <!-- App Lock cover (security/AppLock.kt). -->
         <activity
             android:name=".security.LockActivity"
