@@ -17,6 +17,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.text.font.FontFamily
 import androidx.core.content.ContextCompat
 import com.fariin.app.media.MediaRules
@@ -745,6 +746,28 @@ private fun Composer(
     }
 }
 
-/** Long press only (a tap still reaches the photo and voice bubbles inside). */
+/** Long press only (a tap still reaches the photo and voice bubbles inside). Watched in the
+ *  Initial pass, so a photo or video that takes taps itself still opens the menu on a long press
+ *  (iOS), and the press is then eaten so its release does not also open the viewer. */
 private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier =
-    this.pointerInput(Unit) { detectTapGestures(onLongPress = { onLong() }) }
+    this.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val slop = viewConfiguration.touchSlop
+            val long = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                while (true) {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                    val ch = e.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
+                    if (!ch.pressed || ch.isConsumed || (ch.position - down.position).getDistance() > slop) return@withTimeoutOrNull false
+                }
+                @Suppress("UNREACHABLE_CODE") false
+            }
+            if (long != null) return@awaitEachGesture
+            onLong()
+            while (true) {
+                val e = awaitPointerEvent(PointerEventPass.Initial)
+                e.changes.forEach { it.consume() }
+                if (e.changes.none { it.pressed }) break
+            }
+        }
+    }
