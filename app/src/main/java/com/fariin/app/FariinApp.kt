@@ -53,6 +53,13 @@ class FariinApp : Application() {
             usingLocalBackend = true
             Log.i("FariinApp", "Using the LOCAL test backend at $HOST")
         }
+        CrashReports.start(this, debuggable)
+        // The phone's own copies (chat list, newest messages, drafts, the send queue) and the
+        // app-wide front/back hooks (presence, reconnect).
+        com.fariin.app.local.LocalCache.init(this)
+        com.fariin.app.local.Drafts.init(this)
+        com.fariin.app.local.SendQueue.init(this)
+        AppLifecycle.install(this)
     }
 
     companion object {

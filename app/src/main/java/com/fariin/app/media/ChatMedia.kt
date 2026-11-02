@@ -37,6 +37,8 @@ class ChatMedia(
     fun localDir(): File = File(context.cacheDir, "outgoing").also { it.mkdirs() }
 
     fun cached(url: String): File? = if (isLocal(url)) null else key(url).takeIf { it.exists() && it.length() > 0 }
+        // Used = young again, so the size cap (trim) drops the files nobody looked at for longest.
+        ?.also { it.setLastModified(System.currentTimeMillis()) }
 
     /** Seed the cache with what I just sent, under its URL (iOS stores the plain image the same way). */
     fun store(url: String, plain: ByteArray) {
@@ -120,6 +122,27 @@ class ChatMedia(
 
     companion object {
         const val ASSET = "asset://"
+        /** iOS DiskImageCache's budget: 250 MB of opened chat files, least recently used go first. */
+        const val MAX_BYTES = 250L * 1024 * 1024
+
+        /** Keep the opened-media folder under [max] (run at start, off the main thread). */
+        fun trim(context: Context, max: Long = MAX_BYTES) {
+            val files = File(context.cacheDir, "chat-media").listFiles()?.filter { it.isFile } ?: return
+            var total = files.sumOf { it.length() }
+            if (total <= max) return
+            for (f in files.sortedBy { it.lastModified() }) {
+                if (total <= max) break
+                total -= f.length(); f.delete()
+            }
+        }
+
+        /** Sign-out: these are opened photos and voice notes of this account's chats (iOS
+         *  DiskImageCache.removeAll), never left for the next account. */
+        fun wipe(context: Context) {
+            File(context.cacheDir, "chat-media").deleteRecursively()
+            File(context.cacheDir, "outgoing").deleteRecursively()
+        }
+
         fun isLocal(url: String) = url.startsWith(ASSET) || url.startsWith("/")
         fun sha(s: String): String = MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
             .joinToString("") { "%02x".format(it) }

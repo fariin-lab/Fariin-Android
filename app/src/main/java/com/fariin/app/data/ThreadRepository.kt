@@ -33,6 +33,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
+import com.fariin.app.local.LocalCache
+import com.fariin.app.local.SendQueue
 
 /**
  * One open chat: the live newest page, older pages on demand, the conversation's receipts, and
@@ -61,6 +63,11 @@ class ThreadRepository(
         val loadingOlder: Boolean = false,
         val conv: Map<String, Any?> = emptyMap(),
         val error: String? = null,
+        /** 1:1 presence (iOS otherOnline / otherLastActive), and both privacy maps for the rules. */
+        val otherOnline: Boolean = false,
+        val otherLastActive: Double? = null,
+        val otherPrivacy: Map<String, String> = emptyMap(),
+        val myPrivacy: Map<String, String> = emptyMap(),
     )
 
     private val convRef = db.collection("conversations").document(cid)
@@ -80,19 +87,63 @@ class ThreadRepository(
     private val retryVoice = ConcurrentHashMap<String, VoiceRecorder.Result>()
     private var msgReg: ListenerRegistration? = null
     private var convReg: ListenerRegistration? = null
+    private var presenceReg: ListenerRegistration? = null
+    private var otherReg: ListenerRegistration? = null
+    private var myReg: ListenerRegistration? = null
+
+    /** True while the screen shows the phone's saved copy and no live answer has come yet. */
+    @Volatile private var seeded = false
+    /** Messages are only cached once the listener has really answered. */
+    @Volatile private var live = false
+    @Volatile private var msgFailed = false
 
     fun start() {
+        if (msgReg != null) return
+        // The phone's copy first (iOS ThreadMessageCache), so the chat opens full, offline too;
+        // the listener's first answer replaces it.
+        if (liveDocs.isEmpty() && _state.value.messages.isEmpty()) {
+            val saved = LocalCache.loadThread(me, cid).filter { !HiddenMessages.isHidden(it.id) }
+            if (saved.isNotEmpty()) {
+                seeded = true
+                _state.update { it.copy(messages = order.sort(saved), loaded = true) }
+            }
+        }
+        open[cid] = this
+        // Texts still owed from before a kill or an outage: drawn as sending, and driven again.
+        for (e in SendQueue.pending(me, cid)) resend(e)
+        startListeners()
+    }
+
+    /** Back in front or back online (iOS reattachIfDead): a listener that died is made again,
+     *  and texts still queued for this chat go again. */
+    fun recover() {
+        if (msgFailed) {
+            msgReg?.remove(); msgReg = null
+            convReg?.remove(); convReg = null
+            msgFailed = false
+            startListeners()
+        } else if (!Wire.isGroupCid(cid) && presenceReg == null) {
+            otherReg?.remove(); otherReg = null; myReg?.remove(); myReg = null
+            attachPresence(Wire.otherUid(cid, me))
+        }
+        for (e in SendQueue.pending(me, cid)) if (!SendQueue.isInFlight(e.clientId)) resend(e)
+    }
+
+    private fun startListeners() {
         if (msgReg != null) return
         msgReg = convRef.collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(PAGE_SIZE)
             .addSnapshotListener { snap, err ->
                 if (snap == null) {
+                    msgFailed = true
                     _state.update { it.copy(loaded = true, error = err?.message) }
                     return@addSnapshotListener
                 }
-                // Never blank an open thread on an empty offline snapshot (iOS).
-                if (snap.metadata.isFromCache && snap.isEmpty && liveDocs.isNotEmpty()) return@addSnapshotListener
+                // Never blank an open thread on an empty offline snapshot (iOS), nor the saved copy.
+                if (snap.metadata.isFromCache && snap.isEmpty && (liveDocs.isNotEmpty() || seeded)) return@addSnapshotListener
+                seeded = false
+                live = true
                 liveDocs.clear()
                 for (d in snap.documents) liveDocs[d.id] = d
                 if (!snap.metadata.isFromCache && snap.size() < PAGE_SIZE) _state.update { it.copy(canLoadOlder = false) }
@@ -103,6 +154,7 @@ class ThreadRepository(
             _state.update { it.copy(receipts = Receipts.from(data, me, cid), conv = data) }
             if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
         }
+        if (!Wire.isGroupCid(cid)) attachPresence(Wire.otherUid(cid, me))
         // Keys in the background, then re-open what drew as "…" (iOS keyPreloadTask).
         scope.launch(Dispatchers.IO) {
             try { crypto.ensureReady() } catch (_: Exception) {}
@@ -113,7 +165,34 @@ class ThreadRepository(
         }
     }
 
+    /** iOS attachPresence: their presence doc (a refusal is a normal privacy answer: kept quiet,
+     *  the last value stays), their privacy and mine from the user documents. */
+    private fun attachPresence(other: String) {
+        if (other.isEmpty() || presenceReg != null) return
+        val users = db.collection("users")
+        presenceReg = users.document(other).collection("presence").document("state").addSnapshotListener { snap, err ->
+            if (snap == null) { presenceReg?.remove(); presenceReg = null; return@addSnapshotListener }
+            val d = snap.data
+            _state.update { it.copy(otherOnline = d?.get("online") as? Boolean ?: false,
+                otherLastActive = d?.get("lastActive")?.let { v -> Conversation.millis(v) }?.takeIf { v -> v > 0 } ?: it.otherLastActive) }
+        }
+        otherReg = users.document(other).addSnapshotListener { snap, _ ->
+            val d = snap?.data ?: return@addSnapshotListener
+            _state.update { it.copy(otherPrivacy = Presence.privacyOf(d)) }
+        }
+        myReg = users.document(me).addSnapshotListener { snap, _ ->
+            val d = snap?.data ?: return@addSnapshotListener
+            val p = Presence.privacyOf(d)
+            Presence.noteMyPrivacy(p)
+            _state.update { it.copy(myPrivacy = p) }
+        }
+    }
+
     fun stop() {
+        open.remove(cid, this)
+        presenceReg?.remove(); presenceReg = null
+        otherReg?.remove(); otherReg = null
+        myReg?.remove(); myReg = null
         msgReg?.remove(); msgReg = null
         convReg?.remove(); convReg = null
     }
@@ -175,8 +254,12 @@ class ThreadRepository(
                 cidKey !in unconfirmed -> pending.remove(cidKey)
             }
         }
-        val sorted = order.sort(all.values)
+        // While only the saved copy is on screen, a pending send joins it instead of replacing it.
+        val shown = if (seeded && liveDocs.isEmpty() && olderDocs.isEmpty())
+            _state.value.messages.filter { it.sendState == null && it.rowId !in all } + all.values else all.values
+        val sorted = order.sort(shown)
         _state.update { it.copy(messages = sorted, loaded = loaded ?: it.loaded) }
+        if (live) LocalCache.saveThread(me, cid, sorted)
     }
 
     private fun parse(d: DocumentSnapshot): Message {
@@ -211,26 +294,58 @@ class ThreadRepository(
         val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, it.bodyText.take(200)) }
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
-        pending[clientId] = Message(
-            id = clientId, authorId = me, text = t, createdAtMillis = tap, hasServerTime = false,
-            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
+        // On disk BEFORE the network (iOS SendQueue.add), so a kill or an outage cannot lose it.
+        val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text)
+        SendQueue.add(me, e)
+        drive(e, checkFirst = false)
+    }
+
+    /** A queued text from an earlier run or a reconnect: sent again unless the server (or
+     *  Firestore's own offline queue) already has it. */
+    fun resend(e: SendQueue.Entry) = drive(e, checkFirst = true)
+
+    private fun drive(e: SendQueue.Entry, checkFirst: Boolean) = drive(e, checkFirst, sendScope)
+
+    private fun drive(e: SendQueue.Entry, checkFirst: Boolean, on: CoroutineScope) {
+        if (!SendQueue.begin(e.clientId)) return
+        val ref = e.replyId?.let { Message.ReplyRef(it, e.replyAuthor ?: "", e.replyText ?: "") }
+        pending[e.clientId] = Message(
+            id = e.clientId, authorId = me, text = e.text, createdAtMillis = e.ts, hasServerTime = false,
+            clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
         )
         rebuild()
-        scope.launch {
+        on.launch {
             try {
+                if (checkFirst && alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return@launch }
                 turn.withLock {
-                    if (Wire.isGroupCid(cid)) sendGroup(t, clientId, tap, ref) else sendDirect(t, clientId, tap, ref)
+                    if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref) else sendDirect(e.text, e.clientId, e.ts, ref)
                 }
-            } catch (e: Exception) {
-                pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
+                SendQueue.remove(me, e.clientId)
+            } catch (x: Exception) {
+                // A refusal is final (the bubble offers Retry, which is a new send); anything else
+                // stays queued for the next reconnect.
+                if (SendQueue.isPermanent(x)) SendQueue.remove(me, e.clientId)
+                pending[e.clientId]?.let { pending[e.clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
+            } finally {
+                SendQueue.end(e.clientId)
             }
         }
+    }
+
+    /** iOS SendQueue.alreadySent: the doc (id = clientId) in Firestore's offline store means its
+     *  write is already queued there; on the server means it landed before the app died. */
+    private suspend fun alreadySent(clientId: String): Boolean {
+        val ref = convRef.collection("messages").document(clientId)
+        try { if (ref.get(Source.CACHE).await().exists()) return true } catch (_: Exception) {}
+        return try { ref.get(Source.SERVER).await().exists() } catch (_: Exception) { false }
     }
 
     /** Tap a failed bubble: send the same words again under a new clientId. */
     fun retry(m: Message) {
         val id = m.clientId ?: return
+        if (SendQueue.isInFlight(id)) return
+        SendQueue.remove(me, id)
         pending.remove(id)
         retryPhoto.remove(id)?.let { sendPreparedPhoto(it); return }
         retryVoice.remove(id)?.let { sendVoice(it); return }
@@ -654,7 +769,27 @@ class ThreadRepository(
     }
 
     companion object {
+        /** The repository of each chat on screen, so a queue drain sends through it (its bubble
+         *  turns from failed back to sending) rather than through a second copy. */
+        private val open = ConcurrentHashMap<String, ThreadRepository>()
+
+        /** Sends outlive the chat screen: leaving a chat mid-send never cancels the send. */
+        private val sendScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+
+        /** Every queued text of [me]: through the open chat's repository, or a quiet one. */
+        fun drainQueue(me: String, crypto: FariinCrypto, scope: CoroutineScope) {
+            for ((cid, list) in SendQueue.all(me).groupBy { it.cid }) {
+                val repo = open[cid] ?: ThreadRepository(cid, me, crypto, scope)
+                for (e in list) if (!SendQueue.isInFlight(e.clientId)) repo.resend(e)
+            }
+        }
+
+        /** Back in front: every open chat checks its listeners and its queue. */
+        fun recoverOpen() { for (r in open.values) r.recover() }
+
         /** MessageRequests.firstMessageLimit (iOS). */
+
         const val FIRST_MESSAGE_LIMIT = 150
         const val PAGE_SIZE = 60L
         /** Every content field a tombstone drops (iOS deleteMessage `strip`). */

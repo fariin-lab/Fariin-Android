@@ -77,7 +77,11 @@ data class ThreadActions(
     val onTitleClick: () -> Unit = {},
     /** Shown in a small notice ("Forward is coming soon on Android"). */
     val onNotice: (String) -> Unit = {},
+    /** The words left in the box last time (iOS Drafts), and where new ones are kept. */
+    val draft: String = "",
+    val onDraft: (String) -> Unit = {},
 )
+
 
 /** One row of the menu. */
 private data class MenuItem(val title: String, val icon: ImageVector, val destructive: Boolean = false, val run: () -> Unit)

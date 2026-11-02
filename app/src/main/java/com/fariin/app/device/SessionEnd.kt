@@ -19,6 +19,8 @@ object SessionEnd {
     /** Log out tapped here: our own record goes, so it does not linger as a ghost in the list. */
     suspend fun signOut(c: Context) {
         DeviceRegistry.init(c)
+        // iOS SessionWipe: "offline" goes out while the account can still write it.
+        com.fariin.app.data.Presence.set(online = false, context = c)
         DeviceRegistry.removeThisDevice()
         Push.unregister(c)
         FirebaseAuth.getInstance().signOut()
@@ -37,7 +39,16 @@ object SessionEnd {
         NotifStore.clearAccount(c)
         NotificationPoster.clearAll(c)
         Push.clearAccount(c)
+        // The phone's copies of this account's chats: opened messages, the list, drafts, unsent
+        // texts, opened media and faces. None of it survives into the next account (iOS SessionWipe).
+        com.fariin.app.local.LocalCache.wipe()
+        com.fariin.app.local.Drafts.clear()
+        com.fariin.app.local.SendQueue.wipe()
+        com.fariin.app.media.ChatMedia.wipe(c)
+        try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
+        com.fariin.app.local.AtRest.forgetKey()
     }
+
 }
 
 /** The iOS alert after a remote sign-out, same wording, one OK. */

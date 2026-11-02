@@ -28,6 +28,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import com.fariin.app.local.Drafts
+
 
 /** Opens a chat from anywhere under the signed-in shell (the chat list's rows use it). */
 val LocalOpenChat = staticCompositionLocalOf<(Conversation) -> Unit> { {} }
@@ -63,6 +65,17 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         else -> "${typers.size} people are typing…"
     }
     val unreadAtOpen = remember(cid) { CryptoHub.listedConversation(cid)?.unread(me) ?: 0 }
+    // Online / last seen for a 1:1 (iOS ThreadView subtitle), redrawn each minute so "5 min. ago" moves.
+    var minute by remember { mutableStateOf(0) }
+    LaunchedEffect(cid) { while (true) { delay(60_000); minute++ } }
+    val presenceLine = if (conv == null || conv.isGroup || s.receipts.iBlocked || minute < 0) null else
+        com.fariin.app.data.Presence.line(
+            mine = s.myPrivacy, theirs = s.otherPrivacy,
+            contactOfMine = conv.lastMessageCipher.isNotEmpty() && (conv.startedBy.isEmpty() || conv.accepted),
+            online = s.otherOnline, lastActiveMillis = s.otherLastActive,
+            nowMillis = System.currentTimeMillis().toDouble(),
+            legacySwitch = app.getSharedPreferences("fariin_privacy", Context.MODE_PRIVATE).getBoolean("shareLastSeen", true),
+        )
     val admins = (s.conv["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
     val ctx = LocalContext.current
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
@@ -70,7 +83,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     notice?.let { n -> LaunchedEffect(n) { android.widget.Toast.makeText(ctx, n, android.widget.Toast.LENGTH_SHORT).show(); notice = null } }
     val ui = ThreadUi(
         title = conv?.displayName(me) ?: "",
-        subtitle = typingLine ?: if (conv?.isGroup == true) "${conv.users.size} members" else "",
+        subtitle = typingLine ?: if (conv?.isGroup == true) "${conv.users.size} members" else presenceLine ?: "",
         photoUrl = conv?.displayPhoto(me),
         isGroup = conv?.isGroup == true,
         me = me,
@@ -107,6 +120,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
         },
         onNotice = { notice = it },
+        // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
+        draft = remember(cid) { Drafts.text(cid) },
+        onDraft = { Drafts.set(cid, it) },
     )
     // iOS: on open, once the first page is in, my badge goes to 0 and the read receipt goes out;
     // while the chat stays open and in front, every new message from them does the same.

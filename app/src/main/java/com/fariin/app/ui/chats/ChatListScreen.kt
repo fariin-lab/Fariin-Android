@@ -135,6 +135,14 @@ fun ChatRow(conv: Conversation, me: String, decryptor: MessageDecryptor, onOpen:
     val muted = conv.isMuted(me, now)
     val keys by CryptoHub.keysEpoch.collectAsState()
     val preview = remember(conv, me, keys) { ChatList.previewLine(conv, me, decryptor) { null } }
+    // iOS: a chat with unsent words in its box says "Draft:" (red) and the words, not the last line.
+    val drafts by com.fariin.app.local.Drafts.map.collectAsState()
+    val draft = drafts[conv.id]
+    val line = if (draft.isNullOrEmpty()) androidx.compose.ui.text.AnnotatedString(preview) else
+        androidx.compose.ui.text.buildAnnotatedString {
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.red)); append("Draft: "); pop()
+            append(draft.replace('\n', ' '))
+        }
     val time = remember(conv.displayUpdatedAt(me)) { timeLabel(conv.displayUpdatedAt(me), DateFormat.is24HourFormat(context)) }
 
     Column(Modifier.fillMaxWidth().clickable { onOpen(conv) }) {
@@ -167,7 +175,8 @@ fun ChatRow(conv: Conversation, me: String, decryptor: MessageDecryptor, onOpen:
                 Row(verticalAlignment = Alignment.Top) {
                     // Two lines tall always, so every row is the same height (iOS, the hidden " \n ").
                     Text(
-                        preview, fontSize = 15.sp, color = c.secondary,
+                        line, fontSize = 15.sp, color = c.secondary,
+
                         maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )

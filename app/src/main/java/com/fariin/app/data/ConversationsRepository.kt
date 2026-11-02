@@ -6,6 +6,10 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.fariin.app.local.LocalCache
+
 
 /**
  * The chat list's live window, the same query as iOS ConversationsRepository.attach():
@@ -19,6 +23,8 @@ import kotlinx.coroutines.flow.callbackFlow
  */
 class ConversationsRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    /** Off in tests and the demo; on in the app (LocalCache.init runs at start). */
+    private val useDiskCache: Boolean = true,
 ) {
     sealed interface State {
         data object Loading : State
@@ -27,7 +33,11 @@ class ConversationsRepository(
     }
 
     fun listen(uid: String, limit: Long = PAGE_SIZE): Flow<State> = callbackFlow {
-        trySend(State.Loading)
+        // The phone's copy first (iOS ConversationsDiskCache), so a cold start draws the list at
+        // once, offline too. Its previews are still sealed; the rows open them as they draw.
+        val saved = if (useDiskCache) withContext(Dispatchers.IO) { LocalCache.loadChats(uid) } else emptyList()
+        if (saved.isEmpty()) trySend(State.Loading)
+        else trySend(State.Loaded(saved.map { (id, d) -> Conversation.fromFirestore(id, d) }, fromCache = true))
         val reg = db.collection("conversations")
             .whereArrayContains("users", uid)
             .orderBy("updatedAt", Query.Direction.DESCENDING)
@@ -38,8 +48,15 @@ class ConversationsRepository(
                     return@addSnapshotListener
                 }
                 if (snap == null) return@addSnapshotListener
+                // An empty answer from Firestore's own offline store never blanks the saved list.
+                if (snap.metadata.isFromCache && snap.isEmpty && saved.isNotEmpty()) return@addSnapshotListener
                 val convs = snap.documents.map { parse(it) }
                 trySend(State.Loaded(convs, snap.metadata.isFromCache))
+                if (useDiskCache && !snap.metadata.isFromCache) {
+                    LocalCache.saveChats(uid, snap.documents.map {
+                        it.id to (it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap())
+                    })
+                }
             }
         awaitClose { reg.remove() }
     }

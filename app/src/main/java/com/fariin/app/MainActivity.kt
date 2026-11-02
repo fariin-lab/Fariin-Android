@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
+import okio.Path.Companion.toOkioPath
 import coil3.compose.setSingletonImageLoaderFactory
 import com.fariin.app.data.AuthRepository
 import com.fariin.app.data.CryptoDecryptor
@@ -55,8 +56,15 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private val auth by lazy { AuthRepository() }
 
+    /** The launch screen stays until the first real frame: the chat list (saved or live) for a
+     *  signed-in phone, the front door otherwise; never more than [SPLASH_MAX_MS]. */
+    @Volatile private var keepSplash = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = with(androidx.core.splashscreen.SplashScreen) { installSplashScreen() }
         super.onCreate(savedInstanceState)
+        splash.setKeepOnScreenCondition { keepSplash }
+        window.decorView.postDelayed({ keepSplash = false }, SPLASH_MAX_MS)
         enableEdgeToEdge()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // Debug builds only: `adb shell am start -n com.fariin.app/.MainActivity --ez demo true`
@@ -79,13 +87,22 @@ class MainActivity : ComponentActivity() {
             setSingletonImageLoaderFactory { ctx ->
                 ImageLoader.Builder(ctx)
                     .components { add(FariinPhotoFetcher.Factory()) }
+                    // Faces and photos on disk, capped like iOS DiskImageCache (250 MB), wiped at sign-out.
+                    .diskCache {
+                        coil3.disk.DiskCache.Builder()
+                            .directory(java.io.File(ctx.cacheDir, "image_cache").toOkioPath())
+                            .maxSizeBytes(250L * 1024 * 1024)
+                            .build()
+                    }
                     .build()
             }
             FariinTheme {
                 // Debug builds only: `--es authPage <name>` draws one sign-in page with made-up state (ui/auth/AuthDemo.kt).
                 if (debuggable && intent.getStringExtra("authPage") != null) {
+                    LaunchedEffect(Unit) { keepSplash = false }
                     com.fariin.app.ui.auth.AuthDemo(intent.getStringExtra("authPage")!!)
                 } else if (demo) {
+                    LaunchedEffect(Unit) { keepSplash = false }
                     DemoApp(demoThread)
                 } else {
                     val initial = remember { auth.currentUser?.uid }
@@ -109,7 +126,7 @@ class MainActivity : ComponentActivity() {
                         DeviceRegistry.clearRevoked()
                         notice = r
                     }
-                    if (me == null) SignInFlow(auth) else com.fariin.app.ui.auth.AccountGate(me, auth) { SignedIn(me) }
+                    if (me == null) { LaunchedEffect(Unit) { keepSplash = false }; SignInFlow(auth) } else com.fariin.app.ui.auth.AccountGate(me, auth, onOwnPage = { keepSplash = false }) { SignedIn(me) }
                     notice?.let { SignedOutNotice(it) { notice = null } }
                 }
             }
@@ -131,14 +148,17 @@ class MainActivity : ComponentActivity() {
             DeviceRegistry.start(applicationContext)   // its first beat starts the heartbeat
             // Calls ringing me while the app is alive (iOS observeIncoming), and a warm relay list.
             com.fariin.app.call.IncomingCallWatcher.start(applicationContext, me)
+            // Presence "online" and the texts still owed from before (send queue).
+            AppLifecycle.signedIn()
         }
         // The first-run notifications page, right after sign-in, as iOS asks.
         val ctx = LocalContext.current
         var explain by remember { mutableStateOf(Push.needsExplainer(ctx)) }
-        if (explain) { NotificationsExplainer { explain = false }; return }
+        if (explain) { LaunchedEffect(Unit) { keepSplash = false }; NotificationsExplainer { explain = false }; return }
         val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
         val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
         val chats by vm.state.collectAsState()
+        LaunchedEffect(chats.loading) { if (!chats.loading) keepSplash = false }
         val nav = rememberNavController()
         // Notifications: the chat list's names and photos for the push service, the open chat
         // (no notification for it), and a tapped notification opening its chat.
@@ -176,7 +196,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private companion object { const val SPLASH_MAX_MS = 1500L }
+
     @Volatile private var started = false
+
     @Volatile private var openChat: String? = null
 
     override fun onStart() {

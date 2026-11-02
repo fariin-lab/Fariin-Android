@@ -258,7 +258,8 @@ fun ThreadScreen(
                     else -> onSend(t)
                 }
             }
-            Composer(send, onSendPhoto, onSendVoice, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping)
+            Composer(send, onSendPhoto, onSendVoice, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
+                initialDraft = actions.draft, onDraft = actions.onDraft)
         }
     }
 }
@@ -575,12 +576,23 @@ private fun TextWithMeta(text: String, style: TextStyle, meta: @Composable () ->
 private fun Composer(
     onSend: (String) -> Unit, onSendPhoto: (Uri) -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
     prefill: Pair<String, String>? = null, onTyping: (Boolean) -> Unit = {},
+    initialDraft: String = "", onDraft: (String) -> Unit = {},
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
-    var draft by rememberSaveable { mutableStateOf("") }
+    var draft by rememberSaveable { mutableStateOf(initialDraft) }
+    // The words typed outside an edit: what the box gets back when an edit ends (iOS restores the
+    // pre-edit draft, it was never sent).
+    var kept by rememberSaveable { mutableStateOf(initialDraft) }
+    var wasEditing by remember { mutableStateOf(false) }
     // Edit puts the message's words in the field (keyed by message id, so it happens once).
-    LaunchedEffect(prefill?.first) { prefill?.let { draft = it.second } }
+    LaunchedEffect(prefill?.first) {
+        if (prefill != null) { draft = prefill.second; wasEditing = true }
+        else if (wasEditing) { draft = kept; wasEditing = false }
+    }
+    // Every change outside an edit is the chat's draft (sent = cleared below).
+    LaunchedEffect(draft) { if (prefill == null && !wasEditing) { kept = draft; onDraft(draft) } }
+
     // iOS typing: on while there are words (refreshed every 10 s so the 15 s expiry stays armed),
     // off when the field empties, after 5 s without a keystroke, or when the composer goes.
     var lastKey by remember { mutableStateOf(0L) }

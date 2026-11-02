@@ -24,30 +24,45 @@ import okio.Buffer
  * A refusal or a missing file throws, and the avatar shows the grey placeholder, the same as for
  * a person with no photo.
  *
- * TODO: keep a disk copy (iOS DiskImageCache); for now only Coil's memory cache holds them.
+ * A disk copy is kept in Coil's disk cache (size-capped, see MainActivity), under the full name
+ * with its `v`, so a cold start or an offline open draws faces at once (iOS DiskImageCache), and
+ * a changed photo or audience is a new name that asks the rules again.
  */
 class FariinPhotoFetcher(
     private val path: String,
     private val options: Options,
     private val url: String? = null,
+    private val imageLoader: ImageLoader? = null,
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult {
+        val disk = imageLoader?.diskCache
+        val key = url ?: path
+        disk?.openSnapshot(key)?.use { snap ->
+            val bytes = runCatching { disk.fileSystem.read(snap.data) { readByteArray() } }.getOrNull()
+            if (bytes != null && bytes.isNotEmpty()) return result(bytes, DataSource.DISK)
+        }
         val bytes = FirebaseStorage.getInstance().reference.child(path).getBytes(MAX_BYTES).await()
+        disk?.openEditor(key)?.let { ed ->
+            try { disk.fileSystem.write(ed.data) { write(bytes) }; ed.commit() } catch (_: Exception) { ed.abort() }
+        }
         // A copy for the notifications (iOS NotifShared.saveAvatarSoon): the face of a person this
         // account was allowed to see, under the photo's own name.
         url?.let { com.fariin.app.push.NotifStore.saveAvatarSoon(options.context, it, bytes) }
-        return SourceFetchResult(
-            source = ImageSource(source = Buffer().write(bytes), fileSystem = options.fileSystem),
-            mimeType = "image/jpeg",
-            dataSource = DataSource.NETWORK,
-        )
+        return result(bytes, DataSource.NETWORK)
     }
+
+    private fun result(bytes: ByteArray, from: DataSource) = SourceFetchResult(
+        source = ImageSource(source = Buffer().write(bytes), fileSystem = options.fileSystem),
+        mimeType = "image/jpeg",
+        dataSource = from,
+    )
 
     class Factory : Fetcher.Factory<Uri> {
         override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
             val path = storagePath(data) ?: return null
-            return FariinPhotoFetcher(path, options, data.toString())
+            return FariinPhotoFetcher(path, options, data.toString(), imageLoader)
+
         }
     }
 
