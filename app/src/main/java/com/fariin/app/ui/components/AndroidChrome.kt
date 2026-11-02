@@ -83,12 +83,14 @@ fun FariinTopBar(
 
 /** The app-wide snackbar (Android's answer to the iOS toast). Any screen or view model can call [show]. */
 object Snack {
-    data class Event(val message: String, val action: String? = null, val onAction: (() -> Unit)? = null, val long: Boolean = false)
+    data class Event(val message: String, val action: String? = null, val onAction: (() -> Unit)? = null, val long: Boolean = false,
+                     /** Shown this long, then gone (the Undo of a leave lives 5 s, iOS LeaveGroupUndo). */
+                     val durationMs: Long? = null)
 
     internal val events = MutableSharedFlow<Event>(extraBufferCapacity = 8)
 
-    fun show(message: String, action: String? = null, long: Boolean = false, onAction: (() -> Unit)? = null) {
-        events.tryEmit(Event(message, action, onAction, long))
+    fun show(message: String, action: String? = null, long: Boolean = false, durationMs: Long? = null, onAction: (() -> Unit)? = null) {
+        events.tryEmit(Event(message, action, onAction, long, durationMs))
     }
 }
 
@@ -99,7 +101,10 @@ fun SnackHost(bottomOffset: androidx.compose.ui.unit.Dp = 80.dp) {
     LaunchedEffect(Unit) {
         Snack.events.collect { e ->
             host.currentSnackbarData?.dismiss()
-            val r = host.showSnackbar(e.message, e.action, withDismissAction = false,
+            val ms = e.durationMs
+            val r = if (ms != null) kotlinx.coroutines.withTimeoutOrNull(ms) {
+                host.showSnackbar(e.message, e.action, withDismissAction = false, duration = SnackbarDuration.Indefinite)
+            } else host.showSnackbar(e.message, e.action, withDismissAction = false,
                 duration = if (e.action != null || e.long) SnackbarDuration.Long else SnackbarDuration.Short)
             if (r == SnackbarResult.ActionPerformed) e.onAction?.invoke()
         }

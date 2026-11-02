@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = with(androidx.core.splashscreen.SplashScreen) { installSplashScreen() }
         super.onCreate(savedInstanceState)
+        com.fariin.app.data.LeaveUndo.onFailure = { com.fariin.app.ui.components.Snack.show(it, long = true) }
         splash.setKeepOnScreenCondition { keepSplash }
         window.decorView.postDelayed({ keepSplash = false }, SPLASH_MAX_MS)
         enableEdgeToEdge()
@@ -275,6 +276,8 @@ class MainActivity : ComponentActivity() {
         started = false
         PushRouter.activeChatId = null   // a chat open behind the home screen still gets its notification
         DeviceRegistry.stopHeartbeat()
+        // A leave still waiting for its Undo runs now, so leaving the app cannot lose it (iOS LeaveGroupUndo).
+        com.fariin.app.data.LeaveUndo.commit()
         super.onStop()
     }
 

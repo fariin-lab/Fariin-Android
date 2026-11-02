@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
@@ -100,6 +101,7 @@ import com.fariin.app.ui.settings.Trailing
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 /*
  * The group's management pages for its owner and admins (Kulan-iOS GroupSettingsView joining /
@@ -119,6 +121,8 @@ sealed interface GroupPage {
     data object Type : GroupPage
     data object Links : GroupPage
     data class LinkEdit(val link: GroupLink?) : GroupPage
+    data object Members : GroupPage
+    data object Banned : GroupPage
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
@@ -141,14 +145,21 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, open: (GroupPa
         SettingsRow("Invite Links", icon = rememberVectorPainter(Icons.Filled.Link),
             value = if ((conv["inviteCode"] as? String).isNullOrEmpty()) "Off" else "On") { open(GroupPage.Links) }
     }
+    // iOS GroupSettingsView people section: Members, Administrators, Banned Users (Remove members right).
+    SettingsRow("Members", icon = painterResource(R.drawable.ic_gs_members), value = "${team.users.size}") { open(GroupPage.Members) }
     SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sortedAdmins().size}") { open(GroupPage.Admins) }
+    if (team.may(me, Right.BAN_USERS)) {
+        val banned = (conv["bannedUids"] as? List<*>)?.size ?: 0
+        SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "$banned") { open(GroupPage.Banned) }
+    }
     val (on, of) = GroupAdmins.permissionCount(conv)
     SettingsRow("Permissions", icon = painterResource(R.drawable.ic_gs_permissions), value = "$on/$of") { open(GroupPage.Permissions) }
 }
 
 /** Draws the page on top of the stack; back pops it. False when nothing is pushed. */
 @Composable
-internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, onOpenPerson: (String) -> Unit): Boolean {
+internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, onOpenPerson: (String) -> Unit,
+                        onAddMembers: () -> Unit = {}): Boolean {
     val top = stack.lastOrNull() ?: return false
     val pop: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
     val push: (GroupPage) -> Unit = { stack.add(it) }
@@ -162,6 +173,8 @@ internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, 
         GroupPage.Type -> GroupTypePage(cid, me, pop)
         GroupPage.Links -> GroupLinksPage(cid, pop) { push(GroupPage.LinkEdit(it)) }
         is GroupPage.LinkEdit -> LinkEditPage(cid, top.link, pop)
+        GroupPage.Members -> GroupMembersPage(cid, me, pop, push, onOpenPerson, onAddMembers)
+        GroupPage.Banned -> BannedUsersPage(cid, pop)
     }
     return true
 }
@@ -436,6 +449,131 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                 }
                 rows.forEachIndexed { i, (t, p, a) -> SettingsRow(t, icon = p, trailing = Trailing.NONE, last = i == rows.lastIndex && red.isEmpty(), onClick = a) }
                 red.forEachIndexed { i, (t, p, a) -> SettingsRow(t, icon = p, titleColor = c.red, trailing = Trailing.NONE, last = i == red.lastIndex, onClick = a) }
+            }
+        }
+    }
+}
+
+// ---- Members (iOS GroupMembersSheet) ----------------------------------------------------------
+
+/**
+ * Members: the search field, a sort menu (By Name / Admins First), the members under A to Z
+ * headers with Owner / Admin at the end of the row, then Add Members and Invite Via Group Link
+ * for whoever may. An admin taps a member for the member card; others open the profile.
+ */
+@Composable
+private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: (GroupPage) -> Unit,
+                             onOpenPerson: (String) -> Unit, onAddMembers: () -> Unit) {
+    val c = Fariin.colors
+    val doc = liveGroupDoc(cid)
+    var query by remember { mutableStateOf("") }
+    var adminsFirst by remember { mutableStateOf(false) }
+    var sortOpen by remember { mutableStateOf(false) }
+    var card by remember { mutableStateOf<String?>(null) }
+    // The members' @usernames, read once the first search starts (iOS ProfileStore.handles).
+    val handles = remember(cid) { mutableStateMapOf<String, String>() }
+    var handlesAsked by remember { mutableStateOf(false) }
+    if (doc.isEmpty()) { Loading(); return }
+    val team = Team.from(doc)
+    val g = com.fariin.app.data.GroupMembers.Group.from(doc)
+    val searching = query.isNotBlank()
+    LaunchedEffect(searching) {
+        if (!searching || handlesAsked) return@LaunchedEffect
+        handlesAsked = true
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        for (uid in g.users.take(200)) {
+            val h = runCatching { db.collection("users").document(uid).get().await().getString("handle") }.getOrNull()
+            if (!h.isNullOrEmpty()) handles[uid] = h
+        }
+    }
+    val closed = team.closed
+    val canAdd = !closed && (team.may(me, Right.INVITE_USERS) || (doc["membersCanAdd"] == true && me in team.users))
+    val canInvite = !closed && team.may(me, Right.INVITE_USERS)
+    val list = com.fariin.app.data.GroupMembers.search(g, me, query, handles, adminsFirst)
+    val sections = com.fariin.app.data.GroupMembers.sections(list, { com.fariin.app.data.GroupMembers.shownName(g, it, me) }, adminsFirst)
+    card?.let { u -> MemberCard(cid, me, u, doc, onClose = { card = null }, onProfile = onOpenPerson, open = push) }
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Members", onBack) {
+            Box {
+                androidx.compose.material3.IconButton({ sortOpen = true }) {
+                    Icon(Icons.Filled.FilterList, "Sort", tint = c.label)
+                }
+                androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, containerColor = c.card) {
+                    listOf("By Name" to false, "Admins First" to true).forEach { (label, v) ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(label, color = c.label) },
+                            trailingIcon = { if (adminsFirst == v) Icon(Icons.Filled.Check, null, tint = c.blue) },
+                            onClick = { adminsFirst = v; sortOpen = false })
+                    }
+                }
+            }
+        }
+        SearchField(query, "Search") { query = it }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().imePadding()) {
+            if (list.isEmpty()) SettingsSection { Note("No members found.") }
+            sections.forEach { (letter, uids) ->
+                SettingsSection(header = letter.ifEmpty { null }) {
+                    uids.forEach { uid ->
+                        PersonLine(team.photos[uid]?.ifEmpty { null }, com.fariin.app.data.GroupMembers.shownName(g, uid, me),
+                            onClick = if (team.isStaff(me)) ({ card = uid }) else if (uid == me) null else ({ onOpenPerson(uid) })) {
+                            com.fariin.app.data.GroupMembers.rank(g, uid)?.let { Text(it, fontSize = 14.sp, color = c.secondary) }
+                        }
+                    }
+                }
+            }
+            if (query.isEmpty() && (canAdd || canInvite)) SettingsSection {
+                if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.blue,
+                    trailing = Trailing.NONE, last = !canInvite, onClick = onAddMembers)
+                if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.blue,
+                    trailing = Trailing.NONE, last = true) { push(GroupPage.Links) }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+// ---- Banned Users (iOS GroupRemovedUsersView) -------------------------------------------------
+
+/** The people taken out of the group (`bannedUids`), each with Unban. Unban does not add them back. */
+@Composable
+private fun BannedUsersPage(cid: String, onBack: () -> Unit) {
+    val c = Fariin.colors
+    val scope = rememberCoroutineScope()
+    val doc = liveGroupDoc(cid)
+    var busy by remember { mutableStateOf<String?>(null) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    // Names the group doc does not hold, from their own profiles.
+    val fetched = remember(cid) { mutableStateMapOf<String, Pair<String, String?>>() }
+    if (doc.isEmpty()) { Loading(); return }
+    val team = Team.from(doc)
+    val banned = (doc["bannedUids"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+    LaunchedEffect(banned) {
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        for (uid in banned) if (team.names[uid].isNullOrEmpty() && fetched[uid] == null) {
+            runCatching { db.collection("users").document(uid).get().await() }.getOrNull()?.let { d ->
+                fetched[uid] = (d.getString("name") ?: "User") to d.getString("photoUrl")
+            }
+        }
+    }
+    Problem(problem) { problem = null }
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Banned Users", onBack)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+            SettingsSection {
+                if (banned.isEmpty()) Note(com.fariin.app.data.GroupMembers.NOBODY_BANNED)
+                banned.forEach { uid ->
+                    val name = team.names[uid]?.ifEmpty { null } ?: fetched[uid]?.first ?: "User"
+                    val photo = team.photos[uid]?.ifEmpty { null } ?: fetched[uid]?.second
+                    PersonLine(photo, name) {
+                        if (busy == uid) BusyMark()
+                        else TextButton(enabled = busy == null, onClick = {
+                            busy = uid
+                            scope.launch {
+                                try { GroupManage.unban(cid, uid) } catch (e: Exception) { problem = failText(e, "Couldn't unban. Try again.") }
+                                busy = null
+                            }
+                        }) { Text("Unban", color = c.blue, fontSize = 16.sp) }
+                    }
+                }
             }
         }
     }

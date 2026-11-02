@@ -127,6 +127,14 @@ object GroupManage {
         b.commit().await()
     }
 
+    /**
+     * unbanGroupMember (iOS Banned Users): off `bannedUids`, so a link or a request works for them
+     * again. It does not add them back. The rules: the Remove members right (or Add members, shrink only).
+     */
+    suspend fun unban(cid: String, uid: String) {
+        conv(cid).update(mapOf("bannedUids" to FieldValue.arrayRemove(uid), "updatedAt" to FieldValue.serverTimestamp())).await()
+    }
+
     // ---- Permissions ---------------------------------------------------------------------------
 
     /** setOnlyAdminsSend, with its line. */

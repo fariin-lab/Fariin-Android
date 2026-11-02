@@ -70,10 +70,20 @@ fun peopleNav(nav: NavHostController) = PeopleNav(
 /** The live group document (read only), for Group Info. */
 @Composable
 fun liveGroupDoc(cid: String): Map<String, Any?> {
-    var data by remember(cid) { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    // A group I was removed from this session opens as I last saw it, without me (iOS FormerGroups).
+    var data by remember(cid) { mutableStateOf<Map<String, Any?>>(com.fariin.app.data.FormerGroups.get(cid) ?: emptyMap()) }
     DisposableEffect(cid) {
         val reg = FirebaseFirestore.getInstance().collection("conversations").document(cid)
-            .addSnapshotListener { s, _ -> s?.data?.let { data = it } }
+            .addSnapshotListener { s, e ->
+                s?.data?.let { data = it }
+                // Refused: taken out of the group while this page is open. The page draws me out of it.
+                val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (s == null && me != null && data.isNotEmpty() && com.fariin.app.crypto.Wire.isGroupCid(cid) &&
+                    (e as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    data = com.fariin.app.data.FormerGroups.strip(data, me)
+                }
+            }
         onDispose { reg.remove() }
     }
     return data

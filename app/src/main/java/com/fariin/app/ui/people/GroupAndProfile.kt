@@ -32,6 +32,9 @@ import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -344,8 +347,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val owner = conv["createdBy"] as? String ?: ""
     val names = (conv["names"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap()
     val photos = (conv["photos"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap()
-    val iAmAdmin = me in admins || me == owner
-    val canEdit = GroupRules.canEditInfo(me, conv)
+    // Not known yet counts as a member, so the page never flashes the left-group rows (iOS iAmMember).
+    val iAmMember = users.isEmpty() || me in users
+    val iAmAdmin = iAmMember && (me in admins || me == owner)
+    val canEdit = iAmMember && GroupRules.canEditInfo(me, conv)
     var editing by remember { mutableStateOf(false) }
     var editAtDescription by remember { mutableStateOf(false) }
     val desc = GroupRules.description(conv)
@@ -363,12 +368,17 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
     if (askLeave) {
         val plan = GroupRules.leavePlan(me, "", conv)
-        AlertDialog(onDismissRequest = { askLeave = false }, title = { Text("Leave this group?") },
-            text = { if (owner == me) Text(GroupRules.ownerLeaveLine(plan.heir?.let { names[it] ?: "a member" })) else Text("You won't get its messages any more.") },
+        AlertDialog(onDismissRequest = { askLeave = false }, title = { Text("Leave Group?") },
+            text = { if (owner == me) Text(GroupRules.ownerLeaveLine(plan.heir?.let { names[it] ?: "a member" })) else Text("You won't get messages from this group any more.") },
             confirmButton = { TextButton({
                 askLeave = false
-                scope.launch { try { api.leaveGroup(cid); onLeft() } catch (_: Exception) { notice = "Couldn't leave the group. Try again." } }
-            }) { Text("Leave Group", color = c.red) } },
+                // iOS LeaveGroupUndo: out of the list and the screen at once, Undo for 5 s, then the real leave.
+                com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
+                com.fariin.app.ui.components.Snack.show("You left the group.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
+                    com.fariin.app.data.LeaveUndo.undo()
+                }
+                onLeft()
+            }) { Text("Leave", color = c.red) } },
             dismissButton = { TextButton({ askLeave = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
     }
     if (adding) {
@@ -387,7 +397,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         return
     }
     if (DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
-    if (GroupPages(cid, me, pages, onOpenPerson)) return
+    if (GroupPages(cid, me, pages, onOpenPerson, onAddMembers = { adding = true })) return
     card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) }) }
     if (editing && canEdit) {
         EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
@@ -410,7 +420,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     .clickable { editAtDescription = true; editing = true }.padding(horizontal = 8.dp, vertical = 4.dp))
             Spacer(Modifier.height(20.dp))
             if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
-            SettingsSection {
+            if (iAmMember) SettingsSection {
                 // The owner's and admins' settings (iOS Group Settings); members do not see them.
                 GroupManageRows(conv, me) { pages.add(it) }
                 // Who may change it: the owner and admins with Change info (iOS GroupSettingsView).
@@ -419,9 +429,19 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
             }
-            SettingsSection(header = com.fariin.app.data.GroupRules.memberCount(users.size)) {
+            // iOS membersSection: "N Members" opens the whole list; six shown, past six the first five and See All.
+            val g = com.fariin.app.data.GroupMembers.Group.from(conv)
+            val (shownMembers, more) = com.fariin.app.data.GroupMembers.infoShown(com.fariin.app.data.GroupMembers.infoOrder(g, me))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
+                .clickable { pages.add(GroupPage.Members) }.padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("${users.size} Member${if (users.size == 1) "" else "s"}", style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                    color = c.blue, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.Search, "Search members", tint = c.blue, modifier = Modifier.size(20.dp))
+            }
+            SettingsSection {
                 if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) SettingsRow("Add Members", titleColor = c.blue, trailing = Trailing.NONE) { adding = true }
-                users.sortedWith(compareBy({ it != owner }, { it !in admins }, { names[it] ?: "" })).forEach { u ->
+                shownMembers.forEach { u ->
                     PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "Member", "",
                         // An admin opens the member card (Make Group Admin, Ban from Group...); others the profile.
                         onClick = if (iAmAdmin) ({ card = u }) else if (u == me) null else ({ onOpenPerson(u) })) {
@@ -429,8 +449,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         if (tag.isNotEmpty()) Text(tag, fontSize = 14.sp, color = c.secondary)
                     }
                 }
+                if (more) SettingsRow("See All", icon = rememberVectorPainter(Icons.Filled.KeyboardArrowDown), trailing = Trailing.NONE,
+                    last = true) { pages.add(GroupPage.Members) }
             }
-            SettingsSection {
+            // A group I am no longer in: no Leave (iOS: no Leave, Report, End or Delete for it).
+            if (iAmMember) SettingsSection {
                 SettingsRow("Leave Group", titleColor = c.red, trailing = Trailing.NONE, last = true) { askLeave = true }
             }
             Spacer(Modifier.height(30.dp))

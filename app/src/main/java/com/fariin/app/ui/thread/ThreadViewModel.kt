@@ -120,6 +120,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         canPin = channel == null && com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),
         disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
         groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
+        notAMember = s.former && channel == null,
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
@@ -206,7 +207,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             var handled: String? = null
             combine(vm.repo.state, atBottom) { st, bottom -> st to bottom }.collect { (st, bottom) ->
-                if (!st.loaded || !bottom) return@collect
+                if (!st.loaded || !bottom || st.former) return@collect
                 val newest = st.messages.lastOrNull { it.authorId != me }?.rowId ?: ""
                 if (newest != handled) { handled = newest; vm.repo.markRead() }
             }

@@ -119,6 +119,8 @@ data class ThreadUi(
     val loadingOlder: Boolean = false,
     /** Shown instead of the composer when sending is not possible here. */
     val sendBlocked: String? = null,
+    /** A group I am no longer in (iOS notAMember): a plain line instead of the composer, no calls. */
+    val notAMember: Boolean = false,
     /** The chat id (voice speed is per chat, as on iOS). */
     val cid: String = "",
     /** Group: I hold the admin "Delete messages" right. */
@@ -419,6 +421,12 @@ fun ThreadScreen(
                     Text("Unblock", fontSize = 17.sp, color = c.label)
                 }
             }
+        } else if (ui.notAMember) {
+            // iOS removedBar: one centred line where the composer was.
+            HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+            Text("You're no longer a member of this group", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.secondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
         } else if (ui.sendBlocked != null) {
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
@@ -523,7 +531,7 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                     }
                 }
             }
-            if (ui.channel == null) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
+            if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
         }
     }
 }

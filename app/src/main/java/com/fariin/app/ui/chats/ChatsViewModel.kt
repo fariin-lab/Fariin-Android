@@ -46,6 +46,14 @@ class ChatsViewModel(
             } else s
         }
         .combine(burnTick) { s, _ -> s }
+        // A group whose leave is waiting (or running) is off the list at once (iOS LeaveGroupUndo.hiddenIds).
+        .combine(com.fariin.app.data.LeaveUndo.hidden.combine(com.fariin.app.data.FormerGroups.version) { h, _ -> h }) { s, hidden ->
+            // A former group listed again with me (added back) is mine again; one whose old copy the
+            // list still holds is taken off (FormerGroups.hides).
+            if (s is ConversationsRepository.State.Loaded) com.fariin.app.data.FormerGroups.noteList(s.conversations, me)
+            if (s is ConversationsRepository.State.Loaded)
+                s.copy(conversations = s.conversations.filter { it.id !in hidden && !com.fariin.app.data.FormerGroups.hides(it) }) else s
+        }
         .onEach { s ->
             if (s is ConversationsRepository.State.Loaded) {
                 scheduleListBurn(s.conversations)

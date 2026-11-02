@@ -74,6 +74,9 @@ class ThreadRepository(
         val otherLastActive: Double? = null,
         val otherPrivacy: Map<String, String> = emptyMap(),
         val myPrivacy: Map<String, String> = emptyMap(),
+        /** A group I am no longer in (removed, or left on another phone): iOS notAMember. `conv` is
+         *  then its last copy with me out of `users`; the messages already here stay. */
+        val former: Boolean = false,
     )
 
     private val convRef = db.collection("conversations").document(cid)
@@ -122,6 +125,13 @@ class ThreadRepository(
             }
         }
         open[cid] = this
+        // A group I was removed from earlier this session (iOS FormerGroups): its last copy, no listeners.
+        val former = FormerGroups.get(cid)
+        if (former != null && CryptoHub.listedConversation(cid)?.users?.contains(me) != true) {
+            _state.update { it.copy(conv = former, former = true, loaded = true, synced = true) }
+            watchBack()
+            return
+        }
         // Texts still owed from before a kill or an outage: drawn as sending, and driven again.
         for (e in SendQueue.pending(me, cid)) resend(e)
         startListeners()
@@ -130,6 +140,7 @@ class ThreadRepository(
     /** Back in front or back online (iOS reattachIfDead): a listener that died is made again,
      *  and texts still queued for this chat go again. */
     fun recover() {
+        if (_state.value.former) return
         if (msgFailed) {
             msgReg?.remove(); msgReg = null
             convReg?.remove(); convReg = null
@@ -165,8 +176,21 @@ class ThreadRepository(
                 rebuild(loaded = true)
                 if (!snap.metadata.isFromCache && !_state.value.synced) _state.update { it.copy(synced = true) }
             }
-        convReg = convRef.addSnapshotListener { snap, _ ->
-            val data = snap?.data ?: return@addSnapshotListener
+        convReg = convRef.addSnapshotListener { snap, err ->
+            // Removed from the group (or left on another phone): the rules refuse a non-member's
+            // read, so the listener ends refused. Asked once more, as iOS confirmRemovedFromGroup.
+            if (snap == null) {
+                if (Wire.isGroupCid(cid) && (err as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) confirmRemoved()
+                return@addSnapshotListener
+            }
+            val data = snap.data
+            if (data == null) {
+                if (Wire.isGroupCid(cid) && !snap.metadata.isFromCache) confirmRemoved()
+                return@addSnapshotListener
+            }
+            if (me in ((data["users"] as? List<*>) ?: emptyList<Any>())) wasMember = true
+            if (wasMember && !snap.metadata.isFromCache && FormerGroups.isFormer(cid, data, me)) { becomeFormer(data); return@addSnapshotListener }
             _state.update { it.copy(receipts = Receipts.from(data, me, cid), conv = data) }
             if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
             syncPins(PinRules.pinnedIds(data))
@@ -207,7 +231,50 @@ class ThreadRepository(
         }
     }
 
+    /** I was seen in `users` in this chat, so a copy without me means I was taken out (iOS old.users.contains(me)). */
+    @Volatile private var wasMember = CryptoHub.listedConversation(cid)?.users?.contains(me) == true
+    private var backJob: Job? = null
+
+    /** iOS confirmRemovedFromGroup: a refusal, a missing doc or `users` without me means removed. */
+    private fun confirmRemoved() {
+        if (!wasMember || _state.value.former) return
+        scope.launch {
+            val gone = try {
+                val snap = convRef.get(Source.SERVER).await()
+                FormerGroups.goneFromServer(snap.exists(), (snap.get("users") as? List<*>)?.filterIsInstance<String>(), me)
+            } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+                e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+            } catch (_: Exception) { false }
+            if (gone && !_state.value.former) becomeFormer(_state.value.conv)
+        }
+    }
+
+    /** No longer a member: the last copy without me, kept for this session; the listeners end. */
+    private fun becomeFormer(data: Map<String, Any?>) {
+        val stripped = FormerGroups.strip(data, me)
+        FormerGroups.note(cid, stripped, CryptoHub.listedConversation(cid)?.updatedAtMillis ?: 0.0)
+        msgReg?.remove(); msgReg = null
+        convReg?.remove(); convReg = null
+        _state.update { it.copy(conv = stripped, former = true) }
+        watchBack()
+    }
+
+    /** Added back (the chat list holds the group with me again): live once more. */
+    private fun watchBack() {
+        if (backJob != null) return
+        backJob = scope.launch {
+            FormerGroups.back.collect { id ->
+                if (id != cid) return@collect
+                wasMember = true
+                msgFailed = false
+                _state.update { it.copy(former = false, error = null) }
+                startListeners()
+            }
+        }
+    }
+
     fun stop() {
+        backJob?.cancel(); backJob = null
         open.remove(cid, this)
         presenceReg?.remove(); presenceReg = null
         otherReg?.remove(); otherReg = null
