@@ -685,7 +685,13 @@ class ThreadRepository(
 
     /** iOS sendImage / sendAudio always make sure the 1:1 doc has both of us and a time. */
     private suspend fun seedDirect(other: String) {
-        convRef.set(mapOf("users" to listOf(me, other), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
+        val seed = mutableMapOf<String, Any>("users" to listOf(me, other), "updatedAt" to FieldValue.serverTimestamp())
+        // iOS sendMessage: a chat born from its first send takes the Settings default timer. Only
+        // when the server says the chat is not there yet, so a timer someone chose is never undone.
+        val def = Disappearing.defaultSeconds
+        if (def > 0 && CryptoHub.listedConversation(cid) == null &&
+            runCatching { !convRef.get(Source.SERVER).await().exists() }.getOrDefault(false)) seed["disappearSeconds"] = def
+        convRef.set(seed, SetOptions.merge()).await()
     }
 
     /** End-to-end encrypted bytes go up as application/octet-stream (storage.rules `chat/`). */
@@ -724,9 +730,7 @@ class ThreadRepository(
         }
         // The seed, only when this phone's list does not already show both of us in it (iOS
         // `seedNeeded`; a brand-new chat is never opened from the Android list yet).
-        if (local == null || !(local.users.contains(me) && local.users.contains(other))) {
-            convRef.set(mapOf("users" to listOf(me, other), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
-        }
+        if (local == null || !(local.users.contains(me) && local.users.contains(other))) seedDirect(other)
         val batch = db.batch()
         val msg = hashMapOf<String, Any>(
             "text" to cipher,
