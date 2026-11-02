@@ -183,10 +183,12 @@ class ThreadRepository(
     /** The iOS SendTurn: one text at a time per chat, in tap order. */
     private val turn = Mutex()
 
-    /** Why the composer cannot send here, or null. Message requests are not ported yet. */
+    /** Why the composer cannot send here, or null. My own unsent request takes its one short
+     *  text (the knock, iOS MessageRequests .firstMessage); the rest of requests is not ported yet. */
     fun sendBlockedReason(conv: Conversation?): String? {
         if (conv == null || conv.isGroup || conv.startedBy.isEmpty() || conv.accepted) return null
         return when {
+            conv.lastSender.isEmpty() && conv.startedBy == me -> null
             conv.lastSender.isEmpty() -> "Message requests are not on Android yet."
             conv.lastSender == me -> "Waiting for them to accept your message."
             else -> null   // they wrote first: my reply accepts it
@@ -363,6 +365,18 @@ class ThreadRepository(
         val local = CryptoHub.listedConversation(cid)
         val answering = local != null && !local.isGroup && local.startedBy.isNotEmpty() && !local.accepted &&
             local.lastSender.isNotEmpty() && local.lastSender != me
+        // The knock: my one first message into a request I opened (iOS `knocking`). The rules take
+        // it as short text only and hold it to the day's budget, which the app counts first.
+        val knocking = if (local != null) isKnock(local.startedBy, local.accepted, local.lastSender)
+            else try {
+                val d = convRef.get().await()
+                isKnock(d.getString("startedBy") ?: "", d.getBoolean("accepted") ?: false, d.getString("lastSender") ?: "")
+            } catch (_: Exception) { false }
+        if (knocking) {
+            require(t.codePointCount(0, t.length) <= FIRST_MESSAGE_LIMIT) { "a first message is at most $FIRST_MESSAGE_LIMIT characters" }
+            require(reply == null) { "a first message is plain text" }
+            countKnock()
+        }
         // The seed, only when this phone's list does not already show both of us in it (iOS
         // `seedNeeded`; a brand-new chat is never opened from the Android list yet).
         if (local == null || !(local.users.contains(me) && local.users.contains(other))) {
@@ -388,6 +402,24 @@ class ThreadRepository(
         if (answering) conv["accepted"] = true
         batch.update(convRef, conv)
         batch.commit().await()
+    }
+
+    private fun isKnock(startedBy: String, accepted: Boolean, lastSender: String) =
+        startedBy == me && !accepted && lastSender.isEmpty()
+
+    /** iOS MessageRequests.countDaily("requests"): `users/{me}/limits/requests`, a 24 h window and a
+     *  count that only goes up by one. Best effort, as iOS: the rules fail open with no counter. */
+    private suspend fun countKnock() {
+        val ref = db.collection("users").document(me).collection("limits").document("requests")
+        try {
+            val snap = ref.get().await()
+            val start = snap.getTimestamp("windowStart")?.toDate()?.time
+            if (snap.exists() && start != null && System.currentTimeMillis() - start < 24 * 3600_000L) {
+                ref.update("count", FieldValue.increment(1)).await()
+            } else {
+                ref.set(mapOf("windowStart" to FieldValue.serverTimestamp(), "count" to 1)).await()
+            }
+        } catch (_: Exception) {}
     }
 
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null) {
@@ -615,6 +647,8 @@ class ThreadRepository(
     }
 
     companion object {
+        /** MessageRequests.firstMessageLimit (iOS). */
+        const val FIRST_MESSAGE_LIMIT = 150
         const val PAGE_SIZE = 60L
         /** Every content field a tombstone drops (iOS deleteMessage `strip`). */
         val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
