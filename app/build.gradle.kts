@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "com.fariin.app"
-        minSdk = 28
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -56,7 +56,17 @@ android {
                 mappingFileUploadEnabled = project.hasProperty("uploadMapping")
             }
         }
+        // Release code signed with the debug key, allowed to use the LOCAL test backend: for
+        // measuring start-up, memory and data on the low-end emulator. Never uploaded anywhere.
+        // ./gradlew assembleBenchmark
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            configure<CrashlyticsExtension> { mappingFileUploadEnabled = false }
+        }
     }
+    sourceSets.getByName("benchmark").res.srcDir("src/debug/res")
 
     // One APK per CPU type for release side-loading (Play uses the AAB and splits by itself).
     // Debug builds keep the single app-debug.apk the scripts install. AGP cannot shrink resources
@@ -102,6 +112,9 @@ dependencies {
     // The launch screen (Android 12 API, back-ported), and the app-wide foreground/background signal.
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.process)
+    // Installs the Baseline Profile (src/main/baseline-prof.txt + the Compose libraries' own) on
+    // side-loaded installs too, so the first start on a cheap phone runs compiled code, not the interpreter.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation(libs.kotlinx.coroutines.play.services)
     // libsodium, the library the iOS app's Crypto.swift uses (swift-sodium), so both sides speak
     // the same box/secretbox formats.

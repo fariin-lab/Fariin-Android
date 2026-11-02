@@ -24,7 +24,7 @@ object CrashReports {
         crash.setCrashlyticsCollectionEnabled(send)
         if (!send) return
         val info = try { c.packageManager.getPackageInfo(c.packageName, 0) } catch (_: Exception) { null }
-        crash.setCustomKey("build", "${info?.versionName ?: "?"} (${info?.longVersionCode ?: 0})")
+        crash.setCustomKey("build", "${info?.versionName ?: "?"} (${info?.let { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(it) } ?: 0})")
         crash.setCustomKey("android", "${Build.VERSION.RELEASE} (${Build.VERSION.SDK_INT})")
         crash.setCustomKey("model", Build.MODEL ?: "")
         crash.setCustomKey("install", installId(c))

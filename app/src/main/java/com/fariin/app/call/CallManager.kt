@@ -737,8 +737,23 @@ object CallManager {
     private fun startRingtone() {
         try {
             val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            ringtone = RingtoneManager.getRingtone(app, uri)?.apply { isLooping = true; play() }
+            val r = RingtoneManager.getRingtone(app, uri) ?: return
+            ringtone = r
+            if (android.os.Build.VERSION.SDK_INT >= 28) r.isLooping = true else loopRingtone(r)
+            r.play()
         } catch (_: Exception) {}
+    }
+
+    /** Android 8 has no Ringtone looping: start it again each time it ends, while it is still ours. */
+    private fun loopRingtone(r: android.media.Ringtone) {
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        h.postDelayed(object : Runnable {
+            override fun run() {
+                if (ringtone !== r) return
+                if (!r.isPlaying) try { r.play() } catch (_: Exception) {}
+                h.postDelayed(this, 500)
+            }
+        }, 500)
     }
 
     private fun appInFront(): Boolean {

@@ -88,6 +88,12 @@ object AutoDownload {
 
 /** Saving to the phone's gallery through MediaStore (no storage permission on Android 10+). */
 object GallerySaver {
+    /** Android 8 and 9 still need the storage permission to write into Pictures. */
+    fun needsPermission(c: Context): Boolean = Build.VERSION.SDK_INT < 29 &&
+        c.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    const val PERMISSION_NOTICE = "Allow Fariin to use storage to save"
+
     /** Copies [file] into Pictures/Fariin or Movies/Fariin. True when it landed. */
     fun save(c: Context, file: File, isVideo: Boolean): Boolean = runCatching {
         val name = "Fariin_${System.currentTimeMillis()}" + if (isVideo) ".mp4" else ".jpg"
@@ -99,6 +105,14 @@ object GallerySaver {
                 put(MediaStore.MediaColumns.RELATIVE_PATH,
                     (if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES) + "/Fariin")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
+            } else {
+                // Before Android 10 the file's place is a real path under Pictures or Movies.
+                @Suppress("DEPRECATION")
+                val dir = File(Environment.getExternalStoragePublicDirectory(
+                    if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES), "Fariin")
+                dir.mkdirs()
+                @Suppress("DEPRECATION")
+                put(MediaStore.MediaColumns.DATA, File(dir, name).absolutePath)
             }
         }
         val collection = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
@@ -115,6 +129,7 @@ object GallerySaver {
     suspend fun saveMessage(c: Context, media: ChatMedia?, m: com.fariin.app.data.Message): String =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val media = media ?: return@withContext "Couldn't save"
+            if (needsPermission(c)) return@withContext PERMISSION_NOTICE
             val items: List<Triple<String, com.fariin.app.crypto.EncMeta?, Boolean>> = when (m.mediaKind) {
                 com.fariin.app.data.Message.MediaKind.PHOTO -> listOfNotNull((m.localPath ?: m.imageUrl)?.let { Triple(it, m.enc, false) })
                 com.fariin.app.data.Message.MediaKind.VIDEO -> listOfNotNull(m.videoUrl?.let { Triple(it, m.enc, true) })

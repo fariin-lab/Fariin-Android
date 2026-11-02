@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "benchmark" build: release code (R8, not debuggable, Baseline Profile applied) signed with
+     the debug key, able to use the LOCAL test backend so start-up and memory can be measured on a
+     signed-in fake account. Never shipped. Same Firebase switches as the debug manifest. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application android:networkSecurityConfig="@xml/network_security_config">
+        <meta-data android:name="fariin.local_backend_allowed" android:value="true" />
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
+        <provider android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider" tools:node="remove" />
+        <!-- `adb shell am start -W` reads this to start the app the way a launcher does. -->
+        <profileable android:shell="true" tools:targetApi="29" />
+    </application>
+</manifest>

@@ -197,7 +197,13 @@ private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> 
     val context = LocalContext.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
         value = withContext(Dispatchers.IO) {
-            runCatching { context.contentResolver.loadThumbnail(uri, Size(300, 300), null).asImageBitmap() }.getOrNull()
+            runCatching {
+                if (android.os.Build.VERSION.SDK_INT >= 29) context.contentResolver.loadThumbnail(uri, Size(300, 300), null).asImageBitmap()
+                else if (isVideo) android.media.MediaMetadataRetriever().run {
+                    try { setDataSource(context, uri); getScaledFrameAtTimeCompat(this) } finally { release() }
+                }?.asImageBitmap()
+                else com.fariin.app.media.BitmapDecode.fromUri(context, uri, 300)?.asImageBitmap()
+            }.getOrNull()
         }
     }
     Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.15f)).clickable(onClick = onRemove)) {
@@ -213,4 +219,11 @@ private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> 
             contentAlignment = Alignment.Center,
         ) { Text("$number", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
     }
+}
+
+/** Android 8 video tile: one frame near the start, shrunk to tile size (getScaledFrameAtTime is 27+). */
+private fun getScaledFrameAtTimeCompat(r: android.media.MediaMetadataRetriever): android.graphics.Bitmap? {
+    val f = r.getFrameAtTime(0) ?: return null
+    val (w, h) = com.fariin.app.media.MediaRules.fit(f.width, f.height, 300)
+    return android.graphics.Bitmap.createScaledBitmap(f, w, h, true).also { if (it !== f) f.recycle() }
 }

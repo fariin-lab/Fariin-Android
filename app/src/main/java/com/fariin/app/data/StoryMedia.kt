@@ -2,7 +2,6 @@ package com.fariin.app.data
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.ImageDecoder
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -26,11 +25,8 @@ object StoryMedia {
 
     /** iOS StoryPhoto.encode: 1080 wide (then 900, 720, 540) at 0.85 until it fits 1.5 MB. */
     fun preparePhoto(context: Context, uri: Uri): Prepared? {
-        val src = runCatching {
-            ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { d, _, _ ->
-                d.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            }
-        }.getOrNull() ?: return null
+        // 2400 on the long side covers the 1080-wide story of a tall photo without holding all 12 MP.
+        val src = com.fariin.app.media.BitmapDecode.fromUri(context, uri, 2400) ?: return null
         val bmp = flatten(src)
         var out = ByteArray(0)
         var w = bmp.width; var h = bmp.height

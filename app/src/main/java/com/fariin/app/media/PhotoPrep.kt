@@ -3,7 +3,6 @@ package com.fariin.app.media
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
 import android.net.Uri
 import android.util.Base64
 import java.io.ByteArrayOutputStream
@@ -12,18 +11,16 @@ import java.io.ByteArrayOutputStream
  * A picked photo made ready to send, the way iOS sendJPEG / inlineThumb / BlurHash.encode do it:
  * rebuilt from pixels (so the camera's metadata, GPS included, never leaves the phone), the long
  * side at most 1280 (standard quality), JPEG 0.6, stepped down by quarters while it is over 1.5 MB.
- * ImageDecoder applies the EXIF rotation, as UIImage does.
+ * The EXIF rotation is applied (BitmapDecode), as UIImage does.
  */
 class PhotoPrep(val jpeg: ByteArray, val width: Int, val height: Int, val blurhash: String?, val thumbB64: String?) {
     companion object {
         fun fromUri(context: Context, uri: Uri, q: MediaRules.PhotoQuality = MediaRules.PhotoQuality.STANDARD): PhotoPrep? {
-            val src = ImageDecoder.createSource(context.contentResolver, uri)
-            return prepare(q) { side -> decode(src, side) }
+            return prepare(q) { side -> BitmapDecode.fromUri(context, uri, side)?.let { flatten(it) } }
         }
 
         fun fromBytes(bytes: ByteArray, q: MediaRules.PhotoQuality = MediaRules.PhotoQuality.STANDARD): PhotoPrep? {
-            val src = ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))
-            return prepare(q) { side -> decode(src, side) }
+            return prepare(q) { side -> BitmapDecode.fromBytes(bytes, side)?.let { flatten(it) } }
         }
 
         private fun prepare(q: MediaRules.PhotoQuality, decodeAt: (Int) -> Bitmap?): PhotoPrep? {
@@ -41,15 +38,6 @@ class PhotoPrep(val jpeg: ByteArray, val width: Int, val height: Int, val blurha
             b.recycle()
             return prep
         }
-
-        private fun decode(src: ImageDecoder.Source, side: Int): Bitmap? = runCatching {
-            ImageDecoder.decodeBitmap(src) { dec, info, _ ->
-                val (w, h) = MediaRules.fit(info.size.width, info.size.height, side)
-                dec.setTargetSize(w, h)
-                dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                dec.memorySizePolicy = ImageDecoder.MEMORY_POLICY_DEFAULT
-            }
-        }.getOrNull()?.let { flatten(it) }
 
         /** No alpha in a JPEG: a transparent PNG goes on white, not black. */
         private fun flatten(b: Bitmap): Bitmap {

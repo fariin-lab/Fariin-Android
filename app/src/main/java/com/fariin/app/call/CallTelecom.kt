@@ -147,7 +147,8 @@ object CallTelecom {
     @Suppress("DEPRECATION")
     internal fun onAudioState(conn: FariinConnection, s: CallAudioState) {
         if (conn !== connection) return
-        val bt = try { s.activeBluetoothDevice?.name } catch (_: SecurityException) { null }
+        val bt = if (android.os.Build.VERSION.SDK_INT < 28) null
+            else try { s.activeBluetoothDevice?.name } catch (_: SecurityException) { null }
         val r = CallRouting.fromMask(s.supportedRouteMask, s.route, bt)
         _route.value = r
         CallManager.onSystemAudio(conn.callId, r, s.isMuted)
