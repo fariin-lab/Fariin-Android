@@ -14,7 +14,10 @@ object DeliveryReceipts {
     @Synchronized
     fun mark(convs: List<Conversation>, me: String, db: FirebaseFirestore = FirebaseFirestore.getInstance()) {
         if (me.isEmpty()) return
-        val todo = MessageRules.deliveredWrites(convs, me, written)
+        // My private block list too (iOS BlockList.shared.contains): the blocked sender keeps one tick.
+        val snap = BlockList.snapshot
+        val blocked = if (snap.owner == me) snap.entries.keys else emptySet()
+        val todo = MessageRules.deliveredWrites(convs, me, written, blocked)
         if (todo.isEmpty()) return
         val batch = db.batch()
         for ((cid, at) in todo) {

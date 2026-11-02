@@ -291,6 +291,11 @@ class ThreadRepository(
 
     /** Why the composer cannot send here, or null. My own unsent request takes its one short
      *  text (the knock, iOS MessageRequests .firstMessage); the rest of requests is not ported yet. */
+    /** iOS ThreadRepository.iBlocked also reads my private list (users/{me}/blocked), not only the
+     *  old shared blockedBy copy on the chat. */
+    fun blockedByMyList(): Boolean = !Wire.isGroupCid(cid) &&
+        BlockList.snapshot.owner == me && BlockList.contains(Wire.otherUid(cid, me))
+
     fun sendBlockedReason(conv: Conversation?): String? {
         if (conv == null || conv.isGroup || conv.startedBy.isEmpty() || conv.accepted) return null
         return when {
@@ -929,7 +934,7 @@ class ThreadRepository(
                     val update = hashMapOf<String, Any>("unreadCount.$me" to 0)
                     if (local?.markedUnread?.get(me) == true) update["markedUnread.$me"] = FieldValue.delete()
                     try { convRef.update(update).await() } catch (_: Exception) {}
-                    val iBlocked = _state.value.receipts.iBlocked
+                    val iBlocked = _state.value.receipts.iBlocked || blockedByMyList()
                     if (readReceipts && !iBlocked) {
                         try {
                             convRef.set(mapOf("lastRead" to mapOf(me to FieldValue.serverTimestamp())), SetOptions.merge()).await()

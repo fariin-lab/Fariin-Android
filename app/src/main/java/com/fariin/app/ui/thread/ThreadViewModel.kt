@@ -51,6 +51,11 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val conv = remember(s.conv, listed) {
         if (s.conv.isNotEmpty()) Conversation.fromFirestore(cid, s.conv) else listed
     }
+    // Blocked by me, from the chat's old shared copy or my private list (iOS repo.iBlocked):
+    // no presence, typing, ticks or read receipts, and the composer gives way to Unblock.
+    val blockSnap by com.fariin.app.data.BlockList.state.collectAsState()
+    val receipts = if (blockSnap.owner == me && conv?.isGroup != true &&
+        blockSnap.contains(com.fariin.app.crypto.Wire.otherUid(cid, me))) s.receipts.copy(iBlocked = true) else s.receipts
     // Typing: theirs from `typing.<uid>`, cleared 15 s after the value last changed (iOS expiry).
     val typingMap = s.conv["typing"] as? Map<*, *> ?: emptyMap<String, Any>()
     val typers = typingMap.filter { (k, v) -> k != me && MessageRules.isTyping(v) }.keys.mapNotNull { it as? String }
@@ -60,6 +65,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val typingNow = typers.isNotEmpty() && System.currentTimeMillis() - typingSince < MessageRules.TYPING_EXPIRY_MS && typingTick >= 0
     val typingLine = when {
         !typingNow -> null
+        receipts.iBlocked -> null
         conv?.isGroup != true -> "typing…"
         typers.size == 1 -> "${conv.names[typers[0]] ?: "Someone"} is typing…"
         else -> "${typers.size} people are typing…"
@@ -68,7 +74,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     // Online / last seen for a 1:1 (iOS ThreadView subtitle), redrawn each minute so "5 min. ago" moves.
     var minute by remember { mutableStateOf(0) }
     LaunchedEffect(cid) { while (true) { delay(60_000); minute++ } }
-    val presenceLine = if (conv == null || conv.isGroup || s.receipts.iBlocked || minute < 0) null else
+    val presenceLine = if (conv == null || conv.isGroup || receipts.iBlocked || minute < 0) null else
         com.fariin.app.data.Presence.line(
             mine = s.myPrivacy, theirs = s.otherPrivacy,
             contactOfMine = conv.lastMessageCipher.isNotEmpty() && (conv.startedBy.isEmpty() || conv.accepted),
@@ -91,7 +97,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         isGroup = conv?.isGroup == true,
         me = me,
         messages = s.messages,
-        receipts = s.receipts,
+        receipts = receipts,
         names = conv?.names ?: emptyMap(),
         photos = conv?.photos ?: emptyMap(),
         loaded = s.loaded,
@@ -110,6 +116,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
+        onUnblock = {
+            vm.viewModelScope.launch {
+                val ok = com.fariin.app.data.FirestorePeople(me, CryptoHub.get(ctx))
+                    .setBlocked(com.fariin.app.crypto.Wire.otherUid(cid, me), false)
+                if (!ok) notice = "Couldn't unblock. Check your connection and try again."
+            }
+        },
         onReact = { m, e -> vm.viewModelScope.launch { if (!vm.repo.setReaction(m, e)) notice = "Couldn't react. Try again." } },
         onSendReply = { t, r -> vm.repo.sendText(t, r) },
         onEdit = { m, t -> vm.viewModelScope.launch { if (!vm.repo.editMessage(m, t)) notice = "Couldn't edit this message." } },

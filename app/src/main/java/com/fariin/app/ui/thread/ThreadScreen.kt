@@ -280,6 +280,14 @@ fun ThreadScreen(
         if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             com.fariin.app.ui.channels.ChannelBottomBar(ch, ui.sendBlocked)
+        } else if (ui.receipts.iBlocked && !ui.isGroup) {
+            // iOS blockedBar: the action alone, in the text colour.
+            HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+            Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.TextButton(onClick = actions.onUnblock) {
+                    Text("Unblock", fontSize = 17.sp, color = c.label)
+                }
+            }
         } else if (ui.sendBlocked != null) {
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,

@@ -76,6 +76,7 @@ data class ThreadActions(
     /** The list reached (true) or left (false) the newest message. */
     val onAtBottom: (Boolean) -> Unit = {},
     val onTitleClick: () -> Unit = {},
+    val onUnblock: () -> Unit = {},
     /** Shown in a small notice ("Copied", "Saved to Photos"). */
     val onNotice: (String) -> Unit = {},
     /** Opens the forward picker for a message (ThreadScreen sets it), then sends to the chats picked. */
