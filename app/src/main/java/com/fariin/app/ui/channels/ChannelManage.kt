@@ -97,6 +97,10 @@ internal fun ChannelManageSection(info: ChannelInfo, team: Team, me: String, sho
         // iOS Channel Settings joining section: the invite links (Add users right).
         if (team.can(me, Right.INVITE_USERS)) {
             SettingsRow("Invite Links", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link)) { nav.links(info.cid) }
+            // iOS GroupSettingsView: Follow Requests under the same right, "None" or how many wait.
+            val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = true)
+            SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
+                value = com.fariin.app.data.JoinRequests.rowValue(reqs.size)) { nav.requests(info.cid) }
         }
         SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
         val canBan = team.can(me, Right.BAN_USERS)
@@ -122,6 +126,7 @@ data class ChannelManageNav(
     val links: (String) -> Unit = {},
     val banned: (String) -> Unit = {},
     val reactions: (String) -> Unit = {},
+    val requests: (String) -> Unit = {},
 )
 
 /** Edit Channel: the group editor in a channel's words and squircle (iOS EditGroupView). */
