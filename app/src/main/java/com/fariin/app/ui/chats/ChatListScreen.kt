@@ -155,6 +155,9 @@ fun ChatListScreen(
             else -> listState.animateScrollToItem(0)
         }
     }
+    // Archived, search and the main list share one list position: each opens at its top, or the
+    // main list came back anchored on the row that topped the archive (newer chats above the screen).
+    LaunchedEffect(showArchive, searching) { listState.scrollToItem(0) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val selecting = selected.isNotEmpty()
@@ -205,6 +208,10 @@ fun ChatListScreen(
 
     val barState = rememberTopAppBarState()
     val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior(barState)
+    // At the very top the bar is always shown: a second tap on Chats scrolls there without a drag,
+    // and the bar stayed hidden from the scroll down.
+    val atTop by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 } }
+    LaunchedEffect(atTop) { if (atTop) barState.heightOffset = 0f }
     // The floating buttons step aside while the list scrolls down and come back on the way up.
     var fabShown by remember { mutableStateOf(true) }
     val fabScroll = remember {
