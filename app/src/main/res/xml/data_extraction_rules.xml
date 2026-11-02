@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and later. The end-to-end keys never leave this phone: not in a cloud backup and
+     not in a phone-to-phone transfer (the private key is wrapped by a Keystore key that cannot
+     move anyway, and a copied public-key cache would only be stale). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />
+        <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />
+        <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
+    </device-transfer>
+</data-extraction-rules>

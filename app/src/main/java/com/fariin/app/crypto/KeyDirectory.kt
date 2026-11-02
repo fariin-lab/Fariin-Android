@@ -56,7 +56,12 @@ class FirestoreKeyDirectory(
     override suspend fun publishIfChanged(uid: String, b64: String) {
         try {
             val ref = db.collection("users").document(uid)
-            val published = ref.get().await().getString("publicKey")
+            val snap = ref.get(Source.SERVER).await()
+            // iOS publishes once the profile document exists (RootView: after `loadMine`). Android
+            // has no sign-up yet, so a missing profile is a half-made account: never create the
+            // document with only a key in it (the iPhone's first-run routing reads that document).
+            if (!snap.exists()) return
+            val published = snap.getString("publicKey")
             if (published == b64) return
             if (!mayPublish(uid)) return
             val keep = listOfNotNull(published, b64)

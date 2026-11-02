@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.fariin.app.data.ChatList
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.ConversationsRepository
+import com.fariin.app.data.CryptoHub
+import com.fariin.app.crypto.FariinCrypto
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -20,8 +24,12 @@ data class ChatsUiState(
 class ChatsViewModel(
     private val me: String,
     repo: ConversationsRepository = ConversationsRepository(),
+    private val crypto: FariinCrypto? = null,
 ) : ViewModel() {
+    private val preloaded = HashSet<String>()
+
     val state: StateFlow<ChatsUiState> = repo.listen(me)
+        .onEach { s -> if (s is ConversationsRepository.State.Loaded) warmKeys(s.conversations) }
         .map { s ->
             when (s) {
                 ConversationsRepository.State.Loading -> ChatsUiState(loading = true)
@@ -31,6 +39,20 @@ class ChatsViewModel(
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatsUiState())
+
+    /** Fetch every chat partner's key once, then redraw the previews that said "…" (iOS heals the
+     *  list the same way when a peer key lands). */
+    private fun warmKeys(convs: List<Conversation>) {
+        CryptoHub.noteListed(convs)
+        val c = crypto ?: return
+        val fresh = convs.flatMap { it.users }.filter { it != me && it.isNotEmpty() && preloaded.add(it) }
+        if (fresh.isEmpty()) return
+        viewModelScope.launch {
+            try { c.ensureReady() } catch (_: Exception) {}
+            c.preloadKeys(fresh)
+            CryptoHub.bumpKeys()
+        }
+    }
 }
 
 /** Chats with something unread, the number on the Chats tab (blocked chats do not count). */

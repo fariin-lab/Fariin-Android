@@ -49,6 +49,8 @@ data class Conversation(
     val accepted: Boolean = true,
     val reqOff: Boolean = false,
     val deletedUsers: List<String> = emptyList(),
+    /** `rk`: keys a member released for old sealed group items (nonce b64 to key b64). */
+    val releasedKeys: Map<String, String> = emptyMap(),
 ) {
     val isGroup: Boolean get() = convType == "group"
 
@@ -194,6 +196,7 @@ data class Conversation(
                 accepted = data["accepted"] as? Boolean ?: (data["startedBy"] == null),
                 reqOff = data["reqOff"] as? Boolean ?: false,
                 deletedUsers = stringList(data["deletedUsers"]),
+                releasedKeys = stringMap(data["rk"]),
             )
         }
 
