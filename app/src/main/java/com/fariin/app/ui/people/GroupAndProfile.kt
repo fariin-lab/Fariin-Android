@@ -95,15 +95,6 @@ private fun TextAction(text: String, enabled: Boolean, onClick: () -> Unit) {
         modifier = Modifier.clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp))
 }
 
-@Composable
-private fun rememberPhotoPicker(onBytes: (ByteArray) -> Unit): () -> Unit {
-    val ctx = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        uri?.let { u -> ctx.contentResolver.openInputStream(u)?.use { it.readBytes() }?.let(onBytes) }
-    }
-    return { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-}
-
 /**
  * Edit Profile (iOS EditProfileView): the photo with "Set New Photo", the name, and the
  * Username row that opens the username page. The photo goes to `profiles/{me}.jpg`.
@@ -285,7 +276,10 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     var photo by remember { mutableStateOf<ByteArray?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val pick = rememberPhotoPicker { photo = it }
+    // The picked photo goes to the circle cropper, as on Edit Group.
+    val picker = rememberCirclePhotoPicker { photo = it }
+    val pick = picker.launch
+    if (picker.pending != null) { picker.Host("Group photo", "Shown in chats and on the group page"); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
