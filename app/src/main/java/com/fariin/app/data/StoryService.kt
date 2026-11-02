@@ -160,9 +160,19 @@ class StoryService(
         picked: Set<String>,
         hours: Int,
         convs: List<Conversation>,
+        captureSwitch: Boolean = false,
+        myFriends: StoryListDoc = StoryPrivacyRules.defaultMyFriends,
+        hiddenFrom: Set<String> = emptySet(),
     ): String {
         if (me.isEmpty()) throw PostRefused("Not signed in.")
-        val (recipients, mode) = StoryRules.resolveAudience(me, convs, choice, picked)
+        val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, picked, myFriends, hiddenFrom)
+        val recipients = reached
+        val mode = if (choice == StoryAudienceChoice.EVERYONE) "everyone" else how
+        val replies = StoryPrivacyRules.allowsReplies(choice, myFriends)
+        val capture = StoryPrivacyRules.captureProtected(choice, captureSwitch)
+        // iOS "No one will see this": a list that resolves to nobody while I do have chats.
+        if (!choice.needsPeople && recipients.isEmpty() && StoryRules.contacts(me, convs).isNotEmpty())
+            throw PostRefused("Everyone in this list has been excluded or is no longer a chat. Pick another audience or add people to this one.")
         if (choice.needsPeople && recipients.isEmpty()) throw PostRefused("Pick at least one person.")
         countAgainstBudget()
         val id = StoryRules.newStoryId()
@@ -171,7 +181,7 @@ class StoryService(
         val isVideo = media.video != null
         val payload = StoryRules.payload(
             me, isVideo, id, caption.trim(), choice, mode, recipients, expires, FieldValue.serverTimestamp(),
-            media.blurThumb, media.video?.info,
+            media.blurThumb, media.video?.info, allowsReplies = replies, captureProtected = capture,
         )
         val mainRef = storage.reference.child(if (isVideo) StoryRules.videoPath(id) else StoryRules.photoPath(id))
         val thumbRef = storage.reference.child(StoryRules.thumbPath(id))
@@ -198,7 +208,7 @@ class StoryService(
                         "mediaUrl" to urls.first, "thumbUrl" to urls.second, "blurThumb" to media.blurThumb,
                         "stickers" to emptyList<Any>(), "type" to if (isVideo) "video" else "image",
                         "caption" to caption.trim(), "duration" to (media.video?.info?.durationSec ?: 0.0),
-                        "allowsReplies" to true, "captureProtected" to false,
+                        "allowsReplies" to replies, "captureProtected" to capture,
                     )).await()
                 }
             }

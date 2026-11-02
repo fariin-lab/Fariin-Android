@@ -9,6 +9,8 @@ Accounts and their generated passwords go to test-accounts.json next to this fil
     python seed.py --carol      # a third fake user, carol (low-end phone tests), added to the same file
     python seed.py --photos     # plain group "Photo Test" (alice + carol) with 10 photos from alice
     python seed.py --widget     # three plain groups with carol, newest lines unread (home screen widget tests)
+    python seed.py --carol-stories  # 1:1 chats alice-carol and bobby-carol, and stories for carol to watch:
+                                    # alice (plain, and one with Block screenshots), bobby (replies off)
 """
 import datetime, json, os, secrets, sys, urllib.request
 
@@ -232,6 +234,50 @@ def seed_widget_chats():
             "clientTs": at.timestamp() * 1000, "createdAt": iso(at)})
         print("seeded", cid, title)
 
+
+def seed_carol_stories():
+    """Stories posted to carol, in the iOS postStory shape (StoriesService payload), so carol's phone can
+    watch, react and reply without the other phones. recipientUids holds the hashed audience token."""
+    import hashlib, io
+    from PIL import Image, ImageDraw
+    accts = {a["handle"]: a for a in load_accounts()}
+    alice, bobby, carol = accts["alice"], accts["bobby"], accts["carol"]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    token = hashlib.sha256(("fariin-audience-v1:" + carol["uid"]).encode()).hexdigest()
+    for other in (alice, bobby):
+        users = sorted([other["uid"], carol["uid"]])
+        cid = "_".join(users)
+        patch_doc(f"conversations/{cid}", {
+            "users": users, "names": {other["uid"]: other["name"], carol["uid"]: carol["name"]}, "photos": {},
+            "startedBy": other["uid"], "accepted": True, "createdAt": iso(now - datetime.timedelta(hours=2)),
+            "updatedAt": iso(now - datetime.timedelta(hours=2)), "lastMessage": "", "lastSender": "",
+            "unreadCount": {u: 0 for u in users}, "typing": {u: False for u in users}})
+        print("chat", cid)
+    stories = [("seedAlice01", alice, "Morning walk", (40, 120, 200), False, True, 30),
+               ("seedAlice02", alice, "No screenshots please", (200, 80, 60), True, True, 20),
+               ("seedBobby01", bobby, "Replies are off", (60, 160, 90), False, False, 10)]
+    for sid, who, caption, rgb, secure, replies, mins in stories:
+        img = Image.new("RGB", (720, 1280), rgb)
+        d = ImageDraw.Draw(img)
+        for i in range(0, 1280, 80):
+            d.rectangle([0, i, 720, i + 40], fill=tuple(min(255, c + 30) for c in rgb))
+        d.text((60, 600), caption, fill=(255, 255, 255))
+        buf = io.BytesIO(); img.save(buf, "JPEG", quality=70)
+        path = f"stories/{sid}/photo.jpg"
+        url = upload(path, buf.getvalue(), "image/jpeg")
+        at = now - datetime.timedelta(minutes=mins)
+        patch_doc(f"stories/{sid}", {
+            "authorUid": who["uid"], "createdAt": iso(at), "expiresAt": iso(at + datetime.timedelta(hours=24)),
+            "type": "image", "mediaPath": path, "mediaUrl": url, "blurThumb": "", "caption": caption, "stickers": [],
+            "audience": {"mode": "all", "listId": "my-story"}, "audienceLabel": "friends", "oneTime": False,
+            "captureProtected": secure, "public": False, "allowsReplies": replies, "replyCount": 0,
+            "recipientUids": [token]})
+        print("story", sid, who["handle"], "secure" if secure else "", "" if replies else "replies off")
+
+
+if sys.argv[1:] == ["--carol-stories"]:
+    seed_carol_stories()
+    sys.exit(0)
 
 if sys.argv[1:] == ["--carol"]:
     seed_carol()

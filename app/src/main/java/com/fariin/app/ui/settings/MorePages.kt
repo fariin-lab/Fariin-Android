@@ -70,7 +70,9 @@ internal fun moreRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
         page.startsWith(PAGE_AUTODL) -> page.removePrefix(PAGE_AUTODL).let { k ->
             ChoicePage(SettingsRules.autoKinds.first { it.first == k }.second, MEDIA_PREFS, "autodl.$k", SettingsRules.autoDefault(k), SettingsRules.autoPolicies, null, pop)
         }
-        page == PAGE_STORIES -> StoriesSettingsPage(pop)
+        page == PAGE_STORIES -> StoriesSettingsPage(push, pop)
+        page == PAGE_STORY_EVERYONE -> StoryEveryonePage(pop)
+        page == PAGE_STORY_MYCHATS -> StoryMyChatsPage(pop)
         page == PAGE_SEC_NOTIFS -> SecurityNotificationsPage(pop)
         else -> return false
     }
@@ -400,9 +402,9 @@ private fun StorageDataPage(push: (String) -> Unit, pop: () -> Unit) {
 
 // ---------------------------------------------------------------- Stories
 
-/** iOS StorySettingsView's View Receipts switch (StoryReceiptPrefs): users/{me}/private/storyPrefs {receipts, offAt}. */
+/** iOS StorySettingsView: Everyone / My Chats (StoryPrivacyPages.kt), then View Receipts (StoryReceiptPrefs): users/{me}/private/storyPrefs {receipts, offAt}. */
 @Composable
-private fun StoriesSettingsPage(pop: () -> Unit) {
+private fun StoriesSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val p = remember { ctx.getSharedPreferences("fariin_stories", Context.MODE_PRIVATE) }
@@ -410,16 +412,14 @@ private fun StoriesSettingsPage(pop: () -> Unit) {
     val me = FirebaseAuth.getInstance().currentUser?.uid
     val ref = me?.let { FirebaseFirestore.getInstance().collection("users").document(it).collection("private").document("storyPrefs") }
     LaunchedEffect(me) { ref?.let { r -> runCatching { r.get().await().getBoolean("receipts") }.getOrNull()?.let { on = it; p.edit().putBoolean("storyViewReceipts", it).apply() } } }
-    val privacy by com.fariin.app.data.PrivacySettings.map.collectAsState()
     ScrollPage("Stories", pop) {
+        // iOS StorySettingsView: the audiences first, then View Receipts.
+        StoryAudienceRows(push)
         SettingsSection(footer = "See and share when stories are viewed. If disabled, you won't see when others view your stories.") {
             SwitchRow("View Receipts", on, last = true) { v ->
                 on = v; p.edit().putBoolean("storyViewReceipts", v).apply()
                 scope.launch { runCatching { ref?.set(mapOf("receipts" to v, "offAt" to if (v) null else FieldValue.serverTimestamp()))?.await() } }
             }
-        }
-        SettingsSection(footer = "Stories disappear after 24 hours. Who sees each story is chosen when you post it.") {
-            SettingsRow("Profile photo", value = com.fariin.app.data.PrivacyRules.audience(privacy, "photo").label("photo"), trailing = Trailing.NONE, last = true)
         }
     }
 }

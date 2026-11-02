@@ -28,6 +28,8 @@ data class Story(
     val audienceLabel: String = "",
     val oneTime: Boolean = false,
     val allowsReplies: Boolean = true,
+    /** The author asked for no screenshots (iOS `captureProtected`): the viewer sets FLAG_SECURE. */
+    val captureProtected: Boolean = false,
     val isPublic: Boolean = false,
     /** Seconds, video only (0 = unknown). */
     val durationSec: Double = 0.0,
@@ -94,6 +96,7 @@ object StoryList {
             audienceLabel = data["audienceLabel"] as? String ?: "",
             oneTime = data["oneTime"] as? Boolean ?: false,
             allowsReplies = data["allowsReplies"] as? Boolean ?: true,
+            captureProtected = data["captureProtected"] as? Boolean ?: false,
             isPublic = data["public"] as? Boolean ?: false,
             durationSec = (data["duration"] as? Number)?.toDouble() ?: 0.0,
             blurThumb = data["blurThumb"] as? String ?: "",

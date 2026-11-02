@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -66,6 +67,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -138,7 +141,16 @@ fun StoryViewerDialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        StoryViewer(me, groups, startGroup, conversations, onClose)
+        // Block screenshots (iOS captureProtected): while such a story is on screen this window is
+        // FLAG_SECURE, so a screenshot or a screen recording of it comes out black.
+        val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        var secure by remember { mutableStateOf(false) }
+        DisposableEffect(window, secure) {
+            if (secure) window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            else window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            onDispose { }
+        }
+        StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected })
     }
 }
 
@@ -149,13 +161,19 @@ fun StoryViewer(
     startGroup: Int,
     conversations: List<Conversation>,
     onClose: () -> Unit,
+    onShown: (Story) -> Unit = {},
 ) {
     val service = remember(me) { StoryService(me) }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val groups = remember { mutableStateListOf<StoryGroup>().apply { addAll(initialGroups) } }
     val pager = rememberPagerState(initialPage = startGroup.coerceIn(0, maxOf(0, initialGroups.size - 1))) { groups.size }
     val convs by rememberUpdatedState(conversations)
     val who: (String) -> Pair<String, String?> = { StoryService.who(it, convs, me) }
+    // The people I may reply to: my accepted 1:1 chats (iOS StoryContact.isFriend).
+    val contacts = remember(conversations) { StoryRules.contacts(me, conversations) }
+    // The react bar's emoji flying up after a tap (iOS EmojiReactionView).
+    var flying by remember { mutableStateOf<Pair<String, Long>?>(null) }
     // Seen watermarks as this viewer moves them, so a ring is not written twice.
     val watermarks = remember { mutableStateMapOf<String, Long>().apply { initialGroups.forEach { g -> g.lastViewedAtMs?.let { put(g.key, it) } } } }
     val marked = remember { mutableSetOf<String>() }
@@ -224,18 +242,26 @@ fun StoryViewer(
                     onOpenViewers = { id -> sheetFor = id },
                     onDelete = { confirmDelete = it },
                     onReplyFocus = { replyFocused = it },
-                    onReply = { s, text ->
+                    // Typed text is a reply; a react bar emoji is the same message marked isReaction
+                    // (iOS StoryViewer.handle: ReplyRef isStatus + storyThumb, isReaction for the bar).
+                    onReply = { s, text, reaction ->
                         toast = "Sent"
+                        if (reaction) flying = text to System.nanoTime()
                         storyScope.launch {
                             val ok = runCatching {
                                 val cid = listOf(me, s.authorUid).sorted().joinToString("_")
                                 ThreadRepository(cid, me, CryptoHub.crypto, storyScope).sendStoryReply(
-                                    text, Message.ReplyRef(s.id, s.authorUid, "", isStatus = true, storyThumb = s.previewUrl),
+                                    text, Message.ReplyRef(s.id, s.authorUid, "", isStatus = true, storyThumb = s.previewUrl, isReaction = reaction),
                                 )
                             }.isSuccess
                             if (!ok) toast = "Couldn't send. Check your connection and try again."
                         }
                     },
+                    canReply = { s -> com.fariin.app.data.StoryPrivacyRules.canReply(s, contacts) },
+                    receipts = receipts,
+                    onShown = onShown,
+                    // iOS "..." > Hide Stories: hidden at once, and the viewer closes.
+                    onHide = { uid -> com.fariin.app.data.StoryMutes.setHidden(context, uid, true); onClose() },
                     onLike = { s, liked ->
                         if (liked) toast = "Reacted"
                         storyScope.launch { service.setLiked(s, liked) }
@@ -243,6 +269,8 @@ fun StoryViewer(
                 )
             }
         }
+
+        flying?.let { (emoji, key) -> FlyingEmoji(emoji, key) { if (flying?.second == key) flying = null } }
 
         AnimatedVisibility(toast != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
             Text(
@@ -317,8 +345,12 @@ private fun StoryPage(
     onOpenViewers: (String) -> Unit,
     onDelete: (Story) -> Unit,
     onReplyFocus: (Boolean) -> Unit,
-    onReply: (Story, String) -> Unit,
+    onReply: (Story, String, Boolean) -> Unit,
     onLike: (Story, Boolean) -> Unit,
+    canReply: (Story) -> Boolean,
+    receipts: Boolean,
+    onShown: (Story) -> Unit,
+    onHide: (String) -> Unit,
 ) {
     val stories = group.stories
     if (stories.isEmpty()) return
@@ -336,6 +368,7 @@ private fun StoryPage(
 
     // Receipt only the story actually on screen and loaded (iOS markSeenItem).
     LaunchedEffect(story.id, active, loaded) { if (active && loaded) onSeen(story) }
+    LaunchedEffect(story.id, active) { if (active) onShown(story) }
 
     // Photo clock: 5 s of shown time, standing still while paused or held.
     if (!story.isVideo) {
@@ -434,6 +467,21 @@ private fun StoryPage(
                     }
                     if (mine) Text(StoryRules.audienceTitle(story), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
                 }
+                if (!mine) {
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        Box(Modifier.size(40.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color.White)
+                        }
+                        androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Hide Stories") },
+                                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
+                                onClick = { menu = false; onHide(story.authorUid) },
+                            )
+                        }
+                    }
+                }
                 Box(Modifier.size(40.dp).clickable { onClose() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
                 }
@@ -451,8 +499,8 @@ private fun StoryPage(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp))
             }
             if (mine) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) }, onDelete = { onDelete(story) })
-            else if (story.allowsReplies) ReplyBar(story, service, onFocus = onReplyFocus, onSend = { onReply(story, it) }, onLike = { onLike(story, it) })
-            else Spacer(Modifier.height(16.dp))
+            else ReplyBar(story, service, canReply = canReply(story), showLike = receipts, onFocus = onReplyFocus,
+                onSend = { t, reaction -> onReply(story, t, reaction) }, onLike = { onLike(story, it) })
         }
     }
 }
@@ -570,40 +618,97 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
     }
 }
 
-/** "Send message…" and the heart (iOS reply pill; the heart is only there with receipts on). */
+/**
+ * "Send message…" and the heart (iOS reply pill; the heart only with receipts on). With the field
+ * focused and empty the react bar sits above it: "Send reaction as a private message" and seven
+ * emojis, each sent to the chat as a reaction. A story that takes no replies from me shows
+ * "You can’t reply to this story" in the field's place, and keeps the heart.
+ */
 @Composable
-private fun ReplyBar(story: Story, service: StoryService, onFocus: (Boolean) -> Unit, onSend: (String) -> Unit, onLike: (Boolean) -> Unit) {
+private fun ReplyBar(
+    story: Story, service: StoryService, canReply: Boolean, showLike: Boolean,
+    onFocus: (Boolean) -> Unit, onSend: (String, Boolean) -> Unit, onLike: (Boolean) -> Unit,
+) {
     var text by remember(story.id) { mutableStateOf("") }
     var liked by remember(story.id) { mutableStateOf(false) }
-    LaunchedEffect(story.id) { liked = !service.myReaction(story.id).isNullOrEmpty() }
+    var focused by remember(story.id) { mutableStateOf(false) }
+    LaunchedEffect(story.id, showLike) { if (showLike) liked = !service.myReaction(story.id).isNullOrEmpty() }
     val focus = LocalFocusManager.current
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (text.isEmpty()) Text("Send message…", color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp)
-            BasicTextField(
-                text, { text = it.take(1000) }, singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
-                modifier = Modifier.fillMaxWidth().onFocusChanged { onFocus(it.isFocused) },
-            )
-        }
-        Spacer(Modifier.width(6.dp))
-        if (text.isNotBlank()) {
-            Box(Modifier.size(44.dp).clickable {
-                onSend(text.trim()); text = ""; focus.clearFocus()
-            }, contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
-            }
-        } else {
-            Box(Modifier.size(44.dp).clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
-                Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
-                    tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(28.dp))
+    Column(Modifier.fillMaxWidth()) {
+        if (canReply && focused && text.isEmpty()) {
+            Column(
+                Modifier.padding(start = 16.dp, end = 44.dp, bottom = 4.dp).fillMaxWidth().height(62.dp)
+                    .clip(RoundedCornerShape(24.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+            ) {
+                Text(com.fariin.app.data.StoryPrivacyRules.REACT_LINE, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                Row(Modifier.fillMaxWidth()) {
+                    com.fariin.app.data.StoryPrivacyRules.REACTIONS.forEach { e ->
+                        Box(Modifier.weight(1f).clickable { focus.clearFocus(); onSend(e, true) }, contentAlignment = Alignment.Center) {
+                            Text(e, fontSize = 24.sp)
+                        }
+                    }
+                }
             }
         }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
+                    .border(1.dp, Color.White.copy(alpha = if (canReply) 0.6f else 0.3f), RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (!canReply) {
+                    Text(com.fariin.app.data.StoryPrivacyRules.REPLY_LOCKED, color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp, maxLines = 1)
+                } else {
+                    if (text.isEmpty()) Text("Send message…", color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp)
+                    // Focusable only after a tap on it, and again only after the next tap once it lets
+                    // go: the dialog window hands its focus to this field whenever it has none, so the
+                    // keyboard came up as soon as a story opened, and again right after a send.
+                    var armed by remember(story.id) { mutableStateOf(false) }
+                    val fr = remember { androidx.compose.ui.focus.FocusRequester() }
+                    LaunchedEffect(armed) { if (armed) runCatching { fr.requestFocus() } }
+                    BasicTextField(
+                        text, { text = it.take(1000) }, singleLine = true,
+                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
+                        modifier = Modifier.fillMaxWidth().focusRequester(fr)
+                            .focusProperties { canFocus = armed }
+                            .onFocusChanged { focused = it.isFocused; if (!it.isFocused) armed = false; onFocus(it.isFocused) },
+                    )
+                    if (!armed) Box(Modifier.matchParentSize().clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
+                    ) { armed = true })
+                }
+            }
+            Spacer(Modifier.width(6.dp))
+            if (canReply && text.isNotBlank()) {
+                Box(Modifier.size(44.dp).clickable {
+                    onSend(text.trim(), false); text = ""; focus.clearFocus()
+                }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
+                }
+            } else if (showLike) {
+                Box(Modifier.size(44.dp).clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
+                    Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
+                        tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(28.dp))
+                }
+            }
+        }
+    }
+}
+
+/** The tapped emoji rising and growing as it fades (iOS EmojiReactionView), 900 ms. */
+@Composable
+private fun FlyingEmoji(emoji: String, key: Long, onDone: () -> Unit) {
+    val t = remember(key) { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(key) { t.animateTo(1f, androidx.compose.animation.core.tween(900)); onDone() }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(emoji, fontSize = 72.sp, modifier = Modifier.graphicsLayer {
+            val v = t.value
+            translationY = -v * 260f * density
+            scaleX = 0.6f + v * 0.9f; scaleY = scaleX
+            alpha = if (v < 0.7f) 1f else (1f - v) / 0.3f
+        })
     }
 }
 

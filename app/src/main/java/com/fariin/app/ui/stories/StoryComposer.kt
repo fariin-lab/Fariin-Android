@@ -7,6 +7,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +38,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -103,11 +106,14 @@ object StoryUploads {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start(me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
-              hours: Int, convs: List<Conversation>) {
+              hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false) {
         state.value = State.Uploading
+        // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
+        val myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
+        val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
         scope.launch {
             state.value = try {
-                StoryService(me).post(media, caption, choice, picked, hours, convs)
+                StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden)
                 null
             } catch (e: StoryService.PostRefused) {
                 State.Failed(e.message ?: "Couldn't post your story.")
@@ -319,8 +325,8 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             CircularProgressIndicator(color = Color.White)
         }
         if (audience) {
-            AudiencePage(me, conversations, onBack = { audience = false }) { choice, picked ->
-                StoryUploads.start(me, posted, caption, choice, picked, hours, conversations)
+            AudiencePage(me, conversations, onBack = { audience = false }) { choice, picked, capture ->
+                StoryUploads.start(me, posted, caption, choice, picked, hours, conversations, capture)
                 onPosted()
             }
         }
@@ -349,10 +355,12 @@ private fun AudiencePage(
     me: String,
     conversations: List<Conversation>,
     onBack: () -> Unit,
-    onPost: (StoryAudienceChoice, Set<String>) -> Unit,
+    onPost: (StoryAudienceChoice, Set<String>, Boolean) -> Unit,
 ) {
     val c = Fariin.colors
     var choice by remember { mutableStateOf(StoryAudienceChoice.MY_CHATS) }
+    var blockShots by remember { mutableStateOf(false) }
+    val myFriends by com.fariin.app.data.StoryPrivacyStore.myFriends.collectAsState()
     var picked by remember { mutableStateOf(setOf<String>()) }
     var picking by remember { mutableStateOf(false) }
     val contacts = remember(conversations) {
@@ -369,7 +377,7 @@ private fun AudiencePage(
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             Spacer(Modifier.size(44.dp))
         }
-        if (!picking) {
+        if (!picking) Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Text("Who can see your story", color = c.secondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 6.dp))
             StoryAudienceChoice.entries.forEach { a ->
                 Row(
@@ -383,6 +391,8 @@ private fun AudiencePage(
                         Text(a.title, color = c.label, fontSize = 17.sp)
                         val sub = when {
                             a.needsPeople && choice == a && picked.isNotEmpty() -> if (picked.size == 1) "1 person" else "${picked.size} people"
+                            a == StoryAudienceChoice.MY_CHATS && myFriends.mode != com.fariin.app.data.StoryPrivacyRules.MODE_ALL ->
+                                com.fariin.app.data.StoryPrivacyRules.myChatsSubtitle(myFriends)
                             a == StoryAudienceChoice.MY_CHATS -> if (contacts.size == 1) "1 person" else "${contacts.size} people"
                             else -> null
                         }
@@ -394,7 +404,22 @@ private fun AudiencePage(
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 20.dp))
             }
             Text(choice.footer, color = c.secondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
-            Spacer(Modifier.weight(1f))
+            // iOS ShareStorySheet: Block screenshots, locked on for a one-time story.
+            val oneTime = choice == StoryAudienceChoice.ONE_TIME
+            val shotsOn = com.fariin.app.data.StoryPrivacyRules.captureProtected(choice, blockShots)
+            Row(
+                Modifier.fillMaxWidth().padding(top = 12.dp).clickable(enabled = !oneTime) { blockShots = !blockShots }
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Block screenshots", color = if (oneTime) c.secondary else c.label, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(
+                    checked = shotsOn, onCheckedChange = { if (!oneTime) blockShots = it }, enabled = !oneTime,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White, checkedBorderColor = c.blue),
+                )
+            }
+            Text(com.fariin.app.data.StoryPrivacyRules.captureFooter(choice), color = c.secondary, fontSize = 13.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         } else {
             LazyColumn(Modifier.weight(1f)) {
                 items(contacts.size, key = { contacts[it].id }) { i ->
@@ -421,7 +446,7 @@ private fun AudiencePage(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
                 .background(if (ready || picking) c.accent else c.accent.copy(alpha = 0.4f))
-                .clickable(enabled = ready || picking) { if (picking) picking = false else onPost(choice, picked) }
+                .clickable(enabled = ready || picking) { if (picking) picking = false else onPost(choice, picked, com.fariin.app.data.StoryPrivacyRules.captureProtected(choice, blockShots)) }
                 .padding(vertical = 14.dp),
         )
     }

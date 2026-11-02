@@ -127,6 +127,8 @@ object StoryRules {
         now: Any,
         blurThumb: String,
         video: VideoInfo? = null,
+        allowsReplies: Boolean = true,
+        captureProtected: Boolean = false,
     ): Map<String, Any> {
         val everyone = choice == StoryAudienceChoice.EVERYONE
         val p = linkedMapOf<String, Any>(
@@ -142,9 +144,9 @@ object StoryRules {
             "audience" to mapOf("mode" to mode, "listId" to "my-story"),
             "audienceLabel" to choice.tagLabel,
             "oneTime" to (choice == StoryAudienceChoice.ONE_TIME),
-            "captureProtected" to false,
+            "captureProtected" to captureProtected,
             "public" to everyone,
-            "allowsReplies" to true,
+            "allowsReplies" to allowsReplies,
             "replyCount" to 0,
             "recipientUids" to recipients.map { StoryAudienceToken.token(it) },
         )

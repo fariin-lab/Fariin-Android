@@ -3,6 +3,10 @@ package com.fariin.app.ui.stories
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -82,7 +86,10 @@ import kotlinx.coroutines.delay
  * the camera button and Add Story open the story camera (StoryCamera.kt), whose gallery button picks
  * a photo or video; either way the composer (StoryComposer.kt) follows.
  *
- * TODO: Posted Stories, the more menu, Hidden Stories, the per-story ring segments.
+ * Long press on a row: Send Message and Hide Stories (Unhide Story on the dimmed Hidden Stories
+ * list); on my row Add Story and Posted Stories, which the "My Story >" heading also opens.
+ *
+ * TODO: the more menu, the per-story ring segments.
  */
 @Composable
 fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0) {
@@ -147,11 +154,42 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
     var viewedCollapsed by rememberSaveable { mutableStateOf(false) }
+    var hiddenCollapsed by rememberSaveable { mutableStateOf(false) }
+    var posted by rememberSaveable { mutableStateOf(false) }
+    var hideTarget by remember { mutableStateOf<StoryGroup?>(null) }
+    val openChat = com.fariin.app.ui.thread.LocalOpenChat.current
+    // Hide Stories (iOS StoryPrefs "hiddenStories") and my story lists (Settings > Stories).
+    LaunchedEffect(Unit) { com.fariin.app.data.StoryMutes.load(context) }
+    LaunchedEffect(me, live) { if (live) com.fariin.app.data.StoryPrivacyStore.start(me) }
+    val muted by com.fariin.app.data.StoryMutes.set.collectAsState()
     val myName = profile?.name?.ifEmpty { null } ?: "You"
-    val recent = state.others.filter { it.hasUnseen }
-    val viewed = state.others.filter { !it.hasUnseen }
+    val (shown, hidden) = com.fariin.app.data.StoryMutes.split(state.others, muted)
+    val recent = shown.filter { it.hasUnseen }
+    val viewed = shown.filter { !it.hasUnseen }
     val ordered = recent + viewed
     val openRing: (StoryGroup) -> Unit = { g -> viewing = ordered to ordered.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
+    // A hidden person's story walks the Hidden Stories list, not the page above it (iOS).
+    val openHidden: (StoryGroup) -> Unit = { g -> viewing = hidden to hidden.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
+    val sendMessage: (StoryGroup) -> Unit = { g ->
+        val uid = g.stories.firstOrNull()?.authorUid
+        val conv = if (g.key.startsWith(StoryGroup.GROUP_PREFIX)) conversations.firstOrNull { it.id == g.key.removePrefix(StoryGroup.GROUP_PREFIX) }
+            else conversations.firstOrNull { !it.isGroup && it.otherUid(me) == uid }
+        if (conv != null) openChat(conv)
+    }
+    fun friendMenu(g: StoryGroup) = listOf(
+        RowAction("Send Message", R.drawable.ic_menu_chat) { sendMessage(g) },
+        RowAction("Hide Stories", R.drawable.ic_eye_off, destructive = true) { hideTarget = g },
+    )
+    fun hiddenMenu(g: StoryGroup) = listOf(
+        RowAction("Send Message", R.drawable.ic_menu_chat) { sendMessage(g) },
+        RowAction("Unhide Story", R.drawable.ic_stories) {
+            g.stories.firstOrNull()?.authorUid?.let { com.fariin.app.data.StoryMutes.setHidden(context, it, false) }
+        },
+    )
+    val myMenu = listOf(
+        RowAction("Add Story", R.drawable.ic_stories) { addStory() },
+        RowAction("Posted Stories", R.drawable.ic_stories_stack) { posted = true },
+    )
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // A second tap on Stories: to the top.
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
@@ -169,10 +207,12 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             item {
                 Row(
-                    Modifier.clickable { /* TODO: Posted Stories */ }.padding(start = 20.dp, end = 20.dp, top = 8.dp),
+                    Modifier.clickable { posted = true }.padding(start = 20.dp, end = 20.dp, top = 8.dp)
+                        .semantics { contentDescription = "Posted Stories" },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("My Story", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.blue)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.blue, modifier = Modifier.size(18.dp))
                 }
             }
             item {
@@ -188,20 +228,20 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         thumbUrl = newest.listThumb, title = "My Story", subtitle = uploadLine ?: StoryList.ago(newest.createdAtMs, now),
                         authorPhoto = profile?.photoUrl, seen = !mine.hasUnseen, camera = true,
                         backThumbUrl = mine.stories.getOrNull(mine.stories.size - 2)?.listThumb,
-                        onClick = { viewing = listOf(mine) to 0 }, onCamera = addStory,
+                        onClick = { viewing = listOf(mine) to 0 }, onCamera = addStory, menu = myMenu,
                     )
                 } else {
                     StoryRow(
                         thumbUrl = "", title = "Add Story", subtitle = uploadLine ?: "Disappears after 24 hours",
                         authorPhoto = profile?.photoUrl, seen = true, camera = true, addBadge = true,
-                        onClick = addStory, onCamera = addStory,
+                        onClick = addStory, onCamera = addStory, menu = myMenu,
                     )
                 }
                 pickError?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp)) }
             }
             if (recent.isNotEmpty()) {
                 item { Heading("Recent Stories") }
-                items(recent, key = { "r" + it.key }) { g -> FriendRow(g, now) { openRing(g) } }
+                items(recent, key = { "r" + it.key }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
             }
             if (viewed.isNotEmpty()) {
                 item {
@@ -219,7 +259,28 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         )
                     }
                 }
-                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }) { g -> FriendRow(g, now) { openRing(g) } }
+                if (!viewedCollapsed) items(viewed, key = { "v" + it.key }) { g -> FriendRow(g, now, friendMenu(g)) { openRing(g) } }
+            }
+            // iOS Hidden Stories: only while there is one, dimmed, folding like Viewed Stories.
+            if (hidden.isNotEmpty()) {
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { hiddenCollapsed = !hiddenCollapsed }
+                            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Hidden Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.blue)
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            if (hiddenCollapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+                            contentDescription = if (hiddenCollapsed) "Show hidden stories" else "Hide hidden stories",
+                            tint = c.secondary, modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                if (!hiddenCollapsed) items(hidden, key = { "h" + it.key }) { g ->
+                    Box(Modifier.alpha(0.45f)) { FriendRow(g, now, hiddenMenu(g)) { openHidden(g) } }
+                }
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
@@ -243,6 +304,33 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             onLibrary = openLibrary, onClose = { camera = false },
         )
     }
+    if (posted) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { posted = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            PostedStoriesPage(me, state.mine?.stories ?: emptyList(), profile?.photoUrl,
+                onOpen = { s ->
+                    // Start the viewer on the tapped story: a watermark just before it.
+                    state.mine?.let { g -> viewing = listOf(g.copy(lastViewedAtMs = s.createdAtMs - 1)) to 0 }
+                },
+                onBack = { posted = false })
+        }
+    }
+    hideTarget?.let { g ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { hideTarget = null },
+            title = { Text("Hide Stories?") },
+            text = { Text("New story updates from ${g.name.ifEmpty { "this person" }} won't appear at the top of the stories list anymore.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    g.stories.firstOrNull()?.authorUid?.let { com.fariin.app.data.StoryMutes.setHidden(context, it, true) }
+                    hideTarget = null
+                }) { Text("Hide Stories", color = c.red) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { hideTarget = null }) { Text("Cancel") } },
+        )
+    }
     composing?.let { m -> StoryComposerDialog(me, m, conversations, onClose = { composing = null }, onPosted = { composing = null; camera = false }) }
 }
 
@@ -255,15 +343,18 @@ private fun Heading(title: String) {
 }
 
 @Composable
-private fun FriendRow(g: StoryGroup, now: Long, onClick: () -> Unit) {
+private fun FriendRow(g: StoryGroup, now: Long, menu: List<RowAction>, onClick: () -> Unit) {
     val newest = g.stories.lastOrNull()
     StoryRow(
         thumbUrl = newest?.listThumb ?: "", title = g.name.ifEmpty { "Fariin user" },
         subtitle = newest?.let { StoryList.ago(it.createdAtMs, now) } ?: "",
         authorPhoto = g.photoUrl, seen = !g.hasUnseen,
-        squircle = false, onClick = onClick,
+        squircle = false, onClick = onClick, menu = menu,
     )
 }
+
+/** One entry of a row's long-press menu (iOS CMAction). */
+private class RowAction(val title: String, val icon: Int, val destructive: Boolean = false, val run: () -> Unit)
 
 private val UnseenRing = Brush.linearGradient(listOf(Color(0xFF34C76F), Color(0xFF3DA1FD)))
 
@@ -281,11 +372,15 @@ private fun StoryRow(
     squircle: Boolean = false,
     onClick: () -> Unit = {},
     onCamera: () -> Unit = {},
+    menu: List<RowAction> = emptyList(),
 ) {
     val c = Fariin.colors
     val shape = RoundedCornerShape(14.dp)
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
     Row(
-        Modifier.fillMaxWidth().clickable { onClick() }
+        Modifier.fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = if (menu.isEmpty()) null else ({ menuOpen = true }))
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -356,6 +451,17 @@ private fun StoryRow(
                     modifier = Modifier.size(22.dp))
             }
         }
+    }
+    androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false },
+        offset = androidx.compose.ui.unit.DpOffset(96.dp, 0.dp)) {
+        menu.forEach { a ->
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(a.title, color = if (a.destructive) c.red else c.label) },
+                leadingIcon = { Icon(painterResource(a.icon), contentDescription = null, tint = if (a.destructive) c.red else c.label, modifier = Modifier.size(22.dp)) },
+                onClick = { menuOpen = false; a.run() },
+            )
+        }
+    }
     }
 }
 
