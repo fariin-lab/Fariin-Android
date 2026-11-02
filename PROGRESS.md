@@ -5,6 +5,11 @@ Owner's order 2026-11-02 night: pure native Android (Kotlin + Jetpack Compose), 
 C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to him.
 
 ## Rules
+- ⛔ ANDROID WAY, NOT IPHONE WAY (owner 2026-11-02): same features and words as iOS, but every
+  control placed and behaving the way Android users expect (Material 3): new-chat floating button
+  bottom right (with a small camera button for stories above it), top app bar with search/overflow
+  menu, system back and predictive back, bottom sheets and snackbars, Android share sheet,
+  Android-style dialogs and pickers, edge-to-edge. When iOS and Android conventions differ, Android wins.
 - No brand names of other messengers in code or commits ("the reference app").
 - Never type passwords or sign in on the emulator. ⛔ NOT review1/review2 either while Apple's review of
   iOS 1.0 is open (one phone per account: an Android sign-in would sign out the reviewer's phone and
