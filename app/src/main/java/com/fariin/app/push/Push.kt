@@ -63,6 +63,7 @@ object Push {
      */
     fun register(c: Context) {
         val app = c.applicationContext
+        if (com.fariin.app.FariinApp.usingLocalBackend) return   // no FCM emulator: never touch the real project
         scope.launch {
             val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
             if (!prefs(app).contains(PUSH_ON)) {
@@ -85,6 +86,7 @@ object Push {
     /** A new or rotated token (FirebaseMessagingService.onNewToken). */
     fun onNewToken(c: Context, token: String) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (com.fariin.app.FariinApp.usingLocalBackend) return
         if (!pushOn(c)) return
         DeviceRegistry.init(c)
         saveToken(token, uid)
@@ -106,6 +108,7 @@ object Push {
      * retried, as iOS `unregister`. Without it a signed-out phone keeps getting the account's banners.
      */
     suspend fun unregister(c: Context) {
+        if (com.fariin.app.FariinApp.usingLocalBackend) return
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val token = try { FirebaseMessaging.getInstance().token.await() } catch (_: Exception) { null } ?: return
         val db = FirebaseFirestore.getInstance()
