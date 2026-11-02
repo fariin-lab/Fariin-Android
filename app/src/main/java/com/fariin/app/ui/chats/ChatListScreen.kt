@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
@@ -600,6 +601,11 @@ fun ChatRow(
 @Composable
 private fun Ticks(conv: Conversation, me: String) {
     val c = Fariin.colors
+    if (ChatListRules.lastSendPending(conv, me) { com.fariin.app.local.SendQueue.pending(me, conv.id).isNotEmpty() }) {
+        // Still on this phone (sent offline): the clock, as the chat's own bubble shows.
+        Icon(Icons.Filled.Schedule, contentDescription = "Sending", tint = c.secondary, modifier = Modifier.size(15.dp))
+        return
+    }
     val read = conv.lastReadByOther(me)
     val delivered = read || conv.lastDeliveredToOther(me)
     Icon(
@@ -629,4 +635,15 @@ fun timeLabel(ms: Double, is24h: Boolean, nowMs: Long = System.currentTimeMillis
         then.get(Calendar.YEAR) != now.get(Calendar.YEAR) -> SimpleDateFormat("MMM d, yyyy", loc).format(d)
         else -> SimpleDateFormat("MMM d", loc).format(d)
     }
+}
+
+/** Pure rules for the chat list row, kept here for the tests. */
+object ChatListRules {
+    /**
+     * My newest message has not reached the server: Firestore still holds this phone's write to
+     * the chat doc AND the send queue still has a text for this chat. The queue check keeps an
+     * offline "mark read" (also a local write) from turning a read tick into a clock.
+     */
+    fun lastSendPending(conv: Conversation, me: String, queued: () -> Boolean): Boolean =
+        conv.lastIsMine(me) && !conv.isChannel && conv.localPending && queued()
 }

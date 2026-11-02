@@ -276,6 +276,15 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
     val durMs = if (mine && st.durationMs > 0) st.durationMs else (total * 1000).toLong()
     val progress = if (durMs > 0) (pos.toFloat() / durMs).coerceIn(0f, 1f) else 0f
     val rate = VoicePlayer.state.collectAsState().value.rates[cid] ?: 1f
+    // Storage and Data > Auto-Download > Voice messages (iOS AutoDownloadPrefs, audio "always" by
+    // default): a note that may come down on this network is fetched as its bubble appears, so the
+    // tap plays at once. Not allowed: it still loads on the tap. ChatMedia shares one download.
+    val remote = m.audioUrl?.takeIf { m.localPath == null && !ChatMedia.isLocal(it) }
+    LaunchedEffect(remote) {
+        if (remote != null && media.cached(remote) == null && AutoDownload.allowedNow(ctx, AutoDownload.Kind.AUDIO)) {
+            media.file(remote, m.enc)
+        }
+    }
 
     Column(Modifier.width(width)) {
         Row(Modifier.fillMaxWidth().height(55.dp), verticalAlignment = Alignment.CenterVertically) {

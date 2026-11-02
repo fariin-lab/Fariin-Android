@@ -42,7 +42,9 @@ class ConversationsRepository(
             .whereArrayContains("users", uid)
             .orderBy("updatedAt", Query.Direction.DESCENDING)
             .limit(limit)
-            .addSnapshotListener { snap, error ->
+            // Metadata changes too: the server's ack of an offline send flips hasPendingWrites
+            // without touching the data, and the row's clock must turn into a tick then.
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, error ->
                 if (error != null) {
                     trySend(State.Failed(error.message ?: "Could not load chats"))
                     return@addSnapshotListener
@@ -65,7 +67,8 @@ class ConversationsRepository(
         // ESTIMATE, as iOS reads `data(with: .estimate)`: a pending server time shows as now
         // instead of dropping the chat to the bottom.
         val data = doc.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()
-        return Conversation.fromFirestore(doc.id, data)
+        val conv = Conversation.fromFirestore(doc.id, data)
+        return if (doc.metadata.hasPendingWrites()) conv.copy(localPending = true) else conv
     }
 
     companion object {
