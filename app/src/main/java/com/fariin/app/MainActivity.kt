@@ -166,6 +166,15 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.channel.ChannelFollows.start(me)
             onDispose { com.fariin.app.channel.ChannelFollows.stop() }
         }
+        // The official Fariin chat (announcements and my read state).
+        androidx.compose.runtime.DisposableEffect(me) {
+            val build = try {
+                val p = packageManager.getPackageInfo(packageName, 0)
+                if (android.os.Build.VERSION.SDK_INT >= 28) p.longVersionCode.toInt() else @Suppress("DEPRECATION") p.versionCode
+            } catch (_: Exception) { 0 }
+            com.fariin.app.data.OfficialChannel.start(me, build)
+            onDispose { com.fariin.app.data.OfficialChannel.stop() }
+        }
         LaunchedEffect(me) {
             try { crypto.ensureReady() } catch (_: Exception) {}
             crypto.publishPublicKey()

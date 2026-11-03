@@ -29,6 +29,8 @@ data class ChannelNav(
     val page: (String) -> Unit = {},
     /** The channel's posts (a visitor reads a public channel from outside). */
     val open: (String) -> Unit = {},
+    /** The official Fariin chat. */
+    val official: () -> Unit = {},
 )
 
 val LocalChannelNav = staticCompositionLocalOf { ChannelNav() }
@@ -38,10 +40,12 @@ fun channelNav(nav: NavHostController) = ChannelNav(
     create = { nav.navigate("newchannel") { launchSingleTop = true } },
     page = { nav.navigate("channelpage/$it") { launchSingleTop = true } },
     open = { nav.navigate("thread/$it") { launchSingleTop = true } },
+    official = { nav.navigate("official") { launchSingleTop = true } },
 )
 
 /** The channel pages' routes, added to the signed-in NavHost. */
 fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () -> List<com.fariin.app.data.Conversation> = { emptyList() }) {
+    composable("official") { com.fariin.app.ui.official.OfficialChatScreen(onBack = { nav.popBackStack() }) }
     composable("findchannels") {
         FindChannelsScreen(me, onBack = { nav.popBackStack() }, onOpen = { cid -> nav.navigate("thread/$cid") })
     }

@@ -184,6 +184,13 @@ fun ChatListScreen(
         .toList()
     val pinned = if (showArchive) emptyList() else shown.filter { it.isPinned(me) }
     val rest = shown.filter { showArchive || !it.isPinned(me) }
+    // The official Fariin chat: its own row, placed among the chats by its newest announcement.
+    val official by com.fariin.app.data.OfficialChannel.view.collectAsState()
+    val officialShown = !showArchive && official.latest != null &&
+        (filter == FILTER_ALL || (filter == FILTER_UNREAD && official.unread > 0)) &&
+        (query.isBlank() || com.fariin.app.data.OfficialChannel.NAME.contains(query.trim(), ignoreCase = true))
+    val officialAt = official.latest?.sortAt ?: 0.0
+    val officialIndex = if (officialShown) rest.indexOfFirst { it.displayUpdatedAt(me) < officialAt }.let { if (it < 0) rest.size else it } else rest.size
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
 
     val toggle: (Conversation) -> Unit = { conv ->
@@ -338,7 +345,7 @@ fun ChatListScreen(
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
                 state.loading && source.isEmpty() -> com.fariin.app.ui.components.ChatListSkeleton()
                 state.error != null && source.isEmpty() -> Centered(state.error)
-                shown.isEmpty() -> Centered(when {
+                shown.isEmpty() && !officialShown -> Centered(when {
                     query.isNotBlank() -> "No results"
                     showArchive -> "No archived chats"
                     filter == FILTER_UNREAD -> "No unread chats"
@@ -371,7 +378,15 @@ fun ChatListScreen(
                         item(key = "h-chats") { SectionHeader("Chats") }
                     }
                     // A chat that gets a new message glides to its new place instead of jumping.
-                    items(rest, key = { it.id }, contentType = { "chat" }) {
+                    items(rest.subList(0, officialIndex), key = { it.id }, contentType = { "chat" }) {
+                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                    }
+                    if (officialShown) item(key = com.fariin.app.data.OfficialChannel.CID, contentType = "chat") {
+                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
+                            com.fariin.app.ui.official.OfficialRow(official, onOpen = channels.official)
+                        }
+                    }
+                    items(rest.subList(officialIndex, rest.size), key = { it.id }, contentType = { "chat" }) {
                         Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
                     }
                 }
