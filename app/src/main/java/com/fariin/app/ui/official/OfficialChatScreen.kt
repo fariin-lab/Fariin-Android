@@ -3,6 +3,14 @@ package com.fariin.app.ui.official
 import android.text.format.DateFormat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -104,10 +112,30 @@ fun OfficialChatScreen(onBack: () -> Unit) {
     fun pickedNotes() = view.visible.filter { it.id in picked }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val listState = rememberLazyListState()
+    var confirmClear by remember { mutableStateOf(false) }
+    // Double tap reacts with Settings > Chats > Quick Reaction, as a chat message does.
+    val quick = remember {
+        context.getSharedPreferences(com.fariin.app.ui.settings.CHAT_PREFS, android.content.Context.MODE_PRIVATE)
+            .getString(com.fariin.app.ui.settings.SettingsRules.QUICK_KEY, null)?.takeIf { it.isNotEmpty() } ?: "❤️"
+    }
+    // Search in the chat itself, the normal chat's way (iOS): top field, up/down and "n of N" at the
+    // bottom, each step scrolls to the match. The position is kept counted from the newest.
+    var searching by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var fromNewest by remember { mutableStateOf(0) }
+    val matches = remember(view.visible, query) { if (searching) OfficialChannel.searchMatches(view.visible, query) else emptyList() }
+    val matchIndex = if (matches.isEmpty()) 0 else matches.size - 1 - minOf(fromNewest, matches.size - 1)
+    val current = matches.getOrNull(matchIndex)
+    fun closeSearch() { searching = false; query = ""; fromNewest = 0 }
+    androidx.activity.compose.BackHandler(searching && !selecting) { closeSearch() }
+    LaunchedEffect(current) {
+        val at = view.visible.indexOfFirst { it.id == current }
+        if (at >= 0) listState.animateScrollToItem(at)
+    }
 
     // Open = read, and anything that lands while it is open is read too.
     LaunchedEffect(view.visible) { OfficialChannel.markRead() }
-    LaunchedEffect(view.visible.size) { if (view.visible.isNotEmpty()) listState.scrollToItem(view.visible.size - 1) }
+    LaunchedEffect(view.visible.size) { if (view.visible.isNotEmpty() && !searching) listState.scrollToItem(view.visible.size - 1) }
 
     fun tap(b: AnnouncementButton) {
         when (b.action) {
@@ -146,6 +174,12 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             confirmButton = { TextButton({ OfficialChannel.hide(ids); pendingDelete = null; picked.clear() }) { Text("Delete for Me", color = c.red) } },
             dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
     }
+    // Delete All in the selection bar clears the whole chat for me (iOS showClearConfirm).
+    if (confirmClear) {
+        AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear this chat?") },
+            confirmButton = { TextButton({ OfficialChannel.clearHistory(); confirmClear = false; picked.clear() }) { Text("Clear", color = c.red) } },
+            dismissButton = { TextButton({ confirmClear = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+    }
     rejectResult?.let { text ->
         AlertDialog(onDismissRequest = { rejectResult = null }, text = { Text(text) },
             confirmButton = { TextButton({ rejectResult = null }) { Text("OK", color = c.blue) } }, containerColor = c.card)
@@ -155,8 +189,35 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
             // The bell (iOS bellButton): mutes the announcements; security posts still come.
             val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
-            if (selecting) FariinTopBar("${picked.size} Selected", onBack = { picked.clear() })
+            if (selecting) FariinTopBar("${picked.size} Selected", onBack = { picked.clear() }) {
+                TextButton({ confirmClear = true }) { Text("Delete All", color = c.red) }
+            }
+            else if (searching) {
+                // Search owns the top while it is open, as in a normal chat.
+                val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.IconButton({ closeSearch() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = c.label)
+                    }
+                    Box(Modifier.weight(1f)) {
+                        if (query.isEmpty()) Text("Search", fontSize = 18.sp, color = c.secondary)
+                        androidx.compose.foundation.text.BasicTextField(query, { query = it }, singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 18.sp, color = c.label),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(c.label),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { if (fromNewest > 0) fromNewest-- }),
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                    }
+                    if (query.isNotEmpty()) androidx.compose.material3.IconButton({ query = "" }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Clear", tint = c.label)
+                    }
+                }
+            }
             else FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE) {
+                androidx.compose.material3.IconButton({ searching = true; query = ""; fromNewest = 0 }) {
+                    Icon(Icons.Filled.Search, contentDescription = "Search")
+                }
                 androidx.compose.material3.IconButton({ OfficialChannel.setMuted(!muted) }) {
                     Icon(androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
                         contentDescription = if (muted) "Notifications off" else "Notifications on", modifier = Modifier.size(24.dp))
@@ -174,7 +235,12 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                     onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(a.plainText)) },
                     onForward = { forwardTexts = listOf(a.plainText) },
                     onSelect = { picked.add(a.id) },
-                    onDelete = { pendingDelete = listOf(a.id) })
+                    onDelete = { pendingDelete = listOf(a.id) },
+                    mine = view.state.reactions[a.id], onReact = { OfficialChannel.react(a.id, it) },
+                    // Not on a picture, as iOS (a picture opens on one tap there).
+                    onDoubleTap = if (a.mediaUrl == null) ({ OfficialChannel.react(a.id,
+                        com.fariin.app.data.MessageRules.nextReaction(view.state.reactions[a.id], quick)) }) else null,
+                    current = a.id == current)
             }
         }
         HorizontalDivider(color = c.separator)
@@ -190,6 +256,23 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                 Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = "Forward", tint = c.blue)
             }
         }
+        // The normal chat's up/down and "n of N" (iOS searchNavBar); up is older.
+        else if (searching) Row(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.IconButton({ fromNewest++ }, enabled = matches.isNotEmpty() && matchIndex > 0) {
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Previous")
+            }
+            androidx.compose.material3.IconButton({ fromNewest-- }, enabled = matches.isNotEmpty() && matchIndex < matches.size - 1) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Next")
+            }
+            Spacer(Modifier.weight(1f))
+            if (matches.isNotEmpty() || query.trim().length >= 2)
+                Text(if (matches.isEmpty()) "No results" else "${matchIndex + 1} of ${matches.size}",
+                    style = MaterialTheme.typography.bodyMedium, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+        // Somebody who blocked this chat before keeps Unblock to get it back (iOS: no Block since 2026-10-31).
+        else if (view.state.blocked) TextButton({ OfficialChannel.setBlocked(false) },
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 4.dp)) { Text("Unblock", color = c.blue) }
         else Text(OfficialChannel.CANNOT_REPLY, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 16.dp, horizontal = 16.dp))
@@ -207,12 +290,13 @@ private fun kindIcon(k: AnnouncementKind): ImageVector = when (k) {
 @Composable
 private fun AnnouncementCard(a: Announcement, time: String, buttons: List<AnnouncementButton>, onTap: (AnnouncementButton) -> Unit,
                              ticked: Boolean?, onToggle: () -> Unit,
-                             onCopy: () -> Unit, onForward: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit) {
+                             onCopy: () -> Unit, onForward: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit,
+                             mine: String?, onReact: (String?) -> Unit, onDoubleTap: (() -> Unit)?, current: Boolean) {
     val c = Fariin.colors
     val accent = if (a.kind == AnnouncementKind.SECURITY) c.red else c.blue
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
-    // Long press: Copy, Forward, Select and Delete (for me), as a chat message (iOS menuActions).
+    // Long press: the reaction bar, then Copy, Forward, Select and Delete (for me), as a chat message (iOS menuActions).
     // While selecting (ticked not null) a tap or long press ticks the card and its buttons rest.
     Row(verticalAlignment = Alignment.CenterVertically) {
     if (ticked != null) {
@@ -221,9 +305,13 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
             tint = if (ticked) c.blue else c.tertiary,
             modifier = Modifier.padding(end = 10.dp).size(24.dp).clickable(onClick = onToggle))
     }
-    Box(Modifier.weight(1f)) {
+    Column(Modifier.weight(1f)) {
+    Box(Modifier.fillMaxWidth()) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)
-        .combinedClickable(onClick = { if (ticked != null) onToggle() }, onLongClick = {
+        // The search's current match is ringed, so the step lands somewhere the eye can find.
+        .then(if (current) Modifier.border(2.dp, c.blue, RoundedCornerShape(16.dp)) else Modifier)
+        .combinedClickable(onClick = { if (ticked != null) onToggle() },
+            onDoubleClick = if (ticked == null && onDoubleTap != null) onDoubleTap else null, onLongClick = {
             if (ticked != null) onToggle()
             else { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true } })) {
         if (a.mediaUrl != null) {
@@ -253,6 +341,16 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
         }
     }
     androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
+        // The chat's quick reaction bar (QuickReaction.bar), mine filled; the same one again takes it back.
+        Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (e in com.fariin.app.data.MessageRules.QUICK_REACTIONS) {
+                Box(Modifier.size(42.dp).clip(CircleShape)
+                    .background(if (mine == e) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                    .clickable { menu = false; onReact(com.fariin.app.data.MessageRules.nextReaction(mine, e)) },
+                    contentAlignment = Alignment.Center) { Text(e, fontSize = 24.sp) }
+            }
+        }
+        HorizontalDivider(color = c.separator)
         androidx.compose.material3.DropdownMenuItem(text = { Text("Copy") }, onClick = { menu = false; onCopy() },
             leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Forward") }, onClick = { menu = false; onForward() },
@@ -261,6 +359,14 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
             leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { menu = false; onDelete() },
             leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = c.red) })
+    }
+    }
+    // My reaction as a chip under the card; a tap takes it back.
+    if (mine != null) {
+        Box(Modifier.padding(start = 12.dp, top = 2.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.18f))
+            .clickable { if (ticked != null) onToggle() else onReact(null) }.padding(horizontal = 7.dp, vertical = 3.dp)) {
+            Text(mine, fontSize = 15.sp)
+        }
     }
     }
     }
@@ -274,7 +380,10 @@ fun OfficialAvatar(size: Dp) {
     }
 }
 
-/** The official chat's chat list row: name with the verified mark, the newest post, its time and unread. */
+/**
+ * The official chat's chat list row: name with the verified mark, the newest post, its time and unread.
+ * A long press offers Mark as Read/Unread, Pin and Archive (iOS markUnread, setPinned, setArchived).
+ */
 @Composable
 fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
     val c = Fariin.colors
@@ -282,7 +391,12 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
     val latest = view.latest ?: return
     val unread = view.unread
     val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
-    Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var menu by remember { mutableStateOf(false) }
+    Box {
+    Row(Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true })
+        .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.padding(vertical = 10.dp)) { OfficialAvatar(56.dp) }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f).padding(top = 7.dp, bottom = 9.dp)) {
@@ -314,5 +428,17 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                 }
             }
         }
+    }
+    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card,
+        offset = androidx.compose.ui.unit.DpOffset(88.dp, 0.dp)) {
+        val pinned = view.state.pinned
+        val archived = view.state.archived
+        androidx.compose.material3.DropdownMenuItem(text = { Text(if (unread > 0) "Mark as Read" else "Mark as Unread") },
+            onClick = { menu = false; if (unread > 0) OfficialChannel.markRead() else OfficialChannel.markUnread() })
+        androidx.compose.material3.DropdownMenuItem(text = { Text(if (pinned) "Unpin" else "Pin") },
+            onClick = { menu = false; OfficialChannel.setPinned(!pinned) })
+        androidx.compose.material3.DropdownMenuItem(text = { Text(if (archived) "Unarchive" else "Archive") },
+            onClick = { menu = false; OfficialChannel.setArchived(!archived) })
+    }
     }
 }

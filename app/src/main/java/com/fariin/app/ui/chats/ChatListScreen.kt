@@ -186,11 +186,14 @@ fun ChatListScreen(
     val rest = shown.filter { showArchive || !it.isPinned(me) }
     // The official Fariin chat: its own row, placed among the chats by its newest announcement.
     val official by com.fariin.app.data.OfficialChannel.view.collectAsState()
-    val officialShown = !showArchive && official.latest != null &&
+    // Archived, it lives in the Archived list; pinned, it heads the Pinned section.
+    val officialArchived = official.state.archived
+    val officialShown = showArchive == officialArchived && official.latest != null &&
         (filter == FILTER_ALL || (filter == FILTER_UNREAD && official.unread > 0)) &&
         (query.isBlank() || com.fariin.app.data.OfficialChannel.NAME.contains(query.trim(), ignoreCase = true))
     val officialAt = official.latest?.sortAt ?: 0.0
-    val officialIndex = if (officialShown) rest.indexOfFirst { it.displayUpdatedAt(me) < officialAt }.let { if (it < 0) rest.size else it } else rest.size
+    val officialPinned = officialShown && !showArchive && official.state.pinned
+    val officialIndex = if (officialShown && !officialPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < officialAt }.let { if (it < 0) rest.size else it } else rest.size
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
 
     val toggle: (Conversation) -> Unit = { conv ->
@@ -359,9 +362,10 @@ fun ChatListScreen(
                     // section after a pin, the Archived row) shows at once instead of landing just above
                     // the screen. Scrolled down, the list keeps the row I am looking at, so nothing jumps.
                     item(key = "top-anchor", contentType = "anchor") { Spacer(Modifier.fillMaxWidth().height(1.dp)) }
-                    if (!showArchive && !searching && filter == FILTER_ALL && state.archived.isNotEmpty()) {
+                    val archivedCount = state.archived.size + if (officialArchived && official.latest != null) 1 else 0
+                    if (!showArchive && !searching && filter == FILTER_ALL && archivedCount > 0) {
                         item(key = "archive") {
-                            ListRow("Archived", fi(R.drawable.ic_archive), trailing = "${state.archived.size}") { showArchive = true }
+                            ListRow("Archived", fi(R.drawable.ic_archive), trailing = "$archivedCount") { showArchive = true }
                         }
                     }
                     val row: @Composable (Conversation) -> Unit = { conv ->
@@ -370,8 +374,16 @@ fun ChatListScreen(
                             onOpen = { if (selecting) toggle(conv) else onOpen(conv) },
                             onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) })
                     }
-                    if (pinned.isNotEmpty()) {
+                    val officialItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+                        item(key = com.fariin.app.data.OfficialChannel.CID, contentType = "chat") {
+                            Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
+                                com.fariin.app.ui.official.OfficialRow(official, onOpen = { if (!selecting) channels.official() })
+                            }
+                        }
+                    }
+                    if (pinned.isNotEmpty() || officialPinned) {
                         item(key = "h-pinned") { SectionHeader("Pinned") }
+                        if (officialPinned) officialItem()
                         items(pinned, key = { it.id }, contentType = { "chat" }) {
                             Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
                         }
@@ -381,11 +393,7 @@ fun ChatListScreen(
                     items(rest.subList(0, officialIndex), key = { it.id }, contentType = { "chat" }) {
                         Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
                     }
-                    if (officialShown) item(key = com.fariin.app.data.OfficialChannel.CID, contentType = "chat") {
-                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
-                            com.fariin.app.ui.official.OfficialRow(official, onOpen = channels.official)
-                        }
-                    }
+                    if (officialShown && !officialPinned) officialItem()
                     items(rest.subList(officialIndex, rest.size), key = { it.id }, contentType = { "chat" }) {
                         Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
                     }

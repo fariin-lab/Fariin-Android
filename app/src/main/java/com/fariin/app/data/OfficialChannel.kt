@@ -157,14 +157,22 @@ data class Announcement(
     }
 }
 
-/** My half of the channel, users/{me}/officialChannel/state. Only what this slice reads. */
+/** My half of the channel, users/{me}/officialChannel/state (iOS OfficialChannelState). */
 data class OfficialChannelState(
     val muted: Boolean = false,
     /** When a timed mute ends, server ms; 0 = Always. */
     val mutedUntil: Double = 0.0,
+    /** Only security posts get through (iOS: blocking stops the news, not the alarm). */
+    val blocked: Boolean = false,
+    val pinned: Boolean = false,
+    val archived: Boolean = false,
     val lastReadAt: Double = 0.0,
     val clearedAt: Double = 0.0,
+    /** "Mark as Unread" from the chat list, its own flag: cleared by the next read. */
+    val markedUnread: Boolean = false,
     val hiddenIds: Set<String> = emptySet(),
+    /** My reaction per announcement id, private to me: the announcement is shared and read only. */
+    val reactions: Map<String, String> = emptyMap(),
 ) {
     fun isMutedNow(now: Double) = muted && (mutedUntil == 0.0 || now < mutedUntil)
 
@@ -174,13 +182,22 @@ data class OfficialChannelState(
         clearedAt = maxOf(clearedAt, incoming.clearedAt),
     )
 
+    /** One reaction per announcement; null takes it back. */
+    fun reacted(id: String, emoji: String?) = copy(reactions = if (emoji == null) reactions - id else reactions + (id to emoji))
+
     companion object {
         fun from(d: Map<String, Any?>?) = OfficialChannelState(
             muted = d?.get("muted") as? Boolean ?: false,
             mutedUntil = Conversation.millis(d?.get("mutedUntil")),
+            blocked = d?.get("blocked") as? Boolean ?: false,
+            pinned = d?.get("pinned") as? Boolean ?: false,
+            archived = d?.get("archived") as? Boolean ?: false,
             lastReadAt = Conversation.millis(d?.get("lastReadAt")),
             clearedAt = Conversation.millis(d?.get("clearedAt")),
+            markedUnread = d?.get("markedUnread") as? Boolean ?: false,
             hiddenIds = (d?.get("hiddenIds") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
+            reactions = (d?.get("reactions") as? Map<*, *>)?.entries
+                ?.mapNotNull { (k, v) -> if (k is String && v is String) k to v else null }?.toMap() ?: emptyMap(),
         )
     }
 }
@@ -217,11 +234,59 @@ object OfficialChannel {
             // Nothing broadcast before the account existed.
             .filter { it.isPersonal || joinedAt == null || it.sortAt >= joinedAt }
             .filter { it.arrivedAt > state.clearedAt && it.id !in state.hiddenIds }
+            // Blocked keeps the security posts: a block stops the news, never the account alarm.
+            .filter { !state.blocked || it.kind == AnnouncementKind.SECURITY }
             .sortedWith(compareBy<Announcement> { it.sortAt }.thenBy { it.id })
     }
 
-    fun unreadCount(visible: List<Announcement>, state: OfficialChannelState): Int =
-        visible.count { it.arrivedAt > state.lastReadAt }
+    /** What arrived after the read watermark, else the one a Mark as Unread asks for. */
+    fun unreadCount(visible: List<Announcement>, state: OfficialChannelState): Int {
+        val n = visible.count { it.arrivedAt > state.lastReadAt }
+        return if (n == 0 && state.markedUnread && visible.isNotEmpty()) 1 else n
+    }
+
+    /** The clear watermark to write: now, never behind the stored one (iOS clearHistory). */
+    fun clearMark(state: OfficialChannelState, now: Double): Double = maxOf(state.clearedAt, now)
+
+    /** Search text: case and accents folded, anything not a letter or digit a separator. */
+    private fun normalize(s: String): String {
+        val folded = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "").lowercase()
+        return folded.map { if (it.isLetterOrDigit()) it else ' ' }.joinToString("")
+    }
+
+    /** A word's letter and digit runs, so "abc123" finds "abc" and "123" too (iOS ChatSearch). */
+    private fun runs(w: String): List<String> {
+        val out = mutableListOf<String>()
+        var cur = StringBuilder()
+        var digit: Boolean? = null
+        for (ch in w) {
+            if (digit == ch.isDigit()) cur.append(ch)
+            else { if (cur.isNotEmpty()) out.add(cur.toString()); cur = StringBuilder().append(ch); digit = ch.isDigit() }
+        }
+        if (cur.isNotEmpty()) out.add(cur.toString())
+        return out
+    }
+
+    fun searchTokens(text: String): List<String> = normalize(text).split(' ').filter { it.isNotEmpty() }
+        .flatMap { w -> runs(w).let { if (it.size > 1) listOf(w) + it else listOf(w) } }
+
+    /** Two characters and up, else no search. */
+    fun searchTerms(query: String): List<String> {
+        val q = normalize(query).trim()
+        if (q.length < 2) return emptyList()
+        return q.split(' ').filter { it.isNotEmpty() }.flatMap { runs(it) }.distinct()
+    }
+
+    /** The in-chat search (iOS updateSearchMatches): every term starts some word. Ids, oldest first. */
+    fun searchMatches(visible: List<Announcement>, query: String): List<String> {
+        val terms = searchTerms(query)
+        if (terms.isEmpty()) return emptyList()
+        return visible.filter { a ->
+            val t = searchTokens(a.title + " " + a.body)
+            terms.all { term -> t.any { it.startsWith(term) } }
+        }.map { it.id }
+    }
 
     /** The read watermark to write on open, or null when it would not move forward. */
     fun readMark(visible: List<Announcement>, state: OfficialChannelState): Double? =
@@ -301,13 +366,63 @@ object OfficialChannel {
 
     /** Opening the chat reads everything on screen: the watermark is the latest arrival shown. */
     fun markRead() {
-        val me = uid ?: return
-        val at = readMark(_view.value.visible, state) ?: return
-        state = state.copy(lastReadAt = at)   // optimistic, so the badge clears on the tap
+        if (_view.value.visible.isEmpty()) return
+        val write = HashMap<String, Any>()
+        // Optimistic, so the badge clears on the tap.
+        readMark(_view.value.visible, state)?.let { state = state.copy(lastReadAt = it); write["lastReadAt"] = it }
+        if (state.markedUnread) { state = state.copy(markedUnread = false); write["markedUnread"] = false }
+        if (write.isEmpty()) return
         _view.value = _view.value.copy(state = state)
-        FirebaseFirestore.getInstance().collection("users").document(me)
-            .collection("officialChannel").document("state")
-            .set(mapOf("lastReadAt" to at), SetOptions.merge())
+        stateRef()?.set(write, SetOptions.merge())
+    }
+
+    private fun stateRef() = uid?.let {
+        FirebaseFirestore.getInstance().collection("users").document(it).collection("officialChannel").document("state")
+    }
+
+    /** When a switch was chosen, written with it so the rules refuse an older choice that lands later. */
+    private fun chosenAt() = System.currentTimeMillis().toDouble()
+
+    /** Mark as Unread from the chat list: the badge shows one, as a normal chat's. A flag, not a rewind. */
+    fun markUnread() {
+        if (_view.value.visible.isEmpty()) return
+        state = state.copy(markedUnread = true)
+        recompute()
+        stateRef()?.set(mapOf("markedUnread" to true), SetOptions.merge())
+    }
+
+    fun setPinned(pinned: Boolean) {
+        state = state.copy(pinned = pinned)
+        recompute()
+        stateRef()?.set(mapOf("pinned" to pinned, "pinnedAt" to chosenAt()), SetOptions.merge())
+    }
+
+    fun setArchived(archived: Boolean) {
+        state = state.copy(archived = archived)
+        recompute()
+        stateRef()?.set(mapOf("archived" to archived, "archivedAt" to chosenAt()), SetOptions.merge())
+    }
+
+    /** iOS offers only Unblock now (the chat cannot be blocked since 2026-10-31); the history comes back. */
+    fun setBlocked(blocked: Boolean) {
+        state = state.copy(blocked = blocked)
+        recompute()
+        stateRef()?.set(mapOf("blocked" to blocked, "blockedAt" to chosenAt()), SetOptions.merge())
+    }
+
+    /** Clear Chat: everything that had arrived by now leaves this account's chat. Never moved back. */
+    fun clearHistory() {
+        val at = clearMark(state, System.currentTimeMillis().toDouble())
+        state = state.copy(clearedAt = at)
+        recompute()
+        stateRef()?.set(mapOf("clearedAt" to at), SetOptions.merge())
+    }
+
+    /** One reaction per announcement, as a chat message; null takes it back. */
+    fun react(id: String, emoji: String?) {
+        state = state.reacted(id, emoji)
+        recompute()
+        stateRef()?.set(mapOf("reactions" to mapOf(id to (emoji ?: com.google.firebase.firestore.FieldValue.delete()))), SetOptions.merge())
     }
 
     private fun syncTopics() {

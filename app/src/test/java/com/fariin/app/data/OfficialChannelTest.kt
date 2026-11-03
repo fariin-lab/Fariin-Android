@@ -97,4 +97,54 @@ class OfficialChannelTest {
         val merged = OfficialChannelState(lastReadAt = 10.0, clearedAt = 10.0).merged(OfficialChannelState(lastReadAt = 5.0, clearedAt = 20.0, muted = true))
         assertEquals(10.0, merged.lastReadAt, 0.0); assertEquals(20.0, merged.clearedAt, 0.0); assertTrue(merged.muted)
     }
+
+    @Test fun clearWatermarkHidesWhatHadArrived() {
+        val before = Announcement(id = "b", publishAt = now - 2000, createdAt = now - 2000)
+        // Backdated: published early, written after the clear, so it arrived after and stays.
+        val late = Announcement(id = "l", publishAt = now - 3000, createdAt = now - 500)
+        val at = OfficialChannel.clearMark(OfficialChannelState(), now - 1000)
+        assertEquals(now - 1000, at, 0.0)
+        assertEquals(listOf("l"), OfficialChannel.visible(listOf(before, late), emptyList(), OfficialChannelState(clearedAt = at), "u", 1, null, now).map { it.id })
+        // Never moved back behind a clear already stored.
+        assertEquals(now, OfficialChannel.clearMark(OfficialChannelState(clearedAt = now), now - 5000), 0.0)
+    }
+
+    @Test fun markedUnreadCountsOneUntilRead() {
+        val n = Announcement(id = "n", publishAt = now - 1000, createdAt = now - 1000)
+        val read = OfficialChannelState(lastReadAt = now)
+        assertEquals(0, OfficialChannel.unreadCount(listOf(n), read))
+        assertEquals(1, OfficialChannel.unreadCount(listOf(n), read.copy(markedUnread = true)))
+        assertEquals(0, OfficialChannel.unreadCount(emptyList(), read.copy(markedUnread = true)))
+        // Real unread wins over the flag, it does not add one.
+        assertEquals(1, OfficialChannel.unreadCount(listOf(n), OfficialChannelState(markedUnread = true)))
+        assertTrue(OfficialChannelState.from(mapOf("markedUnread" to true)).markedUnread)
+    }
+
+    @Test fun blockedKeepsSecurityOnly() {
+        val news = a("news", "kind" to "news")
+        val sec = a("sec", "kind" to "security")
+        val st = OfficialChannelState.from(mapOf("blocked" to true, "pinned" to true, "archived" to true))
+        assertTrue(st.blocked && st.pinned && st.archived)
+        assertEquals(listOf("sec"), OfficialChannel.visible(listOf(news, sec), emptyList(), st, "u", 1, null, now).map { it.id })
+        assertEquals(2, OfficialChannel.visible(listOf(news, sec), emptyList(), st.copy(blocked = false), "u", 1, null, now).size)
+    }
+
+    @Test fun reactionsMergeAndTakeBack() {
+        val st = OfficialChannelState.from(mapOf("reactions" to mapOf("a1" to "👍", "bad" to 3)))
+        assertEquals(mapOf("a1" to "👍"), st.reactions)
+        val two = st.reacted("a2", "❤️").reacted("a1", "😂")
+        assertEquals(mapOf("a1" to "😂", "a2" to "❤️"), two.reactions)
+        assertEquals(mapOf("a2" to "❤️"), two.reacted("a1", null).reactions)
+        // A snapshot's reactions are the server's word; only the watermarks are kept forward.
+        assertEquals(emptyMap<String, String>(), two.merged(OfficialChannelState()).reactions)
+    }
+
+    @Test fun searchIsWordPrefixFolded() {
+        val x = a("x", "title" to "Nouvelle fonctionnalité", "body" to "Room 52 open")
+        val y = a("y", "title" to "Other", "body" to "nothing")
+        assertEquals(listOf("x"), OfficialChannel.searchMatches(listOf(x, y), "fonctionnalite"))
+        assertEquals(listOf("x"), OfficialChannel.searchMatches(listOf(x, y), "ROO 52"))
+        assertEquals(emptyList<String>(), OfficialChannel.searchMatches(listOf(x, y), "n"))   // two characters and up
+        assertEquals(emptyList<String>(), OfficialChannel.searchMatches(listOf(x, y), "onction"))  // a word's start only
+    }
 }
