@@ -27,6 +27,8 @@ import com.fariin.app.data.Message
 import com.fariin.app.data.StickerGifRules
 import com.fariin.app.media.AutoDownload
 import com.fariin.app.ui.theme.Fariin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 /**
  * The link card a message carries (iOS LinkPreviewBubbleView, `.article` shape): drawn from what
@@ -41,9 +43,18 @@ internal fun LinkPreviewCard(lp: Message.LinkPreview, isMe: Boolean) {
     val ink = if (isMe) Color.White else c.label
     val tint = if (isMe) Color.White else c.blue
     val uri = LocalUriHandler.current
+    val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     Column(
         Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp).clip(RoundedCornerShape(12.dp))
-            .background(tint.copy(alpha = 0.10f)).clickable { runCatching { uri.openUri(lp.url) } },
+            .background(tint.copy(alpha = 0.10f)).clickable {
+                // My own username link opens My Profile (iOS openProfileHandle); any other link as before.
+                val h = com.fariin.app.data.QrRules.handleFrom(lp.url)
+                if (h == null) { runCatching { uri.openUri(lp.url) }; return@clickable }
+                scope.launch {
+                    if (usernameIsMine(h)) nav.myProfile() else runCatching { uri.openUri(lp.url) }
+                }
+            },
     ) {
         if (lp.imageUrl != null) {
             Box(Modifier.fillMaxWidth().height(170.dp).background(c.secondary.copy(alpha = 0.15f))) {
@@ -73,4 +84,14 @@ internal fun LinkPreviewCard(lp: Message.LinkPreview, isMe: Boolean) {
                 overflow = TextOverflow.Ellipsis)
         }
     }
+}
+
+/** Whether `usernames/{h}` is mine (a released name is nobody's). False when it cannot be read. */
+private suspend fun usernameIsMine(h: String): Boolean {
+    val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return false
+    val key = com.fariin.app.data.Usernames.lookupKey(h) ?: return false
+    return runCatching {
+        val d = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("usernames").document(key).get().await()
+        d.getString("uid") == me && d.get("releasedAt") == null
+    }.getOrDefault(false)
 }

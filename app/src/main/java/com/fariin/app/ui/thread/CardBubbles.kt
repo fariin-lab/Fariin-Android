@@ -85,7 +85,7 @@ internal fun ContactBody(card: CardRules.Contact, isMe: Boolean, me: String, cid
     Column(Modifier.width(width)) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                .clickable { if (card.uid == me) nav.editProfile() else nav.contact(card.uid) }.padding(vertical = 2.dp),
+                .clickable { if (card.uid == me) nav.myProfile() else nav.contact(card.uid) }.padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(card.photo, 44.dp)

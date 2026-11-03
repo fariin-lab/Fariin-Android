@@ -41,6 +41,7 @@ fun NavGraphBuilder.peopleRoutes(
     }
     composable("newgroup") { NewGroupScreen(api, chats(), onBack = { nav.popBackStack() }, onCreated = openChat) }
     composable("editprofile") { EditProfileScreen(api, onBack = { nav.popBackStack() }) }
+    composable("myprofile") { com.fariin.app.ui.glow.MyProfileRoute(api.me, chats(), onBack = { nav.popBackStack() }) }
     // Calls tab: New Call, call links (ui/calls).
     composable("newcall") {
         com.fariin.app.ui.calls.NewCallScreen(api.me, chats(), onBack = { nav.popBackStack() },
@@ -65,6 +66,7 @@ fun peopleNav(nav: NavHostController, api: PeopleApi? = null) = PeopleNav(
     groupStep = { cid, step -> nav.navigate("group/$cid?open=$step") { launchSingleTop = true } },
     newGroup = { nav.navigate("newgroup") { launchSingleTop = true } },
     editProfile = { nav.navigate("editprofile") { launchSingleTop = true } },
+    myProfile = { nav.navigate("myprofile") { launchSingleTop = true } },
     newCall = { nav.navigate("newcall") { launchSingleTop = true } },
     newCallLink = { nav.navigate("calllink/new") { launchSingleTop = true } },
     callLink = { nav.navigate("calllink/$it") { launchSingleTop = true } },

@@ -58,6 +58,22 @@ fun rememberGlowDoor(uid: String, name: String): GlowDoor {
     return remember(uid, name) { GlowDoor(uid, name, scope) }
 }
 
+/**
+ * My Profile opened from a chat (iOS ThreadView showMyProfile): my own card or username link tapped
+ * in a message. Outside the tab shell, so it reads my profile and my stories itself.
+ */
+@Composable
+fun MyProfileRoute(me: String, conversations: List<com.fariin.app.data.Conversation>, onBack: () -> Unit) {
+    val prof = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value
+    val convs by androidx.compose.runtime.rememberUpdatedState(conversations)
+    val profNow by androidx.compose.runtime.rememberUpdatedState(prof)
+    val stories = remember(me) {
+        com.fariin.app.data.StoriesRepository().listen(me, { convs }, { profNow?.name?.ifEmpty { null } ?: "You" }, { profNow?.photoUrl })
+    }.collectAsState(initial = com.fariin.app.data.StoriesState()).value
+    val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+    ProvideMyStories(stories, conversations) { GlowProfilePage(me, prof, onEdit = nav.editProfile, onBack = onBack) }
+}
+
 /** The sheet and the refusal alert for [door]; place once on the page. */
 @Composable
 fun GlowDoorHost(door: GlowDoor) {

@@ -12,6 +12,8 @@ data class PeopleNav(
     val groupStep: (String, String) -> Unit = { _, _ -> },
     val newGroup: () -> Unit = {},
     val editProfile: () -> Unit = {},
+    /** My Profile (iOS ThreadView showMyProfile): my own card or username tapped in a message. */
+    val myProfile: () -> Unit = {},
     val newCall: () -> Unit = {},
     val newCallLink: () -> Unit = {},
     val callLink: (String) -> Unit = {},
