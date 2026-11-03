@@ -355,14 +355,11 @@ internal fun MethodPage(
                 Text(if (mode == AuthMode.Create) "Create your account" else "Log in to Fariin", fontSize = 28.sp,
                     fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.padding(top = 22.dp, bottom = 36.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    // Android: Google first, as Android users expect. Apple stays, second: accounts made
-                    // with Apple on an iPhone open only with Apple, so an Android user must still find it.
-                    RaisedPill("Continue with Google", enabled = !busy, busy = spinning == SignInMethod.Google, lastUsed = lastDoor == SignInMethod.Google,
+                    // Android: Google and email only (owner 2026-11-03: no Apple door on Android). An
+                    // account made with Apple on an iPhone adds a password there to log in here.
+                    DoorPill("Continue with Google", enabled = !busy, busy = spinning == SignInMethod.Google, lastUsed = lastDoor == SignInMethod.Google,
                         icon = { Image(painterResource(R.drawable.ic_google_g), null, Modifier.size(20.dp)) }) {
                         run(SignInMethod.Google) { act -> auth.signInWithGoogleToken(GoogleSignIn.idToken(act), mode == AuthMode.Login, mode == AuthMode.Create) }
-                    }
-                    DoorPill("Continue with Apple", enabled = !busy, busy = spinning == SignInMethod.Apple, lastUsed = lastDoor == SignInMethod.Apple) {
-                        run(SignInMethod.Apple) { auth.signInWithApple(it, mode == AuthMode.Login, mode == AuthMode.Create) }
                     }
                     OrDivider()
                     RaisedPill("Continue with Email", enabled = !busy, lastUsed = lastDoor == SignInMethod.Email) { onEmail(mode, "") }
