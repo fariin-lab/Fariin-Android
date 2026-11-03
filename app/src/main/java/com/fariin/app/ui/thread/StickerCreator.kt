@@ -52,6 +52,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,7 +81,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /** The finished art, at most 512 x 512, transparent where there is no subject (iOS StickerArt). */
-internal class MadeSticker(val cutout: Bitmap?, val rounded: Bitmap)
+internal class MadeSticker(val cutout: Bitmap?, val rounded: Bitmap, val photo: Bitmap)
 
 /**
  * Make a sticker from a photo (iOS StickerCreator, owner 2026-10-17): the subject is lifted out on
@@ -92,6 +99,12 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
     var useOriginal by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
+    // iOS framing: when the photo itself is the sticker, a drag moves it and a pinch zooms it (1 to 4)
+    // inside the square, which it always covers. Kept in stage pixels; save turns them into the crop.
+    var zoom by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var stagePx by remember { mutableFloatStateOf(1f) }
+    val framing = art != null && (useOriginal || art?.cutout == null)
 
     LaunchedEffect(photo) {
         val made = withContext(Dispatchers.Default) { StickerArtMaker.make(ctx, photo) }
@@ -102,9 +115,11 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
         val a = art ?: return
         if (saving) return
         saving = true
-        val image = (if (useOriginal) null else a.cutout) ?: a.rounded
+        val framed = framing
         scope.launch {
             val png = withContext(Dispatchers.Default) {
+                val image = if (framed) StickerArtMaker.roundedSquare(a.photo, framedCrop(a.photo, zoom, offset, stagePx)) ?: a.rounded
+                    else a.cutout ?: a.rounded
                 ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
             }
             val made = runCatching { StickerFavorites.addMine(png, "🙂") }.getOrNull()
@@ -133,8 +148,29 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
                         Checkerboard(Modifier.fillMaxSize())
                         val a = art
                         if (a != null) {
-                            val shown = (if (useOriginal) null else a.cutout) ?: a.rounded
-                            Image(shown.asImageBitmap(), contentDescription = "Sticker", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(12.dp))
+                            if (framing) {
+                                val photoBmp = remember(a) { a.photo.asImageBitmap() }
+                                BoxWithConstraints(Modifier.fillMaxSize().padding(12.dp)) {
+                                    val inner = maxWidth
+                                    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(inner * 0.14f))
+                                        .onSizeChanged { stagePx = it.width.toFloat().coerceAtLeast(1f) }
+                                        .pointerInput(a) {
+                                            detectTransformGestures { _, pan, z, _ ->
+                                                zoom = (zoom * z).coerceIn(1f, 4f)
+                                                offset = clampOffset(offset + pan, zoom, stagePx, a.photo)
+                                            }
+                                        }) {
+                                        // The photo at its aspect-filled size (not clipped to the square
+                                        // by the image itself), so a move brings the rest of it in.
+                                        val k = inner.value / min(a.photo.width, a.photo.height).coerceAtLeast(1)
+                                        Image(photoBmp, contentDescription = "Sticker", contentScale = ContentScale.FillBounds,
+                                            modifier = Modifier.align(Alignment.Center).wrapContentSize(unbounded = true)
+                                                .requiredSize((a.photo.width * k).dp, (a.photo.height * k).dp).graphicsLayer {
+                                                scaleX = zoom; scaleY = zoom; translationX = offset.x; translationY = offset.y
+                                            })
+                                    }
+                                }
+                            } else Image(a.cutout!!.asImageBitmap(), contentDescription = "Sticker", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(12.dp))
                         }
                     }
                 }
@@ -192,6 +228,27 @@ private fun Segmented(original: Boolean, onPick: (Boolean) -> Unit) {
 }
 
 /** iOS StickerCheckerboard: the transparency grid behind the art. */
+/** iOS clamped: the photo, aspect-filled in the square and zoomed, never shows an empty edge. */
+private fun clampOffset(o: Offset, zoom: Float, side: Float, photo: Bitmap): Offset {
+    val k = side / min(photo.width, photo.height).coerceAtLeast(1)
+    val maxX = maxOf(0f, (photo.width * k * zoom - side) / 2)
+    val maxY = maxOf(0f, (photo.height * k * zoom - side) / 2)
+    return Offset(o.x.coerceIn(-maxX, maxX), o.y.coerceIn(-maxY, maxY))
+}
+
+/** iOS framedCrop: the part of the photo the square shows, in the photo's pixels. */
+private fun framedCrop(photo: Bitmap, zoom: Float, o: Offset, side: Float): android.graphics.Rect {
+    val s0 = min(photo.width, photo.height).toFloat()
+    val visible = s0 / zoom
+    val pxPerPt = s0 / (side * zoom)
+    val cx = photo.width / 2f - o.x * pxPerPt
+    val cy = photo.height / 2f - o.y * pxPerPt
+    val l = (cx - visible / 2).roundToInt().coerceIn(0, photo.width - 1)
+    val t = (cy - visible / 2).roundToInt().coerceIn(0, photo.height - 1)
+    val v = visible.roundToInt().coerceAtMost(minOf(photo.width - l, photo.height - t)).coerceAtLeast(1)
+    return android.graphics.Rect(l, t, l + v, t + v)
+}
+
 @Composable
 private fun Checkerboard(modifier: Modifier) {
     ComposeCanvas(modifier.background(Color(0xFF2C2C2E))) {
@@ -212,7 +269,7 @@ internal object StickerArtMaker {
         val photo = decode(ctx, uri, 2048) ?: return null
         val rounded = roundedSquare(photo) ?: return null
         val cutout = runCatching { lift(photo) }.getOrNull()?.let { outlined(it) }
-        return MadeSticker(cutout, rounded)
+        return MadeSticker(cutout, rounded, photo)
     }
 
     private fun decode(ctx: android.content.Context, uri: Uri, maxPx: Int): Bitmap? = runCatching {
@@ -270,10 +327,11 @@ internal object StickerArtMaker {
     }
 
     /** The middle square of the photo, 512 px, rounded corners, transparent outside them. */
-    fun roundedSquare(photo: Bitmap): Bitmap? {
+    fun roundedSquare(photo: Bitmap, crop: android.graphics.Rect? = null): Bitmap? {
         val s = min(photo.width, photo.height)
         if (s <= 0) return null
-        val sq = Bitmap.createBitmap(photo, (photo.width - s) / 2, (photo.height - s) / 2, s, s)
+        val sq = if (crop != null) Bitmap.createBitmap(photo, crop.left, crop.top, crop.width(), crop.height())
+            else Bitmap.createBitmap(photo, (photo.width - s) / 2, (photo.height - s) / 2, s, s)
         val out = Bitmap.createBitmap(SIDE, SIDE, Bitmap.Config.ARGB_8888)
         val c = Canvas(out)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
