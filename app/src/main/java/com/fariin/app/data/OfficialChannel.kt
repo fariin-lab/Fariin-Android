@@ -332,7 +332,7 @@ object OfficialChannel {
                 if (snap != null) state = state.merged(OfficialChannelState.from(snap.data))
                 answer("state")
                 // Fires on launch, on my mute and on my other phone's mute: the one place topics follow.
-                if (snap != null) syncTopics()
+                if (snap != null) { syncTopics(); scheduleMuteEnd() }
             },
         )
     }
@@ -341,6 +341,7 @@ object OfficialChannel {
         regs.forEach { it.remove() }
         regs = emptyList()
         timer?.cancel(); timer = null
+        muteEnd?.cancel(); muteEnd = null
         uid = null
         broadcast = emptyList(); personal = emptyList(); state = OfficialChannelState()
         answered.clear()
@@ -430,15 +431,34 @@ object OfficialChannel {
         com.fariin.app.push.OfficialPushTopics.sync(c, state.isMutedNow(System.currentTimeMillis().toDouble()))
     }
 
-    /** The bell: on or off with no end (iOS setMuted; a timed mute is the profile's, not built yet). */
-    fun setMuted(muted: Boolean) {
+    /**
+     * The bell and the mute menu (iOS setMuted). `until`: when a timed mute ends, ms; null or the
+     * "Always" far-future stamp is stored as 0, "no end".
+     */
+    fun setMuted(muted: Boolean, until: Double? = null) {
         val me = uid ?: return
-        state = state.copy(muted = muted, mutedUntil = 0.0)
+        val end = (if (muted) until else null)?.let { if (it > 9_000_000_000_000.0) 0.0 else it } ?: 0.0
+        state = state.copy(muted = muted, mutedUntil = end)
         recompute()
         syncTopics()   // at once, not only when the write comes back
+        scheduleMuteEnd()
         FirebaseFirestore.getInstance().collection("users").document(me)
             .collection("officialChannel").document("state")
-            .set(mapOf("muted" to muted, "mutedUntil" to 0, "mutedAt" to System.currentTimeMillis().toDouble()), SetOptions.merge())
+            .set(mapOf("muted" to muted, "mutedUntil" to end, "mutedAt" to System.currentTimeMillis().toDouble()), SetOptions.merge())
+    }
+
+    /**
+     * A timed mute runs out on its own (iOS scheduleMuteEnd): one timer for the end, and the unmute
+     * is WRITTEN, so the other phone and the push topics hear it too. Also run when the state
+     * arrives, so a mute that ended while the app was closed is lifted when it opens.
+     */
+    private var muteEnd: Job? = null
+    private fun scheduleMuteEnd() {
+        muteEnd?.cancel(); muteEnd = null
+        if (!state.muted || state.mutedUntil <= 0.0) return
+        val wait = state.mutedUntil - System.currentTimeMillis()
+        if (wait <= 0) { setMuted(false); return }
+        muteEnd = scope.launch { delay(wait.toLong() + 1000); scheduleMuteEnd() }
     }
 
     /** Forward notes' words to chats, one forwarded text each, in order, sealed per chat. Outlives the page. */

@@ -83,6 +83,9 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> Unit, manage: ChannelManageNav = ChannelManageNav()) {
+    // iOS GroupInfoView onSearch: Search goes back to the channel and opens its search there; only
+    // when this page was opened from that channel, else the circle is dimmed and does nothing.
+    val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
     val entries by ChannelFollows.entries.collectAsState()
     val bias by ChannelFollows.biasFlow.collectAsState()
@@ -110,12 +113,14 @@ fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> 
     val shown = if (doc["channel"] == true) ChannelRules.subscriberCount(ChannelFollows.adjusted(cid, base.followerCount), base.users.size)
     else ChannelFollows.adjusted(cid, preview?.shownCount ?: base.followerCount)
     ChannelPage(base, shown, ChannelRules.role(base, me, entries.containsKey(cid)), entries[cid]?.isMuted() ?: false, onBack, onLeft,
-        team = com.fariin.app.channel.ChannelAdmins.Team.from(doc), me = me, manage = manage)
+        team = com.fariin.app.channel.ChannelAdmins.Team.from(doc), me = me, manage = manage,
+        onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack() }) else null)
 }
 
 @Composable
 fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, onBack: () -> Unit, onLeft: () -> Unit,
-                team: com.fariin.app.channel.ChannelAdmins.Team? = null, me: String = "", manage: ChannelManageNav = ChannelManageNav()) {
+                team: com.fariin.app.channel.ChannelAdmins.Team? = null, me: String = "", manage: ChannelManageNav = ChannelManageNav(),
+                onSearch: (() -> Unit)? = null) {
     val canEdit = role == Role.ADMIN && team?.can(me, com.fariin.app.channel.ChannelAdmins.Right.CHANGE_INFO) == true
     val c = Fariin.colors
     val ctx = LocalContext.current
@@ -158,7 +163,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             Action.FOLLOW -> follow()
             Action.LEAVE -> if (role == Role.VISITOR) leave(fromUndo = true) else confirmLeave = true
             Action.SHARE -> share()
-            Action.SEARCH -> notice = "Search in channels is coming soon on Android."
+            Action.SEARCH -> onSearch?.invoke()
             Action.MUTE -> scope.launch { ChannelService.setMuted(info.cid, true, 0.0) }
             Action.UNMUTE -> scope.launch { ChannelService.setMuted(info.cid, false) }
         }
@@ -201,7 +206,9 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     for (circle in ChannelRules.circles(shownRole, info.username.isNotEmpty(), muted)) {
-                        ActionCircle(iconFor(circle.action), circle.label, circle.dimmed) { tap(circle.action, circle.dimmed) }
+                        // A follower's Search is dimmed when the page was not opened from the channel (iOS).
+                        val dim = circle.dimmed || (circle.action == Action.SEARCH && onSearch == null)
+                        ActionCircle(iconFor(circle.action), circle.label, dim) { tap(circle.action, circle.dimmed) }
                     }
                 }
                 Spacer(Modifier.height(20.dp))

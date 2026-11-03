@@ -222,10 +222,31 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                 // Search and the bell in floating circles, as the chat header's buttons.
                 com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, "Search",
                     onClick = { searching = true; query = ""; fromNewest = 0 }, modifier = Modifier.padding(end = 8.dp))
-                com.fariin.app.ui.components.FloatingIcon(
-                    androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
-                    if (muted) "Notifications off" else "Notifications on",
-                    onClick = { OfficialChannel.setMuted(!muted) }, modifier = Modifier.padding(end = 8.dp))
+                // The bell opens the chat's mute menu (iOS OfficialChatInfoView actionButtons, the
+                // profile's Mute): 1 hour to Always, or, muted, until when and Unmute.
+                Box {
+                    var muteOpen by remember { mutableStateOf(false) }
+                    com.fariin.app.ui.components.FloatingIcon(
+                        androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
+                        if (muted) "Notifications off" else "Notifications on",
+                        onClick = { muteOpen = true }, modifier = Modifier.padding(end = 8.dp))
+                    val circles = com.fariin.app.data.GroupInfoCircles
+                    androidx.compose.material3.DropdownMenu(muteOpen, onDismissRequest = { muteOpen = false },
+                        shape = com.fariin.app.ui.components.FariinMenu.shape,
+                        border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+                        val until = view.state.mutedUntil
+                        Text(if (!muted) circles.MUTE_HEADER
+                            else if (until <= 0.0) "Muted always"
+                            else circles.mutedLabel(until, System.currentTimeMillis(), is24h),
+                            fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        if (muted) androidx.compose.material3.DropdownMenuItem(text = { Text("Unmute", color = c.label) },
+                            onClick = { muteOpen = false; OfficialChannel.setMuted(false) })
+                        else circles.MUTE_CHOICES.forEach { (label, hours) ->
+                            androidx.compose.material3.DropdownMenuItem(text = { Text(label, color = c.label) },
+                                onClick = { muteOpen = false; OfficialChannel.setMuted(true, circles.muteUntil(hours)) })
+                        }
+                    }
+                }
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
