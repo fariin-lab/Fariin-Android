@@ -177,7 +177,14 @@ fun ChatListScreen(
     }
     // Archived, search and the main list share one list position: each opens at its top, or the
     // main list came back anchored on the row that topped the archive (newer chats above the screen).
-    LaunchedEffect(showArchive, searching) { listState.scrollToItem(0) }
+    // Only on a real switch: coming back from a chat re-runs this effect, and that put the list back
+    // at the top instead of on the row I left from (owner 2026-11-03).
+    var listMode by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(showArchive, searching) {
+        val mode = "$showArchive/$searching"
+        if (listMode.isNotEmpty() && listMode != mode) listState.scrollToItem(0)
+        listMode = mode
+    }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val selecting = selected.isNotEmpty()
@@ -202,6 +209,27 @@ fun ChatListScreen(
         }
         .filter { query.isBlank() || it.displayName(me).contains(query.trim(), ignoreCase = true) }
         .toList()
+    // The search reaches past the list (iOS lookUpPeople, owner 2026-11-03 "not global"): who owns
+    // the username typed, asked 0.4 s after the last key, answers kept per query for the session.
+    // Somebody already in a chat above is not offered again.
+    var peopleHits by remember { mutableStateOf<List<com.fariin.app.data.Person>>(emptyList()) }
+    val peopleCache = remember { HashMap<String, List<com.fariin.app.data.Person>>() }
+    var peopleAll by remember { mutableStateOf(false) }
+    val q = query.trim()
+    LaunchedEffect(q, searching) {
+        peopleAll = false
+        if (!searching || q.trim('@').isEmpty()) { peopleHits = emptyList(); return@LaunchedEffect }
+        val key = q.lowercase()
+        peopleCache[key]?.let { peopleHits = it; return@LaunchedEffect }
+        kotlinx.coroutines.delay(400)
+        val found = people.searchPeople(q)
+        peopleCache[key] = found
+        peopleHits = found
+    }
+    val newPeople = run {
+        val known = shown.filter { !it.isGroup }.map { it.otherUid(me) }.toSet()
+        peopleHits.filter { it.uid != me && it.uid !in known }
+    }
     val pinned = if (showArchive) emptyList() else shown.filter { it.isPinned(me) }
     val rest = shown.filter { showArchive || !it.isPinned(me) }
     // The official Fariin chat: its own row, placed among the chats by its newest announcement.
@@ -393,7 +421,7 @@ fun ChatListScreen(
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
                 state.loading && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { com.fariin.app.ui.components.ChatListSkeleton() }
                 state.error != null && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(state.error) }
-                shown.isEmpty() && !officialShown -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
+                shown.isEmpty() && !officialShown && newPeople.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
                     query.isNotBlank() -> "No results"
                     showArchive -> "No archived chats"
                     filter == FILTER_UNREAD -> "No unread chats"
@@ -452,6 +480,20 @@ fun ChatListScreen(
                     if (officialShown && !officialPinned) officialItem()
                     items(rest.subList(officialIndex, rest.size), key = { it.id }, contentType = { "chat" }) {
                         Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                    }
+                    // iOS ChatSearchPage: people under "Global Search", after everything local, the first
+                    // three and then Show More. A tap opens the chat, which is what creates it.
+                    if (searching && newPeople.isNotEmpty()) {
+                        item(key = "h-global") { SectionHeader("Global Search") }
+                        items(if (peopleAll) newPeople else newPeople.take(3), key = { "p-" + it.uid }) { p ->
+                            PersonRow(p) {
+                                scope.launch { people.startChat(p)?.let { cid -> searching = false; query = ""; people.chat(cid) } }
+                            }
+                        }
+                        if (!peopleAll && newPeople.size > 3) item(key = "p-more") {
+                            Text("Show More", color = c.blue, style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.fillMaxWidth().clickable { peopleAll = true }.padding(horizontal = 86.dp, vertical = 12.dp))
+                        }
                     }
                 }
             }
@@ -582,10 +624,8 @@ private fun OverflowMenu(
             HorizontalDivider()
             if (requests > 0) item("Message Requests ($requests)", fi(R.drawable.ic_message_request), false, onRequests)
             item("Archive", fi(R.drawable.ic_archive), false, onArchive)
-            item("New Group", Icons.Outlined.Group, false, onNewGroup)
-            item("New Channel", Icons.Outlined.Campaign, false, onNewChannel)
-            item("Find Channels", Icons.Outlined.Explore, false, onFindChannels)
-            item("Settings", Icons.Outlined.Settings, false, onSettings)
+            // New Group / New Channel / Find Channels live under the pen, Settings is a tab: the menu
+            // keeps iOS's own set (owner 2026-11-03, "a lot of things in there").
             HorizontalDivider()
             item("Mark All Read", Icons.Outlined.CheckCircle, false, onMarkAllRead)
         }
@@ -640,6 +680,21 @@ private fun Centered(text: String, action: Pair<String, () -> Unit>? = null) {
 }
 
 /** Section label, Material style: small, in the brand blue, 16 from the edge. */
+/** A person found by username (iOS newPersonRow): photo, name, the @handle in blue. */
+@Composable
+private fun PersonRow(p: com.fariin.app.data.Person, onClick: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar(p.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(p.name.ifEmpty { p.handle }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+                color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.blue, maxLines = 1)
+        }
+    }
+}
+
 @Composable
 private fun SectionHeader(text: String) {
     Text(

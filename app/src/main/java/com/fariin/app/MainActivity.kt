@@ -252,7 +252,7 @@ class MainActivity : ComponentActivity() {
         }
         val people = remember(me) { com.fariin.app.data.FirestorePeople(me, crypto) }
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
-            com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav),
+            com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav, people),
             com.fariin.app.ui.channels.LocalChannelNav provides com.fariin.app.ui.channels.channelNav(nav)) {
             NavHost(nav, startDestination = "main",
                 enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),

@@ -54,7 +54,7 @@ fun NavGraphBuilder.peopleRoutes(
     }
 }
 
-fun peopleNav(nav: NavHostController) = PeopleNav(
+fun peopleNav(nav: NavHostController, api: PeopleApi? = null) = PeopleNav(
     newChat = { nav.navigate("newchat") { launchSingleTop = true } },
     requests = { nav.navigate("requests") { launchSingleTop = true } },
     contact = { nav.navigate("contact/$it") { launchSingleTop = true } },
@@ -66,6 +66,8 @@ fun peopleNav(nav: NavHostController) = PeopleNav(
     callLink = { nav.navigate("calllink/$it") { launchSingleTop = true } },
     joinLink = { key, video -> nav.navigate("joinlink/$key/${if (video) "video" else "voice"}") { launchSingleTop = true } },
     chat = { nav.navigate("thread/$it") { popUpTo("main"); launchSingleTop = true } },
+    searchPeople = { q -> api?.let { runCatching { it.search(q) }.getOrDefault(emptyList()) }.orEmpty() },
+    startChat = { p -> api?.let { runCatching { it.openChat(p) }.getOrNull() } },
 )
 
 /** The live group document (read only), for Group Info. */

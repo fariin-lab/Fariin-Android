@@ -27,6 +27,65 @@ object StickerCatalog {
     @Volatile private var packs: List<StickerPackInfo>? = null
     @Volatile private var files: Set<String> = emptySet()
 
+    /** One `stickerPacks/{id}` record (iOS StickerStore.RemotePack): for a pack the app ships, an
+     *  override (title, order, on/off, hidden stickers); for kind "server", the whole pack with a
+     *  download link per sticker. Managed from the admin panel without an app update. */
+    data class RemotePack(val id: String, val kind: String, val title: String, val order: Int,
+                          val enabled: Boolean, val deleted: Boolean, val hidden: Boolean?, val stickers: List<Item>) {
+        data class Item(val id: String, val emoji: String?, val ext: String?, val url: String?, val animated: Boolean?, val hidden: Boolean?)
+        val shown: Boolean get() = enabled && hidden != true && !deleted
+    }
+
+    /** The panel's packs, as iOS rebuildPacks: the shipped ones with their overrides, then the
+     *  server's, by the panel's order (ties keep the shipped order). Pure. */
+    fun arrange(shipped: List<StickerPackInfo>, remote: List<RemotePack>): List<StickerPackInfo> {
+        val overrides = remote.filter { it.kind == "bundled" }.associateBy { it.id }
+        val entries = ArrayList<Pair<Int, StickerPackInfo>>()
+        shipped.forEachIndexed { i, p ->
+            val o = overrides[p.id] ?: run { entries += i to p; return@forEachIndexed }
+            if (!o.shown) return@forEachIndexed
+            val hidden = o.stickers.filter { it.hidden == true }.map { it.id }.toSet()
+            val kept = p.stickers.filter { it.stickerId !in hidden }
+            if (kept.isNotEmpty()) entries += o.order to StickerPackInfo(p.id, o.title.ifEmpty { p.title }, kept)
+        }
+        for (r in remote) if (r.kind == "server" && r.shown) {
+            val items = r.stickers.filter { it.hidden != true && !it.url.isNullOrEmpty() }
+                .map { StickerRef(r.id, it.id, it.emoji ?: "", if (it.ext == "tgs") true else it.animated ?: false) }
+            if (items.isNotEmpty()) entries += r.order to StickerPackInfo(r.id, r.title.ifEmpty { r.id }, items)
+        }
+        return entries.withIndex().sortedWith(compareBy({ it.value.first }, { it.index })).map { it.value.second }
+    }
+
+    /** Every server sticker's download link, hidden and removed packs too: sent messages need them. */
+    @Volatile private var links: Map<String, String> = emptyMap()
+    fun link(key: String): String? = links[key]
+    private val remoteFlow = kotlinx.coroutines.flow.MutableStateFlow<List<RemotePack>>(emptyList())
+    @Volatile private var watching = false
+
+    /** The panel's packs, live: listens to `stickerPacks` once per process (iOS watchCatalog). */
+    fun live(context: Context): kotlinx.coroutines.flow.Flow<List<StickerPackInfo>> {
+        val shipped = packs(context)
+        if (!watching) {
+            watching = true
+            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("stickerPacks").addSnapshotListener { snap, _ ->
+                snap ?: return@addSnapshotListener   // refused or offline: keep the last catalog
+                val list = snap.documents.map { d ->
+                    val x = d.data.orEmpty()
+                    val items = (x["stickers"] as? List<*>).orEmpty().mapNotNull { st ->
+                        val m = st as? Map<*, *> ?: return@mapNotNull null
+                        val id = (m["id"] as? String)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                        RemotePack.Item(id, m["emoji"] as? String, m["ext"] as? String, m["url"] as? String, m["animated"] as? Boolean, m["hidden"] as? Boolean)
+                    }
+                    RemotePack(d.id, x["kind"] as? String ?: "", x["title"] as? String ?: "", (x["order"] as? Number)?.toInt() ?: 0,
+                        x["enabled"] as? Boolean ?: true, x["deleted"] as? Boolean ?: false, x["hidden"] as? Boolean, items)
+                }
+                links = list.filter { it.kind == "server" }.flatMap { r -> r.stickers.mapNotNull { it.url?.takeIf { u -> u.isNotEmpty() }?.let { u -> "${r.id}/${it.id}" to u } } }.toMap()
+                remoteFlow.value = list
+            }
+        }
+        return kotlinx.coroutines.flow.combine(kotlinx.coroutines.flow.flowOf(shipped), remoteFlow) { s, r -> arrange(s, r) }
+    }
+
     fun packs(context: Context): List<StickerPackInfo> {
         packs?.let { return it }
         val am = context.assets

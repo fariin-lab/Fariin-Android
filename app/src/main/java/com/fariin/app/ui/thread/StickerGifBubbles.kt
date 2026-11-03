@@ -142,7 +142,7 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                 }
             }
         }
-        else -> AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url, play), contentDescription = null,
+        else -> AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play), contentDescription = null,
             contentScale = ContentScale.Fit, modifier = modifier)
     }
 }
@@ -246,7 +246,8 @@ private const val TOP_BAND = 48
 private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
-    val packs = remember { StickerCatalog.packs(ctx) }
+    // The admin panel's order, on/off and server packs (iOS StickerStore), the shipped order meanwhile.
+    val packs by remember { StickerCatalog.live(ctx) }.collectAsState(initial = StickerCatalog.packs(ctx))
     var recents by remember { mutableStateOf(StickerCatalog.recents(ctx, me)) }
     val shelves: List<StickerPackInfo> = remember(recents) {
         (if (recents.isEmpty()) emptyList() else listOf(StickerPackInfo("recent", "Recently Used", recents))) + packs

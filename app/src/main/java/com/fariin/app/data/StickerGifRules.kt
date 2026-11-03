@@ -18,7 +18,8 @@ object StickerGifRules {
 
     /** The public copy of a built-in sticker on fariin.com (StickerSend.publicURL). */
     fun stickerPublicUrl(packId: String, stickerId: String): String =
-        "https://fariin.com/stickers/$packId/$stickerId.webp"
+        // A pack from the admin panel: its own download link, which every build can draw.
+        StickerCatalog.link("$packId/$stickerId") ?: "https://fariin.com/stickers/$packId/$stickerId.webp"
 
     /** What an older build reads instead of the sticker (StickerSend.oldBuildMarker). */
     const val OLD_BUILD_MARKER = "fariin-sticker:1"

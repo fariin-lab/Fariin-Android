@@ -17,6 +17,10 @@ data class PeopleNav(
     val joinLink: (String, Boolean) -> Unit = { _, _ -> },
     /** A chat by its id (a contact card's Message button). */
     val chat: (String) -> Unit = {},
+    /** The chat list's search reaching past the list (iOS lookUpPeople): who owns a username, and
+     *  the chat with a person found that way (opening it is what creates it). */
+    val searchPeople: suspend (String) -> List<com.fariin.app.data.Person> = { emptyList() },
+    val startChat: suspend (com.fariin.app.data.Person) -> String? = { null },
 )
 
 val LocalPeopleNav = staticCompositionLocalOf { PeopleNav() }
