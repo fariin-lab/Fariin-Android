@@ -56,6 +56,7 @@ object SessionEnd {
         com.fariin.app.local.Drafts.clear()
         com.fariin.app.local.SendQueue.wipe()
         com.fariin.app.call.CallLinks.reset()
+        com.fariin.app.ui.call.LiveGroupCalls.stopAll()   // the live group-call watchers belong to the account
         com.fariin.app.media.ChatMedia.wipe(c)
         try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
         com.fariin.app.ui.thread.DecodedPictures.clear()   // decoded chat photos held in memory
