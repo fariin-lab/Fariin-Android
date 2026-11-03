@@ -293,12 +293,13 @@ fun ChatListScreen(
         topBar = {
             Column(
                 Modifier.then(when {
-                    selecting -> Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    scrolled && glass -> Modifier.hazeEffect(haze) {
+                    // Select mode too: one soft frosted colour from the status bar down (owner 2026-11-03:
+                    // the grey bar under a white strip read as two colours).
+                    (scrolled || selecting) && glass -> Modifier.hazeEffect(haze) {
                         backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
                         tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.72f)))
                     }
-                    scrolled -> Modifier.background(c.bg.copy(alpha = 0.97f))
+                    scrolled || selecting -> Modifier.background(c.bg.copy(alpha = 0.97f))
                     else -> Modifier.background(c.bg)
                 }).statusBarsPadding(),
             ) {
@@ -563,7 +564,7 @@ private fun SelectionBar(
           }
         },
         windowInsets = WindowInsets(0, 0, 0, 0),
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = c.bg, titleContentColor = c.label,
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = c.label,
             navigationIconContentColor = c.label, actionIconContentColor = c.label),
     )
 }
