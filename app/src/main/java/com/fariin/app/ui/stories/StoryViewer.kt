@@ -50,6 +50,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -216,7 +218,9 @@ fun StoryViewer(
 
     // Owner-bar numbers by story id (never by "the item I last heard about").
     val summaries = remember { mutableStateMapOf<String, StoryViewSummary>() }
-    var sheetFor by rememberSaveable { mutableStateOf<String?>(null) }
+    // The viewers sheet and the shrink of my story into the row above it (iOS viewersProgress).
+    val sheet = remember { ViewersSheetState(scope) }
+    val sheetFor = sheet.id
     var profileUid by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<Story?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
@@ -229,8 +233,18 @@ fun StoryViewer(
     LaunchedEffect(toast) { if (toast != null) { delay(1500); toast = null } }
 
     BackHandler(enabled = profileUid != null || sheetFor != null) {
-        if (profileUid != null) profileUid = null else sheetFor = null
+        if (profileUid != null) profileUid = null else sheet.close()
     }
+    // My stories in the row while the sheet is up, and every one's count under its card.
+    val sheetStories = sheetFor?.let { id -> groups.firstOrNull { g -> g.stories.any { it.id == id } }?.stories }.orEmpty()
+    LaunchedEffect(sheetFor != null, sheetStories.map { it.id }) {
+        if (sheetFor == null) return@LaunchedEffect
+        sheetStories.forEach { s -> if (s.id != sheetFor) service.viewSummary(s.id, who)?.let { summaries[s.id] = it } }
+    }
+    // Which story of my ring the row landed on, for its page to show.
+    var jumpTo by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sheetFor) { if (sheetFor == null) jumpTo = null }
+    val topInset = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
 
     // ---- The zoom: out of the tapped card, back into it (iOS StoryZoomPresenter + the hero drag) ----
     val density = LocalDensity.current.density
@@ -434,10 +448,26 @@ fun StoryViewer(
             pager, beyondViewportPageCount = 1, key = { groups.getOrNull(it)?.key ?: it },
             // Person to person: commit at 30% of a face, settle over 0.4s on the iOS curve.
             flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = turnSpec, snapPositionalThreshold = StoryMotion.TURN_THRESHOLD),
+            userScrollEnabled = sheetFor == null,
             modifier = Modifier.fillMaxSize().graphicsLayer {
                 if (size == IntSize.Zero) return@graphicsLayer
-                val r = visibleRect()
                 val w = size.width.toFloat(); val h = size.height.toFloat()
+                // Viewers up: the story is the row's centre card, picture and all, scaled (never resized,
+                // so a playing clip's surface is untouched) and clipped to its 9:16 band with 24 corners.
+                val live = sheetStories.indexOfFirst { it.id == sheetFor }
+                if (sheetFor != null && live >= 0 && !hero.live) {
+                    val g = StorySheetGeometry(w, h, topInset, density, sheet.fraction)
+                    val pl = g.placement(live - sheet.row.value)
+                    val s = pl.h / g.contentH
+                    scaleX = s; scaleY = s
+                    translationX = pl.cx - w / 2f
+                    translationY = pl.cy - h / 2f
+                    alpha = 1f
+                    clip = true
+                    shape = CardShape(w, g.contentH, pl.corner / maxOf(0.001f, s))
+                    return@graphicsLayer
+                }
+                val r = visibleRect()
                 val s = maxOf(r.width / w, r.height / h)
                 scaleX = s; scaleY = s
                 translationX = r.center.x - w / 2f
@@ -477,7 +507,9 @@ fun StoryViewer(
                 StoryPage(
                     me = me, group = g, active = page == pager.currentPage && !pager.isScrollInProgress,
                     paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live,
-                    chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) },
+                    // The bars and caption go over the first third of the sheet's pull (iOS storySheetProgress).
+                    chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
+                    jumpTo = if (page == pager.currentPage) jumpTo else null,
                     summaries = summaries, service = service, who = who,
                     onSeen = { s ->
                         if (s.authorUid != me && marked.add(s.id)) {
@@ -493,7 +525,7 @@ fun StoryViewer(
                         dragTo(dy)
                     },
                     onDragEnd = { dy, vy -> dragEnd(dy, vy) },
-                    onOpenViewers = { id -> sheetFor = id },
+                    onOpenViewers = { id -> sheet.open(id, maxOf(0, g.stories.indexOfFirst { it.id == id })) },
                     onDelete = { confirmDelete = it },
                     onReplyFocus = { replyFocused = it },
                     // Typed text is a reply; a react bar emoji is the same message marked isReaction
@@ -566,6 +598,9 @@ fun StoryViewer(
             }
         }
 
+        // The rest of my ring beside the shrunk story, with every card's count, and the touches above the sheet.
+        if (sheetFor != null) ViewersCarousel(sheet, sheetStories, summaries, topInset, onLanded = { jumpTo = it })
+
         flying?.let { (emoji, key) -> FlyingEmoji(emoji, key) { if (flying?.second == key) flying = null } }
 
         AnimatedVisibility(notifyBar != null, enter = fadeIn(), exit = fadeOut(),
@@ -601,11 +636,20 @@ fun StoryViewer(
             )
         }
 
-        sheetFor?.let { id ->
-            StoryViewersSheet(
-                storyId = id, service = service, who = who,
-                onDismiss = { sheetFor = null },
+        sheetStories.firstOrNull { it.id == sheetFor }?.let { s ->
+            val openChat = LocalOpenChat.current
+            ViewersSheet(
+                sheet, s, me, service, who,
+                friendUids = remember(conversations) { conversations.filter { !it.isGroup }.map { it.otherUid(me) }.filter { it.isNotEmpty() }.toSet() },
+                receipts = receipts, customName = customTitle(s),
                 onOpenPerson = { uid -> profileUid = uid },
+                // iOS onSendMessage: the viewer closes and the chat with them opens; with no chat yet, their profile.
+                onSendMessage = { v ->
+                    val conv = convs.firstOrNull { !it.isGroup && it.users.contains(v.uid) }
+                    if (conv != null) { onClose(); openChat(conv) } else profileUid = v.uid
+                },
+                // iOS onBlock: straight away, no question (ChatService.setBlocked).
+                onBlock = { v -> storyScope.launch { runCatching { FirestorePeople(me, CryptoHub.crypto).setBlocked(v.uid, true) } } },
             )
         }
         // A profile opened from the sheet sits over it; closing it leaves the sheet where it was.
@@ -675,11 +719,17 @@ private fun StoryPage(
     onShown: (Story) -> Unit,
     onHide: (String) -> Unit,
     onNotify: (uid: String, name: String) -> Unit = { _, _ -> },
+    /** A story of this ring to show now: the viewers row landed on it. */
+    jumpTo: String? = null,
 ) {
     val stories = group.stories
     if (stories.isEmpty()) return
     var index by rememberSaveable(group.key) { mutableIntStateOf(StoryRules.startIndex(group)) }
     if (index > stories.lastIndex) index = stories.lastIndex
+    LaunchedEffect(jumpTo) {
+        val i = stories.indexOfFirst { it.id == jumpTo }
+        if (i >= 0) index = i
+    }
     val story = stories[index]
     val mine = story.authorUid == me
     var holding by remember { mutableStateOf(false) }
@@ -1069,130 +1119,6 @@ private fun FlyingEmoji(emoji: String, key: Long, onDone: () -> Unit) {
             scaleX = 0.6f + v * 0.9f; scaleY = scaleX
             alpha = if (v < 0.7f) 1f else (1f - v) / 0.3f
         })
-    }
-}
-
-/**
- * My story's viewers (iOS StoryViewersSheet): newest first, a heart by anyone who liked it,
- * Search, and a tap opens that person's profile over the sheet.
- */
-@Composable
-private fun StoryViewersSheet(
-    storyId: String,
-    service: StoryService,
-    who: (String) -> Pair<String, String?>,
-    onDismiss: () -> Unit,
-    onOpenPerson: (String) -> Unit,
-) {
-    val c = com.fariin.app.ui.theme.Fariin.colors
-    var people by remember(storyId) { mutableStateOf<List<StoryViewer>?>(null) }
-    var failed by remember(storyId) { mutableStateOf(false) }
-    var query by rememberSaveable(storyId) { mutableStateOf("") }
-    DisposableEffect(storyId) {
-        var job: kotlinx.coroutines.Job? = null
-        fun load() {
-            job?.cancel()
-            job = storyScope.launch {
-                var got = service.fetchViewers(storyId, who)
-                while (got == null) { failed = true; delay(3000); got = service.fetchViewers(storyId, who) }
-                failed = false; people = got
-            }
-        }
-        load()
-        val reg = service.watchViews(storyId) { load() }
-        onDispose { reg.remove(); job?.cancel() }
-    }
-    // Slides up and away on the iOS sheet spring (critically damped, stiffness 340); the finger can
-    // pull it down, and it closes past 30% of the screen or 5% with a 150dp/s flick.
-    val shown = remember { Animatable(0f) }
-    val sheetScope = rememberCoroutineScope()
-    var sheetH by remember { mutableFloatStateOf(1f) }
-    val dens = LocalDensity.current.density
-    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * dens
-    val sheetSpring = spring<Float>(dampingRatio = 1f, stiffness = StoryMotion.SHEET_STIFFNESS)
-    LaunchedEffect(Unit) { shown.animateTo(1f, sheetSpring) }
-    var leaving by remember { mutableStateOf(false) }
-    val close: (Float) -> Unit = { v ->
-        if (!leaving) {
-            leaving = true
-            sheetScope.launch { shown.animateTo(0f, sheetSpring, initialVelocity = v); onDismiss() }
-        }
-    }
-    Box(Modifier.fillMaxSize().graphicsLayer { alpha = shown.value.coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = 0.35f)).clickable(
-        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
-    ) { close(0f) }) {
-        Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.62f)
-                .onSizeChanged { sheetH = maxOf(1f, it.height.toFloat()) }
-                .graphicsLayer { translationY = (1f - shown.value) * sheetH }
-                .pointerInput(Unit) {
-                    var start = 1f
-                    val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
-                    detectVerticalDragGestures(
-                        onDragStart = { start = shown.value; tracker.resetTracking() },
-                        onVerticalDrag = { ch, d ->
-                            tracker.addPosition(ch.uptimeMillis, ch.position)
-                            sheetScope.launch { shown.snapTo((shown.value - d / sheetH).coerceIn(0f, 1f)) }
-                        },
-                        onDragEnd = {
-                            val vDown = tracker.calculateVelocity().y
-                            val dropped = (start - shown.value) * sheetH
-                            if (dropped >= screenH * 0.30f || (dropped >= screenH * 0.05f && vDown >= 150f * dens)) close(-vDown / sheetH)
-                            else sheetScope.launch { shown.animateTo(1f, sheetSpring, initialVelocity = -vDown / sheetH) }
-                        },
-                        onDragCancel = { sheetScope.launch { shown.animateTo(1f, sheetSpring) } },
-                    )
-                }
-                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(c.bg)
-                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
-                .navigationBarsPadding(),
-        ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).size(36.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(c.separator))
-            val list = people
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(list?.let { StoryRules.viewsLabel(it.size, false) } ?: "Views", color = c.label, fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Box(Modifier.size(36.dp).clip(CircleShape).background(c.fieldFill).clickable { close(0f) }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
-                }
-            }
-            Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(38.dp).clip(RoundedCornerShape(10.dp)).background(c.fieldFill)
-                .padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                if (query.isEmpty()) Text("Search", color = c.secondary, fontSize = 16.sp)
-                BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(color = c.label, fontSize = 16.sp),
-                    cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
-            }
-            Spacer(Modifier.height(8.dp))
-            when {
-                list == null -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    if (failed) Text("Couldn't load viewers. Trying again…", color = c.secondary, fontSize = 15.sp)
-                    else CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
-                }
-                list.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Text("No views yet", color = c.secondary, fontSize = 15.sp)
-                }
-                else -> androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                    val shown = list.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
-                    items(shown.size, key = { shown[it].uid }) { i ->
-                        val v = shown[i]
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onOpenPerson(v.uid) }.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Avatar(v.photoUrl, 44.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(v.name, color = c.label, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(StoryRules.timeAgo(v.viewedAtMs), color = c.secondary, fontSize = 13.sp)
-                            }
-                            if (!v.reaction.isNullOrEmpty()) {
-                                Icon(Icons.Filled.Favorite, contentDescription = "Liked", tint = Color(0xFFFF3B30), modifier = Modifier.size(20.dp))
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
