@@ -147,6 +147,8 @@ class MainActivity : ComponentActivity() {
                     }
                     if (me == null) { LaunchedEffect(Unit) { keepSplash = false }; SignInFlow(auth) } else com.fariin.app.ui.auth.AccountGate(me, auth, onOwnPage = { keepSplash = false }) { SignedIn(me) }
                     notice?.let { SignedOutNotice(it) { notice = null } }
+                    // A message for another chat while the app is open (push/InAppNotify).
+                    if (me != null) com.fariin.app.ui.components.InAppBannerHost() else LaunchedEffect(Unit) { com.fariin.app.push.InAppNotify.reset() }
                 }
                 // One snackbar for the whole app (Android toasts and banners).
                 com.fariin.app.ui.components.SnackHost()
@@ -296,6 +298,8 @@ class MainActivity : ComponentActivity() {
         takeOpenCid(intent)
         takeCallLink(intent)
         com.fariin.app.system.SystemRouter.take(intent)
+        // Debug builds only: `--es notifChat <cid>` to the running app = that push arriving in front (the in-app banner).
+        if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) intent.getStringExtra("notifChat")?.let { com.fariin.app.push.DebugNotifs.postReal(this, it) }
     }
 
     /** A tapped call link (https://call.fariin.com/video/..., fariin.com/call/#key=...). */

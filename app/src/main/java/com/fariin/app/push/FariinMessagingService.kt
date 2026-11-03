@@ -88,7 +88,14 @@ class FariinMessagingService : FirebaseMessagingService() {
                 activeChat = PushRouter.activeChatId,
                 pushOn = Push.pushOn(c),
             )
-            if (decision is NotifDecision.Show) {
+            // In front, a chat message is our banner, not the system's (iOS PushManager.willPresent).
+            val route = InAppRules.route(decision, com.fariin.app.AppLifecycle.inFront, locked = appLockShowing(c),
+                prefs = InAppNotify.prefs(c), localPhoto = p.cid?.let { NotifStore.chat(c, it)?.photo })
+            if (route is InAppRoute.InApp) {
+                InAppNotify.present(c, route)
+                val s = (decision as NotifDecision.Show).spec
+                if (s.opensChat) com.fariin.app.system.FariinWidget.notePush(c, s.key, if (s.plain) null else s.line)
+            } else if (decision is NotifDecision.Show) {
                 val s = decision.spec
                 val photos = if (s.plain) listOf(null, null) else kotlinx.coroutines.coroutineScope {
                     listOf(s.senderPhoto, s.groupPhoto).map { url -> async(kotlinx.coroutines.Dispatchers.IO) { url?.let { loadAvatar(c, it) } } }
@@ -100,6 +107,11 @@ class FariinMessagingService : FirebaseMessagingService() {
             }
             ack.await()
         }
+
+        /** The lock page is up (or about to be): on, and not unlocked since the app came back. */
+        private fun appLockShowing(c: Context): Boolean = try {
+            com.fariin.app.security.AppLock.enabled(c) && !com.fariin.app.security.AppLock.unlocked
+        } catch (_: Exception) { false }
 
         /** The crypto's decrypt, the "could not open" answers turned into null. */
         private fun open(c: Context, ct: String, cid: String, aid: String): String? = try {
