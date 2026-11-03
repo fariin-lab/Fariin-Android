@@ -92,6 +92,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.LocationOn
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.platform.LocalContext
@@ -665,7 +668,11 @@ fun ChatRow(
     // iOS: a chat with unsent words in its box says "Draft:" (red) and the words, not the last line.
     val drafts by com.fariin.app.local.Drafts.map.collectAsState()
     val draft = drafts[conv.id]
-    val line = if (draft.isNullOrEmpty()) androidx.compose.ui.text.AnnotatedString(preview) else
+    // iOS previewRow: a small grey glyph before a pin notice, a contact or a location.
+    val glyph = if (draft.isNullOrEmpty()) ChatList.previewIcon(preview) else null
+    val line = if (glyph != null) androidx.compose.ui.text.buildAnnotatedString {
+        appendInlineContent("glyph", "[icon]"); append(" "); append(preview)
+    } else if (draft.isNullOrEmpty()) androidx.compose.ui.text.AnnotatedString(preview) else
         androidx.compose.ui.text.buildAnnotatedString {
             pushStyle(androidx.compose.ui.text.SpanStyle(color = c.red)); append("Draft: "); pop()
             append(draft.replace('\n', ' '))
@@ -733,6 +740,14 @@ fun ChatRow(
                 // Two lines tall always, so every row is the same height (iOS, the hidden " \n ").
                 Text(
                     line, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
+                    inlineContent = if (glyph == null) emptyMap() else mapOf("glyph" to androidx.compose.foundation.text.InlineTextContent(
+                        androidx.compose.ui.text.Placeholder(14.sp, 14.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
+                        Icon(when (glyph) {
+                            ChatList.PreviewIcon.PIN -> Icons.Filled.PushPin
+                            ChatList.PreviewIcon.CONTACT -> Icons.Filled.Person
+                            ChatList.PreviewIcon.LOCATION -> Icons.Filled.LocationOn
+                        }, contentDescription = null, tint = c.secondary, modifier = Modifier.fillMaxSize())
+                    }),
                     maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )

@@ -46,6 +46,16 @@ object ChatList {
             }
             .toList()
 
+    /** The small icon iOS draws before some preview lines (MainShell previewRow): the line's
+     *  words after any "Name: " sender prefix decide it. */
+    enum class PreviewIcon { PIN, CONTACT, LOCATION }
+    fun previewIcon(line: String): PreviewIcon? = when (line.substringAfter(": ", line)) {
+        "Pinned a message" -> PreviewIcon.PIN
+        "Contact" -> PreviewIcon.CONTACT
+        "Location" -> PreviewIcon.LOCATION
+        else -> null
+    }
+
     /**
      * "Reacted 😂 to "Photo"" when the newest event is a reaction (iOS MainShell reactionPreview):
      * mine "You reacted 😂", a group member's "Omar reacted 😂", on my message without its words
