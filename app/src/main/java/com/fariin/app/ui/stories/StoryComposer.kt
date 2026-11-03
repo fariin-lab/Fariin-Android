@@ -153,7 +153,12 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     var audience by remember { mutableStateOf(false) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    val bmp = remember(media) { BitmapFactory.decodeByteArray(media.jpeg, 0, media.jpeg.size)?.asImageBitmap() }
+    // Decoded off the main thread (about 7 ms on the low-end phone); null until it lands.
+    val bmp by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, media) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            BitmapFactory.decodeByteArray(media.jpeg, 0, media.jpeg.size)?.asImageBitmap()
+        }
+    }
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
@@ -178,9 +183,10 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     var box by remember { mutableStateOf(IntSize.Zero) }
     var captionArmed by remember { mutableStateOf(true) }
     val img = remember(box, bmp) {
-        if (bmp == null || box.width == 0) Rect.Zero else {
-            val k = minOf(box.width / bmp.width.toFloat(), box.height / bmp.height.toFloat())
-            val w = bmp.width * k; val h = bmp.height * k
+        val b = bmp
+        if (b == null || box.width == 0) Rect.Zero else {
+            val k = minOf(box.width / b.width.toFloat(), box.height / b.height.toFloat())
+            val w = b.width * k; val h = b.height * k
             Rect(Offset((box.width - w) / 2, (box.height - h) / 2), androidx.compose.ui.geometry.Size(w, h))
         }
     }
@@ -218,7 +224,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     BackHandler(enabled = !drawing && editingId < 0 && !audience && !edits.isEmpty) { askDiscard = true }
 
     Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { box = it }) {
-        if (bmp != null) Image(bmp, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        bmp?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
         if (canEdit) StoryEditCanvas(
             edits, img, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = { stroking = it },
