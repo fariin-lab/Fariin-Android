@@ -57,7 +57,7 @@ class CallRoutingTest {
 
     @Test fun proximityOnlyAtTheEar() {
         assertTrue(CallRouting.proximityWanted(CallPhase.ACTIVE, cameraOn = false, route = AudioRoute.EARPIECE))
-        assertTrue(CallRouting.proximityWanted(CallPhase.OUTGOING, false, AudioRoute.EARPIECE))
+        assertFalse(CallRouting.proximityWanted(CallPhase.OUTGOING, false, AudioRoute.EARPIECE))   // not while ringing out
         assertFalse(CallRouting.proximityWanted(CallPhase.INCOMING, false, AudioRoute.EARPIECE))
         assertFalse(CallRouting.proximityWanted(CallPhase.ACTIVE, false, AudioRoute.SPEAKER))
         assertFalse(CallRouting.proximityWanted(CallPhase.ACTIVE, true, AudioRoute.EARPIECE))

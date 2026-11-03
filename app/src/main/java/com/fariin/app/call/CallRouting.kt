@@ -87,10 +87,12 @@ object CallRouting {
 
     /**
      * The screen goes dark at the ear: a voice call (no camera on either side shown) while the sound
-     * comes from the earpiece, and the call is ringing out, connecting or on.
+     * comes from the earpiece, once the call is answered. Not while it rings out: people watch the
+     * screen then, and an under-screen sensor (Pixel 5, 2026-11-03 on the owner's phone) read "near"
+     * in the hand and blacked the whole ring.
      */
     fun proximityWanted(phase: CallPhase, cameraOn: Boolean, route: AudioRoute): Boolean =
-        (phase == CallPhase.OUTGOING || phase == CallPhase.ACTIVE || phase == CallPhase.RECONNECTING) &&
+        (phase == CallPhase.ACTIVE || phase == CallPhase.RECONNECTING) &&
             !cameraOn && route == AudioRoute.EARPIECE
 
     /** The system call's end cause, so the car screen and the phone's call log read right. */
