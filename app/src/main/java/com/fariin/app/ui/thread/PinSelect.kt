@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.floating
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -139,8 +141,10 @@ internal fun PinnedBar(
     val msg = msgFor(pid)
     val author = msg?.let { if (it.authorId == ui.me) "You" else ui.names[it.authorId] ?: ui.title } ?: "Pinned Message"
     var menu by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().background(c.bg)) {
-        Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 14.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    // A floating rounded card under the header, not a flat strip (iOS pinned banner, owner 2026-11-03).
+    Box(Modifier.fillMaxWidth().background(c.bg).padding(start = 10.dp, end = 10.dp, top = 2.dp, bottom = 8.dp)) {
+        Row(Modifier.fillMaxWidth().height(52.dp).floating(RoundedCornerShape(18.dp)).padding(start = 14.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             if (ids.size > 1) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     ids.indices.forEach { i ->
@@ -179,7 +183,6 @@ internal fun PinnedBar(
                 }
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = c.separator)
     }
 }
 

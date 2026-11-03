@@ -1,5 +1,12 @@
 package com.fariin.app.ui.call
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.fariin.app.ui.components.floating
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
@@ -34,12 +41,13 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
     if (!isGroup) {
         val peer = Wire.otherUid(cid, me)
         if (peer.isEmpty() || peer == me) return
-        Row {
+        // One floating capsule, video then voice, outline icons (iOS ChatHeaderView call pill).
+        Row(Modifier.floating(CircleShape).padding(horizontal = 4.dp)) {
             IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = true) }) {
-                Icon(Icons.Filled.Videocam, contentDescription = "Video call", tint = tint)
+                Icon(Icons.Outlined.Videocam, contentDescription = "Video call", tint = tint)
             }
             IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = false) }) {
-                Icon(Icons.Filled.Call, contentDescription = "Voice call", tint = tint)
+                Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = tint)
             }
         }
         return
@@ -53,18 +61,18 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         onDispose { reg.remove(); conv.remove() }
     }
     if (live) {
-        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }) {
-            Icon(Icons.Filled.Call, contentDescription = "Join call", tint = tint)
+        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }, modifier = Modifier.floating(CircleShape)) {
+            Icon(Icons.Outlined.Call, contentDescription = "Join call", tint = tint)
         }
         return
     }
     if (!mayStart) return
-    Row {
+    Row(Modifier.floating(CircleShape).padding(horizontal = 4.dp)) {
         IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }) {
-            Icon(Icons.Filled.Videocam, contentDescription = "Group video call", tint = tint)
+            Icon(Icons.Outlined.Videocam, contentDescription = "Group video call", tint = tint)
         }
         IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false, start = true) }) {
-            Icon(Icons.Filled.Call, contentDescription = "Group voice call", tint = tint)
+            Icon(Icons.Outlined.Call, contentDescription = "Group voice call", tint = tint)
         }
     }
 }

@@ -1,5 +1,9 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.filled.Add
+import com.fariin.app.ui.components.floating
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -572,10 +576,12 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label)
+            // Back in its own floating circle, the chevron as iOS (ChatHeaderView).
+            IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp).floating()) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Back", tint = c.label,
+                    modifier = Modifier.padding(start = 6.dp).size(20.dp))
             }
-            // Android: photo and name at the start, beside the up arrow; the whole block opens the profile.
+            // Photo and name beside it; the whole block opens the profile.
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Avatar(ui.photoUrl, 40.dp, squircle = ui.channel != null)
@@ -1000,8 +1006,8 @@ private fun Composer(
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val cancelAt = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
 
-    // Android composer: one rounded field holding the emoji button, the words and the paperclip,
-    // and a round button beside it that is the mic until there are words, then Send.
+    // As iOS ChatComposerView: a floating "+" (the attach sheet), the floating message pill with the
+    // emoji button inside, and a floating round button that is the mic until there are words, then Send.
     var emojiOpen by rememberSaveable { mutableStateOf(false) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -1009,7 +1015,7 @@ private fun Composer(
     Column(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
             if (recording) {
-                Row(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(field).padding(start = 16.dp),
+                Row(Modifier.weight(1f).height(48.dp).floating(RoundedCornerShape(24.dp)).padding(start = 16.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(c.red))
                     Spacer(Modifier.width(8.dp))
@@ -1022,19 +1028,16 @@ private fun Composer(
                     Spacer(Modifier.width(12.dp))
                 }
             } else {
+                IconButton(onClick = onAttach, modifier = Modifier.size(48.dp).floating()) {
+                    Icon(Icons.Filled.Add, contentDescription = "Attach", tint = c.label, modifier = Modifier.size(26.dp))
+                }
+                Spacer(Modifier.width(8.dp))
                 Row(
-                    Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(field),
+                    Modifier.weight(1f).heightIn(min = 48.dp).floating(RoundedCornerShape(24.dp)),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                IconButton(onClick = {
-                    emojiOpen = !emojiOpen
-                    if (emojiOpen) keyboard?.hide() else keyboard?.show()
-                }) {
-                    Icon(if (emojiOpen) Icons.Filled.Keyboard else Icons.Outlined.EmojiEmotions,
-                        contentDescription = if (emojiOpen) "Keyboard" else "Emoji", tint = c.secondary)
-                }
                 Box(
-                    Modifier.weight(1f).heightIn(min = 48.dp).padding(vertical = 12.dp),
+                    Modifier.weight(1f).heightIn(min = 48.dp).padding(start = 16.dp, top = 12.dp, bottom = 12.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (draft.isEmpty()) Text("Message", style = MaterialTheme.typography.bodyLarge, color = c.secondary)
@@ -1051,27 +1054,30 @@ private fun Composer(
                         modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false },
                     )
                 }
-                IconButton(onClick = onAttach) {
-                    Icon(Icons.Filled.AttachFile, contentDescription = "Attach", tint = c.secondary,
-                        modifier = Modifier.graphicsLayer { rotationZ = -45f })
+                IconButton(onClick = {
+                    emojiOpen = !emojiOpen
+                    if (emojiOpen) keyboard?.hide() else keyboard?.show()
+                }) {
+                    Icon(if (emojiOpen) Icons.Filled.Keyboard else Icons.Outlined.EmojiEmotions,
+                        contentDescription = if (emojiOpen) "Keyboard" else "Emoji", tint = c.secondary)
                 }
                 }
             }
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
             if (draft.isNotBlank() && !recording) {
                 Box(
-                    Modifier.size(48.dp).clip(CircleShape).background(c.blue).clickable {
+                    Modifier.size(48.dp).floating(fill = c.blue).clickable {
                         val t = draft
                         draft = ""
                         onSend(t)
                     },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(24.dp))
                 }
             } else {
                 Box(
-                    Modifier.size(48.dp).clip(CircleShape).background(c.blue)
+                    Modifier.size(48.dp).floating(fill = if (recording) c.blue else null)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
@@ -1100,8 +1106,8 @@ private fun Composer(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Mic, contentDescription = "Hold to record a voice message",
-                        tint = Color.White, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Outlined.Mic, contentDescription = "Hold to record a voice message",
+                        tint = if (recording) Color.White else c.label, modifier = Modifier.size(26.dp))
                 }
             }
         }
