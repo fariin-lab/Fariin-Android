@@ -98,7 +98,8 @@ fun FloatingTopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String
 fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: String, modifier: Modifier = Modifier, fill: Color? = null) {
     val c = Fariin.colors
     Row(
-        (if (fill != null) modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(fill) else modifier.height(44.dp).floating(RoundedCornerShape(22.dp)))
+        // Every search field is a grey capsule (owner 2026-11-03: white on the white page was not seen).
+        modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(fill ?: c.fieldFill)
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

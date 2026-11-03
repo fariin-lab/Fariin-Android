@@ -221,7 +221,7 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
             if (canSearch) {
                 Spacer(Modifier.height(12.dp))
                 Box(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp))
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(c.fieldFill)
                         .padding(horizontal = 16.dp, vertical = 11.dp),
                 ) {
                     if (query.isEmpty()) Text("Search by name or address", fontSize = 17.sp, color = c.secondary)
@@ -380,7 +380,7 @@ internal fun ContactPickSheet(me: String, cid: String, onDismiss: () -> Unit, on
             Text("Share Contact", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
             Box(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp))
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(c.fieldFill)
                     .padding(horizontal = 16.dp, vertical = 11.dp),
             ) {
                 if (query.isEmpty()) Text("Search", fontSize = 17.sp, color = c.secondary)

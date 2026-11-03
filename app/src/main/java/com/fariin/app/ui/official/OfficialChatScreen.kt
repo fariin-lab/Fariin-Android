@@ -201,7 +201,9 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     com.fariin.app.ui.components.FloatingBack({ closeSearch() }, Modifier.padding(start = 4.dp, end = 8.dp),
                         contentDescription = "Close search")
-                    Box(Modifier.weight(1f)) {
+                    Box(Modifier.weight(1f).padding(end = 8.dp).heightIn(min = 44.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).background(c.fieldFill).padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.CenterStart) {
                         if (query.isEmpty()) Text("Search", fontSize = 18.sp, color = c.secondary)
                         androidx.compose.foundation.text.BasicTextField(query, { query = it }, singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 18.sp, color = c.label),
