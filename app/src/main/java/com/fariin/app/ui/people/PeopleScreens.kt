@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -68,6 +69,7 @@ import com.fariin.app.ui.components.floating
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.Wallpaper
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsRow
 import com.fariin.app.ui.settings.SettingsSection
@@ -402,7 +404,13 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
-            if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor)
+            // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
+            // under Glow Story and a divider when Glow is on, as iOS orders the menu.
+            val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
+            if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
+                if (fromChat) { androidx.compose.material3.HorizontalDivider(color = c.separator); ChangeWallpaperItem { close(); wallpaper() } }
+            }
+            else if (fromChat) ContactInfoMenu(onWallpaper = wallpaper)
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
@@ -440,6 +448,28 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Spacer(Modifier.height(30.dp))
         }
     }
+}
+
+/** The contact page's three-dot menu (iOS ContactInfoView moreMenu): Change Wallpaper for this chat. */
+@Composable
+private fun ContactInfoMenu(onWallpaper: () -> Unit) {
+    val c = Fariin.colors
+    var open by remember { mutableStateOf(false) }
+    Box {
+        com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "More",
+            onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
+        androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+            ChangeWallpaperItem { open = false; onWallpaper() }
+        }
+    }
+}
+
+@Composable
+private fun ChangeWallpaperItem(onClick: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
+        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Wallpaper, null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable

@@ -91,9 +91,10 @@ fun GlowActionTile(door: GlowDoor) {
     }
 }
 
-/** The page bar's overflow holding "Glow Story" (or "Remove Glowing"), the second door. */
+/** The page bar's overflow holding "Glow Story" (or "Remove Glowing"), the second door; [more] adds the
+ *  page's own items under it (the contact page's Change Wallpaper), given a close for the menu. */
 @Composable
-fun GlowOverflow(door: GlowDoor) {
+fun GlowOverflow(door: GlowDoor, more: @Composable (close: () -> Unit) -> Unit = {}) {
     val c = Fariin.colors
     val s by Glow.state.collectAsState()
     var open by remember { mutableStateOf(false) }
@@ -105,6 +106,7 @@ fun GlowOverflow(door: GlowDoor) {
                 onClick = { open = false; door.remove() }, leadingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })
             else DropdownMenuItem(text = { Text("Glow Story", color = if (s.known) c.label else c.secondary) }, enabled = s.known,
                 onClick = { open = false; door.intro = true }, leadingIcon = { GlowMark(20.dp, tint = if (s.known) c.label else c.secondary) })
+            more { open = false }
         }
     }
 }

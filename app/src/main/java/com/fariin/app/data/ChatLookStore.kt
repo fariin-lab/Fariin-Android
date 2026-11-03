@@ -41,6 +41,19 @@ object ChatLookStore {
         prefs(c).edit().putString(ChatLookRules.WALL_DEFAULT, w.stored).apply(); bump()
     }
 
+    /** iOS set(_:for:): this chat's own wallpaper (None = plain, which beats the Settings one). */
+    fun setWallpaper(c: Context, cid: String, w: ChatWallpaper) {
+        prefs(c).edit().putString(ChatLookRules.wallKey(cid), w.stored).apply(); bump()
+    }
+
+    /** Does this chat have its own wallpaper, or follow the Settings one (iOS hasOverride)? */
+    fun hasOwnWallpaper(c: Context, cid: String): Boolean = prefs(c).contains(ChatLookRules.wallKey(cid))
+
+    /** iOS applyToAllChats(alsoFor:): the Settings wallpaper becomes [w] and [cid] drops its own. */
+    fun applyToAllChats(c: Context, w: ChatWallpaper, alsoFor: String) {
+        prefs(c).edit().putString(ChatLookRules.WALL_DEFAULT, w.stored).remove(ChatLookRules.wallKey(alsoFor)).apply(); bump()
+    }
+
     /** Every chat's own wallpaper back to the Settings one, and the Settings one to [w]. */
     fun resetAllWallpapers(c: Context, w: ChatWallpaper = ChatWallpaper.None) {
         val p = prefs(c); val e = p.edit()
@@ -60,6 +73,17 @@ object ChatLookStore {
     fun setDefaultColor(c: Context, spec: ChatColorSpec?) {
         val e = prefs(c).edit()
         if (spec != null) e.putString(ChatLookRules.COLOR_DEFAULT, spec.stored) else e.remove(ChatLookRules.COLOR_DEFAULT)
+        e.apply(); bump()
+    }
+
+    /** This chat's own colour pick; null = Auto (iOS ChatColorStore.chosen(for:)). */
+    fun ownColor(c: Context, cid: String): ChatColorSpec? =
+        prefs(c).getString(ChatLookRules.colorKey(cid), null).let { if (it == "__none__") null else ChatColorSpec.parse(it) }
+
+    /** iOS ChatColorStore.set(_:for:): null clears the chat's own pick. */
+    fun setColor(c: Context, cid: String, spec: ChatColorSpec?) {
+        val e = prefs(c).edit()
+        if (spec != null) e.putString(ChatLookRules.colorKey(cid), spec.stored) else e.remove(ChatLookRules.colorKey(cid))
         e.apply(); bump()
     }
 

@@ -194,8 +194,18 @@ fun ThreadScreen(
         bubbleText(ctx.getSharedPreferences(com.fariin.app.ui.settings.CHAT_PREFS, android.content.Context.MODE_PRIVATE)
             .getString("chat.textSize", "medium") ?: "medium")
     }
-    androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
-        ThreadContent(ui, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+    // iOS openChatWallpaper: "Change Wallpaper" on the info page comes back here and opens this chat's picker.
+    var wallpaperOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(ui.cid) {
+        com.fariin.app.ui.settings.ChatWallpaperLink.requests.collect { want ->
+            if (want == ui.cid) { com.fariin.app.ui.settings.ChatWallpaperLink.requests.value = null; wallpaperOpen = true }
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
+            ThreadContent(ui, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+        }
+        if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid) { wallpaperOpen = false }
     }
 }
 
