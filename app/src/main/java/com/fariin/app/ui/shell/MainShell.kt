@@ -89,6 +89,11 @@ import dev.chrisbanes.haze.hazeSource
  */
 val LocalBottomBarInset = staticCompositionLocalOf { 0.dp }
 
+/** A page pushed inside a tab hides the tab bar while it is open (iOS hides it on a pushed page). */
+object TabBarVisibility {
+    var hidden by androidx.compose.runtime.mutableStateOf(false)
+}
+
 /** Counts taps on the tab that is already open; the open tab reads it through [OnTabReselect]. */
 val LocalTabReselect = compositionLocalOf { 0 }
 
@@ -195,10 +200,14 @@ fun MainShell(
             val flow = remember(me) { repo.listen(me) }
             flow.collectAsState(initial = null).value?.photoUrl
         }
-        FloatingTabBar(
-            tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, animate = power.animations, onSelect = select,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 24.dp, vertical = BarMargin),
-        )
+        androidx.compose.animation.AnimatedVisibility(!TabBarVisibility.hidden, modifier = Modifier.align(Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+            FloatingTabBar(
+                tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, animate = power.animations, onSelect = select,
+                modifier = Modifier.navigationBarsPadding().padding(horizontal = 24.dp, vertical = BarMargin),
+            )
+        }
     }
 }
 

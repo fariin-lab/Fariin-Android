@@ -99,6 +99,11 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
     }
 
     val page = stack.lastOrNull()
+    // A Settings page hides the tab bar, the home list shows it (iOS).
+    androidx.compose.runtime.DisposableEffect(page == null) {
+        com.fariin.app.ui.shell.TabBarVisibility.hidden = page != null
+        onDispose { com.fariin.app.ui.shell.TabBarVisibility.hidden = false }
+    }
     // The grey page under the white section cards (iOS grouped background).
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
         when {
