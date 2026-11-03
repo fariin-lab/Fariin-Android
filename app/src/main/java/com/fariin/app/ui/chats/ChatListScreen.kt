@@ -322,7 +322,15 @@ fun ChatListScreen(
                         }
                         Column {
                         TopAppBar(
-                            title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                            // The brand at rest: the Fariin mark and the name in bold (owner 2026-11-03, "ours
+                            // looks weak" beside the reference apps). Status words stay plain.
+                            title = {
+                                if (title == "Fariin") Row(verticalAlignment = Alignment.CenterVertically) {
+                                    com.fariin.app.ui.official.OfficialAvatar(32.dp)
+                                    Spacer(Modifier.width(10.dp))
+                                    Text("Fariin", fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = c.label)
+                                } else Text(title, style = MaterialTheme.typography.titleLarge)
+                            },
                             // The bar's buttons float in their own circles, as the chat screen's back does.
                             navigationIcon = {
                                 if (showArchive) FloatingBack(onBack = { showArchive = false }, modifier = Modifier.padding(start = 12.dp, end = 4.dp))

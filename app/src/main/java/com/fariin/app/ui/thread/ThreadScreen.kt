@@ -1166,6 +1166,8 @@ private fun Composer(
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
+                                val downAt = down.uptimeMillis
+                                var upAt = downAt
                                 val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                                     PackageManager.PERMISSION_GRANTED
                                 if (!granted) {
@@ -1181,12 +1183,17 @@ private fun Composer(
                                     val e = awaitPointerEvent()
                                     val ch = e.changes.firstOrNull { it.id == down.id } ?: break
                                     slide = ch.position.x - down.position.x
+                                    upAt = ch.uptimeMillis
                                     ch.consume()
                                     if (slide < -cancelAt) { cancelled = true; break }
                                     if (!ch.pressed) break
                                 }
                                 recording = false; slide = 0f
-                                if (cancelled) recorder.cancel() else recorder.finish { it?.let(onSendVoice) }
+                                // A tap, not a hold: nothing is sent and the iOS hint says how (ChatComposerView
+                                // holdHintPill, "Hold to record, release to send").
+                                val tapped = upAt - downAt < 300
+                                if (cancelled || tapped) recorder.cancel() else recorder.finish { it?.let(onSendVoice) }
+                                if (tapped && !cancelled) com.fariin.app.ui.components.Snack.show("Hold to record, release to send")
                             }
                         },
                     contentAlignment = Alignment.Center,
