@@ -13,6 +13,7 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
 import com.fariin.app.data.AuthFlowError
 import com.fariin.app.data.AuthRepository
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.functions.FirebaseFunctions
@@ -24,17 +25,26 @@ import org.json.JSONObject
 class SheetCancelled : Exception("cancelled")
 
 /**
- * Sign in with Google through the system Credential Manager ("Sign in with Google" button flow).
+ * Sign in with Google through the system Credential Manager (the bottom sheet, else the button flow).
  * The ID token is for the project's web client (default_web_client_id from google-services.json),
  * which Firebase accepts for provider google.com; the Google account id inside it is the one the
  * iPhone's sign-in carries, so both open the same Fariin account.
  */
 object GoogleSignIn {
     suspend fun idToken(activity: Activity): String {
-        val option = GetSignInWithGoogleOption.Builder(AuthRepository.googleServerClientId(activity)).build()
-        val req = GetCredentialRequest.Builder().addCredentialOption(option).build()
+        val client = AuthRepository.googleServerClientId(activity)
+        val manager = CredentialManager.create(activity)
+        // The small sheet from the bottom first ("Continue as ..."), as most Android apps sign in; the
+        // full Google dialog only when the phone holds no Google account the sheet could offer.
+        val sheet = GetGoogleIdOption.Builder().setServerClientId(client).setFilterByAuthorizedAccounts(false)
+            .setAutoSelectEnabled(false).build()
         val cred = try {
-            CredentialManager.create(activity).getCredential(activity, req).credential
+            try {
+                manager.getCredential(activity, GetCredentialRequest.Builder().addCredentialOption(sheet).build()).credential
+            } catch (_: NoCredentialException) {
+                val button = GetSignInWithGoogleOption.Builder(client).build()
+                manager.getCredential(activity, GetCredentialRequest.Builder().addCredentialOption(button).build()).credential
+            }
         } catch (e: GetCredentialCancellationException) {
             // Google refusing the app (an unregistered signing key, a broken account) comes back as a
             // "cancel" too, after the person picked an account: "[16] Account reauth failed". That one
