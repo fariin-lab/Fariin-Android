@@ -295,6 +295,23 @@ data class GroupLink(
     }
 }
 
+/** The group page's ⋮ menu link (Share Group, QR Code). */
+object GroupShareLink {
+    /**
+     * iOS GroupInfoView.mayShareLink / inviteLink: admins and the owner share the link, members only
+     * while "Share the group link" is on; the server's code first, else the group doc's old `inviteCode`.
+     * null = no Share Group or QR Code in the menu.
+     */
+    fun of(me: String, conv: Map<String, Any?>, serverCode: String?): String? {
+        val admins = (conv["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        val may = me in admins || conv["createdBy"] == me || conv["membersCanShareLink"] == true
+        if (!may) return null
+        val code = serverCode ?: (conv["inviteCode"] as? String)
+        if (code.isNullOrEmpty() || !QrRules.safeSegment(code)) return null
+        return "https://fariin.com/g/$code"
+    }
+}
+
 /** listGroupLinks: the primary link, the others this admin may see, the revoked ones. */
 data class GroupLinkList(val primary: GroupLink?, val links: List<GroupLink>, val revoked: List<GroupLink>, val isOwner: Boolean) {
     companion object {

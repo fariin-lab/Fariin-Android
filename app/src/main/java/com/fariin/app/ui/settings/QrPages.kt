@@ -293,18 +293,31 @@ private fun Flash(text: String?, modifier: Modifier) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MyQrSheet(profile: MyProfile?, onClose: () -> Unit, onScan: () -> Unit) {
+    val handle = profile?.handle.orEmpty()
+    val name = profile?.name.orEmpty()
+    QrPosterSheet(title = name.ifEmpty { handle }, subtitle = if (handle.isEmpty()) " " else "@$handle",
+        link = if (handle.isEmpty()) QrRules.LINK_HOST else QrRules.userLink(handle), photoUrl = profile?.photoUrl,
+        hint = "Scan with the camera to chat", onClose = onClose, onScan = onScan)
+}
+
+/** iOS GroupLinkQRSheet for a group: "Group · N members" under the name, "to join" under the code, no Scan. */
+@Composable
+internal fun GroupQrSheet(title: String, link: String, photoUrl: String?, memberCount: Int, onClose: () -> Unit) {
+    QrPosterSheet(title = title, subtitle = "Group · $memberCount member${if (memberCount == 1) "" else "s"}", link = link,
+        photoUrl = photoUrl, hint = "Scan with the camera to join", onClose = onClose, onScan = null)
+}
+
+/** The poster sheet both codes use (iOS GroupLinkQRSheet): the coloured ground, the card, the colours, the actions. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUrl: String?, hint: String,
+                          onClose: () -> Unit, onScan: (() -> Unit)?) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val prefs = remember { ctx.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE) }
     var themeIndex by remember { mutableIntStateOf(prefs.getInt("groupQR.theme", 0).coerceIn(0, QrTheme.all.size - 1)) }
     val theme = QrTheme.all[themeIndex]
-    val handle = profile?.handle.orEmpty()
-    val name = profile?.name.orEmpty()
-    val title = name.ifEmpty { handle }
-    val link = if (handle.isEmpty()) QrRules.LINK_HOST else QrRules.userLink(handle)
-    val subtitle = if (handle.isEmpty()) " " else "@$handle"
-    val hint = "Scan with the camera to chat"
     var toast by remember { mutableStateOf<String?>(null) }
     var toastSeq by remember { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
@@ -317,7 +330,7 @@ internal fun MyQrSheet(profile: MyProfile?, onClose: () -> Unit, onScan: () -> U
 
     suspend fun card(): File? = withContext(Dispatchers.IO) {
         runCatching {
-            val photo = profile?.photoUrl?.takeIf { it.isNotEmpty() }?.let { QrPoster.loadPhoto(ctx, it) }
+            val photo = photoUrl?.takeIf { it.isNotEmpty() }?.let { QrPoster.loadPhoto(ctx, it) }
             val bmp = QrPoster.render(ctx, themeIndex, title, subtitle, hint, link, photo)
             File(ctx.cacheDir, "open").apply { mkdirs() }.let { File(it, "fariin-qr.png") }.also { f ->
                 f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -360,7 +373,7 @@ internal fun MyQrSheet(profile: MyProfile?, onClose: () -> Unit, onScan: () -> U
                     }
                 }
                 Spacer(Modifier.weight(1f).heightIn(min = 10.dp))
-                CardFace(title, subtitle, link, profile?.photoUrl, theme, hint, Modifier.padding(horizontal = 28.dp).scale(dipScale))
+                CardFace(title, subtitle, link, photoUrl, theme, hint, Modifier.padding(horizontal = 28.dp).scale(dipScale))
                 Spacer(Modifier.weight(1f).heightIn(min = 24.dp))
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -396,7 +409,7 @@ internal fun MyQrSheet(profile: MyProfile?, onClose: () -> Unit, onScan: () -> U
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("Fariin link", link))
                         flash("Link copied")
                     }
-                    PosterAction(rememberVectorPainter(Icons.Outlined.QrCodeScanner), "Scan", Modifier.weight(1f)) {
+                    if (onScan != null) PosterAction(rememberVectorPainter(Icons.Outlined.QrCodeScanner), "Scan", Modifier.weight(1f)) {
                         scope.launch { sheet.hide() }.invokeOnCompletion { onClose(); onScan() }
                     }
                 }

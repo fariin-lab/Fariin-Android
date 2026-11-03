@@ -191,6 +191,10 @@ object GroupManage {
 
     suspend fun listLinks(cid: String): GroupLinkList = GroupLinkList.from(call("listGroupLinks", mapOf("cid" to cid)))
 
+    /** iOS GroupInviteService.shareCode: the primary link's code (getShareLink), "" when the group has none. */
+    suspend fun shareCode(cid: String): String =
+        (call("getShareLink", mapOf("cid" to cid))?.get("code") as? String)?.takeIf { QrRules.safeSegment(it) } ?: ""
+
     private fun linkOf(d: Map<*, *>?): GroupLink =
         GroupLink.from(d?.get("link") as? Map<*, *>) ?: throw IllegalStateException("The server sent back no link. Try again.")
 
