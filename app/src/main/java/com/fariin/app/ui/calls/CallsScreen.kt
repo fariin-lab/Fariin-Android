@@ -4,6 +4,7 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -199,7 +200,14 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                                 onInfo = { nav.callLink(r.roomId) }, onLongClick = { picked = setOf(tag) })
                         } else {
                             val run = r as CallRun
-                            CallRow(run, me, now, onInfo = { info = run }, onLongClick = { picked = setOf(tag) })
+                            // iOS: swipe a call left to Delete it from this phone's history.
+                            com.fariin.app.ui.chats.SwipeActionsRow(leading = emptyList(), enabled = !selecting, trailing = listOf(
+                                com.fariin.app.ui.chats.SwipeAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Delete),
+                                    com.fariin.app.ui.chats.SwipeColors.red) {
+                                    com.fariin.app.data.HiddenCalls.hide(ctx, run.entries.map { it.id }.toSet())
+                                })) {
+                                CallRow(run, me, now, onInfo = { info = run }, onLongClick = { picked = setOf(tag) })
+                            }
                         }
                     }
                 }
@@ -242,9 +250,9 @@ private fun PickableRow(selecting: Boolean, picked: Boolean, onToggle: () -> Uni
     val c = Fariin.colors
     Box(Modifier.background(if (picked) c.blue.copy(alpha = 0.12f) else androidx.compose.ui.graphics.Color.Transparent)) {
         content()
-        // The tick covers the row's (i), on the row's own colour.
+        // The tick sits over the photo, as on the chat list, so the time and (i) stay whole.
         val under = if (picked) c.blue.copy(alpha = 0.12f).compositeOver(c.bg) else c.bg
-        if (selecting) Box(Modifier.matchParentSize().clickable(onClick = onToggle).padding(end = 8.dp), contentAlignment = Alignment.CenterEnd) {
+        if (selecting) Box(Modifier.matchParentSize().clickable(onClick = onToggle).padding(start = 17.dp), contentAlignment = Alignment.CenterStart) {
             Box(Modifier.size(44.dp).background(under), contentAlignment = Alignment.Center) {
                 Icon(if (picked) Icons.Filled.CheckCircle else Icons.Outlined.Circle, contentDescription = if (picked) "Selected" else null,
                     tint = if (picked) c.blue else c.secondary, modifier = Modifier.size(24.dp))
