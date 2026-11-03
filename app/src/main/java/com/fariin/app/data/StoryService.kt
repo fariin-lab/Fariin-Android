@@ -192,7 +192,7 @@ class StoryService(
             me, isVideo, id, caption.trim(), choice, mode, recipients, expires, FieldValue.serverTimestamp(),
             media.blurThumb, media.video?.info, allowsReplies = replies, captureProtected = capture,
             stickers = media.stickers,
-        )
+        ).let { p -> media.repostOf?.let { p + ("repostOf" to it.asMap()) } ?: p }
         val mainRef = storage.reference.child(if (isVideo) StoryRules.videoPath(id) else StoryRules.photoPath(id))
         val thumbRef = storage.reference.child(StoryRules.thumbPath(id))
         try {
@@ -217,6 +217,7 @@ class StoryService(
                         "authorUid" to me, "createdAt" to FieldValue.serverTimestamp(), "expiresAt" to expires,
                         "mediaUrl" to urls.first, "thumbUrl" to urls.second, "blurThumb" to media.blurThumb,
                         "stickers" to media.stickers.map { StoryTaps.asMap(it) }, "type" to if (isVideo) "video" else "image",
+                        *(media.repostOf?.let { arrayOf("repostOf" to it.asMap()) } ?: emptyArray()),
                         "caption" to caption.trim(), "duration" to (media.video?.info?.durationSec ?: 0.0),
                         "allowsReplies" to replies, "captureProtected" to capture,
                     )).await()

@@ -70,6 +70,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -149,6 +150,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.fariin.app.data.StoryMedia
+import coil3.request.allowHardware
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -223,6 +227,42 @@ fun StoryViewer(
     val groups = remember { mutableStateListOf<StoryGroup>().apply { addAll(initialGroups) } }
     val pager = rememberPagerState(initialPage = startGroup.coerceIn(0, maxOf(0, initialGroups.size - 1))) { groups.size }
     val convs by rememberUpdatedState(conversations)
+    // Repost (iOS beginRepost): the original drawn as a card, then the story composer with the credit.
+    val reposting = remember { mutableStateOf(false) }
+    var repostDraft by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
+    val repostCtx = androidx.compose.ui.platform.LocalContext.current
+    val repostScope = rememberCoroutineScope()
+    fun startRepost(st: Story, g: StoryGroup) {
+        if (reposting.value) return
+        reposting.value = true
+        repostScope.launch {
+            val draft = withContext(Dispatchers.IO) {
+                runCatching {
+                    val loader = coil3.SingletonImageLoader.get(repostCtx)
+                    suspend fun load(u: String?): android.graphics.Bitmap? = u?.takeIf { it.isNotEmpty() }?.let { url ->
+                        (loader.execute(coil3.request.ImageRequest.Builder(repostCtx).data(url)
+                            .allowHardware(false).build()) as? coil3.request.SuccessResult)
+                            ?.image?.let { (it as? coil3.BitmapImage)?.bitmap }
+                    }
+                    val image = load(st.previewUrl) ?: return@runCatching null
+                    val card = RepostCard.render(image, g.name, load(g.photoUrl))
+                    val f = java.io.File(repostCtx.cacheDir, "repost-${st.id}.jpg")
+                    f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
+                    StoryMedia.preparePhoto(repostCtx, android.net.Uri.fromFile(f))?.let { p ->
+                        StoryMedia.Prepared(p.jpeg, p.blurThumb, null, p.width, p.height, p.stickers,
+                            com.fariin.app.data.StoryRepost(st.authorUid, g.name, st.id, card = true))
+                    }
+                }.getOrNull()
+            }
+            if (draft == null) { reposting.value = false; com.fariin.app.ui.components.Snack.show("Could not load that story") }
+            else repostDraft = draft
+        }
+    }
+    repostDraft?.let { d ->
+        StoryComposerDialog(me, d, conversations,
+            onClose = { repostDraft = null; reposting.value = false },
+            onPosted = { repostDraft = null; reposting.value = false; com.fariin.app.ui.components.Snack.show("Reposted") })
+    }
     val who: (String) -> Pair<String, String?> = { StoryService.who(it, convs, me) }
     // The people I may reply to: my accepted 1:1 chats (iOS StoryContact.isFriend).
     val contacts = remember(conversations) { StoryRules.contacts(me, conversations) }
@@ -556,8 +596,11 @@ fun StoryViewer(
                 },
             ) {
                 StoryPage(
+                    canRepost = { st -> com.fariin.app.data.StoryRepostRules.allows(st, st.repostOf, me,
+                        convs.firstOrNull { !it.isGroup && it.users.contains(st.authorUid) && it.users.contains(me) }?.isBlockedByMe(me) == true) },
+                    onRepost = { st -> startRepost(st, g) },
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
-                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live,
+                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value,
                     // The bars and caption go over the first third of the sheet's pull (iOS storySheetProgress).
                     chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
                     jumpTo = if (page == pager.currentPage) jumpTo else null,
@@ -756,6 +799,8 @@ fun StoryViewer(
 /** One ring's stories, with its own place in them. */
 @Composable
 private fun StoryPage(
+    canRepost: (Story) -> Boolean,
+    onRepost: (Story) -> Unit,
     me: String,
     group: StoryGroup,
     /** Where the story card sits in this page, in pixels (the viewer's `cardOf`). */
@@ -1015,6 +1060,7 @@ private fun StoryPage(
         ) {
             if (mine) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) }, onDelete = { onDelete(story) })
             else ReplyBar(story, service, canReply = canReply(story), showLike = receipts, onFocus = onReplyFocus,
+                onRepost = if (canRepost(story)) ({ onRepost(story) }) else null,
                 onSend = { t, reaction -> onReply(story, t, reaction) }, onLike = { onLike(story, it) })
         }
     }
@@ -1150,6 +1196,7 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
 private fun ReplyBar(
     story: Story, service: StoryService, canReply: Boolean, showLike: Boolean,
     onFocus: (Boolean) -> Unit, onSend: (String, Boolean) -> Unit, onLike: (Boolean) -> Unit,
+    onRepost: (() -> Unit)? = null,
 ) {
     var text by remember(story.id) { mutableStateOf("") }
     var liked by remember(story.id) { mutableStateOf(false) }
@@ -1213,8 +1260,13 @@ private fun ReplyBar(
                 }, contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
                 }
-            } else if (showLike) {
+            } else if (showLike || onRepost != null) {
+                // iOS repost button (ic_repost), left of the heart, only where the story may be passed on.
+                if (onRepost != null) Box(Modifier.size(44.dp).clip(CircleShape).clickable { onRepost() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Repeat, contentDescription = "Repost", tint = Color.White, modifier = Modifier.size(26.dp))
+                }
                 // iOS likeButton: the bare heart on the black, in a 44 target, no plate.
+                if (showLike)
                 Box(Modifier.size(44.dp).clip(CircleShape)
                     .clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
                     Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",

@@ -15,7 +15,9 @@ object StoryMedia {
     /** [jpeg] is the photo itself, or the video's poster frame (thumb.jpg). [stickers]: the tap
      *  areas drawn into it (a text story's link card), posted as the story's `stickers`. */
     class Prepared(val jpeg: ByteArray, val blurThumb: String, val video: Video? = null, val width: Int = 0, val height: Int = 0,
-                   val stickers: List<StoryTapTarget> = emptyList())
+                   val stickers: List<StoryTapTarget> = emptyList(),
+                   /** A repost's credit (iOS repostOf), written on the story and its public copy. */
+                   val repostOf: StoryRepost? = null)
 
     class TooBig : Exception("This video is too large for a story.")
 

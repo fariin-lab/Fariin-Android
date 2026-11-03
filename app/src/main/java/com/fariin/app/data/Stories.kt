@@ -38,6 +38,8 @@ data class Story(
     val recipientsLeft: Int = -1,
     /** The link areas drawn into the picture (iOS `stickers`, see [StoryTapTarget]). */
     val taps: List<StoryTapTarget> = emptyList(),
+    /** The credit of a repost (iOS repostOf), null for an original story. */
+    val repostOf: StoryRepost? = null,
 ) {
     /** The ring a story belongs to: its author, or "g:" + the group for a group's story. */
     val ringKey: String get() = groupId?.takeIf { it.isNotEmpty() }?.let { StoryGroup.GROUP_PREFIX + it } ?: authorUid
@@ -104,6 +106,7 @@ object StoryList {
             blurThumb = data["blurThumb"] as? String ?: "",
             recipientsLeft = (data["recipientUids"] as? List<*>)?.size ?: -1,
             taps = StoryTaps.list(data["stickers"]),
+            repostOf = StoryRepost.from(data["repostOf"]),
         )
     }
 
