@@ -300,6 +300,8 @@ fun ChatListScreen(
                     (scrolled || selecting) && glass -> Modifier.hazeEffect(haze) {
                         backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
                         tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.72f)))
+                        // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
+                        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
                     }
                     scrolled || selecting -> Modifier.background(c.bg.copy(alpha = 0.97f))
                     else -> Modifier.background(c.bg)

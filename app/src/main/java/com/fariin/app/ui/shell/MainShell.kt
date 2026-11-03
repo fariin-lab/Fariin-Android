@@ -77,6 +77,7 @@ import com.fariin.app.ui.debug.DemoSettings
 import com.fariin.app.ui.settings.SettingsTab
 import com.fariin.app.ui.stories.StoriesTab
 import com.fariin.app.ui.theme.Fariin
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -259,6 +260,8 @@ private fun FloatingTabBar(
             backgroundColor = c.bg
             blurRadius = 24.dp
             noiseFactor = 0f
+            // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
+            inputScale = HazeInputScale.Fixed(1f / 3)
             // Frosted white by day, the dark surface at night, both thin enough to show what passes under.
             tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.72f)))
         }
