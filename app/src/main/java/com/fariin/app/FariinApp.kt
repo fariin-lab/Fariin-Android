@@ -50,6 +50,9 @@ class FariinApp : Application() {
                 FirebaseApp.initializeApp(this)
             }
         }
+        // App Check (iOS AppCheckSetup): every Firebase call carries a token proving it comes from
+        // this app on a real phone. Not on the local backend, which has no App Check.
+        if (!local) com.fariin.app.system.AppCheckSetup.install(debuggable)
         if (local) {
             FirebaseAuth.getInstance().useEmulator(HOST, 9099)
             FirebaseFirestore.getInstance().useEmulator(HOST, 8080)

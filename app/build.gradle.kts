@@ -109,6 +109,10 @@ dependencies {
     implementation(libs.firebase.messaging)
     // Crash reports, as iOS (Telemetry.swift): stack traces and phone facts only, never message text.
     implementation(libs.firebase.crashlytics)
+    // App Check, as iOS sends it (AppCheckSetup.swift): Play Integrity in builds for users, the
+    // debug provider in test builds. Nothing is enforced on the server yet.
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
     // The launch screen (Android 12 API, back-ported), and the app-wide foreground/background signal.
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.process)
