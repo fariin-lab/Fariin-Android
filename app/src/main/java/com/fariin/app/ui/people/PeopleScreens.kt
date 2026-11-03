@@ -352,6 +352,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // iOS: Search only on the page opened from this person's chat; it goes back there and opens it.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     var nickname by remember { mutableStateOf(false) }
+    // Glow (iOS ContactInfoView): the Glow circle and "Glow Story" in the overflow, never on my own
+    // page or a blocked person's; hidden with the feature.
+    val glowOn = com.fariin.app.data.AppFeatures.glow && uid != me && !blocked
+    val glowDoor = com.fariin.app.ui.glow.rememberGlowDoor(uid, name)
     if (nickname) { SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), onBack = { nickname = false }); return }
     // The chat's timer, live (either person may change it; iOS ContactInfoView).
     val live = if (api is com.fariin.app.data.FirestorePeople) liveGroupDoc(cid) else emptyMap()
@@ -391,12 +395,14 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }) { Text(if (block) (if (blocked) "Unblock" else "Block") else "Report", color = c.red) } },
             dismissButton = { TextButton({ ask = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
     }
+    if (glowOn) com.fariin.app.ui.glow.GlowDoorHost(glowDoor)
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
+            if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor)
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
@@ -406,6 +412,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Spacer(Modifier.height(16.dp))
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 ActionTile("Message", androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline) { onOpenChat(cid) }
+                if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor)
                 ActionTile(if (muted) "Unmute" else "Mute",
                     if (muted) androidx.compose.material.icons.Icons.Outlined.Notifications
                     else androidx.compose.material.icons.Icons.Outlined.NotificationsOff) {

@@ -168,6 +168,12 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.channel.ChannelFollows.start(me)
             onDispose { com.fariin.app.channel.ChannelFollows.stop() }
         }
+        // Feature switches (config/features) and the glow relationship (iOS RootView).
+        androidx.compose.runtime.DisposableEffect(me) {
+            com.fariin.app.data.AppFeatures.start()
+            com.fariin.app.data.Glow.start(applicationContext, me)
+            onDispose { com.fariin.app.data.Glow.stop(); com.fariin.app.data.AppFeatures.stop() }
+        }
         // The official Fariin chat (announcements and my read state).
         androidx.compose.runtime.DisposableEffect(me) {
             val build = try {
