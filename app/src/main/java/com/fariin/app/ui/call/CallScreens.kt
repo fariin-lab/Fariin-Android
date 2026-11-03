@@ -87,7 +87,33 @@ import com.fariin.app.call.GroupCallUi
 import com.fariin.app.call.GroupMember
 import com.fariin.app.call.RtcEngine
 import com.fariin.app.ui.components.Avatar
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.util.lerp
+import io.livekit.android.renderer.TextureViewRenderer
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import livekit.org.webrtc.RendererCommon
 import livekit.org.webrtc.SurfaceViewRenderer
 import livekit.org.webrtc.VideoTrack
@@ -122,6 +148,8 @@ private fun Modifier.plainTap(onTap: () -> Unit): Modifier =
 private class Chrome {
     var visible by mutableStateOf(true)
     var poke by mutableIntStateOf(0)
+    /** A finger is dragging my card: no hiding under it (iOS: the clock stops for the drag). */
+    var held by mutableStateOf(false)
     fun touch() { visible = true; poke++ }
     fun tap(allowed: Boolean) { if (!visible) touch() else if (allowed) visible = false }
 }
@@ -129,9 +157,9 @@ private class Chrome {
 @Composable
 private fun rememberChrome(allowed: Boolean): Chrome {
     val c = remember { Chrome() }
-    LaunchedEffect(allowed, c.visible, c.poke) {
+    LaunchedEffect(allowed, c.visible, c.poke, c.held) {
         if (!allowed) { c.visible = true; return@LaunchedEffect }
-        if (c.visible) { delay(5_000); c.visible = false }
+        if (c.visible && !c.held) { delay(5_000); c.visible = false }
     }
     return c
 }
@@ -158,15 +186,25 @@ fun CallScreen(
     // Calling on video: my own preview fills the screen until they pick up (iOS showLocalFull).
     val localFull = ui.cameraOn && s.phase == CallPhase.OUTGOING
     val chrome = rememberChrome(connected && (ui.cameraOn || ui.remoteCameraOn))
-    val shown by animateFloatAsState(if (chrome.visible) 1f else 0f, tween(280), label = "chrome")
+    // The header and the capsule fade: in over 0.2 s, away over 0.28 s, ease in and out (iOS).
+    val shown by animateFloatAsState(if (chrome.visible) 1f else 0f,
+        tween(if (chrome.visible) 200 else 280, easing = EaseInOut), label = "chrome")
+    val local = ui.localVideo
+    val cardUp = ui.cameraOn && !localFull && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED
+    // A tap on my card swaps the two pictures: mine big, theirs in the card (iOS isLocalExpanded).
+    var swapped by remember { mutableStateOf(false) }
+    LaunchedEffect(cardUp) { if (!cardUp) swapped = false }
+    val mineBig = localFull || (swapped && cardUp)
     Box(Modifier.fillMaxSize().background(Backdrop)) {
-        val local = ui.localVideo
+        // One renderer for the big picture whoever is in it, so a swap only moves the tracks.
+        val bigTrack = if (mineBig) local else remoteVideo
+        val bigDemo = bigTrack == null && (if (mineBig) swapped else demoVideo)
         when {
-            remoteVideo != null -> VideoView(remoteVideo, mirror = false, modifier = Modifier.fillMaxSize())
-            demoVideo -> DemoVideo(Modifier.fillMaxSize(), Color(0xFF3A5A40), Color(0xFF1B2B1F))
-            localFull && local != null -> VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize())
+            bigTrack != null -> VideoView(bigTrack, mirror = mineBig && ui.frontCamera, modifier = Modifier.fillMaxSize())
+            bigDemo && mineBig -> DemoVideo(Modifier.fillMaxSize(), MeA, MeB)
+            bigDemo -> DemoVideo(Modifier.fillMaxSize(), ThemA, ThemB)
         }
-        val showFace = remoteVideo == null && !demoVideo && !(localFull && local != null)
+        val showFace = bigTrack == null && !bigDemo
         // Above the video, under every control: a tap shows or hides the controls.
         Box(Modifier.fillMaxSize().plainTap { chrome.tap(connected && (ui.cameraOn || ui.remoteCameraOn)) })
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -194,32 +232,127 @@ fun CallScreen(
             }
             Spacer(Modifier.navigationBarsPadding().height(22.dp))
         }
+        // Controls away: the first tap anywhere only brings them back (hidden buttons take no taps).
+        if (!chrome.visible) Box(Modifier.fillMaxSize().plainTap { chrome.touch() }.semantics { contentDescription = "Show call controls" })
         // My camera: a card at the bottom corner, smaller while the controls are away (iOS pipLayer).
-        if (ui.cameraOn && !localFull && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED) {
-            // The size changes in one step: a video surface resized every frame drops its frames and
-            // flickers (Pixel 5, 2026-11-03: "rejecting buffer" all through the animation). Only the
-            // slide up and down animates, which moves the surface without resizing it.
-            val w = if (chrome.visible) 135.dp else 79.dp
-            val h = if (chrome.visible) 240.dp else 140.dp
-            val bottom by animateDpAsState(if (chrome.visible) 22.dp + BarHeight + 12.dp else 12.dp, label = "tileY")
-            val shape = RoundedCornerShape(18.dp)
-            Box(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = bottom).size(w, h)
-                .shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
-                .clip(shape).border(1.dp, Color.White.copy(alpha = 0.25f), shape)
-                .semantics { contentDescription = "Your video" }) {
+        // Above the catch-all tap, so it can be dragged and tapped while the controls are away too.
+        if (cardUp) {
+            SelfCard(grown = chrome.visible, chrome = chrome,
+                label = if (swapped) ui.peerName else "Your video",
+                onFlip = if (!swapped && local != null) { { chrome.touch(); onFlip() } } else null,
+                // TWO STAGES (iOS tapTile): the small card only brings the controls back; a tap on the
+                // grown card swaps the pictures, and the next one swaps them back.
+                onTap = { if (chrome.visible) swapped = !swapped; chrome.touch() },
+            ) {
                 val m = Modifier.fillMaxSize()
-                if (local != null) VideoView(local, mirror = ui.frontCamera, overlay = true, modifier = m)
-                else DemoVideo(m, Color(0xFF6B7A8F), Color(0xFF2E3A48))
-                // The flip glyph belongs to the card (iOS: no flip in the bar).
-                Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(34.dp).darkGlass(CircleShape)
-                    .clickable { chrome.touch(); onFlip() }.semantics { contentDescription = "Flip camera" },
-                    contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                val cardTrack = if (swapped) remoteVideo else local
+                when {
+                    cardTrack != null -> CardVideoView(cardTrack, mirror = !swapped && ui.frontCamera, modifier = m)
+                    !swapped -> DemoVideo(m, MeA, MeB)
+                    demoVideo -> DemoVideo(m, ThemA, ThemB)
+                    // Their camera is off: their photo holds the card (iOS tileContent).
+                    else -> Box(m.background(TileFill), contentAlignment = Alignment.Center) { Avatar(ui.peerPhoto, 64.dp) }
                 }
             }
         }
-        // Controls away: the first tap anywhere only brings them back (hidden buttons take no taps).
-        if (!chrome.visible) Box(Modifier.fillMaxSize().plainTap { chrome.touch() }.semantics { contentDescription = "Show call controls" })
+    }
+}
+
+// The demo call's made-up pictures: theirs green, mine slate.
+private val ThemA = Color(0xFF3A5A40)
+private val ThemB = Color(0xFF1B2B1F)
+private val MeA = Color(0xFF6B7A8F)
+private val MeB = Color(0xFF2E3A48)
+
+/** iOS's ease in and out (`.easeInOut`). */
+private val EaseInOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+/** iOS `.spring(duration: 0.4)`: no bounce. The card's size and home move on it as one relayout. */
+private val CardSpring = spring<Float>(dampingRatio = 1f, stiffness = 246.7f)
+/** iOS PipTileDrag's snap to a corner: `.spring(response: 0.35, dampingFraction: 0.78)`. */
+private val SnapSpring = spring<Float>(dampingRatio = 0.78f, stiffness = 322.3f)
+/** The card at full size with the controls up, and small without (iOS: a 240 and 140 pt box, 9:16). */
+private val CardBig = DpSize(135.dp, 240.dp)
+private val CardSmall = DpSize(79.dp, 140.dp)
+
+/**
+ * My card (iOS pipLayer + PipTileDrag). [grown] with the controls up: 135 by 240 above the capsule;
+ * without, 79 by 140 near the edge, size and home on one spring. A drag carries it anywhere and the
+ * release snaps it to the nearest corner, judged by where the throw was going. The picture inside
+ * is drawn at the full size and scaled, so the video surface is never resized while it moves.
+ */
+@Composable
+private fun SelfCard(grown: Boolean, chrome: Chrome, label: String, onFlip: (() -> Unit)?, onTap: () -> Unit,
+                     content: @Composable () -> Unit) {
+    val t by animateFloatAsState(if (grown) 1f else 0f, CardSpring, label = "card")
+    // The corner as fractions of the travel: x 0 = the end edge, 1 = the start edge; y 0 = bottom, 1 = top.
+    val fx = remember { Animatable(0f) }
+    val fy = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val bars = WindowInsets.systemBars
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = lerp(CardSmall.width, CardBig.width, t)
+        val h = lerp(CardSmall.height, CardBig.height, t)
+        val px = with(density) {
+            val wPx = w.toPx(); val hPx = h.toPx()
+            val gutter = 12.dp.toPx()
+            val endX = constraints.maxWidth - bars.getRight(this, LayoutDirection.Ltr) - gutter - wPx
+            val startX = bars.getLeft(this, LayoutDirection.Ltr) + gutter
+            // Home clears the capsule with the controls up (iOS barClear: bar + 56), else 12 off the edge.
+            val bottomY = constraints.maxHeight - bars.getBottom(this) - lerp(12.dp, BarHeight + 56.dp, t).toPx() - hPx
+            // The top corner sits under the header (iOS headerClear: safe top + 76).
+            val topY = minOf(bars.getTop(this) + 76.dp.toPx(), bottomY)
+            floatArrayOf(if (rtl) startX else endX, if (rtl) endX else startX, bottomY, topY)
+        }
+        val travel by rememberUpdatedState(px)
+        val shape = RoundedCornerShape(18.dp)
+        Box(Modifier
+            .offset { IntOffset(lerp(px[0], px[1], fx.value).roundToInt(), lerp(px[2], px[3], fy.value).roundToInt()) }
+            .size(w, h)
+            .shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
+            .clip(shape).border(1.dp, Color.White.copy(alpha = 0.25f), shape)
+            .pointerInput(Unit) {
+                val vt = VelocityTracker()
+                var path = Offset.Zero
+                fun settle() {
+                    chrome.held = false
+                    val v = vt.calculateVelocity()
+                    val spanX = travel[1] - travel[0]; val spanY = travel[3] - travel[2]
+                    // Where the throw was going (UIKit's projection at the normal deceleration rate).
+                    val goX = if (spanX == 0f) 0f else fx.value + v.x * 0.499f / spanX
+                    val goY = if (spanY == 0f) 0f else fy.value + v.y * 0.499f / spanY
+                    scope.launch { fx.animateTo(if (goX > 0.5f) 1f else 0f, SnapSpring, if (spanX == 0f) 0f else v.x / spanX) }
+                    scope.launch { fy.animateTo(if (goY > 0.5f) 1f else 0f, SnapSpring, if (spanY == 0f) 0f else v.y / spanY) }
+                }
+                detectDragGestures(
+                    onDragStart = { chrome.held = true; vt.resetTracking(); path = Offset.Zero },
+                    onDragEnd = { settle() },
+                    onDragCancel = { settle() },
+                ) { change, d ->
+                    change.consume()
+                    path += d
+                    vt.addPosition(change.uptimeMillis, path)
+                    val spanX = travel[1] - travel[0]; val spanY = travel[3] - travel[2]
+                    scope.launch {
+                        if (spanX != 0f) fx.snapTo((fx.value + d.x / spanX).coerceIn(0f, 1f))
+                        if (spanY != 0f) fy.snapTo((fy.value + d.y / spanY).coerceIn(0f, 1f))
+                    }
+                }
+            }
+            .pointerInput(Unit) { detectTapGestures { onTap() } }
+            .semantics { contentDescription = label; onClick { onTap(); true } }) {
+            // Drawn at the big size and scaled down: the size moves every frame, the surface never does.
+            Box(Modifier.requiredSize(CardBig).graphicsLayer {
+                scaleX = w / CardBig.width; scaleY = h / CardBig.height
+            }) { content() }
+            // The flip glyph belongs to my live camera's card (iOS: no flip in the bar).
+            if (onFlip != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(34.dp).darkGlass(CircleShape)
+                .clickable(onClick = onFlip).semantics { contentDescription = "Flip camera" },
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+        }
     }
 }
 
@@ -399,6 +532,38 @@ fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier = Modifier,
                 setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
                 setEnableHardwareScaler(true)
                 if (overlay) setZOrderMediaOverlay(true)
+            }
+        },
+        update = { r ->
+            r.setMirror(mirror)
+            val old = r.tag as? VideoTrack
+            if (old !== track) {
+                try { old?.removeSink(r) } catch (_: Exception) {}
+                track.addSink(r)
+                r.tag = track
+            }
+        },
+        onRelease = { r ->
+            try { (r.tag as? VideoTrack)?.removeSink(r) } catch (_: Exception) {}
+            r.release()
+        },
+    )
+}
+
+/**
+ * A WebRTC track drawn into a TextureView, for my card. The card's size moves on a spring; a
+ * SurfaceView there drops its frames and flickers ("rejecting buffer" on every frame, Pixel 5,
+ * 2026-11-03), while a TextureView is drawn with the rest of the screen and takes the scale, the
+ * rounded clip and the drag like any other view.
+ */
+@Composable
+private fun CardVideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier = Modifier) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            TextureViewRenderer(ctx).apply {
+                init(RtcEngine.egl.eglBaseContext, null)
+                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
             }
         },
         update = { r ->

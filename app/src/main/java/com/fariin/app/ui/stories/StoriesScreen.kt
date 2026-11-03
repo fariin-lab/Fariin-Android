@@ -58,6 +58,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -225,6 +228,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         thumbUrl = newest.listThumb, title = "My Story", subtitle = uploadLine ?: StoryList.ago(newest.createdAtMs, now),
                         authorPhoto = profile?.photoUrl, seen = !mine.hasUnseen, camera = true,
                         backThumbUrl = mine.stories.getOrNull(mine.stories.size - 2)?.listThumb,
+                        originKey = mine.key,
                         onClick = { viewing = listOf(mine) to 0 }, onCamera = addStory, menu = myMenu,
                     )
                 } else {
@@ -346,7 +350,7 @@ private fun FriendRow(g: StoryGroup, now: Long, menu: List<RowAction>, onClick: 
         thumbUrl = newest?.listThumb ?: "", title = g.name.ifEmpty { "Fariin user" },
         subtitle = newest?.let { StoryList.ago(it.createdAtMs, now) } ?: "",
         authorPhoto = g.photoUrl, seen = !g.hasUnseen,
-        squircle = false, onClick = onClick, menu = menu,
+        squircle = false, originKey = g.key, onClick = onClick, menu = menu,
     )
 }
 
@@ -367,6 +371,8 @@ private fun StoryRow(
     addBadge: Boolean = false,
     backThumbUrl: String? = null,
     squircle: Boolean = false,
+    /** The ring this card opens: the viewer zooms out of it and shrinks back into it. */
+    originKey: String? = null,
     onClick: () -> Unit = {},
     onCamera: () -> Unit = {},
     menu: List<RowAction> = emptyList(),
@@ -397,7 +403,28 @@ private fun StoryRow(
                         .clip(RoundedCornerShape(16.dp)).background(c.bg),
                 )
             }
-            Box(Modifier.size(width = 66.dp, height = 94.dp).clip(shape).background(c.placeholderFill), contentAlignment = Alignment.Center) {
+            val view = androidx.compose.ui.platform.LocalView.current
+            val radiusPx = with(androidx.compose.ui.platform.LocalDensity.current) { 14.dp.toPx() }
+            if (originKey != null) androidx.compose.runtime.DisposableEffect(originKey) {
+                onDispose { StoryOrigins.rects.remove(originKey); StoryOrigins.radii.remove(originKey) }
+            }
+            Box(
+                Modifier.size(width = 66.dp, height = 94.dp)
+                    .then(if (originKey == null) Modifier else Modifier
+                        .onGloballyPositioned { lc ->
+                            // In screen pixels: the viewer is its own window.
+                            val loc = IntArray(2)
+                            view.getLocationOnScreen(loc)
+                            val p = lc.positionInWindow()
+                            StoryOrigins.rects[originKey] = androidx.compose.ui.geometry.Rect(
+                                p.x + loc[0], p.y + loc[1], p.x + loc[0] + lc.size.width, p.y + loc[1] + lc.size.height)
+                            StoryOrigins.radii[originKey] = radiusPx
+                        }
+                        // The slot stays empty while its story is out, so the landing fills it.
+                        .graphicsLayer { alpha = if (StoryOrigins.hiddenKey == originKey) 0f else 1f })
+                    .clip(shape).background(c.placeholderFill),
+                contentAlignment = Alignment.Center,
+            ) {
                 when {
                     // Debug demo data only: a plain colour instead of a picture.
                     thumbUrl.startsWith("demo:") -> Box(Modifier.fillMaxSize().background(demoColor(thumbUrl)))

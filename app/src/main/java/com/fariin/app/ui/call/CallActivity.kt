@@ -90,6 +90,30 @@ class CallActivity : ComponentActivity() {
     /** Picture in picture: a video call shrinks into a small window when I leave the app. */
     private var inPip by mutableStateOf(false)
     private var demoGroup: GroupCallUi? = null
+    /** Debug demo only: my real camera in the card, so the card's video path runs without a call. */
+    private var demoCam by mutableStateOf<livekit.org.webrtc.VideoTrack?>(null)
+    private var demoCapturer: livekit.org.webrtc.CameraVideoCapturer? = null
+    private var demoHelper: livekit.org.webrtc.SurfaceTextureHelper? = null
+
+    private fun startDemoCamera() {
+        if (demoCam != null || !granted(Manifest.permission.CAMERA)) return
+        val f = com.fariin.app.call.RtcEngine.factory(this)
+        val en = livekit.org.webrtc.Camera2Enumerator(this)
+        val name = en.deviceNames.firstOrNull { en.isFrontFacing(it) } ?: en.deviceNames.firstOrNull() ?: return
+        val cap = en.createCapturer(name, null) ?: return
+        val src = f.createVideoSource(false)
+        val helper = livekit.org.webrtc.SurfaceTextureHelper.create("demo-camera", com.fariin.app.call.RtcEngine.egl.eglBaseContext)
+        cap.initialize(helper, applicationContext, src.capturerObserver)
+        try { cap.startCapture(1280, 720, 30) } catch (_: Exception) { helper.dispose(); return }
+        demoCapturer = cap; demoHelper = helper
+        demoCam = f.createVideoTrack("demo-video", src)
+    }
+
+    override fun onDestroy() {
+        demoCam?.let { try { demoCapturer?.stopCapture() } catch (_: InterruptedException) {}; demoCapturer?.dispose(); demoHelper?.dispose() }
+        demoCam = null
+        super.onDestroy()
+    }
 
     private fun granted(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
 
@@ -131,7 +155,7 @@ class CallActivity : ComponentActivity() {
                     val pip = CallRouting.pipWanted(ui.status.phase, ui.cameraOn, ui.remoteCameraOn)
                     LaunchedEffect(pip) { updatePip(pip) }
                     if (inPip) { PipScreen(ui); return@FariinTheme }
-                    CallScreen(ui,
+                    CallScreen(demoCam?.let { ui.copy(localVideo = it) } ?: ui,
                         onAccept = { withMic(ui.status.video, { CallManager.accept() }, { CallManager.micDenied() }) },
                         onDecline = { CallManager.decline() },
                         onEnd = { CallManager.hangUp() },
@@ -241,7 +265,7 @@ class CallActivity : ComponentActivity() {
             "incoming" -> CallManager.demo(this, CallPhase.INCOMING, video = false)
             "incomingVideo" -> CallManager.demo(this, CallPhase.INCOMING, video = true)
             "calling" -> CallManager.demo(this, CallPhase.OUTGOING, video = false)
-            "video" -> CallManager.demo(this, CallPhase.ACTIVE, video = true)
+            "video" -> { CallManager.demo(this, CallPhase.ACTIVE, video = true); startDemoCamera() }
             "ended" -> CallManager.demo(this, CallPhase.ENDED, video = false)
             // A car or headset connected: the speaker button opens the route list.
             "bluetooth" -> CallManager.demo(this, CallPhase.ACTIVE, video = false, route = com.fariin.app.call.RouteState(

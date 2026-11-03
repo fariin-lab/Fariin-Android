@@ -2,6 +2,29 @@ package com.fariin.app.ui.stories
 
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import kotlinx.coroutines.Job
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,6 +33,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -142,11 +166,18 @@ fun StoryViewerDialog(
 ) {
     Dialog(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        // Back is the viewer's own: it runs the same shrink into the card as the swipe down.
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnBackPress = false),
     ) {
         // Block screenshots (iOS captureProtected): while such a story is on screen this window is
         // FLAG_SECURE, so a screenshot or a screen recording of it comes out black.
         val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        // The window itself neither dims nor fades: the zoom paints its own wall, on the card's fraction.
+        DisposableEffect(window) {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            window?.setWindowAnimations(0)
+            onDispose { }
+        }
         var secure by remember { mutableStateOf(false) }
         DisposableEffect(window, secure) {
             if (secure) window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
@@ -193,7 +224,6 @@ fun StoryViewer(
     var notifyBar by remember { mutableStateOf<Triple<Boolean, String, Int>?>(null) }
     LaunchedEffect(me) { com.fariin.app.data.StoryNotify.load(me) }
     LaunchedEffect(notifyBar) { val b = notifyBar ?: return@LaunchedEffect; delay(3000); if (notifyBar == b) notifyBar = null }
-    var dragY by remember { mutableFloatStateOf(0f) }
     var replyFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(toast) { if (toast != null) { delay(1500); toast = null } }
@@ -202,35 +232,252 @@ fun StoryViewer(
         if (profileUid != null) profileUid = null else sheetFor = null
     }
 
+    // ---- The zoom: out of the tapped card, back into it (iOS StoryZoomPresenter + the hero drag) ----
+    val density = LocalDensity.current.density
+    val hostView = LocalView.current
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    val hero = remember { HeroState() }
+    val heroJob = remember { arrayOfNulls<Job>(1) }
+    fun currentKey() = groups.getOrNull(pager.currentPage)?.key
+    val cardRadius = 14f * density
+    // The hole follows whoever is on screen, so the landing fills the slot it came out of.
+    val shownKey = currentKey()
+    LaunchedEffect(shownKey) { if (!hero.closed) StoryOrigins.hiddenKey = shownKey }
+    DisposableEffect(Unit) { onDispose { StoryOrigins.hiddenKey = null } }
+
+    fun anchorFor(key: String?): Rect? {
+        val r = StoryOrigins.rects[key ?: return null] ?: return null
+        if (r.width < 1f || r.height < 1f) return null
+        val loc = IntArray(2)
+        hostView.getLocationOnScreen(loc)
+        return r.translate(-loc[0].toFloat(), -loc[1].toFloat())
+    }
+    fun rest() = Offset(size.width / 2f, size.height / 2f)
+
+    /** One flight on the iOS animator: critically damped, mass 1, every property on the same t. */
+    fun runHero(
+        toF: Float, toC: Offset, toA: Float, velocity: Float, stiffness: Float, settle: Float,
+        cover: ((Float) -> Float)? = null, crop: ((Float) -> Float)? = null, dimFloor: ((Float) -> Float)? = null,
+        extra: ((Float) -> Unit)? = null, done: () -> Unit,
+    ) {
+        heroJob[0]?.cancel()
+        val fromF = hero.f; val fromC = hero.center; val fromA = hero.alpha
+        heroJob[0] = scope.launch {
+            Animatable(0f).animateTo(1f, spring(dampingRatio = 1f, stiffness = stiffness, visibilityThreshold = settle), initialVelocity = velocity) {
+                // A real release velocity can carry the spring a hair past 1; never publish outside it.
+                val t = value.coerceIn(0f, 1f)
+                hero.f = fromF + (toF - fromF) * t
+                hero.center = androidx.compose.ui.geometry.lerp(fromC, toC, t)
+                hero.alpha = fromA + (toA - fromA) * t
+                cover?.let { hero.cover = it(t) }
+                crop?.let { hero.crop = it(t) }
+                dimFloor?.let { hero.dimFloor = it(t) }
+                extra?.invoke(t)
+            }
+            done()
+        }
+    }
+
+    // THE OPEN: the first painted frame is already the size of the card it came out of.
+    // Keyed on nothing: a window that re-lays itself out (the screenshot block going on) must not
+    // restart this half way and leave the card parked on its slot.
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { size }.first { it != IntSize.Zero }
+        if (hero.staged) return@LaunchedEffect
+        hero.staged = true
+        val a = anchorFor(currentKey())
+        hero.center = rest()
+        if (a == null) {
+            // Nothing to fly from (Posted Stories): show the story, faded in like the pager's backstop.
+            hero.rootAlpha = 0f
+            hero.visible = true
+            Animatable(0f).animateTo(1f, tween(180)) { hero.rootAlpha = value }
+            return@LaunchedEffect
+        }
+        hero.anchor = a
+        hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
+        hero.coverUrl = groups.getOrNull(pager.currentPage)?.stories?.lastOrNull()?.listThumb
+        hero.f = 1f; hero.center = a.center; hero.crop = 1f; hero.cover = 1f; hero.dimFloor = 0f
+        hero.exiting = false; hero.live = true
+        hero.visible = true
+        // Seated first, flown after: the first frames go to building the page, not to the spring's clock.
+        withFrameMillis { }; withFrameMillis { }
+        runHero(0f, rest(), 1f, 0f, StoryMotion.OPEN_STIFFNESS, StoryMotion.OPEN_SETTLE,
+            cover = StoryMotion::coverOut, crop = StoryMotion::coverOut, dimFloor = { it }) {
+            hero.live = false; hero.cover = 0f; hero.crop = 0f
+        }
+    }
+
+    fun land() {
+        if (hero.closed) return
+        hero.closed = true
+        // The card is home: put the row's own card back, and lift the viewer off it a frame later.
+        StoryOrigins.hiddenKey = null
+        scope.launch { withFrameMillis { }; onClose() }
+    }
+
+    /** Every way out: the swipe, the X, back, the last story ending. Same landing for all of them. */
+    fun close(vy: Float = 0f) {
+        if (hero.committing || hero.closed) return
+        if (!hero.staged || size == IntSize.Zero) { land(); return }
+        heroJob[0]?.cancel()
+        hero.committing = true
+        if (!hero.live) { hero.center = rest(); hero.f = 0f }
+        hero.live = true
+        hero.exiting = true
+        val a = anchorFor(currentKey())
+        if (a == null) {
+            // No card to fly to (scrolled away, or opened from Posted Stories): drift down by its own
+            // height, shrink to 0.72 and fade, on the 0.25s critically damped spring (iOS MediaDismiss).
+            val h = size.height * (1f + (((hero.anchor?.width ?: 0f) / size.width) - 1f) * hero.f)
+            runHero(hero.f, hero.center + Offset(0f, h), 0f, 0f, StoryMotion.DRIFT_STIFFNESS, 0.004f,
+                dimFloor = { 1f - it }, extra = { t -> hero.shrink = 1f - (1f - StoryMotion.DRIFT_SCALE) * t; hero.rootAlpha = 1f - t }) { land() }
+        } else {
+            hero.anchor = a
+            hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
+            hero.coverUrl = groups.getOrNull(pager.currentPage)?.stories?.lastOrNull()?.listThumb
+            val remaining = maxOf(1f, (a.center - hero.center).getDistance())
+            runHero(1f, a.center, 1f, minOf(6f, maxOf(0f, vy) / remaining), StoryMotion.CLOSE_STIFFNESS,
+                StoryMotion.settle(remaining, density),
+                cover = StoryMotion::coverIn, crop = StoryMotion::coverIn, dimFloor = { 1f - it }) { land() }
+        }
+        // A flight that never lands must not trap anyone in the viewer: 1.2s is four times the flight.
+        scope.launch { delay(1200); land() }
+    }
+
+    fun dragBegin() {
+        if (hero.committing || hero.closed || size == IntSize.Zero) return
+        heroJob[0]?.cancel()
+        hero.anchor = anchorFor(currentKey())
+        hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
+        hero.live = true
+        hero.f = 0f; hero.center = rest(); hero.alpha = 1f
+        // Nothing cross-fades under the finger, nothing is cropped, the floor is held.
+        hero.cover = 0f; hero.crop = 0f; hero.dimFloor = 1f
+        // A pull is an exit: the reply bar goes now.
+        hero.exiting = true
+    }
+    /** Down only, measured from the touch: 1:1 while the card shrinks, then a short rubber band. */
+    fun dragTo(dy: Float) {
+        if (!hero.live || hero.committing || size == IntSize.Zero) return
+        val w = size.width.toFloat(); val h = size.height.toFloat()
+        val ty = maxOf(0f, dy)
+        val ratio = (hero.anchor?.width ?: 0f) / w
+        val ceiling = StoryMotion.dragCeiling(ratio)
+        val span = StoryMotion.DRAG_SPAN * density
+        hero.f = minOf(ceiling, ty / span)
+        var y = h / 2f + StoryMotion.dragTravel(ty, span * ceiling, StoryMotion.DRAG_TAIL * density)
+        // And the bottom edge stays on the display.
+        val scaleNow = 1f + (ratio - 1f) * hero.f
+        y = minOf(y, maxOf(h / 2f, h - h * scaleNow / 2f - 10f * density))
+        hero.center = Offset(w / 2f, y)
+        hero.alpha = 1f
+    }
+    fun springBack(vy: Float) {
+        if (!hero.live || hero.committing) return
+        // An arrival: the reply bar fades back in over the last 18% with the card.
+        hero.exiting = false
+        val home = rest()
+        val remaining = maxOf(1f, (home - hero.center).getDistance())
+        runHero(0f, home, 1f, minOf(6f, maxOf(0f, -vy) / remaining), StoryMotion.CLOSE_STIFFNESS,
+            StoryMotion.settle(remaining, density), cover = { 0f }, crop = { 0f }) { hero.live = false }
+    }
+    fun dragEnd(dy: Float, vy: Float) {
+        if (!hero.live || hero.committing) return
+        if (dy > StoryMotion.COMMIT_DISTANCE * density || vy > StoryMotion.COMMIT_VELOCITY * density) close(vy) else springBack(vy)
+    }
+
+    // System back closes with the same shrink; the predictive gesture pulls the card as a short swipe would.
+    PredictiveBackHandler(enabled = profileUid == null && sheetFor == null && !hero.committing) { events ->
+        var began = false
+        try {
+            events.collect { e ->
+                if (!began) { dragBegin(); began = true }
+                dragTo(e.progress * StoryMotion.COMMIT_DISTANCE * density)
+            }
+            close()
+        } catch (c: kotlin.coroutines.cancellation.CancellationException) {
+            if (began) springBack(0f)
+            throw c
+        }
+    }
+
+    val turnSpec = tween<Float>(StoryMotion.TURN_MS, easing = StoryMotion.TURN_EASING)
     fun nextGroup() {
-        if (pager.currentPage + 1 < groups.size) scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } else onClose()
+        if (pager.currentPage + 1 < groups.size) scope.launch { pager.animateScrollToPage(pager.currentPage + 1, animationSpec = turnSpec) } else close()
     }
     fun previousGroup() {
-        if (pager.currentPage > 0) scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }
+        if (pager.currentPage > 0) scope.launch { pager.animateScrollToPage(pager.currentPage - 1, animationSpec = turnSpec) }
+    }
+
+    /** Where the card is on screen right now, in this window's pixels. */
+    fun visibleRect(): Rect {
+        val w = size.width.toFloat(); val h = size.height.toFloat()
+        val a = hero.anchor
+        val aw = a?.width ?: 0f; val ah = a?.height ?: 0f
+        // The crop converges the story to the slot's own shape on a flight; a drag keeps it whole.
+        val th = h * aw / w + (ah - h * aw / w) * hero.crop
+        val vw = (w + (aw - w) * hero.f) * hero.shrink
+        val vh = (h + (th - h) * hero.f) * hero.shrink
+        // At rest the card is the window, whatever the window has done since (insets, rotation).
+        val c = if (hero.live) hero.center else Offset(w / 2f, h / 2f)
+        return Rect(c.x - vw / 2f, c.y - vh / 2f, c.x + vw / 2f, c.y + vh / 2f)
     }
 
     Box(
-        Modifier.fillMaxSize().background(Color.Black)
-            .offset { IntOffset(0, maxOf(0f, dragY).roundToInt()) }
-            .graphicsLayer {
-                val k = 1f - (maxOf(0f, dragY) / 3000f).coerceIn(0f, 0.15f)
-                scaleX = k; scaleY = k
-            },
+        Modifier.fillMaxSize().onSizeChanged { size = it }
+            .graphicsLayer { alpha = if (hero.visible) hero.rootAlpha else 0f },
     ) {
-        HorizontalPager(pager, beyondViewportPageCount = 1, key = { groups.getOrNull(it)?.key ?: it }) { page ->
+        // The wall behind the card: solid at rest, giving way as the card leaves, on the same fraction.
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = StoryMotion.dim(hero.f, hero.dimFloor) }.background(Color.Black))
+        HorizontalPager(
+            pager, beyondViewportPageCount = 1, key = { groups.getOrNull(it)?.key ?: it },
+            // Person to person: commit at 30% of a face, settle over 0.4s on the iOS curve.
+            flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = turnSpec, snapPositionalThreshold = StoryMotion.TURN_THRESHOLD),
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                if (size == IntSize.Zero) return@graphicsLayer
+                val r = visibleRect()
+                val w = size.width.toFloat(); val h = size.height.toFloat()
+                val s = maxOf(r.width / w, r.height / h)
+                scaleX = s; scaleY = s
+                translationX = r.center.x - w / 2f
+                translationY = r.center.y - h / 2f
+                alpha = hero.alpha
+                val moving = hero.f > 0.0001f || hero.shrink < 1f
+                clip = moving
+                if (moving && s > 0f) shape = CardShape(r.width / s, r.height / s, hero.radius * hero.f / s)
+            },
+        ) { page ->
             val g = groups.getOrNull(page) ?: return@HorizontalPager
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
-                    // The cube turn between rings.
+                    // The cube turn between rings (iOS StoryPager.cubeTransform): every face at the
+                    // same frame, only the turn separates them, so the pager's own slide is undone.
                     val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
-                    cameraDistance = 14f * density
-                    transformOrigin = TransformOrigin(if (off < 0f) 0f else 1f, 0.5f)
-                    rotationY = (-off * 90f).coerceIn(-90f, 90f)
+                    val t = -off
+                    if (abs(t) >= 1f) { alpha = 0f; return@graphicsLayer }
+                    alpha = 1f
+                    val face = StoryMotion.face(t, size.width / density)
+                    cameraDistance = StoryMotion.CUBE_PERSPECTIVE * density / 72f
+                    transformOrigin = TransformOrigin.Center
+                    rotationY = face.rotationDeg
+                    scaleX = face.scale; scaleY = face.scale
+                    translationX = off * size.width + face.shiftPt * density
+                }.drawWithContent {
+                    drawContent()
+                    // Each face darkens as it turns away: black 1.0, 0.8, 0.5 across it at |t| x 1.3.
+                    val t = -((pager.currentPage - page) + pager.currentPageOffsetFraction)
+                    if (abs(t) > 0.001f) {
+                        val stops = listOf(Color.Black, Color.Black.copy(alpha = 0.8f), Color.Black.copy(alpha = 0.5f))
+                        val brush = Brush.horizontalGradient(if (t < 0f) stops else stops.reversed())
+                        drawRect(brush, alpha = minOf(1f, abs(t) * StoryMotion.CUBE_TINT))
+                    }
                 },
             ) {
                 StoryPage(
                     me = me, group = g, active = page == pager.currentPage && !pager.isScrollInProgress,
-                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || dragY != 0f,
+                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live,
+                    chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) },
                     summaries = summaries, service = service, who = who,
                     onSeen = { s ->
                         if (s.authorUid != me && marked.add(s.id)) {
@@ -240,12 +487,12 @@ fun StoryViewer(
                         }
                     },
                     onEnd = { nextGroup() }, onBeforeStart = { previousGroup() },
-                    onClose = onClose,
-                    onDrag = { dragY = it },
-                    onDragEnd = { dy ->
-                        dragY = 0f
-                        if (dy > 220f) onClose()
+                    onClose = { close() },
+                    onDrag = { dy ->
+                        if (!hero.live && dy > 0f) dragBegin()
+                        dragTo(dy)
                     },
+                    onDragEnd = { dy, vy -> dragEnd(dy, vy) },
                     onOpenViewers = { id -> sheetFor = id },
                     onDelete = { confirmDelete = it },
                     onReplyFocus = { replyFocused = it },
@@ -268,7 +515,7 @@ fun StoryViewer(
                     receipts = receipts,
                     onShown = onShown,
                     // iOS "..." > Hide Stories: hidden at once, and the viewer closes.
-                    onHide = { uid -> com.fariin.app.data.StoryMutes.setHidden(context, uid, true); onClose() },
+                    onHide = { uid -> com.fariin.app.data.StoryMutes.setHidden(context, uid, true); close() },
                     onNotify = { uid, name ->
                         val on = com.fariin.app.data.StoryNotify.toggle(me, uid)
                         notifyBar = Triple(on, name, (notifyBar?.third ?: 0) + 1)
@@ -278,6 +525,44 @@ fun StoryViewer(
                         storyScope.launch { service.setLiked(s, liked) }
                     },
                 )
+            }
+        }
+
+        // The slot's own picture riding the flight: it dissolves into the story on the way out and
+        // is fully on by 85% of the way home, so the landing swaps two identical pictures.
+        hero.coverUrl?.let { url ->
+            Box(
+                Modifier.layout { m, c ->
+                    val r = if (size == IntSize.Zero) Rect.Zero else visibleRect()
+                    val p = m.measure(Constraints.fixed(maxOf(1, r.width.roundToInt()), maxOf(1, r.height.roundToInt())))
+                    layout(c.maxWidth, c.maxHeight) { p.place(r.left.roundToInt(), r.top.roundToInt()) }
+                }.graphicsLayer {
+                    alpha = hero.cover * hero.rootAlpha
+                    clip = true
+                    shape = RoundedCornerShape(androidx.compose.foundation.shape.CornerSize(hero.radius * hero.f))
+                },
+            ) {
+                val a = hero.anchor
+                if (a != null && hero.cover > 0f) {
+                    val aw = a.width; val ah = a.height
+                    // Drawn at the slot's own size and scaled to fill, so the picture is never re-fetched mid-flight.
+                    Box(
+                        Modifier.align(Alignment.Center).wrapContentSize(unbounded = true)
+                            .layout { m, _ ->
+                                val p = m.measure(Constraints.fixed(maxOf(1, aw.roundToInt()), maxOf(1, ah.roundToInt())))
+                                layout(p.width, p.height) { p.place(0, 0) }
+                            }
+                            .graphicsLayer {
+                                val r = visibleRect()
+                                val s = maxOf(r.width / aw, r.height / ah)
+                                scaleX = s; scaleY = s
+                            },
+                    ) {
+                        if (url.startsWith("demo:")) Box(Modifier.fillMaxSize().background(
+                            runCatching { Color(android.graphics.Color.parseColor(url.removePrefix("demo:"))) }.getOrDefault(Color.Gray)))
+                        else AsyncImage(url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    }
+                }
             }
         }
 
@@ -352,7 +637,7 @@ fun StoryViewer(
                         val gi = groups.indexOfFirst { g -> g.stories.any { it.id == s.id } }
                         if (gi < 0) return@launch
                         val left = groups[gi].stories.filter { it.id != s.id }
-                        if (left.isEmpty()) { if (groups.size == 1) onClose() else groups.removeAt(gi) }
+                        if (left.isEmpty()) { if (groups.size == 1) close() else groups.removeAt(gi) }
                         else groups[gi] = groups[gi].copy(stories = left)
                     }
                 }) { Text("Delete", color = Color(0xFFFF3B30)) }
@@ -369,6 +654,8 @@ private fun StoryPage(
     group: StoryGroup,
     active: Boolean,
     paused: Boolean,
+    /** The reply bar's alpha while the card flies (read in the draw pass, never recomposes). */
+    chrome: () -> Float,
     summaries: MutableMap<String, StoryViewSummary>,
     service: StoryService,
     who: (String) -> Pair<String, String?>,
@@ -377,7 +664,7 @@ private fun StoryPage(
     onBeforeStart: () -> Unit,
     onClose: () -> Unit,
     onDrag: (Float) -> Unit,
-    onDragEnd: (Float) -> Unit,
+    onDragEnd: (dy: Float, vy: Float) -> Unit,
     onOpenViewers: (String) -> Unit,
     onDelete: (Story) -> Unit,
     onReplyFocus: (Boolean) -> Unit,
@@ -452,6 +739,8 @@ private fun StoryPage(
         Modifier.fillMaxSize().pointerInput(story.id, mine) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
+                val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                tracker.addPosition(down.uptimeMillis, down.position)
                 var dx = 0f; var dy = 0f
                 var vertical = false
                 var held = false
@@ -462,13 +751,18 @@ private fun StoryPage(
                     if (ev == null) { held = true; holding = true; continue }
                     val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                     if (ch.isConsumed) { holding = false; break }   // the pager took the swipe
+                    tracker.addPosition(ch.uptimeMillis, ch.position)
                     // Counted before the up check: a fast flick can carry most of its travel in the last event.
                     val d = ch.positionChange()
                     dx += d.x; dy += d.y
                     if (!vertical && abs(dy) > slop && abs(dy) > abs(dx) * 1.2f) vertical = true
                     if (!ch.pressed) {
                         if (vertical) {
-                            if (dy < -120f && mine) { onDrag(0f); onOpenViewers(story.id) } else onDragEnd(dy)
+                            val vy = tracker.calculateVelocity().y
+                            // My story: up past 40dp or a 300dp/s flick opens the viewers (iOS onSwipeUpEnded).
+                            if (mine && (dy < -StoryMotion.VIEWERS_DISTANCE * density || vy < -StoryMotion.VIEWERS_VELOCITY * density)) {
+                                onDragEnd(0f, 0f); onOpenViewers(story.id)
+                            } else onDragEnd(dy, vy)
                         } else if (!held && ch.isConsumed.not()) {
                             focus.clearFocus()
                             if (StoryRules.tapGoesBack(ch.position.x, size.width.toFloat())) goBack() else goNext()
@@ -477,7 +771,7 @@ private fun StoryPage(
                         break
                     }
                     if (!vertical && abs(dx) > slop) { holding = false; break }
-                    if (vertical) { ch.consume(); holding = true; if (dy > 0) onDrag(dy) }
+                    if (vertical) { ch.consume(); holding = true; onDrag(dy) }
                 }
             }
         },
@@ -547,6 +841,7 @@ private fun StoryPage(
         // Bottom: caption, then the owner bar or the reply field.
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .graphicsLayer { alpha = chrome() }
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))))
                 .navigationBarsPadding().imePadding().padding(top = 28.dp),
         ) {
@@ -805,11 +1100,47 @@ private fun StoryViewersSheet(
         val reg = service.watchViews(storyId) { load() }
         onDispose { reg.remove(); job?.cancel() }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable(
+    // Slides up and away on the iOS sheet spring (critically damped, stiffness 340); the finger can
+    // pull it down, and it closes past 30% of the screen or 5% with a 150dp/s flick.
+    val shown = remember { Animatable(0f) }
+    val sheetScope = rememberCoroutineScope()
+    var sheetH by remember { mutableFloatStateOf(1f) }
+    val dens = LocalDensity.current.density
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * dens
+    val sheetSpring = spring<Float>(dampingRatio = 1f, stiffness = StoryMotion.SHEET_STIFFNESS)
+    LaunchedEffect(Unit) { shown.animateTo(1f, sheetSpring) }
+    var leaving by remember { mutableStateOf(false) }
+    val close: (Float) -> Unit = { v ->
+        if (!leaving) {
+            leaving = true
+            sheetScope.launch { shown.animateTo(0f, sheetSpring, initialVelocity = v); onDismiss() }
+        }
+    }
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = shown.value.coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = 0.35f)).clickable(
         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
-    ) { onDismiss() }) {
+    ) { close(0f) }) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.62f)
+                .onSizeChanged { sheetH = maxOf(1f, it.height.toFloat()) }
+                .graphicsLayer { translationY = (1f - shown.value) * sheetH }
+                .pointerInput(Unit) {
+                    var start = 1f
+                    val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                    detectVerticalDragGestures(
+                        onDragStart = { start = shown.value; tracker.resetTracking() },
+                        onVerticalDrag = { ch, d ->
+                            tracker.addPosition(ch.uptimeMillis, ch.position)
+                            sheetScope.launch { shown.snapTo((shown.value - d / sheetH).coerceIn(0f, 1f)) }
+                        },
+                        onDragEnd = {
+                            val vDown = tracker.calculateVelocity().y
+                            val dropped = (start - shown.value) * sheetH
+                            if (dropped >= screenH * 0.30f || (dropped >= screenH * 0.05f && vDown >= 150f * dens)) close(-vDown / sheetH)
+                            else sheetScope.launch { shown.animateTo(1f, sheetSpring, initialVelocity = -vDown / sheetH) }
+                        },
+                        onDragCancel = { sheetScope.launch { shown.animateTo(1f, sheetSpring) } },
+                    )
+                }
                 .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(c.bg)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
                 .navigationBarsPadding(),
@@ -819,7 +1150,7 @@ private fun StoryViewersSheet(
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(list?.let { StoryRules.viewsLabel(it.size, false) } ?: "Views", color = c.label, fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Box(Modifier.size(36.dp).clip(CircleShape).background(c.fieldFill).clickable { onDismiss() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(36.dp).clip(CircleShape).background(c.fieldFill).clickable { close(0f) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Close, contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
                 }
             }
@@ -870,4 +1201,39 @@ private fun customTitle(s: Story): String? {
     val links by com.fariin.app.data.StoryPrivacyStore.links.collectAsState()
     val custom by com.fariin.app.data.StoryPrivacyStore.custom.collectAsState()
     return com.fariin.app.data.StoryPrivacyRules.storyName(links[s.id], custom)
+}
+
+/** The card's place in its flight. Every field is snapshot state read in the draw pass only. */
+private class HeroState {
+    /** 0 = full screen, 1 = seated in the slot. */
+    var f by mutableFloatStateOf(0f)
+    var center by mutableStateOf(Offset.Zero)
+    var alpha by mutableFloatStateOf(1f)
+    /** How far the story has converged to the slot's shape (0 whole picture, 1 the slot's aspect). */
+    var crop by mutableFloatStateOf(0f)
+    /** The slot's picture over the story. */
+    var cover by mutableFloatStateOf(0f)
+    var coverUrl by mutableStateOf<String?>(null)
+    /** How much of the backdrop's floor is held (1 under the finger, faded out by a landing). */
+    var dimFloor by mutableFloatStateOf(1f)
+    /** The no-destination close: shrink and whole-screen fade. */
+    var shrink by mutableFloatStateOf(1f)
+    var rootAlpha by mutableFloatStateOf(1f)
+    var anchor by mutableStateOf<Rect?>(null)
+    var radius by mutableFloatStateOf(0f)
+    var exiting by mutableStateOf(false)
+    var live by mutableStateOf(false)
+    var visible by mutableStateOf(false)
+    var committing = false
+    var closed = false
+    var staged = false
+}
+
+/** A rounded rect of [w] by [h] centred in the layer: the flying card's clip, in layer pixels. */
+private data class CardShape(val w: Float, val h: Float, val r: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val l = (size.width - w) / 2f
+        val t = (size.height - h) / 2f
+        return Outline.Rounded(RoundRect(l, t, l + w, t + h, CornerRadius(r)))
+    }
 }
