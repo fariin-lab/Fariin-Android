@@ -33,6 +33,8 @@ enum class StoryAudienceChoice(val title: String, val tagLabel: String, val foot
     EVERYONE("Everyone", "everyone",
         "Anyone on Fariin who opens your profile can watch this. People you have chatted with also get it in their stories."),
     MY_CHATS("My Chats", "friends", "The people you have chatted with can watch it."),
+    /** Everyone I have a Glow with, either way (iOS StoryAudience.glowers); offered only with Glow on. */
+    GLOWERS("Glowers", "glowers", "Only the people in this list can watch it."),
     CUSTOM("Custom", "custom", "Only the people in this list can watch it."),
     ONE_TIME("One-Time Story", "oneTime",
         "Each person can open this once. As soon as they do it is gone for them, and they cannot open it again."),

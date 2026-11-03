@@ -42,6 +42,25 @@ object StoryPrivacyRules {
 
     val defaultMyFriends = StoryListDoc(MY_FRIENDS_ID, "myFriends")
     val emptyHidden = StoryListDoc(HIDDEN_ID, "hidden", mode = MODE_EXCEPT)
+    /** The Glowers audience (iOS StoryAudience.glowersAudience): `members` are who to LEAVE OUT. */
+    const val GLOWERS_ID = "glowers"
+    val defaultGlowers = StoryListDoc(GLOWERS_ID, "glowers", name = "Glowers")
+
+    /** iOS ShareStorySheet.glowersRecipients: the relationship less the people hidden from my glow. */
+    fun glowersRecipients(l: StoryListDoc, relationship: Set<String>): Set<String> =
+        relationship - (if (l.mode == MODE_EXCEPT) l.members.toSet() else emptySet())
+
+    /** iOS StoryAudience.subtitle for Glowers, counted off the live relationship. */
+    fun glowersSubtitle(l: StoryListDoc, relationship: Set<String>): String {
+        val n = glowersRecipients(l, relationship).size
+        if (n == 0) return "People you have a Glow with"
+        val people = "$n ${if (n == 1) "person" else "people"} you have a Glow with"
+        return if (l.mode == MODE_EXCEPT && l.members.isNotEmpty()) "$people · ${l.members.size} hidden" else people
+    }
+
+    /** iOS PostRefusal.glowAudienceEmpty / glowAudienceUnknown: a Glowers post that would reach nobody. */
+    const val GLOW_EMPTY = "You don't have any Glows yet, so this story would reach nobody. Pick another audience."
+    const val GLOW_UNKNOWN = "Couldn't load your Glows, so this story would reach nobody. Check your connection and try again."
 
     /** iOS StoryAudienceStore.write: every field, `emoji` "" and the built-ins' epoch date. */
     fun encode(l: StoryListDoc): Map<String, Any> = mapOf(
@@ -144,7 +163,12 @@ object StoryPrivacyRules {
         picked: Set<String>,
         myFriends: StoryListDoc,
         hidden: Set<String>,
+        glowers: Set<String> = emptySet(),
+        blocked: Set<String> = emptySet(),
     ): Pair<Set<String>, String> {
+        // Glowers travels as an explicit list and may reach people I have never chatted with
+        // (iOS resolveAudience glowReach), never anyone blocked either way.
+        if (choice == StoryAudienceChoice.GLOWERS) return glowers.filter { it in contacts || it !in blocked }.toSet() to MODE_ONLY
         val included: Set<String> = when {
             choice.needsPeople -> picked
             choice == StoryAudienceChoice.MY_CHATS && myFriends.mode == MODE_ONLY -> myFriends.members.toSet()
@@ -163,8 +187,11 @@ object StoryPrivacyRules {
     }
 
     /** `allowsReplies` on the story: the My Chats switch; every other audience allows them (iOS). */
-    fun allowsReplies(choice: StoryAudienceChoice, myFriends: StoryListDoc): Boolean =
-        if (choice == StoryAudienceChoice.MY_CHATS) myFriends.allowReplies else true
+    fun allowsReplies(choice: StoryAudienceChoice, myFriends: StoryListDoc, glowers: StoryListDoc = defaultGlowers): Boolean = when (choice) {
+        StoryAudienceChoice.MY_CHATS -> myFriends.allowReplies
+        StoryAudienceChoice.GLOWERS -> glowers.allowReplies
+        else -> true
+    }
 
     /** `captureProtected`: always on for a one-time story, else the Block screenshots switch. */
     fun captureProtected(choice: StoryAudienceChoice, switchOn: Boolean): Boolean =
@@ -193,10 +220,13 @@ object StoryPrivacyRules {
 object StoryPrivacyStore {
     private val _myFriends = MutableStateFlow(StoryPrivacyRules.defaultMyFriends)
     private val _hidden = MutableStateFlow<Set<String>>(emptySet())
+    private val _glowers = MutableStateFlow(StoryPrivacyRules.defaultGlowers)
     private val _custom = MutableStateFlow<List<StoryListDoc>>(emptyList())
     private val _links = MutableStateFlow<Map<String, StoryAudienceLink>>(emptyMap())
     val myFriends: StateFlow<StoryListDoc> = _myFriends
     val hidden: StateFlow<Set<String>> = _hidden
+    /** The Glowers audience, its except-list (iOS StoryAudienceStore.glowers). */
+    val glowers: StateFlow<StoryListDoc> = _glowers
     /** My custom lists, oldest first (iOS StoryAudienceStore.custom). */
     val custom: StateFlow<List<StoryListDoc>> = _custom
     /** Story id > the list(s) it went to (iOS storyLinks, users/{me}/storyAudiences). */
@@ -213,6 +243,7 @@ object StoryPrivacyStore {
         loadedFor = me
         _myFriends.value = StoryPrivacyRules.defaultMyFriends
         _hidden.value = emptySet()
+        _glowers.value = StoryPrivacyRules.defaultGlowers
         _custom.value = emptyList()
         _links.value = emptyMap()
         val user = db.collection("users").document(me)
@@ -221,17 +252,20 @@ object StoryPrivacyStore {
             // The whole snapshot each time, as iOS: a deleted list or a missing doc is its default again.
             var friends = StoryPrivacyRules.defaultMyFriends
             var hidden = emptySet<String>()
+            var glowers = StoryPrivacyRules.defaultGlowers
             val lists = mutableListOf<StoryListDoc>()
             for (d in snap.documents) {
                 val l = StoryPrivacyRules.decode(d.id, d.data ?: continue) ?: continue
                 when {
                     d.id == StoryPrivacyRules.MY_FRIENDS_ID -> friends = l
+                    d.id == StoryPrivacyRules.GLOWERS_ID -> glowers = l
                     l.kind == "hidden" -> hidden = l.members.toSet()
                     l.kind == StoryPrivacyRules.KIND_CUSTOM -> lists.add(l)
                 }
             }
             _myFriends.value = friends
             _hidden.value = hidden
+            _glowers.value = glowers
             _custom.value = lists.sortedBy { it.createdAtMs }
         }
         linkReg = user.collection("storyAudiences").addSnapshotListener { snap, _ ->

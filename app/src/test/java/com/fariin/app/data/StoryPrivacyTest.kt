@@ -85,4 +85,15 @@ class StoryPrivacyTest {
         assertEquals(3, rows.count { PostedStoriesRules.Filter.FRIENDS.matches(it) })
         assertEquals(1, rows.count { PostedStoriesRules.Filter.ONE_TIME.matches(it) })
     }
+    @Test fun glowersReachGlowOnlyPeopleButNotHiddenOrBlocked() {
+        val list = StoryPrivacyRules.defaultGlowers.copy(mode = StoryPrivacyRules.MODE_EXCEPT, members = listOf("x"))
+        val people = StoryPrivacyRules.glowersRecipients(list, setOf("a", "x", "g", "z"))
+        assertEquals(setOf("a", "g", "z"), people)
+        val (who, mode) = StoryPrivacyRules.resolve(contacts, StoryAudienceChoice.GLOWERS, emptySet(),
+            StoryPrivacyRules.defaultMyFriends, setOf("a"), people, blocked = setOf("z"))
+        assertEquals(setOf("a", "g"), who)
+        assertEquals("only", mode)
+        assertEquals("3 people you have a Glow with · 1 hidden", StoryPrivacyRules.glowersSubtitle(list, setOf("a", "x", "g", "z")))
+        assertEquals("People you have a Glow with", StoryPrivacyRules.glowersSubtitle(StoryPrivacyRules.defaultGlowers, emptySet()))
+    }
 }

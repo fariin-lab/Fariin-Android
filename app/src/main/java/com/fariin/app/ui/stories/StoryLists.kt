@@ -498,6 +498,10 @@ fun ShareStoryAudiencePage(
     val prefs = remember { ctx.getSharedPreferences("fariin_stories", android.content.Context.MODE_PRIVATE) }
     LaunchedEffect(me) { StoryPrivacyStore.start(me) }
     val myFriends by StoryPrivacyStore.myFriends.collectAsState()
+    val glowersList by StoryPrivacyStore.glowers.collectAsState()
+    val glow by com.fariin.app.data.Glow.state.collectAsState()
+    // Glowers is offered only with Glow on (iOS StoryAudienceStore.all).
+    val glowOn = com.fariin.app.data.AppFeatures.glow
     val custom by StoryPrivacyStore.custom.collectAsState()
     val links by StoryPrivacyStore.links.collectAsState()
     val people = remember(conversations) { storyPeople(me, storyConvs(conversations)) }
@@ -506,10 +510,13 @@ fun ShareStoryAudiencePage(
         mutableStateOf(
             when {
                 editing?.audienceLabel == "everyone" -> StoryAudienceChoice.EVERYONE
+                // A Glowers story reopens on Glowers (iOS seedFromStory), never moved to My Chats by Update.
+                editing?.audienceLabel == "glowers" -> StoryAudienceChoice.GLOWERS
                 editing?.audienceLabel == "custom" -> StoryAudienceChoice.CUSTOM
                 editing != null -> StoryAudienceChoice.MY_CHATS
                 else -> when (val saved = runCatching { prefs.getString(SELECTED_KEY, null) }.getOrNull()) {
                     "everyone" -> StoryAudienceChoice.EVERYONE
+                    StoryPrivacyRules.GLOWERS_ID -> if (com.fariin.app.data.AppFeatures.glow) StoryAudienceChoice.GLOWERS else StoryAudienceChoice.MY_CHATS
                     null, "myFriends" -> StoryAudienceChoice.MY_CHATS
                     else -> if (StoryPrivacyStore.custom.value.any { it.id == saved }) StoryAudienceChoice.CUSTOM else StoryAudienceChoice.MY_CHATS
                 }
@@ -584,7 +591,7 @@ fun ShareStoryAudiencePage(
                     headerAction = if (editing == null) {
                         { NewAudienceButton(StoryPrivacyStore.canAddCustom, onCustom = { creating = true }, onOneTime = { oneTimePicking = true }) }
                     } else null) {
-                    val rows = 2 + custom.size + if (oneTimeActive) 1 else 0
+                    val rows = 2 + custom.size + (if (oneTimeActive) 1 else 0) + (if (glowOn) 1 else 0)
                     var n = 0
                     if (oneTimeActive) {
                         n++
@@ -601,6 +608,18 @@ fun ShareStoryAudiencePage(
                     AudienceRow({ CircleBadge(Color(0xFFFF9500), rememberVectorPainter(Icons.Filled.People)) },
                         "My Chats", StoryPrivacyRules.myChatsSubtitle(myFriends), on = choice == StoryAudienceChoice.MY_CHATS, last = n == rows) {
                         tapBuiltIn(StoryAudienceChoice.MY_CHATS)
+                    }
+                    if (glowOn) {
+                        n++
+                        // iOS StoryAudienceBadge: the Glow mark on the label colour, drawn in the page colour.
+                        AudienceRow({
+                            Box(Modifier.size(40.dp).clip(CircleShape).background(c.label), contentAlignment = Alignment.Center) {
+                                com.fariin.app.ui.glow.GlowMark(23.dp, tint = c.bg)
+                            }
+                        }, "Glowers", StoryPrivacyRules.glowersSubtitle(glowersList, glow.relationship),
+                            on = choice == StoryAudienceChoice.GLOWERS, last = n == rows) {
+                            tapBuiltIn(StoryAudienceChoice.GLOWERS)
+                        }
                     }
                     for (l in custom) {
                         n++
@@ -627,6 +646,7 @@ fun ShareStoryAudiencePage(
                         if (editing == null) runCatching {
                             prefs.edit().putString(SELECTED_KEY, when (choice) {
                                 StoryAudienceChoice.EVERYONE -> "everyone"
+                                StoryAudienceChoice.GLOWERS -> StoryPrivacyRules.GLOWERS_ID
                                 StoryAudienceChoice.CUSTOM -> chosenLists.firstOrNull()?.id ?: "myFriends"
                                 else -> "myFriends"
                             }).apply()

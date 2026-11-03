@@ -172,10 +172,12 @@ class StoryService(
         val custom = choice == StoryAudienceChoice.CUSTOM
         val people = if (custom) lists.flatMap { it.members }.toSet() else picked
         if (custom && lists.isEmpty()) throw PostRefused(EMPTY_AUDIENCE)
-        val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom)
+        val glow = glowAudience(choice, convs)
+        val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom, glow.first, glow.second)
         val recipients = reached
         val mode = if (choice == StoryAudienceChoice.EVERYONE) "everyone" else how
-        val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists) else StoryPrivacyRules.allowsReplies(choice, myFriends)
+        val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists)
+            else StoryPrivacyRules.allowsReplies(choice, myFriends, StoryPrivacyStore.glowers.value)
         val capture = StoryPrivacyRules.captureProtected(choice, captureSwitch)
         // iOS "No one will see this": a list that resolves to nobody while I do have chats.
         if ((!choice.needsPeople || custom) && recipients.isEmpty() && StoryRules.contacts(me, convs).isNotEmpty())
@@ -228,6 +230,21 @@ class StoryService(
     }
 
     /**
+     * A Glowers story's people and who is blocked either way (iOS glowersRecipients + resolveAudience).
+     * An empty list is refused rather than read as "everybody": no Glows yet, or not loaded yet.
+     */
+    private fun glowAudience(choice: StoryAudienceChoice, convs: List<Conversation>): Pair<Set<String>, Set<String>> {
+        if (choice != StoryAudienceChoice.GLOWERS) return emptySet<String>() to emptySet()
+        val g = Glow.state.value
+        val people = StoryPrivacyRules.glowersRecipients(StoryPrivacyStore.glowers.value, g.relationship)
+        if (people.isEmpty()) throw PostRefused(if (g.known) StoryPrivacyRules.GLOW_EMPTY else StoryPrivacyRules.GLOW_UNKNOWN)
+        val blocked = convs.asSequence().filter { !it.isGroup }
+            .filter { c -> val them = c.otherUid(me); them.isNotEmpty() && (c.isBlockedByMe(me) || c.isBlockedByMe(them)) }
+            .map { it.otherUid(me) }.toSet() + BlockList.snapshot.entries.keys
+        return people to blocked
+    }
+
+    /**
      * Edit Viewers (iOS updateStoryAudience): the same story, id, time, media and caption; only who
      * can see it changes. Everyone, My Chats or custom lists, resolved the way a post is. Narrowing
      * takes the public copy down first; widening to Everyone writes it.
@@ -247,10 +264,12 @@ class StoryService(
         if (custom && lists.isEmpty()) throw PostRefused(EMPTY_AUDIENCE)
         val contacts = StoryRules.contacts(me, convs)
         val people = if (custom) lists.flatMap { it.members }.toSet() else emptySet()
-        val (recipients, how) = StoryPrivacyRules.resolve(contacts, choice, people, myFriends, hiddenFrom)
+        val glow = glowAudience(choice, convs)
+        val (recipients, how) = StoryPrivacyRules.resolve(contacts, choice, people, myFriends, hiddenFrom, glow.first, glow.second)
         val everyone = choice == StoryAudienceChoice.EVERYONE
-        if (recipients.isEmpty() && contacts.isNotEmpty()) throw PostRefused(EMPTY_AUDIENCE)
-        val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists) else StoryPrivacyRules.allowsReplies(choice, myFriends)
+        if (recipients.isEmpty() && (contacts.isNotEmpty() || choice == StoryAudienceChoice.GLOWERS)) throw PostRefused(EMPTY_AUDIENCE)
+        val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists)
+            else StoryPrivacyRules.allowsReplies(choice, myFriends, StoryPrivacyStore.glowers.value)
         val mirror = db.collection("users").document(me).collection("publicStories").document(story.id)
         if (!everyone) mirror.delete().await()
         db.collection("stories").document(story.id).update(mapOf(
