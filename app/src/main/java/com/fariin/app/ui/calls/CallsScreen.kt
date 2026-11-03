@@ -46,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
@@ -250,12 +252,16 @@ private fun PickableRow(selecting: Boolean, picked: Boolean, onToggle: () -> Uni
     val c = Fariin.colors
     Box(Modifier.background(if (picked) c.blue.copy(alpha = 0.12f) else androidx.compose.ui.graphics.Color.Transparent)) {
         content()
-        // The tick sits over the photo, as on the chat list, so the time and (i) stay whole.
+        // A small tick on the photo's lower right, as the chat list marks a chosen row: the photo,
+        // the time and the (i) all stay in view (owner 2026-11-03: the box covered the photo).
         val under = if (picked) c.blue.copy(alpha = 0.12f).compositeOver(c.bg) else c.bg
-        if (selecting) Box(Modifier.matchParentSize().clickable(onClick = onToggle).padding(start = 17.dp), contentAlignment = Alignment.CenterStart) {
-            Box(Modifier.size(44.dp).background(under), contentAlignment = Alignment.Center) {
-                Icon(if (picked) Icons.Filled.CheckCircle else Icons.Outlined.Circle, contentDescription = if (picked) "Selected" else null,
-                    tint = if (picked) c.blue else c.secondary, modifier = Modifier.size(24.dp))
+        if (selecting) Box(Modifier.matchParentSize().clickable(onClick = onToggle)) {
+            Box(Modifier.align(Alignment.CenterStart).padding(start = 46.dp, top = 30.dp).size(22.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                .background(under).padding(2.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                .background(if (picked) c.blue else c.bg)
+                .then(if (picked) Modifier else Modifier.border(1.5.dp, c.secondary, androidx.compose.foundation.shape.CircleShape)),
+                contentAlignment = Alignment.Center) {
+                if (picked) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(14.dp))
             }
         }
     }
