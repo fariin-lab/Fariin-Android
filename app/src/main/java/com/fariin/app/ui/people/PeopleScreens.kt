@@ -342,7 +342,7 @@ internal fun Pill(text: String, bg: Color, ink: Color, onClick: () -> Unit) {
 
 /**
  * A person's page (iOS ContactInfoView): photo, name, @username and bio, the Message / Mute
- * buttons, then Verify Encryption (the safety number), Shared Media (coming soon), Block, Report.
+ * buttons, then Verify Encryption (the safety number), the All Media card, Block, Report.
  */
 @Composable
 fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: () -> Unit, onOpenChat: (String) -> Unit) {
@@ -364,6 +364,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val timer = (live["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0
     var timerOpen by remember { mutableStateOf(false) }
     if (DisappearingEditor(api, cid, isGroup = false, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
+    val shared = rememberSharedMedia(cid, me)
+    var allMedia by remember { mutableStateOf(false) }
+    if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
     if (showSafety) AlertDialog(onDismissRequest = { showSafety = false }, title = { Text("Verify Encryption") },
         text = {
             Column {
@@ -417,9 +420,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }
             SettingsSection {
                 DisappearingRow(timer, short = true) { timerOpen = true }
-                SettingsRow("Verify Encryption", last = false) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
-                SettingsRow("Shared Media", value = "Coming soon on Android", trailing = Trailing.NONE, last = true)
+                SettingsRow("Verify Encryption", last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
             }
+            // iOS: after the settings card, and only when the chat has photos or videos.
+            SharedMediaCard(cid, shared) { allMedia = true }
             SettingsSection {
                 SettingsRow(if (blocked) "Unblock $name" else "Block $name", titleColor = c.red, trailing = Trailing.NONE) { ask = "block" }
                 SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "report" }

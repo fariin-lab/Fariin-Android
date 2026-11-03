@@ -424,6 +424,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             com.fariin.app.data.LeaveUndo.commit()
             onLeft()
         })) return
+    val shared = rememberSharedMedia(cid, me)
+    var allMedia by remember { mutableStateOf(false) }
+    if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
     card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) }) }
     if (editing && canEdit) {
         EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
@@ -455,6 +458,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
             }
+            // iOS: All Media between the settings and the members, for a member, when there is some.
+            if (iAmMember) SharedMediaCard(cid, shared) { allMedia = true }
             // iOS membersSection: "N Members" opens the whole list; six shown, past six the first five and See All.
             val g = com.fariin.app.data.GroupMembers.Group.from(conv)
             val (shownMembers, more) = com.fariin.app.data.GroupMembers.infoShown(com.fariin.app.data.GroupMembers.infoOrder(g, me))
