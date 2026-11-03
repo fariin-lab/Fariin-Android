@@ -177,9 +177,33 @@ fun ThreadScreen(
     onSendPick: (List<Uri>, String, Boolean) -> Unit = { l, _, _ -> l.firstOrNull()?.let(onSendPhoto) },
     onSendFile: (Uri) -> Unit = {},
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val text = remember {
+        bubbleText(ctx.getSharedPreferences(com.fariin.app.ui.settings.CHAT_PREFS, android.content.Context.MODE_PRIVATE)
+            .getString("chat.textSize", "medium") ?: "medium")
+    }
+    androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
+        ThreadContent(ui, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+    }
+}
+
+@Composable
+private fun ThreadContent(
+    ui: ThreadUi,
+    onBack: () -> Unit,
+    onSend: (String) -> Unit,
+    onLoadOlder: () -> Unit,
+    onRetry: (Message) -> Unit,
+    onSendPhoto: (Uri) -> Unit,
+    onSendVoice: (VoiceRecorder.Result) -> Unit,
+    actions: ThreadActions,
+    onSendPick: (List<Uri>, String, Boolean) -> Unit,
+    onSendFile: (Uri) -> Unit,
+) {
     val c = Fariin.colors
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
     var menuFor by remember { mutableStateOf<Message?>(null) }
+    val quickReaction = rememberQuickReaction()
     var postMenuFor by remember { mutableStateOf<Message?>(null) }
     var deleteFor by remember { mutableStateOf<Message?>(null) }
     var infoFor by remember { mutableStateOf<Message?>(null) }
@@ -387,7 +411,10 @@ fun ThreadScreen(
                                 }
                             }
                             else -> SwipeRow(enabled = MessageRules.canReply(m), onReply = { replyTo = m; editing = null }) {
-                                Column(Modifier.fillMaxWidth().background(lit).combinedClickableLong { menuFor = m }) {
+                                Column(Modifier.fillMaxWidth().background(lit).combinedClickableLong { menuFor = m }
+                                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem, key = m.id + m.reactions[ui.me]) {
+                                        actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], quickReaction))
+                                    }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     ReactionChips(m, ui, m.authorId == ui.me) { e ->
                                         actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], e))
@@ -664,7 +691,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             TextWithMeta(
                 text = body,
-                style = TextStyle(fontSize = 17.sp, color = if (m.deleted) ink.copy(alpha = 0.7f) else ink, lineHeight = 22.sp),
+                style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
                 meta = { Meta(m, tick, isMe, is24h) },
             )
         }
@@ -724,7 +751,7 @@ private fun MediaRow(
         }
         if (caption != null) {
             Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                TextWithMeta(caption, TextStyle(fontSize = 17.sp, color = ink, lineHeight = 22.sp)) { Meta(m, tick, isMe, is24h) }
+                TextWithMeta(caption, LocalBubbleText.current.copy(color = ink)) { Meta(m, tick, isMe, is24h) }
             }
         }
     }
@@ -1064,6 +1091,54 @@ private fun EmojiPanel(onPick: (String) -> Unit) {
 }
 
 private const val EMOJI = "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 👍 👎 👌 ✌️ 🤞 🤝 🙏 👏 🙌 👋 💪 ✋ 👀 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💯 🔥 ✨ 🎉 🎂 🎁 🌹 🌸 ☀️ 🌙 ⭐ ⚡ ☕ 🍵 🍕 🍰 🍎 🏠 🚗 ✈️ 📞 📷 🎵 ⚽ 📚 ✅ ❌ ❓ ❗"
+
+/** Settings > Chats > Message Text Size: the words in a bubble (Medium is the old 17 sp). */
+internal val LocalBubbleText = androidx.compose.runtime.staticCompositionLocalOf { bubbleText("medium") }
+
+internal fun bubbleText(size: String): TextStyle = when (size) {
+    "small" -> TextStyle(fontSize = 15.sp, lineHeight = 20.sp)
+    "large" -> TextStyle(fontSize = 20.sp, lineHeight = 25.sp)
+    else -> TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
+}
+
+/** Settings > Chats > Quick Reaction: what a double tap on a message sends (iOS QuickReaction). */
+@Composable
+private fun rememberQuickReaction(): String {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    return remember {
+        ctx.getSharedPreferences(com.fariin.app.ui.settings.CHAT_PREFS, android.content.Context.MODE_PRIVATE)
+            .getString(com.fariin.app.ui.settings.SettingsRules.QUICK_KEY, null)?.takeIf { it.isNotEmpty() } ?: "❤️"
+    }
+}
+
+/** Double tap reacts. The first tap is left alone, so a photo or voice bubble still opens or plays at
+ *  once; only a second tap close behind is taken (and eaten, so it does not open the photo again). */
+private fun Modifier.doubleTapToReact(enabled: Boolean, key: Any, onDouble: () -> Unit): Modifier =
+    if (!enabled) this else this.pointerInput(key) {
+        awaitEachGesture {
+            val first = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                while (true) {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                    val ch = e.changes.firstOrNull { it.id == first.id } ?: return@withTimeoutOrNull null
+                    if (!ch.pressed) return@withTimeoutOrNull ch
+                }
+                @Suppress("UNREACHABLE_CODE") null
+            } ?: return@awaitEachGesture
+            if ((up.position - first.position).getDistance() > viewConfiguration.touchSlop) return@awaitEachGesture
+            val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            } ?: return@awaitEachGesture
+            if ((second.position - first.position).getDistance() > viewConfiguration.touchSlop * 4) return@awaitEachGesture
+            second.consume()
+            while (true) {
+                val e = awaitPointerEvent(PointerEventPass.Initial)
+                val ch = e.changes.firstOrNull { it.id == second.id } ?: break
+                ch.consume()
+                if (!ch.pressed) { onDouble(); break }
+            }
+        }
+    }
 
 /** Long press only (a tap still reaches the photo and voice bubbles inside). Watched in the
  *  Initial pass, so a photo or video that takes taps itself still opens the menu on a long press
