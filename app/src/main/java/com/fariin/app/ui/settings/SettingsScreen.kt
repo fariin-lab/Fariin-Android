@@ -124,16 +124,17 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             securityCheckupRoute(page, profile, demoProfile != null, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             moreRoute(page, push, pop) -> Unit
             lookRoute(page, push, pop) -> Unit
+            page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
         }
     }
 }
 
-private const val PAGE_ACCOUNT = "account"
-private const val PAGE_APPEARANCE = "appearance"
+internal const val PAGE_ACCOUNT = "account"
+internal const val PAGE_APPEARANCE = "appearance"
 private const val PAGE_NIGHT = "night"
-private const val PAGE_ABOUT = "about"
+internal const val PAGE_ABOUT = "about"
 internal const val PAGE_PASSWORD = "auth:password"
 private const val PAGE_RESET = "auth:reset:"
 internal const val PAGE_PASSKEYS = "auth:passkeys"
@@ -155,7 +156,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
         PageBar("Settings", onBack = null, action = {
             // In its own floating circle, as the other tabs' bar buttons.
             com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search, "Search settings",
-                onClick = { push(soon("Search")) }, modifier = Modifier.padding(end = 8.dp))
+                onClick = { openSettingsSearch(push) }, modifier = Modifier.padding(end = 8.dp))
         })
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
