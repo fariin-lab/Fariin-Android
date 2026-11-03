@@ -90,6 +90,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.AlignmentLine
@@ -334,6 +336,25 @@ private fun ThreadContent(
     }
     LaunchedEffect(ui.messages.lastOrNull()?.rowId) {
         if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) listState.scrollToItem(0)
+    }
+    // iOS initialScrollId (owner-approved 2026-07-13): with unread messages the FIRST open lands
+    // at the first unread, the divider row at the top of the screen, the unread run below it. Once
+    // per open; few unread simply stays at the newest, where the clamp leaves it.
+    var landedOnUnread by remember { mutableStateOf(false) }
+    LaunchedEffect(dividerId) {
+        val id = dividerId ?: return@LaunchedEffect
+        if (landedOnUnread) return@LaunchedEffect
+        landedOnUnread = true
+        val i = ui.messages.indexOfFirst { it.rowId == id }
+        if (i < 0) return@LaunchedEffect
+        val idx = ui.messages.size - 1 - i   // the list is reversed
+        withFrameNanos { }
+        listState.scrollToItem(idx)          // the divider row at the bottom edge
+        val info = listState.layoutInfo
+        val row = info.visibleItemsInfo.firstOrNull { it.index == idx } ?: return@LaunchedEffect
+        val usable = info.viewportSize.height - info.beforeContentPadding - info.afterContentPadding
+        listState.scrollBy(-(usable - row.size).coerceAtLeast(0).toFloat())   // lift it to the top
+        stick = listState.firstVisibleItemIndex <= 1
     }
 
     val anim = com.fariin.app.ui.components.animationsOn()
