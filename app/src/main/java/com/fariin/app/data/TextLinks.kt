@@ -19,6 +19,8 @@ object TextLinks {
     private val WEB = Regex("""(?i)(?:https?://|www\.|fariin\.com/)[^\s<>"]+""")
     private val EMAIL = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}""")
     private val HANDLE = Regex("""@([A-Za-z0-9_]{3,24})""")
+    /** Off: iOS links no phone numbers. */
+    const val LINK_PHONES = false
     private val PHONE = Regex("""\+?\(?\d[\d ()-]{5,}\d""")
 
     /** Every run, in text order, none overlapping (links first, then emails, usernames, numbers). */
@@ -50,7 +52,9 @@ object TextLinks {
             if (e < text.length && (text[e].isLetterOrDigit() || text[e] == '_')) continue
             if (free(s, e)) out += Span(s, e, Kind.HANDLE, m.groupValues[1])
         }
-        for (m in PHONE.findAll(text)) {
+        // iOS does not link phone numbers (its detector is web, @handle and email only): kept off so
+        // the two apps draw the same message the same way. The rule stays for a later decision.
+        if (LINK_PHONES) for (m in PHONE.findAll(text)) {
             val s = m.range.first
             var e = m.range.last + 1
             // An unclosed bracket at the end belongs to the sentence, not the number.

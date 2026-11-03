@@ -43,10 +43,9 @@ class TextLinksTest {
         assertEquals(1, runs("amina@mail.so").size)
     }
 
-    @Test fun phones() {
-        assertEquals(listOf(Triple("+252 61 234 5678", Kind.PHONE, "+252 61 234 5678")), runs("call +252 61 234 5678."))
-        assertEquals(listOf(Triple("0612345678", Kind.PHONE, "0612345678")), runs("0612345678"))
-        assertEquals(listOf(Triple("(612) 555-1234", Kind.PHONE, "(612) 555-1234")), runs("ring (612) 555-1234, thanks"))
+    @Test fun phonesAreNotLinkedAsOnIos() {
+        assertTrue(runs("call +252 61 234 5678.").isEmpty())
+        assertTrue(runs("0612345678").isEmpty())
         assertTrue(runs("on 2026-11-03 at 12:30").isEmpty())   // a date and a time
         assertTrue(runs("10 20 30 40 50").isEmpty())           // a list of numbers
         assertTrue(runs("code 123456").isEmpty())              // too short without +
@@ -56,7 +55,7 @@ class TextLinksTest {
 
     @Test fun mixedRunsDoNotOverlap() {
         val r = runs("https://fariin.com/@kream 0612345678 @amina x@y.com")
-        assertEquals(listOf(Kind.WEB, Kind.PHONE, Kind.HANDLE, Kind.EMAIL), r.map { it.second })
+        assertEquals(listOf(Kind.WEB, Kind.HANDLE, Kind.EMAIL), r.map { it.second })
         assertEquals("https://fariin.com/@kream", r[0].first)
     }
 
