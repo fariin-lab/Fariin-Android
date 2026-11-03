@@ -709,9 +709,12 @@ private fun ReplyBar(
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // A dark glass capsule over the photo (the chat composer's floating pill, for a dark
+            // backdrop): a see-through fill with a faint light rim, not a bare outline.
             Box(
                 Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
-                    .border(1.dp, Color.White.copy(alpha = if (canReply) 0.6f else 0.3f), RoundedCornerShape(22.dp))
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .border(0.5.dp, Color.White.copy(alpha = if (canReply) 0.35f else 0.2f), RoundedCornerShape(22.dp))
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
@@ -737,15 +740,18 @@ private fun ReplyBar(
                     ) { armed = true })
                 }
             }
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
             if (canReply && text.isNotBlank()) {
-                Box(Modifier.size(44.dp).clickable {
+                // Send in a blue circle, as the chat composer's.
+                Box(Modifier.size(44.dp).clip(CircleShape).background(com.fariin.app.ui.theme.Fariin.colors.blue).clickable {
                     onSend(text.trim(), false); text = ""; focus.clearFocus()
                 }, contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
                 }
             } else if (showLike) {
-                Box(Modifier.size(44.dp).clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                    .clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
                     Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
                         tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(28.dp))
                 }

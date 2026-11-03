@@ -105,6 +105,11 @@ import com.fariin.app.data.Conversation
 import com.fariin.app.data.CryptoHub
 import com.fariin.app.data.MessageDecryptor
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.components.FloatingBack
+import com.fariin.app.ui.components.FloatingIcon
+import com.fariin.app.ui.components.floating
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.thread.LocalOpenChat
 import com.fariin.app.ui.theme.Fariin
@@ -286,13 +291,13 @@ fun ChatListScreen(
                         }
                         TopAppBar(
                             title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                            // The bar's buttons float in their own circles, as the chat screen's back does.
                             navigationIcon = {
-                                if (showArchive) IconButton(onClick = { showArchive = false }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                                }
+                                if (showArchive) FloatingBack(onBack = { showArchive = false }, modifier = Modifier.padding(start = 12.dp, end = 4.dp))
                             },
                             actions = {
-                                IconButton(onClick = { searching = true }) { Icon(Icons.Outlined.Search, contentDescription = "Search") }
+                                FloatingIcon(Icons.Outlined.Search, contentDescription = "Search", onClick = { searching = true },
+                                    modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
                                 if (!showArchive) OverflowMenu(
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
@@ -326,16 +331,13 @@ fun ChatListScreen(
             AnimatedVisibility(fabShown && !selecting && !searching && !showArchive,
                 enter = com.fariin.app.ui.components.Motion.fabIn(), exit = com.fariin.app.ui.components.Motion.fabOut()) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SmallFloatingActionButton(
-                        onClick = onNewStory,
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = c.label,
-                    ) { Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story") }
-                    FloatingActionButton(
-                        onClick = people.newChat,
-                        containerColor = c.blue,
-                        contentColor = Color.White,
-                    ) { Icon(Icons.Outlined.Edit, contentDescription = "New Chat") }
+                    // Two floating circles (iOS glass buttons): the camera on the card fill, New Chat in blue.
+                    IconButton(onClick = onNewStory, modifier = Modifier.size(48.dp).floating()) {
+                        Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story", tint = c.label)
+                    }
+                    IconButton(onClick = people.newChat, modifier = Modifier.size(58.dp).floating(fill = c.blue)) {
+                        Icon(Icons.Outlined.Edit, contentDescription = "New Chat", tint = Color.White)
+                    }
                 }
             }
         },
@@ -436,10 +438,13 @@ private fun SelectionBar(
     onReadToggle: () -> Unit, onSelectAll: () -> Unit,
 ) {
     var more by remember { mutableStateOf(false) }
+    val c = Fariin.colors
     TopAppBar(
         title = { Text("$count", style = MaterialTheme.typography.titleLarge) },
-        navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Cancel") } },
+        navigationIcon = { FloatingIcon(Icons.Filled.Close, contentDescription = "Cancel", onClick = onClose, modifier = Modifier.padding(start = 12.dp, end = 4.dp)) },
         actions = {
+          // The actions share one floating capsule, as the chat screen's call buttons do.
+          Row(Modifier.padding(end = 12.dp).floating(CircleShape).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             if (!archive) IconButton(onClick = onPin) {
                 Icon(if (allPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, contentDescription = if (allPinned) "Unpin" else "Pin")
             }
@@ -460,9 +465,11 @@ private fun SelectionBar(
                         onClick = { more = false; onSelectAll() })
                 }
             }
+          }
         },
         windowInsets = WindowInsets(0, 0, 0, 0),
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = c.bg, titleContentColor = c.label,
+            navigationIconContentColor = c.label, actionIconContentColor = c.label),
     )
 }
 
@@ -471,18 +478,11 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
     val c = Fariin.colors
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label) }
-        TextField(
-            value = query, onValueChange = onQuery, singleLine = true,
-            placeholder = { Text("Search") },
-            modifier = Modifier.weight(1f).focusRequester(focus),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-            ),
-        )
-        if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Filled.Close, contentDescription = "Clear", tint = c.secondary) }
+    // The floating back circle and the search capsule beside it (iOS `.searchable` field).
+    Row(Modifier.fillMaxWidth().background(c.bg).height(64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        FloatingBack(onBack = onClose)
+        Spacer(Modifier.width(10.dp))
+        com.fariin.app.ui.components.FloatingSearchField(query, onQuery, "Search", Modifier.weight(1f).focusRequester(focus))
     }
 }
 
@@ -495,7 +495,7 @@ private fun OverflowMenu(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+        FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { open = true }, modifier = Modifier.padding(end = 12.dp))
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val item: @Composable (String, ImageVector, Boolean, () -> Unit) -> Unit = { text, icon, checked, onClick ->
                 DropdownMenuItem(
@@ -522,16 +522,19 @@ private fun OverflowMenu(
     }
 }
 
-/** A one-line Material list row (Message Requests, Archived) above the chats. */
+/** A one-line row (Message Requests, Archived) above the chats, on a floating rounded card like the pinned bar. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ListRow(title: String, icon: ImageVector, trailing: String?, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(
-        Modifier.fillMaxWidth().combinedClickable(onClick = onClick).height(56.dp).padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(52.dp)
+            .floating(RoundedCornerShape(18.dp)).combinedClickable(onClick = onClick).padding(start = 8.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { Icon(icon, null, tint = c.secondary) }
+        Box(Modifier.size(36.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = c.label, modifier = Modifier.size(20.dp))
+        }
         Spacer(Modifier.width(12.dp))
         Text(title, style = MaterialTheme.typography.bodyLarge, color = c.label, modifier = Modifier.weight(1f))
         if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelLarge, color = c.blue)
@@ -542,7 +545,14 @@ private fun ListRow(title: String, icon: ImageVector, trailing: String?, onClick
 private fun Centered(text: String, action: Pair<String, () -> Unit>? = null) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(text, style = MaterialTheme.typography.bodyLarge, color = Fariin.colors.secondary)
-        if (action != null) TextButton(onClick = action.second) { Text(action.first) }
+        // The action as a floating capsule, not a bare text link.
+        if (action != null) {
+            Spacer(Modifier.height(16.dp))
+            Box(Modifier.height(44.dp).floating(CircleShape).clickable(onClick = action.second).padding(horizontal = 22.dp),
+                contentAlignment = Alignment.Center) {
+                Text(action.first, style = MaterialTheme.typography.labelLarge, color = Fariin.colors.blue)
+            }
+        }
     }
 }
 

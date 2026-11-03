@@ -483,7 +483,7 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton({ open = true }) { Icon(Icons.Filled.MoreVert, "More", tint = c.secondary) }
-        DropdownMenu(open, onDismissRequest = { open = false }, containerColor = c.card) {
+        DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             items.forEach { (label, act) ->
                 DropdownMenuItem(text = { Text(label, color = c.red) }, onClick = { open = false; act() })
             }

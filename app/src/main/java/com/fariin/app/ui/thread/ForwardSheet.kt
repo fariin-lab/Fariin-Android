@@ -47,6 +47,7 @@ import com.fariin.app.data.CryptoHub
 import com.fariin.app.media.MediaRules
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.ui.components.floating
 
 /**
  * The forward picker (iOS ForwardPicker): "Forward to", a search field, the chats newest first,
@@ -64,19 +65,23 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
         CryptoHub.listedAll().filter { forwardable(it, me) }.sortedByDescending { it.updatedAtMillis }
     }
     val shown = chats.filter { query.isBlank() || it.displayName(me).contains(query.trim(), ignoreCase = true) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.bg) {
+    // Rounded as iOS ForwardPicker: the grey sheet, the search as a floating pill, the chats in one
+    // card, Send as a full capsule.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet,
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
             Box(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(10.dp))
-                    .background(c.secondary.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
             ) {
                 if (query.isEmpty()) Text("Search", fontSize = 17.sp, color = c.secondary)
                 BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                     cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
             }
-            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp).padding(top = 8.dp)) {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
                 items(shown, key = { it.id }) { conv ->
                     val on = conv.id in chosen
                     Row(
@@ -98,8 +103,8 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                 }
             }
             Box(
-                Modifier.fillMaxWidth().padding(16.dp).height(48.dp).clip(RoundedCornerShape(14.dp))
-                    .background(if (chosen.isEmpty()) c.secondary.copy(alpha = 0.3f) else c.blue)
+                Modifier.fillMaxWidth().padding(16.dp).height(50.dp)
+                    .floating(CircleShape, fill = if (chosen.isEmpty()) c.secondary.copy(alpha = 0.3f) else c.blue)
                     .clickable(enabled = chosen.isNotEmpty()) { onSend(chosen.toList()); onDismiss() },
                 contentAlignment = Alignment.Center,
             ) {

@@ -24,15 +24,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.automirrored.filled.Forward
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.automirrored.outlined.Reply
+import androidx.compose.material.icons.automirrored.outlined.Forward
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.History
+import com.fariin.app.ui.components.floating
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -124,18 +126,18 @@ internal fun MessageMenu(
     val now = System.currentTimeMillis().toDouble()
     val items = buildList {
         if (!m.deleted) {
-            if (MessageRules.canReply(m)) add(MenuItem("Reply", Icons.AutoMirrored.Filled.Reply) { onReply(m) })
-            if (MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Filled.Forward) { actions.onForward(m) })
-            if (canSaveToGallery(m)) add(MenuItem("Save", Icons.Filled.Download) { actions.onSave(m) })
+            if (MessageRules.canReply(m)) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply) { onReply(m) })
+            if (MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward) { actions.onForward(m) })
+            if (canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download) { actions.onSave(m) })
             // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).
             val card = com.fariin.app.data.CardRules.isCard(m.text)
-            if (MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.text) })
-            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Filled.Edit) { onStartEdit(m) })
-            if (m.edited) add(MenuItem("Edit History", Icons.Filled.History) { onEditHistory(m) })
+            if (MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy) { onCopy(m.text) })
+            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit) { onStartEdit(m) })
+            if (m.edited) add(MenuItem("Edit History", Icons.Outlined.History) { onEditHistory(m) })
         }
         if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) })
         if (!m.deleted) {
-            if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", Icons.Filled.Info) { onInfo(m) })
+            if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", Icons.Outlined.Info) { onInfo(m) })
             if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) {
                 val pinnedNow = m.id in ui.pinnedIds
                 if (pinnedNow) add(MenuItem("Unpin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu) { actions.onUnpin(m.id) })
@@ -146,7 +148,7 @@ internal fun MessageMenu(
         // (iOS deleteOrTimerRow); someone who cannot delete gets the countdown on a row of its own.
         val expires = m.expiresAtMillis?.takeIf { !m.deleted }
         if (MessageRules.canDeleteHere(m, ui.me, ui.isGroup, ui.adminMayDelete)) {
-            add(MenuItem("Delete", Icons.Filled.Delete, destructive = true, countdownTo = expires) { onDelete(m) })
+            add(MenuItem("Delete", Icons.Outlined.Delete, destructive = true, countdownTo = expires) { onDelete(m) })
         } else if (expires != null) {
             add(MenuItem("Disappearing", null, iconRes = com.fariin.app.R.drawable.ic_disappearing, countdownTo = expires) {})
         }
@@ -160,19 +162,21 @@ internal fun MessageMenu(
             kotlinx.coroutines.delay(1000 - clock.longValue % 1000)
         }
     }
-    // Android: a modal bottom sheet (reaction bar on top, the message, then the actions as a
-    // Material list) in place of the iOS popover beside the bubble.
+    // Android: a modal bottom sheet (reaction capsule on top, the message, then the actions in one
+    // rounded card, as the iOS menu's grouped list) in place of the iOS popover beside the bubble.
     val sheet = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss, sheetState = sheet,
-        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = com.fariin.app.ui.components.sheetFill,
+        shape = com.fariin.app.ui.components.SheetShape,
     ) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             val reactable = !m.deleted && m.sendState == null && !m.isSystem
             if (reactable) {
                 val mine = m.reactions[ui.me]
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        .floating(RoundedCornerShape(28.dp)).padding(horizontal = 6.dp, vertical = 4.dp),
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -192,26 +196,26 @@ internal fun MessageMenu(
                 if (m.deleted) "This message was deleted" else com.fariin.app.data.CardRules.previewWord(m.text) ?: m.bodyText.ifEmpty { "Message" },
                 style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 32.dp, vertical = 10.dp),
             )
-            HorizontalDivider(color = c.separator.copy(alpha = 0.4f))
-            items.forEach {
-                val tint = if (it.destructive) c.red else c.label
-                val until = it.countdownTo
-                androidx.compose.material3.ListItem(
-                    headlineContent = { Text(it.title, color = tint) },
-                    supportingContent = if (until == null) null else {
-                        // Whole-width digits, so the line does not shiver as the seconds change.
-                        { Text(com.fariin.app.data.Disappearing.countdown(until - clock.longValue), color = tint,
-                            fontSize = 13.sp, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"), maxLines = 1) }
-                    },
-                    leadingContent = {
-                        if (it.icon != null) Icon(it.icon, null, tint = tint)
-                        else Icon(androidx.compose.ui.res.painterResource(it.iconRes), null, tint = tint, modifier = Modifier.size(24.dp))
-                    },
-                    colors = androidx.compose.material3.ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.clickable { onDismiss(); it.run() },
-                )
+            com.fariin.app.ui.components.SheetCard {
+                items.forEachIndexed { i, it ->
+                    val tint = if (it.destructive) c.red else c.label
+                    val until = it.countdownTo
+                    com.fariin.app.ui.components.SheetRow(
+                        title = it.title,
+                        icon = if (it.icon != null) androidx.compose.ui.graphics.vector.rememberVectorPainter(it.icon)
+                            else androidx.compose.ui.res.painterResource(it.iconRes),
+                        tint = tint,
+                        supporting = if (until == null) null else {
+                            // Whole-width digits, so the line does not shiver as the seconds change.
+                            { Text(com.fariin.app.data.Disappearing.countdown(until - clock.longValue), color = tint,
+                                fontSize = 13.sp, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"), maxLines = 1) }
+                        },
+                        last = i == items.lastIndex,
+                        onClick = { onDismiss(); it.run() },
+                    )
+                }
             }
         }
     }

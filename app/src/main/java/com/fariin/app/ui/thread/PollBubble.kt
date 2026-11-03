@@ -245,7 +245,8 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
         DateUtils.getRelativeTimeSpanString(it.toLong(), now, DateUtils.MINUTE_IN_MILLIS).toString().lowercase()
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.bg) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet,
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -268,8 +269,8 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
                     Text(PollRules.percent(votes, i), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
                 }
                 Spacer(Modifier.height(6.dp))
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.bgSecondary)
-                    .padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)) {
                     when {
                         hidden -> Text(if (who.isEmpty()) "No votes" else PollRules.voteCount(who.size), fontSize = 16.sp, color = c.secondary)
                         who.isEmpty() -> Text("No votes", fontSize = 16.sp, color = c.secondary)
@@ -289,8 +290,8 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
             }
             if (PollRules.canStop(m.authorId, ctx.me, isOpen)) {
                 Spacer(Modifier.height(22.dp))
-                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.bgSecondary)
-                    .clickable { confirmStop = true }.padding(14.dp)) {
+                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)
+                    .clickable { confirmStop = true }.padding(16.dp)) {
                     Text("Stop Poll", fontSize = 17.sp, color = c.red)
                 }
                 Spacer(Modifier.height(6.dp))
@@ -420,7 +421,7 @@ internal fun PollComposer(onDismiss: () -> Unit, onSend: (String) -> Unit) {
                             Text("Ends", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                             Text(ends.label, fontSize = 17.sp, color = c.secondary)
                         }
-                        DropdownMenu(expanded = endsMenu, onDismissRequest = { endsMenu = false }) {
+                        DropdownMenu(expanded = endsMenu, onDismissRequest = { endsMenu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                             PollRules.EndChoice.entries.forEach { e ->
                                 DropdownMenuItem(text = { Text(e.label) }, onClick = { ends = e; endsMenu = false })
                             }
@@ -445,7 +446,7 @@ private fun Footnote(t: String) {
 
 @Composable
 private fun Group(content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Fariin.colors.bg).padding(horizontal = 16.dp),
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Fariin.colors.card).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.Center) { content() }
 }
 

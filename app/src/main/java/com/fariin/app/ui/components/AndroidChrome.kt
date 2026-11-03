@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,11 +62,8 @@ fun FariinTopBar(
             }
         },
         navigationIcon = {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            }
+            // Back in the chat screen's floating circle with the iOS chevron, on every page.
+            if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp))
         },
         actions = actions,
         windowInsets = insets,

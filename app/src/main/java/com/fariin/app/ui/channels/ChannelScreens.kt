@@ -57,6 +57,7 @@ import com.fariin.app.channel.ChannelFollows
 import com.fariin.app.channel.ChannelRules
 import com.fariin.app.channel.ChannelService
 import com.fariin.app.channel.DiscoveredChannel
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.theme.Fariin
@@ -87,9 +88,9 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
         loading = false
     }
     toast?.let { t -> LaunchedEffect(t) { delay(2500); toast = null } }
-    Box(Modifier.fillMaxSize().background(c.bg)) {
+    Box(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
-            PageBar("Find Channels", onBack)
+            com.fariin.app.ui.components.FloatingTopBar("Find Channels", onBack = onBack, container = c.bgSecondary)
             when {
                 loading && rows.isEmpty() -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
@@ -98,7 +99,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                 rows.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
                 else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                     item {
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(c.card)) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
                             rows.forEachIndexed { i, r ->
                                 if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 76.dp))
                                 @Suppress("UNUSED_VARIABLE") val b = bias.size
@@ -207,8 +208,8 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
 @Composable
 private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxSize().background(c.bg).navigationBarsPadding()) {
-        PageBar("", onBack)
+    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
+        com.fariin.app.ui.components.FloatingTopBar("", onBack = onBack)
         Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
             // A made-up channel post, as the iOS intro shows one (ChannelIntroPreview).
@@ -268,10 +269,10 @@ private fun Field(value: String, placeholder: String, single: Boolean, onChange:
 private fun Details(name: String, about: String, creating: Boolean, error: String?, onName: (String) -> Unit,
                     onAbout: (String) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding().navigationBarsPadding()) {
-        PageBar("New Channel", onBack)
+    Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().imePadding().navigationBarsPadding()) {
+        com.fariin.app.ui.components.FloatingTopBar("New Channel", onBack = onBack, container = c.bgSecondary)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            Column(Modifier.padding(16.dp).clip(RoundedCornerShape(12.dp)).background(c.card)) {
+            Column(Modifier.padding(16.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
                 Field(name, "Channel name", true, onName)
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                 Field(about, "Description", false, onAbout)
@@ -309,11 +310,11 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
         linkNote = r ?: "fariin.com/$link is available."
         linkOk = r == null
     }
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding().navigationBarsPadding()) {
-        PageBar("Channel Type", null)
+    Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().imePadding().navigationBarsPadding()) {
+        com.fariin.app.ui.components.FloatingTopBar("Channel Type", container = c.bgSecondary)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             SectionTitle("CHANNEL TYPE")
-            Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(12.dp)).background(c.card)) {
+            Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
                 TypeRow("Public Channel", public) { public = true }
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                 TypeRow("Private Channel", !public) { public = false }
@@ -321,7 +322,7 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
             Foot(ChannelRules.typeFooter(public))
             if (public) {
                 SectionTitle("PUBLIC LINK")
-                Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).padding(16.dp)) {
+                Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card).padding(16.dp)) {
                     Text("fariin.com/", fontSize = 17.sp, color = c.secondary)
                     BasicTextField(link, { link = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                         cursorBrush = SolidColor(c.blue), modifier = Modifier.weight(1f))
@@ -330,7 +331,7 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
                     if (linkOk) Color(0xFF34C759) else null)
             } else {
                 SectionTitle("INVITE LINK")
-                Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).padding(16.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card).padding(16.dp)) {
                     Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     Text(primary?.let { "fariin.com/g/${it.code}" } ?: "This channel has no invite link on.", fontSize = 15.sp, color = c.secondary)
                 }
@@ -385,7 +386,7 @@ private fun TypeRow(title: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ToggleRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card)
+    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)
         .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
         Switch(on, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.blue, checkedThumbColor = Color.White))

@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +69,7 @@ import com.fariin.app.data.PeopleApi
 import com.fariin.app.data.Person
 import com.fariin.app.data.Usernames
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.photo.rememberCirclePhotoPicker
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsRow
@@ -265,11 +268,18 @@ private fun PickPeople(people: List<Person>, picked: Set<String>, onToggle: (Str
         }
     }
     SearchField(q, "Search") { q = it }
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(people.filter { q.isBlank() || it.shownName.contains(q, true) }, key = { it.uid }) { p ->
-            PersonRow(p.photoUrl, p.shownName, "", onClick = { onToggle(p.uid) }) {
-                Icon(if (p.uid in picked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
-                    tint = if (p.uid in picked) c.blue else c.tertiary)
+    // The people sit in one rounded card on the grey page, as a settings section does: the first
+    // row takes the top corners, the last the bottom ones.
+    val shown = people.filter { q.isBlank() || it.shownName.contains(q, true) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp)) {
+        itemsIndexed(shown, key = { _, p -> p.uid }) { i, p ->
+            val top = if (i == 0) 20.dp else 0.dp
+            val bottom = if (i == shown.lastIndex) 20.dp else 0.dp
+            Box(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(top, top, bottom, bottom)).background(c.card)) {
+                PersonRow(p.photoUrl, p.shownName, "", onClick = { onToggle(p.uid) }) {
+                    Icon(if (p.uid in picked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                        tint = if (p.uid in picked) c.blue else c.tertiary)
+                }
             }
         }
     }
@@ -298,13 +308,19 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     if (picker.pending != null) { picker.Host("Group photo", "Shown in chats and on the group page"); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    // The bar floats: back in its circle, Next / Create in a capsule (iOS NewGroupView's glass bar buttons).
+    val bar: @Composable (String, () -> Unit, @Composable () -> Unit) -> Unit = { t, back, action ->
+        com.fariin.app.ui.components.FloatingTopBar(t, onBack = back, container = c.bgSecondary) {
+            Box(Modifier.floating(CircleShape)) { action() }
+        }
+    }
+    Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding()) {
         if (step == 1) {
-            PageBar("Add Members", onBack = onBack, action = { TextAction("Next", picked.isNotEmpty()) { step = 2 } })
+            bar("Add Members", onBack) { TextAction("Next", picked.isNotEmpty()) { step = 2 } }
             Text("${picked.size} of 1024 selected", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp))
             PickPeople(people, picked) { u -> picked = if (u in picked) picked - u else picked + u }
         } else {
-            PageBar("New Group", onBack = { step = 1 }, action = {
+            bar("New Group", { step = 1 }) {
                 TextAction("Create", title.isNotBlank() && !busy) {
                     busy = true
                     scope.launch {
@@ -317,7 +333,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                         busy = false
                     }
                 }
-            })
+            }
             // iOS NewGroupView: the photo and the name side by side in one rounded card.
             SettingsSection {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

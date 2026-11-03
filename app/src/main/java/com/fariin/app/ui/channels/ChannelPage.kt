@@ -24,13 +24,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.filled.Report
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -70,6 +70,7 @@ import com.fariin.app.channel.ChannelService
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.ui.components.floating
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -97,7 +98,7 @@ fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> 
     val base = if (doc["channel"] == true) ChannelInfo.from(cid, doc) else preview?.let { ChannelInfo.fromPreview(it) }
     val c = Fariin.colors
     if (base == null) {
-        Column(Modifier.fillMaxSize().background(c.bg)) {
+        Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
             PageBar("", onBack)
             Text(refused ?: "", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(32.dp))
@@ -176,7 +177,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         confirmButton = { TextButton({ confirmLeave = false; leave(fromUndo = false) }) { Text("Leave Channel", color = c.red) } },
         dismissButton = { TextButton({ confirmLeave = false }) { Text("Cancel", color = c.blue) } })
 
-    Box(Modifier.fillMaxSize().background(c.bg)) {
+    // The grey page with white cards and floating action circles (iOS ChannelInfo on grouped background).
+    Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         Column(Modifier.fillMaxSize()) {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             PageBar("", onBack, action = if (canEdit) ({
@@ -222,7 +224,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         if (shownRole == Role.VISITOR) notice = "Follow this channel to change its notifications."
                         else tap(if (muted) Action.UNMUTE else Action.MUTE, false)
                     }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (muted) Icons.Filled.NotificationsOff else Icons.Filled.Notifications, null, tint = c.label, modifier = Modifier.size(22.dp))
+                        Icon(if (muted) Icons.Outlined.NotificationsOff else Icons.Outlined.Notifications, null, tint = c.label, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(14.dp))
                         Text("Sounds & Notifications", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                         Text(if (muted && shownRole != Role.VISITOR) "Off" else "On", fontSize = 17.sp, color = c.secondary)
@@ -238,11 +240,11 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 }
                 Spacer(Modifier.height(20.dp))
                 Card {
-                    if (role != Role.ADMIN) FootRow(if (reported) "Reported" else "Report Channel", Icons.Filled.Report,
+                    if (role != Role.ADMIN) FootRow(if (reported) "Reported" else "Report Channel", Icons.Outlined.Report,
                         if (reported) c.secondary else c.red) { if (!reported) confirmReport = true }
                     if (role == Role.FOLLOWER) {
                         HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
-                        FootRow("Leave Channel", Icons.AutoMirrored.Filled.ExitToApp, c.red) { confirmLeave = true }
+                        FootRow("Leave Channel", Icons.AutoMirrored.Outlined.ExitToApp, c.red) { confirmLeave = true }
                     }
                     if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(16.dp))
@@ -256,7 +258,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             }
         }
         AnimatedVisibility(undo, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(24.dp)) {
-            Row(Modifier.clip(CircleShape).background(c.card).clickable { leave(fromUndo = true) }.padding(horizontal = 18.dp, vertical = 12.dp)) {
+            Row(Modifier.floating(CircleShape).clickable { leave(fromUndo = true) }.padding(horizontal = 18.dp, vertical = 12.dp)) {
                 Text("Following “${info.title}”", fontSize = 15.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(14.dp))
@@ -268,11 +270,11 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
 
 private fun iconFor(a: Action): ImageVector = when (a) {
     Action.FOLLOW -> Icons.Filled.Add
-    Action.LEAVE -> Icons.AutoMirrored.Filled.ExitToApp
-    Action.SHARE -> Icons.Filled.Share
+    Action.LEAVE -> Icons.AutoMirrored.Outlined.ExitToApp
+    Action.SHARE -> Icons.Outlined.Share
     Action.SEARCH -> Icons.Filled.Search
-    Action.MUTE -> Icons.Filled.NotificationsOff
-    Action.UNMUTE -> Icons.Filled.Notifications
+    Action.MUTE -> Icons.Outlined.NotificationsOff
+    Action.UNMUTE -> Icons.Outlined.Notifications
 }
 
 @Composable
@@ -280,7 +282,7 @@ private fun ActionCircle(icon: ImageVector, label: String, dimmed: Boolean, onCl
     val c = Fariin.colors
     Column(Modifier.width(72.dp).alpha(if (dimmed) 0.45f else 1f).clickable(onClick = onClick).semantics { contentDescription = label },
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(52.dp).clip(CircleShape).background(c.card), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = c.label, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
@@ -290,7 +292,7 @@ private fun ActionCircle(icon: ImageVector, label: String, dimmed: Boolean, onCl
 
 @Composable
 private fun Card(content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Fariin.colors.card)) { content() }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Fariin.colors.card)) { content() }
 }
 
 @Composable

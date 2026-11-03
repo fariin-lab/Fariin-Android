@@ -73,6 +73,7 @@ import com.fariin.app.data.StoriesState
 import com.fariin.app.data.StoryGroup
 import com.fariin.app.data.StoryList
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
 
@@ -195,14 +196,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        // Material 3 top app bar: title at the start, actions (camera, overflow) at the end.
-        com.fariin.app.ui.components.FariinTopBar("Stories", actions = {
-            androidx.compose.material3.IconButton(onClick = addStory) {
-                Icon(Icons.Outlined.PhotoCamera, contentDescription = "Add Story", tint = c.label)
-            }
-            androidx.compose.material3.IconButton(onClick = { /* TODO: more menu */ }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
-            }
+        // Title at the start, the actions (camera, overflow) as floating circles at the end.
+        com.fariin.app.ui.components.FloatingTopBar("Stories", actions = {
+            com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.PhotoCamera, contentDescription = "Add Story", onClick = addStory)
+            com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { /* TODO: more menu */ })
         })
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             item {
@@ -444,7 +441,7 @@ private fun StoryRow(
         if (camera) {
             Spacer(Modifier.width(8.dp))
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { onCamera() },
+                Modifier.size(44.dp).floating().clickable { onCamera() },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(painterResource(R.drawable.ic_story_camera), contentDescription = "Add Story", tint = c.label,

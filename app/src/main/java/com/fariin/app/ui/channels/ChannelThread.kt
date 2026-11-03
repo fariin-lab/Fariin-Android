@@ -298,7 +298,7 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                     }
                 }
             }
-            DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
+            DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                 if (ch.muted) DropdownMenuItem(text = { Text("Unmute") }, onClick = { menu = false; ch.onMute(null) })
                 else {
                     for ((label, hours) in listOf("1 hour" to 1, "8 hours" to 8, "1 day" to 24, "1 week" to 168)) {

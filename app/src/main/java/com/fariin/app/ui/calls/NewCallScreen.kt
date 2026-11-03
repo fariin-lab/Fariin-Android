@@ -53,6 +53,7 @@ import com.fariin.app.data.BlockList
 import com.fariin.app.data.Conversation
 import com.fariin.app.ui.call.CallActivity
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 
 /** One row of the New Call page: a person from my chats, or a group I may call. */
@@ -119,24 +120,24 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
         if (searching) {
             val focus = remember { FocusRequester() }
             LaunchedEffect(Unit) { focus.requestFocus() }
-            Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { searching = false; q = "" }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close search", tint = c.label) }
-                Box(Modifier.weight(1f)) {
-                    if (q.isEmpty()) Text("Search", fontSize = 18.sp, color = c.secondary)
-                    BasicTextField(q, { q = it }, singleLine = true, textStyle = TextStyle(fontSize = 18.sp, color = c.label),
-                        cursorBrush = SolidColor(c.label), modifier = Modifier.fillMaxWidth().focusRequester(focus))
-                }
-                if (q.isNotEmpty()) IconButton(onClick = { q = "" }) { Icon(Icons.Filled.Close, "Clear", tint = c.label) }
+            // The floating back circle and the search capsule, as the chat list's search.
+            Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.fariin.app.ui.components.FloatingBack(onBack = { searching = false; q = "" }, contentDescription = "Close search")
+                Spacer(Modifier.width(10.dp))
+                com.fariin.app.ui.components.FloatingSearchField(q, { q = it }, "Search", Modifier.weight(1f).focusRequester(focus))
             }
         } else {
-            com.fariin.app.ui.components.FariinTopBar("New Call", onBack = onBack) {
-                IconButton(onClick = { searching = true }) { Icon(Icons.Filled.Search, "Search") }
+            com.fariin.app.ui.components.FloatingTopBar("New Call", onBack = onBack) {
+                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, "Search", onClick = { searching = true })
             }
         }
         LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
             if (q.isBlank()) {
                 item(key = "link") {
-                    Row(Modifier.fillMaxWidth().clickable(onClick = onCreateLink).padding(horizontal = 16.dp, vertical = 10.dp),
+                    // On a floating rounded card, as the chat list's Archived row.
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+                        .floating(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+                        .clickable(onClick = onCreateLink).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(46.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
                             Icon(Icons.Filled.Link, null, tint = c.blue)

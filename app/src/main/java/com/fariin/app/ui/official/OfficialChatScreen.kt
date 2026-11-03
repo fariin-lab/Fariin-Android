@@ -185,11 +185,13 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             confirmButton = { TextButton({ rejectResult = null }) { Text("OK", color = c.blue) } }, containerColor = c.card)
     }
 
-    Column(Modifier.fillMaxSize().background(c.bg)) {
-        Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
+    // The grey page with the notes as white rounded cards and no hard lines at the bar edges
+    // (iOS OfficialChatView), the back in its floating circle as in a chat.
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
             // The bell (iOS bellButton): mutes the announcements; security posts still come.
             val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
-            if (selecting) FariinTopBar("${picked.size} Selected", onBack = { picked.clear() }) {
+            if (selecting) FariinTopBar("${picked.size} Selected", onBack = { picked.clear() }, container = c.bgSecondary) {
                 TextButton({ confirmClear = true }) { Text("Delete All", color = c.red) }
             }
             else if (searching) {
@@ -197,9 +199,8 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                 val focus = remember { androidx.compose.ui.focus.FocusRequester() }
                 LaunchedEffect(Unit) { focus.requestFocus() }
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.IconButton({ closeSearch() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = c.label)
-                    }
+                    com.fariin.app.ui.components.FloatingBack({ closeSearch() }, Modifier.padding(start = 4.dp, end = 8.dp),
+                        contentDescription = "Close search")
                     Box(Modifier.weight(1f)) {
                         if (query.isEmpty()) Text("Search", fontSize = 18.sp, color = c.secondary)
                         androidx.compose.foundation.text.BasicTextField(query, { query = it }, singleLine = true,
@@ -214,17 +215,17 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            else FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE) {
-                androidx.compose.material3.IconButton({ searching = true; query = ""; fromNewest = 0 }) {
-                    Icon(Icons.Filled.Search, contentDescription = "Search")
-                }
-                androidx.compose.material3.IconButton({ OfficialChannel.setMuted(!muted) }) {
-                    Icon(androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
-                        contentDescription = if (muted) "Notifications off" else "Notifications on", modifier = Modifier.size(24.dp))
-                }
+            else FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE,
+                container = c.bgSecondary) {
+                // Search and the bell in floating circles, as the chat header's buttons.
+                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, "Search",
+                    onClick = { searching = true; query = ""; fromNewest = 0 }, modifier = Modifier.padding(end = 8.dp))
+                com.fariin.app.ui.components.FloatingIcon(
+                    androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
+                    if (muted) "Notifications off" else "Notifications on",
+                    onClick = { OfficialChannel.setMuted(!muted) }, modifier = Modifier.padding(end = 8.dp))
             }
         }
-        HorizontalDivider(color = c.separator)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -243,7 +244,6 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                     current = a.id == current)
             }
         }
-        HorizontalDivider(color = c.separator)
         // The chat's own selection bar: Delete, "N Selected", Forward.
         if (selecting) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -307,9 +307,9 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
     }
     Column(Modifier.weight(1f)) {
     Box(Modifier.fillMaxWidth()) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)
         // The search's current match is ringed, so the step lands somewhere the eye can find.
-        .then(if (current) Modifier.border(2.dp, c.blue, RoundedCornerShape(16.dp)) else Modifier)
+        .then(if (current) Modifier.border(2.dp, c.blue, RoundedCornerShape(20.dp)) else Modifier)
         .combinedClickable(onClick = { if (ticked != null) onToggle() },
             onDoubleClick = if (ticked == null && onDoubleTap != null) onDoubleTap else null, onLongClick = {
             if (ticked != null) onToggle()
@@ -340,7 +340,7 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
                 modifier = Modifier.fillMaxWidth().clickable { if (ticked != null) onToggle() else onTap(b) }.padding(vertical = 12.dp, horizontal = 14.dp))
         }
     }
-    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
+    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
         // The chat's quick reaction bar (QuickReaction.bar), mine filled; the same one again takes it back.
         Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             for (e in com.fariin.app.data.MessageRules.QUICK_REACTIONS) {
@@ -429,7 +429,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
             }
         }
     }
-    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card,
+    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = Fariin.colors.card,
         offset = androidx.compose.ui.unit.DpOffset(88.dp, 0.dp)) {
         val pinned = view.state.pinned
         val archived = view.state.archived

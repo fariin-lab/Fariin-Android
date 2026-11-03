@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import com.fariin.app.ui.components.floating
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -47,8 +52,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -220,7 +223,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                         // No menu on an empty tab (iOS showsMoreMenu): Show is the only thing in it here.
                         if (tab == SharedMedia.Tab.MEDIA && state.lists.media.isNotEmpty()) Box {
                             IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = c.label) }
-                            DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
+                            DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                                 Text("Show", style = MaterialTheme.typography.labelMedium, color = c.secondary,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                                 SharedMedia.Filter.entries.forEach { f ->
@@ -232,10 +235,19 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                     },
                 )
             }
-            PrimaryTabRow(pager.currentPage, containerColor = c.bg, contentColor = c.blue) {
+            // The tabs as one floating capsule with the chosen one in a pill (iOS segmented picker),
+            // in place of Material's underlined tab row.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(40.dp)
+                .floating(CircleShape).padding(3.dp)) {
                 tabs.forEachIndexed { i, t ->
-                    Tab(pager.currentPage == i, onClick = { scope.launch { pager.animateScrollToPage(i) } },
-                        text = { Text(t.label) }, selectedContentColor = c.blue, unselectedContentColor = c.secondary)
+                    val on = pager.currentPage == i
+                    Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape).background(if (on) c.fieldFill else Color.Transparent)
+                        .clickable { scope.launch { pager.animateScrollToPage(i) } }
+                        .semantics { role = androidx.compose.ui.semantics.Role.Tab; selected = on },
+                        contentAlignment = Alignment.Center) {
+                        Text(t.label, style = MaterialTheme.typography.labelLarge, color = if (on) c.label else c.secondary,
+                            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                    }
                 }
             }
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->

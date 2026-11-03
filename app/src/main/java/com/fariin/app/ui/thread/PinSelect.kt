@@ -82,19 +82,21 @@ internal fun EditHistorySheet(m: Message, actions: ThreadActions, onDismiss: () 
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape,
     ) {
         Column(Modifier.fillMaxWidth().padding(bottom = 16.dp).verticalScroll(rememberScrollState())) {
             Text("Edit History", style = MaterialTheme.typography.titleMedium, color = c.label,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            HistoryRow(m.text, "Current")
+            // The versions in one rounded card on the grey sheet (iOS grouped list).
+            com.fariin.app.ui.components.SheetCard {
+            HistoryRow(m.text, "Current", last = versions.isNullOrEmpty())
             val v = versions
             when {
                 v != null && v.isEmpty() -> Text("No earlier versions", fontSize = 15.sp, color = c.secondary,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
-                v != null -> v.asReversed().forEach { (text, at) ->
+                v != null -> v.asReversed().forEachIndexed { i, (text, at) ->
                     val readable = !(text.isEmpty() || text == Wire.NOT_READY || text == Wire.LOCKED)
-                    HistoryRow(if (readable) text else "Unavailable", historyTime(at), dim = !readable)
+                    HistoryRow(if (readable) text else "Unavailable", historyTime(at), dim = !readable, last = i == v.lastIndex)
                 }
                 failed -> Text("Couldn't load the edit history. Check your connection and try again.", fontSize = 15.sp,
                     color = c.secondary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
@@ -102,18 +104,19 @@ internal fun EditHistorySheet(m: Message, actions: ThreadActions, onDismiss: () 
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                 }
             }
+            }
         }
     }
 }
 
 @Composable
-private fun HistoryRow(text: String, caption: String, dim: Boolean = false) {
+private fun HistoryRow(text: String, caption: String, dim: Boolean = false, last: Boolean = false) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(text, fontSize = 17.sp, color = if (dim) c.secondary else c.label)
         if (caption.isNotEmpty()) Text(caption, fontSize = 12.sp, color = c.secondary)
     }
-    HorizontalDivider(Modifier.padding(start = 24.dp), color = c.separator.copy(alpha = 0.4f))
+    if (!last) HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 0.5.dp, color = c.separator)
 }
 
 /** iOS `.formatted(date: .abbreviated, time: .shortened)`; empty when the time is unknown. */
@@ -177,7 +180,7 @@ internal fun PinnedBar(
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(44.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.12f))) {
                     Icon(painterResource(R.drawable.ic_pin_bar), "Pinned message", tint = c.label, modifier = Modifier.size(22.dp))
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                     if (ui.canPin) DropdownMenuItem(
                         text = { Text("Unpin") },
                         leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
@@ -211,7 +214,7 @@ internal fun PinnedMessagesSheet(
     var rowMenu by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(
         onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.bg,
+        containerColor = c.bg, shape = com.fariin.app.ui.components.SheetShape,
     ) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
             Column(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -260,7 +263,7 @@ internal fun PinnedMessagesSheet(
                                         Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Go to Message", tint = c.secondary)
                                     }
                                 }
-                                DropdownMenu(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }) {
+                                DropdownMenu(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                                     DropdownMenuItem(
                                         text = { Text("Unpin") },
                                         leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
@@ -274,10 +277,13 @@ internal fun PinnedMessagesSheet(
             }
             if (ui.canPin && pinned.isNotEmpty()) {
                 Box(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.FilledTonalButton(onClick = {
+                    // A floating capsule, as the chat's other controls.
+                    Box(Modifier.height(48.dp).floating(androidx.compose.foundation.shape.CircleShape).clickable {
                         pinned.forEach { onUnpin(it.id) }
                         onDismiss()
-                    }) { Text("Unpin All", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                    }.padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+                        Text("Unpin All", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
+                    }
                 }
             }
         }

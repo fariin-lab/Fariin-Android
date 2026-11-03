@@ -23,7 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.BatterySaver
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.HelpOutline
@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.fariin.app.ui.components.floating
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -146,9 +147,9 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     val c = Fariin.colors
     Column(Modifier.fillMaxSize()) {
         PageBar("Settings", onBack = null, action = {
-            IconButton(onClick = { push(soon("Search")) }) {
-                Icon(Icons.Filled.Search, contentDescription = "Search settings", tint = c.label)
-            }
+            // In its own floating circle, as the other tabs' bar buttons.
+            com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search, "Search settings",
+                onClick = { push(soon("Search")) }, modifier = Modifier.padding(end = 8.dp))
         })
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
@@ -208,7 +209,11 @@ private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -
 
 @Composable
 private fun Capsule(title: String, onClick: () -> Unit, modifier: Modifier) {
-    androidx.compose.material3.FilledTonalButton(onClick = onClick, modifier = modifier) { Text(title) }
+    // A floating white capsule with the blue title (iOS glass buttons), not Material's tonal fill.
+    Box(modifier.height(44.dp).floating(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) {
+        Text(title, style = androidx.compose.material3.MaterialTheme.typography.labelLarge, color = Fariin.colors.blue)
+    }
 }
 
 /** iOS AccountSettingsView: Sign-in, Security, Account (Your Account Data, Log out). */
@@ -232,7 +237,7 @@ private fun AccountPage(
                 IconButton(onClick = { menu = true }) {
                     Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                     DropdownMenuItem(
                         text = { Text("Delete Account", color = c.red) },
                         onClick = { menu = false; push(PAGE_DELETE) },

@@ -50,6 +50,7 @@ import com.fariin.app.data.ChannelReactions
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsSection
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.ui.components.floating
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -138,7 +139,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
             }
             if (mode == "some") {
                 Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.Center) {
-                    Row(Modifier.clip(CircleShape).background(c.card).border(1.dp, c.separator, CircleShape)
+                    Row(Modifier.floating(CircleShape)
                         .padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         list.forEachIndexed { i, e ->
                             Box(Modifier.size(48.dp)) {

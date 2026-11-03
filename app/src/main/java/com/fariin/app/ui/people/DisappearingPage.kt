@@ -141,7 +141,7 @@ internal fun NewGroupTimerSection(seconds: Int, onChange: (Int) -> Unit) {
                 Text(Disappearing.newGroupLabel(seconds), style = MaterialTheme.typography.bodyLarge, color = c.secondary)
                 Icon(painterResource(R.drawable.ic_disappearing), null, tint = c.secondary, modifier = Modifier.padding(start = 8.dp).size(18.dp))
             }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = c.card,
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card,
                 modifier = Modifier.align(Alignment.TopEnd)) {
                 val choices = Disappearing.newGroupChoices.toMutableList()
                 // The Settings default, when it is none of these.

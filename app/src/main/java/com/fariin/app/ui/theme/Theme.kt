@@ -13,6 +13,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 /**
  * Colours from Kulan-iOS/Kulan/DesignSystem/Theme.swift, plus the iOS system colours that file
@@ -139,6 +140,19 @@ fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable (
         }
     }
     CompositionLocalProvider(LocalFariinColors provides c) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = scheme, shapes = RoundShapes, content = content)
     }
 }
+
+/*
+ * Material's corner set, rounded up to the iOS look app-wide: menus and text fields (extraSmall,
+ * 4dp by default) get 14dp, so a DropdownMenu or a field reads as a rounded card rather than a
+ * square box; dialogs and sheets keep their 28dp.
+ */
+private val RoundShapes = androidx.compose.material3.Shapes(
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+)

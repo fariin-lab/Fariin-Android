@@ -71,6 +71,7 @@ import com.fariin.app.data.Conversation
 import com.fariin.app.data.CryptoHub
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.ui.components.floating
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -159,7 +160,8 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.bg) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet,
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(bottom = 12.dp)) {
             Text("Location", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 12.dp))
@@ -187,8 +189,8 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                         else -> CardRules.coords(f.latitude, f.longitude)
                     }
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(14.dp))
-                            .background(c.secondary.copy(alpha = 0.10f))
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(20.dp))
+                            .background(c.card)
                             .clickable(enabled = f != null || !locating) {
                                 if (f == null) { access = LocAccess.of(ctx); tries++; return@clickable }
                                 onSend(f.latitude, f.longitude, if (approximate) "Approximate location" else placeName)
@@ -219,8 +221,8 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
             if (canSearch) {
                 Spacer(Modifier.height(12.dp))
                 Box(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 40.dp).clip(RoundedCornerShape(10.dp))
-                        .background(c.secondary.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp))
+                        .padding(horizontal = 16.dp, vertical = 11.dp),
                 ) {
                     if (query.isEmpty()) Text("Search by name or address", fontSize = 17.sp, color = c.secondary)
                     BasicTextField(query, { query = it; searchSeq++; searchNote = null; searching = false },
@@ -235,7 +237,8 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                     }
                     searchNote != null -> Text(searchNote!!, fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-                    else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp).padding(top = 6.dp)) {
+                    else -> if (results.isNotEmpty()) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = 10.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
                         items(results.take(6)) { a ->
                             val name = CardRules.placeName(a.featureName, a.thoroughfare, a.subLocality, a.locality,
                                 a.subAdminArea, a.adminArea, a.countryName) ?: query.trim()
@@ -371,13 +374,14 @@ internal fun ContactPickSheet(me: String, cid: String, onDismiss: () -> Unit, on
     var chosen by remember { mutableStateOf<String?>(null) }
     val people = remember { CryptoHub.listedAll().filter { pickable(it, me, cid) }.sortedBy { it.displayName(me).lowercase() } }
     val shown = people.filter { query.isBlank() || it.displayName(me).contains(query.trim(), ignoreCase = true) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.bg) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet,
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
             Text("Share Contact", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
             Box(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(10.dp))
-                    .background(c.secondary.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
             ) {
                 if (query.isEmpty()) Text("Search", fontSize = 17.sp, color = c.secondary)
                 BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
@@ -387,7 +391,8 @@ internal fun ContactPickSheet(me: String, cid: String, onDismiss: () -> Unit, on
                 Text("People you chat with show up here.", fontSize = 15.sp, color = c.secondary,
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp))
             }
-            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp).padding(top = 8.dp)) {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
                 items(shown, key = { it.id }) { conv ->
                     val on = conv.id == chosen
                     Row(
@@ -408,8 +413,8 @@ internal fun ContactPickSheet(me: String, cid: String, onDismiss: () -> Unit, on
             }
             val pick = people.firstOrNull { it.id == chosen }
             Box(
-                Modifier.fillMaxWidth().padding(16.dp).height(48.dp).clip(RoundedCornerShape(14.dp))
-                    .background(if (pick == null) c.secondary.copy(alpha = 0.3f) else c.blue)
+                Modifier.fillMaxWidth().padding(16.dp).height(50.dp)
+                    .floating(CircleShape, fill = if (pick == null) c.secondary.copy(alpha = 0.3f) else c.blue)
                     .clickable(enabled = pick != null) { pick?.let { onSend(cardFor(it, me)) }; onDismiss() },
                 contentAlignment = Alignment.Center,
             ) { Text("Send", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }

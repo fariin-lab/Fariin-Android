@@ -527,7 +527,7 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                 androidx.compose.material3.IconButton({ sortOpen = true }) {
                     Icon(Icons.Filled.FilterList, "Sort", tint = c.label)
                 }
-                androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, containerColor = c.card) {
+                androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     listOf("By Name" to false, "Admins First" to true).forEach { (label, v) ->
                         androidx.compose.material3.DropdownMenuItem(text = { Text(label, color = c.label) },
                             trailingIcon = { if (adminsFirst == v) Icon(Icons.Filled.Check, null, tint = c.blue) },

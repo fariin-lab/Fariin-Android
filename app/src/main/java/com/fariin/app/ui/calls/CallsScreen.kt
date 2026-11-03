@@ -119,21 +119,14 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
         return
     }
 
-    // Android: top app bar, search, All / Missed as filter chips, New Call as a floating button.
+    // The bar, the search capsule, All / Missed as a floating segmented pill (iOS MainShell Calls'
+    // picker), New Call as a floating blue circle.
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        com.fariin.app.ui.components.FariinTopBar("Calls")
+        com.fariin.app.ui.components.FloatingTopBar("Calls")
         SearchField(search, { search = it }, "Search calls")
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for ((label, value) in listOf("All" to false, "Missed" to true)) {
-                androidx.compose.material3.FilterChip(
-                    selected = missedOnly == value, onClick = { missedOnly = value },
-                    label = { Text(label) },
-                    colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer),
-                )
-            }
-        }
+        com.fariin.app.ui.components.FloatingSegments(listOf("All", "Missed"), if (missedOnly) 1 else 0,
+            onSelect = { missedOnly = it == 1 }, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
         when {
             // iOS CallListSkeleton while the history is read.
             !loaded -> com.fariin.app.ui.components.CallListSkeleton()
@@ -155,34 +148,17 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
             }
         }
     }
-    androidx.compose.material3.FloatingActionButton(
-        onClick = { nav.newCall() },
-        containerColor = c.blue, contentColor = androidx.compose.ui.graphics.Color.White,
-        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp + com.fariin.app.ui.shell.bottomBarInset()),
-    ) { Icon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call", modifier = Modifier.size(24.dp)) }
+    com.fariin.app.ui.components.FloatingIcon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call",
+        onClick = { nav.newCall() }, tint = androidx.compose.ui.graphics.Color.White, fill = c.blue,
+        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp + com.fariin.app.ui.shell.bottomBarInset()).size(58.dp))
     }
 }
 
 @Composable
 internal fun SearchField(value: String, onChange: (String) -> Unit, prompt: String) {
-    val c = Fariin.colors
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp).height(40.dp)
-            .clip(RoundedCornerShape(20.dp)).background(c.fieldFill).padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Filled.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(6.dp))
-        Box(Modifier.weight(1f)) {
-            if (value.isEmpty()) Text(prompt, fontSize = 17.sp, color = c.secondary)
-            BasicTextField(
-                value, onChange, singleLine = true,
-                textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                cursorBrush = SolidColor(c.label),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
+    // The floating search capsule every tab page shares.
+    com.fariin.app.ui.components.FloatingSearchField(value, onChange, prompt,
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 10.dp))
 }
 
 @Composable
@@ -242,7 +218,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, onInfo: () -> Unit) {
                 Icon(Icons.Outlined.Info, contentDescription = "Info", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 74.dp))
+        HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 74.dp, end = 16.dp))
     }
 }
 

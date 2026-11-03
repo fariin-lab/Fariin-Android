@@ -64,6 +64,10 @@ import com.fariin.app.data.PeopleApi
 import com.fariin.app.data.Person
 import com.fariin.app.data.Requests
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.components.floating
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsOff
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsRow
 import com.fariin.app.ui.settings.SettingsSection
@@ -91,22 +95,9 @@ internal fun PersonRow(photo: String?, name: String, sub: String, onClick: (() -
 
 @Composable
 internal fun SearchField(value: String, placeholder: String, onChange: (String) -> Unit) {
-    val c = Fariin.colors
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(12.dp))
-            .background(c.fieldFill).padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Filled.Search, null, tint = c.secondary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(6.dp))
-        Box(Modifier.weight(1f)) {
-            if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.secondary)
-            BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
-        }
-        if (value.isNotEmpty()) Icon(Icons.Filled.Close, "Clear", tint = c.secondary,
-            modifier = Modifier.size(18.dp).clickable { onChange("") })
-    }
+    // The floating search capsule the tab pages share (was a flat grey box).
+    com.fariin.app.ui.components.FloatingSearchField(value, onChange, placeholder,
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
 }
 
 /**
@@ -143,38 +134,36 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
 
-    Column(Modifier.fillMaxSize().background(c.bg)) {
-        PageBar("New Chat", onBack = onBack)
+    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
+        com.fariin.app.ui.components.FloatingTopBar("New Chat", onBack = onBack)
         SearchField(q, "Search by name or @username") { q = it }
         LazyColumn(Modifier.fillMaxSize()) {
             if (q.isBlank()) {
                 item {
-                    Row(Modifier.fillMaxWidth().clickable(onClick = onNewGroup).padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(44.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Groups, null, tint = c.blue)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text("New Group", fontSize = 17.sp, color = c.blue)
-                    }
-                    // Channels (iOS NewChatView: New channel, and Find Channels on the same page).
+                    // New Group and the channels (iOS NewChatView: New channel, and Find Channels on the
+                    // same page) share one floating rounded card, an inset hairline between them.
                     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
-                    for ((label, open, icon) in listOf(
+                    val actions = listOf(
+                        Triple("New Group", onNewGroup, Icons.Filled.Groups),
                         Triple("New Channel", channelNav.create, Icons.Filled.Campaign),
                         Triple("Find Channels", channelNav.find, Icons.Filled.Explore),
-                    )) {
-                        Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(44.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                                Icon(icon, null, tint = c.blue)
+                    )
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                        .floating(RoundedCornerShape(20.dp))) {
+                        actions.forEachIndexed { i, (label, open, icon) ->
+                            if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 64.dp))
+                            Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(40.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                                    Icon(icon, null, tint = c.blue)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Text(label, fontSize = 17.sp, color = c.blue)
                             }
-                            Spacer(Modifier.width(12.dp))
-                            Text(label, fontSize = 17.sp, color = c.blue)
                         }
                     }
-                    HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                     Text("Find people by their @username.", fontSize = 13.sp, color = c.secondary,
-                        modifier = Modifier.padding(16.dp))
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp))
                 }
             }
             if (local.isNotEmpty()) item { Header("Chats") }
@@ -403,7 +392,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
 
-    Column(Modifier.fillMaxSize().background(c.bg)) {
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("", onBack = onBack) {
             if (uid != me) Text("Edit", fontSize = 17.sp, color = c.blue,
                 modifier = Modifier.clickable { nickname = true }.padding(horizontal = 12.dp, vertical = 8.dp))
@@ -414,9 +403,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             person?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 16.sp, color = c.secondary) }
             Spacer(Modifier.height(16.dp))
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ActionTile("Message", Modifier.weight(1f)) { onOpenChat(cid) }
-                ActionTile(if (muted) "Unmute" else "Mute", Modifier.weight(1f)) {
+            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                ActionTile("Message", androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline) { onOpenChat(cid) }
+                ActionTile(if (muted) "Unmute" else "Mute",
+                    if (muted) androidx.compose.material.icons.Icons.Outlined.Notifications
+                    else androidx.compose.material.icons.Icons.Outlined.NotificationsOff) {
                     scope.launch { if (api.setMuted(cid, !muted)) muted = !muted else notice = "Check your connection and try again." }
                 }
             }
@@ -441,9 +432,15 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 }
 
 @Composable
-internal fun ActionTile(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    // Android: a Material outlined button in the brand blue (iOS drew a white tile).
-    androidx.compose.material3.OutlinedButton(onClick = onClick, modifier = modifier) {
-        Text(text, color = Fariin.colors.blue)
+internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    // iOS glassActions: an icon-only floating circle with its name under it.
+    val c = Fariin.colors
+    Column(modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = c.label, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(text, fontSize = 13.sp, color = c.label)
     }
 }

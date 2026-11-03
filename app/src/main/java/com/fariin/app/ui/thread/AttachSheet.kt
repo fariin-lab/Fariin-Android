@@ -31,13 +31,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.filled.PhotoSizeSelectActual
-import androidx.compose.material.icons.filled.Poll
+import androidx.compose.material.icons.outlined.Poll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import com.fariin.app.ui.components.floating
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -118,47 +119,50 @@ internal fun AttachSheet(
     val onePhoto = picked.size == 1 && picked[0] !in videos
     if (!onePhoto || !allowViewOnce) viewOnce = false
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.bg) {
+    // The iOS attach sheet: the photo area as a rounded card on the grey sheet, the source buttons
+    // in one floating capsule under it, the caption and send as floating pills.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet,
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(bottom = 8.dp)) {
-            Box(Modifier.fillMaxWidth().height(330.dp)) {
+            Box(Modifier.fillMaxWidth().height(330.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(22.dp)).background(c.card)) {
                 if (picked.isEmpty() && mediaOff != null) {
-                    Box(Modifier.fillMaxSize().background(c.secondary.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(mediaOff, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(24.dp))
                     }
                 } else if (picked.isEmpty()) {
                     AddTile(Modifier.fillMaxSize(), openGallery)
                 } else {
                     LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(picked.toList(), key = { it.toString() }) { u ->
                             PickedTile(u, u in videos, picked.indexOf(u) + 1) { picked.remove(u); videos.remove(u) }
                         }
-                        if (picked.size < MediaRules.MEDIA_PER_PICK) item { AddTile(Modifier.aspectRatio(1f), openGallery) }
+                        if (picked.size < MediaRules.MEDIA_PER_PICK) item { AddTile(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)), openGallery) }
                     }
                 }
             }
             if (picked.isEmpty()) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    SheetButton("Gallery", Icons.Filled.PhotoLibrary, openGallery)
-                    SheetButton("File", Icons.AutoMirrored.Filled.InsertDriveFile) { files.launch(arrayOf("*/*")) }
-                    if (onPoll != null) SheetButton("Poll", Icons.Filled.Poll) { onDismiss(); onPoll() }
-                    if (onLocation != null) SheetButton("Location", Icons.Filled.Place) { onDismiss(); onLocation() }
-                    if (onContact != null) SheetButton("Contact", Icons.Filled.Person) { onDismiss(); onContact() }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                    .floating(RoundedCornerShape(32.dp)).padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    SheetButton("Gallery", Icons.Outlined.PhotoLibrary, openGallery)
+                    SheetButton("File", Icons.AutoMirrored.Outlined.InsertDriveFile) { files.launch(arrayOf("*/*")) }
+                    if (onPoll != null) SheetButton("Poll", Icons.Outlined.Poll) { onDismiss(); onPoll() }
+                    if (onLocation != null) SheetButton("Location", Icons.Outlined.Place) { onDismiss(); onLocation() }
+                    if (onContact != null) SheetButton("Contact", Icons.Outlined.Person) { onDismiss(); onContact() }
                 }
             } else {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onePhoto && allowViewOnce) {
                         Box(
-                            Modifier.size(36.dp).clip(CircleShape)
-                                .background(if (viewOnce) c.blue else c.secondary.copy(alpha = 0.15f))
+                            Modifier.size(44.dp).floating(fill = if (viewOnce) c.blue else null)
                                 .clickable { viewOnce = !viewOnce },
                             contentAlignment = Alignment.Center,
                         ) { Text("1", color = if (viewOnce) Color.White else c.label, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
                         Spacer(Modifier.width(8.dp))
                     }
                     Box(
-                        Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp))
-                            .border(0.5.dp, c.separator, RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
+                        Modifier.weight(1f).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
@@ -167,9 +171,9 @@ internal fun AttachSheet(
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
-                        Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.blue)
+                        Modifier.height(44.dp).floating(RoundedCornerShape(22.dp), fill = c.blue)
                             .clickable { onSendMedia(picked.toList(), caption, viewOnce); onDismiss() }
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -189,7 +193,7 @@ internal fun AttachSheet(
 @Composable
 private fun AddTile(modifier: Modifier, onAdd: () -> Unit) {
     val c = Fariin.colors
-    Column(modifier.background(c.secondary.copy(alpha = 0.08f)).clickable(onClick = onAdd),
+    Column(modifier.background(c.secondary.copy(alpha = 0.06f)).clickable(onClick = onAdd),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Filled.PhotoSizeSelectActual, null, tint = c.blue, modifier = Modifier.size(36.dp))
         Spacer(Modifier.height(6.dp))
@@ -201,13 +205,14 @@ private fun AddTile(modifier: Modifier, onAdd: () -> Unit) {
 @Composable
 private fun SheetButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 6.dp),
+    // A tab of the floating capsule (iOS attach bar): the blue glyph over its name, no filled disc.
+    Column(Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(48.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = c.blue, modifier = Modifier.size(26.dp))
         }
-        Spacer(Modifier.height(4.dp))
-        Text(label, fontSize = 13.sp, color = c.label)
+        Spacer(Modifier.height(2.dp))
+        Text(label, fontSize = 12.sp, color = c.label)
     }
 }
 
@@ -226,7 +231,7 @@ private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> 
             }.getOrNull()
         }
     }
-    Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.15f)).clickable(onClick = onRemove)) {
+    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(c.secondary.copy(alpha = 0.15f)).clickable(onClick = onRemove)) {
         bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         if (isVideo) {
             Text("Video", color = Color.White, fontSize = 12.sp,
