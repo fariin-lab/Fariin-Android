@@ -123,6 +123,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             privacyRoute(page, push, pop) -> Unit
             securityCheckupRoute(page, profile, demoProfile != null, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             moreRoute(page, push, pop) -> Unit
+            lookRoute(page, push, pop) -> Unit
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
         }
@@ -310,8 +311,8 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
         PageBar("Appearance", onBack = pop)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection {
-                SettingsRow("Chat Wallpaper") { push(soon("Chat Wallpaper")) }
-                SettingsRow("Chat Color") { push(soon("Chat Color")) }
+                SettingsRow("Chat Wallpaper") { push(PAGE_WALLPAPER) }
+                SettingsRow("Chat Color") { push(PAGE_CHAT_COLOR) }
                 SettingsRow("App Icon") { push(soon("App Icon")) }
                 SettingsRow("Quick Reaction", last = true) { push(PAGE_QUICK) }
             }

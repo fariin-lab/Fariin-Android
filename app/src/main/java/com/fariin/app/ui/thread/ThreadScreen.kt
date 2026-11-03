@@ -348,7 +348,7 @@ private fun ThreadContent(
     var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
+    Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
             val all = com.fariin.app.data.PinRules.sheetOrder(pins) { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] }
@@ -699,7 +699,7 @@ private fun receivedFill(): Color = if (Fariin.colors.dark) Color(0xFF26262B) el
 
 /** Theme.defaultBubble: system blue (the default chat colour). */
 @Composable
-private fun myFill(): Color = Fariin.colors.blue
+private fun myFill(): Color = com.fariin.app.ui.components.openChatBubbleColor() ?: Fariin.colors.blue
 
 private val senderPalette = listOf(
     Color(0xFF007AFF), Color(0xFFAF52DE), Color(0xFFFF2D55), Color(0xFFFF9500),
