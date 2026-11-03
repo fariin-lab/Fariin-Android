@@ -79,7 +79,7 @@ import java.util.Locale
 @Composable
 fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?, shared: List<CallEntry>? = null) {
     // The shell already reads the history for the missed badge: shown as is, not read twice.
-    if (demoCalls == null && shared != null) { CallsScreen(me, shared, true); return }
+    if (demoCalls == null && shared != null) { CallsScreen(me, shared, true, conversations); return }
     val repo = remember { CallsRepository() }
     var calls by remember { mutableStateOf(demoCalls ?: emptyList()) }
     var loaded by remember { mutableStateOf(demoCalls != null) }
@@ -91,11 +91,11 @@ fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<Call
             loaded = true
         }
     }
-    CallsScreen(me, calls, loaded)
+    CallsScreen(me, calls, loaded, conversations)
 }
 
 @Composable
-private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
+private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, groups: List<Conversation> = emptyList()) {
     val c = Fariin.colors
     var missedOnly by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -113,6 +113,11 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
     val links = if (missedOnly) emptyList() else allLinks.filter { q.isEmpty() || it.title.lowercase().contains(q) }
     val rows: List<Any> = (links.map { it.createdAtMs to (it as Any) } + runs.map { it.latest.dateMs to (it as Any) })
         .sortedByDescending { it.first }.map { it.second }
+    // iOS LiveGroupCalls: the calls going in my groups, above the history (not under Missed or a search).
+    val groupKey = groups.filter { it.isGroup }.joinToString(",") { it.id }
+    LaunchedEffect(groupKey) { com.fariin.app.ui.call.LiveGroupCalls.sync(groups) }
+    val liveAll by com.fariin.app.ui.call.LiveGroupCalls.calls.collectAsState()
+    val live = if (missedOnly || q.isNotEmpty()) emptyList() else liveAll
     var info by remember { mutableStateOf<CallRun?>(null) }
     info?.let { r ->
         CallInfoScreen(r, me, onBack = { info = null }, onCall = { video -> callBack(ctx, r.latest, video) })
@@ -130,11 +135,13 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean) {
         when {
             // iOS CallListSkeleton while the history is read.
             !loaded -> com.fariin.app.ui.components.CallListSkeleton()
-            calls.isEmpty() && allLinks.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
+            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
             rows.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
-            rows.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
+            rows.isEmpty() && live.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
             else -> LazyColumn(Modifier.fillMaxSize(), state = listState,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
+                items(live, key = { "live:" + it.cid }) { l -> com.fariin.app.ui.call.LiveGroupCallRow(l, groups.firstOrNull { it.id == l.cid }) }
+
                 items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r ->
                     if (r is com.fariin.app.call.SavedCallLink) {
                         CallLinkRow(r, callTimeLabel(r.createdAtMs, DateFormat.is24HourFormat(ctx), now),

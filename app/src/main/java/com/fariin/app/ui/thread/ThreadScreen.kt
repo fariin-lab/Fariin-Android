@@ -407,10 +407,13 @@ private fun ThreadContent(
                 })
                 else if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
                 // Search owns the top: the pinned bar hides while searching (iOS).
-                if (!search.active) PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
-                    onJump = { jumpTo(it, advance = true) },
-                    onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
-                    onSeeAll = { showPins.value = true })
+                // A group's live call takes the pinned bar's place while it runs (iOS CallBarOrPin).
+                if (!search.active) com.fariin.app.ui.call.ThreadLiveCallBar(ui.cid, ui.isGroup && ui.channel == null && !ui.notAMember, ui.title) {
+                    PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
+                        onJump = { jumpTo(it, advance = true) },
+                        onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
+                        onSeeAll = { showPins.value = true })
+                }
             }
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes.
