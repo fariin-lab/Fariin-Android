@@ -99,11 +99,14 @@ private val CardCorner = RoundedCornerShape(22.dp)
 fun GlowProfilePage(me: String, profile: MyProfile?, onEdit: () -> Unit, onBack: () -> Unit) {
     val feed = LocalMyStories.current
     var people by remember { mutableStateOf<String?>(null) }    // the people list's title while open
+    var peopleGlowing by remember { mutableStateOf(false) }     // the list opened on its Glowing side
+    var insights by remember { mutableStateOf(false) }
     var seeAll by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<Long?>(null) }      // open my ring just before this story
     if (people != null) {
         val nav = com.fariin.app.ui.people.LocalPeopleNav.current
-        GlowPeopleListPage(people!!, onOpenPerson = { nav.contact(it) }, onBack = { people = null }); return
+        GlowPeopleListPage(people!!, startOnGlowing = peopleGlowing, onOpenPerson = { nav.contact(it) },
+            onBack = { people = null; peopleGlowing = false }); return
     }
     if (seeAll) {
         PostedStoriesPage(me, feed.state.mine?.stories ?: emptyList(), profile?.photoUrl,
@@ -111,6 +114,13 @@ fun GlowProfilePage(me: String, profile: MyProfile?, onEdit: () -> Unit, onBack:
             conversations = feed.conversations, myHandle = profile?.handle)
         viewing?.let { w -> feed.state.mine?.let { g ->
             StoryViewerDialog(me, listOf(g.copy(lastViewedAtMs = w)), 0, feed.conversations, onClose = { viewing = null }) } }
+        return
+    }
+    if (insights) {
+        val handle = profile?.handle.orEmpty()
+        GlowInsightsPage(me, handle, Glow.myPosted(feed.state.mine?.stories ?: emptyList()),
+            onPeople = { glowing -> peopleGlowing = glowing; people = handle.ifEmpty { profile?.name?.ifEmpty { null } ?: "Glow" } },
+            onPosted = { seeAll = true }, onBack = { insights = false })
         return
     }
     BackHandler(onBack = onBack)
@@ -193,6 +203,8 @@ fun GlowProfilePage(me: String, profile: MyProfile?, onEdit: () -> Unit, onBack:
                 val title = profile?.handle?.ifEmpty { null } ?: profile?.name?.ifEmpty { null } ?: "Glow"
                 if (AppFeatures.glow) StatsCard(glow.glowers.size, glow.glowing.size, faces,
                     Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp)) { people = title }
+                if (AppFeatures.insights) InsightsCard(glow.glowers.size, profile?.handle.orEmpty(), CardColor, Label, Secondary,
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) { insights = true }
                 PostedCard(posted, onSeeAll = { seeAll = true }, onOpen = { s -> viewing = s.createdAtMs - 1 },
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp))
                 Spacer(Modifier.height(32.dp))
