@@ -138,7 +138,8 @@ class CallActivity : ComponentActivity() {
                         onMute = { CallManager.toggleMute() },
                         onRoute = { CallManager.setRoute(it) },
                         onCamera = { cameraToggle(ui.cameraOn) },
-                        onFlip = { CallManager.flipCamera() })
+                        onFlip = { CallManager.flipCamera() },
+                        onMinimize = { minimize() })
                 }
             }
         }
@@ -162,6 +163,19 @@ class CallActivity : ComponentActivity() {
     private fun updatePip(wanted: Boolean) {
         if (!pipAllowed()) return
         try { setPictureInPictureParams(pipParams(wanted)) } catch (_: Exception) {}
+    }
+
+    /**
+     * The header's minimize (iOS: the call shrinks into its card): a video call goes into the
+     * picture-in-picture window, a voice call steps behind the app and goes on (the ongoing call
+     * notification and the Calls tab bring it back), as Home does.
+     */
+    private fun minimize() {
+        val u = CallManager.ui.value
+        if (pipAllowed() && CallRouting.pipWanted(u.status.phase, u.cameraOn, u.remoteCameraOn)) {
+            try { enterPictureInPictureMode(pipParams(true)); return } catch (_: Exception) {}
+        }
+        moveTaskToBack(true)
     }
 
     override fun onUserLeaveHint() {
