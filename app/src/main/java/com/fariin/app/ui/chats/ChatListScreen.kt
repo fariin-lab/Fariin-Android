@@ -299,6 +299,7 @@ fun ChatListScreen(
                             // The brand name at the top left (owner 2026-11-02, Android messengers).
                             else -> "Fariin"
                         }
+                        Column {
                         TopAppBar(
                             title = { Text(title, style = MaterialTheme.typography.titleLarge) },
                             // The bar's buttons float in their own circles, as the chat screen's back does.
@@ -306,8 +307,9 @@ fun ChatListScreen(
                                 if (showArchive) FloatingBack(onBack = { showArchive = false }, modifier = Modifier.padding(start = 12.dp, end = 4.dp))
                             },
                             actions = {
-                                FloatingIcon(Icons.Outlined.Search, contentDescription = "Search", onClick = { searching = true },
-                                    modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
+                                // In the Archive the search stays a button; the list itself has the field below.
+                                if (showArchive) FloatingIcon(Icons.Outlined.Search, contentDescription = "Search", onClick = { searching = true },
+                                    modifier = Modifier.padding(end = 12.dp))
                                 if (!showArchive) OverflowMenu(
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
@@ -333,6 +335,10 @@ fun ChatListScreen(
                                 titleContentColor = c.label, actionIconContentColor = c.label, navigationIconContentColor = c.label,
                             ),
                         )
+                        // The search field always showing under the title (owner 2026-11-03): one tap
+                        // and the keyboard is up, as the reference app's list does.
+                        if (!showArchive) SearchCapsule { searching = true }
+                        }
                     }
                 }
             }
@@ -345,7 +351,7 @@ fun ChatListScreen(
                     IconButton(onClick = onNewStory, modifier = Modifier.size(48.dp).floating()) {
                         Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story", tint = c.label)
                     }
-                    IconButton(onClick = people.newChat, modifier = Modifier.size(58.dp).floating(fill = c.blue)) {
+                    IconButton(onClick = people.newChat, modifier = Modifier.size(56.dp).floating(fill = c.blue)) {
                         Icon(Icons.Outlined.Edit, contentDescription = "New Chat", tint = Color.White)
                     }
                 }
@@ -486,6 +492,22 @@ private fun SelectionBar(
     )
 }
 
+/** The resting search field: FloatingSearchField's look, a tap opens the live one. */
+@Composable
+private fun SearchCapsule(onOpen: () -> Unit) {
+    val c = Fariin.colors
+    Row(
+        Modifier.fillMaxWidth().background(c.bg).padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
+            .height(44.dp).floating(RoundedCornerShape(22.dp))
+            .clickable(onClickLabel = "Search", onClick = onOpen).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Search", fontSize = 17.sp, color = c.secondary, maxLines = 1)
+    }
+}
+
 @Composable
 private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> Unit) {
     val c = Fariin.colors
@@ -612,13 +634,13 @@ fun ChatRow(
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.padding(vertical = 10.dp)) {
-            // iOS ChatRow: with a story up the photo is 50 inside a 58 ring that overhangs the
-            // 56 slot by one all round; without, a flat 56.
-            Box(Modifier.size(56.dp).then(if (onStoryTap != null) Modifier.clickable(onClick = onStoryTap) else Modifier),
+        Box(Modifier.padding(vertical = 9.dp)) {
+            // The reference app's Android row: a 54 photo, 9 above and below (72 tall). With a story up
+            // the photo is 48 inside a 56 ring overhanging the slot by one all round (iOS's 2 gap).
+            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClick = onStoryTap) else Modifier),
                 contentAlignment = Alignment.Center) {
-                Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 56.dp else 50.dp, squircle = conv.isChannel)
-                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(58.dp))
+                Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel)
+                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp))
             }
             // Disappearing messages on: the timer badge on the photo's lower right, hanging 5 past
             // it (iOS DisappearingAvatarBadge: 24 glass disc, grey timer).
@@ -641,7 +663,7 @@ fun ChatRow(
             }
         }
         Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f).padding(top = 7.dp, bottom = 9.dp)) {
+        Column(Modifier.weight(1f).padding(top = 4.dp, bottom = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Text(

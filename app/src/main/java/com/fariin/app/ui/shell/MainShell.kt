@@ -108,8 +108,11 @@ fun OnTabReselect(action: suspend () -> Unit) {
     LaunchedEffect(n) { if (n != seen) action() }
 }
 
-private val BarHeight = 64.dp
-private val BarMargin = 12.dp
+// The reference app's Android sizes (owner 2026-11-03: "exactly like" it): a 56 bar, 6 off the
+// gesture bar, 32 in from each side.
+private val BarHeight = 56.dp
+private val BarMargin = 6.dp
+private val BarSide = 32.dp
 
 /**
  * The four tabs in the Android order (owner 2026-11-02, after the big Android messengers):
@@ -214,7 +217,7 @@ fun MainShell(
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
             FloatingTabBar(
                 tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, animate = power.animations, onSelect = select,
-                modifier = Modifier.navigationBarsPadding().padding(horizontal = 24.dp, vertical = BarMargin),
+                modifier = Modifier.navigationBarsPadding().padding(horizontal = BarSide, vertical = BarMargin),
             )
         }
     }
@@ -244,19 +247,23 @@ private fun FloatingTabBar(
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(BarHeight / 2)
     val surface = scheme.surfaceContainer
-    val border = if (c.dark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f)
+    // The shine: a white rim, brightest along the top edge, as frosted glass catches the light.
+    val border = androidx.compose.ui.graphics.Brush.verticalGradient(
+        if (c.dark) listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))
+        else listOf(Color.White, Color.White.copy(alpha = 0.55f)))
     val fill = if (glass) {
         Modifier.hazeEffect(haze) {
             backgroundColor = c.bg
             blurRadius = 24.dp
             noiseFactor = 0f
-            tints = listOf(HazeTint(surface.copy(alpha = if (c.dark) 0.62f else 0.70f)))
+            // Frosted white by day, the dark surface at night, both thin enough to show what passes under.
+            tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.60f)))
         }
     } else Modifier.background(surface.copy(alpha = 0.97f))
     Row(
         modifier
             .widthIn(max = 420.dp).fillMaxWidth().height(BarHeight)
-            .shadow(if (c.dark) 0.dp else 4.dp, shape, clip = false)
+            .shadow(if (c.dark) 0.dp else 10.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.16f))
             .clip(shape)
             .then(fill)
             .border(1.dp, border, shape)
@@ -300,7 +307,7 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
         contentAlignment = Alignment.Center,
     ) {
         androidx.compose.foundation.layout.Column(
-            Modifier.widthIn(min = 64.dp).height(52.dp)
+            Modifier.widthIn(min = 64.dp).height(48.dp)
                 .drawBehind {
                     if (on <= 0f) return@drawBehind
                     val s = 0.6f + 0.4f * on
@@ -319,9 +326,9 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
                 }
             }) {
                 if (t.icon != null) {
-                    Icon(androidx.compose.ui.res.painterResource(t.icon), contentDescription = null, tint = tint, modifier = Modifier.size(25.dp))
+                    Icon(androidx.compose.ui.res.painterResource(t.icon), contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
                 } else {
-                    com.fariin.app.ui.components.Avatar(photo, 26.dp,
+                    com.fariin.app.ui.components.Avatar(photo, 24.dp,
                         modifier = if (selected) Modifier.border(1.5.dp, c.label, androidx.compose.foundation.shape.CircleShape) else Modifier)
                 }
             }
