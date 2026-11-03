@@ -184,6 +184,8 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.data.OfficialChannel.start(applicationContext, me, build)
             onDispose { com.fariin.app.data.OfficialChannel.stop() }
         }
+        // Favorites, the stickers I made and saved (iOS StickerStore + StickerBackup).
+        LaunchedEffect(me) { com.fariin.app.data.StickerFavorites.start(applicationContext, me) }
         LaunchedEffect(me) {
             try { crypto.ensureReady() } catch (_: Exception) {}
             crypto.publishPublicKey()

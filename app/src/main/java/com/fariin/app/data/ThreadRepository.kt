@@ -738,6 +738,7 @@ class ThreadRepository(
      * (the emoji, else the old-build marker). The chat list says "😂 Sticker".
      */
     fun sendSticker(s: StickerRef, reply: Message?) {
+        if (s.packId == StickerFavorites.MINE) { sendMineSticker(s, reply); return }
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
         val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
@@ -758,6 +759,52 @@ class ThreadRepository(
             if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
             writeLooseMessage(fields, s.emoji.ifEmpty { StickerGifRules.OLD_BUILD_MARKER },
                 StickerGifRules.stickerLabel(s.emoji), ref, clientId, tap)
+        }
+    }
+
+    /**
+     * A sticker I made (iOS StickerSend.write, source .mine): the transparent PNG is sealed on the
+     * photo path and never re-encoded (JPEG would drop the alpha). The message goes first with
+     * `uploading`, the file lands on it after; a failed upload takes the message down again. Each
+     * send uploads its own copy: chat files are named after their message and deleted with it.
+     */
+    private fun sendMineSticker(s: StickerRef, reply: Message?) {
+        val file = StickerFavorites.png(s.stickerId) ?: return
+        val tap = System.currentTimeMillis().toDouble()
+        val clientId = UUID.randomUUID().toString().uppercase()
+        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
+        val png = file.readBytes()
+        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(png, 0, png.size, opts)
+        val w = opts.outWidth.coerceAtLeast(1).toDouble(); val h = opts.outHeight.coerceAtLeast(1).toDouble()
+        pending[clientId] = Message(
+            id = clientId, authorId = me, text = "", type = "sticker", createdAtMillis = tap, hasServerTime = false,
+            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
+            width = w, height = h, stickerPack = s.packId, stickerId = s.stickerId, stickerEmoji = s.emoji,
+            stickerAnimated = false, localPath = file.absolutePath,
+        )
+        rebuild()
+        runMediaSend(clientId) {
+            val members = if (Wire.isGroupCid(cid)) freshMembers() else null
+            val fields = hashMapOf<String, Any>(
+                "type" to "sticker", "stickerPack" to s.packId, "stickerId" to s.stickerId,
+                "animated" to false, "width" to w, "height" to h, "uploading" to true,
+            )
+            if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
+            writeLooseMessage(fields, StickerGifRules.OLD_BUILD_MARKER, StickerGifRules.stickerLabel(s.emoji), ref, clientId, tap)
+            val msg = convRef.collection("messages").document(clientId)
+            try {
+                val (cipher, meta) = if (members != null) crypto.sealBytesForGroup(png, members, cid) else crypto.encryptBytes(cid, png)
+                val sref = com.google.firebase.storage.FirebaseStorage.getInstance().reference
+                    .child(com.fariin.app.media.MediaRules.imagePath(cid, clientId))
+                sref.putBytes(cipher, com.google.firebase.storage.StorageMetadata.Builder()
+                    .setContentType("application/octet-stream").build()).await()
+                val url = sref.downloadUrl.await().toString()
+                msg.update(mapOf("imageUrl" to url, "enc" to meta.asMap(), "uploading" to false)).await()
+            } catch (e: Exception) {
+                runCatching { msg.delete().await() }
+                throw e
+            }
         }
     }
 

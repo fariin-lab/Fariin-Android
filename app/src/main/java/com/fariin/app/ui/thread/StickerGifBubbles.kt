@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -115,7 +116,10 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
     val ctx = LocalContext.current
     val play = autoplay() && !still
     val asset = remember(packId, stickerId) { if (packId == "mine") null else StickerCatalog.assetPath(ctx, packId, stickerId) }
+    // One I made that this phone holds (Favorites, or my own just sent): drawn from the file.
+    val own = remember(packId, stickerId) { if (packId == "mine") com.fariin.app.data.StickerFavorites.png(stickerId) else null }
     when {
+        own != null -> AsyncImage(own, contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier)
         packId == "mine" || (asset == null && enc != null) -> {
             val got = rememberGatedFile(url, enc, AutoDownload.Kind.PHOTOS)
             val px = with(LocalDensity.current) { StickerGifRules.STICKER_SIDE.dp.roundToPx() }
@@ -249,8 +253,11 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
     // The admin panel's order, on/off and server packs (iOS StickerStore), the shipped order meanwhile.
     val packs by remember { StickerCatalog.live(ctx) }.collectAsState(initial = StickerCatalog.packs(ctx))
     var recents by remember { mutableStateOf(StickerCatalog.recents(ctx, me)) }
-    val shelves: List<StickerPackInfo> = remember(recents) {
-        (if (recents.isEmpty()) emptyList() else listOf(StickerPackInfo("recent", "Recently Used", recents))) + packs
+    // iOS panel order: Recently Used, Favorites (made and saved), then the packs.
+    val favorites by com.fariin.app.data.StickerFavorites.list.collectAsState()
+    val shelves: List<StickerPackInfo> = remember(recents, favorites, packs) {
+        (if (recents.isEmpty()) emptyList() else listOf(StickerPackInfo("recent", "Recently Used", recents))) +
+            (if (favorites.isEmpty()) emptyList() else listOf(StickerPackInfo("favorites", "Favorites", favorites))) + packs
     }
     // Where each shelf's header sits in the grid, for the strip's jumps.
     val starts = remember(shelves) { var i = 0; shelves.map { s -> val at = i; i += 1 + s.stickers.size; at } }
@@ -286,6 +293,7 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
                 Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).clickable { scope.launch { grid.animateScrollToItem(starts[i]) } },
                     contentAlignment = Alignment.Center) {
                     if (shelf.id == "recent") Icon(Icons.Filled.Schedule, contentDescription = "Recently Used", tint = c.secondary, modifier = Modifier.size(20.dp))
+                    else if (shelf.id == "favorites") Icon(Icons.Filled.Star, contentDescription = "Favorites", tint = c.secondary, modifier = Modifier.size(20.dp))
                     else shelf.stickers.firstOrNull()?.let { s -> StickerArt(s.packId, s.stickerId, null, null, Modifier.size(24.dp), still = true) }
                 }
             }
