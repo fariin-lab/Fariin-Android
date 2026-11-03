@@ -257,15 +257,29 @@ object CallAudio {
         setSpeaker(context, speaker)
     }
 
-    fun setSpeaker(context: Context, on: Boolean) {
+    fun setSpeaker(context: Context, on: Boolean) = setRoute(context, if (on) AudioRoute.SPEAKER else AudioRoute.EARPIECE)
+
+    /**
+     * This app's own choice of where the call sound goes. Android 12 and later follow the request
+     * of the app that owns the call's audio mode, which is this one: when only Telecom moved the
+     * route, the app's older earpiece request still held, so the speaker button lit up while the
+     * sound stayed at the ear. Every route change is mirrored here so the two always agree.
+     */
+    fun setRoute(context: Context, r: AudioRoute) {
         val am = context.getSystemService(AudioManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val want = if (on) AudioDeviceInfo.TYPE_BUILTIN_SPEAKER else AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
-            val dev = am.availableCommunicationDevices.firstOrNull { it.type == want }
-            if (dev != null) am.setCommunicationDevice(dev) else am.clearCommunicationDevice()
-        } else {
+            val want = when (r) {
+                AudioRoute.SPEAKER -> setOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+                AudioRoute.EARPIECE -> setOf(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
+                AudioRoute.HEADSET -> setOf(AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_USB_HEADSET)
+                AudioRoute.BLUETOOTH -> setOf(AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET)
+            }
+            val dev = am.availableCommunicationDevices.firstOrNull { it.type in want }
+            val now = am.communicationDevice
+            if (dev != null) { if (now?.id != dev.id) am.setCommunicationDevice(dev) } else am.clearCommunicationDevice()
+        } else if (r == AudioRoute.SPEAKER || r == AudioRoute.EARPIECE) {
             @Suppress("DEPRECATION")
-            am.isSpeakerphoneOn = on
+            am.isSpeakerphoneOn = r == AudioRoute.SPEAKER
         }
     }
 

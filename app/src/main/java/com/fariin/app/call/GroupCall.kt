@@ -134,7 +134,7 @@ data class GroupCallUi(
  * bubble. A refused start asks the server to close a dead call once and tries again. The last
  * one out asks `groupCallClose` to end it (the old transaction when the server can not be reached).
  *
- * Not on Android yet: the group's ring screen on this side, the ringback sound, roles and admin
+ * Not on Android yet: the group's ring screen on this side, roles and admin
  * actions, raised hands, call links, and growing a 1:1 into an `adhoc_` room.
  */
 object GroupCall {
@@ -264,7 +264,7 @@ object GroupCall {
                 refresh()
                 if (_ui.value.linkRoom != null) return@run
                 if (!requireLive && r.remoteParticipants.isEmpty()) start(cid, title, video, r)
-                else noteJoined(cid)
+                else { CallTonePlayer.play(CallTone.GROUP_JOINED); noteJoined(cid) }   // iOS: the sound when I get in
             } catch (e: Exception) {
                 Log.w(TAG, "join failed", e)
                 fail("Call failed")
@@ -290,6 +290,7 @@ object GroupCall {
             noteJoined(cid); return   // they started at the same moment: their call
         }
         recordId = id; startedHere = true; startedAtMs = System.currentTimeMillis()
+        refresh()   // the calling sound starts (iOS: from the tap until the first person joins)
         val conv = db.collection("conversations").document(cid)
         try {
             conv.collection("messages").document(id).set(GroupCallWire.recordFields(me, video, FieldValue.serverTimestamp())).await()
@@ -343,6 +344,7 @@ object GroupCall {
     private fun refresh() {
         val r = room ?: return
         if (r.remoteParticipants.isNotEmpty()) someoneCame = true
+        if (startedHere && !someoneCame) CallTonePlayer.startRingback() else CallTonePlayer.stopRingback()
         val all: List<Participant> = listOf<Participant>(r.localParticipant) + r.remoteParticipants.values
         _ui.value = _ui.value.copy(members = all.map { p ->
             GroupMember(
@@ -382,6 +384,8 @@ object GroupCall {
             }
         }
         events?.cancel(); events = null
+        CallTonePlayer.stopRingback()
+        if (_ui.value.joined) CallTonePlayer.play(CallTone.GROUP_LEFT)   // iOS: the sound when I leave or am removed
         room?.let { try { it.disconnect(); it.release() } catch (_: Exception) {} }
         room = null
         appContext?.let { CallService.stop(it) }

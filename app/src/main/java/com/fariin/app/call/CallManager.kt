@@ -49,6 +49,8 @@ data class CallUi(
     val route: RouteState = RouteState(),
     /** A phone call was answered over this one: the mic is off until it ends. */
     val held: Boolean = false,
+    /** The No answer page is up over the ended call (iOS noAnswerHold). */
+    val noAnswer: Boolean = false,
 )
 
 /**
@@ -108,6 +110,15 @@ object CallManager {
         // The screen goes dark at the ear during a voice call on the earpiece.
         main.launch {
             ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn, u.route.current)) }
+        }
+        // The calling sound from the dial to the pick-up, and the chime when their camera comes on (iOS).
+        main.launch {
+            var theirCam = false
+            ui.collect { u ->
+                if (CallToneRules.ringback(u.status)) CallTonePlayer.startRingback() else CallTonePlayer.stopRingback()
+                if (CallToneRules.videoChime(theirCam, u.remoteCameraOn, u.status, u.held, System.currentTimeMillis())) CallTonePlayer.play(CallTone.VIDEO_ON)
+                theirCam = u.remoteCameraOn
+            }
         }
     }
 
@@ -466,7 +477,11 @@ object CallManager {
         when (state) {
             PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> {
                 val first = status.connectedAtMs == null
-                move(if (status.phase == CallPhase.RECONNECTING) CallEvent.MediaBack else CallEvent.MediaUp(System.currentTimeMillis()))
+                val back = status.phase == CallPhase.RECONNECTING
+                move(if (back) CallEvent.MediaBack else CallEvent.MediaUp(System.currentTimeMillis()))
+                // iOS: back from Reconnecting, say again whether they can hear me (a write made while
+                // the link was down may never have landed).
+                if (back) broadcastMute()
                 if (first && status.connectedAtMs != null) {
                     CallTelecom.setActive(id)
                     if (!status.isCaller) engine?.sendAccept()
@@ -517,8 +532,24 @@ object CallManager {
     fun toggleMute() {
         val m = !_ui.value.muted
         edit { it.copy(muted = m) }
-        engine?.setMic(!m)
-        callId?.let { if (status.callDocCreated) signaling.update(it, CallWire.mutedField(me, m)) }
+        engine?.setMic(!m && !_ui.value.held)
+        broadcastMute()
+    }
+
+    /**
+     * iOS broadcastMuteState: "can they hear me right now", which is mute OR hold, on the call doc's
+     * `muted.{me}` (the field the iPhone reads). A failed write tries again after 2 s, up to 3 times.
+     */
+    private fun broadcastMute(attempt: Int = 0) {
+        val id = callId ?: return
+        if (!status.callDocCreated) return
+        val value = _ui.value.muted || _ui.value.held
+        signaling.update(id, CallWire.mutedField(me, value)) { ok ->
+            if (!ok && attempt < 3) main.launch {
+                delay(2000)
+                if (callId == id && status.live && (_ui.value.muted || _ui.value.held) == value) broadcastMute(attempt + 1)
+            }
+        }
     }
 
     /** The speaker button with only the phone and the speaker to choose from. */
@@ -529,7 +560,10 @@ object CallManager {
 
     /** A route from the speaker button or its list: through Telecom when the system call is up. */
     fun setRoute(to: AudioRoute) {
-        if (CallTelecom.setRoute(to)) return
+        if (CallTelecom.setRoute(to)) {
+            if (::app.isInitialized) CallAudio.setRoute(app, to)
+            return
+        }
         edit { it.copy(route = it.route.copy(current = to), speaker = to == AudioRoute.SPEAKER) }
         CallTelecom.setLocalRoute(to)
         if (::app.isInitialized && (to == AudioRoute.SPEAKER || to == AudioRoute.EARPIECE)) CallAudio.setSpeaker(app, to == AudioRoute.SPEAKER)
@@ -586,6 +620,7 @@ object CallManager {
         if (id != callId || !status.live) return
         edit { it.copy(held = on) }
         engine?.setMic(!on && !_ui.value.muted)
+        broadcastMute()
     }
 
     /** The volume key or the system's silence while ringing: the ring stays, the sound stops. */
@@ -594,6 +629,8 @@ object CallManager {
     /** The routes from Telecom, and the system mute (a car's or a headset's mute button). */
     fun onSystemAudio(id: String, r: RouteState, systemMuted: Boolean) {
         if (id != callId) return
+        // Telecom moved it (a headset in, Bluetooth on): this app's own request follows, see CallAudio.setRoute.
+        if (r.current != _ui.value.route.current && ::app.isInitialized) CallAudio.setRoute(app, r.current)
         edit { it.copy(route = r, speaker = CallRouting.speakerLit(r)) }
         if (status.phase != CallPhase.INCOMING && systemMuted && !_ui.value.muted) toggleMute()
     }
@@ -656,19 +693,42 @@ object CallManager {
                 else -> signaling.endPlain(id, s.endReason)
             }
         }
-        teardown()
-        if (quiet) { reset(); return }
-        main.launch { delay(1500); if (status.phase == CallPhase.ENDED) reset() }
+        CallTonePlayer.stopRingback()
+        val tone = if (quiet) null else CallToneRules.endTone(s, byUser)
+        tone?.let { CallTonePlayer.play(it) }
+        teardown(audioHoldMs = tone?.let { CallToneRules.endToneMs(it) } ?: 0L)
+        val hold = CallMachine.endedHoldMs(s, byUser)
+        if (quiet || hold == 0L) { reset(); return }
+        if (CallMachine.noAnswerPage(s, byUser, appInFront())) { edit { it.copy(noAnswer = true) }; return }
+        main.launch { delay(hold); if (status.phase == CallPhase.ENDED && !_ui.value.noAnswer && callId == id) reset() }
     }
 
-    private fun teardown() {
+    /** The No answer page's Close (and the page going away with the app). */
+    fun closeNoAnswer() { if (status.phase == CallPhase.ENDED && _ui.value.noAnswer) reset() }
+
+    /** The No answer page's Call again / Try again: the same person, the same kind of call. */
+    fun callAgain(context: Context) {
+        val u = _ui.value
+        if (status.phase != CallPhase.ENDED || !u.noAnswer || u.peerUid.isEmpty()) return
+        val video = u.status.video
+        reset()
+        dial(context, u.peerUid, u.peerName, u.peerPhoto, video)
+    }
+
+    /** [audioHoldMs]: the end tone's length; the call audio stays up until it has played. */
+    private fun teardown(audioHoldMs: Long = 0L) {
         stopRingtone()
         timers.forEach { it.cancel() }; timers.clear()
         listeners.forEach { it.remove() }; listeners.clear()
         engine?.close(); engine = null
         edit { it.copy(remoteVideo = null, localVideo = null) }
         if (::app.isInitialized) {
-            CallAudio.stop(app)
+            if (audioHoldMs > 0) main.launch {
+                delay(audioHoldMs)
+                CallTonePlayer.stopTone()
+                // A new call dialled inside the tone keeps its own audio.
+                if (!status.live && !GroupCall.ui.value.joined) CallAudio.stop(app)
+            } else CallAudio.stop(app)
             CallNotifications.cancelIncoming(app)
             CallService.stop(app)
         }

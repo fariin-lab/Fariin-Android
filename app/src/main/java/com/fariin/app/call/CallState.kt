@@ -97,6 +97,26 @@ object CallMachine {
         }
     }
 
+    /**
+     * iOS finishCall's No answer page: a call I placed that nobody answered (or that never
+     * connected) stays on screen with Call again / Try again, Voice message and Close, while the
+     * app is in front. My own End closes at once instead.
+     */
+    fun noAnswerPage(s: CallStatus, byUser: Boolean, inFront: Boolean): Boolean =
+        s.isCaller && !byUser && !s.micDenied && inFront && (s.endReason == EndReason.MISSED || s.endReason == EndReason.DECLINED ||
+            (s.endReason == EndReason.FAILED && s.connectedAtMs == null))
+
+    /**
+     * How long the ended words stay before the screen closes (iOS finishCall): none after my own
+     * End, 2 s for the busy tone or the mic line, 1 s otherwise.
+     */
+    fun endedHoldMs(s: CallStatus, byUser: Boolean): Long = when {
+        s.micDenied -> 2000
+        byUser -> 0
+        s.endReason == EndReason.BUSY -> 2000
+        else -> 1000
+    }
+
     /** iOS CallDuration.clock: m:ss, then h:mm:ss. */
     fun clock(sec: Int): String {
         val t = sec.coerceAtLeast(0)

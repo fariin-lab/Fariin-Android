@@ -75,4 +75,25 @@ class CallMachineTest {
         assertEquals("0:00", CallMachine.clock(0)); assertEquals("0:59", CallMachine.clock(59))
         assertEquals("10:05", CallMachine.clock(605)); assertEquals("1:00:01", CallMachine.clock(3601))
     }
+
+    @Test fun noAnswerPageForMyUnansweredOrUnconnectedCall() {
+        val ended = CallStatus(phase = CallPhase.ENDED, isCaller = true, callDocCreated = true, calleeRinging = true)
+        assertTrue(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.MISSED), byUser = false, inFront = true))
+        assertTrue(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.DECLINED), byUser = false, inFront = true))
+        assertTrue(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.FAILED), byUser = false, inFront = true))
+        assertFalse(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.FAILED, connectedAtMs = 1), false, true))
+        assertFalse(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.BUSY), false, true))
+        assertFalse(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.MISSED), byUser = true, inFront = true))
+        assertFalse(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.MISSED), byUser = false, inFront = false))
+        assertFalse(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.MISSED, isCaller = false), false, true))
+        assertFalse(CallMachine.noAnswerPage(ended.copy(endReason = EndReason.FAILED, micDenied = true), false, true))
+    }
+
+    @Test fun endedWordsStayAsLongAsIos() {
+        val ended = CallStatus(phase = CallPhase.ENDED, isCaller = true, endReason = EndReason.HANGUP)
+        assertEquals(0L, CallMachine.endedHoldMs(ended, byUser = true))
+        assertEquals(1000L, CallMachine.endedHoldMs(ended, byUser = false))
+        assertEquals(2000L, CallMachine.endedHoldMs(ended.copy(endReason = EndReason.BUSY), byUser = false))
+        assertEquals(2000L, CallMachine.endedHoldMs(ended.copy(micDenied = true), byUser = false))
+    }
 }
