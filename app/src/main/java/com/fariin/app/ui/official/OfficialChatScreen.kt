@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Build
@@ -224,7 +225,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
     val context = LocalContext.current
     val latest = view.latest ?: return
     val unread = view.unread
-    val muted = view.state.muted
+    val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.padding(vertical = 10.dp)) { OfficialAvatar(56.dp) }
         Spacer(Modifier.width(16.dp))
@@ -235,6 +236,10 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                         fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Medium, color = c.label, maxLines = 1)
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Filled.Verified, contentDescription = "Official", tint = c.blue, modifier = Modifier.size(17.dp))
+                    if (muted) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.NotificationsOff, contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(timeLabel(latest.sortAt, DateFormat.is24HourFormat(context)), style = MaterialTheme.typography.labelMedium,
