@@ -44,14 +44,21 @@ import kotlinx.coroutines.tasks.await
 fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val newPasswordFor by AuthHandoff.newPasswordFor.collectAsState()
-    var phase by remember(me) { mutableStateOf<Phase>(Phase.Loading) }
+    // An account this phone has opened before opens at once (owner 2026-11-03: Fariin took 1.5 to
+    // 3.5 s to show anything, others under 1 s; the profile was fetched from the SERVER on every
+    // launch before the first frame). The same checks still run, in the background, and move the
+    // page if their answer differs. A fresh sign-in has no mark, so it waits for them as before.
+    val opened = remember(me) { GateMemory.wasReady(ctx, me) }
+    var phase by remember(me) { mutableStateOf<Phase>(if (opened) Phase.Ready else Phase.Loading) }
+    var verified by remember(me) { mutableStateOf(!opened) }
     var recheckTwoStep by remember(me) { mutableStateOf(false) }
     LaunchedEffect(me, recheckTwoStep, phase == Phase.Ready) {
         if (recheckTwoStep && phase == Phase.Ready && TwoStepGate.needsPassword(20_000) == true) { recheckTwoStep = false; phase = Phase.TwoStep }
     }
 
     LaunchedEffect(me, phase) {
-        if (phase != Phase.Loading) return@LaunchedEffect
+        if (phase != Phase.Loading && verified) return@LaunchedEffect
+        verified = true
         // The email check runs on a Cloud Function, which the local test backend does not have:
         // there it could never finish, so fake accounts skip it. Real builds always ask.
         if (!isLocalBackend(ctx)) auth.unprovenEmailCached?.let { phase = Phase.ProveEmail(it); return@LaunchedEffect }
@@ -69,8 +76,11 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
         (doc?.get("deletionScheduledFor") as? com.google.firebase.Timestamp)?.let {
             phase = Phase.Restore(p.handle, it.toDate().time); return@LaunchedEffect
         }
+        // A background check that found nothing (offline, cache empty) keeps the page as it is.
+        if (opened && doc == null) return@LaunchedEffect
         phase = if (p.name.isNotBlank() && p.handle.isNotEmpty()) Phase.Ready else Phase.Onboarding(p.handle)
     }
+    LaunchedEffect(me, phase) { if (phase == Phase.Ready) GateMemory.markReady(ctx, me) else if (phase != Phase.Loading) GateMemory.clear(ctx) }
 
     val ownPage = newPasswordFor != null || (phase != Phase.Ready && phase != Phase.Loading)
     LaunchedEffect(ownPage) { if (ownPage) onOwnPage() }
@@ -138,4 +148,15 @@ private fun RememberThisAccount(me: String) {
             SavedAccounts.remember(ctx, p, photoJpeg = jpeg)
         }
     }
+}
+
+/** Which account last opened all the way on this phone (the fast path above). Cleared at sign-out. */
+object GateMemory {
+    private const val PREFS = "fariin_gate"
+    fun wasReady(c: android.content.Context, uid: String) =
+        c.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).getString("ready", null) == uid
+    fun markReady(c: android.content.Context, uid: String) =
+        c.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit().putString("ready", uid).apply()
+    fun clear(c: android.content.Context) =
+        c.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).edit().remove("ready").apply()
 }
