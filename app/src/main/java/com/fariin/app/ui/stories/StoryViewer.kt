@@ -55,6 +55,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -615,6 +616,8 @@ fun StoryViewer(
                     onEnd = { nextGroup() }, onBeforeStart = { previousGroup() },
                     onClose = { close() },
                     onLink = openLink,
+                    onRepostAuthor = { uid -> profileUid = uid },
+                    authorPhoto = { uid -> groups.firstOrNull { g -> g.stories.any { it.authorUid == uid } }?.photoUrl },
                     onDrag = { dy ->
                         if (!hero.live && dy > 0f) dragBegin()
                         dragTo(dy)
@@ -818,6 +821,8 @@ private fun StoryPage(
     onClose: () -> Unit,
     /** A link on the story was asked for: its tap area's Visit link, or a link in the caption. */
     onLink: (String) -> Unit,
+    onRepostAuthor: (String) -> Unit,
+    authorPhoto: (String) -> String?,
     onDrag: (Float) -> Unit,
     onDragEnd: (dy: Float, vy: Float) -> Unit,
     onOpenViewers: (String) -> Unit,
@@ -956,8 +961,13 @@ private fun StoryPage(
         ) {
             StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
                 onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active)
-            if (story.taps.isNotEmpty()) StoryTapLayer(story.taps, card.width, card.height, armed,
-                onArm = { armed = it }, onOpen = { url -> armed = null; onLink(url) })
+            // iOS repostTapArea: a repost's middle column pauses it and shows the original author;
+            // their face and name open the profile.
+            val taps = remember(story.id) { story.taps + listOfNotNull(story.repostOf?.let { REPOST_TAP }) }
+            if (taps.isNotEmpty()) StoryTapLayer(taps, card.width, card.height, armed,
+                onArm = { armed = it }, onOpen = { url -> armed = null; onLink(url) },
+                person = story.repostOf?.let { r -> (r.authorName.ifEmpty { "Reposted" }) to authorPhoto(r.authorUid) },
+                onPerson = { armed = null; story.repostOf?.let { onRepostAuthor(it.authorUid) } })
 
             // Top shade, bars, header, inside the card: they fade with the drag like the bottom bar
             // (iOS chrome), so a card on its way down is the story alone (owner 2026-11-03).
@@ -1353,6 +1363,8 @@ private fun StoryTapLayer(
     armed: StoryTapTarget?,
     onArm: (StoryTapTarget?) -> Unit,
     onOpen: (String) -> Unit,
+    person: Pair<String, String?>? = null,
+    onPerson: () -> Unit = {},
 ) {
     val d = LocalDensity.current
     val floor = with(d) { 24.dp.toPx() }
@@ -1363,7 +1375,7 @@ private fun StoryTapLayer(
                 .size(with(d) { r.width.toDp() }, with(d) { r.height.toDp() })
                 .graphicsLayer { rotationZ = Math.toDegrees(t.rotation).toFloat() }
                 .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
-                    onClickLabel = "Visit link") { if (armed != t) onArm(t) },
+                    onClickLabel = if (t === REPOST_TAP) "Show who posted it" else "Visit link") { if (armed != t) onArm(t) },
         )
     }
     val a = armed ?: return
@@ -1375,7 +1387,8 @@ private fun StoryTapLayer(
     val above = StoryTaps.bubbleAbove(r, ch, bubbleH, gap, margin)
     val cx = r.center.x.coerceIn(minOf(margin, cw / 2), maxOf(cw - margin, cw / 2))
     val top = if (above) r.top - gap - bubbleH else r.bottom + gap
-    VisitLinkBubble(tailDown = above, onTap = { onOpen(a.url) },
+    val who = if (a === REPOST_TAP) person else null
+    VisitLinkBubble(tailDown = above, onTap = { if (who != null) onPerson() else onOpen(a.url) }, person = who,
         modifier = Modifier.layout { m, c ->
             val p = m.measure(c.copy(minWidth = 0, minHeight = 0))
             layout(c.maxWidth, c.maxHeight) { p.place((cx - p.width / 2f).roundToInt(), top.roundToInt()) }
@@ -1383,11 +1396,13 @@ private fun StoryTapLayer(
 }
 
 private const val VISIT_ROW = 50
+/** iOS RepostCard.tapRect: the middle column, off the left and right fifths that move between stories. */
+private val REPOST_TAP = StoryTapTarget(x = 0.5, y = 0.5, w = 0.40, h = 0.76, rotation = 0.0, url = "fariin://repost")
 private const val VISIT_TAIL = 9
 
 /** iOS VisitLinkBubble: "Visit link >" on a dark rounded body, its tail pointing at the area. */
 @Composable
-private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modifier) {
+private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modifier, person: Pair<String, String?>? = null) {
     val shape = remember(tailDown) { VisitBubbleShape(tailDown) }
     Row(
         modifier.shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f))
@@ -1396,7 +1411,12 @@ private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modi
             .height(VISIT_ROW.dp).padding(start = 18.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Visit link", color = Color.White, fontSize = 17.sp)
+        if (person != null) {
+            Avatar(person.second, 28.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(person.first, color = Color.White, fontSize = 17.sp, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
+        } else Text("Visit link", color = Color.White, fontSize = 17.sp)
         Spacer(Modifier.width(6.dp))
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
             tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
