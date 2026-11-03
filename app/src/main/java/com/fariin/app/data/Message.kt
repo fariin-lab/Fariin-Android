@@ -81,12 +81,38 @@ data class Message(
     val pollCounts: Map<Int, Int> = emptyMap(),
     val pollVoters: Int = 0,
     val pollTallyAt: Double = 0.0,
+    // ---- Stickers (iOS StickerSend): a built-in one names its pack and file, every phone draws its
+    // own copy; `imageUrl` is the public copy. One I made (`stickerPack == "mine"`) is a sealed PNG.
+    val stickerPack: String? = null,
+    val stickerId: String? = null,
+    val stickerEmoji: String? = null,
+    val stickerAnimated: Boolean = false,
+    // ---- A call record (`type == "call"`, iOS Message call fields).
+    val callerUid: String? = null,
+    val callOutcome: String? = null,
+    val callVideo: Boolean = false,
+    val callDuration: Int? = null,
+    val callJoinedUids: List<String>? = null,
+    val callRungUids: List<String>? = null,
+    /** The sender's link card, opened (iOS LinkPreviewData); null when absent or unreadable. */
+    val linkPreview: LinkPreview? = null,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
     val sendState: SendState? = null,
 ) {
     enum class SendState { SENDING, FAILED }
+
+    /** iOS LinkPreviewData: fetched and sealed by the sender; the picture is a sealed file like a photo's. */
+    data class LinkPreview(val url: String, val title: String, val desc: String,
+                           val imageUrl: String? = null, val imageEnc: EncMeta? = null) {
+        val host: String get() = StickerGifRules.host(url)
+    }
+
+    /** iOS isSticker: a sticker names both its pack and its file. */
+    val isSticker: Boolean get() = !deleted && type == "sticker" && !stickerPack.isNullOrEmpty() && !stickerId.isNullOrEmpty()
+    /** iOS isGif: the public GIF link (not end-to-end encrypted). */
+    val isGif: Boolean get() = !deleted && type == "gif" && !imageUrl.isNullOrEmpty()
 
     /** [isStatus]: the quote points at a story; [storyThumb] its plain picture URL (iOS ReplyRef). */
     data class ReplyRef(
@@ -135,6 +161,8 @@ data class Message(
         get() = when {
             deleted -> ""
             poll != null -> PollRules.safeText(poll!!)   // iOS safeText: never the raw marker
+            type == "sticker" -> StickerGifRules.stickerLabel(stickerEmoji)
+            type == "gif" -> "GIF"   // before the imageUrl check below: a GIF carries one too
             text.isNotEmpty() -> text
             type == "image" || imageUrl != null -> "Photo"
             type == "video" || videoUrl != null -> "Video"
@@ -194,10 +222,35 @@ data class Message(
                     videoEnc = if (video) EncMeta.fromMap(m["videoEnc"] as? Map<*, *>) else null,
                     duration = (m["duration"] as? Number)?.toDouble())
             } ?: emptyList()
+            // iOS: the link card's words are sealed like the caption; a sentinel drops the whole card.
+            val linkPreview = (data["linkPreview"] as? Map<*, *>)?.let { lp ->
+                fun openLp(key: String): String {
+                    val v = lp[key] as? String ?: return ""
+                    if (v.isEmpty()) return ""
+                    val clear = open(v, author)
+                    return if (clear == Wire.NOT_READY || clear == Wire.LOCKED) "" else clear
+                }
+                val url = openLp("url")
+                if (url.isEmpty()) null else LinkPreview(url, openLp("title"), openLp("desc"),
+                    (lp["imageUrl"] as? String)?.ifEmpty { null }, EncMeta.fromMap(lp["imageEnc"] as? Map<*, *>))
+            }
+            val sticker = type == "sticker"
             return Message(
                 id = id,
                 authorId = author,
-                text = text,
+                // A sticker's sealed `text` is only what an older build shows instead (iOS): dropped.
+                text = if (sticker) "" else text,
+                stickerPack = if (sticker) data["stickerPack"] as? String else null,
+                stickerId = if (sticker) data["stickerId"] as? String else null,
+                stickerEmoji = if (sticker) data["emoji"] as? String else null,
+                stickerAnimated = sticker && data["animated"] == true,
+                callerUid = data["callerUid"] as? String,
+                callOutcome = data["callOutcome"] as? String,
+                callVideo = data["callVideo"] as? Boolean ?: false,
+                callDuration = (data["callDuration"] as? Number)?.toInt(),
+                callJoinedUids = (data["joinedUids"] as? List<*>)?.filterIsInstance<String>(),
+                callRungUids = (data["rungUids"] as? List<*>)?.filterIsInstance<String>(),
+                linkPreview = linkPreview,
                 type = type,
                 createdAtMillis = if (created > 0) created else nowMillis,
                 hasServerTime = created > 0,

@@ -130,6 +130,11 @@ dependencies {
     implementation(libs.coil.compose)
     // Group photos can be plain https links; profile photos go through FariinPhotoFetcher.
     implementation(libs.coil.network.okhttp)
+    // Received GIFs and animated sticker WebP (iOS AnimatedGifView / RowStickerView): Coil's own
+    // animated decoders, Apache 2.0.
+    implementation("io.coil-kt.coil3:coil-gif:3.2.0")
+    // Animated .tgs stickers (iOS TGSEngine on rlottie): Lottie for Android, Apache 2.0.
+    implementation("com.airbnb.android:lottie-compose:6.6.7")
     // Voice notes, videos and the full-screen video player (Media3, the Android media stack).
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)

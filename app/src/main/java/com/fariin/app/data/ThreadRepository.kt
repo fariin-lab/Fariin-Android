@@ -643,6 +643,77 @@ class ThreadRepository(
         }
     }
 
+    // ------------------------------------------------------------------ stickers and GIFs
+
+    /**
+     * A built-in sticker (iOS StickerSend.write): pack + file + emoji + animated, 512 x 512, its
+     * public copy in `imageUrl`; nothing uploaded. The sealed `text` is what an older build shows
+     * (the emoji, else the old-build marker). The chat list says "😂 Sticker".
+     */
+    fun sendSticker(s: StickerRef, reply: Message?) {
+        val tap = System.currentTimeMillis().toDouble()
+        val clientId = UUID.randomUUID().toString().uppercase()
+        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
+        pending[clientId] = Message(
+            id = clientId, authorId = me, text = "", type = "sticker", createdAtMillis = tap, hasServerTime = false,
+            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
+            width = 512.0, height = 512.0, stickerPack = s.packId, stickerId = s.stickerId,
+            stickerEmoji = s.emoji, stickerAnimated = s.animated,
+            imageUrl = StickerGifRules.stickerPublicUrl(s.packId, s.stickerId),
+        )
+        rebuild()
+        runMediaSend(clientId) {
+            val fields = hashMapOf<String, Any>(
+                "type" to "sticker", "stickerPack" to s.packId, "stickerId" to s.stickerId,
+                "animated" to s.animated, "width" to 512.0, "height" to 512.0,
+                "imageUrl" to StickerGifRules.stickerPublicUrl(s.packId, s.stickerId),
+            )
+            if (s.emoji.isNotEmpty()) fields["emoji"] = s.emoji
+            writeLooseMessage(fields, s.emoji.ifEmpty { StickerGifRules.OLD_BUILD_MARKER },
+                StickerGifRules.stickerLabel(s.emoji), ref, clientId, tap)
+        }
+    }
+
+    /** iOS ChatService.sendGif: the public GIPHY link and its size, `text` empty; the list says "GIF". */
+    fun sendGif(g: StickerGifRules.Gif, reply: Message?) {
+        val tap = System.currentTimeMillis().toDouble()
+        val clientId = UUID.randomUUID().toString().uppercase()
+        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
+        pending[clientId] = Message(
+            id = clientId, authorId = me, text = "", type = "gif", createdAtMillis = tap, hasServerTime = false,
+            clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING, replyTo = ref,
+            imageUrl = g.url, width = g.width, height = g.height,
+        )
+        rebuild()
+        runMediaSend(clientId) {
+            writeLooseMessage(hashMapOf("type" to "gif", "imageUrl" to g.url, "width" to g.width, "height" to g.height),
+                null, "GIF", ref, clientId, tap)
+        }
+    }
+
+    /** One message whose words are not the preview (a sticker, a GIF): the fields, the sealed
+     *  [text] (null = empty), the clear [label] for the chat list, the badge for everyone else. */
+    private suspend fun writeLooseMessage(fields: Map<String, Any>, text: String?, label: String,
+                                          reply: Message.ReplyRef?, clientId: String, clientTs: Double) {
+        val members = if (Wire.isGroupCid(cid)) freshMembers() else null
+        val other = Wire.otherUid(cid, me)
+        if (members == null) seedDirect(other)
+        val msg = HashMap<String, Any>(fields)
+        msg["text"] = text?.let { seal(it, members) } ?: ""
+        msg["authorId"] = me
+        msg["createdAt"] = FieldValue.serverTimestamp()
+        msg["clientTs"] = clientTs
+        msg["clientId"] = clientId
+        if (reply != null) msg["replyTo"] = replyMap(reply, seal(reply.text, members))
+        val batch = db.batch()
+        batch.set(convRef.collection("messages").document(clientId), msg)
+        val conv = hashMapOf<String, Any>("lastMessage" to label, "lastSender" to me, "updatedAt" to FieldValue.serverTimestamp())
+        for (u in members ?: listOf(other)) if (u != me) conv["unreadCount.$u"] = FieldValue.increment(1)
+        batch.update(convRef, conv)
+        batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
+    }
+
     // ------------------------------------------------------------------ media (ChatService.sendImage / sendAudio)
 
     /** A photo from the system picker: made ready like iOS (sendJPEG), then sent. */
@@ -1005,6 +1076,7 @@ class ThreadRepository(
             "audio" -> if (once) "🎤 One-time voice message" else "🎤 Voice message"
             "file" -> "📄 File"
             "gif" -> "GIF"
+            "sticker" -> StickerGifRules.stickerLabel(d["emoji"] as? String)
             "call" -> {
                 val video = d["callVideo"] == true
                 if (d["callOutcome"] == "missed") (if (video) "📹 Missed video call" else "📞 Missed call")

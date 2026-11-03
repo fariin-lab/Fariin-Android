@@ -1,0 +1,820 @@
+{
+ "packs": [
+  {
+   "id": "kulu",
+   "title": "Kulu",
+   "stickers": [
+    {
+     "id": "hi",
+     "emoji": "👋"
+    },
+    {
+     "id": "laugh",
+     "emoji": "😂"
+    },
+    {
+     "id": "love",
+     "emoji": "😍"
+    },
+    {
+     "id": "cry",
+     "emoji": "😭"
+    },
+    {
+     "id": "angry",
+     "emoji": "😠"
+    },
+    {
+     "id": "wow",
+     "emoji": "😮"
+    },
+    {
+     "id": "wink",
+     "emoji": "😉"
+    },
+    {
+     "id": "sleepy",
+     "emoji": "😴"
+    },
+    {
+     "id": "cool",
+     "emoji": "😎"
+    },
+    {
+     "id": "thinking",
+     "emoji": "🤔"
+    },
+    {
+     "id": "party",
+     "emoji": "🥳"
+    },
+    {
+     "id": "yes",
+     "emoji": "✅"
+    }
+   ]
+  },
+  {
+   "id": "kuluday",
+   "title": "Kulu Day",
+   "stickers": [
+    {
+     "id": "coffee",
+     "emoji": "☕"
+    },
+    {
+     "id": "typing",
+     "emoji": "💬"
+    },
+    {
+     "id": "please",
+     "emoji": "🥺"
+    },
+    {
+     "id": "shy",
+     "emoji": "😊"
+    },
+    {
+     "id": "shocked",
+     "emoji": "😱"
+    },
+    {
+     "id": "dizzy",
+     "emoji": "😵‍💫"
+    },
+    {
+     "id": "dance",
+     "emoji": "💃"
+    },
+    {
+     "id": "hug",
+     "emoji": "🤗"
+    },
+    {
+     "id": "goodnight",
+     "emoji": "🌙"
+    },
+    {
+     "id": "celebrate",
+     "emoji": "🎉"
+    },
+    {
+     "id": "facepalm",
+     "emoji": "🤦"
+    },
+    {
+     "id": "kiss",
+     "emoji": "😘"
+    }
+   ]
+  },
+  {
+   "id": "words",
+   "title": "Somali Words",
+   "stickers": [
+    {
+     "id": "mahadsanid",
+     "emoji": "🙏"
+    },
+    {
+     "id": "haye",
+     "emoji": "👌"
+    },
+    {
+     "id": "hambalyo",
+     "emoji": "🎉"
+    },
+    {
+     "id": "nabad",
+     "emoji": "👋"
+    },
+    {
+     "id": "iskawarran",
+     "emoji": "👋"
+    },
+    {
+     "id": "subax",
+     "emoji": "☀️"
+    },
+    {
+     "id": "habeen",
+     "emoji": "🌙"
+    },
+    {
+     "id": "xiisay",
+     "emoji": "❤️"
+    },
+    {
+     "id": "haa",
+     "emoji": "✅"
+    },
+    {
+     "id": "maya",
+     "emoji": "❌"
+    },
+    {
+     "id": "hahaha",
+     "emoji": "😂"
+    },
+    {
+     "id": "wow",
+     "emoji": "😮"
+    }
+   ]
+  },
+  {
+   "id": "hearts",
+   "title": "Hearts",
+   "stickers": [
+    {
+     "id": "beat",
+     "emoji": "❤️"
+    },
+    {
+     "id": "sparkle",
+     "emoji": "💖"
+    },
+    {
+     "id": "two",
+     "emoji": "💕"
+    },
+    {
+     "id": "balloon",
+     "emoji": "🎈"
+    },
+    {
+     "id": "mend",
+     "emoji": "❤️‍🩹"
+    },
+    {
+     "id": "letter",
+     "emoji": "💌"
+    },
+    {
+     "id": "rain",
+     "emoji": "💗"
+    },
+    {
+     "id": "face",
+     "emoji": "🥰"
+    },
+    {
+     "id": "arrow",
+     "emoji": "💘"
+    },
+    {
+     "id": "rainbow",
+     "emoji": "❤️‍🔥"
+    }
+   ]
+  },
+  {
+   "id": "nature",
+   "title": "Weather & Treats",
+   "stickers": [
+    {
+     "id": "sun",
+     "emoji": "☀️"
+    },
+    {
+     "id": "rain",
+     "emoji": "🌧️"
+    },
+    {
+     "id": "storm",
+     "emoji": "⛈️"
+    },
+    {
+     "id": "rainbow",
+     "emoji": "🌈"
+    },
+    {
+     "id": "moon",
+     "emoji": "🌜"
+    },
+    {
+     "id": "tea",
+     "emoji": "🍵"
+    },
+    {
+     "id": "cake",
+     "emoji": "🎂"
+    },
+    {
+     "id": "melon",
+     "emoji": "🍉"
+    },
+    {
+     "id": "icecream",
+     "emoji": "🍦"
+    }
+   ]
+  },
+  {
+   "id": "topi",
+   "title": "Topi",
+   "stickers": [
+    {
+     "id": "topi_01",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_02",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_03",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_04",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_05",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_06",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_07",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_08",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_09",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_10",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_11",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_12",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_13",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_14",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_15",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_16",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_17",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_18",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_19",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_20",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_21",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_22",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_23",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_24",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_25",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_26",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_27",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_28",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_29",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_30",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_31",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_32",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_33",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_34",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_35",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_36",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_37",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_38",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_39",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_40",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_41",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_42",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_43",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_44",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_45",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_46",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_47",
+     "emoji": "😊"
+    },
+    {
+     "id": "topi_48",
+     "emoji": "😊"
+    }
+   ]
+  },
+  {
+   "id": "mice",
+   "title": "Mice Hugs",
+   "stickers": [
+    {
+     "id": "mice_01",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_02",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_03",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_04",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_05",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_06",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_07",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_08",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_09",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_10",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_11",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_12",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_13",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_14",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_15",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_16",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_17",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_18",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_19",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_20",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_21",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_22",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_23",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_24",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_25",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_26",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_27",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_28",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_29",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_30",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_31",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_32",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_33",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_34",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_35",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_36",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_37",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_38",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_39",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_40",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_41",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_42",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_43",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_44",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_45",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_46",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_47",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_48",
+     "emoji": "🤗"
+    },
+    {
+     "id": "mice_49",
+     "emoji": "🤗"
+    }
+   ]
+  },
+  {
+   "id": "mateo",
+   "title": "Mateo",
+   "stickers": [
+    {
+     "id": "mateo_01",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_02",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_03",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_04",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_05",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_06",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_07",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_08",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_09",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_10",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_11",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_12",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_13",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_14",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_15",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_16",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_17",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_18",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_19",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_20",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_21",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_22",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_23",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_24",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_25",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_26",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_27",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_28",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_29",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_30",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_31",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_32",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_33",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_34",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_35",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_36",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_37",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_38",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_39",
+     "emoji": "😺"
+    },
+    {
+     "id": "mateo_40",
+     "emoji": "😺"
+    }
+   ]
+  }
+ ]
+}
