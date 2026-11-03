@@ -41,14 +41,14 @@ object GroupManage {
     }
 
     /** myName(): my name as the group shows it, else my profile's. */
-    private suspend fun myName(cid: String): String {
+    internal suspend fun myName(cid: String): String {
         val fromGroup = runCatching { (conv(cid).get().await().get("names") as? Map<*, *>)?.get(me) as? String }.getOrNull()
         if (!fromGroup.isNullOrBlank()) return fromGroup
         return runCatching { db.collection("users").document(me).get().await().getString("name") }.getOrNull()?.ifBlank { null } ?: "Someone"
     }
 
     /** writeSystemMessage: the line, and the chat list summary pointing at it. */
-    private suspend fun systemLine(cid: String, text: String) {
+    internal suspend fun systemLine(cid: String, text: String) {
         val b = db.batch()
         b.set(conv(cid).collection("messages").document(), mapOf("text" to text, "authorId" to me, "type" to "system",
             "createdAt" to FieldValue.serverTimestamp()))

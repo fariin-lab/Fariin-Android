@@ -151,14 +151,15 @@ private fun ResetMenu(wallpaperPage: Boolean) {
  * a wallpaper of its own. Nothing to reset, no button. Each closes the picker, as iOS does.
  */
 @Composable
-private fun ChatResetMenu(cid: String, onDone: () -> Unit) {
+private fun ChatResetMenu(cid: String, shared: Boolean, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     ChatLookStore.version.intValue
     val blue = ChatColors.presets.first()
     val own = ChatLookStore.ownColor(ctx, cid)
     val canColor = own != null && own != blue
-    val canWall = ChatLookStore.hasOwnWallpaper(ctx, cid) && ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None
+    // A group's (shared): Reset Wallpaper makes it plain for the whole group (iOS resetWallpaperOnly).
+    val canWall = (shared || ChatLookStore.hasOwnWallpaper(ctx, cid)) && ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None
     if (!canColor && !canWall) return
     var open by remember { mutableStateOf(false) }
     Box {
@@ -168,10 +169,19 @@ private fun ChatResetMenu(cid: String, onDone: () -> Unit) {
             if (canColor) DropdownMenuItem(text = { Text("Reset Chat Color") },
                 onClick = { open = false; ChatLookStore.setColor(ctx, cid, blue); onDone() })
             if (canWall) DropdownMenuItem(text = { Text("Reset Wallpaper") },
-                onClick = { open = false; ChatLookStore.setWallpaper(ctx, cid, ChatWallpaper.None); onDone() })
+                onClick = {
+                    open = false
+                    if (shared) com.fariin.app.data.GroupWallpaper.publish(ctx, cid, ChatWallpaper.None) { groupWallpaperFailed(ctx, it) }
+                    else ChatLookStore.setWallpaper(ctx, cid, ChatWallpaper.None)
+                    onDone()
+                })
         }
     }
 }
+
+/** A group wallpaper that could not be set is said, not silent (iOS ToastNotice). */
+private fun groupWallpaperFailed(ctx: android.content.Context, text: String) =
+    android.widget.Toast.makeText(ctx.applicationContext, text, android.widget.Toast.LENGTH_LONG).show()
 
 /** The info page's "Change Wallpaper": the chat it names opens its picker (iOS .openChatWallpaper). */
 object ChatWallpaperLink {
@@ -182,16 +192,18 @@ object ChatWallpaperLink {
 /**
  * One chat's wallpaper picker (iOS "Change Wallpaper" from the chat's info page, WallpaperPickerSheet
  * per chat): the Settings pages for [cid] alone, with the chat's own resets. Back steps out.
+ * [shared]: a group's picker, opened only for someone who may change group info; Apply and Reset
+ * Wallpaper set the group's wallpaper for every member (GroupWallpaper). The chat colour stays mine.
  */
 @Composable
-fun ChatWallpaperPicker(cid: String, onClose: () -> Unit) {
+fun ChatWallpaperPicker(cid: String, shared: Boolean = false, onClose: () -> Unit) {
     var colors by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler { if (colors) colors = false else onClose() }
     // Drawn over the chat: it takes every touch so none reaches the list under it.
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)
         .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }) {
-        if (colors) WallpaperColorPage({ colors = false }, cid, done = onClose)
-        else ChatWallpaperPage({ colors = true }, onClose, cid)
+        if (colors) WallpaperColorPage({ colors = false }, cid, done = onClose, shared = shared)
+        else ChatWallpaperPage({ colors = true }, onClose, cid, shared)
     }
 }
 
@@ -236,7 +248,7 @@ private fun WallTile(w: ChatWallpaper, current: ChatWallpaper, modifier: Modifie
 }
 
 @Composable
-private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: String? = null) {
+private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: String? = null, shared: Boolean = false) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
@@ -257,7 +269,7 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
     }
     Column(Modifier.fillMaxSize()) {
         PageBar(if (cid != null) "Chat Wallpaper" else "Set Wallpaper", onBack = pop,
-            action = { if (cid != null) ChatResetMenu(cid, pop) else ResetMenu(wallpaperPage = true) })
+            action = { if (cid != null) ChatResetMenu(cid, shared, pop) else ResetMenu(wallpaperPage = true) })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.card)) {
                 SettingsRow("Choose from Photos") {
@@ -288,7 +300,7 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
     previewing?.let { w ->
         val alone = w is ChatWallpaper.Photo && w.id == justPicked
         WallpaperPreview(w, siblings = if (alone) emptyList() else library.map { ChatWallpaper.Photo(it) } + ChatWallpapers.all.map { ChatWallpaper.Gradient(it.id) },
-            cid = cid, onApplied = pop,
+            cid = cid, shared = shared, onApplied = pop,
             onClose = {
                 // Not kept unless applied (iOS): a picked photo closed without Apply leaves the library.
                 val id = justPicked
@@ -303,7 +315,7 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
 }
 
 @Composable
-private fun WallpaperColorPage(pop: () -> Unit, cid: String? = null, done: () -> Unit = pop) {
+private fun WallpaperColorPage(pop: () -> Unit, cid: String? = null, done: () -> Unit = pop, shared: Boolean = false) {
     val ctx = LocalContext.current
     ChatLookStore.version.intValue
     val current = cid?.let { ChatLookStore.wallpaper(ctx, it) } ?: ChatLookStore.defaultWallpaper(ctx)
@@ -318,7 +330,7 @@ private fun WallpaperColorPage(pop: () -> Unit, cid: String? = null, done: () ->
         }
     }
     previewing?.let { w ->
-        WallpaperPreview(w, ChatWallpapers.colors.map { ChatWallpaper.Solid(it) }, cid = cid, onApplied = done, onClose = { previewing = null })
+        WallpaperPreview(w, ChatWallpapers.colors.map { ChatWallpaper.Solid(it) }, cid = cid, shared = shared, onApplied = done, onClose = { previewing = null })
     }
 }
 
@@ -329,7 +341,8 @@ private fun WallpaperColorPage(pop: () -> Unit, cid: String? = null, done: () ->
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>, cid: String? = null, onApplied: () -> Unit = {}, onClose: () -> Unit) {
+private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>, cid: String? = null, shared: Boolean = false,
+                             onApplied: () -> Unit = {}, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val appDark = Fariin.colors.dark
     val inSet = first in siblings
@@ -360,6 +373,8 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
         // From a chat (iOS): Apply Wallpaper is this chat's; Apply For All Chats sets the Settings one
         // and this chat follows it again.
         if (cid == null) ChatLookStore.setDefaultWallpaper(ctx, final)
+        // A group's: everyone's wallpaper, written by the server (iOS publishGroupWallpaper).
+        else if (shared) com.fariin.app.data.GroupWallpaper.publish(ctx, cid, final) { groupWallpaperFailed(ctx, it) }
         else if (allChats) ChatLookStore.applyToAllChats(ctx, final, alsoFor = cid)
         else ChatLookStore.setWallpaper(ctx, cid, final)
         // A chat's picker closes once applied, back to the chat (iOS dismiss).
@@ -410,13 +425,13 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                             Text("Blurred", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                         }
                     }
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = if (cid != null) 6.dp else 12.dp)
-                        .then(if (cid != null) Modifier else Modifier.navigationBarsPadding())
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = if (cid != null && !shared) 6.dp else 12.dp)
+                        .then(if (cid != null && !shared) Modifier else Modifier.navigationBarsPadding())
                         .height(52.dp).floating(CircleShape).clickable { apply() }, contentAlignment = Alignment.Center) {
                         Text(if (cid != null) "Apply Wallpaper" else "Apply For All Chats", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     }
                     // iOS: from a chat, the smaller all-chats button rides under Apply Wallpaper.
-                    if (cid != null) Text("Apply For All Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                    if (cid != null && !shared) Text("Apply For All Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 12.dp).navigationBarsPadding()
                             .clip(CircleShape).clickable { apply(allChats = true) }.padding(horizontal = 16.dp, vertical = 10.dp))
                 }

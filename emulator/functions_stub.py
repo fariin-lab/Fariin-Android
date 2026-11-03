@@ -1257,6 +1257,38 @@ HANDLERS.update({"transferGroupOwnership": transfer_group_ownership, "approveJoi
                  "addChannelFollowers": add_channel_followers})
 
 
+# setGroupWallpaper (functions-groups index.js + lib/groupwallpaper.js), so the Android group
+# wallpaper can be driven locally. Same checks: a member, a known value, not a closed group, and
+# change-info right (owner, an admin with changeInfo or no rights list, or membersCanEditInfo).
+# Local only: a photo link may also be the Storage emulator's (http://10.0.2.2:9199/...), which the
+# real server never sees. No transaction. Never deployed.
+import re as _re
+_WP_RE = _re.compile(r"^[gcb]:[A-Za-z0-9_-]{1,64}$")
+_WP_PHOTO = _re.compile(r"^u:(https://firebasestorage\.googleapis\.com(:443)?|http://10\.0\.2\.2:9199)/\S*$")
+
+
+def set_group_wallpaper(uid, data):
+    cid = str((data or {}).get("cid") or "")
+    w = (data or {}).get("wallpaper")
+    if not cid or "/" in cid: raise Refusal("INVALID_ARGUMENT", "Missing cid.")
+    conv = get(f"conversations/{cid}")
+    if not conv or conv.get("type") != "group": raise Refusal("NOT_FOUND", "No such group.")
+    if uid not in (conv.get("users") or []): raise Refusal("PERMISSION_DENIED", "Not in this group.")
+    if not isinstance(w, str) or len(w) > 1024 or not (w == "none" or _WP_RE.match(w) or _WP_PHOTO.match(w)):
+        raise Refusal("INVALID_ARGUMENT", "Unknown wallpaper.")
+    if ((conv.get("mod") or {}).get("state") in ("disabled", "ended")) or conv.get("endedAt"):
+        raise Refusal("PERMISSION_DENIED", "This group cannot be changed.")
+    rights = (conv.get("adminRights") or {}).get(uid)
+    admin = conv.get("createdBy") == uid or (uid in (conv.get("admins") or []) and (not isinstance(rights, list) or "changeInfo" in rights))
+    if not (admin or conv.get("membersCanEditInfo") is True):
+        raise Refusal("PERMISSION_DENIED", "Only admins who can change group info can set the wallpaper.")
+    write(f"conversations/{cid}", {"wallpaper": w, "updatedAt": Ts()})
+    return {"ok": True}
+
+
+HANDLERS.update({"setGroupWallpaper": set_group_wallpaper})
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         name = self.path.rstrip("/").split("/")[-1]

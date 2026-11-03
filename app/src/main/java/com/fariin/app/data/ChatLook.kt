@@ -207,11 +207,38 @@ object ChatLookRules {
     fun wallKey(cid: String) = "wallpaper.$cid"
     fun colorKey(cid: String) = "chatColor.$cid"
 
-    /** iOS wallpaper(for:): the Fariin chat never has one; else the chat's own, else the Settings one. */
-    fun wallpaper(cid: String, read: (String) -> String?): ChatWallpaper {
+    /**
+     * iOS wallpaper(for:): the Fariin chat never has one; else a group's shared wallpaper [group]
+     * (it beats this phone's own pick, iOS groupResolved); else the chat's own, else the Settings one.
+     */
+    fun wallpaper(cid: String, read: (String) -> String?, group: ChatWallpaper? = null): ChatWallpaper {
         if (cid == OfficialChannel.CID) return ChatWallpaper.None
+        group?.let { return it }
         return ChatWallpaper.parse(read(wallKey(cid)) ?: read(WALL_DEFAULT))
     }
+
+    /** The key holding a group's shared `wallpaper` field as this phone last read it. */
+    fun groupKey(cid: String) = "wallpaper.group.$cid"
+
+    /**
+     * iOS groupResolved: the group's stored value as this phone can draw it, or null to use the
+     * phone's own pick. "u:<link>" is a photo fetched once into the file named [photoId]; until it
+     * is on the phone the chat keeps [lastShown] (null = its own pick). A "p:" value names a photo
+     * on someone else's phone, so it reads as plain.
+     */
+    fun groupWallpaper(raw: String?, hasPhoto: (String) -> Boolean, lastShown: ChatWallpaper? = null): ChatWallpaper? {
+        if (raw == null) return null
+        val link = photoLink(raw) ?: return if (raw.startsWith("p:") || raw == "photo") ChatWallpaper.None else ChatWallpaper.parse(raw)
+        val id = photoId(link)
+        return if (hasPhoto(id)) ChatWallpaper.Photo(id) else lastShown
+    }
+
+    /** The download link of a shared photo value ("u:<link>"), else null. */
+    fun photoLink(raw: String?): String? = raw?.takeIf { it.startsWith("u:") }?.drop(2)
+
+    /** iOS sharedPhotoId: a stable local id for a group photo link, the same on every launch. */
+    fun photoId(link: String): String = "grp-" + java.security.MessageDigest.getInstance("SHA-256")
+        .digest(link.toByteArray()).take(16).joinToString("") { "%02x".format(it) }
 
     fun defaultWallpaper(read: (String) -> String?): ChatWallpaper = ChatWallpaper.parse(read(WALL_DEFAULT))
 
@@ -232,8 +259,10 @@ object ChatLookRules {
      * wallpaper's pairing (a photo or plain one stops at the Settings colour), else the Settings
      * colour, else the Settings wallpaper's pairing. null = the app's default blue.
      */
-    fun color(cid: String, read: (String) -> String?): ChatColorSpec? {
+    fun color(cid: String, read: (String) -> String?, group: ChatWallpaper? = null): ChatColorSpec? {
         stored(colorKey(cid), read)?.let { return it }
+        // A group's shared wallpaper counts as the chat's own (iOS hasOverride).
+        if (cid != OfficialChannel.CID && group != null) return group.pairedColor ?: globalChosen(read)
         if (cid != OfficialChannel.CID && read(wallKey(cid)) != null) {
             return wallpaper(cid, read).pairedColor ?: globalChosen(read)
         }

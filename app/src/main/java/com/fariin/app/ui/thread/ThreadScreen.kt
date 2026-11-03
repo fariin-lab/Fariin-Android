@@ -201,11 +201,14 @@ fun ThreadScreen(
             if (want == ui.cid) { com.fariin.app.ui.settings.ChatWallpaperLink.requests.value = null; wallpaperOpen = true }
         }
     }
+    // A group's wallpaper is everyone's: its picker opens only for someone who may change group info.
+    val groupShared = ui.isGroup && ui.channel == null
+    if (wallpaperOpen && groupShared && ui.groupDoc.isNotEmpty() && !com.fariin.app.data.GroupRules.canEditInfo(ui.me, ui.groupDoc)) wallpaperOpen = false
     Box(Modifier.fillMaxSize()) {
         androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
             ThreadContent(ui, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
         }
-        if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid) { wallpaperOpen = false }
+        if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid, shared = groupShared) { wallpaperOpen = false }
     }
 }
 

@@ -33,8 +33,72 @@ object ChatLookStore {
 
     // Wallpaper
 
-    fun wallpaper(c: Context, cid: String): ChatWallpaper = ChatLookRules.wallpaper(cid, reader(c))
+    fun wallpaper(c: Context, cid: String): ChatWallpaper = ChatLookRules.wallpaper(cid, reader(c), groupWallpaper(c, cid))
     fun defaultWallpaper(c: Context): ChatWallpaper = ChatLookRules.defaultWallpaper(reader(c))
+
+    // Shared group wallpaper (iOS WallpaperStore "Shared group wallpaper"): a group's `wallpaper`
+    // field is everyone's and beats this phone's own pick. Kept here as last read, so a chat opens
+    // with it at once; a photo ("u:<link>") is fetched once into the photo folder (not the person's
+    // own library list) and drawn from there. 1:1 chats never read any of this.
+
+    private val groupPending = HashMap<String, ChatWallpaper>()
+    private val groupLastShown = HashMap<String, ChatWallpaper>()
+    private val groupFetching = HashSet<String>()
+
+    /** The group's wallpaper as this phone can draw it now, or null for this phone's own pick. */
+    fun groupWallpaper(c: Context, cid: String): ChatWallpaper? {
+        synchronized(groupPending) { groupPending[cid] }?.let { return it }
+        val raw = prefs(c).getString(ChatLookRules.groupKey(cid), null) ?: return null
+        val last = synchronized(groupPending) { groupLastShown[cid] }
+        val w = ChatLookRules.groupWallpaper(raw, { libraryFile(c, it).exists() }, last)
+        if (w is ChatWallpaper.Photo) synchronized(groupPending) { groupLastShown[cid] = w }
+        else ChatLookRules.photoLink(raw)?.let { fetchGroupPhoto(c, it) }
+        return w
+    }
+
+    /** The group's raw stored value as last read ("none", "g:..", "u:<link>"), null when it has none. */
+    fun groupStored(c: Context, cid: String): String? = prefs(c).getString(ChatLookRules.groupKey(cid), null)
+
+    /** iOS syncGroupWallpapers: the group's `wallpaper` field as the server has it now (null = never set). */
+    fun syncGroupWallpaper(c: Context, cid: String, raw: String?) {
+        if (groupStored(c, cid) == raw) return
+        val e = prefs(c).edit()
+        if (raw != null) e.putString(ChatLookRules.groupKey(cid), raw) else e.remove(ChatLookRules.groupKey(cid))
+        e.apply(); bump()
+    }
+
+    /** Apply in a group: shown at once here while it uploads and saves; null drops it again. */
+    fun setGroupPending(cid: String, w: ChatWallpaper?) {
+        synchronized(groupPending) { if (w != null) groupPending[cid] = w else groupPending.remove(cid) }
+        bump()
+    }
+
+    /** The picture this phone sent for a group, kept under the link's id so it is not fetched back. */
+    fun keepGroupPhoto(c: Context, link: String, fromId: String) {
+        runCatching { libraryFile(c, fromId).copyTo(libraryFile(c, ChatLookRules.photoId(link)), overwrite = true) }
+    }
+
+    /** Fetch a group's photo once. Only Firebase Storage links (the local test backend's too). */
+    private fun fetchGroupPhoto(c: Context, link: String) {
+        val u = runCatching { java.net.URL(link) }.getOrNull() ?: return
+        val ok = (u.protocol == "https" && u.host.equals("firebasestorage.googleapis.com", true)) ||
+            com.fariin.app.FariinApp.usingLocalBackend
+        if (!ok || !synchronized(groupPending) { groupFetching.add(link) }) return
+        val app = c.applicationContext
+        Thread({
+            val file = libraryFile(app, ChatLookRules.photoId(link))
+            val saved = runCatching {
+                val bytes = (u.openConnection() as java.net.HttpURLConnection).run {
+                    connectTimeout = 20_000; readTimeout = 60_000
+                    try { inputStream.use { it.readBytes() } } finally { disconnect() }
+                }
+                if (bytes.size > 12 * 1024 * 1024 || BitmapFactory.decodeByteArray(bytes, 0, bytes.size) == null) false
+                else { file.writeBytes(bytes); true }
+            }.getOrDefault(false)
+            synchronized(groupPending) { groupFetching.remove(link) }
+            if (saved) android.os.Handler(android.os.Looper.getMainLooper()).post { bump() }
+        }, "group-wallpaper").start()
+    }
 
     /** iOS applyToAllChats: the Settings wallpaper; a chat's own pick beats it. */
     fun setDefaultWallpaper(c: Context, w: ChatWallpaper) {
@@ -57,14 +121,16 @@ object ChatLookStore {
     /** Every chat's own wallpaper back to the Settings one, and the Settings one to [w]. */
     fun resetAllWallpapers(c: Context, w: ChatWallpaper = ChatWallpaper.None) {
         val p = prefs(c); val e = p.edit()
-        p.all.keys.filter { it.startsWith("wallpaper.") && !it.startsWith("wallpaper.library") && it != ChatLookRules.WALL_DEFAULT }
+        // The groups' shared copies are not this phone's picks (iOS keeps "wallpaper.group" too).
+        p.all.keys.filter { it.startsWith("wallpaper.") && !it.startsWith("wallpaper.library") && !it.startsWith("wallpaper.group.") &&
+            it != ChatLookRules.WALL_DEFAULT }
             .forEach { e.remove(it) }
         e.putString(ChatLookRules.WALL_DEFAULT, w.stored).apply(); bump()
     }
 
     // Chat colour
 
-    fun color(c: Context, cid: String): ChatColorSpec? = ChatLookRules.color(cid, reader(c))
+    fun color(c: Context, cid: String): ChatColorSpec? = ChatLookRules.color(cid, reader(c), groupWallpaper(c, cid))
     fun globalChosen(c: Context): ChatColorSpec? = ChatLookRules.globalChosen(reader(c))
     fun globalColor(c: Context): ChatColorSpec? = ChatLookRules.globalColor(reader(c))
     fun globalAuto(c: Context): ChatColorSpec? = ChatLookRules.globalAuto(reader(c))
@@ -158,6 +224,7 @@ object ChatLookStore {
         prefs(c).edit().clear().apply()
         File(c.filesDir, "wallpapers").deleteRecursively()
         synchronized(images) { images.clear() }
+        synchronized(groupPending) { groupPending.clear(); groupLastShown.clear() }
         bump()
     }
 }

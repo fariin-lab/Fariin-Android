@@ -73,6 +73,8 @@ data class Conversation(
     /** Mine as a follower (ChannelFollows, users/{me}/channels/{cid}); null when I am not one. */
     val followerRead: Int? = null,
     val followerMuted: Boolean = false,
+    /** A group's shared wallpaper (iOS groupWallpaper, `wallpaper`): "none", "g:..", "u:<link>"; null when never set. */
+    val groupWallpaper: String? = null,
 ) {
     val isGroup: Boolean get() = convType == "group"
 
@@ -226,6 +228,7 @@ data class Conversation(
                 convType = type,
                 title = data["title"] as? String ?: "",
                 avatarUrl = data["avatarUrl"] as? String,
+                groupWallpaper = if (type == "group") data["wallpaper"] as? String else null,
                 isChannel = data["channel"] as? Boolean ?: false,
                 e2eeOff = type == "group" && (data["e2ee"] as? Boolean) == false,
                 lastPlainTag = data["lastPlainTag"] as? String,

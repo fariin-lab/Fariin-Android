@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.QrCode
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -478,16 +479,17 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
-        // group has a link I may share. Change Wallpaper and Save to Photos wait for per-chat
-        // wallpaper and auto-save on Android.
+        // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
+        // may change its info: back to the chat, which opens its picker. Save to Photos waits for auto-save.
         PageBar("Group Info", onBack = onBack, action = if (canEdit || inviteLink != null) ({
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (canEdit) TextAction("Edit", enabled = true) { editing = true }
-                if (inviteLink != null) GroupInfoMenu(onShare = {
+                GroupInfoMenu(onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }) else null,
+                    onShare = if (inviteLink != null) ({
                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
                         .putExtra(android.content.Intent.EXTRA_TEXT, inviteLink)
                     ctx.startActivity(android.content.Intent.createChooser(send, null))
-                }, onQr = { showQr = true })
+                }) else null, onQr = { showQr = true })
             }
         }) else null)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -559,7 +561,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
 
 /** The group page's three-dot menu (iOS GroupInfoView moreMenuItems, menuGroupItems). */
 @Composable
-private fun GroupInfoMenu(onShare: () -> Unit, onQr: () -> Unit) {
+private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit) {
+    if (onWallpaper == null && onShare == null) return
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
@@ -567,12 +570,17 @@ private fun GroupInfoMenu(onShare: () -> Unit, onQr: () -> Unit) {
             onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
         androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-            androidx.compose.material3.DropdownMenuItem(text = { Text("Share Group", color = c.label) },
-                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label, modifier = Modifier.size(24.dp)) },
-                onClick = { open = false; onShare() })
-            androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
-                leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.QrCode, null, tint = c.label) },
-                onClick = { open = false; onQr() })
+            if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
+                leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Wallpaper, null, tint = c.label) },
+                onClick = { open = false; onWallpaper() })
+            if (onShare != null) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Share Group", color = c.label) },
+                    leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label, modifier = Modifier.size(24.dp)) },
+                    onClick = { open = false; onShare() })
+                androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
+                    leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.QrCode, null, tint = c.label) },
+                    onClick = { open = false; onQr() })
+            }
         }
     }
 }
