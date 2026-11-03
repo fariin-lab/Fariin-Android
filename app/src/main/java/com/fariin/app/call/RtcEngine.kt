@@ -1,6 +1,8 @@
 package com.fariin.app.call
 
 import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjection
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
@@ -21,6 +23,7 @@ import livekit.org.webrtc.PeerConnection
 import livekit.org.webrtc.PeerConnectionFactory
 import livekit.org.webrtc.RtpReceiver
 import livekit.org.webrtc.RtpTransceiver
+import livekit.org.webrtc.ScreenCapturerAndroid
 import livekit.org.webrtc.SdpObserver
 import livekit.org.webrtc.SessionDescription
 import livekit.org.webrtc.SurfaceTextureHelper
@@ -101,6 +104,8 @@ class RtcEngine(
     private var capturing = false
     var frontCamera = true; private set
     private var acceptChannel: DataChannel? = null
+    private var screenCapturer: ScreenCapturerAndroid? = null
+    private var screenHelper: SurfaceTextureHelper? = null
 
     fun open(servers: List<IceServerSpec>, relayOnly: Boolean, isCaller: Boolean, micOn: Boolean, cameraOn: Boolean): Boolean {
         val conn = f.createPeerConnection(rtcConfig(servers, relayOnly), observer) ?: return false
@@ -196,6 +201,62 @@ class RtcEngine(
         return en.createCapturer(pick, null)
     }
 
+    // ------------------------------------------------------------------ screen share
+
+    /**
+     * My screen into the camera's own source, so the sender, the track and the SDP never change
+     * (iOS fallback share). The camera stops first, then the screen goes live on the same source,
+     * so no camera frame lands between screen frames. [projection] is the system dialog's result;
+     * [onEnded] runs (on any thread) when the system ends the capture. False if it could not start.
+     */
+    fun startScreen(projection: Intent, onEnded: () -> Unit): Boolean {
+        val src = videoSource ?: return false
+        stopScreen()
+        stopCamera()
+        val cap = ScreenCapturerAndroid(projection, object : MediaProjection.Callback() {
+            override fun onStop() { onEnded() }
+        })
+        val helper = SurfaceTextureHelper.create("call-screen", egl.eglBaseContext)
+        return try {
+            cap.initialize(helper, context.applicationContext, src.capturerObserver)
+            val (w, h) = screenSize()
+            cap.startCapture(w, h, 30)
+            screenCapturer = cap; screenHelper = helper
+            localVideo?.setEnabled(true)   // a voice call's track is disabled until now
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "screen capture failed", e)
+            try { cap.dispose() } catch (_: Exception) {}
+            helper.dispose()
+            false
+        }
+    }
+
+    /** Frames the screen capture has produced so far (0 until the first one). */
+    fun screenFrames(): Long = screenCapturer?.numCapturedFrames ?: 0L
+
+    /** The screen capture ends; the camera comes back only when [camera] is on (the untouched intent). */
+    fun stopScreen(camera: Boolean = false) {
+        val cap = screenCapturer
+        if (cap != null) {
+            try { cap.stopCapture() } catch (_: Exception) {}
+            try { cap.dispose() } catch (_: Exception) {}
+            screenHelper?.dispose()
+            screenCapturer = null; screenHelper = null
+            localVideo?.setEnabled(camera)
+            if (camera) startCamera()
+        }
+    }
+
+    /** The display at most 1280 on its long side, even numbers (iOS shares at 720p-class too). */
+    private fun screenSize(): Pair<Int, Int> {
+        val m = context.resources.displayMetrics
+        val long = maxOf(m.widthPixels, m.heightPixels).coerceAtLeast(1)
+        val k = minOf(1f, 1280f / long)
+        fun even(v: Float) = (v.toInt() / 2 * 2).coerceAtLeast(2)
+        return even(m.widthPixels * k) to even(m.heightPixels * k)
+    }
+
     // ------------------------------------------------------------------ the accept channel
 
     private fun watch(ch: DataChannel) {
@@ -237,6 +298,7 @@ class RtcEngine(
     private var remoteVideoSeen = 0
 
     fun close() {
+        stopScreen()
         stopCamera()
         try { capturer?.dispose() } catch (_: Exception) {}
         capturer = null

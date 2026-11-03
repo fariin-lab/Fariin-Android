@@ -24,17 +24,26 @@ import com.fariin.app.ui.call.CallActivity
 /**
  * Keeps the process, the microphone and the camera alive while a call is on (the Android side of
  * what CallKit's audio session does on iOS). Shows the ongoing-call notification with Hang Up.
+ * While my screen is shared in a 1:1 call it also carries the media projection type, which
+ * Android 14 and later want in place before the capture starts (after the system's consent).
  */
 class CallService : Service() {
     enum class Mode { CALL }
 
     companion object {
         private const val EXTRA_VIDEO = "video"
+        private const val EXTRA_SCREEN = "screen"
         const val ONGOING_ID = 7301
 
-        fun start(c: Context, mode: Mode, video: Boolean) {
-            val i = Intent(c, CallService::class.java).putExtra(EXTRA_VIDEO, video)
-            try { ContextCompat.startForegroundService(c, i) } catch (_: Exception) {}
+        /** Runs once on the main thread after the next start with [screen]: true if the projection type took. */
+        private var screenReady: ((Boolean) -> Unit)? = null
+
+        fun start(c: Context, mode: Mode, video: Boolean, screen: Boolean = false, onScreenReady: ((Boolean) -> Unit)? = null) {
+            if (screen) screenReady = onScreenReady
+            val i = Intent(c, CallService::class.java).putExtra(EXTRA_VIDEO, video).putExtra(EXTRA_SCREEN, screen)
+            try { ContextCompat.startForegroundService(c, i) } catch (_: Exception) {
+                if (screen) { screenReady = null; onScreenReady?.invoke(false) }
+            }
         }
 
         fun stop(c: Context) { c.stopService(Intent(c, CallService::class.java)) }
@@ -44,10 +53,13 @@ class CallService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val video = intent?.getBooleanExtra(EXTRA_VIDEO, false) == true
+        val screen = intent?.getBooleanExtra(EXTRA_SCREEN, false) == true
+        val ready = if (screen) screenReady.also { screenReady = null } else null
         CallNotifications.ensureChannel(this)
         var types = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             types = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+            if (screen) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (granted(Manifest.permission.RECORD_AUDIO)) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
                 if (video && granted(Manifest.permission.CAMERA)) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
@@ -55,8 +67,13 @@ class CallService : Service() {
         }
         try {
             ServiceCompat.startForeground(this, ONGOING_ID, CallNotifications.ongoing(this), types)
+            ready?.invoke(true)
         } catch (_: Exception) {
-            stopSelf()
+            if (ready != null) {
+                // The projection type was refused: the call itself stays up without it.
+                ready(false)
+                try { ServiceCompat.startForeground(this, ONGOING_ID, CallNotifications.ongoing(this), types and ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION.inv()) } catch (_: Exception) { stopSelf() }
+            } else stopSelf()
         }
         return START_NOT_STICKY
     }

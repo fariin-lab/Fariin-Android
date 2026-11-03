@@ -119,6 +119,18 @@ import androidx.compose.material.icons.filled.SignalWifiStatusbarConnectedNoInte
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.heightIn
 import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.aspectRatio
+import com.fariin.app.R
+import com.fariin.app.call.CallManager
+import com.fariin.app.call.SharePhase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import livekit.org.webrtc.RendererCommon
@@ -177,14 +189,18 @@ private fun rememberChrome(allowed: Boolean): Chrome {
  * The 1:1 call screen after iOS CallView: a header (minimize at the start, the bold name and the
  * stage words or clock in the middle, "Muted" between them while they are muted), their video full
  * screen or their big photo, my camera in a card at the bottom corner with the flip glyph on it,
- * and one dark capsule: camera, speaker, mute, end. A ring shows Decline and Accept instead.
+ * and one dark capsule: share, camera, speaker, mute, end. A ring shows Decline and Accept instead.
+ *
+ * Screen share (iOS shareLayout, owner 2026-10-10): while I share, or they do, the call is a rounded
+ * card under the header ("You're sharing your screen" with Stop Sharing, or their screen whole) with
+ * the two people as tiles under it; their screen opens full screen from the card's corner button.
  */
 @Composable
 fun CallScreen(
     ui: CallUi,
     onAccept: () -> Unit, onDecline: () -> Unit, onEnd: () -> Unit,
     onMute: () -> Unit, onRoute: (AudioRoute) -> Unit, onCamera: () -> Unit, onFlip: () -> Unit,
-    onMinimize: (() -> Unit)? = null,
+    onMinimize: (() -> Unit)? = null, onShare: () -> Unit = {},
     onCallAgain: () -> Unit = {}, onVoiceMessage: () -> Unit = {}, onCloseNoAnswer: () -> Unit = {},
 ) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -195,7 +211,8 @@ fun CallScreen(
     val demoVideo = ui.peerUid == "demo" && ui.remoteCameraOn && s.phase == CallPhase.ACTIVE
     // Calling on video: my own preview fills the screen until they pick up (iOS showLocalFull).
     val localFull = ui.cameraOn && s.phase == CallPhase.OUTGOING
-    val chrome = rememberChrome(connected && (ui.cameraOn || ui.remoteCameraOn))
+    val anyVideo = ui.cameraOn || ui.remoteCameraOn || ui.sharing || ui.remoteScreen
+    val chrome = rememberChrome(connected && anyVideo)
     // The header and the capsule fade: in over 0.2 s, away over 0.28 s, ease in and out (iOS).
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f,
         tween(if (chrome.visible) 200 else 280, easing = EaseInOut), label = "chrome")
@@ -204,19 +221,29 @@ fun CallScreen(
     // A tap on my card swaps the two pictures: mine big, theirs in the card (iOS isLocalExpanded).
     var swapped by remember { mutableStateOf(false) }
     LaunchedEffect(cardUp) { if (!cardUp) swapped = false }
-    val mineBig = localFull || (swapped && cardUp)
+    // Their screen on the stage (their camera's track carries it), or the demo's made-up one.
+    val theirScreen = ui.remoteScreen && connected && (remoteVideo != null || ui.peerUid == "demo")
+    var shareFull by remember { mutableStateOf(false) }
+    LaunchedEffect(theirScreen) { if (!theirScreen) shareFull = false }
+    val shareLayout = connected && (ui.sharing || (theirScreen && !shareFull))
+    // A share (mine or theirs) starts with the controls hidden; a tap brings them (iOS, 2026-10-10).
+    LaunchedEffect(shareLayout) { if (shareLayout) chrome.visible = false }
+    LaunchedEffect(shareLayout) { if (shareLayout) swapped = false }
+    val mineBig = !shareLayout && !shareFull && (localFull || (swapped && cardUp))
     Box(Modifier.fillMaxSize().background(Backdrop)) {
         // One renderer for the big picture whoever is in it, so a swap only moves the tracks.
-        val bigTrack = if (mineBig) local else remoteVideo
-        val bigDemo = bigTrack == null && (if (mineBig) swapped else demoVideo)
+        val bigTrack = if (shareLayout || shareFull) null else if (mineBig) local else remoteVideo
+        val bigDemo = !shareLayout && !shareFull && bigTrack == null && (if (mineBig) swapped else demoVideo)
         when {
             bigTrack != null -> VideoView(bigTrack, mirror = mineBig && ui.frontCamera, modifier = Modifier.fillMaxSize())
             bigDemo && mineBig -> DemoVideo(Modifier.fillMaxSize(), MeA, MeB)
             bigDemo -> DemoVideo(Modifier.fillMaxSize(), ThemA, ThemB)
         }
-        val showFace = bigTrack == null && !bigDemo
+        val showFace = bigTrack == null && !bigDemo && !shareLayout && !shareFull
+        // Their screen full screen: whole, pinch to zoom, a tap shows or hides the controls.
+        if (shareFull) ShareStage(remoteVideo, Modifier.fillMaxSize(), zoomable = true) { chrome.tap(true) }
         // Above the video, under every control: a tap shows or hides the controls.
-        Box(Modifier.fillMaxSize().plainTap { chrome.tap(connected && (ui.cameraOn || ui.remoteCameraOn)) })
+        else Box(Modifier.fillMaxSize().plainTap { chrome.tap(connected && anyVideo) })
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = if (ui.held && s.live) "On hold" else CallMachine.label(s, now)
             CallHeader(
@@ -239,15 +266,24 @@ fun CallScreen(
                 CallPhase.INCOMING -> IncomingButtons(s.video, onAccept, onDecline)
                 CallPhase.ENDED -> if (ui.noAnswer) NoAnswerCard(s, onCallAgain, onVoiceMessage, onCloseNoAnswer)
                     else Spacer(Modifier.height(BarHeight))
-                else -> ControlBar(ui, chrome, onEnd, onMute, onRoute, onCamera, Modifier.alpha(shown))
+                else -> ControlBar(ui, chrome, onEnd, onMute, onRoute, onCamera, onShare, Modifier.alpha(shown))
             }
             Spacer(Modifier.navigationBarsPadding().height(22.dp))
         }
         // Controls away: the first tap anywhere only brings them back (hidden buttons take no taps).
         if (!chrome.visible) Box(Modifier.fillMaxSize().plainTap { chrome.touch() }.semantics { contentDescription = "Show call controls" })
+        // The share card and the two people, above the catch-all so Stop Sharing works with the
+        // controls away too; it never reaches under the header or the capsule while they show.
+        if (shareLayout) ShareLayout(ui, chrome, remoteVideo, local, onStop = { chrome.touch(); onShare() },
+            onFull = { chrome.touch(); shareFull = true })
+        // Back from their full-screen share to the card.
+        if (shareFull) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(end = 16.dp, bottom = 22.dp + BarHeight + 14.dp)
+            .alpha(shown), contentAlignment = Alignment.BottomEnd) {
+            if (chrome.visible) HeaderCircle(Icons.Filled.FullscreenExit, "Exit full screen", 40.dp) { chrome.touch(); shareFull = false }
+        }
         // My camera: a card at the bottom corner, smaller while the controls are away (iOS pipLayer).
         // Above the catch-all tap, so it can be dragged and tapped while the controls are away too.
-        if (cardUp) {
+        if (cardUp && !shareLayout) {
             SelfCard(grown = chrome.visible, chrome = chrome,
                 label = if (swapped) ui.peerName else "Your video",
                 onFlip = if (!swapped && local != null) { { chrome.touch(); onFlip() } } else null,
@@ -266,8 +302,173 @@ fun CallScreen(
                 }
             }
         }
+        SharePill(ui)
     }
 }
+
+/**
+ * The one small pill under the header (iOS topPill): "Amina is sharing their screen" once when
+ * their share begins (3 s), or my share's notice when it ended without my Stop (2.5 s).
+ */
+@Composable
+private fun SharePill(ui: CallUi) {
+    var text by remember { mutableStateOf<String?>(null) }
+    val first = ui.peerName.substringBefore(' ')
+    LaunchedEffect(ui.remoteScreen) {
+        if (ui.remoteScreen) { text = "$first is sharing their screen"; delay(3_000); text = null }
+    }
+    LaunchedEffect(ui.shareNotice) {
+        val n = ui.shareNotice ?: return@LaunchedEffect
+        text = n; delay(2_500); text = null
+        CallManager.clearShareNotice()
+    }
+    val a by animateFloatAsState(if (text != null) 1f else 0f, tween(300, easing = EaseInOut), label = "pill")
+    var last by remember { mutableStateOf("") }
+    text?.let { last = it }
+    if (a > 0f) Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 96.dp), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.alpha(a).height(32.dp).darkGlass(CircleShape).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+            Text(last, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * iOS shareLayoutView: the card under the header and the two people under it, on a spring when the
+ * controls come and go (they rise to the status bar and sink to the bottom edge without them).
+ */
+@Composable
+private fun ShareLayout(ui: CallUi, chrome: Chrome, remote: VideoTrack?, local: VideoTrack?, onStop: () -> Unit, onFull: () -> Unit) {
+    val insets = WindowInsets.systemBars.asPaddingValues()
+    val topIn = insets.calculateTopPadding()
+    val bottomIn = insets.calculateBottomPadding()
+    val spring = spring<Dp>(dampingRatio = 0.9f, stiffness = 322.3f)
+    // Clear of the header: its name and clock, and the "Muted" line while they are muted.
+    val header = if (ui.remoteMuted) 108.dp else 86.dp
+    val top by animateDpAsState(if (chrome.visible) topIn + header else topIn + 8.dp, spring, label = "shareTop")
+    val bottom by animateDpAsState(if (chrome.visible) bottomIn + 22.dp + BarHeight + 14.dp else maxOf(bottomIn, 12.dp) + 4.dp, spring, label = "shareBottom")
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val tileH = minOf(150.dp, maxOf(96.dp, maxHeight * 0.17f))
+        Column(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = top, bottom = bottom),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ShareCard(ui, chrome, remote, onStop, onFull, Modifier.weight(1f).fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Them: their camera, never their screen (it rides on that same track). Me: my live camera.
+                ShareTile(remote.takeIf { ui.remoteCameraOn && !ui.remoteScreen }, false, ui.peerName, ui.peerPhoto, tileH) { chrome.tap(true) }
+                ShareTile(local.takeIf { ui.cameraOn && !ui.sharing }, ui.frontCamera, "You", null, tileH) { chrome.tap(true) }
+            }
+        }
+    }
+}
+
+/** iOS shareCard: my share's card with Stop Sharing, or their screen whole with the full-screen button. */
+@Composable
+private fun ShareCard(ui: CallUi, chrome: Chrome, remote: VideoTrack?, onStop: () -> Unit, onFull: () -> Unit, modifier: Modifier) {
+    Box(modifier.clip(RoundedCornerShape(28.dp)).background(ShareCardFill).plainTap { chrome.tap(true) }) {
+        if (ui.sharing) {
+            Column(Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically)) {
+                if (ui.sharePhase == SharePhase.STARTING) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Starting…", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                } else {
+                    Icon(painterResource(R.drawable.ic_share_screen), null, tint = Color.White, modifier = Modifier.size(44.dp))
+                    Text("You're sharing your screen", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center)
+                    Row(Modifier.height(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).clickable(onClick = onStop)
+                        .padding(horizontal = 22.dp).semantics { contentDescription = "Stop Sharing" },
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Stop Sharing", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        } else {
+            ShareStage(remote, Modifier.fillMaxSize(), zoomable = false) { chrome.tap(true) }
+            Box(Modifier.align(Alignment.BottomEnd).padding(12.dp)) {
+                HeaderCircle(Icons.Filled.Fullscreen, "Full screen", 40.dp, onFull)
+            }
+        }
+    }
+}
+
+/**
+ * Their shared screen, whole (never cropped, never mirrored), on a TextureView so the card and the
+ * full-screen stage can move and scale it. [zoomable]: pinch and pan, a double tap goes back to 1x.
+ * The demo call draws its made-up picture instead.
+ */
+@Composable
+private fun ShareStage(track: VideoTrack?, modifier: Modifier, zoomable: Boolean, onTap: () -> Unit) {
+    var scale by remember { mutableStateOf(1f) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    val gestures = if (zoomable) Modifier
+        .pointerInput(Unit) {
+            detectTransformGestures { _, p, z, _ ->
+                scale = (scale * z).coerceIn(1f, 4f)
+                val maxX = size.width * (scale - 1) / 2
+                val maxY = size.height * (scale - 1) / 2
+                pan = if (scale == 1f) Offset.Zero else Offset((pan.x + p.x).coerceIn(-maxX, maxX), (pan.y + p.y).coerceIn(-maxY, maxY))
+            }
+        }
+        .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }, onDoubleTap = { scale = 1f; pan = Offset.Zero }) }
+    else Modifier.plainTap(onTap)
+    Box(modifier.then(gestures).semantics { contentDescription = "Shared screen" }) {
+        val m = Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale; translationX = pan.x; translationY = pan.y }
+        if (track != null) ScreenVideoView(track, m) else DemoScreen(m)
+    }
+}
+
+/** The demo call's made-up shared screen: a phone-shaped page, whole, on the dark stage. */
+@Composable
+private fun DemoScreen(modifier: Modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxHeight(0.92f).aspectRatio(9f / 19.5f).clip(RoundedCornerShape(10.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFFECEFF4), Color(0xFFC9D2DE)))))
+    }
+}
+
+/** One person under the share card (iOS shareTile): their live camera, else their photo. */
+@Composable
+private fun ShareTile(track: VideoTrack?, mirror: Boolean, name: String, photo: String?, height: Dp, onTap: () -> Unit) {
+    Box(Modifier.size(height * 0.74f, height).clip(RoundedCornerShape(22.dp)).background(ShareTileFill).plainTap(onTap)
+        .semantics { contentDescription = name }, contentAlignment = Alignment.Center) {
+        if (track != null) CardVideoView(track, mirror, Modifier.fillMaxSize())
+        else Avatar(photo, minOf(64.dp, height * 0.42f))
+    }
+}
+
+/** A WebRTC track drawn whole into a TextureView (a shared screen: aspect fit, never mirrored). */
+@Composable
+private fun ScreenVideoView(track: VideoTrack, modifier: Modifier = Modifier) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            TextureViewRenderer(ctx).apply {
+                init(RtcEngine.egl.eglBaseContext, null)
+                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
+            }
+        },
+        update = { r ->
+            val old = r.tag as? VideoTrack
+            if (old !== track) {
+                try { old?.removeSink(r) } catch (_: Exception) {}
+                track.addSink(r)
+                r.tag = track
+            }
+        },
+        onRelease = { r ->
+            try { (r.tag as? VideoTrack)?.removeSink(r) } catch (_: Exception) {}
+            r.release()
+        },
+    )
+}
+
+// iOS Color(white: 0.12) for the share card, 0.18 for the tiles under it.
+private val ShareCardFill = Color(0xFF1F1F1F)
+private val ShareTileFill = Color(0xFF2E2E2E)
 
 // The demo call's made-up pictures: theirs green, mine slate.
 private val ThemA = Color(0xFF3A5A40)
@@ -485,18 +686,40 @@ private fun ControlCapsule(modifier: Modifier = Modifier, content: @Composable (
     ) { content() }
 }
 
-/** iOS order: camera, speaker, mute next to end under the right thumb. Flip is on my camera's card. */
+/** iOS order: share, camera, speaker, mute next to end under the right thumb. Flip is on my camera's card. */
 @Composable
 private fun ControlBar(ui: CallUi, chrome: Chrome, onEnd: () -> Unit, onMute: () -> Unit, onRoute: (AudioRoute) -> Unit,
-                       onCamera: () -> Unit, modifier: Modifier = Modifier) {
+                       onCamera: () -> Unit, onShare: () -> Unit, modifier: Modifier = Modifier) {
     ControlCapsule(modifier) {
         val size = 56.dp
-        Circle(if (ui.cameraOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, active = !ui.cameraOn,
-            label = if (ui.cameraOn) "Turn camera off" else "Turn camera on", size = size) { chrome.touch(); onCamera() }
+        val sharingOn = ui.sharePhase != SharePhase.OFF
+        ShareCircle(lit = ui.sharePhase == SharePhase.LIVE, on = sharingOn, enabled = sharingOn || ui.canStartShare, size = size) {
+            chrome.touch(); onShare()
+        }
+        // Dimmed while a share of mine runs or is being started (iOS shareBlocksCamera).
+        val camOk = ui.cameraOn || !sharingOn
+        Box(Modifier.alpha(if (camOk) 1f else 0.4f)) {
+            Circle(if (ui.cameraOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, active = !ui.cameraOn,
+                label = if (ui.cameraOn) "Turn camera off" else "Turn camera on", size = size) { chrome.touch(); if (camOk) onCamera() }
+        }
         SpeakerButton(ui, size) { chrome.touch(); onRoute(it) }
         Circle(if (ui.muted) Icons.Filled.MicOff else Icons.Filled.Mic, active = ui.muted,
             label = if (ui.muted) "Unmute" else "Mute", size = size) { chrome.touch(); onMute() }
         EndCircle("End call", size, onEnd)
+    }
+}
+
+/**
+ * Share Screen (iOS shareCircle): dimmed = not yet (no connected call, or they are sharing), glass =
+ * ready, solid white with a dark glyph = my screen is really going out. Stopping is never disabled.
+ */
+@Composable
+private fun ShareCircle(lit: Boolean, on: Boolean, enabled: Boolean, size: Dp, onClick: () -> Unit) {
+    val label = if (lit) "Stop Sharing" else if (on) "Cancel Sharing" else "Share Screen"
+    Box(Modifier.alpha(if (enabled) 1f else 0.4f).size(size)
+        .then(if (lit) Modifier.clip(CircleShape).background(GlassOn) else Modifier.darkGlass(CircleShape))
+        .clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Icon(painterResource(R.drawable.ic_share_screen), null, tint = if (lit) Color.Black else Color.White, modifier = Modifier.size(size * 0.42f))
     }
 }
 
@@ -566,7 +789,7 @@ fun PipScreen(ui: CallUi) {
         val demoThem = ui.peerUid == "demo" && ui.remoteCameraOn
         val bigIsMine = remote == null && !demoThem && local != null
         when {
-            remote != null -> VideoView(remote, mirror = false, modifier = Modifier.fillMaxSize())
+            remote != null -> VideoView(remote, mirror = false, modifier = Modifier.fillMaxSize(), fit = ui.remoteScreen)
             demoThem -> DemoVideo(Modifier.fillMaxSize(), ThemA, ThemB)
             local != null -> VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize())
             else -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
@@ -614,13 +837,13 @@ private fun Circle(icon: ImageVector, active: Boolean, label: String, size: Dp, 
 
 /** A WebRTC track drawn into a SurfaceViewRenderer (the in-call video). */
 @Composable
-fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier = Modifier, overlay: Boolean = false) {
+fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier = Modifier, overlay: Boolean = false, fit: Boolean = false) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             SurfaceViewRenderer(ctx).apply {
                 init(RtcEngine.egl.eglBaseContext, null)
-                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                setScalingType(if (fit) RendererCommon.ScalingType.SCALE_ASPECT_FIT else RendererCommon.ScalingType.SCALE_ASPECT_FILL)
                 setEnableHardwareScaler(true)
                 if (overlay) setZOrderMediaOverlay(true)
             }
@@ -683,7 +906,7 @@ private fun CardVideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier
  * while it rings (iOS groupWaiting + GroupCallRingingView). [GroupCallUi.members] lists me first.
  */
 @Composable
-fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit) {
+fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit = {}) {
     var focus by remember { mutableStateOf<String?>(null) }
     var people by remember { mutableStateOf(false) }
     val me = g.members.firstOrNull { it.local } ?: g.members.firstOrNull()
@@ -692,7 +915,16 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
     LaunchedEffect(g.members.map { it.id }) { if (focus != null && remotes.none { it.id == focus }) focus = null }
     // iOS: no pin in the two-person look (the other person is the whole stage already).
     LaunchedEffect(remotes.size) { if (remotes.size < 2) focus = null }
-    val allowed = g.joined && !people && g.requests.isEmpty() && (g.cameraOn || g.members.any { it.video != null })
+    val allowed = g.joined && !people && g.requests.isEmpty() && (g.cameraOn || g.members.any { it.video != null || it.screen != null })
+    // A shared screen is what the room is looking at: its presenter takes the stage unless I picked
+    // someone (iOS GroupCallStage: the user's pin, then the presenter, else the grid).
+    val presenter = remotes.firstOrNull { it.screen != null }?.id
+    var announced by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(presenter) {
+        val p = remotes.firstOrNull { it.id == presenter }
+        if (p != null && announced != p.id) { announced = p.id; GroupCall.say("${p.name.substringBefore(' ')} is sharing their screen") }
+        if (p == null) announced = null
+    }
     val chrome = rememberChrome(allowed)
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f, tween(280), label = "chrome")
     val waitingScreen = g.linkRoom == null && !g.cameraOn && !g.waiting && (g.connecting || (g.joined && remotes.isEmpty()))
@@ -707,10 +939,10 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
             )
             Spacer(Modifier.height(2.dp))
             Box(Modifier.weight(1f).fillMaxWidth().plainTap { chrome.tap(allowed) }) {
-                if (!waitingScreen) GroupStage(g.members, meId, g.activeSpeaker, focus, onTile = { id ->
+                if (!waitingScreen) GroupStage(g.members, meId, g.activeSpeaker, focus ?: presenter, g.sharing, onTile = { id ->
                     chrome.touch()
                     // My own tile does nothing (iOS); a tap on the large one goes back.
-                    focus = if (focus == id || id == meId || remotes.size < 2) null else id
+                    focus = if ((focus ?: presenter) == id || id == meId || (remotes.size < 2 && presenter == null)) null else id
                 })
             }
             if (g.linkCreator && g.requests.isNotEmpty()) {
@@ -719,6 +951,10 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
             }
             Spacer(Modifier.height(16.dp))
             ControlCapsule(Modifier.alpha(shown)) {
+                val shareOn = g.sharing || g.sharePending
+                ShareCircle(lit = g.sharing, on = shareOn, enabled = shareOn || (g.joined && presenter == null), size = 56.dp) {
+                    chrome.touch(); onShare()
+                }
                 Circle(if (g.cameraOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, !g.cameraOn,
                     if (g.cameraOn) "Turn camera off" else "Turn camera on", 56.dp) { chrome.touch(); onCamera() }
                 Circle(if (g.micOn) Icons.Filled.Mic else Icons.Filled.MicOff, !g.micOn, if (g.micOn) "Mute" else "Unmute", 56.dp) {
@@ -768,7 +1004,7 @@ private fun <T> stageSpring() = spring<T>(dampingRatio = 1f, stiffness = 273f)
  * else. Every tile moves to its new frame on the one stage spring.
  */
 @Composable
-private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: String?, focus: String?, onTile: (String) -> Unit) {
+private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: String?, focus: String?, iAmSharing: Boolean, onTile: (String) -> Unit) {
     val me = members.firstOrNull { it.id == meId }
     val remotes = members.filter { it.id != meId }
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -776,8 +1012,8 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
         val h = maxHeight.value
         val big = remotes.firstOrNull { it.id == focus }
         when {
-            remotes.isEmpty() -> if (me != null) MemberTile(me, true, false, Modifier.fillMaxSize(), alone = true) {}
-            big != null -> FocusStage(big, members.filter { it.id != big.id }, meId, speaker, onTile)
+            remotes.isEmpty() -> if (me != null) MemberTile(me, true, false, Modifier.fillMaxSize(), alone = true, iAmSharing = iAmSharing) {}
+            big != null -> FocusStage(big, members.filter { it.id != big.id }, meId, speaker, iAmSharing, onTile)
             else -> {
                 val full = com.fariin.app.call.GroupCallLayout.capacity(w, h)
                 val cells = if (remotes.size >= 2) members.size else remotes.size
@@ -795,14 +1031,14 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
                         val y by animateDpAsState(f.y.dp, stageSpring(), label = "y")
                         val tw by animateDpAsState(f.w.dp, stageSpring(), label = "w")
                         val th by animateDpAsState(f.h.dp, stageSpring(), label = "h")
-                        MemberTile(m, m.id == meId, m.id == speaker && m.id != meId, Modifier.offset(x, y).size(tw, th)) { onTile(m.id) }
+                        MemberTile(m, m.id == meId, m.id == speaker && m.id != meId, Modifier.offset(x, y).size(tw, th), iAmSharing = iAmSharing) { onTile(m.id) }
                     }
                 }
                 if (layout.overflow.isNotEmpty()) {
-                    Strip(layout.overflow.mapNotNull { byId[it] }, meId, speaker, onTile,
+                    Strip(layout.overflow.mapNotNull { byId[it] }, meId, speaker, iAmSharing, onTile,
                         Modifier.align(Alignment.BottomStart).offset(y = 0.dp))
                 }
-                if (remotes.size == 1 && me != null) SelfCard(me, w, h, Modifier.align(Alignment.BottomEnd))
+                if (remotes.size == 1 && me != null) SelfCard(me, w, h, iAmSharing, Modifier.align(Alignment.BottomEnd))
             }
         }
     }
@@ -810,29 +1046,29 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
 
 /** One person large (iOS GroupCallFocusView) over the strip of everyone else, me among them. */
 @Composable
-private fun FocusStage(big: GroupMember, others: List<GroupMember>, meId: String?, speaker: String?, onTile: (String) -> Unit) {
+private fun FocusStage(big: GroupMember, others: List<GroupMember>, meId: String?, speaker: String?, iAmSharing: Boolean, onTile: (String) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         MemberTile(big, false, big.id == speaker, Modifier.weight(1f).fillMaxWidth().padding(com.fariin.app.call.GroupCallMetrics.INSET.dp), large = true) { onTile(big.id) }
-        Strip(others, meId, speaker, onTile, Modifier)
+        Strip(others, meId, speaker, iAmSharing, onTile, Modifier)
     }
 }
 
 /** iOS GroupCallStripView: 96 squares 4 apart, 16 from the leading edge, 12 under it. */
 @Composable
-private fun Strip(people: List<GroupMember>, meId: String?, speaker: String?, onTile: (String) -> Unit, modifier: Modifier) {
+private fun Strip(people: List<GroupMember>, meId: String?, speaker: String?, iAmSharing: Boolean, onTile: (String) -> Unit, modifier: Modifier) {
     val m = com.fariin.app.call.GroupCallMetrics
     LazyRow(modifier.fillMaxWidth().height(m.STRIP_HEIGHT.dp).padding(top = m.INSET.dp, bottom = m.STRIP_INSET.dp),
         horizontalArrangement = Arrangement.spacedBy(m.STRIP_SPACING.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = m.STRIP_LEADING.dp, end = m.STRIP_LEADING.dp)) {
         items(people, key = { it.id }) { p ->
-            MemberTile(p, p.id == meId, p.id == speaker && p.id != meId, Modifier.size(m.STRIP_TILE.dp), strip = true) { if (p.id != meId) onTile(p.id) }
+            MemberTile(p, p.id == meId, p.id == speaker && p.id != meId, Modifier.size(m.STRIP_TILE.dp), strip = true, iAmSharing = iAmSharing) { if (p.id != meId) onTile(p.id) }
         }
     }
 }
 
 /** My card with one other person here (iOS GroupCallSelfView): 90 x 160, a tap grows it on a 0.3 s spring. */
 @Composable
-private fun SelfCard(me: GroupMember, stageW: Float, stageH: Float, modifier: Modifier) {
+private fun SelfCard(me: GroupMember, stageW: Float, stageH: Float, iAmSharing: Boolean, modifier: Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val (tw, th) = com.fariin.app.call.GroupStagePlan.selfSize(expanded, stageW, stageH)
     val anim = spring<Dp>(dampingRatio = 1f, stiffness = 439f)
@@ -841,7 +1077,7 @@ private fun SelfCard(me: GroupMember, stageW: Float, stageH: Float, modifier: Mo
     val shape = RoundedCornerShape(com.fariin.app.call.GroupCallMetrics.TILE_CORNER.dp)
     Box(modifier.padding(end = com.fariin.app.call.GroupCallMetrics.SELF_TRAILING.dp, bottom = com.fariin.app.call.GroupCallMetrics.STRIP_INSET.dp)
         .shadow(4.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))) {
-        MemberTile(me, true, false, Modifier.size(w, h), pip = true) { expanded = !expanded }
+        MemberTile(me, true, false, Modifier.size(w, h), pip = true, iAmSharing = iAmSharing) { expanded = !expanded }
     }
 }
 
@@ -855,7 +1091,8 @@ private fun SelfCard(me: GroupMember, stageW: Float, stageH: Float, modifier: Mo
 @Composable
 private fun MemberTile(
     m: GroupMember, isMe: Boolean, activeSpeaker: Boolean, modifier: Modifier,
-    large: Boolean = false, strip: Boolean = false, pip: Boolean = false, alone: Boolean = false, onClick: () -> Unit,
+    large: Boolean = false, strip: Boolean = false, pip: Boolean = false, alone: Boolean = false, iAmSharing: Boolean = false,
+    onClick: () -> Unit,
 ) {
     val metrics = com.fariin.app.call.GroupCallMetrics
     val shape = RoundedCornerShape(if (alone) 0.dp else metrics.TILE_CORNER.dp)
@@ -868,13 +1105,18 @@ private fun MemberTile(
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = listOfNotNull(if (isMe) "You" else m.name, m.role.badge?.lowercase(), "speaking".takeIf { activeSpeaker },
-                    "muted".takeIf { !m.micOn }, "camera off".takeIf { m.video == null }, "poor connection".takeIf { m.poor }).joinToString(", ")
+                    "muted".takeIf { !m.micOn }, "camera off".takeIf { m.video == null }, "presenting".takeIf { m.screen != null },
+                    "poor connection".takeIf { m.poor }).joinToString(", ")
             },
             contentAlignment = Alignment.Center) {
             val w = maxWidth.value
             val hh = maxHeight.value
             val v = m.video
-            if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = isMe)
+            // The large tile shows a presenter's screen whole (never cropped, never mirrored); a strip
+            // shows their face, not a second unreadable copy of the screen (iOS preferScreen).
+            val scr = m.screen?.takeIf { large }
+            if (scr != null) LiveKitVideo(scr, Modifier.fillMaxSize(), fit = true)
+            else if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = isMe)
             else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Avatar(m.photo, com.fariin.app.call.GroupStagePlan.avatarSize(w, hh).dp)
                 if (alone) {
@@ -897,6 +1139,13 @@ private fun MemberTile(
                     .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(if (compact) 9.dp else 16.dp))
                 }
+            }
+            // I am sharing my screen (owner 2026-10-28): my own tile says so (iOS sharingCard).
+            if (isMe && iAmSharing) Column(Modifier.fillMaxSize().background(ShareCardFill.copy(alpha = 0.92f)),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+                Icon(painterResource(R.drawable.ic_share_screen), null, tint = Color.White, modifier = Modifier.size(if (w >= 150) 32.dp else 20.dp))
+                if (w >= 150) Text("You're sharing your screen", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 10.dp))
             }
             if (m.poor && !(pip && w < 60)) {
                 Box(Modifier.align(if (large) Alignment.TopEnd else Alignment.TopStart).padding(inset).size(22.dp).clip(CircleShape)
@@ -997,10 +1246,13 @@ private fun SheetSection(content: @Composable () -> Unit) {
  * would tear or flash.
  */
 @Composable
-private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifier: Modifier, mirror: Boolean = false) {
+private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifier: Modifier, mirror: Boolean = false, fit: Boolean = false) {
     val room = GroupCall.room() ?: return
     AndroidView(modifier = modifier, factory = { ctx ->
-        TextureViewRenderer(ctx).also { room.initVideoRenderer(it); it.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL) }
+        TextureViewRenderer(ctx).also {
+            room.initVideoRenderer(it)
+            it.setScalingType(if (fit) RendererCommon.ScalingType.SCALE_ASPECT_FIT else RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+        }
     }, update = { r ->
         r.setMirror(mirror)
         val old = r.tag as? io.livekit.android.room.track.VideoTrack

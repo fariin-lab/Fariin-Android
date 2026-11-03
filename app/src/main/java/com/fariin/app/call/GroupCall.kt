@@ -1,6 +1,8 @@
 package com.fariin.app.call
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import com.fariin.app.data.AuthRepository
 import com.google.firebase.Timestamp
@@ -22,6 +24,7 @@ import io.livekit.android.room.participant.Participant
 
 import io.livekit.android.room.track.Track
 import io.livekit.android.room.track.VideoTrack
+import io.livekit.android.room.track.screencapture.ScreenCaptureParams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -118,6 +121,8 @@ object GroupCallWire {
 data class GroupMember(
     val id: String, val name: String, val speaking: Boolean, val micOn: Boolean, val video: VideoTrack?,
     val photo: String? = null, val role: CallRole = CallRole.PARTICIPANT, val poor: Boolean = false, val local: Boolean = false,
+    /** Their shared screen (LiveKit's screen share track). Never mine: my own screen is not drawn back to me. */
+    val screen: VideoTrack? = null,
 )
 
 /** Someone at a call link's door (callLinks/{roomId}/requests/{uid}, status pending). */
@@ -148,6 +153,10 @@ data class GroupCallUi(
     val requests: List<LinkRequest> = emptyList(),
     /** A short line the screen shows for a few seconds ("Couldn't answer. Try again."). */
     val toast: String? = null,
+    /** My screen is published (iOS screenSharing follows the publish, not the button). */
+    val sharing: Boolean = false,
+    /** The system's consent dialog is up, or the share is being published. */
+    val sharePending: Boolean = false,
 )
 
 /**
@@ -158,7 +167,8 @@ data class GroupCallUi(
  * bubble. A refused start asks the server to close a dead call once and tries again. The last
  * one out asks `groupCallClose` to end it (the old transaction when the server can not be reached).
  *
- * Not on Android yet: admin actions (mute, remove), raised hands, screen share, and growing a
+ * Screen share is LiveKit's own: the system's consent dialog, then a screen share track (the source
+ * an iPhone's share arrives on too). Not on Android yet: admin actions (mute, remove), raised hands, and growing a
  * 1:1 into an `adhoc_` room.
  */
 object GroupCall {
@@ -396,6 +406,7 @@ object GroupCall {
             val uid = p.identity?.value ?: ""
             val face = faces[uid]
             val cam = p.getTrackPublication(Track.Source.CAMERA)
+            val scr = if (p === r.localParticipant) null else p.getTrackPublication(Track.Source.SCREEN_SHARE)
             GroupMember(
                 id = uid,
                 name = p.name?.takeIf { it.isNotEmpty() } ?: face?.first ?: if (p === r.localParticipant) "You" else "Member",
@@ -406,10 +417,13 @@ object GroupCall {
                 role = CallRole.of(p.attributes["role"]),
                 poor = p.connectionQuality == ConnectionQuality.POOR || p.connectionQuality == ConnectionQuality.LOST,
                 local = p === r.localParticipant,
+                screen = (scr?.track as? VideoTrack)?.takeIf { scr?.muted != true },
             )
         }
+        val mine = r.localParticipant.getTrackPublication(Track.Source.SCREEN_SHARE)
+        val sharing = mine?.track != null && mine.muted != true
         members.filter { !it.local && it.id.isNotEmpty() && it.id !in faces && it.id !in asked }.forEach { loadFace(it.id) }
-        _ui.value = _ui.value.copy(members = members, calling = startedHere && !someoneCame)
+        _ui.value = _ui.value.copy(members = members, calling = startedHere && !someoneCame, sharing = sharing)
         tickSpeaker()
     }
 
@@ -516,6 +530,9 @@ object GroupCall {
         }
     }
 
+    /** A short line on the call screen (the group's "Amina is sharing their screen"). */
+    fun say(text: String) { if (_ui.value.cid != null) _ui.value = _ui.value.copy(toast = text) }
+
     fun clearToast() { if (_ui.value.toast != null) _ui.value = _ui.value.copy(toast = null) }
 
     fun toggleMic() {
@@ -531,6 +548,43 @@ object GroupCall {
     }
 
     fun room(): Room? = room
+
+    /**
+     * Share Screen / Stop Sharing in the capsule. True when the system's consent dialog should open
+     * now; a share already on (or on its way) is stopped instead. Never while someone else shares.
+     */
+    fun shareTapped(): Boolean {
+        val g = _ui.value
+        if (!g.joined || room == null) return false
+        if (g.sharing || g.sharePending) { stopShare(); return false }
+        if (g.members.any { it.screen != null }) return false
+        _ui.value = g.copy(sharePending = true)
+        return true
+    }
+
+    /** The system dialog's answer: LiveKit publishes the screen from its own capture service. */
+    fun shareConsent(resultCode: Int, data: Intent?) {
+        if (!_ui.value.sharePending) return
+        val r = room
+        if (resultCode != Activity.RESULT_OK || data == null || r == null) { _ui.value = _ui.value.copy(sharePending = false); return }
+        scope.launch {
+            val ok = try {
+                r.localParticipant.setScreenShareEnabled(true, ScreenCaptureParams(data, onStop = { scope.launch { stopShare() } }))
+            } catch (e: Exception) { Log.w(TAG, "screen share failed", e); false }
+            if (room !== r) return@launch
+            _ui.value = _ui.value.copy(sharePending = false, toast = if (ok) _ui.value.toast else "Couldn't start screen sharing. Try again.")
+            refresh()
+        }
+    }
+
+    private fun stopShare() {
+        _ui.value = _ui.value.copy(sharePending = false)
+        val r = room ?: return
+        scope.launch {
+            try { r.localParticipant.setScreenShareEnabled(false) } catch (_: Exception) {}
+            refresh()
+        }
+    }
 
     fun leave() {
         val cid = _ui.value.cid

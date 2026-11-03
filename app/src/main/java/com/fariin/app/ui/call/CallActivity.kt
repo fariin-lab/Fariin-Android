@@ -95,6 +95,23 @@ class CallActivity : ComponentActivity() {
         if (ok && cameraAfterAsk) { if (groupMode) GroupCall.toggleCamera() else CallManager.toggleCamera() }
         cameraAfterAsk = false
     }
+    /**
+     * Screen share: Android's own consent dialog, asked at the moment of need (the share button).
+     * Its answer goes to the call it was asked for: the group room or the 1:1 call.
+     */
+    private val askScreen = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (groupMode) GroupCall.shareConsent(r.resultCode, r.data) else CallManager.shareConsent(r.resultCode, r.data)
+    }
+
+    private fun shareTapped() {
+        val ask = if (groupMode) GroupCall.shareTapped() else CallManager.shareTapped()
+        if (!ask) return
+        val pm = getSystemService(android.media.projection.MediaProjectionManager::class.java)
+        try { askScreen.launch(pm.createScreenCaptureIntent()) } catch (_: Exception) {
+            if (groupMode) GroupCall.shareConsent(RESULT_CANCELED, null) else CallManager.shareConsent(RESULT_CANCELED, null)
+        }
+    }
+
     private var groupMode by mutableStateOf(false)
     /** The group ring screen (GroupRing's invite) is up. */
     private var ringMode by mutableStateOf(false)
@@ -176,7 +193,7 @@ class CallActivity : ComponentActivity() {
                     if (inLobby) {
                         CallLobbyScreen(lobbyKey!!, lobbyVideo, g, onLeave = { GroupCall.leave(); finish() }, onJoin = { video, mic -> joinFromLobby(video, mic) })
                     } else GroupCallScreen(g, onMic = { micToggle() }, onCamera = { cameraToggle(GroupCall.ui.value.cameraOn) },
-                        onLeave = { GroupCall.leave(); finish() })
+                        onLeave = { GroupCall.leave(); finish() }, onShare = { if (demoGroup == null) shareTapped() })
                 } else {
                     val ui by CallManager.ui.collectAsState()
                     LaunchedEffect(ui.status.phase) { if (ui.status.phase == CallPhase.IDLE) finish() }
@@ -198,6 +215,7 @@ class CallActivity : ComponentActivity() {
                         onCamera = { cameraToggle(ui.cameraOn) },
                         onFlip = { CallManager.flipCamera() },
                         onMinimize = { minimize() },
+                        onShare = { if (ui.peerUid == "demo") demoShare() else shareTapped() },
                         onCallAgain = { withMic(ui.status.video, { CallManager.callAgain(this@CallActivity) }, { CallManager.closeNoAnswer() }) },
                         onVoiceMessage = { voiceMessageAfterNoAnswer() },
                         onCloseNoAnswer = { CallManager.closeNoAnswer() })
@@ -351,6 +369,13 @@ class CallActivity : ComponentActivity() {
         })
     }
 
+    /** Debug demo: the share button walks the demo share on and off without the system dialog. */
+    private fun demoShare() {
+        val u = CallManager.ui.value
+        val next = if (u.sharePhase == com.fariin.app.call.SharePhase.OFF) com.fariin.app.call.SharePhase.LIVE else com.fariin.app.call.SharePhase.OFF
+        CallManager.demo(this, CallPhase.ACTIVE, video = false, share = next)
+    }
+
     private fun demo(screen: String) {
         when (screen) {
             "incoming" -> CallManager.demo(this, CallPhase.INCOMING, video = false)
@@ -364,6 +389,18 @@ class CallActivity : ComponentActivity() {
                 setOf(com.fariin.app.call.AudioRoute.EARPIECE, com.fariin.app.call.AudioRoute.SPEAKER, com.fariin.app.call.AudioRoute.BLUETOOTH),
                 "Car Kit"))
             "held" -> CallManager.demo(this, CallPhase.ACTIVE, video = false, held = true)
+            // Screen share: mine (the card with Stop Sharing), theirs (their screen in the card).
+            "shareMine" -> CallManager.demo(this, CallPhase.ACTIVE, video = false, share = com.fariin.app.call.SharePhase.LIVE)
+            "shareTheirs" -> CallManager.demo(this, CallPhase.ACTIVE, video = false, theirScreen = true)
+            // A group call while I share: my tile says so; the share button is white.
+            "groupSharing" -> {
+                groupMode = true
+                demoGroup = GroupCallUi(cid = "demo", title = "Family", joined = true, sharing = true, members = listOf(
+                    GroupMember("me", "You", speaking = false, micOn = true, video = null, local = true),
+                    GroupMember("a", "Amina Yusuf", speaking = false, micOn = true, video = null),
+                    GroupMember("b", "Hodan Ali", speaking = false, micOn = false, video = null),
+                ))
+            }
             "group" -> {
                 groupMode = true
                 demoGroup = GroupCallUi(cid = "demo", title = "Family", joined = true, activeSpeaker = "a", members = listOf(

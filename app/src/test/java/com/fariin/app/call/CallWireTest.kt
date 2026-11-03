@@ -71,6 +71,17 @@ class CallWireTest {
         assertEquals("bob", d.other("alice")); assertFalse(d.ended)
     }
 
+    @Test fun screenShareWritesAndReads() {
+        // Sharing: screen, cams and the mode in one write; stopping drops the mode (iOS broadcastScreenState).
+        assertEquals(mapOf("screen.me" to true, "cams.me" to true, "screenMode.me" to "camera"), CallWire.screenFields("me", true, true))
+        assertEquals(mapOf("screen.me" to false, "cams.me" to false), CallWire.screenFields("me", false, false))
+        val d = CallWire.parse("c1", mapOf("caller" to "alice", "callee" to "bob",
+            "screen" to mapOf("alice" to true), "screenMode" to mapOf("alice" to "camera", "bob" to 3)))
+        assertEquals(true, d.screen["alice"]); assertNull(d.screen["bob"])
+        assertEquals("camera", d.screenMode["alice"]); assertNull(d.screenMode["bob"])
+        assertTrue(CallWire.parse("c2", mapOf("caller" to "a")).screen.isEmpty())
+    }
+
     @Test fun endReasonFromWire() {
         assertEquals(EndReason.BUSY, EndReason.from("busy"))
         assertEquals(EndReason.HANGUP, EndReason.from(null))

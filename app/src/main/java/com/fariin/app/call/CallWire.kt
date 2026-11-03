@@ -10,7 +10,8 @@ package com.fariin.app.call
  *   "active" | "ended"), cams {uid: Bool}, muted {uid: Bool}, hb {uid: seconds}, createdAt,
  *   offerEnc (enc1 sealed SDP, 1:1 chat crypto of convId(caller, callee)), sig: 2,
  *   answerEnc, ringingAt, acceptedAt, answeredDevice, endReason, cancelledAt, glare, refused,
- *   restartOffer/restartAnswer {enc, version}, restartRequest, moveTo ("adhoc_..."), caps.
+ *   restartOffer/restartAnswer {enc, version}, restartRequest, moveTo ("adhoc_..."), caps,
+ *   screen {uid: Bool}, screenMode {uid: "camera" | "track"}.
  * calls/{id}/callerCandidates/{auto} and calleeCandidates/{auto}: {enc} where enc seals the JSON
  *   {"candidate", "sdpMLineIndex", "sdpMid"}; old builds wrote those three keys in the clear.
  * The chat row: conversations/{cid}/messages/call_{id} {type "call", authorId, callerUid,
@@ -93,6 +94,19 @@ object CallWire {
     fun ringingFields(serverTime: Any): Map<String, Any> = mapOf("ringingAt" to serverTime)
     fun mutedField(me: String, muted: Boolean): Map<String, Any> = mapOf("muted.$me" to muted)
     fun camsField(me: String, on: Boolean): Map<String, Any> = mapOf("cams.$me" to on)
+    /**
+     * My screen share (iOS broadcastScreenState): `screen`, the `cams` that goes with it and, while
+     * sharing, `screenMode` in ONE write, so the other phone never fits a face or crops a screen.
+     * This build always shares on its camera's own track ("camera"): it never says `caps` screen2,
+     * so an iPhone never sends it a second (screen) track either.
+     */
+    fun screenFields(me: String, sharing: Boolean, cams: Boolean): Map<String, Any> {
+        val m = linkedMapOf<String, Any>("screen.$me" to sharing, "cams.$me" to cams)
+        if (sharing) m["screenMode.$me"] = SCREEN_MODE_CAMERA
+        return m
+    }
+    const val SCREEN_MODE_CAMERA = "camera"
+    const val SCREEN_MODE_TRACK = "track"
     fun heartbeatField(me: String, nowMs: Long): Map<String, Any> = mapOf("hb.$me" to nowMs / 1000.0)
     fun claimField(device: String): Map<String, Any> = mapOf("answeredDevice" to device)
     /** An ICE-restart SDP (iOS writeSignalSdp). */
@@ -275,6 +289,8 @@ object CallWire {
         moveTo = d["moveTo"] as? String,
         cams = boolMap(d["cams"]),
         muted = boolMap(d["muted"]),
+        screen = boolMap(d["screen"]),
+        screenMode = (d["screenMode"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { kk -> (v as? String)?.let { kk to it } } }?.toMap() ?: emptyMap(),
         heartbeats = (d["hb"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { kk -> (v as? Number)?.let { kk to it.toDouble() } } }?.toMap() ?: emptyMap(),
         restartOffer = versioned(d["restartOffer"]),
         restartAnswer = versioned(d["restartAnswer"]),
@@ -325,6 +341,10 @@ data class CallDoc(
     val moveTo: String?,
     val cams: Map<String, Boolean>,
     val muted: Map<String, Boolean>,
+    /** Who is sharing their screen (iOS `screen`); a missing key under the map means not sharing. */
+    val screen: Map<String, Boolean> = emptyMap(),
+    /** How each share is carried (iOS `screenMode`): "camera" (on the camera track) or "track". */
+    val screenMode: Map<String, String> = emptyMap(),
     val heartbeats: Map<String, Double>,
     val restartOffer: Versioned?,
     val restartAnswer: Versioned?,

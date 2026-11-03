@@ -3,6 +3,7 @@ package com.fariin.app.call
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.app.Activity
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.media.Ringtone
@@ -51,7 +52,24 @@ data class CallUi(
     val held: Boolean = false,
     /** The No answer page is up over the ended call (iOS noAnswerHold). */
     val noAnswer: Boolean = false,
-)
+    /** Where MY screen share is (iOS screenSharePhase). */
+    val sharePhase: SharePhase = SharePhase.OFF,
+    /** THEIR screen is what their video carries (iOS remoteScreenSharing): drawn whole, never cropped. */
+    val remoteScreen: Boolean = false,
+    /** One short line when my share ended without my Stop, or never got going (iOS screenShareNotice). */
+    val shareNotice: String? = null,
+) {
+    /** My share has begun and owns my video (iOS screenSharing). */
+    val sharing: Boolean get() = sharePhase == SharePhase.STARTING || sharePhase == SharePhase.LIVE
+    /** A share can be started now: a connected call and nobody else sharing (iOS shareCircle canStart). */
+    val canStartShare: Boolean get() = status.phase == CallPhase.ACTIVE && status.connectedAtMs != null && !remoteScreen && !held
+}
+
+/**
+ * iOS ScreenSharePhase. PICKING: the system's consent dialog is up, nothing in the call has changed.
+ * STARTING: the capture runs, no frame yet. LIVE: frames are going out.
+ */
+enum class SharePhase { OFF, PICKING, STARTING, LIVE }
 
 /**
  * The 1:1 call, after Kulan-iOS CallService: the same documents, the same sealed signalling, the
@@ -61,7 +79,10 @@ data class CallUi(
  * The system side (headset / car / Bluetooth buttons, audio routes, hold, busy while a phone call
  * can not be held) goes through [CallTelecom]; the proximity sensor follows the route.
  *
- * Left out for now (iOS has them): the early answer before Accept, screen sharing, moving a call
+ * Screen sharing rides on the camera's own track (iOS fallback mode, `screenMode` "camera"); the
+ * iPhone's second screen track is not offered, so an iPhone shares to this phone the same way.
+ *
+ * Left out for now (iOS has them): the early answer before Accept, moving a call
  * into a group room (`moveTo`), glare between two crossing dials, the data saver,
  * network-change restarts on a timer, Opus DTX/RED munging and telemetry.
  */
@@ -109,7 +130,7 @@ object CallManager {
         app = context.applicationContext
         // The screen goes dark at the ear during a voice call on the earpiece.
         main.launch {
-            ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn, u.route.current)) }
+            ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn || u.sharing || u.remoteScreen, u.route.current)) }
         }
         // The calling sound from the dial to the pick-up, and the chime when their camera comes on (iOS).
         main.launch {
@@ -401,6 +422,19 @@ object CallManager {
                 }
             }
         }
+        // Their screen share, read BEFORE `cams`: the sharer writes both in one update (iOS).
+        if (d.screen.isNotEmpty()) {
+            val on = d.screen[peer] ?: false
+            if (on != _ui.value.remoteScreen) {
+                edit { it.copy(remoteScreen = on) }
+                // One sharer at a time (iOS, owner 2026-10-10): theirs arriving while mine is only being
+                // picked cancels mine. Both live: the share of the lower uid stays, the same on both phones.
+                if (on && _ui.value.sharePhase != SharePhase.OFF) {
+                    if (!_ui.value.sharing) stopScreenShare(signal = false)
+                    else if (me > peer) stopScreenShare(notice = "${_ui.value.peerName} is sharing their screen")
+                }
+            }
+        }
         d.cams[peer]?.let { on -> if (on != _ui.value.remoteCameraOn) edit { it.copy(remoteCameraOn = on) } }
         d.muted[peer]?.let { m -> if (m != _ui.value.remoteMuted) edit { it.copy(remoteMuted = m) } }
         d.heartbeats[peer]?.let { lastPeerBeat = it }
@@ -632,6 +666,8 @@ object CallManager {
     /** A phone call answered over this one puts it on hold: my mic goes off until it ends. */
     fun onSystemHold(id: String, on: Boolean) {
         if (id != callId || !status.live) return
+        // A share ENDS on hold (iOS): the person is on a phone call now, and their screen would show it.
+        if (on) stopScreenShare(notice = if (_ui.value.sharing) "Screen sharing stopped" else null)
         edit { it.copy(held = on) }
         engine?.setMic(!on && !_ui.value.muted)
         broadcastMute()
@@ -651,6 +687,8 @@ object CallManager {
 
     /** The camera button; the call screen asks for the camera permission first. */
     fun toggleCamera() {
+        // Owner 2026-10-10 (iOS shareBlocksCamera): my share and my camera never run together.
+        if (!_ui.value.cameraOn && _ui.value.sharePhase != SharePhase.OFF) return
         val on = !_ui.value.cameraOn
         edit { it.copy(cameraOn = on) }
         engine?.setCamera(on)
@@ -664,6 +702,96 @@ object CallManager {
     }
 
     fun hangUp() { if (status.live) finish(EndReason.NONE, updateRemote = true, byUser = true) }
+
+    // ================================================================== screen share (iOS 1:1 share)
+    //
+    //   Share Screen -> PICKING while the system's consent dialog is up; nothing in the call changes.
+    //   Allowed -> the call service takes the media projection type, the camera goes off (and stays
+    //       off after, as on iOS), the screen feeds the camera's own source, `screen` / `cams` /
+    //       `screenMode` "camera" go out in one write. LIVE on the first captured frame.
+    //   Stop Sharing / the system ending the capture / hold / their share winning / call end ->
+    //       the capture stops, `screen` false and `cams` the real camera state go out.
+
+    /** The capsule's share button. True when the system's consent dialog should open now. */
+    fun shareTapped(): Boolean {
+        val u = _ui.value
+        if (u.sharePhase != SharePhase.OFF) { stopScreenShare(); return false }
+        if (!u.canStartShare) return false
+        edit { it.copy(sharePhase = SharePhase.PICKING, shareNotice = null) }
+        return true
+    }
+
+    /** The system dialog's answer. Closing it is not a failure: back to off, silently (iOS). */
+    fun shareConsent(resultCode: Int, data: Intent?) {
+        val u = _ui.value
+        if (u.sharePhase != SharePhase.PICKING) return
+        if (resultCode != Activity.RESULT_OK || data == null || !status.live) { stopScreenShare(signal = false); return }
+        if (u.remoteScreen) { stopScreenShare(notice = "${u.peerName} is sharing their screen"); return }
+        val id = callId
+        CallService.start(app, CallService.Mode.CALL, u.cameraOn, screen = true) { ok ->
+            if (callId == id && _ui.value.sharePhase == SharePhase.PICKING) {
+                if (ok) beginScreenShare(data) else stopScreenShare(notice = SHARE_FAILED)
+            }
+        }
+    }
+
+    private const val SHARE_FAILED = "Couldn't start screen sharing. Try again."
+
+    private fun beginScreenShare(data: Intent) {
+        val e = engine
+        if (e == null || !(status.phase == CallPhase.ACTIVE || status.phase == CallPhase.RECONNECTING) || _ui.value.held) {
+            stopScreenShare(); return
+        }
+        if (_ui.value.remoteScreen) { stopScreenShare(notice = "${_ui.value.peerName} is sharing their screen"); return }
+        // The camera goes OFF as the share begins and stays off after it (iOS, owner 2026-10-10).
+        if (_ui.value.cameraOn) toggleCamera()
+        val id = callId
+        val started = e.startScreen(data) {
+            main.launch { if (callId == id && _ui.value.sharing) stopScreenShare(notice = "Screen sharing stopped") }
+        }
+        if (!started) { stopScreenShare(notice = SHARE_FAILED); return }
+        edit { it.copy(sharePhase = SharePhase.STARTING) }
+        broadcastScreen()
+        // LIVE on the first frame; none in 10 s is a failed start (iOS noFirstFrame).
+        main.launch {
+            val t0 = System.currentTimeMillis()
+            while (callId == id && _ui.value.sharePhase == SharePhase.STARTING) {
+                if (e.screenFrames() > 0) { edit { it.copy(sharePhase = SharePhase.LIVE) }; break }
+                if (System.currentTimeMillis() - t0 > 10_000) { stopScreenShare(notice = SHARE_FAILED); break }
+                delay(100)
+            }
+        }
+    }
+
+    /**
+     * Ends a running share or abandons a pending one; safe from every exit (iOS stopScreenShare).
+     * [signal] false once the call is over. [notice] only when the user did not press Stop.
+     */
+    fun stopScreenShare(notice: String? = null, signal: Boolean = true) {
+        val u = _ui.value
+        if (u.sharePhase == SharePhase.OFF) return
+        val wasSharing = u.sharing
+        edit { it.copy(sharePhase = SharePhase.OFF, shareNotice = notice ?: it.shareNotice) }
+        if (!wasSharing) return
+        engine?.stopScreen(camera = false)
+        if (signal) broadcastScreen()
+        // The call service lets go of the projection type; the call itself goes on.
+        if (signal && status.live && ::app.isInitialized) CallService.start(app, CallService.Mode.CALL, _ui.value.cameraOn)
+    }
+
+    fun clearShareNotice() { if (_ui.value.shareNotice != null) edit { it.copy(shareNotice = null) } }
+
+    /** `screen`, `cams` and `screenMode` in one write, retried like the mute (iOS broadcastScreenState). */
+    private fun broadcastScreen(attempt: Int = 0) {
+        val id = callId ?: return
+        if (!status.callDocCreated) return
+        val sharing = _ui.value.sharing
+        signaling.update(id, CallWire.screenFields(me, sharing, cams = sharing || _ui.value.cameraOn)) { ok ->
+            if (!ok && attempt < 3) after(2000) {
+                if (callId == id && status.live && _ui.value.sharing == sharing) broadcastScreen(attempt + 1)
+            }
+        }
+    }
 
     fun micDenied() {
         move(CallEvent.MicDenied)
@@ -685,6 +813,7 @@ object CallManager {
         val connected = before.connectedAtMs != null
         val dur = before.connectedAtMs?.let { ((System.currentTimeMillis() - it) / 1000).toInt() } ?: 0
         val video = before.video || _ui.value.cameraOn
+        stopScreenShare(signal = false)
         val outcome = if (!recordWritten && id != null && peerUid.isNotEmpty())
             CallWire.recordOutcome(s.endReason, before.isCaller, before.callDocCreated, connected, before.accepted) else null
         recordWritten = true
@@ -847,12 +976,13 @@ object CallManager {
     // ================================================================== debug demo
 
     /** Debug builds only: a made-up call on screen, no Firebase, no WebRTC. */
-    fun demo(context: Context, phase: CallPhase, video: Boolean, route: RouteState = RouteState(), held: Boolean = false) {
+    fun demo(context: Context, phase: CallPhase, video: Boolean, route: RouteState = RouteState(), held: Boolean = false,
+             share: SharePhase = SharePhase.OFF, theirScreen: Boolean = false) {
         init(context)
-        _ui.value = CallUi(route = route, speaker = CallRouting.speakerLit(route), held = held,
+        _ui.value = CallUi(route = route, speaker = CallRouting.speakerLit(route), held = held, sharePhase = share, remoteScreen = theirScreen,
             status = CallStatus(phase = phase, isCaller = phase != CallPhase.INCOMING, video = video, accepted = phase == CallPhase.ACTIVE,
                 calleeRinging = true, connectedAtMs = if (phase == CallPhase.ACTIVE) System.currentTimeMillis() - 83_000 else null),
-            peerUid = "demo", peerName = "Amina Yusuf", cameraOn = video, remoteCameraOn = video, remoteMuted = phase == CallPhase.ACTIVE && !video,
+            peerUid = "demo", peerName = "Amina Yusuf", cameraOn = video, remoteCameraOn = video || theirScreen, remoteMuted = phase == CallPhase.ACTIVE && !video,
         )
     }
 }
