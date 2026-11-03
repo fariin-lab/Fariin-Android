@@ -85,4 +85,7 @@ class CryptoDecryptor(private val crypto: FariinCrypto) : MessageDecryptor {
         if (conv.isGroup && conv.releasedKeys.isNotEmpty()) crypto.noteReleased(conv.id, conv.releasedKeys)
         return crypto.decrypt(raw, conv.id, conv.lastSender)
     }
+
+    override fun open(conv: Conversation, sealed: String, author: String): String? =
+        try { crypto.decrypt(sealed, conv.id, author) } catch (_: Exception) { null }
 }

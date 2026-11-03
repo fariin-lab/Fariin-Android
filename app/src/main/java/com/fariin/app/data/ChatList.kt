@@ -8,6 +8,9 @@ package com.fariin.app.data
 fun interface MessageDecryptor {
     /** Plain text of [conv]'s last message as [me] may read it, or null when it cannot be opened. */
     fun previewText(conv: Conversation, me: String): String?
+
+    /** Any other sealed line of [conv] (a reaction's emoji, the words it was on), written by [author]. */
+    fun open(conv: Conversation, sealed: String, author: String): String? = null
 }
 
 object NoDecryptor : MessageDecryptor {
@@ -43,8 +46,28 @@ object ChatList {
             }
             .toList()
 
+    /**
+     * "Reacted 😂 to "Photo"" when the newest event is a reaction (iOS MainShell reactionPreview):
+     * mine "You reacted 😂", a group member's "Omar reacted 😂", on my message without its words
+     * "Reacted 😂 to your message". Null when there is no fresh reaction or it cannot be opened.
+     */
+    fun reactionPreview(c: Conversation, me: String, decryptor: MessageDecryptor, senderName: (String) -> String?): String? {
+        if (!c.freshReaction(me)) return null
+        val emoji = decryptor.open(c, c.lastReactionEnc ?: return null, c.lastReactionBy)?.takeIf { it.isNotEmpty() && it != "…" && it != "🔒" } ?: return null
+        val words = c.lastReactionToEnc?.let { decryptor.open(c, it, c.lastReactionBy) }
+        val on = if (words.isNullOrEmpty() || words == "…" || words == "🔒") "" else " to \"$words\""
+        if (c.lastReactionBy == me) return "You reacted $emoji$on"
+        if (c.isGroup) {
+            val n = senderName(c.lastReactionBy) ?: c.names[c.lastReactionBy] ?: "Someone"
+            return "${n.split(" ").first()} reacted $emoji$on"
+        }
+        if (on.isNotEmpty()) return "Reacted $emoji$on"
+        return if (c.lastReactionToAuthor == me) "Reacted $emoji to your message" else "Reacted $emoji"
+    }
+
     /** The preview line under the name. */
     fun previewLine(c: Conversation, me: String, decryptor: MessageDecryptor, senderName: (String) -> String?): String {
+        reactionPreview(c, me, decryptor, senderName)?.let { return it }
         if (c.lastMessageCipher.isEmpty() && c.lastImageUrl.isNullOrEmpty()) return ""
         val text = when {
             c.isGroup && c.e2eeOff && c.lastIsPlainText -> c.lastMessageCipher

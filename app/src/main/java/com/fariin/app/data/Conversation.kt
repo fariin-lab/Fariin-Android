@@ -54,6 +54,13 @@ data class Conversation(
     /** When the newest message falls due on the timer (server `lastExpiresAt`, ms), or null. */
     val lastExpiresAtMillis: Double? = null,
     val updatedAtMillis: Double = 0.0,
+    /** The newest reaction (iOS lastReactionBy / lastReactionEnc / lastReactionAt / lastReactionToEnc /
+     *  lastReactionToAuthor): the emoji and the words it was on, sealed by the reactor. */
+    val lastReactionBy: String = "",
+    val lastReactionEnc: String? = null,
+    val lastReactionAtMillis: Double = 0.0,
+    val lastReactionToEnc: String? = null,
+    val lastReactionToAuthor: String = "",
     val startedBy: String = "",
     val accepted: Boolean = true,
     val reqOff: Boolean = false,
@@ -139,6 +146,13 @@ data class Conversation(
     }
 
     /** The old shared copy, or my private BlockList (users/{me}/blocked) once it has loaded. */
+    /** A reaction newer than the last message: the list previews it (iOS freshReaction). Never in a
+     *  channel, not from someone I blocked, not older than my delete-for-me. */
+    fun freshReaction(me: String): Boolean =
+        !isChannel && lastReactionBy.isNotEmpty() && lastReactionEnc != null &&
+            lastReactionAtMillis > updatedAtMillis && lastReactionAtMillis > (clearedAt[me] ?: 0.0) &&
+            !(isBlockedByMe(me) && lastReactionBy != me)
+
     fun isBlockedByMe(me: String): Boolean = !isGroup && ((blockedBy[me] ?: false) ||
         (BlockList.snapshot.owner == me && BlockList.contains(otherUid(me))))
 
@@ -218,6 +232,11 @@ data class Conversation(
                 disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt() ?: 0,
                 lastExpiresAtMillis = millis(data["lastExpiresAt"]).takeIf { it > 0 },
                 updatedAtMillis = millis(data["updatedAt"]),
+                lastReactionBy = data["lastReactionBy"] as? String ?: "",
+                lastReactionEnc = (data["lastReactionEnc"] as? String)?.takeIf { it.isNotEmpty() },
+                lastReactionAtMillis = millis(data["lastReactionAt"]),
+                lastReactionToEnc = (data["lastReactionToEnc"] as? String)?.takeIf { it.isNotEmpty() },
+                lastReactionToAuthor = data["lastReactionToAuthor"] as? String ?: "",
                 startedBy = startedBy ?: "",
                 // Absent means "from before message requests existed": accepted.
                 accepted = data["accepted"] as? Boolean ?: (data["startedBy"] == null),
