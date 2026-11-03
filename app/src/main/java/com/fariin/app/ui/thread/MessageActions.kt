@@ -275,44 +275,6 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
     )
 }
 
-/** Message Info (iOS MessageInfoView, groups): who read it and who has not yet. */
-@Composable
-internal fun MessageInfoDialog(m: Message, ui: ThreadUi, is24h: Boolean, onDismiss: () -> Unit) {
-    val c = Fariin.colors
-    val others = ui.members.filter { it != ui.me }
-    val read = others.filter { (ui.memberReads[it] ?: 0.0) >= m.createdAtMillis }
-    val waiting = others - read.toSet()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Message Info") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("Read by", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
-                if (read.isEmpty()) Text("Nobody yet", fontSize = 15.sp, color = c.secondary)
-                read.forEach { u ->
-                    InfoRow(ui.photos[u], ui.names[u] ?: "Member",
-                        ThreadLogic.timeLabel(ui.memberReads[u] ?: 0.0, is24h))
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("Not read yet", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
-                waiting.forEach { u -> InfoRow(ui.photos[u], ui.names[u] ?: "Member", "") }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = c.blue) } },
-        containerColor = c.card,
-    )
-}
-
-@Composable
-private fun InfoRow(photo: String?, name: String, trailing: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(photo, 32.dp)
-        Spacer(Modifier.width(10.dp))
-        Text(name, fontSize = 16.sp, color = Fariin.colors.label, modifier = Modifier.weight(1f), maxLines = 1)
-        Text(trailing, fontSize = 13.sp, color = Fariin.colors.secondary)
-    }
-}
-
 /** Reactions under the bubble: a pill per emoji, up to three faces, else the count; mine tinted. */
 @Composable
 internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (String) -> Unit) {

@@ -285,7 +285,7 @@ private fun ThreadContent(
             onDelete = { deleteFor = it })
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
-    infoFor?.let { m -> MessageInfoDialog(m, ui, is24h) { infoFor = null } }
+    infoFor?.let { m -> MessageInfoSheet(m, ui, is24h) { infoFor = null } }
     // The divider is placed once, from the unread count at open (iOS anchors it the same way).
     // Counted only on the server's first answer: the phone's saved copy can lack the very messages
     // that are unread, and counting back through it put the divider on old, read rows.
