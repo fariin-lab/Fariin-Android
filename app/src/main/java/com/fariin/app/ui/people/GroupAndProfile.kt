@@ -388,6 +388,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val pages = remember(cid) { androidx.compose.runtime.mutableStateListOf<GroupPage>() }
     var card by remember { mutableStateOf<String?>(null) }
     val team = com.fariin.app.data.GroupAdmins.Team.from(conv)
+    // iOS: the Search circle goes back to the group's chat and opens its search; only from that chat.
+    val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
     if (askLeave) {
@@ -460,6 +462,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
                     .clickable { editAtDescription = true; editing = true }.padding(horizontal = 8.dp, vertical = 4.dp))
+            if (fromChat && iAmMember) {
+                Spacer(Modifier.height(16.dp))
+                ActionTile("Search", Icons.Filled.Search) { com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack() }
+            }
             Spacer(Modifier.height(20.dp))
             if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
             if (iAmMember) SettingsSection {

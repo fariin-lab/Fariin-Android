@@ -95,7 +95,9 @@ fun FloatingTopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String
  * x once there is text. Pass `modifier` for focus or weight; the caller sets the outer padding.
  */
 @Composable
-fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: String, modifier: Modifier = Modifier, fill: Color? = null) {
+fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: String, modifier: Modifier = Modifier, fill: Color? = null,
+                        /** The keyboard's Search key; null keeps the plain key. */
+                        onSearch: (() -> Unit)? = null) {
     val c = Fariin.colors
     Row(
         // Every search field is a grey capsule (owner 2026-11-03: white on the white page was not seen).
@@ -108,7 +110,10 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = if (onSearch != null) androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search) else androidx.compose.foundation.text.KeyboardOptions.Default,
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
         }
         if (value.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { onChange("") }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, contentDescription = "Clear", tint = c.secondary, modifier = Modifier.size(18.dp))

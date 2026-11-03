@@ -1169,9 +1169,30 @@ class ThreadRepository(
         convRef.set(mapOf("pinnedMessageIds" to FieldValue.arrayRemove(id)), SetOptions.merge()).await()
     }
 
-    /** iOS ensureLoaded: page older history until [id] is in the window (at most 12 pages). */
-    suspend fun ensureLoaded(id: String): Boolean {
-        repeat(12) {
+    /**
+     * iOS MessageSearch.loadChat: the newest 1000 messages read and opened on this phone for the
+     * in-chat search. Not kept anywhere. Skipped like the thread skips them: view-once, deleted,
+     * hidden for me, sent while I had them blocked, nothing to read.
+     */
+    suspend fun searchCorpus(limit: Int = ChatSearch.CORPUS_LIMIT): List<ChatSearch.Item> = try {
+        val snap = convRef.collection("messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(limit.toLong())
+            .get().await()
+        snap.documents.mapNotNull { d ->
+            val m = Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
+            when {
+                HiddenMessages.isHidden(m.id) -> null
+                m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis) -> null
+                m.text == Message.NOT_ENCRYPTED -> null
+                else -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis) }
+            }
+        }
+    } catch (_: Exception) { emptyList() }
+
+    /** iOS ensureLoaded: page older history until [id] is in the window (at most [maxPages] pages). */
+    suspend fun ensureLoaded(id: String, maxPages: Int = 12): Boolean {
+        repeat(maxPages) {
             if (_state.value.messages.any { it.id == id }) return true
             if (!_state.value.canLoadOlder) return false
             loadOlder()

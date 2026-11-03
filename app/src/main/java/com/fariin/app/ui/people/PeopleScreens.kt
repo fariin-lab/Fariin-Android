@@ -349,6 +349,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // A name I saved for them wins (iOS ContactNames); Edit opens Set nickname.
     val name = com.fariin.app.data.ContactNames.name(uid) ?: person?.shownName ?: conv?.names?.get(uid) ?: ""
     val cid = conv?.id ?: Wire.directCid(me, uid)
+    // iOS: Search only on the page opened from this person's chat; it goes back there and opens it.
+    val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     var nickname by remember { mutableStateOf(false) }
     if (nickname) { SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), onBack = { nickname = false }); return }
     // The chat's timer, live (either person may change it; iOS ContactInfoView).
@@ -408,6 +410,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     if (muted) androidx.compose.material.icons.Icons.Outlined.Notifications
                     else androidx.compose.material.icons.Icons.Outlined.NotificationsOff) {
                     scope.launch { if (api.setMuted(cid, !muted)) muted = !muted else notice = "Check your connection and try again." }
+                }
+                if (fromChat && uid != me) ActionTile("Search", androidx.compose.material.icons.Icons.Filled.Search) {
+                    com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack()
                 }
             }
             Spacer(Modifier.height(20.dp))

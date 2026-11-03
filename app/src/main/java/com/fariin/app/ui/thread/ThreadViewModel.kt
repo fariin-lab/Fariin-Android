@@ -145,6 +145,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onTyping = { on -> vm.repo.setTyping(on) },
         onAtBottom = { atBottom.value = it },
         onTitleClick = {
+            InChatSearchLink.openedFrom = cid   // the info page's Search circle shows only when opened from here
             if (channel != null) channelNav.page(cid) else if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
         },
         onNotice = { notice = it },
@@ -177,6 +178,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             }
         },
         onEnsureLoaded = { id -> vm.repo.ensureLoaded(id) },
+        onSearchCorpus = { vm.repo.searchCorpus() },
+        onReachMatch = { id -> vm.repo.ensureLoaded(id, maxPages = com.fariin.app.data.ChatSearch.JUMP_PAGES) },
         onEditHistory = { m -> vm.repo.editHistory(m) },
         onDeleteMany = { plan ->
             for (m in plan.forMe) vm.repo.hideForMe(app, m)

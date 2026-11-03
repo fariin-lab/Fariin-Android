@@ -97,6 +97,10 @@ data class ThreadActions(
     val onUnpin: (String) -> Unit = {},
     /** Pages older history until the message is loaded (iOS ensureLoaded); false when out of reach. */
     val onEnsureLoaded: suspend (String) -> Boolean = { false },
+    /** In-chat search: the newest messages opened on this phone (iOS MessageSearch.loadChat), and
+     *  paging far enough to reach any match it can return (iOS ensureLoaded maxPages 18). */
+    val onSearchCorpus: suspend () -> List<com.fariin.app.data.ChatSearch.Item> = { emptyList() },
+    val onReachMatch: suspend (String) -> Boolean = { false },
     /** Earlier versions of an edited message, oldest first (text, at ms). Throws when unreadable. */
     val onEditHistory: suspend (Message) -> List<Pair<String, Double>> = { emptyList() },
     /** Select mode: the delete plan run at once, and several messages forwarded to the chats picked. */

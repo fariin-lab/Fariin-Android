@@ -342,6 +342,43 @@ private fun ThreadContent(
             if (flashId == row) flashId = null
         }
     }
+    // In-chat search (InChatSearch.kt, iOS uiMode .search): opened from the info pages' Search circle.
+    val search = remember(ui.cid) { InChatSearchState() }
+    val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    fun goToMatch() {
+        val id = search.current?.id ?: return
+        // A newer step supersedes this one, so fast taps land one scroll on the last target (iOS).
+        val seq = ++search.jumpSeq
+        scope.launch {
+            val found = actions.onReachMatch(id)
+            if (seq != search.jumpSeq || !search.active) return@launch
+            val list = uiNow.value.messages
+            val i = list.indexOfFirst { it.id == id }
+            if (!found || i < 0) { actions.onNotice("That message isn't available"); return@launch }
+            listState.animateScrollToItem(list.size - 1 - i)
+            val row = list[i].rowId
+            flashId = row
+            kotlinx.coroutines.delay(2000)
+            if (flashId == row) flashId = null
+        }
+    }
+    fun closeSearch() { keyboard?.hide(); search.close(); flashId = null }
+    BackHandler(enabled = search.active) { closeSearch() }
+    LaunchedEffect(ui.cid) {
+        InChatSearchLink.requests.collect { want ->
+            if (want != ui.cid) return@collect
+            InChatSearchLink.requests.value = null
+            selected.clear(); replyTo = null; editing = null
+            search.open()
+            // The corpus is read while the field takes focus; anything typed meanwhile runs again on it.
+            val corpus = actions.onSearchCorpus()
+            if (search.active) { search.corpus = corpus; if (search.update(uiNow.value.messages, force = true, navigate = true)) goToMatch() }
+        }
+    }
+    LaunchedEffect(search.query) { if (search.active && search.update(uiNow.value.messages, force = false, navigate = true)) goToMatch() }
+    // The chat itself changed (a message came, was edited or deleted): results follow, the list stays put.
+    LaunchedEffect(ui.messages) { if (search.active) search.update(ui.messages, force = true, navigate = false) }
     val pins = visiblePins(ui)
     // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
     // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
@@ -361,8 +398,14 @@ private fun ThreadContent(
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg, 0.7f to c.bg.copy(alpha = 0.92f), 1f to c.bg.copy(alpha = 0f)))
                 .onSizeChanged { topBarPx = it.height }) {
-                if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
-                PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
+                if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
+                    // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).
+                    keyboard?.hide()
+                    if (search.matches.isNotEmpty()) { search.index = minOf(search.index + 1, search.matches.size - 1); goToMatch() }
+                })
+                else if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
+                // Search owns the top: the pinned bar hides while searching (iOS).
+                if (!search.active) PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
                     onJump = { jumpTo(it, advance = true) },
                     onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
                     onSeeAll = { showPins.value = true })
@@ -375,7 +418,7 @@ private fun ThreadContent(
             }
             val timerMark = TimerMark(ui.disappearSeconds,
                 remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
-            androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term) {
             LazyColumn(
                 Modifier.fillMaxSize(), state = listState, reverseLayout = true,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
@@ -479,7 +522,17 @@ private fun ThreadContent(
                 }
             }
             }
-            if (!atBottom) {
+            if (search.active && search.asList && search.matches.isNotEmpty()) {
+                SearchResultsList(searchRows(ui, search.matches), com.fariin.app.data.ChatSearch.queryTerms(search.term),
+                    top = with(density) { topBarPx.toDp() }, bottom = with(density) { bottomBarPx.toDp() }, is24h = is24h) { id ->
+                    // A row tapped: that message becomes the current match, the chat comes back and jumps to it.
+                    search.matches.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { search.index = it }
+                    search.asList = false
+                    keyboard?.hide()
+                    goToMatch()
+                }
+            }
+            if (!atBottom && !search.active) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
                     scope.launch { listState.animateScrollToItem(0) }
                 }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = with(density) { bottomBarPx.toDp() } + 12.dp))
@@ -490,7 +543,11 @@ private fun ThreadContent(
         Column(Modifier.fillMaxWidth().zIndex(1f)
             .layout { m, cs -> val pl = m.measure(cs); layout(pl.width, 0) { pl.place(0, -pl.height) } }
             .onSizeChanged { bottomBarPx = it.height }) {
-            if (selecting) {
+            if (search.active) {
+                SearchNavBar(search, onStep = { d ->
+                    search.index = (search.index + d).coerceIn(0, maxOf(0, search.matches.size - 1)); goToMatch()
+                }, onList = { search.asList = it })
+            } else if (selecting) {
                 val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
                     picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete) })
                 SelectionBar(
@@ -1007,7 +1064,9 @@ private fun tickDescription(t: Tick) = when (t) {
 private fun TextWithMeta(text: String, style: TextStyle, meta: @Composable () -> Unit) {
     val layoutRef = remember { arrayOfNulls<TextLayoutResult>(1) }
     Layout(content = {
-        Text(text, style = style, onTextLayout = { layoutRef[0] = it })
+        // In-chat search: the matched terms marked in yellow, never the whole bubble (iOS BubbleText).
+        val term = LocalSearchTerm.current
+        Text(remember(text, term) { searchMarked(text, term) }, style = style, onTextLayout = { layoutRef[0] = it })
         meta()
     }) { measurables, constraints ->
         val gap = 5.dp.roundToPx()
