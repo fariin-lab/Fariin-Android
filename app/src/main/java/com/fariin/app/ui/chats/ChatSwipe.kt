@@ -111,11 +111,14 @@ internal fun SwipeActionsRow(
                             else -> x.animateTo(0f, settle)
                         }
                     },
-                ))
-                // A tap on an open row closes it instead of opening the chat.
-                .then(if (x.value != 0f) Modifier.clickable(indication = null,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { close() } else Modifier),
-        ) { content() }
+                )),
+        ) {
+            content()
+            // A tap on an open row closes it instead of opening the chat: a cover over the row
+            // takes the touch before the row's own tap can.
+            if (x.value != 0f) Box(Modifier.matchParentSize().clickable(indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { close() })
+        }
     }
 }
 
