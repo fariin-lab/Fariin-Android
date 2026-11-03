@@ -71,9 +71,7 @@ fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
         PageBar("Set nickname", onBack = onBack) {
-            Text("Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (changed) c.blue else c.secondary,
-                modifier = Modifier.clickable(enabled = changed) { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp))
+            com.fariin.app.ui.components.FloatingTextAction("Save", enabled = changed) { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(8.dp))

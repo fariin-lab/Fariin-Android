@@ -95,11 +95,8 @@ private fun Field(value: String, placeholder: String, onChange: (String) -> Unit
 }
 
 @Composable
-private fun TextAction(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-        color = if (enabled) Fariin.colors.blue else Fariin.colors.secondary,
-        modifier = Modifier.clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp))
-}
+private fun TextAction(text: String, enabled: Boolean, onClick: () -> Unit) =
+    com.fariin.app.ui.components.FloatingTextAction(text, enabled = enabled, onClick = onClick)
 
 /**
  * Edit Profile (iOS EditProfileView): the photo with "Set New Photo", the name, and the

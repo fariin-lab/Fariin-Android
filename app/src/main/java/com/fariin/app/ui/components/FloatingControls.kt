@@ -133,3 +133,13 @@ fun FloatingSegments(options: List<String>, selected: Int, onSelect: (Int) -> Un
         }
     }
 }
+
+/** A page bar's word button (Edit, Save, Add, Next) in a floating capsule, as iOS's glass bar buttons. */
+@Composable
+fun FloatingTextAction(text: String, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.material3.Text(text, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        color = if (enabled) c.blue else c.secondary,
+        modifier = modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 18.dp, vertical = 11.dp))
+}

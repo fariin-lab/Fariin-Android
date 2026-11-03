@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.floating
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -300,7 +301,7 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Add Admin", onDone, action = {
             if (busy) BusyMark() else Text("Add", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.blue,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
+                modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable {
                     busy = true
                     scope.launch {
                         try {
@@ -309,7 +310,7 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
                         } catch (e: Exception) { problem = failText(e) }
                         busy = false
                     }
-                }.padding(horizontal = 12.dp, vertical = 8.dp))
+                }.padding(horizontal = 18.dp, vertical = 11.dp))
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             AdminHeader(team.photos[uid]?.ifEmpty { null }, name, "Admin")
@@ -756,8 +757,8 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
         PageBar("Group Type", onBack, action = {
             if (saving) BusyMark() else Text("Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = if (showPublic && changed && ok) c.blue else c.secondary,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = showPublic && changed && ok) { save(typed) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp))
+                modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable(enabled = showPublic && changed && ok) { save(typed) }
+                    .padding(horizontal = 18.dp, vertical = 11.dp))
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection(header = "Group Type", footer = if (showPublic) "Anyone can find this group in search and join it without an invite."
@@ -1031,7 +1032,7 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
         PageBar(if (link == null) "New Link" else "Edit Link", onDone, action = {
             if (saving) BusyMark() else Text(if (link == null) "Create" else "Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.blue,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
+                modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable {
                     saving = true
                     val f = hashMapOf<String, Any?>("name" to name.trim(), "requestApproval" to approval)
                     val t = timeOpts[time].second
@@ -1045,7 +1046,7 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
                         } catch (e: Exception) { problem = GroupManage.errorText(e, "The link was not saved. Try again.") }
                         saving = false
                     }
-                }.padding(horizontal = 12.dp, vertical = 8.dp))
+                }.padding(horizontal = 18.dp, vertical = 11.dp))
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection(header = "Name", footer = "Only admins see the name. ${name.length}/32") {

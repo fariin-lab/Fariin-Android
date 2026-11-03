@@ -394,8 +394,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("", onBack = onBack) {
-            if (uid != me) Text("Edit", fontSize = 17.sp, color = c.blue,
-                modifier = Modifier.clickable { nickname = true }.padding(horizontal = 12.dp, vertical = 8.dp))
+            if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
