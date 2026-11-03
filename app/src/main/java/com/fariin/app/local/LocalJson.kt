@@ -110,7 +110,34 @@ object LocalJson {
             })
         })
         if (m.reactions.isNotEmpty()) put("rx", JSONObject(m.reactions))
+        // What the bubble draws from the live answer, kept so the saved copy opens looking the same
+        // (a call record drew as "Incoming" until the server answered, then turned "Missed").
+        if (m.mentions.isNotEmpty()) put("men", JSONArray(m.mentions))
+        if (m.views > 0) put("views", m.views)
+        if (m.reactionCounts.isNotEmpty()) put("rxc", JSONObject(m.reactionCounts))
+        if (m.pollClosed) put("pollX", true)
+        if (m.pollCounts.isNotEmpty()) put("pollC", JSONObject(m.pollCounts.mapKeys { it.key.toString() }))
+        if (m.pollVoters > 0) put("pollV", m.pollVoters)
+        if (m.pollTallyAt > 0) put("pollT", m.pollTallyAt)
+        m.stickerPack?.let { put("stP", it) }
+        m.stickerId?.let { put("stI", it) }
+        m.stickerEmoji?.let { put("stE", it) }
+        if (m.stickerAnimated) put("stA", true)
+        m.callerUid?.let { put("caller", it) }
+        m.callOutcome?.let { put("callO", it) }
+        if (m.callVideo) put("callV", true)
+        m.callDuration?.let { put("callD", it) }
+        m.callJoinedUids?.let { put("callJ", JSONArray(it)) }
+        m.callRungUids?.let { put("callR", JSONArray(it)) }
+        m.linkPreview?.let { lp ->
+            put("lp", JSONObject().put("u", lp.url).put("t", lp.title).put("d", lp.desc).apply {
+                lp.imageUrl?.let { put("i", it) }
+                enc(lp.imageEnc)?.let { put("ie", it) }
+            })
+        }
     }
+
+    private fun strings(a: JSONArray?): List<String>? = a?.let { (0 until it.length()).map { i -> it.getString(i) } }
 
     fun decodeMessage(o: JSONObject): Message? {
         val id = o.optString("id").takeIf { it.isNotEmpty() } ?: return null
@@ -141,6 +168,20 @@ object LocalJson {
                 }
             } ?: emptyList(),
             reactions = o.optJSONObject("rx")?.let { r -> r.keys().asSequence().associateWith { r.getString(it) } } ?: emptyMap(),
+            mentions = strings(o.optJSONArray("men")) ?: emptyList(),
+            views = o.optInt("views"),
+            reactionCounts = o.optJSONObject("rxc")?.let { r -> r.keys().asSequence().associateWith { r.getInt(it) } } ?: emptyMap(),
+            pollClosed = o.optBoolean("pollX"),
+            pollCounts = o.optJSONObject("pollC")?.let { r -> r.keys().asSequence().mapNotNull { k -> k.toIntOrNull()?.let { it to r.getInt(k) } }.toMap() } ?: emptyMap(),
+            pollVoters = o.optInt("pollV"), pollTallyAt = o.optDouble("pollT", 0.0),
+            stickerPack = s("stP"), stickerId = s("stI"), stickerEmoji = s("stE"), stickerAnimated = o.optBoolean("stA"),
+            callerUid = s("caller"), callOutcome = s("callO"), callVideo = o.optBoolean("callV"),
+            callDuration = if (o.has("callD")) o.getInt("callD") else null,
+            callJoinedUids = strings(o.optJSONArray("callJ")), callRungUids = strings(o.optJSONArray("callR")),
+            linkPreview = o.optJSONObject("lp")?.let { lp ->
+                Message.LinkPreview(lp.optString("u"), lp.optString("t"), lp.optString("d"),
+                    imageUrl = if (lp.has("i")) lp.getString("i") else null, imageEnc = encBack(lp.optJSONObject("ie")))
+            },
         )
     }
 

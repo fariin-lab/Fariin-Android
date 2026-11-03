@@ -31,6 +31,19 @@ class LocalStoresTest {
         assertEquals(listOf(m), back)
     }
 
+    @Test fun drawnLiveFieldsRoundTrip() {
+        val enc = EncMeta(1, "n", "k", "kn", mapOf("a" to "w.n"), "a")
+        val call = Message(id = "c", authorId = "bob", text = "", type = "call", createdAtMillis = 1.0,
+            callerUid = "bob", callOutcome = "missed", callVideo = true, callDuration = 62,
+            callJoinedUids = listOf("bob"), callRungUids = listOf("alice", "carol"))
+        val rest = Message(id = "s", authorId = "bob", text = "hi @alice", createdAtMillis = 2.0,
+            mentions = listOf("alice"), views = 7, reactionCounts = mapOf("👍" to 3),
+            pollClosed = true, pollCounts = mapOf(0 to 2, 1 to 5), pollVoters = 7, pollTallyAt = 3.5,
+            stickerPack = "p", stickerId = "i", stickerEmoji = "😀", stickerAnimated = true,
+            linkPreview = Message.LinkPreview("https://x", "T", "D", "https://x/i", enc))
+        assertEquals(listOf(call, rest), LocalJson.decodeMessages(LocalJson.encodeMessages(listOf(call, rest))))
+    }
+
     @Test fun minimalMessageRoundTrip() {
         val m = Message(id = "x", authorId = "a", text = "", createdAtMillis = 5.0)
         assertEquals(m, LocalJson.decodeMessage(LocalJson.encodeMessage(m)))
