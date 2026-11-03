@@ -202,6 +202,14 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         RowAction("Add Story", R.drawable.ic_stories) { addStory() },
         RowAction("Posted Stories", R.drawable.ic_stories_stack) { posted = true },
     )
+    // Glow: the Glowing grid's cards, the viewer door for them, and the page behind its heading.
+    val glowOn = live && com.fariin.app.data.AppFeatures.glow
+    val glowState by com.fariin.app.data.Glow.state.collectAsState()
+    val glowCards = if (glowOn) com.fariin.app.ui.glow.rememberGlowCards(me) else com.fariin.app.data.GlowLoad.Loaded(emptyList())
+    val glowOpener = remember { com.fariin.app.ui.glow.GlowOpener() }
+    var glowPage by rememberSaveable { mutableStateOf(false) }
+    // A glow person's ring is grey once their stories in my feed are all seen.
+    val glowSeen: (String) -> Boolean = { uid -> state.others.firstOrNull { it.key == uid }?.hasUnseen == false }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // A second tap on Stories: to the top.
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
@@ -301,6 +309,18 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     Box(Modifier.alpha(0.45f)) { FriendRow(g, now, hiddenMenu(g)) { openHidden(g) } }
                 }
             }
+            // Glowing (iOS glowSection): under Friends, never mixed into it; hidden with Glow.
+            if (glowOn && com.fariin.app.ui.glow.hasGlowGrid(glowState.relationship, glowCards)) {
+                item(key = "glowHeading") { com.fariin.app.ui.glow.GlowingHeading { glowPage = true } }
+                val cards = glowCards.valueOrNull
+                if (cards == null) item(key = "glowLoading") {
+                    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(color = c.secondary)
+                    }
+                } else items(cards.chunked(2), key = { "glow:" + it.first().person.id }) { pair ->
+                    com.fariin.app.ui.glow.GlowCardRow(me, pair, glowSeen, glowOpener)
+                }
+            }
             item { Spacer(Modifier.height(24.dp)) }
         }
     }
@@ -333,6 +353,13 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     pop = { if (privacyPages.isNotEmpty()) privacyPages.removeAt(privacyPages.lastIndex) })
             }
         }
+    }
+    if (live) com.fariin.app.ui.glow.GlowViewerHost(me, glowOpener, conversations)
+    if (glowPage) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { glowPage = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) { com.fariin.app.ui.glow.GlowStoriesPage(me, conversations, glowSeen, onBack = { glowPage = false }) }
     }
     if (posted) {
         androidx.compose.ui.window.Dialog(
