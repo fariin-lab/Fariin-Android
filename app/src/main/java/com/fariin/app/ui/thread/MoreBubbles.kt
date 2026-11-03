@@ -148,7 +148,7 @@ internal fun ViewOnceBody(m: Message, cid: String, isMe: Boolean, onView: (Viewi
     Column {
         Row(
             Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = canOpen) {
-                url?.let { onView(Viewing.Photo(it, m.enc, once = cid to m.id)) }
+                url?.let { onView(Viewing.Photo(it, m.enc, once = cid to m.id, msg = m)) }
             }.padding(vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -201,7 +201,11 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                                 .clickable(enabled = (bmp != null || waits) && !busy) {
                                     val v = item.videoUrl
                                     if (bmp == null) got.start()
-                                    else if (v != null) onView(Viewing.Video(v, item.videoEnc)) else onView(Viewing.Photo(item.imageUrl, item.enc))
+                                    else {
+                                        val at = items.indexOfFirst { it === item }.takeIf { it >= 0 }
+                                        if (v != null) onView(Viewing.Video(v, item.videoEnc, msg = m, albumIndex = at))
+                                        else onView(Viewing.Photo(item.imageUrl, item.enc, msg = m, albumIndex = at))
+                                    }
                                 },
                         ) {
                             if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

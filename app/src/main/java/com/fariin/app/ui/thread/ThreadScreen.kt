@@ -243,7 +243,7 @@ private fun ThreadContent(
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var viewing by remember { mutableStateOf<Viewing?>(null) }
-    viewing?.let { v -> MediaViewer(v) { viewing = null } }
+    viewing?.let { v -> MediaViewer(v, viewerHost(ui, actions)) { viewing = null } }
     // Leaving the chat stops its note (iOS stops playback when the thread goes away).
     DisposableEffect(ui.cid) { onDispose { VoicePlayer.stop() } }
     val context = LocalContext.current
@@ -863,13 +863,13 @@ private fun MediaRow(
             Message.MediaKind.PHOTO -> {
                 val url = m.localPath ?: m.imageUrl
                 PictureBox(m, url, m.enc, maxW, RectangleShape, captionW, busy, onOpen = {
-                    url?.let { onView(Viewing.Photo(it, if (m.localPath != null) null else m.enc)) }
+                    url?.let { onView(Viewing.Photo(it, if (m.localPath != null) null else m.enc, msg = m)) }
                 }, overlay = capsule)
             }
             Message.MediaKind.VIDEO -> {
                 val ready = m.videoUrl != null
                 PictureBox(m, m.thumbUrl, m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
-                    m.videoUrl?.let { onView(Viewing.Video(it, m.enc)) }
+                    m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
                 }, overlay = { VideoOverlay(m, ready); capsule() })
             }
             else -> AlbumMosaic(m, maxW, onView, capsule)

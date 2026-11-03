@@ -136,8 +136,9 @@ private fun ProvideChatMedia(cid: String, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalChatMedia provides media, content = content)
 }
 
-private fun viewingOf(item: SharedMedia.Item): Viewing =
-    item.videoUrl?.let { Viewing.Video(it, item.videoEnc) } ?: Viewing.Photo(item.pictureUrl, item.pictureEnc)
+/** iOS MediaGalleryView: a photo pages through the photos of [all] in the grid's order; a video opens alone. */
+private fun viewingOf(item: SharedMedia.Item, all: List<SharedMedia.Item>): Viewing =
+    com.fariin.app.data.ViewerRules.sharedPages(all, item).let { (pages, start) -> Viewing.Pages(pages, start) }
 
 /**
  * The profile's All Media card (iOS ProfileMediaCard): the heading and See All on one line, one row
@@ -162,7 +163,7 @@ internal fun SharedMediaCard(cid: String, state: SharedMediaState, onSeeAll: () 
                 Spacer(Modifier.height(10.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(strip, key = { it.id }) { item ->
-                        MediaTile(item, Modifier.size(84.dp).clip(RoundedCornerShape(12.dp))) { viewing = viewingOf(item) }
+                        MediaTile(item, Modifier.size(84.dp).clip(RoundedCornerShape(12.dp))) { viewing = viewingOf(item, state.lists.media) }
                     }
                 }
             }
@@ -252,7 +253,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
             }
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                 when (tabs[page]) {
-                    SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded) { viewing = viewingOf(it) }
+                    SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded) { viewing = viewingOf(it, media) }
                     SharedMedia.Tab.FILES -> Rows(state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, Icons.Outlined.Description) {
                         items(state.lists.files, key = { it.id }) { m -> FileRow(m) }
                     }

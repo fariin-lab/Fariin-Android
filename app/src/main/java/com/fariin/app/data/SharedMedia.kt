@@ -41,6 +41,8 @@ object SharedMedia {
         val duration: Double? = null,
         val thumb: String? = null,
         val blurhash: String? = null,
+        /** Who sent it; the viewer's header says "You" or the name. */
+        val authorId: String = "",
     ) {
         val isVideo: Boolean get() = videoUrl != null
     }
@@ -93,15 +95,15 @@ object SharedMedia {
     /** A photo, a video, or an album's items, in the album's own order. */
     fun items(m: Message): List<Item> = when (m.type) {
         "album" -> m.album.mapIndexed { i, a ->
-            Item("${m.id}-$i", m.id, m.createdAtMillis, a.imageUrl, a.enc, a.videoUrl, a.videoEnc, a.duration)
+            Item("${m.id}-$i", m.id, m.createdAtMillis, a.imageUrl, a.enc, a.videoUrl, a.videoEnc, a.duration, authorId = m.authorId)
         }
         "video" -> {
             val poster = m.thumbUrl
             val clip = m.videoUrl
             if (poster != null && clip != null) listOf(Item(m.id, m.id, m.createdAtMillis, poster, m.thumbEnc, clip, m.enc,
-                m.duration, m.thumb, m.blurhash)) else emptyList()
+                m.duration, m.thumb, m.blurhash, m.authorId)) else emptyList()
         }
-        "image", null -> m.imageUrl?.let { listOf(Item(m.id, m.id, m.createdAtMillis, it, m.enc, thumb = m.thumb, blurhash = m.blurhash)) }
+        "image", null -> m.imageUrl?.let { listOf(Item(m.id, m.id, m.createdAtMillis, it, m.enc, thumb = m.thumb, blurhash = m.blurhash, authorId = m.authorId)) }
             ?: emptyList()
         else -> emptyList()
     }

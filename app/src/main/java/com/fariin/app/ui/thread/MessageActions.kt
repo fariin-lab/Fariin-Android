@@ -248,12 +248,13 @@ internal fun MessageMenu(
  * Delete for Me in a 1:1, plain Delete for an unsent one of mine in a group.
  */
 @Composable
-internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions, onDismiss: () -> Unit) {
+internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
+                          title: String = "Delete this message?", onDismiss: () -> Unit) {
     val c = Fariin.colors
     val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete this message?") },
+        title = { Text(title) },
         confirmButton = {
             Column(horizontalAlignment = Alignment.End) {
                 if (everyone) TextButton(onClick = { onDismiss(); actions.onDeleteForEveryone(m) }) {
