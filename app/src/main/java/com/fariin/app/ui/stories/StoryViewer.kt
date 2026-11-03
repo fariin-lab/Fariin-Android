@@ -779,9 +779,11 @@ private fun StoryPage(
         StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
             onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active)
 
-        // Top shade, bars, header.
+        // Top shade, bars, header: they fade with the drag like the bottom bar (iOS chrome), so a
+        // card on its way down is the story alone, not a strip left behind (owner 2026-11-03).
         Column(
             Modifier.fillMaxWidth()
+                .graphicsLayer { alpha = chrome() }
                 .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)))
                 .statusBarsPadding().padding(top = 6.dp, start = 8.dp, end = 8.dp, bottom = 18.dp),
         ) {

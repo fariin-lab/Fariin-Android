@@ -356,9 +356,8 @@ fun ChatListScreen(
                             // The brand at rest: the Fariin mark and the name in bold (owner 2026-11-03, "ours
                             // looks weak" beside the reference apps). Status words stay plain.
                             title = {
+                                // No mark beside it (owner 2026-11-03: "remove the black round").
                                 if (title == "Fariin") Row(verticalAlignment = Alignment.CenterVertically) {
-                                    com.fariin.app.ui.official.OfficialAvatar(32.dp)
-                                    Spacer(Modifier.width(10.dp))
                                     Text("Fariin", fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = c.label)
                                 } else Text(title, style = MaterialTheme.typography.titleLarge)
                             },
@@ -569,13 +568,14 @@ private fun SelectionBar(
     )
 }
 
-/** The resting search field: FloatingSearchField's look, a tap opens the live one. */
+/** The resting search field, a grey capsule; a tap opens the live one. */
 @Composable
 private fun SearchCapsule(onOpen: () -> Unit) {
     val c = Fariin.colors
     Row(
         Modifier.fillMaxWidth().background(c.bg).padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
-            .height(44.dp).floating(RoundedCornerShape(22.dp))
+            // A grey field on the white page (owner 2026-11-03: white on white could not be seen).
+            .height(44.dp).clip(RoundedCornerShape(22.dp)).background(c.fieldFill)
             .clickable(onClickLabel = "Search", onClick = onOpen).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -594,7 +594,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
     Row(Modifier.fillMaxWidth().background(c.bg).height(64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         FloatingBack(onBack = onClose)
         Spacer(Modifier.width(10.dp))
-        com.fariin.app.ui.components.FloatingSearchField(query, onQuery, "Search", Modifier.weight(1f).focusRequester(focus))
+        com.fariin.app.ui.components.FloatingSearchField(query, onQuery, "Search", Modifier.weight(1f).focusRequester(focus), fill = c.fieldFill)
     }
 }
 

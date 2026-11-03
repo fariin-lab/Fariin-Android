@@ -95,10 +95,11 @@ fun FloatingTopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String
  * x once there is text. Pass `modifier` for focus or weight; the caller sets the outer padding.
  */
 @Composable
-fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: String, modifier: Modifier = Modifier) {
+fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: String, modifier: Modifier = Modifier, fill: Color? = null) {
     val c = Fariin.colors
     Row(
-        modifier.height(44.dp).floating(RoundedCornerShape(22.dp)).padding(start = 14.dp, end = 4.dp),
+        (if (fill != null) modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(fill) else modifier.height(44.dp).floating(RoundedCornerShape(22.dp)))
+            .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Outlined.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
