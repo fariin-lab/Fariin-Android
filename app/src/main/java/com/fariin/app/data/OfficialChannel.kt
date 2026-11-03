@@ -326,13 +326,13 @@ object OfficialChannel {
             .set(mapOf("muted" to muted, "mutedUntil" to 0, "mutedAt" to System.currentTimeMillis().toDouble()), SetOptions.merge())
     }
 
-    /** Forward a note's words to chats, sealed for each as a forwarded text. Outlives the page. */
-    fun forward(context: android.content.Context, me: String, text: String, targets: List<String>) {
+    /** Forward notes' words to chats, one forwarded text each, in order, sealed per chat. Outlives the page. */
+    fun forward(context: android.content.Context, me: String, texts: List<String>, targets: List<String>) {
         val crypto = CryptoHub.get(context.applicationContext)
         scope.launch {
             for (cid in targets) {
-                try { ThreadRepository.openOrQuiet(cid, me, crypto, scope).sendForwardedText(text, forwarded = true) }
-                catch (_: Exception) {}
+                val repo = ThreadRepository.openOrQuiet(cid, me, crypto, scope)
+                for (t in texts) try { repo.sendForwardedText(t, forwarded = true) } catch (_: Exception) {}
             }
         }
     }

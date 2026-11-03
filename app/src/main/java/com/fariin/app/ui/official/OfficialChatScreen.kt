@@ -26,7 +26,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Forward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Build
@@ -88,8 +91,17 @@ fun OfficialChatScreen(onBack: () -> Unit) {
     var pendingReject by remember { mutableStateOf<String?>(null) }
     var rejecting by remember { mutableStateOf(false) }
     var rejectResult by remember { mutableStateOf<String?>(null) }
-    var pendingDelete by remember { mutableStateOf<String?>(null) }
-    var forwardText by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<List<String>?>(null) }
+    var forwardTexts by remember { mutableStateOf<List<String>?>(null) }
+    // Select (iOS startSelection): ticked ids; the page is in selection while any are ticked.
+    val picked = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    val selecting = picked.isNotEmpty()
+    androidx.activity.compose.BackHandler(selecting) { picked.clear() }
+    // A note that leaves the list (deleted, expired) leaves the selection too.
+    LaunchedEffect(view.visible) { picked.retainAll(view.visible.map { it.id }.toSet()) }
+    fun toggle(id: String) { if (!picked.remove(id)) picked.add(id) }
+    /** The ticked notes in list order, oldest first. */
+    fun pickedNotes() = view.visible.filter { it.id in picked }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val listState = rememberLazyListState()
 
@@ -119,17 +131,19 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             dismissButton = { TextButton({ pendingReject = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
     }
     // Forward: the note goes as its words, marked forwarded, like a forwarded chat message (iOS forwardable).
-    forwardText?.let { text ->
+    forwardTexts?.let { texts ->
         val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-        if (me == null) forwardText = null
-        else com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { forwardText = null }) { targets ->
-            forwardText = null
-            OfficialChannel.forward(context, me, text, targets)
+        if (me == null) forwardTexts = null
+        else com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { forwardTexts = null }) { targets ->
+            forwardTexts = null
+            picked.clear()
+            OfficialChannel.forward(context, me, texts, targets)
         }
     }
-    pendingDelete?.let { id ->
-        AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("Delete this message?") },
-            confirmButton = { TextButton({ OfficialChannel.hide(listOf(id)); pendingDelete = null }) { Text("Delete for Me", color = c.red) } },
+    pendingDelete?.let { ids ->
+        AlertDialog(onDismissRequest = { pendingDelete = null },
+            title = { Text(if (ids.size == 1) "Delete this message?" else "Delete ${ids.size} messages?") },
+            confirmButton = { TextButton({ OfficialChannel.hide(ids); pendingDelete = null; picked.clear() }) { Text("Delete for Me", color = c.red) } },
             dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
     }
     rejectResult?.let { text ->
@@ -141,7 +155,8 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
             // The bell (iOS bellButton): mutes the announcements; security posts still come.
             val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
-            FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE) {
+            if (selecting) FariinTopBar("${picked.size} Selected", onBack = { picked.clear() })
+            else FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE) {
                 androidx.compose.material3.IconButton({ OfficialChannel.setMuted(!muted) }) {
                     Icon(androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
                         contentDescription = if (muted) "Notifications off" else "Notifications on", modifier = Modifier.size(24.dp))
@@ -155,13 +170,27 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             items(view.visible, key = { it.id }) { a ->
                 val now = System.currentTimeMillis().toDouble()
                 AnnouncementCard(a, timeLabel(a.sortAt, is24h), a.buttons.filter { it.isUsable(now) }, ::tap,
+                    ticked = if (selecting) a.id in picked else null, onToggle = { toggle(a.id) },
                     onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(a.plainText)) },
-                    onForward = { forwardText = a.plainText },
-                    onDelete = { pendingDelete = a.id })
+                    onForward = { forwardTexts = listOf(a.plainText) },
+                    onSelect = { picked.add(a.id) },
+                    onDelete = { pendingDelete = listOf(a.id) })
             }
         }
         HorizontalDivider(color = c.separator)
-        Text(OfficialChannel.CANNOT_REPLY, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
+        // The chat's own selection bar: Delete, "N Selected", Forward.
+        if (selecting) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.IconButton({ pendingDelete = pickedNotes().map { it.id } }) {
+                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = c.red)
+            }
+            Text("${picked.size} Selected", style = MaterialTheme.typography.titleSmall, color = c.label,
+                textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            androidx.compose.material3.IconButton({ forwardTexts = pickedNotes().map { it.plainText } }) {
+                Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = "Forward", tint = c.blue)
+            }
+        }
+        else Text(OfficialChannel.CANNOT_REPLY, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 16.dp, horizontal = 16.dp))
     }
@@ -177,16 +206,26 @@ private fun kindIcon(k: AnnouncementKind): ImageVector = when (k) {
 
 @Composable
 private fun AnnouncementCard(a: Announcement, time: String, buttons: List<AnnouncementButton>, onTap: (AnnouncementButton) -> Unit,
-                             onCopy: () -> Unit, onForward: () -> Unit, onDelete: () -> Unit) {
+                             ticked: Boolean?, onToggle: () -> Unit,
+                             onCopy: () -> Unit, onForward: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit) {
     val c = Fariin.colors
     val accent = if (a.kind == AnnouncementKind.SECURITY) c.red else c.blue
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
-    // Long press: Copy, Forward and Delete (for me), as a chat message (iOS menuActions; Select later).
-    Box {
+    // Long press: Copy, Forward, Select and Delete (for me), as a chat message (iOS menuActions).
+    // While selecting (ticked not null) a tap or long press ticks the card and its buttons rest.
+    Row(verticalAlignment = Alignment.CenterVertically) {
+    if (ticked != null) {
+        Icon(if (ticked) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            contentDescription = if (ticked) "Selected" else "Not selected",
+            tint = if (ticked) c.blue else c.tertiary,
+            modifier = Modifier.padding(end = 10.dp).size(24.dp).clickable(onClick = onToggle))
+    }
+    Box(Modifier.weight(1f)) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)
-        .combinedClickable(onClick = {}, onLongClick = {
-            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true })) {
+        .combinedClickable(onClick = { if (ticked != null) onToggle() }, onLongClick = {
+            if (ticked != null) onToggle()
+            else { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true } })) {
         if (a.mediaUrl != null) {
             AsyncImage(a.mediaUrl, contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp))
@@ -210,7 +249,7 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
         for (b in buttons) {
             HorizontalDivider(color = c.separator)
             Text(b.label, style = MaterialTheme.typography.labelLarge, color = c.blue, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().clickable { onTap(b) }.padding(vertical = 12.dp, horizontal = 14.dp))
+                modifier = Modifier.fillMaxWidth().clickable { if (ticked != null) onToggle() else onTap(b) }.padding(vertical = 12.dp, horizontal = 14.dp))
         }
     }
     androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
@@ -218,8 +257,11 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
             leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Forward") }, onClick = { menu = false; onForward() },
             leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = null) })
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Select") }, onClick = { menu = false; onSelect() },
+            leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { menu = false; onDelete() },
             leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = c.red) })
+    }
     }
     }
 }
