@@ -31,10 +31,13 @@ fun NavGraphBuilder.peopleRoutes(
         val conv = chats().firstOrNull { !it.isGroup && it.users.contains(uid) }
         ContactInfoScreen(api, uid, conv, onBack = { nav.popBackStack() }, onOpenChat = openChat)
     }
-    composable("group/{cid}") { e ->
+    // ?open= the welcome card's step (add, link, edit): that page alone, closing back to the chat.
+    composable("group/{cid}?open={open}", arguments = listOf(androidx.navigation.navArgument("open") {
+        type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null })) { e ->
         val cid = e.arguments?.getString("cid") ?: return@composable
         GroupInfoScreen(api, groupDoc(cid), cid, chats(), onBack = { nav.popBackStack() },
-            onLeft = { nav.popBackStack("main", false) }, onOpenPerson = { nav.navigate("contact/$it") })
+            onLeft = { nav.popBackStack("main", false) }, onOpenPerson = { nav.navigate("contact/$it") },
+            start = e.arguments?.getString("open"))
     }
     composable("newgroup") { NewGroupScreen(api, chats(), onBack = { nav.popBackStack() }, onCreated = openChat) }
     composable("editprofile") { EditProfileScreen(api, onBack = { nav.popBackStack() }) }
@@ -59,6 +62,7 @@ fun peopleNav(nav: NavHostController, api: PeopleApi? = null) = PeopleNav(
     requests = { nav.navigate("requests") { launchSingleTop = true } },
     contact = { nav.navigate("contact/$it") { launchSingleTop = true } },
     group = { nav.navigate("group/$it") { launchSingleTop = true } },
+    groupStep = { cid, step -> nav.navigate("group/$cid?open=$step") { launchSingleTop = true } },
     newGroup = { nav.navigate("newgroup") { launchSingleTop = true } },
     editProfile = { nav.navigate("editprofile") { launchSingleTop = true } },
     newCall = { nav.navigate("newcall") { launchSingleTop = true } },

@@ -104,6 +104,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         loaded = s.loaded,
         synced = s.synced,
         loadingOlder = s.loadingOlder,
+        canLoadOlder = s.canLoadOlder,
         sendBlocked = (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupAdmins.announcementBlock(s.conv, me) else null)
             ?: vm.repo.sendBlockedReason(listed ?: conv),
         cid = cid,

@@ -8,6 +8,8 @@ data class PeopleNav(
     val requests: () -> Unit = {},
     val contact: (String) -> Unit = {},
     val group: (String) -> Unit = {},
+    /** A group's page opened straight at one step (the welcome card): "add", "link" or "edit". */
+    val groupStep: (String, String) -> Unit = { _, _ -> },
     val newGroup: () -> Unit = {},
     val editProfile: () -> Unit = {},
     val newCall: () -> Unit = {},

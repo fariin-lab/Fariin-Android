@@ -367,7 +367,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
  */
 @Composable
 fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats: List<Conversation>, onBack: () -> Unit,
-                    onLeft: () -> Unit, onOpenPerson: (String) -> Unit) {
+                    onLeft: () -> Unit, onOpenPerson: (String) -> Unit, start: String? = null) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val me = api.me
@@ -380,17 +380,23 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val iAmMember = users.isEmpty() || me in users
     val iAmAdmin = iAmMember && (me in admins || me == owner)
     val canEdit = iAmMember && GroupRules.canEditInfo(me, conv)
-    var editing by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(start == "edit") }
     var editAtDescription by remember { mutableStateOf(false) }
     val desc = GroupRules.description(conv)
-    var adding by remember { mutableStateOf(false) }
+    var adding by remember { mutableStateOf(start == "add") }
     var picked by remember { mutableStateOf(setOf<String>()) }
     var askLeave by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var timerOpen by remember { mutableStateOf(false) }
     val timer = (conv["disappearSeconds"] as? Number)?.toInt() ?: 0
     // The management pages pushed over this one (Administrators, Permissions, Group Type, Invite Links).
-    val pages = remember(cid) { androidx.compose.runtime.mutableStateListOf<GroupPage>() }
+    val pages = remember(cid) { androidx.compose.runtime.mutableStateListOf<GroupPage>().apply { if (start == "link") add(GroupPage.Links) } }
+    // Opened at one step from the chat's welcome card (iOS: a sheet over the chat): closing that
+    // step goes back to the chat, not to this page.
+    var startOpen by remember { mutableStateOf(start != null) }
+    LaunchedEffect(adding, editing, pages.size) {
+        if (startOpen && !adding && !editing && pages.isEmpty()) { startOpen = false; onBack() }
+    }
     var card by remember { mutableStateOf<String?>(null) }
     val team = com.fariin.app.data.GroupAdmins.Team.from(conv)
     // A Fariin admin sees Statistics at any size (iOS AdminStore: the rules let me read my own admins doc).

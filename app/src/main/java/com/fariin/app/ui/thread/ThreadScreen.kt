@@ -128,6 +128,8 @@ data class ThreadUi(
     val loaded: Boolean = true,
     val synced: Boolean = true,
     val loadingOlder: Boolean = false,
+    /** False once the whole history is loaded (iOS repo.canLoadOlder): the group card sits above it then. */
+    val canLoadOlder: Boolean = true,
     /** Shown instead of the composer when sending is not possible here. */
     val sendBlocked: String? = null,
     /** A group I am no longer in (iOS notAMember): a plain line instead of the composer, no calls. */
@@ -253,6 +255,7 @@ private fun ThreadContent(
     // Newest at the bottom: the list is reversed, so index 0 is the newest message.
     val reversed = remember(ui.messages) { ui.messages.indices.reversed().toList() }
     val listState = rememberLazyListState()
+    val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
     forwardFor?.let { m -> ForwardSheet(ui.me, onDismiss = { forwardFor = null }) { targets -> actions.onForwardTo(m, targets) } }
@@ -420,7 +423,7 @@ private fun ThreadContent(
                 com.fariin.app.ui.components.ThreadSkeleton()
             } else if (ui.messages.isEmpty() && ui.isGroup && ui.channel == null && !ui.notAMember && ui.groupDoc.isNotEmpty()) {
                 // iOS encryptionNotice: an empty group shows its welcome card (GroupWelcomeCard.kt).
-                GroupWelcomeCard(ui, onOpenGroup = actions.onTitleClick, modifier = Modifier.align(Alignment.Center))
+                GroupWelcomeCard(ui, onStep = { peopleNav.groupStep(ui.cid, it) }, modifier = Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty()) {
                 Text("No messages here yet", fontSize = 15.sp, color = c.secondary, modifier = Modifier.align(Alignment.Center))
             }
@@ -526,6 +529,14 @@ private fun ThreadContent(
                 if (ui.loadingOlder) item(key = "older") {
                     Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    }
+                }
+                // iOS groupHistoryCard: once the whole history is here, the group's card stays above its
+                // oldest message (never between pages); scrolling up to the start shows it.
+                if (ui.loaded && ui.isGroup && ui.channel == null && !ui.notAMember && !ui.canLoadOlder &&
+                    ui.messages.isNotEmpty() && ui.groupDoc.isNotEmpty()) item(key = "groupWelcome") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                        GroupWelcomeCard(ui, onStep = { peopleNav.groupStep(ui.cid, it) })
                     }
                 }
             }

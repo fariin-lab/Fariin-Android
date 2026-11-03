@@ -37,11 +37,12 @@ import com.fariin.app.ui.theme.Fariin
 /**
  * iOS GroupWelcomeCard: an empty group chat shows the group itself in a rounded glass card: its
  * photo (a camera badge while whoever may edit has set none), name, who started it and its size, and
- * the next steps as the group page's round circles. Each step opens the group's page, where the
- * Add Members, Invite Links and Edit Group pages live on Android.
+ * the next steps as the group page's round circles. Each step opens its own page as iOS opens its
+ * sheet: [onStep] "add" (Add Members), "link" (Invite Links, iOS InviteLinkSheet), "edit" (Edit Group,
+ * also the photo and Description).
  */
 @Composable
-internal fun GroupWelcomeCard(ui: ThreadUi, onOpenGroup: () -> Unit, modifier: Modifier = Modifier) {
+internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: Modifier = Modifier) {
     val c = Fariin.colors
     val doc = ui.groupDoc
     val canEdit = GroupRules.canEditInfo(ui.me, doc)
@@ -53,7 +54,7 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onOpenGroup: () -> Unit, modifier: M
         .padding(horizontal = 18.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(if (canEdit) Modifier.clip(CircleShape).clickable(onClick = onOpenGroup) else Modifier) {
+            Box(if (canEdit) Modifier.clip(CircleShape).clickable { onStep("edit") } else Modifier) {
                 Avatar(photo, 92.dp)
                 if (canEdit && photo.isNullOrEmpty()) Box(Modifier.align(Alignment.BottomEnd).size(32.dp).floating(CircleShape),
                     contentAlignment = Alignment.Center) {
@@ -67,10 +68,10 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onOpenGroup: () -> Unit, modifier: M
             }
         }
         if (canEdit || canAdd) Row {
-            if (canAdd) WelcomeCircle(Icons.Outlined.PersonAddAlt, "Add Members", onOpenGroup)
-            if (canLink) WelcomeCircle(Icons.Outlined.Link, "Group Link", onOpenGroup)
+            if (canAdd) WelcomeCircle(Icons.Outlined.PersonAddAlt, "Add Members") { onStep("add") }
+            if (canLink) WelcomeCircle(Icons.Outlined.Link, "Group Link") { onStep("link") }
             if (canEdit) WelcomeCircle(Icons.Outlined.Edit,
-                if (GroupRules.description(doc).isEmpty()) "Description" else "Edit", onOpenGroup)
+                if (GroupRules.description(doc).isEmpty()) "Description" else "Edit") { onStep("edit") }
         }
     }
 }
