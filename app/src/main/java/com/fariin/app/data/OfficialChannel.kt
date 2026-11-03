@@ -95,6 +95,9 @@ data class Announcement(
     /** A copy written to users/{me}/announcements: picked by hand, so no country or rollout check. */
     val isPersonal: Boolean = false,
 ) {
+    /** The words as the card reads them, for Copy and Forward: the title on its own line, then the body. */
+    val plainText: String get() = listOf(title, body).filter { it.isNotEmpty() }.joinToString("\n")
+
     /** The chat list line: "Title: the message" on one line. */
     val preview: String get() {
         val text = body.lines().joinToString(" ").trim()
@@ -321,6 +324,17 @@ object OfficialChannel {
         FirebaseFirestore.getInstance().collection("users").document(me)
             .collection("officialChannel").document("state")
             .set(mapOf("muted" to muted, "mutedUntil" to 0, "mutedAt" to System.currentTimeMillis().toDouble()), SetOptions.merge())
+    }
+
+    /** Forward a note's words to chats, sealed for each as a forwarded text. Outlives the page. */
+    fun forward(context: android.content.Context, me: String, text: String, targets: List<String>) {
+        val crypto = CryptoHub.get(context.applicationContext)
+        scope.launch {
+            for (cid in targets) {
+                try { ThreadRepository.openOrQuiet(cid, me, crypto, scope).sendForwardedText(text, forwarded = true) }
+                catch (_: Exception) {}
+            }
+        }
     }
 
     /** Delete for me: hidden on this account only, the announcement stays for everybody else. */

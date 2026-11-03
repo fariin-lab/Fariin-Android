@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Forward
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -88,6 +89,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
     var rejecting by remember { mutableStateOf(false) }
     var rejectResult by remember { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
+    var forwardText by remember { mutableStateOf<String?>(null) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val listState = rememberLazyListState()
 
@@ -115,6 +117,15 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                 }
             }) { Text("Reject", color = c.red) } },
             dismissButton = { TextButton({ pendingReject = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+    }
+    // Forward: the note goes as its words, marked forwarded, like a forwarded chat message (iOS forwardable).
+    forwardText?.let { text ->
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (me == null) forwardText = null
+        else com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { forwardText = null }) { targets ->
+            forwardText = null
+            OfficialChannel.forward(context, me, text, targets)
+        }
     }
     pendingDelete?.let { id ->
         AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("Delete this message?") },
@@ -144,7 +155,8 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             items(view.visible, key = { it.id }) { a ->
                 val now = System.currentTimeMillis().toDouble()
                 AnnouncementCard(a, timeLabel(a.sortAt, is24h), a.buttons.filter { it.isUsable(now) }, ::tap,
-                    onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(listOf(a.title, a.body).filter { it.isNotEmpty() }.joinToString("\n"))) },
+                    onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(a.plainText)) },
+                    onForward = { forwardText = a.plainText },
                     onDelete = { pendingDelete = a.id })
             }
         }
@@ -165,12 +177,12 @@ private fun kindIcon(k: AnnouncementKind): ImageVector = when (k) {
 
 @Composable
 private fun AnnouncementCard(a: Announcement, time: String, buttons: List<AnnouncementButton>, onTap: (AnnouncementButton) -> Unit,
-                             onCopy: () -> Unit, onDelete: () -> Unit) {
+                             onCopy: () -> Unit, onForward: () -> Unit, onDelete: () -> Unit) {
     val c = Fariin.colors
     val accent = if (a.kind == AnnouncementKind.SECURITY) c.red else c.blue
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
-    // Long press: Copy and Delete (for me), as a chat message (iOS menuActions; Forward and Select later).
+    // Long press: Copy, Forward and Delete (for me), as a chat message (iOS menuActions; Select later).
     Box {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)
         .combinedClickable(onClick = {}, onLongClick = {
@@ -204,6 +216,8 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
     androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
         androidx.compose.material3.DropdownMenuItem(text = { Text("Copy") }, onClick = { menu = false; onCopy() },
             leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) })
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Forward") }, onClick = { menu = false; onForward() },
+            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { menu = false; onDelete() },
             leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = c.red) })
     }
