@@ -127,7 +127,14 @@ fun OfficialChatScreen(onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(c.bg)) {
         Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
-            FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE)
+            // The bell (iOS bellButton): mutes the announcements; security posts still come.
+            val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
+            FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE) {
+                androidx.compose.material3.IconButton({ OfficialChannel.setMuted(!muted) }) {
+                    Icon(androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
+                        contentDescription = if (muted) "Notifications off" else "Notifications on", modifier = Modifier.size(24.dp))
+                }
+            }
         }
         HorizontalDivider(color = c.separator)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,

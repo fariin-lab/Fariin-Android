@@ -157,10 +157,14 @@ data class Announcement(
 /** My half of the channel, users/{me}/officialChannel/state. Only what this slice reads. */
 data class OfficialChannelState(
     val muted: Boolean = false,
+    /** When a timed mute ends, server ms; 0 = Always. */
+    val mutedUntil: Double = 0.0,
     val lastReadAt: Double = 0.0,
     val clearedAt: Double = 0.0,
     val hiddenIds: Set<String> = emptySet(),
 ) {
+    fun isMutedNow(now: Double) = muted && (mutedUntil == 0.0 || now < mutedUntil)
+
     /** A snapshot merged onto what the phone holds: the two watermarks only move forward. */
     fun merged(incoming: OfficialChannelState) = incoming.copy(
         lastReadAt = maxOf(lastReadAt, incoming.lastReadAt),
@@ -170,6 +174,7 @@ data class OfficialChannelState(
     companion object {
         fun from(d: Map<String, Any?>?) = OfficialChannelState(
             muted = d?.get("muted") as? Boolean ?: false,
+            mutedUntil = Conversation.millis(d?.get("mutedUntil")),
             lastReadAt = Conversation.millis(d?.get("lastReadAt")),
             clearedAt = Conversation.millis(d?.get("clearedAt")),
             hiddenIds = (d?.get("hiddenIds") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
@@ -232,9 +237,12 @@ object OfficialChannel {
     private val answered = HashSet<String>()
     private var timer: Job? = null
 
-    fun start(me: String, appBuild: Int) {
+    private var app: android.content.Context? = null
+
+    fun start(context: android.content.Context, me: String, appBuild: Int) {
         if (uid == me && regs.isNotEmpty()) return
         stop()
+        app = context.applicationContext
         uid = me
         build = appBuild
         val db = FirebaseFirestore.getInstance()
@@ -255,6 +263,8 @@ object OfficialChannel {
             user.collection("officialChannel").document("state").addSnapshotListener { snap, _ ->
                 if (snap != null) state = state.merged(OfficialChannelState.from(snap.data))
                 answer("state")
+                // Fires on launch, on my mute and on my other phone's mute: the one place topics follow.
+                if (snap != null) syncTopics()
             },
         )
     }
@@ -295,6 +305,22 @@ object OfficialChannel {
         FirebaseFirestore.getInstance().collection("users").document(me)
             .collection("officialChannel").document("state")
             .set(mapOf("lastReadAt" to at), SetOptions.merge())
+    }
+
+    private fun syncTopics() {
+        val c = app ?: return
+        com.fariin.app.push.OfficialPushTopics.sync(c, state.isMutedNow(System.currentTimeMillis().toDouble()))
+    }
+
+    /** The bell: on or off with no end (iOS setMuted; a timed mute is the profile's, not built yet). */
+    fun setMuted(muted: Boolean) {
+        val me = uid ?: return
+        state = state.copy(muted = muted, mutedUntil = 0.0)
+        recompute()
+        syncTopics()   // at once, not only when the write comes back
+        FirebaseFirestore.getInstance().collection("users").document(me)
+            .collection("officialChannel").document("state")
+            .set(mapOf("muted" to muted, "mutedUntil" to 0, "mutedAt" to System.currentTimeMillis().toDouble()), SetOptions.merge())
     }
 
     /** Delete for me: hidden on this account only, the announcement stays for everybody else. */

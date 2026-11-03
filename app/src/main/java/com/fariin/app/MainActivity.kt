@@ -172,7 +172,7 @@ class MainActivity : ComponentActivity() {
                 val p = packageManager.getPackageInfo(packageName, 0)
                 if (android.os.Build.VERSION.SDK_INT >= 28) p.longVersionCode.toInt() else @Suppress("DEPRECATION") p.versionCode
             } catch (_: Exception) { 0 }
-            com.fariin.app.data.OfficialChannel.start(me, build)
+            com.fariin.app.data.OfficialChannel.start(applicationContext, me, build)
             onDispose { com.fariin.app.data.OfficialChannel.stop() }
         }
         LaunchedEffect(me) {
