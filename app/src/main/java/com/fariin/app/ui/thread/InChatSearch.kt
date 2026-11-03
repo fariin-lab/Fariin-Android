@@ -221,9 +221,10 @@ internal fun SearchResultsList(rows: List<SearchRow>, terms: List<String>, top: 
                             Spacer(Modifier.width(6.dp))
                             if (r.outgoing) {
                                 // One tick sent, two once read; blue when read, as on the chat list.
-                                Icon(if (r.read) Icons.Filled.DoneAll else Icons.Filled.Done,
+                                Icon(androidx.compose.ui.res.painterResource(
+                                    if (r.read) com.fariin.app.R.drawable.ic_tick_double else com.fariin.app.R.drawable.ic_tick_single),
                                     contentDescription = if (r.read) "Read" else "Sent",
-                                    tint = if (r.read) c.accent else c.secondary, modifier = Modifier.size(16.dp))
+                                    tint = if (r.read) c.accent else c.secondary)
                                 Spacer(Modifier.width(4.dp))
                             }
                             Text(ChatSearch.dateText(r.atMillis, is24h), fontSize = 15.sp, color = c.secondary, maxLines = 1)

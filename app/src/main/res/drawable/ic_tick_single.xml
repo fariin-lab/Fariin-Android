@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sent tick (iOS BubbleTicks.drawnChecks(1)): the owner's checkmark SVG, M6.5 17l6 6 13-13 on
+     a 32-unit box, cropped to its bounds, 1.2 stroke at 6.5/12 scale, round caps and joins. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="11.49dp"
+    android:height="8.24dp"
+    android:viewportWidth="21.2154"
+    android:viewportHeight="15.2154">
+    <path
+        android:pathData="M1.1077,8.1077 L7.1077,14.1077 L20.1077,1.1077"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2.2154"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

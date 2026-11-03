@@ -854,11 +854,11 @@ private fun Ticks(conv: Conversation, me: String) {
     }
     val read = conv.lastReadByOther(me)
     val delivered = read || conv.lastDeliveredToOther(me)
+    // The bubbles' own drawn marks (iOS BubbleTicks), at their drawn size, not stretched.
     Icon(
-        if (delivered) Icons.Filled.DoneAll else Icons.Filled.Done,
+        androidx.compose.ui.res.painterResource(if (delivered) R.drawable.ic_tick_double else R.drawable.ic_tick_single),
         contentDescription = if (read) "Read" else if (delivered) "Delivered" else "Sent",
         tint = if (read) c.accent else c.secondary,
-        modifier = Modifier.size(16.dp),
     )
 }
 

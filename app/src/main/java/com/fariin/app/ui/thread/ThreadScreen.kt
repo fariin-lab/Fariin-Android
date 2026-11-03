@@ -1076,17 +1076,18 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
         val time = ThreadLogic.timeLabel(m.clientTs?.takeIf { isMe && !m.hasServerTime } ?: m.createdAtMillis, is24h)
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
         if (isMe && !m.deleted) {
-            val icon = when (tick) {
-                Tick.SENDING -> Icons.Filled.Schedule
-                Tick.SENT -> Icons.Filled.Done
-                Tick.DELIVERED, Tick.READ -> Icons.Filled.DoneAll
+            // Sent one drawn check, delivered and read two (iOS BubbleTicks), at their drawn size.
+            val drawn = when (tick) {
+                Tick.SENT -> com.fariin.app.R.drawable.ic_tick_single
+                Tick.DELIVERED, Tick.READ -> com.fariin.app.R.drawable.ic_tick_double
                 else -> null
             }
-            if (icon != null) {
+            if (tick == Tick.SENDING || drawn != null) {
                 Spacer(Modifier.width(3.dp))
-                Icon(icon, contentDescription = tickDescription(tick),
-                    tint = if (plain) (if (tick == Tick.READ) Fariin.colors.blue else metaColor)
-                        else Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f), modifier = Modifier.size(14.dp))
+                val tint = if (plain) (if (tick == Tick.READ) Fariin.colors.blue else metaColor)
+                    else Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f)
+                if (drawn != null) Icon(androidx.compose.ui.res.painterResource(drawn), contentDescription = tickDescription(tick), tint = tint)
+                else Icon(Icons.Filled.Schedule, contentDescription = tickDescription(tick), tint = tint, modifier = Modifier.size(14.dp))
             }
         }
     }
