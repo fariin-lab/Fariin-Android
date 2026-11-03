@@ -38,7 +38,13 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.QrCode
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.material3.AlertDialog
@@ -503,9 +509,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
                     .clickable { editAtDescription = true; editing = true }.padding(horizontal = 8.dp, vertical = 4.dp))
-            if (fromChat && iAmMember) {
+            if (iAmMember) {
                 Spacer(Modifier.height(16.dp))
-                ActionTile("Search", Icons.Filled.Search) { com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack() }
+                GroupCirclesRow(cid, me, conv, users.size, onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack() }) else null,
+                    onNotice = { notice = it })
             }
             Spacer(Modifier.height(20.dp))
             if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
@@ -556,6 +563,82 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
             Spacer(Modifier.height(30.dp))
         }
+    }
+}
+
+/**
+ * The circles under the group's name (iOS GroupInfoView actionsRow): Voice, Video, Mute, Search.
+ * Calls join the group's running call or start one (CallActivity.startGroup); a circle I may not
+ * use stays, greyed, and its tap says why. Mute opens the iOS times menu (or Unmute under the
+ * end time). Search works only when the page was opened from the group's chat (it goes back
+ * there and opens the chat's search). iOS's fifth circle, More, is the bar's three-dot menu here.
+ */
+@Composable
+private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, memberCount: Int, onSearch: (() -> Unit)?,
+                            onNotice: (String) -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val circles = com.fariin.app.data.GroupInfoCircles
+    var live by remember(cid) { mutableStateOf(false) }
+    val signedIn = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null
+    if (signedIn) androidx.compose.runtime.DisposableEffect(cid) {
+        val reg = com.fariin.app.call.GroupCall.watchActive(cid) { live = it }
+        onDispose { reg.remove() }
+    }
+    val groupCall by com.fariin.app.call.GroupCall.ui.collectAsState()
+    val oneCall by com.fariin.app.call.CallManager.ui.collectAsState()
+    val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
+    val mayStart = com.fariin.app.call.GroupCallWire.mayStart(conv, me)
+    val ready = circles.callReady(groupCall.cid, oneCall.status.live, cid, ended, mayStart, live)
+    val title = conv["title"] as? String ?: "Group"
+    var solo by remember { mutableStateOf(false) }
+    if (solo) AlertDialog(onDismissRequest = { solo = false }, title = { Text(circles.SOLO_TITLE) }, text = { Text(circles.SOLO_TEXT) },
+        confirmButton = { TextButton({ solo = false }) { Text("OK", color = c.blue) } }, containerColor = c.card)
+    fun call(video: Boolean) {
+        when (val t = circles.callTap(groupCall.cid, oneCall.status.live, cid, ended, mayStart, live, memberCount)) {
+            com.fariin.app.data.GroupInfoCircles.CallTap.Restore -> com.fariin.app.ui.call.CallActivity.startGroup(ctx, cid, title, video)
+            com.fariin.app.data.GroupInfoCircles.CallTap.Solo -> solo = true
+            is com.fariin.app.data.GroupInfoCircles.CallTap.Refuse -> com.fariin.app.ui.components.Snack.show(t.notice)
+            is com.fariin.app.data.GroupInfoCircles.CallTap.Go -> com.fariin.app.ui.call.CallActivity.startGroup(ctx, cid, title, video, start = t.start)
+        }
+    }
+    // The doc's value, or mine at once after a tap until the doc catches up.
+    var heldUntil by remember(cid) { mutableStateOf<Double?>(null) }
+    val until = heldUntil ?: circles.mutedUntil(conv, me)
+    val now = System.currentTimeMillis()
+    val muted = until > now
+    var muteOpen by remember { mutableStateOf(false) }
+    fun setMuted(value: Double) {
+        heldUntil = value
+        scope.launch {
+            val ok = runCatching {
+                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations").document(cid)
+                    .set(mapOf("mutedBy" to mapOf(me to value)), com.google.firebase.firestore.SetOptions.merge()).await()
+            }.isSuccess
+            heldUntil = null
+            if (!ok) onNotice(circles.MUTE_FAILED)
+        }
+    }
+    val off = Modifier.alpha(0.45f)
+    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        ActionTile("Voice", Icons.Outlined.Call, if (ready) Modifier else off) { call(video = false) }
+        ActionTile("Video", Icons.Outlined.Videocam, if (ready) Modifier else off) { call(video = true) }
+        Box {
+            ActionTile(if (muted) "Unmute" else "Mute", if (muted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff) { muteOpen = true }
+            androidx.compose.material3.DropdownMenu(muteOpen, onDismissRequest = { muteOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+                Text(if (muted) circles.mutedLabel(until, now, android.text.format.DateFormat.is24HourFormat(ctx)) else circles.MUTE_HEADER,
+                    fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                if (muted) androidx.compose.material3.DropdownMenuItem(text = { Text("Unmute", color = c.label) },
+                    onClick = { muteOpen = false; setMuted(0.0) })
+                else circles.MUTE_CHOICES.forEach { (label, hours) ->
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(label, color = c.label) },
+                        onClick = { muteOpen = false; setMuted(circles.muteUntil(hours)) })
+                }
+            }
+        }
+        ActionTile("Search", Icons.Filled.Search, if (onSearch != null) Modifier else off) { onSearch?.invoke() }
     }
 }
 

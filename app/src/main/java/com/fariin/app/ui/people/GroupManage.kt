@@ -8,6 +8,14 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -496,19 +504,29 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
  * Members: the search field, a sort menu (By Name / Admins First), the members under A to Z
  * headers with Owner / Admin at the end of the row, then Add Members and Invite Via Group Link
  * for whoever may. An admin taps a member for the member card; others open the profile.
+ * The letters down the side jump to their section (iOS listSectionIndexVisibility). Whoever may
+ * remove a member swipes the row left (iOS GroupMembersListView: never me or the owner, an admin
+ * only by the owner), or long-presses to select and removes from the top bar.
  */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: (GroupPage) -> Unit,
                              onOpenPerson: (String) -> Unit, onAddMembers: () -> Unit) {
     val c = Fariin.colors
+    val scope = rememberCoroutineScope()
     val doc = liveGroupDoc(cid)
     var query by remember { mutableStateOf("") }
     var adminsFirst by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var card by remember { mutableStateOf<String?>(null) }
+    var picked by remember(cid) { mutableStateOf(setOf<String>()) }
+    var pendingRemove by remember { mutableStateOf<List<String>?>(null) }
+    var removeError by remember { mutableStateOf<String?>(null) }
     // The members' @usernames, read once the first search starts (iOS ProfileStore.handles).
     val handles = remember(cid) { mutableStateMapOf<String, String>() }
     var handlesAsked by remember { mutableStateOf(false) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    BackHandler(enabled = picked.isNotEmpty()) { picked = emptySet() }
     if (doc.isEmpty()) { Loading(); return }
     val team = Team.from(doc)
     val g = com.fariin.app.data.GroupMembers.Group.from(doc)
@@ -527,9 +545,41 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
     val canInvite = !closed && team.may(me, Right.INVITE_USERS)
     val list = com.fariin.app.data.GroupMembers.search(g, me, query, handles, adminsFirst)
     val sections = com.fariin.app.data.GroupMembers.sections(list, { com.fariin.app.data.GroupMembers.shownName(g, it, me) }, adminsFirst)
+    // A member who left (or became untouchable) while picked drops out of the pick.
+    val stillPicked = picked.filter { team.canRemove(me, it) }.toSet()
+    if (stillPicked != picked) picked = stillPicked
+    val selecting = picked.isNotEmpty()
+    fun nameOf(uid: String) = team.names[uid]?.ifEmpty { null } ?: "this member"
     card?.let { u -> MemberCard(cid, me, u, doc, onClose = { card = null }, onProfile = onOpenPerson, open = push) }
+    pendingRemove?.let { uids ->
+        val one = uids.size == 1
+        AlertDialog(onDismissRequest = { pendingRemove = null }, containerColor = c.card,
+            title = { Text(if (one) "Remove ${nameOf(uids[0])} from the group?" else "Remove ${uids.size} members from the group?") },
+            confirmButton = { TextButton({
+                pendingRemove = null
+                picked = emptySet()
+                scope.launch {
+                    var done = 0
+                    for (uid in uids) {
+                        try { GroupManage.removeMember(cid, uid, team.names[uid] ?: "User"); done++ }
+                        catch (e: Exception) { removeError = failText(e, "Couldn't remove. Try again."); break }
+                    }
+                    if (done == 1 && one) Snack.show("${team.names[uids[0]] ?: "User"} was removed from the group.")
+                    else if (done > 0) Snack.show("$done member${if (done == 1) " was" else "s were"} removed from the group.")
+                }
+            }) { Text("Remove", color = c.red) } },
+            dismissButton = { TextButton({ pendingRemove = null }) { Text("Cancel", color = c.blue) } })
+    }
+    removeError?.let { e ->
+        AlertDialog(onDismissRequest = { removeError = null }, containerColor = c.card, title = { Text("Could not remove") }, text = { Text(e) },
+            confirmButton = { TextButton({ removeError = null }) { Text("OK", color = c.blue) } })
+    }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Members", onBack) {
+        if (selecting) PageBar("${picked.size} Selected", onBack = { picked = emptySet() }) {
+            androidx.compose.material3.IconButton({ pendingRemove = picked.toList() }) {
+                Icon(Icons.Filled.PersonRemove, "Remove", tint = c.red)
+            }
+        } else PageBar("Members", onBack) {
             Box {
                 androidx.compose.material3.IconButton({ sortOpen = true }) {
                     Icon(Icons.Filled.FilterList, "Sort", tint = c.label)
@@ -544,25 +594,93 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
             }
         }
         SearchField(query, "Search") { query = it }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().imePadding()) {
-            if (list.isEmpty()) SettingsSection { Note("No members found.") }
-            sections.forEach { (letter, uids) ->
-                SettingsSection(header = letter.ifEmpty { null }) {
-                    uids.forEach { uid ->
-                        PersonLine(team.photos[uid]?.ifEmpty { null }, com.fariin.app.data.GroupMembers.shownName(g, uid, me),
-                            onClick = if (team.isStaff(me)) ({ card = uid }) else if (uid == me) null else ({ onOpenPerson(uid) })) {
-                            com.fariin.app.data.GroupMembers.rank(g, uid)?.let { Text(it, fontSize = 14.sp, color = c.secondary) }
+        Box(Modifier.fillMaxSize()) {
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().imePadding(), state = listState,
+                contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
+                if (list.isEmpty()) item(key = "none") { SettingsSection { Note("No members found.") } }
+                sections.forEach { (letter, uids) ->
+                    item(key = "sec:$letter") {
+                        SettingsSection(header = letter.ifEmpty { null }) {
+                            uids.forEach { uid ->
+                                val removable = team.canRemove(me, uid)
+                                val open: (() -> Unit)? = if (team.isStaff(me)) ({ card = uid }) else if (uid == me) null else ({ onOpenPerson(uid) })
+                                val on = uid in picked
+                                MemberSwipeRow(enabled = removable && !selecting, onSwiped = { pendingRemove = listOf(uid) }) {
+                                    Box(Modifier.fillMaxWidth().background(if (on) c.blue.copy(alpha = 0.12f) else c.card)
+                                        .combinedClickable(
+                                            onClick = {
+                                                if (selecting) { if (removable) picked = if (on) picked - uid else picked + uid }
+                                                else open?.invoke()
+                                            },
+                                            onLongClick = if (removable && !selecting) ({ picked = setOf(uid) }) else null,
+                                        )) {
+                                        PersonLine(team.photos[uid]?.ifEmpty { null }, com.fariin.app.data.GroupMembers.shownName(g, uid, me)) {
+                                            com.fariin.app.data.GroupMembers.rank(g, uid)?.let { Text(it, fontSize = 14.sp, color = c.secondary) }
+                                            if (selecting && removable) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Icon(if (on) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null,
+                                                    tint = if (on) c.blue else c.secondary, modifier = Modifier.size(22.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+                if (query.isEmpty() && (canAdd || canInvite) && !selecting) item(key = "add") {
+                    SettingsSection {
+                        if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.blue,
+                            trailing = Trailing.NONE, last = !canInvite, onClick = onAddMembers)
+                        if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.blue,
+                            trailing = Trailing.NONE, last = true) { push(GroupPage.Links) }
+                    }
+                }
+                item(key = "end") { Spacer(Modifier.height(24.dp)) }
             }
-            if (query.isEmpty() && (canAdd || canInvite)) SettingsSection {
-                if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.blue,
-                    trailing = Trailing.NONE, last = !canInvite, onClick = onAddMembers)
-                if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.blue,
-                    trailing = Trailing.NONE, last = true) { push(GroupPage.Links) }
+            val letters = sections.map { it.first }.filter { it.isNotEmpty() }
+            if (letters.isNotEmpty()) LetterIndex(letters, Modifier.align(Alignment.CenterEnd)) { l ->
+                // The list's items: "none" never shows beside sections, so section i is item i.
+                val i = sections.indexOfFirst { it.first == l }
+                if (i >= 0) scope.launch { listState.scrollToItem(i) }
             }
-            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** Swipe a member left to remove them (iOS swipeActions, no full swipe): the row snaps back and the question opens. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MemberSwipeRow(enabled: Boolean, onSwiped: () -> Unit, content: @Composable () -> Unit) {
+    if (!enabled) { content(); return }
+    val c = Fariin.colors
+    val state = androidx.compose.material3.rememberSwipeToDismissBoxState(confirmValueChange = { v ->
+        if (v == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart) onSwiped()
+        false
+    })
+    androidx.compose.material3.SwipeToDismissBox(state, enableDismissFromStartToEnd = false, backgroundContent = {
+        // Only while the row moves: at rest the red would show at the card's rounded corners.
+        if (state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart)
+        Box(Modifier.fillMaxSize().background(c.red).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
+            Text("Remove", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }) { content() }
+}
+
+/** The A to Z strip down the list's edge (iOS section index): a tap or a drag jumps to that letter. */
+@Composable
+private fun LetterIndex(letters: List<String>, modifier: Modifier, onPick: (String) -> Unit) {
+    val c = Fariin.colors
+    var height by remember { mutableStateOf(1) }
+    fun at(y: Float) = letters[(y / height * letters.size).toInt().coerceIn(0, letters.lastIndex)]
+    Column(modifier.padding(end = 2.dp)
+        .onSizeChanged { height = it.height.coerceAtLeast(1) }
+        .pointerInput(letters) { detectTapGestures { onPick(at(it.y)) } }
+        .pointerInput(letters) { detectVerticalDragGestures { change, _ -> onPick(at(change.position.y)) } },
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        letters.forEach {
+            Text(it, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.blue,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
         }
     }
 }
