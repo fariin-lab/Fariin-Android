@@ -372,12 +372,12 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
     }
 }
 
-/** The Fariin mark in a blue circle (iOS official-mark). */
+/** The Fariin mark as its photo (iOS official-mark). */
 @Composable
 fun OfficialAvatar(size: Dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(Fariin.colors.blue), contentAlignment = Alignment.Center) {
-        Image(painterResource(R.drawable.splash_mark), contentDescription = null, modifier = Modifier.size(size * 0.62f))
-    }
+    // The whole picture is the photo, white bubble on black, cut to a circle (iOS official-mark).
+    Image(painterResource(R.drawable.official_mark), contentDescription = null, contentScale = ContentScale.Crop,
+        modifier = Modifier.size(size).clip(CircleShape))
 }
 
 /**
