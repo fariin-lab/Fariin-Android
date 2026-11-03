@@ -224,7 +224,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             }
         }
     }
-    CompositionLocalProvider(LocalChatMedia provides vm.repo.media) {
+    val uploadCancel = remember(vm, me) { UploadCancel(me, vm.repo::cancelMediaSend) }
+    CompositionLocalProvider(LocalChatMedia provides vm.repo.media, LocalUploadCancel provides uploadCancel) {
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlder, onRetry = vm.repo::retry,
             onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice, actions = actions,
             onSendPick = { uris, caption, once -> vm.repo.sendPick(app, uris, caption, once) },

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.unit.sp
 import com.fariin.app.data.Message
 import com.fariin.app.media.AutoDownload
@@ -48,18 +49,39 @@ import com.fariin.app.media.ViewedOnce
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
 
+/** Who I am and what Cancel does, for the upload ring's X (iOS onCancelUpload). */
+internal class UploadCancel(val me: String, val cancel: (Message) -> Unit)
+internal val LocalUploadCancel = androidx.compose.runtime.staticCompositionLocalOf<UploadCancel?> { null }
+
 /**
- * The ring on my own media while it goes up (iOS upload progress ring): a filling arc once the
- * upload reports bytes, a spinner before that. Tap-to-cancel is a TODO.
+ * The ring's tap for [m]: only on my OWN photo, video or album still going up (iOS
+ * MediaBody.cancellable). A photo somebody else is still uploading gets the same ring, no X.
  */
 @Composable
-internal fun UploadRing(clientId: String?, modifier: Modifier = Modifier) {
+internal fun uploadCancelFor(m: Message): (() -> Unit)? {
+    val u = LocalUploadCancel.current ?: return null
+    if (m.authorId != u.me || m.clientId == null) return null
+    if (m.sendState != Message.SendState.SENDING && !(m.uploading && m.sendState == null)) return null
+    return { u.cancel(m) }
+}
+
+/**
+ * The ring on my own media while it goes up (iOS UploadRingView): a filling arc once the upload
+ * reports bytes, a spinner before that. With [onCancel], an X in the middle and a tap cancels the
+ * send (iOS rowCellDidTapCancelUpload).
+ */
+@Composable
+internal fun UploadRing(clientId: String?, modifier: Modifier = Modifier, onCancel: (() -> Unit)? = null) {
     val all by UploadProgress.map.collectAsState()
     val f = clientId?.let { all[it] }
-    Box(modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+    Box(modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f))
+        .then(if (onCancel != null) Modifier.clickable(onClickLabel = "Cancel upload", onClick = onCancel) else Modifier),
+        contentAlignment = Alignment.Center) {
         if (f != null && f > 0f) CircularProgressIndicator(progress = { f }, color = Color.White, strokeWidth = 2.5.dp,
             trackColor = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(30.dp))
         else CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+        if (onCancel != null) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Close,
+            contentDescription = "Cancel upload", tint = Color.White, modifier = Modifier.size(15.dp))
     }
 }
 
@@ -229,7 +251,7 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                 }
             }
         }
-        if (busy) UploadRing(m.clientId, Modifier.align(Alignment.Center))
+        if (busy) UploadRing(m.clientId, Modifier.align(Alignment.Center), onCancel = uploadCancelFor(m))
         Box(Modifier.matchParentSize()) { capsule() }
     }
 }

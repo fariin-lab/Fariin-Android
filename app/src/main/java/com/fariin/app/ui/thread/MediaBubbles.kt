@@ -241,7 +241,7 @@ internal fun PictureBox(
             FetchDisc(got.state, Modifier.align(Alignment.Center))
         } else if (busy || (bmp == null && url != null)) {
             // My own upload shows its progress (iOS ring); a download waits on a plain spinner.
-            UploadRing(if (busy) m.clientId else null, Modifier.align(Alignment.Center))
+            UploadRing(if (busy) m.clientId else null, Modifier.align(Alignment.Center), onCancel = if (busy) uploadCancelFor(m) else null)
         }
         overlay()
     }

@@ -655,17 +655,65 @@ class ThreadRepository(
 
     /** Runs one media send; a failure leaves a red bubble whose tap runs the same work again. */
     private fun runMediaSend(clientId: String, work: suspend () -> Unit) {
-        scope.launch(Dispatchers.IO) {
+        val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try {
                 work()
                 retryMedia.remove(clientId)
+                com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
+                if (mediaSendEnded(clientId, e)) return@launch
                 if (!retryMedia.containsKey(clientId)) retryMedia[clientId] = work
                 com.fariin.app.media.UploadProgress.done(clientId)
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
             }
         }
+        com.fariin.app.media.MediaSend.register(clientId, job)
+        job.start()
+    }
+
+    /**
+     * A media send threw: was it the person's Cancel? Then a document it wrote after the Cancel
+     * looked is taken down too, and the bubble goes quietly instead of turning red (iOS
+     * runRegisteredSend). Forgets the send either way.
+     */
+    private fun mediaSendEnded(clientId: String, e: Exception): Boolean {
+        val send = com.fariin.app.media.MediaSend
+        val cancelled = send.wasCancelled(clientId) || e is kotlinx.coroutines.CancellationException
+        if (cancelled) send.announcedId(clientId)?.let { id -> scope.launch(Dispatchers.IO) { cancelAnnounced(id) } }
+        send.finish(clientId)
+        if (!cancelled) return false
+        com.fariin.app.media.UploadProgress.done(clientId)
+        retryMedia.remove(clientId); retryPhoto.remove(clientId)
+        pending.remove(clientId)
+        rebuild()
+        return true
+    }
+
+    /**
+     * The ring's tap on my own photo, video or album going up (iOS cancelMediaSend): the upload
+     * stops, the bubble goes, and a message document the send already wrote is deleted, so it does
+     * not spin for ever on both phones. A row already back from the server counts only while it is
+     * still marked `uploading`, so a delivered photo is never taken down.
+     */
+    fun cancelMediaSend(m: Message) {
+        val clientId = m.clientId ?: return
+        val send = com.fariin.app.media.MediaSend
+        send.cancel(clientId)
+        val announced = send.announcedId(clientId)
+            ?: m.id.takeIf { m.sendState == Message.SendState.SENDING && it != clientId }
+            ?: m.id.takeIf { m.uploading && m.authorId == me && it != clientId }
+        if (announced != null) scope.launch(Dispatchers.IO) { cancelAnnounced(announced) }
+        com.fariin.app.media.UploadProgress.done(clientId)
+        retryMedia.remove(clientId); retryPhoto.remove(clientId)
+        pending.remove(clientId)
+        rebuild()
+    }
+
+    /** iOS cancelAnnounced: the document goes and the chat list line is rewritten from what is left. */
+    private suspend fun cancelAnnounced(messageId: String) {
+        try { msgRef(messageId).delete().await() } catch (_: Exception) {}
+        rewriteSummaryAfterDelete()
     }
 
     private fun isVideoUri(context: Context, uri: Uri): Boolean =
@@ -777,15 +825,19 @@ class ThreadRepository(
             localPath = local.absolutePath,
         )
         rebuild()
-        scope.launch(Dispatchers.IO) {
+        val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try {
                 photoNow(prep, clientId, tap)
+                com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
+                if (mediaSendEnded(clientId, e)) return@launch
                 retryPhoto[clientId] = prep
                 pending[clientId]?.let { pending[clientId] = it.copy(sendState = Message.SendState.FAILED) }
                 rebuild()
             }
         }
+        com.fariin.app.media.MediaSend.register(clientId, job)
+        job.start()
     }
 
     private suspend fun photoNow(prep: PhotoPrep, clientId: String, clientTs: Double) {
@@ -878,7 +930,9 @@ class ThreadRepository(
     private suspend fun upload(cipher: ByteArray, path: String): String {
         require(cipher.size < MediaRules.STORAGE_CHAT_LIMIT) { "file too large" }
         val ref = FirebaseStorage.getInstance().reference.child(path)
-        ref.putBytes(cipher, StorageMetadata.Builder().setContentType("application/octet-stream").build()).await()
+        val task = ref.putBytes(cipher, StorageMetadata.Builder().setContentType("application/octet-stream").build())
+        // Cancel stops the transfer itself, not only the wait for it.
+        try { task.await() } catch (e: kotlinx.coroutines.CancellationException) { task.cancel(); throw e }
         return ref.downloadUrl.await().toString()
     }
 

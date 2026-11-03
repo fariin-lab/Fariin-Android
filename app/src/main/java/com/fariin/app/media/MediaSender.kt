@@ -76,7 +76,8 @@ class MediaSender(
         if (onProgress != null) task.addOnProgressListener { s ->
             if (s.totalByteCount > 0) onProgress(s.bytesTransferred.toFloat() / s.totalByteCount)
         }
-        task.await()
+        // Cancel (MediaSend.cancel) stops the transfer itself, not only the wait for it.
+        try { task.await() } catch (e: kotlinx.coroutines.CancellationException) { task.cancel(); throw e }
         return ref.downloadUrl.await().toString()
     }
 
@@ -85,7 +86,7 @@ class MediaSender(
         var attempt = 0
         while (true) {
             try { return upload(cipher, path, onProgress) } catch (e: Exception) {
-                if (++attempt >= 4) throw e
+                if (e is kotlinx.coroutines.CancellationException || ++attempt >= 4) throw e
                 delay(minOf(30_000L, 1_000L shl attempt))
             }
         }
@@ -144,6 +145,7 @@ class MediaSender(
             forwarded, FieldValue.serverTimestamp()))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.videoPreview(v.duration), others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = thumbUrl, lastImageEnc = thMeta))
+        MediaSend.noteAnnounced(clientId, msgRef.id)   // before the write: a Cancel during it still takes it down
         batch.commit().await()
         onAnnounced(msgRef.id)
         val clip = v.file.readBytes()
@@ -177,6 +179,7 @@ class MediaSender(
             forwarded, FieldValue.serverTimestamp()))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.FILE_PREVIEW, others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1)))
+        MediaSend.noteAnnounced(clientId, msgRef.id)
         batch.commit().await()
         val url = uploadRetrying(cipher, MediaRules.filePath(cid, msgRef.id), progress(clientId))
         media?.store(url, f.bytes)
