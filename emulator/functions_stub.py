@@ -1054,6 +1054,82 @@ def add_channel_followers(uid, data):
     return {"added": added, "refused": refused, "linkOnly": [], "capped": capped}
 
 
+# rejectGroupOwnership: lib/ownertransfer.js decideReject + rejectWrite + returnedNotice. Same gaps
+# as the transfer above (no transaction, no owned-groups cap for an admin heir, no admin log).
+OT_REJECT_MSG = {
+    "none": "There is no ownership hand-over to reject for this group.",
+    "over": "The 48 hours to reject this group have passed. You can still transfer it to another member in Group Settings.",
+    "notOwner": "You are no longer the owner of this group.",
+    "noHeir": "The previous owner has left and the group has no other admins, so there is nobody to hand it back to. You can transfer it to a member or delete it.",
+}
+
+
+def reject_group_ownership(uid, data):
+    cid = str((data or {}).get("cid") or "")
+    if not cid or "/" in cid:
+        raise Refuse("INVALID_ARGUMENT", "Missing group.")
+    conv = get(f"conversations/{cid}")
+    if not conv or conv.get("type") != "group":
+        _ot_refuse("NOT_FOUND", "no-group", "noGroup")
+    hand = get(f"groupOwnerHandoffs/{cid}")
+    if not hand or hand.get("to") != uid:
+        raise Refuse("FAILED_PRECONDITION", OT_REJECT_MSG["none"], {"reason": "no-handoff"})
+    if not _ot_now() <= int(hand.get("until") or 0):
+        raise Refuse("FAILED_PRECONDITION", OT_REJECT_MSG["over"], {"reason": "window-over"})
+    users = conv.get("users") or []
+    if conv.get("createdBy", "") != uid or uid not in users:
+        raise Refuse("FAILED_PRECONDITION", OT_REJECT_MSG["notOwner"], {"reason": "not-owner"})
+    mod = conv.get("mod") or {}
+    if conv.get("endedAt") or mod.get("blocked") or mod.get("state") == "ended":
+        _ot_refuse("FAILED_PRECONDITION", "closed", "closed")
+    banned = conv.get("bannedUids") or []
+    ok = lambda u: u in users and u not in banned and u != uid
+    giver = hand.get("from")
+    if ok(giver):
+        heir, returning = giver, True
+    else:
+        heir = next((u for u in (conv.get("admins") or []) if ok(u) and u != giver), None)
+        returning = False
+    if not heir:
+        raise Refuse("FAILED_PRECONDITION", OT_REJECT_MSG["noHeir"], {"reason": "no-heir"})
+    names = conv.get("names") or {}
+    who = str(names.get(uid) or "")[:64] or "A member"
+    nxt = str(names.get(heir) or "")[:64] or "A member"
+    text = f"{who} turned down ownership. {nxt} is the owner again" if returning else f"{who} turned down ownership. {nxt} is now the owner"
+    admins = list(conv.get("admins") or [])
+    if heir not in admins: admins.append(heir)
+    upd = {"createdBy": heir, f"adminRights.{heir}": DELETE, f"adminBy.{heir}": DELETE,
+           f"restrictedFlags.{heir}": DELETE, f"restrictedUntil.{heir}": DELETE,
+           "lastMessage": text, "lastSender": uid, "updatedAt": Ts()}
+    if hand.get("toWasAdmin"):
+        if uid not in admins: admins.append(uid)
+        rights = hand.get("toRights")
+        upd[f"adminRights.{uid}"] = rights[:] if isinstance(rights, list) else DELETE
+        upd[f"adminBy.{uid}"] = hand.get("toAdminBy") or DELETE
+    else:
+        admins = [u for u in admins if u != uid]
+        upd[f"adminRights.{uid}"] = DELETE
+        upd[f"adminBy.{uid}"] = DELETE
+    upd["admins"] = admins
+    write(f"conversations/{cid}", upd)
+    _ot_add(f"conversations/{cid}/messages", {"text": text, "authorId": uid, "type": "system", "createdAt": Ts()})
+    remove(f"groupOwnerHandoffs/{cid}")
+    # The button goes from the note it was on, so it is not offered again.
+    note = hand.get("noticeId")
+    if note and get(f"users/{uid}/announcements/{note}") is not None:
+        write(f"users/{uid}/announcements/{note}", {"buttons": [], "editedAt": Ts()})
+    group = str(conv.get("title") or "")[:128] or "the group"
+    by = str(names.get(uid) or "")[:64] or "The new owner"
+    _ot_add(f"users/{heir}/announcements", {
+        "kind": "security",
+        "title": f"{group} is yours again" if returning else f"You now own {group}",
+        "body": f"{by} turned down ownership of {group}, so you are its owner again." if returning
+                else f"{by} turned down ownership of {group}. The previous owner has left, so it passed to you as its longest-standing admin. You are now its owner and answer for what is posted in it.",
+        "buttons": [], "createdBy": "system", "deleted": False, "publishAt": Ts(), "createdAt": Ts()})
+    return {"ok": True, "returning": returning}
+
+
+HANDLERS.update({"rejectGroupOwnership": reject_group_ownership})
 HANDLERS.update({"transferGroupOwnership": transfer_group_ownership, "approveJoinRequest": approve_join_request,
                  "denyJoinRequest": deny_join_request, "setChannelReactions": set_channel_reactions,
                  "addChannelFollowers": add_channel_followers})
