@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.History
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -82,6 +83,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
+import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
 
 @Composable
@@ -388,6 +391,13 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val pages = remember(cid) { androidx.compose.runtime.mutableStateListOf<GroupPage>() }
     var card by remember { mutableStateOf<String?>(null) }
     val team = com.fariin.app.data.GroupAdmins.Team.from(conv)
+    // A Fariin admin sees Statistics at any size (iOS AdminStore: the rules let me read my own admins doc).
+    val appAdmin by androidx.compose.runtime.produceState(false, me) {
+        value = me.isNotEmpty() && runCatching {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("admins").document(me).get().await().exists()
+        }.getOrDefault(false)
+    }
+    val showStats = iAmMember && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
     // iOS: the Search circle goes back to the group's chat and opens its search; only from that chat.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
@@ -472,9 +482,16 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // The owner's and admins' settings (iOS Group Settings); members do not see them.
                 GroupManageRows(conv, me, cid) { pages.add(it) }
                 // Who may change it: the owner and admins with Change info (iOS GroupSettingsView).
-                DisappearingRow(timer, short = false, last = true) {
+                DisappearingRow(timer, short = false, last = !iAmAdmin) {
                     if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
                     else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
+                }
+                // iOS Group Settings chat section: Recent Actions (the server's admin log), owner and admins only.
+                if (iAmAdmin) SettingsRow("Recent Actions", icon = rememberVectorPainter(Icons.Filled.History),
+                    last = !showStats) { pages.add(GroupPage.RecentActions) }
+                // Statistics (iOS showStatsRow): owner and admins of a big enough group, last row.
+                if (showStats) SettingsRow("Statistics", icon = painterResource(com.fariin.app.R.drawable.ic_statistics), last = true) {
+                    pages.add(GroupPage.Stats(conv["title"] as? String ?: "Group"))
                 }
             }
             // iOS: All Media between the settings and the members, for a member, when there is some.

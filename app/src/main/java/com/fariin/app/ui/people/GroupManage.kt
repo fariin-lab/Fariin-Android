@@ -127,6 +127,10 @@ sealed interface GroupPage {
     data object JoinRequests : GroupPage
     /** The owner's Choose Another Owner from the Leave dialog. */
     data object ChooseOwner : GroupPage
+    /** iOS Group Settings › Recent Actions: the server's admin log (RecentActions.kt). */
+    data object RecentActions : GroupPage
+    /** iOS GroupInfoView › Statistics: the `groupStats` page (GroupStatsPage.kt). */
+    data class Stats(val title: String) : GroupPage
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
@@ -184,6 +188,8 @@ internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, 
         GroupPage.Members -> GroupMembersPage(cid, me, pop, push, onOpenPerson, onAddMembers)
         GroupPage.Banned -> BannedUsersPage(cid, pop)
         GroupPage.JoinRequests -> JoinRequestsPage(cid, pop)
+        GroupPage.RecentActions -> RecentActionsPage(cid, me, pop)
+        is GroupPage.Stats -> GroupStatsPage(cid, top.title, pop)
         GroupPage.ChooseOwner -> {
             val doc = liveGroupDoc(cid)
             if (doc.isEmpty()) Loading() else ChooseNewOwnerPage(cid, me, doc, pop) { stack.clear(); onHandedOver() }
