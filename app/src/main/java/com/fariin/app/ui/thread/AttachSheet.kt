@@ -102,6 +102,8 @@ internal fun AttachSheet(
     val gallery = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(MediaRules.MEDIA_PER_PICK),
     ) { uris ->
+        // Backed out of the picker with nothing chosen: the sheet goes too (one back, not two).
+        if (uris.isEmpty() && picked.isEmpty()) { onDismiss(); return@rememberLauncherForActivityResult }
         for (u in uris) if (u !in picked && picked.size < MediaRules.MEDIA_PER_PICK) {
             picked += u
             if ((context.contentResolver.getType(u) ?: "").startsWith("video/")) videos += u

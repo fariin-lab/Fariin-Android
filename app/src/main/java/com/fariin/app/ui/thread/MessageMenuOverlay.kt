@@ -107,8 +107,10 @@ private const val STRIP_COUNT = 15
  * back to 0.2, the bar fading over 0.2 s, the background over 0.4 s. Screen edges 8 (or the system
  * bars), card 250 wide with 45 rows and 33 corners, bar 56 tall (50 on a narrow phone).
  *
- * Android: a full-screen dialog window, so system back closes it and the blur is the window's own
- * blur-behind (Android 12 and up; older phones get the tint alone).
+ * Android: a full-screen dialog window, so system back closes it. The blur is the chat's own
+ * screen blurred in place (a RenderEffect on the activity's content, Android 12 and up; older
+ * phones get the tint alone), always taken off when the menu goes. Not the window blur-behind:
+ * on a real Pixel and the emulator that left the display showing stale frames after the menu.
  */
 @Composable
 internal fun MessageMenuOverlay(
@@ -141,6 +143,19 @@ internal fun MessageMenuOverlay(
         scope.launch { open.animateTo(0f, springSpec); onDismiss(); then() }
     }
 
+    // The blur, on the background's own clock as iOS's blur view alpha is.
+    val content = (LocalView.current.rootView as? android.view.ViewGroup)?.getChildAt(0)
+    val blurPx = with(density) { 20.dp.toPx() }
+    if (Build.VERSION.SDK_INT >= 31 && content != null) {
+        LaunchedEffect(content) {
+            androidx.compose.runtime.snapshotFlow { scrim.value }.collect { v ->
+                content.setRenderEffect(if (v < 0.01f) null
+                    else android.graphics.RenderEffect.createBlurEffect(blurPx * v, blurPx * v, android.graphics.Shader.TileMode.CLAMP))
+            }
+        }
+        androidx.compose.runtime.DisposableEffect(content) { onDispose { content.setRenderEffect(null) } }
+    }
+
     LaunchedEffect(Unit) {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         launch { scrim.animateTo(1f, tween(200, easing = EaseInOut)) }
@@ -156,16 +171,6 @@ internal fun MessageMenuOverlay(
             window ?: return@LaunchedEffect
             window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             window.setWindowAnimations(0)
-            if (Build.VERSION.SDK_INT >= 31) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-        }
-        // The blur follows the background's own clock, as iOS's blur view alpha does.
-        val blurPx = with(density) { 20.dp.toPx() }
-        if (Build.VERSION.SDK_INT >= 31 && window != null) {
-            LaunchedEffect(window) {
-                androidx.compose.runtime.snapshotFlow { scrim.value }.collect { v ->
-                    window.attributes = window.attributes.apply { blurBehindRadius = (blurPx * v).roundToInt() }
-                }
-            }
         }
         var origin by remember { mutableStateOf<Offset?>(null) }
         val tint = if (c.dark) Color.Black.copy(alpha = 0.6f) else Color(0f, 0.039f, 0.149f, 0.2f)

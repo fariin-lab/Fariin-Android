@@ -335,9 +335,6 @@ fun ChatListScreen(
                                 titleContentColor = c.label, actionIconContentColor = c.label, navigationIconContentColor = c.label,
                             ),
                         )
-                        // The search field always showing under the title (owner 2026-11-03): one tap
-                        // and the keyboard is up, as the reference app's list does.
-                        if (!showArchive) SearchCapsule { searching = true }
                         }
                     }
                 }
@@ -359,9 +356,6 @@ fun ChatListScreen(
         },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding())) {
-            if (!showArchive && !searching && filter == FILTER_ALL && state.requests.isNotEmpty()) {
-                ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", onClick = people.requests)
-            }
             when {
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
                 state.loading && source.isEmpty() -> com.fariin.app.ui.components.ChatListSkeleton()
@@ -380,6 +374,13 @@ fun ChatListScreen(
                     // section after a pin, the Archived row) shows at once instead of landing just above
                     // the screen. Scrolled down, the list keeps the row I am looking at, so nothing jumps.
                     item(key = "top-anchor", contentType = "anchor") { Spacer(Modifier.fillMaxWidth().height(1.dp)) }
+                    // The search field heads the list and scrolls away with it, as iOS's does
+                    // (owner 2026-11-03): one tap and the keyboard is up.
+                    if (!showArchive && !searching) item(key = "search", contentType = "search") { SearchCapsule { searching = true } }
+                    if (!showArchive && !searching && filter == FILTER_ALL && state.requests.isNotEmpty()) item(key = "requests", contentType = "requests") {
+                        ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", badge = true,
+                            subtitle = state.requests.joinToString(", ") { it.displayName(me) }, onClick = people.requests)
+                    }
                     val archivedCount = state.archived.size + if (officialArchived && official.latest != null) 1 else 0
                     if (!showArchive && !searching && filter == FILTER_ALL && archivedCount > 0) {
                         item(key = "archive") {
@@ -557,22 +558,35 @@ private fun OverflowMenu(
     }
 }
 
-/** A one-line row (Message Requests, Archived) above the chats, on a floating rounded card like the pinned bar. */
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Message Requests and Archived above the chats, drawn as a chat row (owner 2026-11-03: the
+ * floating card there "makes the UI ugly"): the 54 round icon where a photo goes, the name line,
+ * the line under it, and the count where a chat's unread badge sits (blue for requests).
+ */
 @Composable
-private fun ListRow(title: String, icon: ImageVector, trailing: String?, onClick: () -> Unit) {
+private fun ListRow(title: String, icon: ImageVector, trailing: String?, subtitle: String? = null, badge: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).height(52.dp)
-            .floating(RoundedCornerShape(18.dp)).combinedClickable(onClick = onClick).padding(start = 8.dp, end = 16.dp),
+        Modifier.fillMaxWidth().combinedClickable(onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(36.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = c.label, modifier = Modifier.size(20.dp))
+        Box(Modifier.padding(vertical = 9.dp).size(54.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = c.secondary, modifier = Modifier.size(26.dp))
         }
-        Spacer(Modifier.width(12.dp))
-        Text(title, style = MaterialTheme.typography.bodyLarge, color = c.label, modifier = Modifier.weight(1f))
-        if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelLarge, color = c.blue)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1)
+            if (!subtitle.isNullOrEmpty()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            if (badge) Box(
+                Modifier.height(20.dp).defaultMinSize(minWidth = 20.dp).clip(CircleShape).background(c.blue).padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(trailing, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1) }
+            else Text(trailing, style = MaterialTheme.typography.labelLarge, color = c.secondary)
+        }
     }
 }
 

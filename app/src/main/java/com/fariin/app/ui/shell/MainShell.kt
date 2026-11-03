@@ -257,15 +257,19 @@ private fun FloatingTabBar(
             blurRadius = 24.dp
             noiseFactor = 0f
             // Frosted white by day, the dark surface at night, both thin enough to show what passes under.
-            tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.60f)))
+            tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.72f)))
         }
     } else Modifier.background(surface.copy(alpha = 0.97f))
     Row(
         modifier
             .widthIn(max = 420.dp).fillMaxWidth().height(BarHeight)
-            .shadow(if (c.dark) 0.dp else 10.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.16f))
+            .shadow(if (c.dark) 0.dp else 16.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.28f))
             .clip(shape)
             .then(fill)
+            // A glass edge you can see (owner 2026-11-03, "ours is invisible"): a thin grey outer
+            // line, then the bright inner rim.
+            .border(0.5.dp, if (c.dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.12f), shape)
+            .padding(0.5.dp)
             .border(1.dp, border, shape)
             .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -286,10 +290,12 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
     // in place from 60% while it fades in (decelerating, 320 ms) and the old tab's pill shrinks
     // away, so a tap never smears across the tabs in between. Drawn in drawBehind: the draw phase
     // alone reads the value. The icon gives a small pop when its tab opens.
-    val tint by animateColorAsState(if (selected) c.label else c.secondary, spec, label = "tabTint")
+    // The open tab in the text colour, the others a darker grey than before so the bar does not read
+    // as washed out (owner 2026-11-03: no blue pill, "all looks light").
+    val tint by animateColorAsState(if (selected) c.label else c.label.copy(alpha = 0.62f), spec, label = "tabTint")
     val on by animateFloatAsState(if (selected) 1f else 0f,
         if (animate) tween(320, easing = LinearOutSlowInEasing) else snap(), label = "tabPill")
-    val pillColor = if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
+    val pillColor = if (c.dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
     val pop = remember { Animatable(1f) }
     LaunchedEffect(selected) {
         if (selected && animate) { pop.snapTo(0.86f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
@@ -332,7 +338,7 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
                         modifier = if (selected) Modifier.border(1.5.dp, c.label, androidx.compose.foundation.shape.CircleShape) else Modifier)
                 }
             }
-            Text(t.label, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            Text(t.label, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 color = tint, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
         }
     }
