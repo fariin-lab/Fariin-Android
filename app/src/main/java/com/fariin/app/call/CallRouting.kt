@@ -107,7 +107,13 @@ object CallRouting {
         else -> DisconnectCause.REMOTE
     }
 
-    /** Picture in picture: only a video call that is on, with their picture or mine to show. */
+    /**
+     * Picture in picture when I leave the app: any call I am in (calling, on, reconnecting), with
+     * their video or mine, else their photo, name and clock. Not a ring (the system screen answers it).
+     */
     fun pipWanted(phase: CallPhase, cameraOn: Boolean, remoteCameraOn: Boolean): Boolean =
-        (phase == CallPhase.ACTIVE || phase == CallPhase.RECONNECTING) && (cameraOn || remoteCameraOn)
+        phase == CallPhase.OUTGOING || phase == CallPhase.ACTIVE || phase == CallPhase.RECONNECTING
+
+    /** The window's shape: tall for a video, square for a voice call's photo and name. */
+    fun pipVideo(cameraOn: Boolean, remoteCameraOn: Boolean) = cameraOn || remoteCameraOn
 }

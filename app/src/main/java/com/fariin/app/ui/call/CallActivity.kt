@@ -153,7 +153,13 @@ class CallActivity : ComponentActivity() {
                     val ui by CallManager.ui.collectAsState()
                     LaunchedEffect(ui.status.phase) { if (ui.status.phase == CallPhase.IDLE) finish() }
                     val pip = CallRouting.pipWanted(ui.status.phase, ui.cameraOn, ui.remoteCameraOn)
-                    LaunchedEffect(pip) { updatePip(pip) }
+                    val pipTall = CallRouting.pipVideo(ui.cameraOn, ui.remoteCameraOn)
+                    LaunchedEffect(pip, pipTall) { updatePip(pip) }
+                    // iOS: a call shrunk away opens back up for the No answer page.
+                    LaunchedEffect(ui.noAnswer) {
+                        if (ui.noAnswer && inPip) startActivity(Intent(this@CallActivity, CallActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                    }
                     if (inPip) { PipScreen(ui); return@FariinTheme }
                     CallScreen(demoCam?.let { ui.copy(localVideo = it) } ?: ui,
                         onAccept = { withMic(ui.status.video, { CallManager.accept() }, { CallManager.micDenied() }) },
@@ -163,10 +169,31 @@ class CallActivity : ComponentActivity() {
                         onRoute = { CallManager.setRoute(it) },
                         onCamera = { cameraToggle(ui.cameraOn) },
                         onFlip = { CallManager.flipCamera() },
-                        onMinimize = { minimize() })
+                        onMinimize = { minimize() },
+                        onCallAgain = { withMic(ui.status.video, { CallManager.callAgain(this@CallActivity) }, { CallManager.closeNoAnswer() }) },
+                        onVoiceMessage = { voiceMessageAfterNoAnswer() },
+                        onCloseNoAnswer = { CallManager.closeNoAnswer() })
                 }
             }
         }
+    }
+
+    /**
+     * iOS recordVoiceNoteAfterNoAnswer: the page closes and the chat with them opens. (iOS also
+     * starts its recorder there; the Android composer records only while the mic is held.)
+     */
+    private fun voiceMessageAfterNoAnswer() {
+        val peer = CallManager.ui.value.peerUid
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        CallManager.closeNoAnswer()
+        if (me != null && peer.isNotEmpty()) startActivity(com.fariin.app.system.ChatShortcuts.openIntent(this, com.fariin.app.call.CallWire.convId(me, peer)))
+        finish()
+    }
+
+    /** iOS: nobody is looking at the No answer page once the app has gone; it closes. */
+    override fun onStop() {
+        super.onStop()
+        if (!inPip && !isChangingConfigurations) CallManager.closeNoAnswer()
     }
 
     private fun cameraToggle(on: Boolean) {
@@ -176,7 +203,9 @@ class CallActivity : ComponentActivity() {
     }
 
     private fun pipParams(auto: Boolean): PictureInPictureParams {
-        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16))
+        val u = CallManager.ui.value
+        val b = PictureInPictureParams.Builder()
+            .setAspectRatio(if (CallRouting.pipVideo(u.cameraOn, u.remoteCameraOn)) Rational(9, 16) else Rational(1, 1))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setAutoEnterEnabled(auto).setSeamlessResizeEnabled(true)
         return b.build()
     }
@@ -190,9 +219,9 @@ class CallActivity : ComponentActivity() {
     }
 
     /**
-     * The header's minimize (iOS: the call shrinks into its card): a video call goes into the
-     * picture-in-picture window, a voice call steps behind the app and goes on (the ongoing call
-     * notification and the Calls tab bring it back), as Home does.
+     * The header's minimize (iOS: the call shrinks into its card): the call goes into the
+     * picture-in-picture window, as Home does. Without picture in picture it steps behind the app
+     * and goes on (the ongoing call notification and the Calls tab bring it back).
      */
     private fun minimize() {
         val u = CallManager.ui.value

@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CloseFullscreen
 import androidx.compose.material.icons.filled.Mic
@@ -122,6 +123,8 @@ import livekit.org.webrtc.VideoTrack
 private val Backdrop = Color.Black
 private val Red = Color(0xFFFF3B30)
 private val Green = Color(0xFF34C759)
+/** iOS noAnswerBar's tint (0x22C55E). */
+private val NoAnswerGreen = Color(0xFF22C55E)
 // The dark glass of iOS's call screens: a light veil on black with a faint white rim.
 private val Glass = Color.White.copy(alpha = 0.14f)
 private val GlassRim = Color.White.copy(alpha = 0.18f)
@@ -176,6 +179,7 @@ fun CallScreen(
     onAccept: () -> Unit, onDecline: () -> Unit, onEnd: () -> Unit,
     onMute: () -> Unit, onRoute: (AudioRoute) -> Unit, onCamera: () -> Unit, onFlip: () -> Unit,
     onMinimize: (() -> Unit)? = null,
+    onCallAgain: () -> Unit = {}, onVoiceMessage: () -> Unit = {}, onCloseNoAnswer: () -> Unit = {},
 ) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(ui.status.connectedAtMs) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
@@ -227,7 +231,8 @@ fun CallScreen(
             }
             when (s.phase) {
                 CallPhase.INCOMING -> IncomingButtons(s.video, onAccept, onDecline)
-                CallPhase.ENDED -> Spacer(Modifier.height(BarHeight))
+                CallPhase.ENDED -> if (ui.noAnswer) NoAnswerCard(s, onCallAgain, onVoiceMessage, onCloseNoAnswer)
+                    else Spacer(Modifier.height(BarHeight))
                 else -> ControlBar(ui, chrome, onEnd, onMute, onRoute, onCamera, Modifier.alpha(shown))
             }
             Spacer(Modifier.navigationBarsPadding().height(22.dp))
@@ -426,6 +431,45 @@ private fun LabeledCircle(icon: ImageVector, label: String, color: Color, onClic
     }
 }
 
+/**
+ * iOS noAnswerBar: under "No answer" / "Couldn't connect", one card with the way forward as a wide
+ * green button (Call again, or Try again after a failed connect), and Voice message and Close under it.
+ */
+@Composable
+private fun NoAnswerCard(s: com.fariin.app.call.CallStatus, onCallAgain: () -> Unit, onVoiceMessage: () -> Unit, onClose: () -> Unit) {
+    val retry = if (s.endReason == com.fariin.app.call.EndReason.FAILED) "Try again" else "Call again"
+    Column(
+        Modifier.padding(horizontal = 16.dp).fillMaxWidth().darkGlass(RoundedCornerShape(30.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().height(54.dp).clip(CircleShape).background(NoAnswerGreen).clickable(onClick = onCallAgain)
+                .semantics { contentDescription = retry },
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(if (s.video) Icons.Filled.Videocam else Icons.Filled.Call, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(retry, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NoAnswerSecondary(Icons.Filled.Mic, "Voice message", Modifier.weight(1f), onVoiceMessage)
+            NoAnswerSecondary(Icons.Filled.Close, "Close", Modifier.weight(1f), onClose)
+        }
+    }
+}
+
+@Composable
+private fun NoAnswerSecondary(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.height(46.dp).darkGlass(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label },
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
 /** The dark capsule the round buttons sit in (iOS controlBar background). */
 @Composable
 private fun ControlCapsule(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -497,18 +541,59 @@ private fun SpeakerButton(ui: CallUi, size: Dp, onRoute: (AudioRoute) -> Unit) {
     }
 }
 
-/** The small picture-in-picture window: their video, else mine, else their photo. */
+/**
+ * The picture-in-picture window, as the iOS one carries the whole call: their video big with mine
+ * in a corner tile (mine big while theirs is off), else their photo with the name and the stage
+ * words or clock. A mic-off badge while they are muted, and one on my tile (or by the name) while I am.
+ */
 @Composable
 fun PipScreen(ui: CallUi) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(ui.status.connectedAtMs) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
+    val s = ui.status
+    val connected = s.phase == CallPhase.ACTIVE || s.phase == CallPhase.RECONNECTING
+    val status = if (ui.held && s.live) "On hold" else CallMachine.label(s, now)
+    val theirMute = ui.remoteMuted && connected
     Box(Modifier.fillMaxSize().background(Backdrop), contentAlignment = Alignment.Center) {
         val remote = ui.remoteVideo.takeIf { ui.remoteCameraOn }
         val local = ui.localVideo.takeIf { ui.cameraOn }
+        val demoThem = ui.peerUid == "demo" && ui.remoteCameraOn
+        val bigIsMine = remote == null && !demoThem && local != null
         when {
             remote != null -> VideoView(remote, mirror = false, modifier = Modifier.fillMaxSize())
-            ui.peerUid == "demo" && ui.remoteCameraOn -> DemoVideo(Modifier.fillMaxSize(), Color(0xFF3A5A40), Color(0xFF1B2B1F))
+            demoThem -> DemoVideo(Modifier.fillMaxSize(), ThemA, ThemB)
             local != null -> VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize())
-            else -> Avatar(ui.peerPhoto, 64.dp)
+            else -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+                Avatar(ui.peerPhoto, 56.dp, Modifier.semantics { contentDescription = ui.peerName })
+                Spacer(Modifier.height(6.dp))
+                Text(ui.peerName.substringBefore(' '), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(status, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
+                if (ui.muted) PipMicOff("You are muted", Modifier.padding(top = 4.dp))
+            }
         }
+        val video = remote != null || demoThem || local != null
+        if (video) {
+            // The stage words or clock along the bottom over the video.
+            Text(status, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
+                    .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+            // My tile in the corner while their video is big.
+            if (!bigIsMine && local != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(36.dp, 64.dp).clip(RoundedCornerShape(8.dp))) {
+                VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize(), overlay = true)
+            }
+            if (ui.muted) PipMicOff("You are muted", Modifier.align(Alignment.BottomEnd).padding(8.dp))
+        }
+        if (theirMute) PipMicOff("${ui.peerName.substringBefore(' ')} is muted", Modifier.align(Alignment.TopStart).padding(8.dp))
+    }
+}
+
+/** The small round mic-off badge of the picture-in-picture window. */
+@Composable
+private fun PipMicOff(label: String, modifier: Modifier = Modifier) {
+    Box(modifier.size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center) {
+        Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(14.dp))
     }
 }
 

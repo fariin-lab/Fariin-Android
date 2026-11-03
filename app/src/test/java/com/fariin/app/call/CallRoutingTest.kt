@@ -78,8 +78,12 @@ class CallRoutingTest {
     @Test fun pipOnlyForLiveVideo() {
         assertTrue(CallRouting.pipWanted(CallPhase.ACTIVE, cameraOn = false, remoteCameraOn = true))
         assertTrue(CallRouting.pipWanted(CallPhase.RECONNECTING, true, false))
-        assertFalse(CallRouting.pipWanted(CallPhase.ACTIVE, false, false))
-        assertFalse(CallRouting.pipWanted(CallPhase.OUTGOING, true, true))
+        assertTrue(CallRouting.pipWanted(CallPhase.ACTIVE, false, false))
+        assertTrue(CallRouting.pipWanted(CallPhase.OUTGOING, true, true))
+        assertFalse(CallRouting.pipWanted(CallPhase.INCOMING, true, true))
+        assertFalse(CallRouting.pipWanted(CallPhase.ENDED, true, true))
+        assertTrue(CallRouting.pipVideo(cameraOn = false, remoteCameraOn = true))
+        assertFalse(CallRouting.pipVideo(cameraOn = false, remoteCameraOn = false))
     }
 }
 
