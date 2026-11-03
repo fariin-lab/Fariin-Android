@@ -112,6 +112,9 @@ dependencies {
     // App Check, as iOS sends it (AppCheckSetup.swift): Play Integrity in builds for users, the
     // debug provider in test builds. Nothing is enforced on the server yet.
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    // Create Sticker: the subject lifted on the phone (iOS uses Vision's foreground mask).
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     // The launch screen (Android 12 API, back-ported), and the app-wide foreground/background signal.
     implementation(libs.androidx.core.splashscreen)

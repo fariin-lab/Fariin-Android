@@ -32,6 +32,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -257,10 +258,15 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
     val favorites by com.fariin.app.data.StickerFavorites.list.collectAsState()
     val shelves: List<StickerPackInfo> = remember(recents, favorites, packs) {
         (if (recents.isEmpty()) emptyList() else listOf(StickerPackInfo("recent", "Recently Used", recents))) +
-            (if (favorites.isEmpty()) emptyList() else listOf(StickerPackInfo("favorites", "Favorites", favorites))) + packs
+            listOf(StickerPackInfo("favorites", "Favorites", favorites)) + packs
     }
-    // Where each shelf's header sits in the grid, for the strip's jumps.
-    val starts = remember(shelves) { var i = 0; shelves.map { s -> val at = i; i += 1 + s.stickers.size; at } }
+    // Where each shelf's header sits in the grid, for the strip's jumps (Favorites has the Create tile too).
+    val starts = remember(shelves) { var i = 0; shelves.map { s -> val at = i; i += 1 + s.stickers.size + (if (s.id == "favorites") 1 else 0); at } }
+    // Create Sticker (iOS panel.onCreate): Android's photo picker, then the creator page.
+    var creating by remember { mutableStateOf<android.net.Uri?>(null) }
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { u -> if (u != null) creating = u }
+    creating?.let { u -> StickerCreatorPage(u, onClose = { creating = null }) { made -> creating = null; onSticker(made) } }
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize()) {
@@ -271,6 +277,16 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
                 item(key = "h:${shelf.id}", span = { GridItemSpan(maxLineSpan) }) {
                     Text(shelf.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
                         modifier = Modifier.height(24.dp).padding(top = 6.dp))
+                }
+                if (shelf.id == "favorites") item(key = "create") {
+                    Box(Modifier.size(70.dp).clip(RoundedCornerShape(10.dp)).background(c.label.copy(alpha = 0.06f)).clickable {
+                        pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }.semanticsLabel("Create Sticker"), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Filled.Add, contentDescription = null, tint = c.secondary, modifier = Modifier.size(26.dp))
+                            Text("Create", fontSize = 11.sp, color = c.secondary)
+                        }
+                    }
                 }
                 for (s in shelf.stickers) item(key = "${shelf.id}:${s.key}") {
                     Box(Modifier.size(70.dp).clip(RoundedCornerShape(10.dp)).clickable {
