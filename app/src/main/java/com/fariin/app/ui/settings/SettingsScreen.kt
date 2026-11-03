@@ -72,11 +72,11 @@ import com.fariin.app.ui.theme.Fariin
  *
  * Real pages: Account (Security notifications, Your Account Data, Delete Account, Log out), Devices,
  * Notifications, Appearance > Night Mode / Quick Reaction, Chats, Stories, Privacy & Security
- * (PrivacyPages.kt), Storage and Data (MorePages.kt), Help & About and Safety. Pages outside
- * Settings' scope (Search, Share profile, Invite Friends, wallpaper,
- * chat colour, app icon) still open a "Coming soon on Android" page.
+ * (PrivacyPages.kt), Storage and Data (MorePages.kt), Help & About and Safety, Settings search
+ * (SettingsSearch.kt), Share profile = my QR code and the scanner, Invite Friends (QrPages.kt),
+ * Chat Wallpaper and Chat Color (LookPages.kt).
  *
- * TODO: Subscriptions (iOS shows it to @v only), the admin sections, Settings search, my QR.
+ * TODO: Subscriptions (iOS shows it to @v only), the admin sections.
  */
 @Composable
 fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
@@ -125,6 +125,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             moreRoute(page, push, pop) -> Unit
             lookRoute(page, push, pop) -> Unit
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
+            page == PAGE_SCAN -> ScanQrPage(onMyCode = { pop(); myQrOpen.value = true }, onClose = pop, onDone = pop)
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
         }
@@ -160,7 +161,8 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
         })
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
-            ProfileHeader(profile, onEdit = people.editProfile, onShare = { push(soon("Share profile")) })
+            ProfileHeader(profile, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
+            if (myQrOpen.value) MyQrSheet(profile, onClose = { myQrOpen.value = false }, onScan = { push(PAGE_SCAN) })
             Spacer(Modifier.height(8.dp))
             SettingsSection {
                 SettingsRow("Account", painterResource(R.drawable.ic_account)) { push(PAGE_ACCOUNT) }
@@ -177,7 +179,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             }
             SettingsSection {
                 SettingsRow("Invite Friends", painterResource(R.drawable.ic_invite_friends), trailing = Trailing.NONE) {
-                    push(soon("Invite Friends"))
+                    shareInvite(ctx, profile?.handle)
                 }
                 SettingsRow("Safety", vec(Icons.Outlined.VerifiedUser), trailing = Trailing.NONE) {
                     openWeb(ctx, "https://fariin.com/safety")
@@ -303,7 +305,7 @@ private fun AccountPage(
 
 /**
  * iOS AppearanceSettingsView. The chat theme preview and cards above these rows are not built
- * yet (TODO); Chat Wallpaper, Chat Color, App Icon and Quick Reaction open "Coming soon".
+ * yet (TODO).
  */
 @Composable
 private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {

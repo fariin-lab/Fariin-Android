@@ -146,6 +146,8 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-video:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
+    // My QR code and the scanner (ui/settings/QrPages.kt): QR encode/decode only, Apache 2.0.
+    implementation("com.google.zxing:core:3.5.3")
     // Calls: LiveKit for group rooms, and its bundled WebRTC build (package livekit.org.webrtc) for
     // 1:1 calls too, so the app carries one WebRTC engine, not two.
     implementation(libs.livekit.android)
