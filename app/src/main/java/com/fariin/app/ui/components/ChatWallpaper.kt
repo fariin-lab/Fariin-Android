@@ -50,7 +50,8 @@ fun Modifier.chatWallpaper(cid: String): Modifier = composed {
     val w = ChatLookStore.wallpaper(ctx, cid)
     SideEffect { ChatLookStore.openCid.value = cid }
     DisposableEffect(cid) { onDispose { if (ChatLookStore.openCid.value == cid) ChatLookStore.openCid.value = null } }
-    val pattern = WallpaperArt.pattern(ctx)
+    // The doodle sheet only for a theme that draws it: decoding it costs 10 ms on the opening frame.
+    val pattern = if (w.theme?.pattern == true) WallpaperArt.pattern(ctx) else null
     val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
     drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true) }
 }
