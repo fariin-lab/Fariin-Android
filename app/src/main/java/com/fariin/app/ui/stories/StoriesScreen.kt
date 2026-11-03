@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.filled.Person
@@ -208,6 +209,15 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val glowCards = if (glowOn) com.fariin.app.ui.glow.rememberGlowCards(me) else com.fariin.app.data.GlowLoad.Loaded(emptyList())
     val glowOpener = remember { com.fariin.app.ui.glow.GlowOpener() }
     var glowPage by rememberSaveable { mutableStateOf(false) }
+    // Glow notifications (iOS GlowNotificationsView): the iOS bell is not drawn in this layout, so
+    // its door is in the overflow, with the bell's unread dot (iOS hasUnreadGlow).
+    var glowNotifs by rememberSaveable { mutableStateOf(false) }
+    val glowSeenUpTo by com.fariin.app.data.Glow.seenUpTo.collectAsState()
+    var newestGlowMs by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(glowOn, glowState.glowers) {
+        if (glowOn) newestGlowMs = runCatching { com.fariin.app.data.Glow.fetchRecentGlowers(1).firstOrNull()?.second }.getOrNull()
+    }
+    val glowUnread = glowOn && (newestGlowMs?.let { it > glowSeenUpTo } ?: (glowState.glowers.isNotEmpty() && glowSeenUpTo == 0L))
     // A glow person's ring is grey once their stories in my feed are all seen.
     val glowSeen: (String) -> Boolean = { uid -> state.others.firstOrNull { it.key == uid }?.hasUnseen == false }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -221,11 +231,16 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
             Box {
                 com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { moreOpen = true })
+                if (glowUnread) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(8.dp).clip(CircleShape).background(c.accent))
                 androidx.compose.material3.DropdownMenu(moreOpen, onDismissRequest = { moreOpen = false },
                     shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Story privacy", color = c.label) },
                         leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, tint = c.label) },
                         onClick = { moreOpen = false; privacyPages.add(com.fariin.app.ui.settings.PAGE_STORIES) })
+                    if (glowOn) androidx.compose.material3.DropdownMenuItem(text = { Text("Notifications", color = c.label) },
+                        leadingIcon = { Icon(Icons.Outlined.Notifications, contentDescription = null, tint = c.label) },
+                        trailingIcon = if (glowUnread) { { Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent)) } } else null,
+                        onClick = { moreOpen = false; glowNotifs = true })
                 }
             }
         })
@@ -360,6 +375,18 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             onDismissRequest = { glowPage = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) { com.fariin.app.ui.glow.GlowStoriesPage(me, conversations, glowSeen, onBack = { glowPage = false }) }
+    }
+    if (glowNotifs) {
+        val people = com.fariin.app.ui.people.LocalPeopleNav.current
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { glowNotifs = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            com.fariin.app.ui.glow.GlowNotificationsPage(me, state.mine?.stories ?: emptyList(), conversations,
+                onOpenPerson = { uid -> glowNotifs = false; people.contact(uid) },
+                onOpenMyStory = { state.mine?.let { g -> viewing = listOf(g) to 0 } },
+                onBack = { glowNotifs = false })
+        }
     }
     if (posted) {
         androidx.compose.ui.window.Dialog(
