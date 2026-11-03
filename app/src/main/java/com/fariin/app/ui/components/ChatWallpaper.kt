@@ -55,6 +55,14 @@ fun Modifier.chatWallpaper(cid: String): Modifier = composed {
     drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true) }
 }
 
+/** Whether this chat draws a wallpaper (the thread's top and bottom fades step aside for it). */
+@Composable
+fun hasChatWallpaper(cid: String): Boolean {
+    val ctx = LocalContext.current
+    ChatLookStore.version.intValue
+    return ChatLookStore.wallpaper(ctx, cid) != com.fariin.app.data.ChatWallpaper.None
+}
+
 /** The bubble colour for the open chat, or null for the app's blue (ThreadScreen myFill). */
 @Composable
 fun openChatBubbleColor(): Color? {

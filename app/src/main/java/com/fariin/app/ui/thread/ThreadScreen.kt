@@ -385,6 +385,7 @@ private fun ThreadContent(
     var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val walled = com.fariin.app.ui.components.hasChatWallpaper(ui.cid)
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
@@ -396,7 +397,8 @@ private fun ThreadContent(
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg, 0.7f to c.bg.copy(alpha = 0.92f), 1f to c.bg.copy(alpha = 0f)))
+                // Over a wallpaper the page-colour fade read as a pale band: it steps aside then.
+                .then(if (walled) Modifier else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg, 0.7f to c.bg.copy(alpha = 0.92f), 1f to c.bg.copy(alpha = 0f))))
                 .onSizeChanged { topBarPx = it.height }) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
                     // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).
@@ -1170,7 +1172,8 @@ private fun Composer(
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     val field = MaterialTheme.colorScheme.surfaceContainerHigh
     // A soft wash, not a bar: clear at the top, the page colour behind the controls (iOS composer).
-    Column(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg.copy(alpha = 0f), 0.45f to c.bg.copy(alpha = 0.92f), 1f to c.bg)).navigationBarsPadding()) {
+    val walled = com.fariin.app.data.ChatLookStore.openCid.value?.let { com.fariin.app.ui.components.hasChatWallpaper(it) } == true
+    Column(Modifier.fillMaxWidth().then(if (walled) Modifier else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg.copy(alpha = 0f), 0.45f to c.bg.copy(alpha = 0.92f), 1f to c.bg))).navigationBarsPadding()) {
         // iOS mentionPicker, above the bar; hidden while editing (an edit tags nobody).
         if (mentions != null && prefill == null && !recording) MentionPicker(mentions, boxValue) { v, uid, name ->
             boxValue = v; draft = v.text
