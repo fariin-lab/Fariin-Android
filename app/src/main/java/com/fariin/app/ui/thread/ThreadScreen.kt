@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.filled.Add
@@ -330,12 +332,11 @@ private fun ThreadContent(
         }
     }
     val pins = visiblePins(ui)
+    // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
+    // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
+    var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
-        if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
-        PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
-            onJump = { jumpTo(it, advance = true) },
-            onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
-            onSeeAll = { showPins.value = true })
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
             val all = com.fariin.app.data.PinRules.sheetOrder(pins) { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] }
@@ -345,6 +346,15 @@ private fun ThreadContent(
                 bubble = { m -> MessageRow(ui, m, ThreadLogic.RowGeometry(false, true, true, 0), is24h, {}) {} })
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
+                .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg, 0.7f to c.bg.copy(alpha = 0.92f), 1f to c.bg.copy(alpha = 0f)))
+                .onSizeChanged { topBarPx = it.height }) {
+                if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
+                PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
+                    onJump = { jumpTo(it, advance = true) },
+                    onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
+                    onSeeAll = { showPins.value = true })
+            }
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes.
                 com.fariin.app.ui.components.ThreadSkeleton()
@@ -356,7 +366,7 @@ private fun ThreadContent(
             androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark) {
             LazyColumn(
                 Modifier.fillMaxSize(), state = listState, reverseLayout = true,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 8.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = 8.dp),
             ) {
                 itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId }) { _, i ->
                     val m = ui.messages[i]
@@ -574,7 +584,7 @@ private fun noticeText(m: Message): String = when {
 @Composable
 private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
+    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             // Back in its own floating circle, the chevron as iOS (ChatHeaderView).
             IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp).floating()) {
