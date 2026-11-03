@@ -1130,6 +1130,128 @@ def reject_group_ownership(uid, data):
 
 
 HANDLERS.update({"rejectGroupOwnership": reject_group_ownership})
+
+
+# ---------------------------------------------------------------------------------------------
+# SIGN-UP AND USERNAME TEST STUBS (2026-11-02). Copies of functions-loginalert requestSignupCode /
+# verifySignupCode / completeSignup and functions-username checkUsername / claimUsername, so a new
+# account can be made locally. NOT the real server: no mail is sent (the code is kept in clear as
+# `devCode` on signupCodes/{email} for the test script to read), no rate limits, no IP checks, the
+# username rules are the shape check only (no reserved names, skeletons, 30-day holds or audit).
+SU_TTL_MS = 10 * 60 * 1000
+SU_TICKET_TTL_MS = 15 * 60 * 1000
+SU_MAX_ATTEMPTS = 5
+NO_AUTH = {"requestSignupCode", "verifySignupCode", "completeSignup"}
+
+
+def _su_email(data):
+    return str((data or {}).get("email") or "").strip().lower()
+
+
+def _su_key(email):
+    return hashlib.sha256(email.encode()).hexdigest()
+
+
+def _su_exists(email):
+    return bool(_auth_post("accounts:lookup", {"email": [email]}).get("users"))
+
+
+def request_signup_code(uid, data):
+    email = _su_email(data)
+    if not email or "@" not in email: return {"sent": True}
+    key = _su_key(email)
+    if _su_exists(email):
+        remove(f"signupCodes/{key}")   # the real one mails "You already have a Fariin account"
+        return {"sent": True}
+    code = f"{random.randint(0, 999999):06d}"
+    write(f"signupCodes/{key}", {"hash": _su_key(code + key), "expiresAt": _ot_now() + SU_TTL_MS,
+                                 "attempts": 0, "createdAt": _ot_now(), "devCode": code, "email": email})
+    return {"sent": True}
+
+
+def verify_signup_code(uid, data):
+    email = _su_email(data)
+    code = str((data or {}).get("code") or "").strip()
+    if not (len(code) == 6 and code.isdigit()):
+        raise Refuse("INVALID_ARGUMENT", "Enter the six-digit code from your email.")
+    key = _su_key(email)
+    d = get(f"signupCodes/{key}")
+    reason = None
+    if not d or _ot_now() > int(d.get("expiresAt") or 0): reason = "expired"
+    elif int(d.get("attempts") or 0) >= SU_MAX_ATTEMPTS: reason = "burned"
+    elif d.get("hash") != _su_key(code + key):
+        write(f"signupCodes/{key}", {"attempts": int(d.get("attempts") or 0) + 1})
+        reason = "wrong"
+    if reason:
+        if reason != "wrong": remove(f"signupCodes/{key}")
+        raise Refuse("PERMISSION_DENIED", "Too many wrong tries. Ask for a new code." if reason == "burned"
+                     else "That code is wrong or has expired.")
+    remove(f"signupCodes/{key}")
+    ticket = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
+    write(f"signupTickets/{hashlib.sha256(ticket.encode()).hexdigest()}",
+          {"email": email, "expiresAt": _ot_now() + SU_TICKET_TTL_MS})
+    return {"ticket": ticket}
+
+
+def complete_signup(uid, data):
+    ticket = str((data or {}).get("ticket") or "")
+    password = str((data or {}).get("password") or "")
+    if len(password) < 8 or not any(ch.isalpha() for ch in password) or not any(ch.isdigit() for ch in password):
+        raise Refuse("INVALID_ARGUMENT", "Use at least 8 characters, with a letter and a number.")
+    if not ticket: raise Refuse("PERMISSION_DENIED", "Your code has expired. Start again.")
+    path = f"signupTickets/{hashlib.sha256(ticket.encode()).hexdigest()}"
+    d = get(path)
+    email = d.get("email") if d and _ot_now() <= int(d.get("expiresAt") or 0) else None
+    if not email:
+        remove(path)
+        raise Refuse("PERMISSION_DENIED", "Your code has expired. Start again.")
+    if _su_exists(email):
+        remove(path)
+        raise Refuse("ALREADY_EXISTS", "This email already has an account.")
+    new_uid = _auth_post("accounts", {"email": email, "password": password, "emailVerified": True}).get("localId")
+    remove(path)
+    return {"token": _custom_token(new_uid)}
+
+
+def _un_shape(raw):
+    """The plain shape rule only: 5 to 30 letters, digits and underscores, starting with a letter."""
+    import re
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{4,29}", raw):
+        return "Use 5 to 30 letters, numbers or underscores, starting with a letter."
+    return None
+
+
+def check_username(uid, data):
+    raw = str((data or {}).get("username") or "").strip()
+    shape = _un_shape(raw)
+    if shape: return {"available": False, "code": "invalid", "reason": shape}
+    d = get(f"usernames/{raw.lower()}")
+    if d and d.get("uid") and d.get("uid") != uid:
+        return {"available": False, "code": "taken", "reason": "taken"}
+    return {"available": True, "code": None, "reason": None}
+
+
+def claim_username(uid, data):
+    raw = str((data or {}).get("username") or "").strip()
+    shape = _un_shape(raw)
+    if shape: raise Refuse("INVALID_ARGUMENT", shape, {"reason": shape})
+    lower = raw.lower()
+    d = get(f"usernames/{lower}")
+    if d and d.get("uid") and d.get("uid") != uid:
+        raise Refuse("ALREADY_EXISTS", "This username is taken.", {"reason": "taken"})
+    me = get(f"users/{uid}") or {}
+    old = me.get("handleLower") or ""
+    now = _ot_now()
+    write(f"usernames/{lower}", {"uid": uid, "kind": "user", "state": "held", "username": raw, "claimedAt": now,
+                                 "releasedAt": None, "prevUid": None, "reservedFor": None, "reason": None})
+    write(f"users/{uid}", {"handle": raw, "handleLower": lower})
+    if old and old != lower:
+        write(f"usernames/{old}", {"uid": None, "state": "released", "releasedAt": now, "prevUid": uid})
+    return {"username": raw}
+
+
+HANDLERS.update({"requestSignupCode": request_signup_code, "verifySignupCode": verify_signup_code,
+                 "completeSignup": complete_signup, "checkUsername": check_username, "claimUsername": claim_username})
 HANDLERS.update({"transferGroupOwnership": transfer_group_ownership, "approveJoinRequest": approve_join_request,
                  "denyJoinRequest": deny_join_request, "setChannelReactions": set_channel_reactions,
                  "addChannelFollowers": add_channel_followers})
@@ -1144,7 +1266,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if name not in HANDLERS:
                 raise Refusal("NOT_FOUND", "Not emulated locally.")
-            if not uid:
+            if not uid and name not in NO_AUTH:
                 raise Refusal("UNAUTHENTICATED", "Sign in required.")
             code, out = 200, {"result": HANDLERS[name](uid, body.get("data"))}
         except Refusal as r:
