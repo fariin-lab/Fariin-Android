@@ -87,7 +87,9 @@ class FariinMessagingService : FirebaseMessagingService() {
                 open = { ct, _, _ -> opened[ct] },
                 activeChat = PushRouter.activeChatId,
                 pushOn = Push.pushOn(c),
+                blocked = { com.fariin.app.data.BlockList.state.value.contains(it) },
             )
+            if (decision is NotifDecision.Skip) android.util.Log.d("FariinPush", "not shown: ${decision.why}")
             // In front, a chat message is our banner, not the system's (iOS PushManager.willPresent).
             val route = InAppRules.route(decision, com.fariin.app.AppLifecycle.inFront, locked = appLockShowing(c),
                 prefs = InAppNotify.prefs(c), localPhoto = p.cid?.let { NotifStore.chat(c, it)?.photo })

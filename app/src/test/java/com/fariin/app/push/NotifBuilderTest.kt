@@ -77,6 +77,16 @@ class NotifBuilderTest {
         assertTrue(s.opensChat); assertEquals(cid, s.key)
     }
 
+    @Test fun nothingFromSomebodyIBlocked() {
+        val none: (String, String, String) -> String? = { _, _, _ -> null }
+        val p = PushData.parse(mapOf("cid" to Wire.directCid("alice", "bob"), "aid" to "alice", "sn" to "Alice"), "Alice", "New message")
+        assertTrue(NotifBuilder.decide(p, "bob", noChats, none, blocked = { it == "alice" }) is NotifDecision.Skip)
+        assertTrue(NotifBuilder.decide(p, "bob", noChats, none, blocked = { it == "carol" }) is NotifDecision.Show)
+        // An older push with no `aid`: the other half of the 1:1 id is the sender.
+        val old = PushData.parse(mapOf("cid" to Wire.directCid("alice", "bob")), "Alice", "New message")
+        assertTrue(NotifBuilder.decide(old, "bob", noChats, none, blocked = { it == "alice" }) is NotifDecision.Skip)
+    }
+
     @Test fun unknownSenderKeyKeepsTheServerHint() = runBlocking {
         val alice = device("alice"); val bob = device("bob")
         alice.ensureReady(); bob.ensureReady()      // Bob never fetched Alice's key

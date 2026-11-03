@@ -47,13 +47,18 @@ object DebugNotifs {
         val app = c.applicationContext
         thread(name = "notif-real") {
             runBlocking {
+                android.util.Log.d("FariinPush", "debug push for $cid")
                 val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@runBlocking
                 val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val q = db.collection("conversations").document(cid).collection("messages")
+                    .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(20)
+                // A server read can stall on the emulator; the phone's own copy is enough for a test push.
                 val docs = try {
-                    db.collection("conversations").document(cid).collection("messages")
-                        .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING).limit(20).get().await()
-                } catch (_: Exception) { return@runBlocking }
-                val m = docs.documents.firstOrNull { it.getString("authorId").let { a -> a != null && a != me } } ?: return@runBlocking
+                    kotlinx.coroutines.withTimeoutOrNull(5_000) { q.get().await() }
+                        ?: q.get(com.google.firebase.firestore.Source.CACHE).await()
+                } catch (e: Exception) { android.util.Log.d("FariinPush", "debug push: read failed $e"); return@runBlocking }
+                val m = docs.documents.firstOrNull { it.getString("authorId").let { a -> a != null && a != me } }
+                    ?: run { android.util.Log.d("FariinPush", "debug push: no message from them"); return@runBlocking }
                 val aid = m.getString("authorId")!!
                 val info = NotifStore.chat(app, cid)
                 val group = Wire.isGroupCid(cid)

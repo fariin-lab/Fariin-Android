@@ -130,6 +130,8 @@ object NotifBuilder {
         open: (cipher: String, cid: String, sender: String) -> String?,
         activeChat: String? = null,
         pushOn: Boolean = true,
+        /** Somebody I blocked (BlockList); empty when the app is not running, as iOS's background. */
+        blocked: (String) -> Boolean = { false },
     ): NotifDecision {
         if (!pushOn) return NotifDecision.Skip("notifications switched off")
         // A signed-out phone shows nothing: its tokens left with the sign-out, and a late push would
@@ -137,6 +139,10 @@ object NotifBuilder {
         if (me.isEmpty()) return NotifDecision.Skip("signed out")
         // My own message coming back (a token that also sits under my account), PushManager 2026-10-29.
         if (p.aid != null && p.aid == me) return NotifDecision.Skip("own message")
+        // Nothing from somebody I blocked, even a push already on its way when I blocked them
+        // (PushManager 2026-09-26). The sender is `aid`, or the other half of a 1:1 id.
+        val from = p.aid ?: p.cid?.takeIf { '_' in it }?.split('_')?.firstOrNull { it != me }
+        if (from != null && blocked(from)) return NotifDecision.Skip("blocked sender")
         // A 1:1 push names its recipient; one for another account is not for this phone.
         if (p.ackUid != null && p.ackUid != me) return NotifDecision.Skip("for another account")
         if (p.cid != null && p.cid == activeChat) return NotifDecision.Skip("chat is open")

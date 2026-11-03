@@ -1,5 +1,9 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
@@ -93,6 +97,11 @@ private fun Card(b: InAppBanner) {
             .background(Fariin.colors.card, RoundedCornerShape(24.dp))
             .fillMaxWidth()
             .height(64.dp)
+            // Read out when it lands (a polite live region), as one item that opens the chat.
+            .semantics(mergeDescendants = true) {
+                liveRegion = LiveRegionMode.Polite
+                onClick(label = "Open chat") { open(); true }
+            }
             .pointerInput(b) {
                 detectVerticalDragGestures(
                     onDragStart = { InAppNotify.hold() },
