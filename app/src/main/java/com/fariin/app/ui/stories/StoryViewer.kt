@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -218,6 +219,9 @@ fun StoryViewer(
 
     // Owner-bar numbers by story id (never by "the item I last heard about").
     val summaries = remember { mutableStateMapOf<String, StoryViewSummary>() }
+    // Stories whose picture a page has on screen: until then the viewers row keeps its own thumbnail
+    // over the live card, so landing on a story never shows an empty card while it loads.
+    val pageLoaded = remember { mutableStateMapOf<String, Boolean>() }
     // The viewers sheet and the shrink of my story into the row above it (iOS viewersProgress).
     val sheet = remember { ViewersSheetState(scope) }
     val sheetFor = sheet.id
@@ -245,6 +249,7 @@ fun StoryViewer(
     var jumpTo by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(sheetFor) { if (sheetFor == null) jumpTo = null }
     val topInset = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
+    val bottomInset = WindowInsets.navigationBars.getBottom(LocalDensity.current).toFloat()
 
     // ---- The zoom: out of the tapped card, back into it (iOS StoryZoomPresenter + the hero drag) ----
     val density = LocalDensity.current.density
@@ -266,7 +271,18 @@ fun StoryViewer(
         hostView.getLocationOnScreen(loc)
         return r.translate(-loc[0].toFloat(), -loc[1].toFloat())
     }
-    fun rest() = Offset(size.width / 2f, size.height / 2f)
+    /**
+     * A ring's story card in this window (iOS StoryDetailView): under the status bar, 9:16 unless
+     * shorter, ending above my own bar or the reply bar. Every flight and the sheet aim at this.
+     */
+    fun cardOf(g: StoryGroup?): Rect {
+        val w = size.width.toFloat(); val h = size.height.toFloat()
+        val mine = g?.stories?.firstOrNull()?.authorUid == me
+        val footer = if (mine) StorySheetGeometry.ownFooter(bottomInset, density) else StorySheetGeometry.replyFooter(bottomInset, density)
+        return Rect(0f, topInset, w, topInset + StorySheetGeometry.cardHeight(w, h, topInset, footer))
+    }
+    fun card() = cardOf(groups.getOrNull(pager.currentPage))
+    fun rest() = card().center
 
     /** One flight on the iOS animator: critically damped, mass 1, every property on the same t. */
     fun runHero(
@@ -343,7 +359,7 @@ fun StoryViewer(
         if (a == null) {
             // No card to fly to (scrolled away, or opened from Posted Stories): drift down by its own
             // height, shrink to 0.72 and fade, on the 0.25s critically damped spring (iOS MediaDismiss).
-            val h = size.height * (1f + (((hero.anchor?.width ?: 0f) / size.width) - 1f) * hero.f)
+            val h = card().height * (1f + (((hero.anchor?.width ?: 0f) / size.width) - 1f) * hero.f)
             runHero(hero.f, hero.center + Offset(0f, h), 0f, 0f, StoryMotion.DRIFT_STIFFNESS, 0.004f,
                 dimFloor = { 1f - it }, extra = { t -> hero.shrink = 1f - (1f - StoryMotion.DRIFT_SCALE) * t; hero.rootAlpha = 1f - t }) { land() }
         } else {
@@ -375,15 +391,16 @@ fun StoryViewer(
     fun dragTo(dy: Float) {
         if (!hero.live || hero.committing || size == IntSize.Zero) return
         val w = size.width.toFloat(); val h = size.height.toFloat()
+        val c = card()
         val ty = maxOf(0f, dy)
         val ratio = (hero.anchor?.width ?: 0f) / w
         val ceiling = StoryMotion.dragCeiling(ratio)
         val span = StoryMotion.DRAG_SPAN * density
         hero.f = minOf(ceiling, ty / span)
-        var y = h / 2f + StoryMotion.dragTravel(ty, span * ceiling, StoryMotion.DRAG_TAIL * density)
+        var y = c.center.y + StoryMotion.dragTravel(ty, span * ceiling, StoryMotion.DRAG_TAIL * density)
         // And the bottom edge stays on the display.
         val scaleNow = 1f + (ratio - 1f) * hero.f
-        y = minOf(y, maxOf(h / 2f, h - h * scaleNow / 2f - 10f * density))
+        y = minOf(y, maxOf(c.center.y, h - c.height * scaleNow / 2f - 10f * density))
         hero.center = Offset(w / 2f, y)
         hero.alpha = 1f
     }
@@ -426,15 +443,16 @@ fun StoryViewer(
 
     /** Where the card is on screen right now, in this window's pixels. */
     fun visibleRect(): Rect {
-        val w = size.width.toFloat(); val h = size.height.toFloat()
+        val card = card()
+        val w = card.width; val h = card.height
         val a = hero.anchor
         val aw = a?.width ?: 0f; val ah = a?.height ?: 0f
         // The crop converges the story to the slot's own shape on a flight; a drag keeps it whole.
         val th = h * aw / w + (ah - h * aw / w) * hero.crop
         val vw = (w + (aw - w) * hero.f) * hero.shrink
         val vh = (h + (th - h) * hero.f) * hero.shrink
-        // At rest the card is the window, whatever the window has done since (insets, rotation).
-        val c = if (hero.live) hero.center else Offset(w / 2f, h / 2f)
+        // At rest the card is where the window puts it, whatever the window has done since.
+        val c = if (hero.live) hero.center else card.center
         return Rect(c.x - vw / 2f, c.y - vh / 2f, c.x + vw / 2f, c.y + vh / 2f)
     }
 
@@ -454,28 +472,39 @@ fun StoryViewer(
                 val w = size.width.toFloat(); val h = size.height.toFloat()
                 // Viewers up: the story is the row's centre card, picture and all, scaled (never resized,
                 // so a playing clip's surface is untouched) and clipped to its 9:16 band with 24 corners.
+                // The layer scales about its centre, so a card off the centre is moved by where the
+                // scale put it: card point p lands on centre + s * (p - centre) + translation.
                 val live = sheetStories.indexOfFirst { it.id == sheetFor }
                 if (sheetFor != null && live >= 0 && !hero.live) {
-                    val g = StorySheetGeometry(w, h, topInset, density, sheet.fraction)
+                    val g = StorySheetGeometry(w, h, topInset, density, sheet.fraction, StorySheetGeometry.ownFooter(bottomInset, density))
                     val pl = g.placement(live - sheet.row.value)
                     val s = pl.h / g.contentH
                     scaleX = s; scaleY = s
                     translationX = pl.cx - w / 2f
-                    translationY = pl.cy - h / 2f
+                    translationY = pl.cy - (h / 2f + s * (g.restCenterY - h / 2f))
                     alpha = 1f
                     clip = true
-                    shape = CardShape(w, g.contentH, pl.corner / maxOf(0.001f, s))
+                    shape = CardShape(w / 2f, g.restCenterY, w, g.contentH, pl.corner / maxOf(0.001f, s))
                     return@graphicsLayer
                 }
+                val c = card()
                 val r = visibleRect()
-                val s = maxOf(r.width / w, r.height / h)
+                val s = maxOf(r.width / c.width, r.height / c.height)
                 scaleX = s; scaleY = s
-                translationX = r.center.x - w / 2f
-                translationY = r.center.y - h / 2f
+                translationX = r.center.x - (w / 2f + s * (c.center.x - w / 2f))
+                translationY = r.center.y - (h / 2f + s * (c.center.y - h / 2f))
                 alpha = hero.alpha
                 val moving = hero.f > 0.0001f || hero.shrink < 1f
                 clip = moving
-                if (moving && s > 0f) shape = CardShape(r.width / s, r.height / s, hero.radius * hero.f / s)
+                if (moving && s > 0f) {
+                    // The card's own corner at full size, the slot's at home (iOS lands the mask on it).
+                    val restR = StorySheetGeometry.CARD_RADIUS * density
+                    val radius = restR + (hero.radius - restR) * hero.f
+                    // The bar under the card stays in the clip while it is showing (an arrival's last 18%).
+                    val bandBottom = c.center.y + r.height / s / 2f
+                    val bar = if (hero.exiting) 0f else StoryMotion.chrome(hero.f)
+                    shape = CardShape(c.center.x, c.center.y, r.width / s, r.height / s, radius / s, maxOf(0f, h - bandBottom) * bar)
+                }
             },
         ) { page ->
             val g = groups.getOrNull(page) ?: return@HorizontalPager
@@ -505,7 +534,7 @@ fun StoryViewer(
                 },
             ) {
                 StoryPage(
-                    me = me, group = g, active = page == pager.currentPage && !pager.isScrollInProgress,
+                    me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
                     paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live,
                     // The bars and caption go over the first third of the sheet's pull (iOS storySheetProgress).
                     chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
@@ -546,6 +575,7 @@ fun StoryViewer(
                     canReply = { s -> com.fariin.app.data.StoryPrivacyRules.canReply(s, contacts) },
                     receipts = receipts,
                     onShown = onShown,
+                    onMediaLoaded = { pageLoaded[it] = true },
                     // iOS "..." > Hide Stories: hidden at once, and the viewer closes.
                     onHide = { uid -> com.fariin.app.data.StoryMutes.setHidden(context, uid, true); close() },
                     onNotify = { uid, name ->
@@ -599,7 +629,8 @@ fun StoryViewer(
         }
 
         // The rest of my ring beside the shrunk story, with every card's count, and the touches above the sheet.
-        if (sheetFor != null) ViewersCarousel(sheet, sheetStories, summaries, topInset, onLanded = { jumpTo = it })
+        if (sheetFor != null) ViewersCarousel(sheet, sheetStories, summaries, topInset,
+            StorySheetGeometry.ownFooter(bottomInset, density), pageShows = { pageLoaded[it] == true }, onLanded = { jumpTo = it })
 
         flying?.let { (emoji, key) -> FlyingEmoji(emoji, key) { if (flying?.second == key) flying = null } }
 
@@ -640,6 +671,14 @@ fun StoryViewer(
             val openChat = LocalOpenChat.current
             ViewersSheet(
                 sheet, s, me, service, who,
+                // A sideways swipe anywhere on the sheet pages my stories too (iOS), never a row tap.
+                // Remembered, so a recomposition mid-swipe does not restart the gesture under the finger.
+                rowSwipe = remember(sheetStories, size, topInset, bottomInset) {
+                    RowSwipe(sheet, sheetStories,
+                        StorySheetGeometry(size.width.toFloat(), size.height.toFloat(), topInset, density, 1f,
+                            StorySheetGeometry.ownFooter(bottomInset, density)).fullDist,
+                        onLanded = { jumpTo = it })
+                },
                 friendUids = remember(conversations) { conversations.filter { !it.isGroup }.map { it.otherUid(me) }.filter { it.isNotEmpty() }.toSet() },
                 receipts = receipts, customName = customTitle(s),
                 onOpenPerson = { uid -> profileUid = uid },
@@ -696,6 +735,8 @@ fun StoryViewer(
 private fun StoryPage(
     me: String,
     group: StoryGroup,
+    /** Where the story card sits in this page, in pixels (the viewer's `cardOf`). */
+    card: Rect,
     active: Boolean,
     paused: Boolean,
     /** The reply bar's alpha while the card flies (read in the draw pass, never recomposes). */
@@ -719,6 +760,8 @@ private fun StoryPage(
     onShown: (Story) -> Unit,
     onHide: (String) -> Unit,
     onNotify: (uid: String, name: String) -> Unit = { _, _ -> },
+    /** The story's picture or first frame is on screen. */
+    onMediaLoaded: (String) -> Unit = {},
     /** A story of this ring to show now: the viewers row landed on it. */
     jumpTo: String? = null,
 ) {
@@ -726,7 +769,11 @@ private fun StoryPage(
     if (stories.isEmpty()) return
     var index by rememberSaveable(group.key) { mutableIntStateOf(StoryRules.startIndex(group)) }
     if (index > stories.lastIndex) index = stories.lastIndex
-    LaunchedEffect(jumpTo) {
+    // In the same frame the row lands, not one after it: the row hides the landed card's thumbnail
+    // in that frame, so the page must already be showing that story (no flash of the old one).
+    var tookJump by remember { mutableStateOf<String?>(null) }
+    if (jumpTo != tookJump) {
+        tookJump = jumpTo
         val i = stories.indexOfFirst { it.id == jumpTo }
         if (i >= 0) index = i
     }
@@ -745,6 +792,7 @@ private fun StoryPage(
     // Receipt only the story actually on screen and loaded (iOS markSeenItem).
     LaunchedEffect(story.id, active, loaded) { if (active && loaded) onSeen(story) }
     LaunchedEffect(story.id, active) { if (active) onShown(story) }
+    LaunchedEffect(story.id, loaded) { if (loaded) onMediaLoaded(story.id) }
 
     // Photo clock: 5 s of shown time, standing still while paused or held.
     if (!story.isVideo) {
@@ -826,81 +874,106 @@ private fun StoryPage(
             }
         },
     ) {
-        StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
-            onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active)
-
-        // Top shade, bars, header: they fade with the drag like the bottom bar (iOS chrome), so a
-        // card on its way down is the story alone, not a strip left behind (owner 2026-11-03).
-        Column(
-            Modifier.fillMaxWidth()
-                .graphicsLayer { alpha = chrome() }
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)))
-                .statusBarsPadding().padding(top = 6.dp, start = 8.dp, end = 8.dp, bottom = 18.dp),
+        // THE CARD (iOS StoryDetailView): from under the status bar, 9:16 or shorter, one 20 corner
+        // all round. The status bar and the bar under it are the black wall behind the page.
+        Box(
+            Modifier.layout { m, c ->
+                val p = m.measure(Constraints.fixed(maxOf(1, card.width.roundToInt()), maxOf(1, card.height.roundToInt())))
+                layout(c.maxWidth, c.maxHeight) { p.place(card.left.roundToInt(), card.top.roundToInt()) }
+            }.clip(RoundedCornerShape(StorySheetGeometry.CARD_RADIUS.dp)).background(Color.Black),
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                stories.forEachIndexed { i, _ ->
-                    val f = when { i < index -> 1f; i == index -> progress; else -> 0f }
-                    Box(Modifier.weight(1f).height(2.5.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.35f))) {
-                        Box(Modifier.fillMaxWidth(f).height(2.5.dp).background(Color.White))
+            StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
+                onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active)
+
+            // Top shade, bars, header, inside the card: they fade with the drag like the bottom bar
+            // (iOS chrome), so a card on its way down is the story alone (owner 2026-11-03).
+            Column(
+                Modifier.fillMaxWidth()
+                    .graphicsLayer { alpha = chrome() }
+                    .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent)))
+                    .padding(bottom = 18.dp),
+            ) {
+                // iOS: 8 from the card's top, 16 in from the sides, bars 2 tall and 2 apart.
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    stories.forEachIndexed { i, _ ->
+                        val f = when { i < index -> 1f; i == index -> progress; else -> 0f }
+                        Box(Modifier.weight(1f).height(2.dp).clip(RoundedCornerShape(1.dp)).background(Color.White.copy(alpha = 0.35f))) {
+                            Box(Modifier.fillMaxWidth(f).height(2.dp).background(Color.White))
+                        }
+                    }
+                }
+                // iOS UserView: 38 photo, 13 to the name, name 14 semibold, the age 13 at 70% under it;
+                // my story keeps the age beside the name and the audience under both.
+                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(group.photoUrl, 38.dp, squircle = group.key.startsWith(StoryGroup.GROUP_PREFIX))
+                        Spacer(Modifier.width(13.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            val name = if (mine) "My Story" else group.name.ifEmpty { "Fariin user" }
+                            val age = StoryRules.timeAgo(story.createdAtMs)
+                            if (mine) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(age, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1)
+                                }
+                                Text(customTitle(story) ?: StoryRules.audienceTitle(story), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1)
+                            } else {
+                                Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(age, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1)
+                            }
+                        }
+                    }
+                    if (!mine) {
+                        Box {
+                            // The three-dot overflow (Android's), white, in the 44 target iOS gives its menu.
+                            Box(Modifier.size(44.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                // iOS: Get notifications first, for a person's story (not a group's).
+                                if (story.groupId == null) {
+                                    val notifyOn = story.authorUid in com.fariin.app.data.StoryNotify.on.collectAsState().value
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(com.fariin.app.data.StoryNotifyRules.menuTitle(notifyOn)) },
+                                        leadingIcon = {
+                                            Icon(androidx.compose.ui.res.painterResource(if (notifyOn) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
+                                                contentDescription = null, modifier = Modifier.size(22.dp))
+                                        },
+                                        onClick = { menu = false; onNotify(story.authorUid, group.name.ifEmpty { "Fariin user" }) },
+                                    )
+                                }
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Hide Stories") },
+                                    leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
+                                    onClick = { menu = false; onHide(story.authorUid) },
+                                )
+                            }
+                        }
+                    }
+                    Box(Modifier.size(44.dp).clickable { onClose() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(24.dp))
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(group.photoUrl, 34.dp, squircle = group.key.startsWith(StoryGroup.GROUP_PREFIX))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (mine) "My Story" else group.name.ifEmpty { "Fariin user" }, color = Color.White,
-                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false))
-                        Text("  " + StoryRules.timeAgo(story.createdAtMs), color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp)
-                    }
-                    if (mine) Text(customTitle(story) ?: StoryRules.audienceTitle(story), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
-                }
-                if (!mine) {
-                    Box {
-                        Box(Modifier.size(40.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color.White)
-                        }
-                        androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            // iOS: Get notifications first, for a person's story (not a group's).
-                            if (story.groupId == null) {
-                                val notifyOn = story.authorUid in com.fariin.app.data.StoryNotify.on.collectAsState().value
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(com.fariin.app.data.StoryNotifyRules.menuTitle(notifyOn)) },
-                                    leadingIcon = {
-                                        Icon(androidx.compose.ui.res.painterResource(if (notifyOn) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
-                                            contentDescription = null, modifier = Modifier.size(22.dp))
-                                    },
-                                    onClick = { menu = false; onNotify(story.authorUid, group.name.ifEmpty { "Fariin user" }) },
-                                )
-                            }
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Hide Stories") },
-                                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
-                                onClick = { menu = false; onHide(story.authorUid) },
-                            )
-                        }
-                    }
-                }
-                Box(Modifier.size(40.dp).clickable { onClose() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
-                }
+
+            // The caption: 16 white, 16 in from the sides and 14 off the card's bottom edge (iOS).
+            if (story.caption.isNotEmpty()) {
+                Text(story.caption, color = Color.White, fontSize = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.25f), blurRadius = 8f)),
+                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                        .graphicsLayer { alpha = chrome() }
+                        .padding(start = 16.dp, end = 16.dp, bottom = 14.dp))
             }
         }
 
-        // Bottom: caption, then the owner bar or the reply field.
+        // Under the card, on the black: my own bar, or the reply field (which rides the keyboard).
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .graphicsLayer { alpha = chrome() }
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))))
-                .navigationBarsPadding().imePadding().padding(top = 28.dp),
+                .navigationBarsPadding().imePadding(),
         ) {
-            if (story.caption.isNotEmpty()) {
-                Text(story.caption, color = Color.White, fontSize = 16.sp,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp))
-            }
             if (mine) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) }, onDelete = { onDelete(story) })
             else ReplyBar(story, service, canReply = canReply(story), showLike = receipts, onFocus = onReplyFocus,
                 onSend = { t, reaction -> onReply(story, t, reaction) }, onLike = { onLike(story, it) })
@@ -920,8 +993,14 @@ private fun StoryMedia(
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (!story.isVideo) {
+            // The row's thumbnail until the photo is in (iOS shows the preview first), so a story
+            // the viewers row lands on is never an empty card while its photo loads.
+            var shown by remember(story.id) { mutableStateOf(false) }
+            if (!shown && story.thumbUrl.isNotEmpty()) {
+                AsyncImage(story.thumbUrl, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            }
             AsyncImage(story.mediaUrl, contentDescription = null, contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(), onSuccess = { onLoaded() })
+                modifier = Modifier.fillMaxSize(), onSuccess = { shown = true; onLoaded() })
             return@Box
         }
         AsyncImage(story.thumbUrl.ifEmpty { null }, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
@@ -1055,20 +1134,20 @@ private fun ReplyBar(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            // A dark glass capsule over the photo (the chat composer's floating pill, for a dark
-            // backdrop): a see-through fill with a faint light rim, not a bare outline.
+        // iOS MessageView: 16 all round, so the bar is 44 + 32 over the home inset (the card ends above it).
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            // iOS ReplyPillStyle: black 38% fill, a 1pt white 50% rim, 22 corners, the words 18 in.
             Box(
                 Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
-                    .background(Color.Black.copy(alpha = 0.35f))
-                    .border(0.5.dp, Color.White.copy(alpha = if (canReply) 0.35f else 0.2f), RoundedCornerShape(22.dp))
-                    .padding(horizontal = 16.dp),
+                    .background(Color.Black.copy(alpha = 0.38f))
+                    .border(1.dp, Color.White.copy(alpha = if (canReply) 0.5f else 0.2f), RoundedCornerShape(22.dp))
+                    .padding(start = 18.dp, end = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 if (!canReply) {
                     Text(com.fariin.app.data.StoryPrivacyRules.REPLY_LOCKED, color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp, maxLines = 1)
                 } else {
-                    if (text.isEmpty()) Text("Send message…", color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp)
+                    if (text.isEmpty()) Text("Send message…", color = Color.White, fontSize = 16.sp)
                     // Focusable only after a tap on it, and again only after the next tap once it lets
                     // go: the dialog window hands its focus to this field whenever it has none, so the
                     // keyboard came up as soon as a story opened, and again right after a send.
@@ -1087,7 +1166,7 @@ private fun ReplyBar(
                     ) { armed = true })
                 }
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(12.dp))
             if (canReply && text.isNotBlank()) {
                 // Send in a blue circle, as the chat composer's.
                 Box(Modifier.size(44.dp).clip(CircleShape).background(com.fariin.app.ui.theme.Fariin.colors.blue).clickable {
@@ -1096,8 +1175,8 @@ private fun ReplyBar(
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
                 }
             } else if (showLike) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                // iOS likeButton: the bare heart on the black, in a 44 target, no plate.
+                Box(Modifier.size(44.dp).clip(CircleShape)
                     .clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
                     Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
                         tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(28.dp))
@@ -1157,11 +1236,14 @@ private class HeroState {
     var staged = false
 }
 
-/** A rounded rect of [w] by [h] centred in the layer: the flying card's clip, in layer pixels. */
-private data class CardShape(val w: Float, val h: Float, val r: Float) : Shape {
+/**
+ * A rounded rect of [w] by [h] centred on ([cx], [cy]): the flying card's clip, in layer pixels.
+ * [below] lets it reach that much further down, over the bar under the card.
+ */
+private data class CardShape(val cx: Float, val cy: Float, val w: Float, val h: Float, val r: Float, val below: Float = 0f) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val l = (size.width - w) / 2f
-        val t = (size.height - h) / 2f
-        return Outline.Rounded(RoundRect(l, t, l + w, t + h, CornerRadius(r)))
+        val l = cx - w / 2f
+        val t = cy - h / 2f
+        return Outline.Rounded(RoundRect(l, t, l + w, t + h + below, CornerRadius(r)))
     }
 }

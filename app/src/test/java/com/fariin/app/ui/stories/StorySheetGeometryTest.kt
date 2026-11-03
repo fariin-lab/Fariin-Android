@@ -26,7 +26,7 @@ class StorySheetGeometryTest {
         val closed = geo(0f).placement(0f)
         assertEquals(393f, closed.w, 1e-3f)
         assertEquals(699f, closed.h, 1e-3f)
-        assertEquals(426f, closed.cy, 1e-3f)
+        assertEquals(59f + 699f / 2f, closed.cy, 1e-3f)   // under the status bar, not centred
         assertEquals(0f, closed.corner, 1e-6f)
         val g = geo(1f)
         val open = g.placement(0f)
@@ -39,7 +39,7 @@ class StorySheetGeometryTest {
         // Half way is half way in size and place: the finger moves one number.
         val half = geo(0.5f).placement(0f)
         assertEquals((393f + g.slotW) / 2f, half.w, 1e-3f)
-        assertEquals((426f + g.centerY) / 2f, half.cy, 1e-3f)
+        assertEquals((59f + 699f / 2f + g.centerY) / 2f, half.cy, 1e-3f)
     }
 
     @Test fun neighboursAre54NarrowerAnd12Apart() {

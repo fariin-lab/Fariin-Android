@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -149,6 +150,16 @@ internal class ViewersSheetState(private val scope: CoroutineScope) {
         }
     }
 
+    private var swipeFrom = 0f
+    /** A sideways drag on the row or the sheet: it starts where the row stands now. */
+    fun swipeBegin() { hold(); swipeFrom = row.value }
+    fun swipeTo(dx: Float, fullDist: Float, last: Int) = rowTo(rubberBand(swipeFrom - dx / fullDist, last))
+    /** Let go: the nearest card to where the fling would stop, then that story is the live one. */
+    fun swipeEnd(vx: Float, fullDist: Float, stories: List<Story>, onLanded: (String) -> Unit) {
+        val cardsPerSec = -vx / fullDist
+        pageTo(StorySheetGeometry.snapIndex(row.value, cardsPerSec, stories.size), stories, cardsPerSec, onLanded)
+    }
+
     /** Open fraction, kept inside 0..1 for drawing (a release velocity can carry a spring past). */
     val fraction: Float get() = p.value.coerceIn(0f, 1f)
 }
@@ -174,13 +185,17 @@ internal fun ViewersCarousel(
     stories: List<Story>,
     summaries: Map<String, StoryViewSummary>,
     topInset: Float,
+    /** The room my own bar takes under the story card. */
+    footer: Float,
+    /** The live page has this story's picture up, so its card here can step aside. */
+    pageShows: (String) -> Boolean,
     onLanded: (String) -> Unit,
 ) {
     val d = LocalDensity.current.density
     var size by remember { mutableStateOf(IntSize.Zero) }
     val live = stories.indexOfFirst { it.id == sheet.id }
     if (live < 0) return
-    fun geo(f: Float) = StorySheetGeometry(size.width.toFloat(), size.height.toFloat(), topInset, d, f)
+    fun geo(f: Float) = StorySheetGeometry(size.width.toFloat(), size.height.toFloat(), topInset, d, f, footer)
     val slop = LocalViewConfiguration.current.touchSlop
     Box(
         Modifier.fillMaxSize().onSizeChanged { size = it }.pointerInput(stories, live) {
@@ -192,7 +207,6 @@ internal fun ViewersCarousel(
                 val tracker = VelocityTracker()
                 tracker.addPosition(down.uptimeMillis, down.position)
                 sheet.hold()
-                val startRow = sheet.row.value
                 val startP = sheet.fraction
                 var dx = 0f; var dy = 0f
                 var mode = 0   // 1 = paging the row, 2 = pulling the sheet
@@ -203,19 +217,16 @@ internal fun ViewersCarousel(
                     val m = ch.positionChange()
                     dx += m.x; dy += m.y
                     if (mode == 0) {
-                        if (inBand && stories.size > 1 && abs(dx) > slop && abs(dx) > abs(dy)) mode = 1
+                        if (inBand && stories.size > 1 && abs(dx) > slop && abs(dx) > abs(dy)) { mode = 1; sheet.swipeBegin() }
                         else if (abs(dy) > slop) mode = 2
                     }
-                    if (mode == 1) { ch.consume(); sheet.rowTo(rubberBand(startRow - dx / g.fullDist, stories.lastIndex)) }
+                    if (mode == 1) { ch.consume(); sheet.swipeTo(dx, g.fullDist, stories.lastIndex) }
                     if (mode == 2) { ch.consume(); sheet.dragTo(startP - dy / g.sheetH) }
                     if (!ch.pressed) break
                 }
                 val v = tracker.calculateVelocity()
                 when (mode) {
-                    1 -> {
-                        val cardsPerSec = -v.x / g.fullDist
-                        sheet.pageTo(StorySheetGeometry.snapIndex(sheet.row.value, cardsPerSec, stories.size), stories, cardsPerSec, onLanded)
-                    }
+                    1 -> sheet.swipeEnd(v.x, g.fullDist, stories, onLanded)
                     2 -> {
                         val dropped = (startP - sheet.fraction) * g.sheetH
                         if (StorySheetGeometry.shouldClose(dropped, v.y, g.fullH, d)) sheet.close(-v.y / g.sheetH)
@@ -252,10 +263,14 @@ internal fun ViewersCarousel(
                     translationY = pl.cy - g1.centerY
                 },
             ) {
-                if (i != live) {
+                // Every card stays composed, the live one too, so its picture is already in when the
+                // row moves on and it becomes a side card again (removing it made it reload: a flash).
+                // The live one is see-through once the page under it shows the same story.
+                run {
                     Box(
                         Modifier.fillMaxSize().graphicsLayer {
                             val pl = geo(sheet.fraction).placement(i - sheet.row.value)
+                            alpha = if (i == live && pageShows(s.id)) 0f else 1f
                             clip = true
                             shape = RoundedCornerShape(pl.corner / maxOf(0.001f, pl.w / slotW))
                         }.background(Color.Black),
@@ -274,6 +289,43 @@ internal fun ViewersCarousel(
                 )
             }
         }
+    }
+}
+
+/** My stories paged by a sideways swipe that starts on the sheet (the row's own swipe is in [ViewersCarousel]). */
+internal class RowSwipe(
+    val sheet: ViewersSheetState,
+    val stories: List<Story>,
+    val fullDist: Float,
+    val onLanded: (String) -> Unit,
+)
+
+/**
+ * Takes a sideways drag before anything under it sees it, so a swipe over a viewer's row pages the
+ * stories instead of ending as a tap that opens that viewer. Up and down stay the list's and the sheet's.
+ */
+private fun Modifier.rowSwipe(swipe: RowSwipe?): Modifier = if (swipe == null || swipe.stories.size < 2) this else pointerInput(swipe) {
+    val slop = viewConfiguration.touchSlop
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val tracker = VelocityTracker()
+        tracker.addPosition(down.uptimeMillis, down.position)
+        var dx = 0f; var dy = 0f
+        var paging = false
+        while (true) {
+            val ev = awaitPointerEvent(PointerEventPass.Initial)
+            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+            tracker.addPosition(ch.uptimeMillis, ch.position)
+            val m = ch.positionChange()
+            dx += m.x; dy += m.y
+            if (!paging) {
+                if (abs(dx) > slop && abs(dx) > abs(dy) * 1.2f) { paging = true; swipe.sheet.swipeBegin() }
+                else if (abs(dy) > slop) break
+            }
+            if (paging) { ch.consume(); swipe.sheet.swipeTo(dx, swipe.fullDist, swipe.stories.lastIndex) }
+            if (!ch.pressed) break
+        }
+        if (paging) swipe.sheet.swipeEnd(tracker.calculateVelocity().x, swipe.fullDist, swipe.stories, swipe.onLanded)
     }
 }
 
@@ -332,6 +384,7 @@ internal fun ViewersSheet(
     onOpenPerson: (String) -> Unit,
     onSendMessage: (StoryViewer) -> Unit,
     onBlock: (StoryViewer) -> Unit,
+    rowSwipe: RowSwipe? = null,
 ) {
     val storyId = story.id
     var people by remember(storyId) { mutableStateOf<List<StoryViewer>?>(null) }
@@ -398,6 +451,7 @@ internal fun ViewersSheet(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(StorySheetGeometry.HEIGHT_FRACTION)
                     .onSizeChanged { sheetH = maxOf(1f, it.height.toFloat()) }
                     .graphicsLayer { translationY = (1f - sheet.fraction) * sheetH }
+                    .rowSwipe(rowSwipe)
                     .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(SheetFill)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { focus.clearFocus() }
                     .navigationBarsPadding(),

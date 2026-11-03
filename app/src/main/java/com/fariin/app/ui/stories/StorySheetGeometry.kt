@@ -18,10 +18,12 @@ internal class StorySheetGeometry(
     val topInset: Float,
     val d: Float,
     val fraction: Float,
+    /** The room my own bar takes under the card ([ownFooter]). */
+    val footer: Float = 0f,
 ) {
-    /** The story's own rectangle at rest: a 9:16 band centred in the window (iOS estimatedContentHeight). */
-    val contentH: Float = minOf(ceil(fullW * 1.77778f), fullH)
-    val restCenterY: Float = fullH / 2f
+    /** The story card at rest: from under the status bar, 9:16 unless the room is shorter (iOS estimatedContentHeight). */
+    val contentH: Float = cardHeight(fullW, fullH, topInset, footer)
+    val restCenterY: Float = topInset + contentH / 2f
 
     val sheetH: Float = fullH * HEIGHT_FRACTION
     /** Free height above the open sheet, status bar cleared. */
@@ -80,6 +82,22 @@ internal class StorySheetGeometry(
     data class Placement(val cx: Float, val cy: Float, val w: Float, val h: Float, val corner: Float, val dim: Float)
 
     companion object {
+        /** The story card's one corner (iOS Constant.cardCornerRadius). */
+        const val CARD_RADIUS = 20f
+
+        /**
+         * The story card's height (iOS StoryDetailView.cardHeight): it begins under the status bar
+         * and is 9:16, or shorter when the room above the bar under it is shorter.
+         */
+        fun cardHeight(w: Float, h: Float, top: Float, footer: Float): Float =
+            maxOf(1f, minOf(ceil(w * 1.77778f), h - top - footer))
+
+        /** The reply bar under someone's story: a 44 pill with 16 above and below, over the home inset. */
+        fun replyFooter(bottomInset: Float, d: Float): Float = (44f + 32f) * d + bottomInset
+
+        /** My own bar under my story: 52, over the home inset or 10, whichever is more. */
+        fun ownFooter(bottomInset: Float, d: Float): Float = 52f * d + maxOf(10f * d, bottomInset)
+
         /** The sheet's height against the screen (iOS StoryViewersSheetView.heightFraction, his 0.60). */
         const val HEIGHT_FRACTION = 0.60f
         /** The big count row under the centre card. */
