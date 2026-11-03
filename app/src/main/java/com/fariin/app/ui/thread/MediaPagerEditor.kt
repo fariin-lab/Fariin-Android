@@ -177,8 +177,10 @@ private fun PagerBody(
         if (sent || items.isEmpty()) return
         sent = true
         val list = items.toList()
-        for (u in list) if (u !in videos) SentQuality.choose(u, hd)
-            else trims[u]?.takeIf { it.trimmed }?.let { VideoTrim.choose(u, it.start, it.end) }
+        for (u in list) {
+            SentQuality.choose(u, hd)   // videos too: 1080p or 540p (iOS VideoTranscoder)
+            if (u in videos) trims[u]?.takeIf { it.trimmed }?.let { VideoTrim.choose(u, it.start, it.end) }
+        }
         onSend(list, caption.trim())
     }
     setBack { if (cropOn != null) cropOn = null else onClose() }

@@ -42,7 +42,8 @@ class VideoPrep(
             val cut = VideoTrim.take(uri)
             // A trimmed clip must go trimmed: if the full re-encode fails (some phones and the
             // emulator have no encoder for it), the cut alone is tried before the uncut original.
-            val ok = transcode(context, uri, out, cut) || (cut != null && transcode(context, uri, out, cut, resize = false))
+            val shortSide = if (SentQuality.videoHd(context, uri)) 1080 else 540
+            val ok = transcode(context, uri, out, cut, shortSide = shortSide) || (cut != null && transcode(context, uri, out, cut, resize = false))
             val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out) ?: return null
             if (file.length() > MAX_BYTES) { file.delete(); return null }
             return describe(file)
@@ -73,7 +74,7 @@ class VideoPrep(
         }
 
         /** [cut] is the editor's kept range in ms; when the cut cannot be made the whole original goes (iOS exportTrimmed nil). */
-        private suspend fun transcode(context: Context, uri: Uri, out: File, cut: LongRange?, resize: Boolean = true): Boolean = withContext(Dispatchers.Main) {
+        private suspend fun transcode(context: Context, uri: Uri, out: File, cut: LongRange?, resize: Boolean = true, shortSide: Int = 540): Boolean = withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val t = Transformer.Builder(context)
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
@@ -93,7 +94,7 @@ class VideoPrep(
                             .setStartPositionMs(cut.first).setEndPositionMs(cut.last).build())
                 }.build()
                 val item = EditedMediaItem.Builder(media)
-                    .apply { if (resize) setEffects(Effects(emptyList(), listOf(Presentation.createForShortSide(540)))) }
+                    .apply { if (resize) setEffects(Effects(emptyList(), listOf(Presentation.createForShortSide(shortSide)))) }
                     .build()
                 try {
                     t.start(item, out.absolutePath)

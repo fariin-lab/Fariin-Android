@@ -98,6 +98,9 @@ object SentQuality {
      *  forgotten: the button is not remembered after the send (iOS PhotoQuality). */
     private val chosen = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     fun choose(uri: android.net.Uri, hd: Boolean) { chosen[uri.toString()] = hd }
+    /** iOS VideoTranscoder `hd`: 1080p when chosen (the editor, else the setting), 540p by default. */
+    fun videoHd(c: Context, uri: android.net.Uri): Boolean = chosen.remove(uri.toString()) ?: high(c)
+
     /** The size this photo goes at: the editor's choice for it, else the setting. */
     fun photo(c: Context, uri: android.net.Uri): MediaRules.PhotoQuality {
         val hd = chosen.remove(uri.toString()) ?: high(c)

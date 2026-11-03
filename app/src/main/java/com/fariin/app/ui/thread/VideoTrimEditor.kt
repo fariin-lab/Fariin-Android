@@ -351,6 +351,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
     val s = remember(uri) { TrimState(uri) }
     LaunchedEffect(uri) { s.load(ctx, 10) }
     var sent by remember { mutableStateOf(false) }
+    var hd by remember { mutableStateOf(com.fariin.app.media.SentQuality.high(ctx)) }
     var bottomPx by remember { mutableIntStateOf(0) }
     val ime = WindowInsets.ime
     val imeUp = ime.getBottom(density) > 0
@@ -365,6 +366,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
         sent = true
         s.pause()
         if (s.trimmed) VideoTrim.choose(uri, s.start, s.end)
+        com.fariin.app.media.SentQuality.choose(uri, hd)
         onSend(caption.trim())
     }
 
@@ -391,6 +393,13 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (!imeUp) {
+                // HD, as on the photo editor: 1080p instead of 540p (iOS VideoTranscoder `hd`).
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(40.dp).floating().clickable { hd = !hd }, contentAlignment = Alignment.Center) {
+                        Text("HD", color = if (hd) EditorBlue else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    QualityHint(hd)
+                }
                 // The strip's place is kept while the filmstrip loads, so the clip does not refit.
                 if (s.thumbs.isNotEmpty() && s.durationMs > 0) VideoTrimStrip(s, Modifier.padding(horizontal = 16.dp))
                 else Spacer(Modifier.height(40.dp))
