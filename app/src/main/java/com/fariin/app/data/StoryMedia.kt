@@ -42,6 +42,16 @@ object StoryMedia {
         return encodePhoto(bmp)
     }
 
+    /** A picture drawn here (a text story, iOS renderTextStory): posted at its own size and [quality],
+     *  like iOS; recycles [bmp]. */
+    fun fromRendered(bmp: Bitmap, quality: Int): Prepared {
+        val out = jpeg(bmp, quality)
+        val blur = blurThumb(bmp)
+        val w = bmp.width; val h = bmp.height
+        bmp.recycle()
+        return Prepared(out, blur, width = w, height = h)
+    }
+
     /** The ladder; recycles [bmp]. */
     private fun encodePhoto(bmp: Bitmap): Prepared {
         var out = ByteArray(0)

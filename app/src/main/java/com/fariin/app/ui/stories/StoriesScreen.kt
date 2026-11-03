@@ -136,6 +136,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // The viewer: which rings it walks through and where it starts.
     var viewing by remember { mutableStateOf<Pair<List<StoryGroup>, Int>?>(null) }
     var composing by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
+    var composingText by remember { mutableStateOf(false) }
     var pickError by remember { mutableStateOf<String?>(null) }
     val upload by StoryUploads.state.collectAsState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -355,6 +356,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         .onFailure { pickError = it.message ?: "Couldn't open this file." }
                 }
             },
+            onTextStory = { m -> composingText = true; composing = m },
             onLibrary = openLibrary, onClose = { camera = false },
         )
     }
@@ -415,7 +417,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             dismissButton = { androidx.compose.material3.TextButton(onClick = { hideTarget = null }) { Text("Cancel") } },
         )
     }
-    composing?.let { m -> StoryComposerDialog(me, m, conversations, onClose = { composing = null }, onPosted = { composing = null; camera = false }) }
+    composing?.let { m ->
+        StoryComposerDialog(me, m, conversations, onClose = { composing = null; composingText = false },
+            onPosted = { composing = null; composingText = false; camera = false }, textStory = composingText)
+    }
 }
 
 @Composable

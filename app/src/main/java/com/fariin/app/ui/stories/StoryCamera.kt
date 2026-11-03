@@ -59,10 +59,13 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Lock
@@ -149,6 +152,8 @@ import kotlin.math.roundToInt
  * READ_MEDIA_IMAGES (storage) permission, and the camera asks for none; the picker needs none.
  *
  * Double tap the picture to flip; flick up to open the library (iOS CameraPreview and its swipe).
+ * The CAMERA / TEXT switch (or a sideways flick) turns the page into a text story: words on a
+ * colour, drawn to a picture and posted as a photo story, exactly as iOS posts it (StoryTextCard).
  */
 @Composable
 fun StoryCameraDialog(
@@ -157,9 +162,11 @@ fun StoryCameraDialog(
     onCaptured: (Uri) -> Unit,
     onLibrary: () -> Unit,
     onClose: () -> Unit,
+    /** A finished TEXT story, already drawn to the picture that posts (iOS onTextStory). */
+    onTextStory: (com.fariin.app.data.StoryMedia.Prepared) -> Unit = {},
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        StoryCamera(active, error, onCaptured, onLibrary, onClose)
+        StoryCamera(active, error, onCaptured, onLibrary, onClose, onTextStory)
     }
 }
 
@@ -181,7 +188,10 @@ private fun shareUri(context: Context, f: File): Uri =
 
 @SuppressLint("MissingPermission")
 @Composable
-private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Unit, onLibrary: () -> Unit, onClose: () -> Unit) {
+private fun StoryCamera(
+    active: Boolean, error: String?, onCaptured: (Uri) -> Unit, onLibrary: () -> Unit, onClose: () -> Unit,
+    onTextStory: (com.fariin.app.data.StoryMedia.Prepared) -> Unit,
+) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -240,7 +250,20 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
     }
     val captured by rememberUpdatedState(onCaptured)
     val library by rememberUpdatedState(onLibrary)
-    val bindNow = active && hasCamera
+    // CAMERA and TEXT are two things this one page shows (iOS Mode). Text mode's words live here,
+    // so going to the camera and back keeps what he typed.
+    var textMode by rememberSaveable { mutableStateOf(false) }
+    var storyText by rememberSaveable { mutableStateOf("") }
+    var styleIndex by rememberSaveable { mutableIntStateOf(0) }
+    var fontIndex by rememberSaveable { mutableIntStateOf(0) }
+    var typing by remember { mutableStateOf(false) }
+    var rendering by remember { mutableStateOf(false) }
+    // The text page slides in over the picture (iOS .snappy 0.25). The preview itself never moves;
+    // the camera is let go once the card covers it (iOS stops the session in text mode).
+    val textIn by animateFloatAsState(if (textMode) 1f else 0f, tween(250, easing = FastOutSlowInEasing), label = "textMode")
+    var cameraParked by remember { mutableStateOf(false) }
+    LaunchedEffect(textMode) { if (textMode) { delay(260); cameraParked = true } else cameraParked = false }
+    val bindNow = active && hasCamera && !cameraParked
     val view = LocalView.current
     val window = remember(view) { (view.parent as? DialogWindowProvider)?.window }
 
@@ -500,6 +523,7 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
         lockedByThisTouch = false
     }
 
+    val navBottom = androidx.compose.foundation.layout.WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (hasCamera) {
             AndroidView(
@@ -517,7 +541,10 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
                     // A double tap flips (iOS CameraPreview): the focus tap waits until it is clearly
                     // not the first half of one, so a flip never drops a focus mark on the way.
                     .pointerInput(camera) { detectTapGestures(onTap = { focusAt(it) }, onDoubleTap = { flipCamera() }) }
-                    .pointerInput(Unit) { watchSwipes(onLibrary = { if (recording == null) library() }, isRecording = { recording != null }) },
+                    .pointerInput(Unit) {
+                        watchSwipes(textMode = { textMode }, blocked = { recording != null || typing },
+                            onLibrary = { library() }, onMode = { textMode = it })
+                    },
             )
             focusAt?.let { at -> key(focusTaps) { FocusMark(at) } }
         } else if (asked) {
@@ -541,6 +568,23 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
             }
         }
 
+        // The text page, sliding in from the right over the still picture.
+        if (textIn > 0f) {
+            StoryTextCard(
+                storyText, { storyText = it }, styleIndex, { styleIndex++ }, fontIndex, { fontIndex++ },
+                onTyping = { typing = it }, bottomReserve = BAR_HEIGHT + navBottom, active = textMode,
+                onClose = { onClose() },
+                modifier = Modifier
+                    .graphicsLayer { translationX = (1f - textIn) * size.width }
+                    .pointerInput(Unit) {
+                        watchSwipes(textMode = { textMode }, blocked = { typing },
+                            onLibrary = {}, onMode = { textMode = it })
+                    },
+            )
+        }
+
+        // The camera's own chrome rides off to the left as the text page arrives.
+        Box(Modifier.fillMaxSize().graphicsLayer { translationX = -textIn * size.width; alpha = 1f - textIn }) {
         // Top: close at the start, flash at the end (only on a lens that has one), the clock in the middle.
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ChromeButton(Icons.Filled.Close, "Close") { recording?.stop(); onClose() }
@@ -571,51 +615,86 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
         }
         if (busy) CircularProgressIndicator(color = Color.White, modifier = Modifier.align(Alignment.Center))
 
-        // Bottom: the zoom pill, then gallery, shutter, flip (the lock in flip's place while recording).
+        // Above the bar: the zoom pill, then the shutter with the lock 78 dp to its right while recording.
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = BAR_HEIGHT + 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-        val stops = if (hasCamera && camera != null) StoryCameraRules.zoomStops(lensMin, lensMax) else emptyList()
-        if (stops.isNotEmpty()) {
-            ZoomPill(stops, pillZoom) { s -> pillZoom = s; setZoom(s) }
-            Spacer(Modifier.height(20.dp))
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 28.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
-                if (recording == null) LibraryCard(onLibrary)
+            val stops = if (hasCamera && camera != null) StoryCameraRules.zoomStops(lensMin, lensMax) else emptyList()
+            if (stops.isNotEmpty()) {
+                ZoomPill(stops, pillZoom) { s -> pillZoom = s; setZoom(s) }
+                Spacer(Modifier.height(20.dp))
             }
-            Spacer(Modifier.weight(1f))
-            if (hasCamera) {
-                Shutter(
-                    recording = recording != null, locked = locked,
-                    isRecording = { recording != null },
-                    onTap = { if (recording == null) shoot() },
-                    onHoldStart = ::holdStart, onHoldMove = ::holdMove, onHoldEnd = ::holdEnd,
-                )
-            } else Spacer(Modifier.size(84.dp))
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+            Box(contentAlignment = Alignment.Center) {
+                if (hasCamera) {
+                    Shutter(
+                        recording = recording != null, locked = locked,
+                        isRecording = { recording != null },
+                        onTap = { if (recording == null) shoot() },
+                        onHoldStart = ::holdStart, onHoldMove = ::holdMove, onHoldEnd = ::holdEnd,
+                    )
+                } else Spacer(Modifier.size(84.dp))
                 if (recording != null) {
-                    LockButton(locked, lockProgress) {
-                        // A second finger on the lock while the first still holds the shutter: that
-                        // finger's release is then the tail of a lock, not a press on stop.
-                        if (!locked) lockedByThisTouch = true
-                        locked = true; lockProgress = 1f
-                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    Box(Modifier.offset(x = 78.dp)) {
+                        LockButton(locked, lockProgress) {
+                            // A second finger on the lock while the first still holds the shutter: that
+                            // finger's release is then the tail of a lock, not a press on stop.
+                            if (!locked) lockedByThisTouch = true
+                            locked = true; lockProgress = 1f
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        }
                     }
-                } else if (hasCamera && twoLenses) {
-                    Box(
-                        Modifier.size(46.dp).clip(CircleShape).border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                            .clickable { flipCamera() }.semantics { contentDescription = "Flip camera" },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Outlined.Cameraswitch, contentDescription = null, tint = Color.White) }
                 }
             }
         }
+        }
+
+        // The bar (iOS bottomBar): the CAMERA / TEXT switch dead centre, the library and the flip
+        // beside it on the camera, the send arrow on the text page. Hidden, never removed, while typing.
+        Box(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().height(BAR_HEIGHT)
+                .padding(horizontal = 20.dp).graphicsLayer { alpha = if (typing) 0f else 1f },
+            contentAlignment = Alignment.Center,
+        ) {
+            ModeSwitch(textMode) { t -> if (!typing && recording == null) textMode = t }
+            if (!typing) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (textIn < 0.5f) {
+                    // While recording, the library and the flip step aside.
+                    Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+                        if (recording == null) LibraryCard(onLibrary)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (recording == null && hasCamera && twoLenses) {
+                        Box(
+                            Modifier.size(46.dp).clip(CircleShape).border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                                .clickable { flipCamera() }.semantics { contentDescription = "Flip camera" },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Outlined.Cameraswitch, contentDescription = null, tint = Color.White) }
+                    }
+                } else {
+                    Spacer(Modifier.weight(1f))
+                    val has = com.fariin.app.data.TextStoryRules.hasText(storyText)
+                    Box(
+                        Modifier.size(40.dp).clip(CircleShape).background(if (has) Color.White else Color.White.copy(alpha = 0.18f))
+                            .clickable(enabled = has && !rendering) {
+                                rendering = true
+                                scope.launch {
+                                    val out = withContext(Dispatchers.Default) {
+                                        runCatching { renderTextStory(storyText, styleIndex, fontIndex) }.getOrNull()
+                                    }
+                                    rendering = false
+                                    out?.let { onTextStory(it) }
+                                }
+                            }
+                            .semantics { contentDescription = "Next" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (rendering) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                        else Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null,
+                            tint = if (has) Color.Black else Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
         }
         // The screen is the front lens's flash: white over everything while the photo is taken.
         if (screenFlash) Box(Modifier.fillMaxSize().background(Color.White))
@@ -628,27 +707,60 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
  * only, and nothing while a recording is or was running in this touch.
  */
 private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.watchSwipes(
+    textMode: () -> Boolean,
+    blocked: () -> Boolean,
     onLibrary: () -> Unit,
-    isRecording: () -> Boolean,
+    onMode: (Boolean) -> Unit,
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
         var multi = false
-        var recorded = isRecording()
+        var refused = blocked()
         var last = down.position
         while (true) {
             val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
             if (e.changes.size > 1) multi = true
-            if (isRecording()) recorded = true
+            if (blocked()) refused = true
             val c = e.changes.firstOrNull { it.id == down.id } ?: break
             last = c.position
             if (!c.pressed) break
         }
-        if (multi || recorded) return@awaitEachGesture
+        if (multi || refused) return@awaitEachGesture
         val d = last - down.position
-        when (StoryCameraRules.swipe(d.x.toDp().value, d.y.toDp().value, textMode = false)) {
+        when (StoryCameraRules.swipe(d.x.toDp().value, d.y.toDp().value, textMode())) {
             StoryCameraRules.Swipe.LIBRARY -> onLibrary()
-            else -> {}
+            StoryCameraRules.Swipe.TO_TEXT -> onMode(true)
+            StoryCameraRules.Swipe.TO_CAMERA -> onMode(false)
+            StoryCameraRules.Swipe.NONE -> {}
+        }
+    }
+}
+
+/** iOS barHeight. */
+private val BAR_HEIGHT = 88.dp
+
+/**
+ * The CAMERA / TEXT switch (iOS ComposerTypeSwitch): a 40 dp dark capsule, titles in capitals, the
+ * chosen one bold; the light pill slides between them on the same 250 ms as the page.
+ */
+@Composable
+private fun ModeSwitch(text: Boolean, onPick: (Boolean) -> Unit) {
+    val seg = 92.dp
+    val x by animateDpAsState(if (text) seg else 0.dp, tween(250, easing = FastOutSlowInEasing), label = "modePill")
+    Box(Modifier.height(40.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.14f)).padding(3.dp)) {
+        Box(Modifier.offset(x = x).size(width = seg, height = 34.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.22f)))
+        Row {
+            listOf("CAMERA" to false, "TEXT" to true).forEach { (label, isText) ->
+                val on = isText == text
+                Box(
+                    Modifier.size(width = seg, height = 34.dp).clip(RoundedCornerShape(50)).clickable { onPick(isText) }
+                        .semantics { contentDescription = if (isText) "Text story" else "Camera" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, color = if (on) Color.White else Color.White.copy(alpha = 0.6f), fontSize = 14.sp,
+                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
+                }
+            }
         }
     }
 }

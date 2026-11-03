@@ -139,18 +139,20 @@ fun StoryComposerDialog(
     onClose: () -> Unit,
     /** After Post Story; the camera closes with it (iOS closeAfterPost). Close alone goes back to the camera. */
     onPosted: () -> Unit = onClose,
+    /** A finished text story (iOS onTextStory): straight to "Who can see your story"; back returns to the card. */
+    textStory: Boolean = false,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        StoryComposer(me, media, conversations, onClose, onPosted)
+        StoryComposer(me, media, conversations, onClose, onPosted, textStory)
     }
 }
 
 @Composable
-private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit, onPosted: () -> Unit) {
+private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false) {
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
     var hoursMenu by remember { mutableStateOf(false) }
-    var audience by remember { mutableStateOf(false) }
+    var audience by remember { mutableStateOf(textStory) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     // Decoded off the main thread (about 7 ms on the low-end phone); null until it lands.
@@ -332,7 +334,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             CircularProgressIndicator(color = Color.White)
         }
         if (audience) {
-            ShareStoryAudiencePage(me, conversations, onBack = { audience = false }) { choice, picked, lists, capture ->
+            ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
                 StoryUploads.start(me, posted, caption, choice, picked, hours, storyConvs(conversations), capture, lists)
                 onPosted()
             }
