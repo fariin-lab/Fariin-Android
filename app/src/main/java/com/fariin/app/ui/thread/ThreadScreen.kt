@@ -433,6 +433,11 @@ private fun ThreadContent(
                 onUnpin = { id -> actions.onUnpin(id); pinIndex = 0 },
                 bubble = { m -> MessageRow(ui, m, ThreadLogic.RowGeometry(false, true, true, 0), is24h, {}) {} })
         }
+        // The sticker sheet's pack grid sends into this chat (StickerInfoSheet).
+        androidx.compose.runtime.DisposableEffect(actions) {
+            StickerSendHook.send = { st -> actions.onSendSticker(st, null) }
+            onDispose { StickerSendHook.send = null }
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 // Over a wallpaper the page-colour fade read as a pale band: it steps aside then.

@@ -162,9 +162,12 @@ internal fun StickerRow(m: Message, isMe: Boolean, shape: Shape, fill: Color, he
                         meta: @Composable () -> Unit) {
     val (w, h) = StickerGifRules.stickerBox(m.width, m.height)
     val desc = StickerGifRules.stickerLabel(m.stickerEmoji)
+    // A tap opens the sticker's sheet (iOS StickerInfoSheet); long press still opens the message menu.
+    var info by remember { mutableStateOf(false) }
+    if (info) StickerInfoSheet(m) { info = false }
     val art: @Composable () -> Unit = {
         StickerArt(m.stickerPack ?: "", m.stickerId ?: "", m.localPath ?: m.imageUrl, m.enc,
-            Modifier.size(w.dp, h.dp))
+            Modifier.size(w.dp, h.dp).clickable(enabled = m.sendState == null) { info = true })
     }
     if (m.replyTo != null) {
         Column(Modifier.clip(shape).background(fill).padding(horizontal = 10.dp, vertical = 6.dp),
