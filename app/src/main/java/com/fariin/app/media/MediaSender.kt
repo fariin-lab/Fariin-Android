@@ -117,6 +117,7 @@ class MediaSender(
             FieldValue.serverTimestamp(), FieldValue.increment(1),
             lastImageUrl = if (viewOnce) null else url, lastImageEnc = if (viewOnce) null else meta))
         batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
     }
 
@@ -150,6 +151,7 @@ class MediaSender(
         val url = uploadRetrying(cipher, MediaRules.videoPath(cid, msgRef.id), progress(clientId))
         media?.store(url, clip)
         msgRef.update(MediaMessages.attachVideo(url, meta, FieldValue.delete())).await()
+        com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
     }
 
@@ -179,6 +181,7 @@ class MediaSender(
         val url = uploadRetrying(cipher, MediaRules.filePath(cid, msgRef.id), progress(clientId))
         media?.store(url, f.bytes)
         msgRef.update(MediaMessages.attachFile(url, FieldValue.delete())).await()
+        com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
     }
 
@@ -232,6 +235,7 @@ class MediaSender(
             FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = cover.imageUrl, lastImageEnc = cover.imageMeta,
             lastImages = MediaMessages.lastImages(ordered)))
         batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
         clientId?.let { UploadProgress.done(it) }
     }
 
@@ -250,5 +254,6 @@ class MediaSender(
         val url = uploadRetrying(cipher, MediaRules.audioPath(cid, msgRef.id))
         media?.store(url, data)
         msgRef.update(MediaMessages.attachAudio(url, FieldValue.delete())).await()
+        com.fariin.app.media.ChatSounds.sent()
     }
 }

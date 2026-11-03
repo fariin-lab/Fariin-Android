@@ -694,6 +694,7 @@ class ThreadRepository(
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.PHOTO_PREVIEW, members ?: listOf(other),
             FieldValue.serverTimestamp(), FieldValue.increment(1), lastImageUrl = url, lastImageEnc = meta))
         batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
     }
 
     /** A recorded note: the message goes out first (with `uploading`), the file follows (iOS). */
@@ -731,6 +732,7 @@ class ThreadRepository(
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.voicePreview(r.duration), members ?: listOf(other),
             FieldValue.serverTimestamp(), FieldValue.increment(1)))
         batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
         val path = MediaRules.audioPath(cid, msgRef.id)
         var url: String? = null
         var attempt = 0
@@ -820,6 +822,7 @@ class ThreadRepository(
         if (answering) conv["accepted"] = true
         batch.update(convRef, conv)
         batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
     }
 
     /** iOS replyEnc: {id, authorId, text sealed like the message}, plus a story quote's flags. */
@@ -887,6 +890,7 @@ class ThreadRepository(
         if (countsAsUnread) for (m in members) if (m != me) conv["unreadCount.$m"] = FieldValue.increment(1)
         batch.update(convRef, conv)
         batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
     }
 
     // ------------------------------------------------------------------ message actions (iOS ChatService)
