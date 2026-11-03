@@ -297,6 +297,17 @@ object OfficialChannel {
             .set(mapOf("lastReadAt" to at), SetOptions.merge())
     }
 
+    /** Delete for me: hidden on this account only, the announcement stays for everybody else. */
+    fun hide(ids: List<String>) {
+        val me = uid ?: return
+        if (ids.isEmpty()) return
+        state = state.copy(hiddenIds = state.hiddenIds + ids)
+        recompute()
+        FirebaseFirestore.getInstance().collection("users").document(me)
+            .collection("officialChannel").document("state")
+            .set(mapOf("hiddenIds" to com.google.firebase.firestore.FieldValue.arrayUnion(*ids.toTypedArray())), SetOptions.merge())
+    }
+
     const val REJECT_OFFLINE = "Could not reject ownership. Check your connection and try again."
     const val REJECT_TITLE = "Reject ownership?"
     const val REJECT_MESSAGE = "The group goes back to its previous owner, or to its longest-standing admin if they have left. You keep the role you had before."

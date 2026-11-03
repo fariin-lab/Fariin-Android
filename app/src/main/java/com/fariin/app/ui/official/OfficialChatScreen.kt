@@ -4,6 +4,7 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.AlertDialog
@@ -83,6 +86,8 @@ fun OfficialChatScreen(onBack: () -> Unit) {
     var pendingReject by remember { mutableStateOf<String?>(null) }
     var rejecting by remember { mutableStateOf(false) }
     var rejectResult by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<String?>(null) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val listState = rememberLazyListState()
 
     // Open = read, and anything that lands while it is open is read too.
@@ -110,6 +115,11 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             }) { Text("Reject", color = c.red) } },
             dismissButton = { TextButton({ pendingReject = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
     }
+    pendingDelete?.let { id ->
+        AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("Delete this message?") },
+            confirmButton = { TextButton({ OfficialChannel.hide(listOf(id)); pendingDelete = null }) { Text("Delete for Me", color = c.red) } },
+            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+    }
     rejectResult?.let { text ->
         AlertDialog(onDismissRequest = { rejectResult = null }, text = { Text(text) },
             confirmButton = { TextButton({ rejectResult = null }) { Text("OK", color = c.blue) } }, containerColor = c.card)
@@ -125,7 +135,9 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(view.visible, key = { it.id }) { a ->
                 val now = System.currentTimeMillis().toDouble()
-                AnnouncementCard(a, timeLabel(a.sortAt, is24h), a.buttons.filter { it.isUsable(now) }, ::tap)
+                AnnouncementCard(a, timeLabel(a.sortAt, is24h), a.buttons.filter { it.isUsable(now) }, ::tap,
+                    onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(listOf(a.title, a.body).filter { it.isNotEmpty() }.joinToString("\n"))) },
+                    onDelete = { pendingDelete = a.id })
             }
         }
         HorizontalDivider(color = c.separator)
@@ -144,10 +156,17 @@ private fun kindIcon(k: AnnouncementKind): ImageVector = when (k) {
 }
 
 @Composable
-private fun AnnouncementCard(a: Announcement, time: String, buttons: List<AnnouncementButton>, onTap: (AnnouncementButton) -> Unit) {
+private fun AnnouncementCard(a: Announcement, time: String, buttons: List<AnnouncementButton>, onTap: (AnnouncementButton) -> Unit,
+                             onCopy: () -> Unit, onDelete: () -> Unit) {
     val c = Fariin.colors
     val accent = if (a.kind == AnnouncementKind.SECURITY) c.red else c.blue
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var menu by remember { mutableStateOf(false) }
+    // Long press: Copy and Delete (for me), as a chat message (iOS menuActions; Forward and Select later).
+    Box {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)
+        .combinedClickable(onClick = {}, onLongClick = {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); menu = true })) {
         if (a.mediaUrl != null) {
             AsyncImage(a.mediaUrl, contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp))
@@ -173,6 +192,13 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
             Text(b.label, style = MaterialTheme.typography.labelLarge, color = c.blue, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().clickable { onTap(b) }.padding(vertical = 12.dp, horizontal = 14.dp))
         }
+    }
+    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Copy") }, onClick = { menu = false; onCopy() },
+            leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) })
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { menu = false; onDelete() },
+            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = c.red) })
+    }
     }
 }
 
