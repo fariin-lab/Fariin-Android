@@ -12,8 +12,10 @@ import java.io.ByteArrayOutputStream
 object StoryMedia {
     class Video(val file: Uri, val info: StoryRules.VideoInfo)
 
-    /** [jpeg] is the photo itself, or the video's poster frame (thumb.jpg). */
-    class Prepared(val jpeg: ByteArray, val blurThumb: String, val video: Video? = null, val width: Int = 0, val height: Int = 0)
+    /** [jpeg] is the photo itself, or the video's poster frame (thumb.jpg). [stickers]: the tap
+     *  areas drawn into it (a text story's link card), posted as the story's `stickers`. */
+    class Prepared(val jpeg: ByteArray, val blurThumb: String, val video: Video? = null, val width: Int = 0, val height: Int = 0,
+                   val stickers: List<StoryTapTarget> = emptyList())
 
     class TooBig : Exception("This video is too large for a story.")
 
@@ -39,17 +41,19 @@ object StoryMedia {
         val opts = android.graphics.BitmapFactory.Options().apply { inMutable = true; inPreferredConfig = Bitmap.Config.ARGB_8888 }
         val bmp = android.graphics.BitmapFactory.decodeByteArray(prepared.jpeg, 0, prepared.jpeg.size, opts) ?: return null
         draw(android.graphics.Canvas(bmp), bmp.width / StoryEditRules.SPACE)
-        return encodePhoto(bmp)
+        val out = encodePhoto(bmp)
+        return if (prepared.stickers.isEmpty()) out
+            else Prepared(out.jpeg, out.blurThumb, out.video, out.width, out.height, prepared.stickers)
     }
 
     /** A picture drawn here (a text story, iOS renderTextStory): posted at its own size and [quality],
      *  like iOS; recycles [bmp]. */
-    fun fromRendered(bmp: Bitmap, quality: Int): Prepared {
+    fun fromRendered(bmp: Bitmap, quality: Int, stickers: List<StoryTapTarget> = emptyList()): Prepared {
         val out = jpeg(bmp, quality)
         val blur = blurThumb(bmp)
         val w = bmp.width; val h = bmp.height
         bmp.recycle()
-        return Prepared(out, blur, width = w, height = h)
+        return Prepared(out, blur, width = w, height = h, stickers = stickers)
     }
 
     /** The ladder; recycles [bmp]. */

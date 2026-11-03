@@ -98,8 +98,13 @@ internal fun fittedTextStorySize(text: String, boxWidthPx: Float, fontIndex: Int
 /**
  * iOS renderTextStory: the words on their colour, 1080 x 2700 drawn at 1.5x, URLs shortened, the
  * same fit as the card at the picture's own width. Posted as a plain photo story. Off the main thread.
+ *
+ * With a [link] (the page's card, fetched for the first address in the words) the card sits on top
+ * and the words under it, centred as one group, and where the card landed goes with the picture as
+ * its tap area, so a viewer on either phone can open it.
  */
-internal fun renderTextStory(text: String, styleIndex: Int, fontIndex: Int): StoryMedia.Prepared? {
+internal fun renderTextStory(text: String, styleIndex: Int, fontIndex: Int,
+                             link: com.fariin.app.data.LinkPreviews.Draft? = null): StoryMedia.Prepared? {
     val t = TextStoryRules.shortenedUrls(text).trim()
     if (t.isEmpty()) return null
     val k = TextStoryRules.RENDER_SCALE
@@ -114,9 +119,76 @@ internal fun renderTextStory(text: String, styleIndex: Int, fontIndex: Int): Sto
     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val c = android.graphics.Canvas(bmp)
     c.drawColor(style.bg.toInt())
-    c.translate(pad, (h - layout.height) / 2f)
+    if (link == null) {
+        c.translate(pad, (h - layout.height) / 2f)
+        layout.draw(c)
+        return StoryMedia.fromRendered(bmp, TextStoryRules.RENDER_QUALITY)
+    }
+    // In the picture's own points (1080 x 2700), as iOS lays it out; drawn at k.
+    val cardW = TextStoryRules.RENDER_W * TextStoryRules.LINK_CARD_WIDTH
+    val cardH = TextStoryRules.linkCardHeight(cardW)
+    val (wordsH, centreY) = TextStoryRules.placeLink(layout.height / k * 1.06f, cardH,
+        TextStoryRules.RENDER_W, TextStoryRules.RENDER_H)
+    val cardTop = centreY * h - cardH * k / 2
+    val cardLeft = (w - cardW * k) / 2
+    drawStoryLinkCard(c, link, cardLeft, cardTop, cardW * k, cardH * k)
+    // The words centred in what the layout gave them, under the card and the gap.
+    val wordsTop = cardTop + cardH * k + TextStoryRules.RENDER_W * TextStoryRules.LINK_GAP * k
+    c.save()
+    c.clipRect(0f, wordsTop, w.toFloat(), wordsTop + wordsH * k)
+    c.translate(pad, wordsTop + (wordsH * k - layout.height) / 2f)
     layout.draw(c)
-    return StoryMedia.fromRendered(bmp, TextStoryRules.RENDER_QUALITY)
+    c.restore()
+    val tap = TextStoryRules.linkTap(link.url, centreY, cardH)
+    return StoryMedia.fromRendered(bmp, TextStoryRules.RENDER_QUALITY, listOf(tap))
+}
+
+/**
+ * iOS StoryTextLinkPreview, compact style: a 0.97 white card, 18 corners at a 300 wide card (12 when
+ * the page gave back only its host), a square of the page's picture on the left, then the title (15
+ * semibold, two lines), the description (12.5, two lines) and the host (12.5, grey), 2 apart, 12 in
+ * from the sides and 7 from the top. Black on it whatever the story's colour.
+ */
+private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data.LinkPreviews.Draft,
+                              left: Float, top: Float, cw: Float, ch: Float) {
+    val u = cw / TextStoryRules.LINK_REF_W
+    val bare = d.title.isEmpty() && d.desc.isEmpty()
+    val pic = if (bare) null else d.jpeg?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val radius = (if (bare) 12f else 18f) * u
+    val shape = android.graphics.Path().apply {
+        addRoundRect(android.graphics.RectF(left, top, left + cw, top + ch), radius, radius, android.graphics.Path.Direction.CW)
+    }
+    c.save()
+    c.clipPath(shape)
+    c.drawColor(android.graphics.Color.rgb(247, 247, 247))
+    var textLeft = left
+    if (pic != null) {
+        // The square, filled: the picture's middle, cropped to the card's height on each side.
+        val side = minOf(pic.width, pic.height)
+        val src = android.graphics.Rect((pic.width - side) / 2, (pic.height - side) / 2,
+            (pic.width - side) / 2 + side, (pic.height - side) / 2 + side)
+        c.drawBitmap(pic, src, android.graphics.RectF(left, top, left + ch, top + ch),
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        pic.recycle()
+        textLeft = left + ch
+    }
+    val textW = (left + cw - textLeft - 24f * u).toInt().coerceAtLeast(1)
+    var y = top + 7f * u
+    fun line(s: String, sizePt: Float, bold: Boolean, color: Int, lines: Int) {
+        val p = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = sizePt * u; this.color = color
+            typeface = if (Build.VERSION.SDK_INT >= 28) Typeface.create(Typeface.DEFAULT, if (bold) 600 else 400, false)
+                else if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        }
+        val l = StaticLayout.Builder.obtain(s, 0, s.length, p, textW)
+            .setMaxLines(lines).setEllipsize(android.text.TextUtils.TruncateAt.END).setIncludePad(false).build()
+        c.save(); c.translate(textLeft + 12f * u, y); l.draw(c); c.restore()
+        y += l.height + 2f * u
+    }
+    if (d.title.isNotEmpty()) line(d.title, 15f, true, android.graphics.Color.BLACK, 2)
+    if (d.desc.isNotEmpty()) line(d.desc, 12.5f, false, android.graphics.Color.BLACK, 2)
+    line(d.host, 12.5f, false, android.graphics.Color.argb(153, 60, 60, 67), 1)
+    c.restore()
 }
 
 /**

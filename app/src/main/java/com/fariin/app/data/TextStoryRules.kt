@@ -96,6 +96,53 @@ object TextStoryRules {
         return s
     }
 
+    // ------------------------------------------------------------------ the link card (iOS StoryTextLinkPreview)
+
+    /** iOS StoryText.linkCardWidthFraction: the card is this much of the picture's width, centred. */
+    const val LINK_CARD_WIDTH = 0.72f
+    /** iOS StoryText.linkGapRatio: the air between the card and the words, of the width. */
+    const val LINK_GAP = 0.04f
+    /** The card's numbers are quoted at a 300 wide card (iOS `k = width / 300`). */
+    const val LINK_REF_W = 300f
+    /** iOS textBlockHeight: the compact card is this tall at the reference width. */
+    const val LINK_BLOCK_H = 100f
+
+    /**
+     * iOS StoryTextLinkDetector.firstURL: the first web address in the words, http or https, with a
+     * dot in its host. A story carries one link, and the first is the one.
+     */
+    fun firstLink(text: String): String? = TextLinks.find(text).firstOrNull { s ->
+        if (s.kind != TextLinks.Kind.WEB) return@firstOrNull false
+        val u = runCatching { URI(s.target) }.getOrNull() ?: return@firstOrNull false
+        val scheme = u.scheme?.lowercase()
+        (scheme == "http" || scheme == "https") && u.host?.contains('.') == true
+    }?.target
+
+    /** iOS StoryTextLinkPreview.height, compact style (the default): one text block tall. */
+    fun linkCardHeight(cardWidth: Float): Float = LINK_BLOCK_H * cardWidth / LINK_REF_W
+
+    /**
+     * iOS StoryTextLinkLayout.place: the card on top, the gap, the words, centred as one group. The
+     * words never push the card off the bottom. Returns the words' height and the card's centre as a
+     * fraction of [boxH].
+     */
+    fun placeLink(textH: Float, cardH: Float, boxW: Float, boxH: Float): Pair<Float, Float> {
+        val gap = boxW * LINK_GAP
+        val text = maxOf(0f, minOf(textH, boxH - cardH - gap))
+        val top = maxOf(0f, (boxH - (cardH + gap + text)) / 2)
+        val centre = top + cardH / 2
+        return text to if (boxH > 1) centre / boxH else 0.5f
+    }
+
+    /**
+     * iOS renderTextStory's tap target: centred across, at the card's place, the card's size as
+     * fractions of the 1:2.5 picture, no turn, and the picture's shape so the viewer can undo its crop.
+     */
+    fun linkTap(url: String, cardCentreY: Float, cardH: Float): StoryTapTarget = StoryTapTarget(
+        x = 0.5, y = cardCentreY.toDouble(), w = LINK_CARD_WIDTH.toDouble(), h = (cardH / RENDER_H).toDouble(),
+        rotation = 0.0, url = url, aspect = (RENDER_W / RENDER_H).toDouble(),
+    )
+
     /** iOS: the send arrow is live only when there are words. */
     fun hasText(text: String): Boolean = text.isNotBlank()
 }

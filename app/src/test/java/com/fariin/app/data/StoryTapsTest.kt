@@ -47,4 +47,45 @@ class StoryTapsTest {
         assertTrue(StoryTaps.bubbleAbove(r, 2000f, 59f, 8f, 60f))
         assertFalse(StoryTaps.bubbleAbove(StoryTaps.rect(StoryTaps.from(raw)!!, 1000f, 2000f, 24f), 2000f, 59f, 8f, 60f))
     }
+
+    @Test fun textStoryLinkEntryIsTheIosShape() {
+        val cardW = TextStoryRules.RENDER_W * TextStoryRules.LINK_CARD_WIDTH
+        val cardH = TextStoryRules.linkCardHeight(cardW)
+        assertEquals(259.2f, cardH, 0.01f)
+        // Short words: the card on top of a centred group, the words under it.
+        val (words, centre) = TextStoryRules.placeLink(200f, cardH, 1080f, 2700f)
+        assertEquals(200f, words, 0.01f)
+        val top = (2700f - (cardH + 1080f * 0.04f + 200f)) / 2
+        assertEquals((top + cardH / 2) / 2700f, centre, 1e-5f)
+        val t = TextStoryRules.linkTap("https://example.com/a", centre, cardH)
+        val m = StoryTaps.asMap(t)
+        assertEquals(listOf("x", "y", "w", "h", "rotation", "url", "aspect"), m.keys.toList())
+        assertEquals(0.5, m["x"] as Double, 1e-9)
+        assertEquals(0.72, m["w"] as Double, 1e-6)
+        assertEquals(cardH / 2700.0, m["h"] as Double, 1e-6)
+        assertEquals(0.0, m["rotation"] as Double, 1e-9)
+        assertEquals(0.4, m["aspect"] as Double, 1e-6)
+        // What the viewers read back is what was written.
+        assertEquals(t, StoryTaps.from(m))
+        assertFalse("aspect" in StoryTaps.asMap(t.copy(aspect = null)))
+    }
+
+    @Test fun longWordsNeverPushTheCardOff() {
+        val (words, _) = TextStoryRules.placeLink(5000f, 259.2f, 1080f, 2700f)
+        assertEquals(2700f - 259.2f - 43.2f, words, 0.01f)
+    }
+
+    @Test fun firstWebLinkInTheWords() {
+        assertEquals("https://www.example.com/x", TextStoryRules.firstLink("read www.example.com/x and https://b.org"))
+        assertEquals("http://a.org", TextStoryRules.firstLink("mail me@a.com or see http://a.org"))
+        assertNull(TextStoryRules.firstLink("no link here, call 555 1234"))
+    }
+
+    @Test fun storyPayloadCarriesTheStickers() {
+        val t = TextStoryRules.linkTap("https://example.com", 0.4f, 259.2f)
+        val p = StoryRules.payload("me", false, "S1", "", StoryAudienceChoice.MY_CHATS, "all", setOf("a"), "E", "N", "b",
+            stickers = listOf(t))
+        assertEquals(listOf(StoryTaps.asMap(t)), p["stickers"])
+        assertTrue((StoryRules.payload("me", false, "S2", "", StoryAudienceChoice.MY_CHATS, "all", setOf("a"), "E", "N", "b")["stickers"] as List<*>).isEmpty())
+    }
 }

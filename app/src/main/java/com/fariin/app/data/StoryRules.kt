@@ -131,6 +131,7 @@ object StoryRules {
         video: VideoInfo? = null,
         allowsReplies: Boolean = true,
         captureProtected: Boolean = false,
+        stickers: List<StoryTapTarget> = emptyList(),
     ): Map<String, Any> {
         val everyone = choice == StoryAudienceChoice.EVERYONE
         val p = linkedMapOf<String, Any>(
@@ -142,7 +143,7 @@ object StoryRules {
             "mediaUrl" to "",
             "blurThumb" to blurThumb,
             "caption" to caption,
-            "stickers" to emptyList<Any>(),
+            "stickers" to stickers.map { StoryTaps.asMap(it) },
             "audience" to mapOf("mode" to mode, "listId" to "my-story"),
             "audienceLabel" to choice.tagLabel,
             "oneTime" to (choice == StoryAudienceChoice.ONE_TIME),

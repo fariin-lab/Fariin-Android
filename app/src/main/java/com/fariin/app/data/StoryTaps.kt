@@ -39,6 +39,13 @@ object StoryTaps {
 
     fun list(raw: Any?): List<StoryTapTarget> = (raw as? List<*>).orEmpty().mapNotNull { from(it) }
 
+    /** iOS StoryTapTarget.asDictionary: the `stickers` entry as it is written; no aspect key when there is none. */
+    fun asMap(t: StoryTapTarget): Map<String, Any> {
+        val d = linkedMapOf<String, Any>("x" to t.x, "y" to t.y, "w" to t.w, "h" to t.h, "rotation" to t.rotation, "url" to t.url)
+        t.aspect?.takeIf { it > 0 }?.let { d["aspect"] = it }
+        return d
+    }
+
     /**
      * Where the area sits on a card [cw] x [ch] (iOS tapRect). The fractions are of the file; this
      * viewer shows the file fitted in the card, so with an [StoryTapTarget.aspect] they are laid over

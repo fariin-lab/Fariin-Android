@@ -191,6 +191,7 @@ class StoryService(
         val payload = StoryRules.payload(
             me, isVideo, id, caption.trim(), choice, mode, recipients, expires, FieldValue.serverTimestamp(),
             media.blurThumb, media.video?.info, allowsReplies = replies, captureProtected = capture,
+            stickers = media.stickers,
         )
         val mainRef = storage.reference.child(if (isVideo) StoryRules.videoPath(id) else StoryRules.photoPath(id))
         val thumbRef = storage.reference.child(StoryRules.thumbPath(id))
@@ -215,7 +216,7 @@ class StoryService(
                     db.collection("users").document(me).collection("publicStories").document(id).set(mapOf(
                         "authorUid" to me, "createdAt" to FieldValue.serverTimestamp(), "expiresAt" to expires,
                         "mediaUrl" to urls.first, "thumbUrl" to urls.second, "blurThumb" to media.blurThumb,
-                        "stickers" to emptyList<Any>(), "type" to if (isVideo) "video" else "image",
+                        "stickers" to media.stickers.map { StoryTaps.asMap(it) }, "type" to if (isVideo) "video" else "image",
                         "caption" to caption.trim(), "duration" to (media.video?.info?.durationSec ?: 0.0),
                         "allowsReplies" to replies, "captureProtected" to capture,
                     )).await()
@@ -285,7 +286,7 @@ class StoryService(
             mirror.set(mapOf(
                 "authorUid" to me, "createdAt" to Timestamp(Date(story.createdAtMs)), "expiresAt" to Timestamp(Date(story.expiresAtMs)),
                 "mediaUrl" to story.mediaUrl, "thumbUrl" to story.thumbUrl, "blurThumb" to story.blurThumb,
-                "stickers" to emptyList<Any>(), "type" to if (story.isVideo) "video" else "image",
+                "stickers" to story.taps.map { StoryTaps.asMap(it) }, "type" to if (story.isVideo) "video" else "image",
                 "caption" to story.caption, "duration" to story.durationSec,
                 "allowsReplies" to replies, "captureProtected" to story.captureProtected,
             )).await()

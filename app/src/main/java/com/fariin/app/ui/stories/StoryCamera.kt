@@ -258,6 +258,14 @@ private fun StoryCamera(
     var fontIndex by rememberSaveable { mutableIntStateOf(0) }
     var typing by remember { mutableStateOf(false) }
     var rendering by remember { mutableStateOf(false) }
+    // iOS syncDetectedLink: the link in the words is fetched 400 ms after typing stops, so the card is
+    // ready by the time the arrow is pressed.
+    LaunchedEffect(storyText, textMode) {
+        if (!textMode) return@LaunchedEffect
+        val url = com.fariin.app.data.TextStoryRules.firstLink(storyText) ?: return@LaunchedEffect
+        delay(400)
+        com.fariin.app.data.LinkPreviews.draft(url)
+    }
     // The text page slides in over the picture (iOS .snappy 0.25). The preview itself never moves;
     // the camera is let go once the card covers it (iOS stops the session in text mode).
     val textIn by animateFloatAsState(if (textMode) 1f else 0f, tween(250, easing = FastOutSlowInEasing), label = "textMode")
@@ -679,8 +687,13 @@ private fun StoryCamera(
                             .clickable(enabled = has && !rendering) {
                                 rendering = true
                                 scope.launch {
+                                    // The first address in the words gets the page's card, as on iOS: only
+                                    // when the page answered (usually already fetched while typing, below).
+                                    val link = com.fariin.app.data.TextStoryRules.firstLink(storyText)?.let {
+                                        com.fariin.app.data.LinkPreviews.draftWithin(it, 4_000)
+                                    }
                                     val out = withContext(Dispatchers.Default) {
-                                        runCatching { renderTextStory(storyText, styleIndex, fontIndex) }.getOrNull()
+                                        runCatching { renderTextStory(storyText, styleIndex, fontIndex, link) }.getOrNull()
                                     }
                                     rendering = false
                                     out?.let { onTextStory(it) }
