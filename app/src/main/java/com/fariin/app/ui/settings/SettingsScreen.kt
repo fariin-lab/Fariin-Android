@@ -126,6 +126,8 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             lookRoute(page, push, pop) -> Unit
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
             page == PAGE_APP_ICON -> AppIconPage(pop)
+            page == PAGE_GLOW_PROFILE -> com.fariin.app.ui.glow.GlowProfilePage(me, profile,
+                onEdit = com.fariin.app.ui.people.LocalPeopleNav.current.editProfile, onBack = pop)
             page == PAGE_SCAN -> ScanQrPage(onMyCode = { pop(); myQrOpen.value = true }, onClose = pop, onDone = pop)
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
@@ -134,6 +136,8 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
 }
 
 internal const val PAGE_ACCOUNT = "account"
+/** My Profile (iOS GlowProfileView), behind the myProfileCard switch. */
+private const val PAGE_GLOW_PROFILE = "glow:profile"
 internal const val PAGE_APPEARANCE = "appearance"
 private const val PAGE_NIGHT = "night"
 internal const val PAGE_ABOUT = "about"
@@ -165,6 +169,10 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             ProfileHeader(profile, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
             if (myQrOpen.value) MyQrSheet(profile, onClose = { myQrOpen.value = false }, onScan = { push(PAGE_SCAN) })
             Spacer(Modifier.height(8.dp))
+            // My Profile, its own card under the header (iOS; hidden unless the switch is on).
+            if (com.fariin.app.data.AppFeatures.myProfileCard) SettingsSection {
+                SettingsRow("My Profile", painterResource(R.drawable.ic_account), last = true) { push(PAGE_GLOW_PROFILE) }
+            }
             SettingsSection {
                 SettingsRow("Account", painterResource(R.drawable.ic_account)) { push(PAGE_ACCOUNT) }
                 SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true) { push(PAGE_DEVICES) }

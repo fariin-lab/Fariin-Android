@@ -202,7 +202,10 @@ fun MainShell(
                     TAB_CHATS -> ChatListScreen(chats, me, decryptor, stories = stories,
                         onSettings = { select(TAB_SETTINGS) },
                         onNewStory = { storyRequest++; select(TAB_STORIES) })
-                    else -> SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut)
+                    // My Profile (Settings) reads the same feed for its Posted stories card.
+                    else -> com.fariin.app.ui.glow.ProvideMyStories(stories, chats.chats) {
+                        SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut)
+                    }
                 }
             }
         }
