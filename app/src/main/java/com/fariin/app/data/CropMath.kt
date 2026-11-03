@@ -1,6 +1,9 @@
 package com.fariin.app.data
 
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.sin
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -67,4 +70,115 @@ object CropMath {
 
     /** The side the cut square is sent at: itself, or [MAX_OUTPUT] when larger. */
     fun outputSide(cropSide: Int): Int = min(cropSide, MAX_OUTPUT)
+
+    // ---- The chat photo crop (iOS ChatCropView): a free frame inside the fitted photo.
+    //
+    // The WINDOW is the photo fitted on screen; it does not move. The crop frame lives inside it,
+    // and the picture moves under it (zoom, turn, slide), always covering the window.
+
+    /** A rectangle in screen px. */
+    data class Box(val left: Float, val top: Float, val width: Float, val height: Float) {
+        val right get() = left + width
+        val bottom get() = top + height
+        val centerX get() = left + width / 2
+        val centerY get() = top + height / 2
+    }
+
+    /** iOS: pinch stops at six times the window. */
+    const val FREE_MAX_ZOOM = 6f
+
+    /** iOS minSize: the frame never gets smaller than this on a side (pt, so dp here). */
+    const val FREE_MIN_SIDE_DP = 64f
+
+    /** iOS hit: a corner's grab square, and a side's grab thickness (dp). */
+    const val FREE_HIT_DP = 34f
+
+    /** The straighten wheel's reach either way, in degrees. */
+    const val MAX_STRAIGHTEN = 45f
+
+    /** iOS zoomFloor: the smallest zoom at which a w x h picture turned by [angleDeg] still covers its window. */
+    fun zoomFloor(w: Float, h: Float, angleDeg: Float): Float {
+        if (w <= 1f || h <= 1f) return 1f
+        val r = Math.toRadians(abs(angleDeg).toDouble())
+        val c = abs(cos(r)).toFloat(); val s = abs(sin(r)).toFloat()
+        return max(1f, max((w * c + h * s) / w, (w * s + h * c) / h))
+    }
+
+    /** iOS clampPan: the slide that keeps the window covered at this zoom and angle. */
+    fun clampPan(panX: Float, panY: Float, w: Float, h: Float, zoom: Float, angleDeg: Float): Pair<Float, Float> {
+        val r = Math.toRadians(abs(angleDeg).toDouble())
+        val c = abs(cos(r)).toFloat(); val s = abs(sin(r)).toFloat()
+        val z = max(zoom, zoomFloor(w, h, angleDeg))
+        val zw = w * z; val zh = h * z
+        val slackX = max(0f, (zw * c + zh * s - w) / 2)
+        val slackY = max(0f, (zw * s + zh * c - h) / 2)
+        return panX.coerceIn(-slackX, slackX) to panY.coerceIn(-slackY, slackY)
+    }
+
+    /** iOS displayFrame: the window scaled about its centre (never under the floor) and slid by the pan. */
+    fun displayFrame(window: Box, zoom: Float, angleDeg: Float, panX: Float, panY: Float): Box {
+        val z = max(zoom, zoomFloor(window.width, window.height, angleDeg))
+        val w = window.width * z; val h = window.height * z
+        return Box(window.centerX - w / 2 + panX, window.centerY - h / 2 + panY, w, h)
+    }
+
+    /** iOS setAspect: the biggest frame of [ratio] (w / h) centred in the window; null = the whole window. */
+    fun aspectFrame(window: Box, ratio: Float?): Box {
+        if (ratio == null || window.height <= 0f) return window
+        return if (window.width / window.height > ratio) {
+            val w = window.height * ratio
+            Box(window.centerX - w / 2, window.top, w, window.height)
+        } else {
+            val h = window.width / ratio
+            Box(window.left, window.centerY - h / 2, window.width, h)
+        }
+    }
+
+    /** iOS moveGesture: the frame slid by (dx, dy), kept inside the window. */
+    fun moved(start: Box, dx: Float, dy: Float, window: Box): Box {
+        val l = (start.left + dx).coerceIn(window.left, max(window.left, window.right - start.width))
+        val t = (start.top + dy).coerceIn(window.top, max(window.top, window.bottom - start.height))
+        return start.copy(left = l, top = t)
+    }
+
+    /** Which sides a grab moves (iOS Handle). */
+    enum class Handle(val left: Boolean, val top: Boolean, val right: Boolean, val bottom: Boolean) {
+        TOP_LEFT(true, true, false, false), TOP_RIGHT(false, true, true, false),
+        BOTTOM_LEFT(true, false, false, true), BOTTOM_RIGHT(false, false, true, true),
+        TOP(false, true, false, false), BOTTOM(false, false, false, true),
+        LEFT(true, false, false, false), RIGHT(false, false, true, false);
+        val isCorner get() = (left || right) && (top || bottom)
+    }
+
+    /** iOS resized: [start] dragged by (dx, dy) at [h], inside the window, at least [minSide], held to [aspect] when locked. */
+    fun resized(start: Box, h: Handle, dx: Float, dy: Float, window: Box, minSide: Float, aspect: Float?): Box {
+        var minX = start.left; var minY = start.top; var maxX = start.right; var maxY = start.bottom
+        if (h.left) minX = min(maxX - minSide, max(window.left, start.left + dx))
+        if (h.right) maxX = max(minX + minSide, min(window.right, start.right + dx))
+        if (h.top) minY = min(maxY - minSide, max(window.top, start.top + dy))
+        if (h.bottom) maxY = max(minY + minSide, min(window.bottom, start.bottom + dy))
+        var r = Box(minX, minY, maxX - minX, maxY - minY)
+        if (aspect != null) r = when (h) {
+            Handle.LEFT, Handle.RIGHT -> {
+                val newH = min(r.width / aspect, window.height)
+                r.copy(top = (r.centerY - newH / 2).coerceIn(window.top, max(window.top, window.bottom - newH)), height = newH)
+            }
+            Handle.TOP, Handle.BOTTOM -> {
+                val newW = min(r.height * aspect, window.width)
+                r.copy(left = (r.centerX - newW / 2).coerceIn(window.left, max(window.left, window.right - newW)), width = newW)
+            }
+            else -> {
+                val newH = min(r.width / aspect, window.height)
+                // The fixed side stays fixed.
+                r.copy(top = if (h.top) r.bottom - newH else r.top, height = newH)
+            }
+        }
+        return r
+    }
+
+    /** iOS straightenWheel: [halfWidth] px of drag reaches 45 degrees; within a degree of straight is straight. */
+    fun straighten(startDeg: Float, dragX: Float, halfWidth: Float): Float {
+        val v = (startDeg + dragX * MAX_STRAIGHTEN / max(1f, halfWidth)).coerceIn(-MAX_STRAIGHTEN, MAX_STRAIGHTEN)
+        return if (abs(v) < 1f) 0f else v
+    }
 }

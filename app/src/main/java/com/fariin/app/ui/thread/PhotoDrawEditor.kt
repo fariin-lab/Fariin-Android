@@ -2,6 +2,10 @@ package com.fariin.app.ui.thread
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +18,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
@@ -29,6 +35,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,6 +81,7 @@ import androidx.core.view.WindowCompat
 import com.fariin.app.data.StoryEditRules
 import com.fariin.app.media.BitmapDecode
 import com.fariin.app.media.MediaRules
+import com.fariin.app.media.SentQuality
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.stories.StoryEditCanvas
 import com.fariin.app.ui.stories.StoryEdits
@@ -82,6 +90,7 @@ import com.fariin.app.ui.stories.StoryPenTopBar
 import com.fariin.app.ui.stories.bakeStoryEdits
 import com.fariin.app.ui.theme.FariinTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -131,6 +140,10 @@ private fun EditorWindow() {
     SideEffect {
         (view.parent as? DialogWindowProvider)?.window?.let { w ->
             w.setDimAmount(0f)
+            // The keyboard must not pan the whole window up (a dialog's default): only the caption
+            // bar rides it, on its own ime padding, and the photo stays where it is (iOS).
+            @Suppress("DEPRECATION")
+            w.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             WindowCompat.getInsetsController(w, view).apply {
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = false
@@ -170,12 +183,19 @@ private fun EditorBody(
     var sent by remember { mutableStateOf(false) }
     var caption by remember { mutableStateOf("") }
     var viewOnce by remember { mutableStateOf(false) }
+    var cropping by remember { mutableStateOf(false) }
+    // iOS HD: starts as Settings > Sent Media Quality says, not remembered after the send.
+    var hd by remember { mutableStateOf(SentQuality.high(ctx)) }
 
     // The photo fits the space between the top bar and the bottom chrome (iOS canvasArea); the
     // bottom height is not taken while the keyboard is up, so the photo never moves with it.
     var box by remember { mutableStateOf(IntSize.Zero) }
     var bottomPx by remember { mutableIntStateOf(0) }
     val imeUp = WindowInsets.ime.getBottom(density) > 0
+    // Read at layout time, not from the last composition: the keyboard's first frame reaches the
+    // layout (and takes the navigation bar padding with it) before a recomposition says it is up.
+    val ime = WindowInsets.ime
+    val imeNow = { ime.getBottom(density) > 0 }
     val topPx = WindowInsets.statusBars.getTop(density) + with(density) { (44 + 16).dp.roundToPx() }
     val gapPx = with(density) { 12.dp.roundToPx() }
     val img = remember(box, bottomPx, topPx, base) {
@@ -233,11 +253,12 @@ private fun EditorBody(
         // One send per editor (iOS `sent`): a double tap posted the photo twice there.
         if (sent || busy) return
         sent = true; busy = true
-        scope.launch { onSend(output(), caption.trim(), viewOnce) }
+        scope.launch { output().let { SentQuality.choose(it, hd); onSend(it, caption.trim(), viewOnce) } }
     }
-    setBack { if (drawing) cancelPen() else onClose() }
+    setBack { if (cropping) cropping = false else if (drawing) cancelPen() else onClose() }
 
-    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { box = it }) {
+    // The page's size is held while the keyboard is up, so the photo never moves with it.
+    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { if (!imeNow() || box == IntSize.Zero) box = it }) {
         picture?.let { p ->
             Canvas(Modifier.fillMaxSize()) {
                 if (img.width > 0f) drawImage(
@@ -258,9 +279,9 @@ private fun EditorBody(
             StoryPenBar(
                 penHue, { penHue = it }, highlighter, { highlighter = it }, penWidth, { penWidth = StoryEditRules.nextPenWidth(penWidth) },
                 onCancel = { cancelPen() }, onDone = { finishPen() },
-                modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { if (!imeUp) bottomPx = it.height },
+                modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { if (!imeNow()) bottomPx = it.height },
             )
-        } else {
+        } else if (!cropping) {
             // The editor's own X, 20 in from the edge (iOS top button).
             Box(
                 Modifier.statusBarsPadding().padding(start = 20.dp, top = 8.dp).size(44.dp).floating()
@@ -270,12 +291,17 @@ private fun EditorBody(
             EditorBar(
                 caption, { caption = it }, viewOnce, allowViewOnce,
                 onViewOnce = { viewOnce = !viewOnce; if (viewOnce) caption = "" },
-                onPen = { drawing = true }, onSend = { send() }, toolsShown = !imeUp,
+                onCrop = { if (base != null) cropping = true }, onPen = { drawing = true },
+                hd = hd, onHd = { hd = !hd }, onSend = { send() }, toolsShown = !imeUp,
                 modifier = Modifier.align(Alignment.BottomCenter).imePadding()
-                    .onSizeChanged { if (!imeUp) bottomPx = it.height }.navigationBarsPadding(),
+                    .onSizeChanged { if (!imeNow()) bottomPx = it.height }.navigationBarsPadding(),
             )
         }
         if (busy && !drawing) Box(Modifier.fillMaxSize().clickable(enabled = false) {})
+        val b = base
+        if (cropping && b != null) PhotoCropPage(b, onCancel = { cropping = false }) { out ->
+            base = out; changed = true; cropping = false
+        }
     }
 
     val red = Color(0xFFE5484D)
@@ -293,21 +319,31 @@ private fun EditorBody(
 }
 
 /**
- * The editor page's bottom (iOS bottomBar): the round pen tool, then the caption capsule with the
+ * The editor page's bottom (iOS bottomBar): the round tools (crop, pen, HD), then the caption capsule with the
  * view-once switch inside it ("View Once Media" in place of the caption while it is on) and the
  * blue send circle. The tools hide while the keyboard is up.
  */
 @Composable
 private fun EditorBar(
     caption: String, onCaption: (String) -> Unit, viewOnce: Boolean, allowViewOnce: Boolean,
-    onViewOnce: () -> Unit, onPen: () -> Unit, onSend: () -> Unit, toolsShown: Boolean, modifier: Modifier,
+    onViewOnce: () -> Unit, onCrop: () -> Unit, onPen: () -> Unit, hd: Boolean, onHd: () -> Unit,
+    onSend: () -> Unit, toolsShown: Boolean, modifier: Modifier,
 ) {
     val grey = Color(0xFF8E8E93)
     Column(modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (toolsShown) Row {
-            Box(Modifier.size(40.dp).floating().clickable(onClick = onPen), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
+        if (toolsShown) Box {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(40.dp).floating().clickable(onClick = onCrop), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Crop, contentDescription = "Crop", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Box(Modifier.size(40.dp).floating().clickable(onClick = onPen), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Box(Modifier.size(40.dp).floating().clickable(onClick = onHd), contentAlignment = Alignment.Center) {
+                    Text("HD", color = if (hd) EditorBlue else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
+            QualityHint(hd)
         }
         Row(verticalAlignment = Alignment.Bottom) {
             Row(
@@ -347,4 +383,28 @@ private fun editDir(ctx: android.content.Context) = File(ctx.cacheDir, "edited")
 private fun sweepOldEdits(ctx: android.content.Context) {
     val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
     editDir(ctx).listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
+}
+
+/**
+ * What the HD button just did, in words (iOS PhotoQualityHint): above the tool row for 1.6 s after
+ * each tap, never on opening, never takes a touch.
+ */
+@Composable
+private fun QualityHint(hd: Boolean) {
+    var shown by remember { mutableStateOf(false) }
+    var said by remember { mutableStateOf(hd) }
+    var first by remember { mutableStateOf(true) }
+    LaunchedEffect(hd) {
+        if (first) { first = false; return@LaunchedEffect }
+        said = hd; shown = true
+        delay(1600)
+        shown = false
+    }
+    AnimatedVisibility(shown, enter = fadeIn(tween(150)), exit = fadeOut(tween(200)), modifier = Modifier.offset(y = (-40).dp)) {
+        Box(Modifier.height(30.dp).clip(RoundedCornerShape(15.dp)).background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = 12.dp),
+            contentAlignment = Alignment.Center) {
+            Text(if (said) "HD: sharper photos, bigger upload" else "Standard: smaller photos, faster send",
+                color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+    }
 }

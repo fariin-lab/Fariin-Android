@@ -87,12 +87,22 @@ object AutoDownload {
 }
 
 /** Saving to the phone's gallery through MediaStore (no storage permission on Android 10+). */
-/** Settings > Storage and Data > Sent Media Quality (iOS `sentMediaQuality`, "standard" | "high"). Android has no
- *  per-send HD button yet, so the setting is the size every photo goes at. */
+/** Settings > Storage and Data > Sent Media Quality (iOS `sentMediaQuality`, "standard" | "high"): the size a
+ *  photo goes at, and where the photo editor's HD button starts (iOS PhotoQuality.default). */
 object SentQuality {
     const val KEY = "sentMediaQuality"
     fun high(c: Context): Boolean = c.getSharedPreferences(AutoDownload.PREFS, Context.MODE_PRIVATE).getString(KEY, "standard") == "high"
     fun photo(c: Context): MediaRules.PhotoQuality = if (high(c)) MediaRules.PhotoQuality.HIGH else MediaRules.PhotoQuality.STANDARD
+
+    /** The photo editor's HD button for one photo it hands to the send (iOS onSend's `hd`). Read once, then
+     *  forgotten: the button is not remembered after the send (iOS PhotoQuality). */
+    private val chosen = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    fun choose(uri: android.net.Uri, hd: Boolean) { chosen[uri.toString()] = hd }
+    /** The size this photo goes at: the editor's choice for it, else the setting. */
+    fun photo(c: Context, uri: android.net.Uri): MediaRules.PhotoQuality {
+        val hd = chosen.remove(uri.toString()) ?: high(c)
+        return if (hd) MediaRules.PhotoQuality.HIGH else MediaRules.PhotoQuality.STANDARD
+    }
 }
 
 object GallerySaver {
