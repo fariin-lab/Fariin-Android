@@ -148,7 +148,7 @@ import kotlin.math.roundToInt
  * The gallery card stays a plain card: Android only lets an app read the newest photo with a
  * READ_MEDIA_IMAGES (storage) permission, and the camera asks for none; the picker needs none.
  *
- * TODO (iOS has these): text stories, swipe up for the library, double tap to flip.
+ * Double tap the picture to flip; flick up to open the library (iOS CameraPreview and its swipe).
  */
 @Composable
 fun StoryCameraDialog(
@@ -239,6 +239,7 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
         }
     }
     val captured by rememberUpdatedState(onCaptured)
+    val library by rememberUpdatedState(onLibrary)
     val bindNow = active && hasCamera
     val view = LocalView.current
     val window = remember(view) { (view.parent as? DialogWindowProvider)?.window }
@@ -485,6 +486,14 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
         StoryCameraRules.dragZoom(zoomAtRecordStart, upDp, dxDp, lensMax)?.let { setZoom(it); pillZoom = -1f }
     }
 
+    /** iOS flipCamera: the button and the double tap both come here. Not mid-clip: a rebind would end it. */
+    fun flipCamera() {
+        if (!hasCamera || !twoLenses || recording != null) return
+        front = !front
+        pillZoom = 1f
+        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+    }
+
     fun holdEnd() {
         if (!locked) lockProgress = 0f
         if (recording != null && StoryCameraRules.stopsOnRelease(locked, lockedByThisTouch)) stopRecording()
@@ -505,7 +514,10 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
                             pillZoom = -1f
                         }
                     }
-                    .pointerInput(camera) { detectTapGestures(onTap = { focusAt(it) }) },
+                    // A double tap flips (iOS CameraPreview): the focus tap waits until it is clearly
+                    // not the first half of one, so a flip never drops a focus mark on the way.
+                    .pointerInput(camera) { detectTapGestures(onTap = { focusAt(it) }, onDoubleTap = { flipCamera() }) }
+                    .pointerInput(Unit) { watchSwipes(onLibrary = { if (recording == null) library() }, isRecording = { recording != null }) },
             )
             focusAt?.let { at -> key(focusTaps) { FocusMark(at) } }
         } else if (asked) {
@@ -598,7 +610,7 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
                 } else if (hasCamera && twoLenses) {
                     Box(
                         Modifier.size(46.dp).clip(CircleShape).border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                            .clickable { front = !front }.semantics { contentDescription = "Flip camera" },
+                            .clickable { flipCamera() }.semantics { contentDescription = "Flip camera" },
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Outlined.Cameraswitch, contentDescription = null, tint = Color.White) }
                 }
@@ -607,6 +619,37 @@ private fun StoryCamera(active: Boolean, error: String?, onCaptured: (Uri) -> Un
         }
         // The screen is the front lens's flash: white over everything while the photo is taken.
         if (screenFlash) Box(Modifier.fillMaxSize().background(Color.White))
+    }
+}
+
+/**
+ * iOS StoryCameraView's swipe: a flick judged at the release, never tracking the finger, and only
+ * watched (nothing is consumed, so pinch and taps still work). Up opens the library. One finger
+ * only, and nothing while a recording is or was running in this touch.
+ */
+private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.watchSwipes(
+    onLibrary: () -> Unit,
+    isRecording: () -> Boolean,
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+        var multi = false
+        var recorded = isRecording()
+        var last = down.position
+        while (true) {
+            val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            if (e.changes.size > 1) multi = true
+            if (isRecording()) recorded = true
+            val c = e.changes.firstOrNull { it.id == down.id } ?: break
+            last = c.position
+            if (!c.pressed) break
+        }
+        if (multi || recorded) return@awaitEachGesture
+        val d = last - down.position
+        when (StoryCameraRules.swipe(d.x.toDp().value, d.y.toDp().value, textMode = false)) {
+            StoryCameraRules.Swipe.LIBRARY -> onLibrary()
+            else -> {}
+        }
     }
 }
 

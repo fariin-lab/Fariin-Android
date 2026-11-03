@@ -87,4 +87,14 @@ class StoryCameraRulesTest {
         assertTrue(StoryCameraRules.showsFlashButton(front = true, lensHasFlash = false))
         assertFalse(StoryCameraRules.showsFlashButton(front = false, lensHasFlash = false))
     }
+    @Test fun swipeOnTheCameraPage() {
+        assertEquals(StoryCameraRules.Swipe.LIBRARY, StoryCameraRules.swipe(dxDp = 10f, dyDp = -80f, textMode = false))
+        assertEquals(StoryCameraRules.Swipe.NONE, StoryCameraRules.swipe(dxDp = 10f, dyDp = -80f, textMode = true))   // no library from TEXT
+        assertEquals(StoryCameraRules.Swipe.NONE, StoryCameraRules.swipe(dxDp = 0f, dyDp = 200f, textMode = false))   // down closes nothing
+        assertEquals(StoryCameraRules.Swipe.NONE, StoryCameraRules.swipe(dxDp = 0f, dyDp = -50f, textMode = false))   // too short
+        assertEquals(StoryCameraRules.Swipe.NONE, StoryCameraRules.swipe(dxDp = 70f, dyDp = -80f, textMode = false))  // lazy diagonal
+        assertEquals(StoryCameraRules.Swipe.TO_TEXT, StoryCameraRules.swipe(dxDp = -90f, dyDp = 10f, textMode = false))
+        assertEquals(StoryCameraRules.Swipe.TO_CAMERA, StoryCameraRules.swipe(dxDp = 90f, dyDp = 10f, textMode = true))
+        assertEquals(StoryCameraRules.Swipe.NONE, StoryCameraRules.swipe(dxDp = 90f, dyDp = 10f, textMode = false))   // already there
+    }
 }

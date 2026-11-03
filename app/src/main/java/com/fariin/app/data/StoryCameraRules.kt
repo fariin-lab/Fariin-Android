@@ -110,4 +110,22 @@ object StoryCameraRules {
 
     /** The flash button is drawn for a lens with a flash unit, and for the front lens (the screen is its flash). */
     fun showsFlashButton(front: Boolean, lensHasFlash: Boolean): Boolean = lensHasFlash || front
+
+    /** What a flick on the camera page asks for (iOS StoryCameraView's swipe, judged at the release). */
+    enum class Swipe { NONE, LIBRARY, TO_TEXT, TO_CAMERA }
+
+    /** How far a flick must travel, in dp (iOS 60 pt). */
+    const val SWIPE_DP = 60f
+
+    /**
+     * Vertical first, and only when clearly vertical (1.5 times the sideways travel): up opens the
+     * library, from the camera only; down does nothing. Otherwise clearly sideways: left goes to TEXT,
+     * right back to CAMERA (the page moves the way the switch reads). [dyDp] is positive downwards.
+     */
+    fun swipe(dxDp: Float, dyDp: Float, textMode: Boolean): Swipe {
+        val ax = kotlin.math.abs(dxDp); val ay = kotlin.math.abs(dyDp)
+        if (ay > SWIPE_DP && ay > ax * 1.5f) return if (!textMode && dyDp < 0) Swipe.LIBRARY else Swipe.NONE
+        if (ax <= SWIPE_DP || ax <= ay * 1.5f) return Swipe.NONE
+        return if (dxDp < 0) { if (textMode) Swipe.NONE else Swipe.TO_TEXT } else { if (textMode) Swipe.TO_CAMERA else Swipe.NONE }
+    }
 }
