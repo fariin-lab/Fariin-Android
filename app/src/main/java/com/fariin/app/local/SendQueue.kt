@@ -30,6 +30,8 @@ object SendQueue {
         val replyId: String? = null,
         val replyAuthor: String? = null,
         val replyText: String? = null,
+        /** Group @mentions (iOS SendQueue.Entry.mentions), so a resend still tags them. */
+        val mentions: List<String> = emptyList(),
     )
 
     @Volatile private var root: File? = null
@@ -102,6 +104,7 @@ object SendQueue {
             e.replyId?.let { put("rid", it) }
             e.replyAuthor?.let { put("ra", it) }
             e.replyText?.let { put("rt", it) }
+            if (e.mentions.isNotEmpty()) put("mn", JSONArray(e.mentions))
         })
     }.toString()
 
@@ -112,7 +115,8 @@ object SendQueue {
             val id = o.optString("id"); val cid = o.optString("cid"); val t = o.optString("t")
             if (id.isEmpty() || cid.isEmpty() || t.isEmpty()) return@mapNotNull null
             Entry(id, cid, t, o.optDouble("ts", 0.0),
-                o.optString("rid").ifEmpty { null }, o.optString("ra").ifEmpty { null }, if (o.has("rt")) o.getString("rt") else null)
+                o.optString("rid").ifEmpty { null }, o.optString("ra").ifEmpty { null }, if (o.has("rt")) o.getString("rt") else null,
+                o.optJSONArray("mn")?.let { m -> (0 until m.length()).mapNotNull { j -> m.optString(j).ifEmpty { null } } } ?: emptyList())
         }
     }
 }

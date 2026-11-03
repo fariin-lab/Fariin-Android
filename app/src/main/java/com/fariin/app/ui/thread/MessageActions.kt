@@ -74,6 +74,8 @@ import kotlin.math.roundToInt
 data class ThreadActions(
     val onReact: (Message, String?) -> Unit = { _, _ -> },
     val onSendReply: (String, Message) -> Unit = { _, _ -> },
+    /** A text with group @mentions (uids), optionally a reply; null falls back to the plain sends. */
+    val onSendMentioned: ((String, Message?, List<String>) -> Unit)? = null,
     val onEdit: (Message, String) -> Unit = { _, _ -> },
     val onDeleteForEveryone: (Message) -> Unit = {},
     val onDeleteForMe: (Message) -> Unit = {},

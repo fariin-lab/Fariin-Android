@@ -428,7 +428,10 @@ class ThreadRepository(
     fun sendText(text: String) = sendText(text, null)
 
     /** A text, optionally a reply ([reply] is the quoted message; its words are sealed again). */
-    fun sendText(text: String, reply: Message?) {
+    fun sendText(text: String, reply: Message?) = sendText(text, reply, emptyList())
+
+    /** [mentions]: the uids @-mentioned in a group (MentionRules.forSend), written in the clear. */
+    fun sendText(text: String, reply: Message?, mentions: List<String>) {
         val t = text.trim()
         if (t.isEmpty()) return
         // A card is quoted by its noun (iOS safeText), never by its raw marker.
@@ -436,7 +439,7 @@ class ThreadRepository(
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
         // On disk BEFORE the network (iOS SendQueue.add), so a kill or an outage cannot lose it.
-        val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text)
+        val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text, mentions)
         SendQueue.add(me, e)
         // The link card follows the text (iOS attachLinkPreview): one built while typing shows on
         // my bubble at once; otherwise it is fetched for up to 6 s beside the send.
@@ -477,13 +480,14 @@ class ThreadRepository(
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.text, createdAtMillis = e.ts, hasServerTime = false,
             clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
+            mentions = e.mentions,
         )
         rebuild()
         on.launch {
             try {
                 if (checkFirst && alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return@launch }
                 turn.withLock {
-                    if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref) else sendDirect(e.text, e.clientId, e.ts, ref)
+                    if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions) else sendDirect(e.text, e.clientId, e.ts, ref)
                 }
                 SendQueue.remove(me, e.clientId)
                 cardFor.remove(e.clientId)?.let { u -> on.launch { attachCard(e.clientId, u) } }
@@ -516,7 +520,7 @@ class ThreadRepository(
         return try {
             if (alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return QueuedResult.SENT }
             turn.withLock {
-                if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref) else sendDirect(e.text, e.clientId, e.ts, ref)
+                if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions) else sendDirect(e.text, e.clientId, e.ts, ref)
             }
             SendQueue.remove(me, e.clientId)
             QueuedResult.SENT
@@ -550,7 +554,8 @@ class ThreadRepository(
             return
         }
         if (m.mediaKind != null) { rebuild(); return }
-        sendText(m.text)
+        // iOS deliver: a retry keeps the queued entry's mentions.
+        sendText(m.text, null, m.mentions)
     }
 
     // ------------------------------------------------------------------ media picks (attach sheet)
@@ -972,7 +977,8 @@ class ThreadRepository(
     }
 
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
-                                  forwarded: Boolean = false, countsAsUnread: Boolean = true) {
+                                  forwarded: Boolean = false, countsAsUnread: Boolean = true,
+                                  mentions: List<String> = emptyList()) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
@@ -986,6 +992,8 @@ class ThreadRepository(
         )
         // iOS replyEnc: {id, authorId, text sealed like the message}.
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.sealForGroup(reply.text, members, cid))
+        // iOS sendGroupText: the uids in the clear, for the server's "mentioned you" push.
+        if (mentions.isNotEmpty()) msg["mentions"] = mentions
         if (forwarded) msg["forwarded"] = true
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))

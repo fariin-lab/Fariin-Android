@@ -592,11 +592,13 @@ private fun ThreadContent(
                 editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
-                val send: (String) -> Unit = { t ->
+                val send: (String, List<String>) -> Unit = { t, ids ->
                     val r = replyTo
                     val e = editing
+                    val tagged = actions.onSendMentioned.takeIf { ids.isNotEmpty() }
                     when {
                         e != null -> { editing = null; if (t.trim() != e.text.trim()) actions.onEdit(e, t) }
+                        tagged != null -> { replyTo = null; tagged(t, r, ids) }
                         r != null -> { replyTo = null; actions.onSendReply(t, r) }
                         else -> onSend(t)
                     }
@@ -614,10 +616,10 @@ private fun ThreadContent(
                 fun slow(): String? = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                     ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
-                val gatedSend: (String) -> Unit = { t ->
+                val gatedSend: (String, List<String>) -> Unit = { t, ids ->
                     val links = if (com.fariin.app.data.GroupAdmins.hasLink(t)) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
                     val stop = slow() ?: links
-                    if (stop != null && editing == null) actions.onNotice(stop) else send(t)
+                    if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids)
                 }
                 if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false },
                     onSendMedia = { uris, cap, once ->
@@ -664,7 +666,9 @@ private fun ThreadContent(
                     onGif = { gif ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
                         if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
-                    })
+                    },
+                    // iOS mentionPicker: groups only (MentionPicker.kt).
+                    mentions = if (ui.isGroup) MentionSource(ui.members, ui.me, ui.names, ui.photos) else null)
             }
         }
     }
@@ -880,6 +884,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
                 meta = { Meta(m, tick, isMe, is24h) },
+                // iOS BubbleText: a group's @mentions in semibold.
+                bold = remember(body, m.mentions, ui.names, m.deleted) {
+                    if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
+                },
             )
         }
         ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
@@ -1061,12 +1069,12 @@ private fun tickDescription(t: Tick) = when (t) {
  * (iOS MessageRowLayout: `metaInlineGap` 5, `metaGap` under a full last line).
  */
 @Composable
-private fun TextWithMeta(text: String, style: TextStyle, meta: @Composable () -> Unit) {
+private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), meta: @Composable () -> Unit) {
     val layoutRef = remember { arrayOfNulls<TextLayoutResult>(1) }
     Layout(content = {
         // In-chat search: the matched terms marked in yellow, never the whole bubble (iOS BubbleText).
         val term = LocalSearchTerm.current
-        Text(remember(text, term) { searchMarked(text, term) }, style = style, onTextLayout = { layoutRef[0] = it })
+        Text(remember(text, term, bold) { mentionMarked(searchMarked(text, term), bold) }, style = style, onTextLayout = { layoutRef[0] = it })
         meta()
     }) { measurables, constraints ->
         val gap = 5.dp.roundToPx()
@@ -1108,11 +1116,12 @@ private fun TextWithMeta(text: String, style: TextStyle, meta: @Composable () ->
  */
 @Composable
 private fun Composer(
-    onSend: (String) -> Unit, onAttach: () -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
+    onSend: (String, List<String>) -> Unit, onAttach: () -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
     prefill: Pair<String, String>? = null, onTyping: (Boolean) -> Unit = {},
     initialDraft: String = "", onDraft: (String) -> Unit = {},
     me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
     onGif: (com.fariin.app.data.StickerGifRules.Gif) -> Unit = {},
+    mentions: MentionSource? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1121,9 +1130,11 @@ private fun Composer(
     // pre-edit draft, it was never sent).
     var kept by rememberSaveable { mutableStateOf(initialDraft) }
     var wasEditing by remember { mutableStateOf(false) }
+    // iOS mentionMap: the members picked from the @ list, by name; resolved against the text at send.
+    var picks by remember { mutableStateOf(emptyMap<String, List<String>>()) }
     // Edit puts the message's words in the field (keyed by message id, so it happens once).
     LaunchedEffect(prefill?.first) {
-        if (prefill != null) { draft = prefill.second; wasEditing = true }
+        if (prefill != null) { draft = prefill.second; wasEditing = true; picks = emptyMap() }
         else if (wasEditing) { draft = kept; wasEditing = false }
     }
     // The box's text with its cursor. Words put in from outside (an edit, the draft coming back,
@@ -1160,6 +1171,12 @@ private fun Composer(
     val field = MaterialTheme.colorScheme.surfaceContainerHigh
     // A soft wash, not a bar: clear at the top, the page colour behind the controls (iOS composer).
     Column(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg.copy(alpha = 0f), 0.45f to c.bg.copy(alpha = 0.92f), 1f to c.bg)).navigationBarsPadding()) {
+        // iOS mentionPicker, above the bar; hidden while editing (an edit tags nobody).
+        if (mentions != null && prefill == null && !recording) MentionPicker(mentions, boxValue) { v, uid, name ->
+            boxValue = v; draft = v.text
+            picks = com.fariin.app.data.MentionRules.addPick(picks, name, uid)
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
             if (recording) {
                 Row(Modifier.weight(1f).height(48.dp).floating(RoundedCornerShape(24.dp)).padding(start = 16.dp),
@@ -1218,8 +1235,10 @@ private fun Composer(
                 Box(
                     Modifier.size(48.dp).floating(fill = c.blue).clickable {
                         val t = draft
+                        val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
+                        picks = emptyMap()
                         draft = ""
-                        onSend(t)
+                        onSend(t, ids)
                     },
                     contentAlignment = Alignment.Center,
                 ) {

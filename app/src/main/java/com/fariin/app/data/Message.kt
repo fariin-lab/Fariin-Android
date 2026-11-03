@@ -14,7 +14,7 @@ import com.fariin.app.crypto.Wire
  * `album` items.
  *
  * TODO (iOS has these): file, gif and sticker bodies beyond a label, link previews, reactions, view-once, story replies
- * and mentions, forwarded-from-channel, delete-for-me.
+ * and story mentions, forwarded-from-channel, delete-for-me.
  * Contact and location cards are sealed text markers, read by CardRules.
  */
 data class Message(
@@ -34,6 +34,8 @@ data class Message(
     val deletedBy: String? = null,
     val edited: Boolean = false,
     val forwarded: Boolean = false,
+    /** uids @-mentioned in a group message, in the clear (iOS Message.mentions; MentionRules). */
+    val mentions: List<String> = emptyList(),
     val held: Boolean = false,
     val imageUrl: String? = null,
     val videoUrl: String? = null,
@@ -261,6 +263,7 @@ data class Message(
                 deletedBy = data["deletedBy"] as? String,
                 edited = data["edited"] as? Boolean ?: false,
                 forwarded = data["forwarded"] as? Boolean ?: false,
+                mentions = (data["mentions"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                 held = data["held"] as? Boolean ?: false,
                 imageUrl = data["imageUrl"] as? String,
                 videoUrl = data["videoUrl"] as? String,

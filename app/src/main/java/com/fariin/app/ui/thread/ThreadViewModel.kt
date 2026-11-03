@@ -133,6 +133,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         },
         onReact = { m, e -> vm.viewModelScope.launch { if (!vm.repo.setReaction(m, e)) notice = "Couldn't react. Try again." } },
         onSendReply = { t, r -> vm.repo.sendText(t, r) },
+        onSendMentioned = { t, r, ids -> vm.repo.sendText(t, r, ids) },
         onSendSticker = { s, r -> vm.repo.sendSticker(s, r) },
         onSendGif = { g, r -> vm.repo.sendGif(g, r) },
         onEdit = { m, t -> vm.viewModelScope.launch { if (!vm.repo.editMessage(m, t)) notice = "Couldn't edit this message." } },
