@@ -305,7 +305,6 @@ private fun CallRow(run: CallRun, me: String, now: Long, onInfo: () -> Unit, onL
                 Icon(Icons.Outlined.Info, contentDescription = "Info", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 74.dp, end = 16.dp))
     }
 }
 

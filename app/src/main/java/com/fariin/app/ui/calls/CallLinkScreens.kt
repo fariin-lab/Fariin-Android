@@ -352,6 +352,5 @@ fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onIn
                 Icon(Icons.Outlined.Info, contentDescription = "Link details", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 74.dp))
     }
 }
