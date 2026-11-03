@@ -73,7 +73,7 @@ import kotlinx.coroutines.withContext
  * The attach sheet, after iOS AttachSheetController + AttachRecentsStrip, built on the Android
  * Photo Picker (no photo or video permission, Play policy): the picker opens with the sheet, the
  * chosen photos and videos fill the grid edge to edge with a numbered tick on each (the tick drops
- * one, a tap on a photo opens the editor), "Add photos or videos" opens the picker again, and File opens the document picker. Once
+ * one, a tap on a photo opens the editor, with two or more the pager editor), "Add photos or videos" opens the picker again, and File opens the document picker. Once
  * something is chosen the bar is a caption field, a "View once" switch (one photo only, as iOS)
  * and Send.
  */
@@ -101,8 +101,9 @@ internal fun AttachSheet(
     var viewOnce by remember { mutableStateOf(false) }
     // A chosen photo open in the editor. One photo chosen: the whole editor page (iOS
     // ChatImageEditor: crop, pen, HD, its own caption and Send, which sends and closes the sheet).
-    // Two or more: the pen edit-only, the drawn copy back in its place (iOS MediaApprovalView's pen).
     var drawOn by remember { mutableStateOf<Uri?>(null) }
+    // Two or more chosen: a tap opens the pager editor on that item (iOS MediaApprovalView).
+    var pagerAt by remember { mutableStateOf<Int?>(null) }
     val gallery = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(MediaRules.MEDIA_PER_PICK),
     ) { uris ->
@@ -142,8 +143,9 @@ internal fun AttachSheet(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(picked.toList(), key = { it.toString() }) { u ->
-                            PickedTile(u, u in videos, picked.indexOf(u) + 1, onRemove = { picked.remove(u); videos.remove(u) },
-                                onDraw = { drawOn = u })
+                            PickedTile(u, u in videos, picked.indexOf(u) + 1, opens = picked.size > 1,
+                                onRemove = { picked.remove(u); videos.remove(u) },
+                                onDraw = { if (picked.size > 1) pagerAt = picked.indexOf(u) else drawOn = u })
                         }
                         if (picked.size < MediaRules.MEDIA_PER_PICK) item { AddTile(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)), openGallery) }
                     }
@@ -199,10 +201,10 @@ internal fun AttachSheet(
         if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false, onClose = { drawOn = null },
             allowViewOnce = allowViewOnce,
             onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); onDismiss() })
-        else PhotoDrawEditor(u, editOnly = true, onClose = { drawOn = null }, onReturn = { edited ->
-            val i = picked.indexOf(u)
-            if (i >= 0 && edited != u) picked[i] = edited
-        })
+    }
+    pagerAt?.let { at ->
+        MediaPagerEditor(picked, videos, at, caption, onCaption = { caption = it }, onClose = { pagerAt = null },
+            onSend = { list, cap -> pagerAt = null; onSendMedia(list, cap, false); onDismiss() })
     }
 }
 
@@ -233,7 +235,7 @@ private fun SheetButton(label: String, icon: androidx.compose.ui.graphics.vector
 }
 
 @Composable
-private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> Unit, onDraw: () -> Unit) {
+private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, opens: Boolean, onRemove: () -> Unit, onDraw: () -> Unit) {
     val c = Fariin.colors
     val context = LocalContext.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
@@ -248,8 +250,9 @@ private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> 
         }
     }
     Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(c.secondary.copy(alpha = 0.15f))
-        // A photo opens in the pen; the numbered tick drops it. A video has no pen, so a tap drops it.
-        .clickable(onClick = if (isVideo) onRemove else onDraw)) {
+        // A photo opens the editor, and with two or more chosen any item opens the pager on it; the
+        // numbered tick drops one. A lone video has no editor, so a tap drops it.
+        .clickable(onClick = if (isVideo && !opens) onRemove else onDraw)) {
         bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         if (isVideo) {
             Text("Video", color = Color.White, fontSize = 12.sp,

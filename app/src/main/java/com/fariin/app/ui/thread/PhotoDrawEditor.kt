@@ -97,7 +97,7 @@ import java.io.File
 import java.util.UUID
 
 /** iOS accent on the editor's black page (0x3DA1FD): the send circle and the view-once switch when on. */
-private val EditorBlue = Color(0xFF3DA1FD)
+internal val EditorBlue = Color(0xFF3DA1FD)
 
 /**
  * The chat photo editor's pen (iOS ChatImageEditor opened with startDrawing): the photo on black,
@@ -138,7 +138,7 @@ internal fun PhotoDrawEditor(
 
 /** No dim behind, light bar icons on the black (as the viewer's window). */
 @Composable
-private fun EditorWindow() {
+internal fun EditorWindow() {
     val view = LocalView.current
     SideEffect {
         (view.parent as? DialogWindowProvider)?.window?.let { w ->
@@ -230,13 +230,7 @@ private fun EditorBody(
     suspend fun output(): Uri {
         val b = base
         if (!changed || b == null) return source
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val f = File(editDir(ctx), "edit-${UUID.randomUUID()}.jpg")
-                f.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-                FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
-            }.getOrDefault(source)
-        }
+        return saveEditedPhoto(ctx, b) ?: source
     }
 
     fun leavePen() {
@@ -382,6 +376,15 @@ private fun EditorBar(
 
 private fun editDir(ctx: android.content.Context) = File(ctx.cacheDir, "edited").apply { mkdirs() }
 
+/** An edited photo as a JPEG copy the send can read (null when it could not be written). */
+internal suspend fun saveEditedPhoto(ctx: android.content.Context, b: Bitmap): Uri? = withContext(Dispatchers.IO) {
+    runCatching {
+        val f = File(editDir(ctx), "edit-${UUID.randomUUID()}.jpg")
+        f.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+        FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+    }.getOrNull()
+}
+
 /** Edited copies are read once by the send or the attach sheet; a day later they are only clutter. */
 private fun sweepOldEdits(ctx: android.content.Context) {
     val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
@@ -393,7 +396,7 @@ private fun sweepOldEdits(ctx: android.content.Context) {
  * each tap, never on opening, never takes a touch.
  */
 @Composable
-private fun QualityHint(hd: Boolean) {
+internal fun QualityHint(hd: Boolean) {
     var shown by remember { mutableStateOf(false) }
     var said by remember { mutableStateOf(hd) }
     var first by remember { mutableStateOf(true) }
