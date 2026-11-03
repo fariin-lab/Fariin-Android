@@ -96,6 +96,10 @@ class ThreadRepository(
     private val retryVoice = ConcurrentHashMap<String, VoiceRecorder.Result>()
     /** Video, file, album and captioned / view-once photo sends, by clientId, to go again on a tap. */
     private val retryMedia = ConcurrentHashMap<String, suspend () -> Unit>()
+    /** iOS localCards: the link card on my own bubble until the server copy carries it, by clientId. */
+    private val localCards = ConcurrentHashMap<String, Message.LinkPreview>()
+    /** The link a text send attaches its card for once the text has landed, by clientId. */
+    private val cardFor = ConcurrentHashMap<String, String>()
     /** The media sends (iOS ChatService media paths), see media/MediaSender. */
     private val sender: MediaSender by lazy { MediaSender(cid, me, crypto, media, db) }
     private var msgReg: ListenerRegistration? = null
@@ -337,6 +341,9 @@ class ThreadRepository(
             // My note or photo whose file is still going up: the copy on this phone draws it.
             val local = m.clientId?.let { localFiles[it] }
             if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
+            m.clientId?.let { k -> localCards[k]?.let { card ->
+                if (m.linkPreview == null && !m.deleted) m = m.copy(linkPreview = card) else localCards.remove(k)
+            } }
             if (HiddenMessages.isHidden(m.id)) continue
             // Sent while I had them blocked (now or in a past block): never shown (iOS BlockList.hides).
             if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
@@ -348,7 +355,7 @@ class ThreadRepository(
         // be there to turn into a failed bubble (it used to vanish without a word).
         for ((cidKey, p) in pending) {
             when {
-                !all.containsKey(cidKey) -> all[cidKey] = p
+                !all.containsKey(cidKey) -> all[cidKey] = localCards[cidKey]?.let { p.copy(linkPreview = it) } ?: p
                 cidKey !in unconfirmed -> pending.remove(cidKey)
             }
         }
@@ -431,7 +438,31 @@ class ThreadRepository(
         // On disk BEFORE the network (iOS SendQueue.add), so a kill or an outage cannot lose it.
         val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text)
         SendQueue.add(me, e)
+        // The link card follows the text (iOS attachLinkPreview): one built while typing shows on
+        // my bubble at once; otherwise it is fetched for up to 6 s beside the send.
+        LinkPreviews.cardUrlFor(t, LinkPreviews.enabled(), LinkPreviews.takeSuppressed(cid))
+            ?.takeIf { LinkPreviews.allowedIn(CryptoHub.listedConversation(cid), me) }?.let { u ->
+                cardFor[clientId] = u
+                LinkPreviews.cached(u)?.let { showLocalCard(clientId, it) }
+            }
         drive(e, checkFirst = false)
+    }
+
+    private fun showLocalCard(clientId: String, d: LinkPreviews.Draft) {
+        if (localCards.containsKey(clientId)) return
+        val path = d.jpeg?.let { j -> media?.let { runCatching { File(it.localDir(), "lp-$clientId.jpg").apply { writeBytes(j) }.path }.getOrNull() } }
+        localCards[clientId] = Message.LinkPreview(d.url, d.title, d.desc, path)
+        rebuild()
+    }
+
+    /** After the text landed: the card fetched (or taken from the composer), sealed and added. */
+    private suspend fun attachCard(clientId: String, url: String) {
+        val d = LinkPreviews.draftWithin(url, 6_000)
+        val ok = d != null && run {
+            showLocalCard(clientId, d)
+            LinkPreviews.attach(convRef, cid, me, crypto, clientId, d, if (Wire.isGroupCid(cid)) freshMembers() else null)
+        }
+        if (!ok && localCards.remove(clientId) != null) rebuild()
     }
 
     /** A queued text from an earlier run or a reconnect: sent again unless the server (or
@@ -455,7 +486,10 @@ class ThreadRepository(
                     if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref) else sendDirect(e.text, e.clientId, e.ts, ref)
                 }
                 SendQueue.remove(me, e.clientId)
+                cardFor.remove(e.clientId)?.let { u -> on.launch { attachCard(e.clientId, u) } }
             } catch (x: Exception) {
+                cardFor.remove(e.clientId)
+                localCards.remove(e.clientId)
                 // A refusal is final (the bubble offers Retry, which is a new send); anything else
                 // stays queued for the next reconnect.
                 if (SendQueue.isPermanent(x)) SendQueue.remove(me, e.clientId)

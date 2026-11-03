@@ -533,6 +533,8 @@ private fun ThreadContent(
                         com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText) { replyTo = null }
                 }
                 editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
+                // The box's words, for the link card above it (LinkDraftBar).
+                var linkText by remember { mutableStateOf(actions.draft) }
                 val send: (String) -> Unit = { t ->
                     val r = replyTo
                     val e = editing
@@ -588,11 +590,14 @@ private fun ThreadContent(
                 if (contactOpen) ContactPickSheet(ui.me, ui.cid, onDismiss = { contactOpen = false }) { card ->
                     onSend(com.fariin.app.data.CardRules.contactText(card.uid, card.name, card.photo))
                 }
+                // iOS: the link card rides the same slot as the reply bar, never while editing.
+                if (editing == null) LinkDraftBar(ui.cid, ui.me, linkText,
+                    allowed = held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) == null)
                 Composer(gatedSend, { attachOpen = true }, { r ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                         if (stop != null) actions.onNotice(stop) else onSendVoice(r)
                     }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
-                    initialDraft = actions.draft, onDraft = actions.onDraft,
+                    initialDraft = actions.draft, onDraft = { actions.onDraft(it); linkText = it },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
                     onSticker = { s ->
