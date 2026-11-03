@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ground of each alternate app icon, read from the iOS icon art's corner. -->
+<resources>
+    <color name="app_icon_ground_bubble_blue">#0590F7</color>
+    <color name="app_icon_ground_graphite">#3A3F44</color>
+    <color name="app_icon_ground_indigo">#4C51C6</color>
+    <color name="app_icon_ground_emerald">#1E8E5A</color>
+    <color name="app_icon_ground_crimson">#B3261E</color>
+    <color name="app_icon_ground_sand">#E7DAC3</color>
+</resources>

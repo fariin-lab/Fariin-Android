@@ -44,10 +44,7 @@
             android:launchMode="singleTop"
             android:theme="@style/Theme.Fariin.Starting"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <!-- The launcher entry is one of the App Icon aliases below. -->
             <!-- Call links (call/CallLinks.kt). App Links: https://call.fariin.com/video/<id> and
                  /voice/<id>, the same paths on fariin.com, and the old fariin.com/call/#key=...
                  Verified only once https://call.fariin.com and https://fariin.com serve
@@ -75,9 +72,66 @@
                 <data android:host="voice" />
                 <data android:host="call" />
             </intent-filter>
-            <!-- Launcher long-press shortcuts and the Direct Share target (system/). -->
-            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <!-- Settings > Appearance > App Icon (ui/settings/AppIconPage.kt): one launcher entry per
+             icon, only the chosen one enabled. Each carries the launcher long-press shortcuts and
+             the Direct Share target (system/), which live on the launcher entry. -->
+        <activity-alias android:name=".IconDefault" android:targetActivity=".MainActivity" android:exported="true"
+            android:enabled="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias android:name=".IconBlue" android:targetActivity=".MainActivity" android:exported="true"
+            android:enabled="false" android:icon="@mipmap/ic_launcher_bubble_blue" android:roundIcon="@mipmap/ic_launcher_bubble_blue">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias android:name=".IconGraphite" android:targetActivity=".MainActivity" android:exported="true"
+            android:enabled="false" android:icon="@mipmap/ic_launcher_graphite" android:roundIcon="@mipmap/ic_launcher_graphite">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias android:name=".IconIndigo" android:targetActivity=".MainActivity" android:exported="true"
+            android:enabled="false" android:icon="@mipmap/ic_launcher_indigo" android:roundIcon="@mipmap/ic_launcher_indigo">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias android:name=".IconEmerald" android:targetActivity=".MainActivity" android:exported="true"
+            android:enabled="false" android:icon="@mipmap/ic_launcher_emerald" android:roundIcon="@mipmap/ic_launcher_emerald">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias android:name=".IconCrimson" android:targetActivity=".MainActivity" android:exported="true"
+            android:enabled="false" android:icon="@mipmap/ic_launcher_crimson" android:roundIcon="@mipmap/ic_launcher_crimson">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias android:name=".IconSand" android:targetActivity=".MainActivity" android:exported="true"
+            android:enabled="false" android:icon="@mipmap/ic_launcher_sand" android:roundIcon="@mipmap/ic_launcher_sand">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
         <!-- Fariin in the share sheet: text, links, photos, videos, files (system/ShareActivity). -->
         <activity
             android:name=".system.ShareActivity"

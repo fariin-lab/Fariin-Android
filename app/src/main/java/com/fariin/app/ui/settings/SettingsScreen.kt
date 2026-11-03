@@ -74,7 +74,7 @@ import com.fariin.app.ui.theme.Fariin
  * Notifications, Appearance > Night Mode / Quick Reaction, Chats, Stories, Privacy & Security
  * (PrivacyPages.kt), Storage and Data (MorePages.kt), Help & About and Safety, Settings search
  * (SettingsSearch.kt), Share profile = my QR code and the scanner, Invite Friends (QrPages.kt),
- * Chat Wallpaper and Chat Color (LookPages.kt).
+ * Chat Wallpaper and Chat Color (LookPages.kt), App Icon (AppIconPage.kt).
  *
  * TODO: Subscriptions (iOS shows it to @v only), the admin sections.
  */
@@ -125,6 +125,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             moreRoute(page, push, pop) -> Unit
             lookRoute(page, push, pop) -> Unit
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
+            page == PAGE_APP_ICON -> AppIconPage(pop)
             page == PAGE_SCAN -> ScanQrPage(onMyCode = { pop(); myQrOpen.value = true }, onClose = pop, onDone = pop)
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
@@ -316,7 +317,7 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
             SettingsSection {
                 SettingsRow("Chat Wallpaper") { push(PAGE_WALLPAPER) }
                 SettingsRow("Chat Color") { push(PAGE_CHAT_COLOR) }
-                SettingsRow("App Icon") { push(soon("App Icon")) }
+                SettingsRow("App Icon") { push(PAGE_APP_ICON) }
                 SettingsRow("Quick Reaction", last = true) { push(PAGE_QUICK) }
             }
             SettingsSection {
