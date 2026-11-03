@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.filled.Person
@@ -93,7 +94,8 @@ import kotlinx.coroutines.delay
  * Long press on a row: Send Message and Hide Stories (Unhide Story on the dimmed Hidden Stories
  * list); on my row Add Story and Posted Stories, which the "My Story >" heading also opens.
  *
- * TODO: the more menu, the per-story ring segments.
+ * The three-dot menu holds Story privacy (iOS moreMenu), which opens the Stories page of Settings;
+ * a row's face wears one arc per story (StoryRing).
  */
 @Composable
 fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0, shared: StoriesState? = null) {
@@ -163,6 +165,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var viewedCollapsed by rememberSaveable { mutableStateOf(false) }
     var hiddenCollapsed by rememberSaveable { mutableStateOf(false) }
     var posted by rememberSaveable { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
+    // The Settings pages pushed from the menu (Stories, then its audience pages); empty = closed.
+    val privacyPages = remember { androidx.compose.runtime.mutableStateListOf<String>() }
     var hideTarget by remember { mutableStateOf<StoryGroup?>(null) }
     val openChat = com.fariin.app.ui.thread.LocalOpenChat.current
     // Hide Stories (iOS StoryPrefs "hiddenStories") and my story lists (Settings > Stories).
@@ -205,7 +210,16 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         // Title at the start, the actions (camera, overflow) as floating circles at the end.
         com.fariin.app.ui.components.FloatingTopBar("Stories", actions = {
             com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.PhotoCamera, contentDescription = "Add Story", onClick = addStory)
-            com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { /* TODO: more menu */ })
+            // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
+            Box {
+                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { moreOpen = true })
+                androidx.compose.material3.DropdownMenu(moreOpen, onDismissRequest = { moreOpen = false },
+                    shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Story privacy", color = c.label) },
+                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, tint = c.label) },
+                        onClick = { moreOpen = false; privacyPages.add(com.fariin.app.ui.settings.PAGE_STORIES) })
+                }
+            }
         })
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             item {
@@ -230,6 +244,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     StoryRow(
                         thumbUrl = newest.listThumb, title = "My Story", subtitle = uploadLine ?: StoryList.ago(newest.createdAtMs, now),
                         authorPhoto = profile?.photoUrl, seen = !mine.hasUnseen, camera = true,
+                        seenFlags = com.fariin.app.data.StoryRings.seenFlags(mine),
                         backThumbUrl = mine.stories.getOrNull(mine.stories.size - 2)?.listThumb,
                         originKey = mine.key,
                         onClick = { viewing = listOf(mine) to 0 }, onCamera = addStory, menu = myMenu,
@@ -308,6 +323,17 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             onLibrary = openLibrary, onClose = { camera = false },
         )
     }
+    if (privacyPages.isNotEmpty()) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { privacyPages.removeAt(privacyPages.lastIndex) },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+                com.fariin.app.ui.settings.moreRoute(privacyPages.last(), push = { privacyPages.add(it) },
+                    pop = { if (privacyPages.isNotEmpty()) privacyPages.removeAt(privacyPages.lastIndex) })
+            }
+        }
+    }
     if (posted) {
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { posted = false },
@@ -352,7 +378,7 @@ private fun FriendRow(g: StoryGroup, now: Long, menu: List<RowAction>, onClick: 
     StoryRow(
         thumbUrl = newest?.listThumb ?: "", title = g.name.ifEmpty { "Fariin user" },
         subtitle = newest?.let { StoryList.ago(it.createdAtMs, now) } ?: "",
-        authorPhoto = g.photoUrl, seen = !g.hasUnseen,
+        authorPhoto = g.photoUrl, seen = !g.hasUnseen, seenFlags = com.fariin.app.data.StoryRings.seenFlags(g),
         squircle = false, originKey = g.key, onClick = onClick, menu = menu,
     )
 }
@@ -370,6 +396,8 @@ private fun StoryRow(
     subtitle: String,
     authorPhoto: String?,
     seen: Boolean,
+    /** iOS seenFlags: one arc per story, oldest first (StoryRing); empty = the single ring. */
+    seenFlags: List<Boolean> = emptyList(),
     camera: Boolean = false,
     addBadge: Boolean = false,
     backThumbUrl: String? = null,
@@ -447,18 +475,21 @@ private fun StoryRow(
                     }
                 }
             } else {
-                // The face: 26 avatar, 1 gap, 1.2 ring (1.5 grey when seen).
+                // The face: 26 avatar, 1 gap, 1.2 ring (1.5 grey when seen); one arc per story
+                // when the row knows them (iOS StoryListRow faceRing, StoryRingView).
                 val ring = if (seen) 1.5.dp else 1.2.dp
                 Box(
                     Modifier.align(Alignment.BottomEnd).offset(x = 7.dp, y = 5.dp).size(30.4.dp).clip(CircleShape)
                         .background(c.bg)
                         .then(
-                            if (seen) Modifier.border(ring, if (c.dark) Color(0xFF505052) else Color(0xFFCACACA), CircleShape)
+                            if (seenFlags.isNotEmpty()) Modifier
+                            else if (seen) Modifier.border(ring, if (c.dark) Color(0xFF505052) else Color(0xFFCACACA), CircleShape)
                             else Modifier.border(ring, UnseenRing, CircleShape),
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Avatar(authorPhoto, 26.dp, squircle = squircle)
+                    if (seenFlags.isNotEmpty()) StoryRing(seenFlags, Modifier.fillMaxSize(), lineWidth = 1.2.dp)
                 }
             }
         }
