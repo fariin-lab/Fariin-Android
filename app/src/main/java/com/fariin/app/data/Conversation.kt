@@ -76,7 +76,8 @@ data class Conversation(
     fun name(me: String): String {
         val other = otherUid(me)
         if (!isGroup && isDeletedAccount(other)) return DELETED_ACCOUNT_NAME
-        // TODO: a locally saved contact name (iOS ContactNames) overrides the profile name.
+        // 1:1 only: a name I saved for them on this phone overrides their profile name.
+        if (!isGroup) ContactNames.name(other)?.let { return it }
         return names[other] ?: "User"
     }
 

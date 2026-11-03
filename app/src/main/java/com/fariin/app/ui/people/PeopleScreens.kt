@@ -357,8 +357,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var ask by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(uid) { person = api.profile(uid); blocked = api.isBlocked(uid) }
-    val name = person?.shownName ?: conv?.names?.get(uid) ?: ""
+    // A name I saved for them wins (iOS ContactNames); Edit opens Set nickname.
+    val name = com.fariin.app.data.ContactNames.name(uid) ?: person?.shownName ?: conv?.names?.get(uid) ?: ""
     val cid = conv?.id ?: Wire.directCid(me, uid)
+    var nickname by remember { mutableStateOf(false) }
+    if (nickname) { SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), onBack = { nickname = false }); return }
     // The chat's timer, live (either person may change it; iOS ContactInfoView).
     val live = if (api is com.fariin.app.data.FirestorePeople) liveGroupDoc(cid) else emptyMap()
     val timer = (live["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0
@@ -401,7 +404,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
 
     Column(Modifier.fillMaxSize().background(c.bg)) {
-        PageBar("", onBack = onBack)
+        PageBar("", onBack = onBack) {
+            if (uid != me) Text("Edit", fontSize = 17.sp, color = c.blue,
+                modifier = Modifier.clickable { nickname = true }.padding(horizontal = 12.dp, vertical = 8.dp))
+        }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
             Spacer(Modifier.height(10.dp))
@@ -418,6 +424,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             person?.about?.takeIf { it.isNotEmpty() }?.let { bio ->
                 SettingsSection { Text(bio, fontSize = 17.sp, color = c.label, modifier = Modifier.fillMaxWidth().padding(16.dp)) }
             }
+            if (uid != me) com.fariin.app.data.ContactNames.note(uid)?.let { NotesCard(it) }
             SettingsSection {
                 DisappearingRow(timer, short = true) { timerOpen = true }
                 SettingsRow("Verify Encryption", last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }

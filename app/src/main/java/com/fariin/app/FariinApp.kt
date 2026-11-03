@@ -28,6 +28,7 @@ class FariinApp : Application() {
     override fun onCreate() {
         super.onCreate()
         com.fariin.app.media.ChatSounds.init(this)
+        com.fariin.app.data.ContactNames.init(this)
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // The benchmark build (release code, debug key, never shipped) may use the local backend too.
         val benchmark = runCatching {
