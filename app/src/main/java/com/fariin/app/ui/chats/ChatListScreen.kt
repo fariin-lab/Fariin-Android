@@ -92,6 +92,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -224,7 +226,16 @@ fun ChatListScreen(
     }
 
     val barState = rememberTopAppBarState()
-    val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior(barState)
+    // The title stays put (owner 2026-11-03, the reference apps): the chats slide under it.
+    val scroll = TopAppBarDefaults.pinnedScrollBehavior(barState)
+    // Frosted once the list has moved under it, the page colour at rest; the search field scrolls
+    // away with the list and a search button takes its place in the bar.
+    val haze = remember { dev.chrisbanes.haze.HazeState() }
+    val glass = com.fariin.app.perf.rememberPowerState().glass()
+    val scrolled by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
+    val searchGone by remember { androidx.compose.runtime.derivedStateOf {
+        listState.firstVisibleItemIndex > 1 || (listState.firstVisibleItemIndex == 1 && listState.firstVisibleItemScrollOffset > 24)
+    } }
     // At the very top the bar is always shown: a second tap on Chats scrolls there without a drag,
     // and the bar stayed hidden from the scroll down.
     val atTop by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 } }
@@ -249,7 +260,17 @@ fun ChatListScreen(
         // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
         contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
         topBar = {
-            Column(Modifier.background(if (selecting) MaterialTheme.colorScheme.surfaceContainerHigh else c.bg).statusBarsPadding()) {
+            Column(
+                Modifier.then(when {
+                    selecting -> Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    scrolled && glass -> Modifier.hazeEffect(haze) {
+                        backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
+                        tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.72f)))
+                    }
+                    scrolled -> Modifier.background(c.bg.copy(alpha = 0.97f))
+                    else -> Modifier.background(c.bg)
+                }).statusBarsPadding(),
+            ) {
                 when {
                     selecting -> SelectionBar(
                         count = selected.size,
@@ -308,8 +329,8 @@ fun ChatListScreen(
                             },
                             actions = {
                                 // In the Archive the search stays a button; the list itself has the field below.
-                                if (showArchive) FloatingIcon(Icons.Outlined.Search, contentDescription = "Search", onClick = { searching = true },
-                                    modifier = Modifier.padding(end = 12.dp))
+                                if (showArchive || searchGone) FloatingIcon(Icons.Outlined.Search, contentDescription = "Search", onClick = { searching = true },
+                                    modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
                                 if (!showArchive) OverflowMenu(
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
@@ -331,7 +352,7 @@ fun ChatListScreen(
                             windowInsets = WindowInsets(0, 0, 0, 0),
                             scrollBehavior = scroll,
                             colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = c.bg, scrolledContainerColor = c.bg,
+                                containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent,
                                 titleContentColor = c.label, actionIconContentColor = c.label, navigationIconContentColor = c.label,
                             ),
                         )
@@ -355,20 +376,22 @@ fun ChatListScreen(
             }
         },
     ) { pad ->
-        Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding())) {
+        // The list runs under the title bar (padded by it), everything else sits below it.
+        Column(Modifier.fillMaxSize()) {
             when {
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
-                state.loading && source.isEmpty() -> com.fariin.app.ui.components.ChatListSkeleton()
-                state.error != null && source.isEmpty() -> Centered(state.error)
-                shown.isEmpty() && !officialShown -> Centered(when {
+                state.loading && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { com.fariin.app.ui.components.ChatListSkeleton() }
+                state.error != null && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(state.error) }
+                shown.isEmpty() && !officialShown -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
                     query.isNotBlank() -> "No results"
                     showArchive -> "No archived chats"
                     filter == FILTER_UNREAD -> "No unread chats"
                     filter == FILTER_GROUPS -> "No groups yet"
                     filter == FILTER_CHANNELS -> "No channels yet"
                     else -> "No chats yet"
-                }, action = if (filter == FILTER_CHANNELS && query.isBlank()) ("Find Channels" to channels.find) else null)
-                else -> LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
+                }, action = if (filter == FILTER_CHANNELS && query.isBlank()) ("Find Channels" to channels.find) else null) }
+                else -> LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier), state = listState,
+                    contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                     // An invisible first row. At the top the list keeps this row in place, so anything new
                     // above the old first chat (a new group, a chat moved up by a message, the Pinned
                     // section after a pin, the Archived row) shows at once instead of landing just above
