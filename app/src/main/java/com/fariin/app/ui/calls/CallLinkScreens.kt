@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -328,10 +329,11 @@ fun JoinLinkScreen(keyText: String, videoFromPath: Boolean, onBack: () -> Unit) 
 
 /** A saved link's row in the Calls tab (iOS linkRow): tap joins via the join screen, (i) its page. */
 @Composable
-fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onInfo: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onInfo: () -> Unit, onLongClick: (() -> Unit)? = null) {
     val c = Fariin.colors
     Column {
-        Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
+        Row(Modifier.fillMaxWidth().combinedClickable(onLongClick = onLongClick, onClick = onOpen).padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically) {
             CallLinkAvatar(46.dp)
             Spacer(Modifier.width(12.dp))

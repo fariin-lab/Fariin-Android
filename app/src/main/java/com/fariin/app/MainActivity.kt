@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
                         if (me == null) {
                             CryptoHub.signedOut(); com.fariin.app.call.IncomingCallWatcher.stop()
                             com.fariin.app.data.HiddenMessages.clear(applicationContext)
+                            com.fariin.app.data.HiddenCalls.clear(applicationContext)
                             com.fariin.app.data.DeliveryReceipts.reset()
                         }
                     }
