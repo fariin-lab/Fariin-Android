@@ -498,7 +498,7 @@ internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabl
     Row(Modifier.fillMaxWidth().toggleable(on, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange)
         .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
-        Switch(on, onCheckedChange = null, enabled = enabled,
+        com.fariin.app.ui.components.FariinSwitch(on, onCheckedChange = null, enabled = enabled,
             colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White))
     }
     if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))

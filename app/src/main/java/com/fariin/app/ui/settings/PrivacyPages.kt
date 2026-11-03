@@ -71,7 +71,7 @@ internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true,
     ) {
         Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
             color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f))
-        Switch(
+        com.fariin.app.ui.components.FariinSwitch(
             checked = checked, onCheckedChange = onChange, enabled = enabled,
             colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White, checkedBorderColor = c.blue),
         )

@@ -321,7 +321,7 @@ private fun AdminCard(info: ChannelInfo) {
             HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Protect Content", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                Switch(protect, onCheckedChange = { v ->
+                com.fariin.app.ui.components.FariinSwitch(protect, onCheckedChange = { v ->
                     protect = v; problem = null
                     scope.launch { try { ChannelService.setProtected(info.cid, v) } catch (e: Exception) { protect = !v; problem = "Couldn't save. Try again." } }
                 }, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.blue, checkedThumbColor = Color.White))

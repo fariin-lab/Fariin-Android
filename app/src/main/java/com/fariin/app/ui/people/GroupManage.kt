@@ -650,7 +650,7 @@ private fun PermissionsPage(cid: String, me: String, onBack: () -> Unit) {
                             Text("${GroupAdmins.mediaOnCount(doc)}/${SendKind.entries.size}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                             Icon(if (mediaOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, "Show the kinds", tint = c.secondary)
                         }
-                        Switch(allOn, onCheckedChange = if (canEdit) ({ v -> flip("media.all", v) { GroupManage.setAllMedia(cid, v) } }) else null,
+                        com.fariin.app.ui.components.FariinSwitch(allOn, onCheckedChange = if (canEdit) ({ v -> flip("media.all", v) { GroupManage.setAllMedia(cid, v) } }) else null,
                             enabled = canEdit, colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White))
                     }
                     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))

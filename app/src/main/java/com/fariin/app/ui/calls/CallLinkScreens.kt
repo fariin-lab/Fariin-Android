@@ -293,7 +293,7 @@ private fun SwitchRow(title: String, sub: String, on: Boolean?, onChange: (Boole
             Text(title, fontSize = 17.sp, color = c.label)
             Text(sub, fontSize = 14.sp, color = c.secondary)
         }
-        Switch(checked = on ?: false, onCheckedChange = if (on == null) null else onChange, enabled = on != null)
+        com.fariin.app.ui.components.FariinSwitch(checked = on ?: false, onCheckedChange = if (on == null) null else onChange, enabled = on != null)
     }
 }
 

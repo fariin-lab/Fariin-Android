@@ -465,6 +465,6 @@ private fun Setting(title: String, on: Boolean, enabled: Boolean = true, onChang
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f))
-        Switch(checked = on, onCheckedChange = onChange, enabled = enabled)
+        com.fariin.app.ui.components.FariinSwitch(checked = on, onCheckedChange = onChange, enabled = enabled)
     }
 }
