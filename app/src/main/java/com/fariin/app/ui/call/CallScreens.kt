@@ -196,8 +196,11 @@ fun CallScreen(
         }
         // My camera: a card at the bottom corner, smaller while the controls are away (iOS pipLayer).
         if (ui.cameraOn && !localFull && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED) {
-            val w by animateDpAsState(if (chrome.visible) 135.dp else 79.dp, label = "tileW")
-            val h by animateDpAsState(if (chrome.visible) 240.dp else 140.dp, label = "tileH")
+            // The size changes in one step: a video surface resized every frame drops its frames and
+            // flickers (Pixel 5, 2026-11-03: "rejecting buffer" all through the animation). Only the
+            // slide up and down animates, which moves the surface without resizing it.
+            val w = if (chrome.visible) 135.dp else 79.dp
+            val h = if (chrome.visible) 240.dp else 140.dp
             val bottom by animateDpAsState(if (chrome.visible) 22.dp + BarHeight + 12.dp else 12.dp, label = "tileY")
             val shape = RoundedCornerShape(18.dp)
             Box(Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = bottom).size(w, h)
