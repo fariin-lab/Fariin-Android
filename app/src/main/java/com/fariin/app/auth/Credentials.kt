@@ -35,7 +35,16 @@ object GoogleSignIn {
         val req = GetCredentialRequest.Builder().addCredentialOption(option).build()
         val cred = try {
             CredentialManager.create(activity).getCredential(activity, req).credential
-        } catch (_: GetCredentialCancellationException) { throw SheetCancelled() }
+        } catch (e: GetCredentialCancellationException) {
+            // Google refusing the app (an unregistered signing key, a broken account) comes back as a
+            // "cancel" too, after the person picked an account: "[16] Account reauth failed". That one
+            // must say something; only a real close of the sheet stays quiet.
+            if (e.message?.contains("reauth", ignoreCase = true) == true) {
+                android.util.Log.w("FariinAuth", "Google sign-in refused: ${e.message}")
+                throw AuthFlowError(AuthFlowError.Kind.GoogleFailed)
+            }
+            throw SheetCancelled()
+        }
         if (cred is CustomCredential && cred.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
             return GoogleIdTokenCredential.createFrom(cred.data).idToken
         }
