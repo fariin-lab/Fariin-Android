@@ -41,5 +41,5 @@ data class StoryRepost(
 object StoryRepostRules {
     fun allows(s: Story, repostOf: StoryRepost?, me: String, blockedByMe: Boolean): Boolean =
         repostOf == null && s.groupId.isNullOrEmpty() && s.isPublic && !s.oneTime && !s.captureProtected &&
-            !s.isVideo && (s.authorUid == me || !blockedByMe)
+            (s.authorUid == me || !blockedByMe)
 }

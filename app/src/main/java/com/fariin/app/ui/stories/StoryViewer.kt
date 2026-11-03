@@ -245,13 +245,27 @@ fun StoryViewer(
                             .allowHardware(false).build()) as? coil3.request.SuccessResult)
                             ?.image?.let { (it as? coil3.BitmapImage)?.bitmap }
                     }
+                    val credit = com.fariin.app.data.StoryRepost(st.authorUid, g.name, st.id, card = true)
+                    // iOS beginVideoRepost: the video itself, downloaded, into the composer with the credit.
+                    if (st.isVideo) {
+                        repostCtx.cacheDir.listFiles { f -> f.name.startsWith("repost-") && f.name.endsWith(".mp4") &&
+                            System.currentTimeMillis() - f.lastModified() > 3_600_000 }?.forEach { it.delete() }
+                        val f = java.io.File(repostCtx.cacheDir, "repost-${st.id}.mp4")
+                        val c = java.net.URL(st.mediaUrl).openConnection() as java.net.HttpURLConnection
+                        try {
+                            if (c.responseCode != 200) return@runCatching null
+                            c.inputStream.use { i -> f.outputStream().use { i.copyTo(it) } }
+                        } finally { c.disconnect() }
+                        return@runCatching StoryMedia.prepareVideo(repostCtx, android.net.Uri.fromFile(f))?.let { p ->
+                            StoryMedia.Prepared(p.jpeg, p.blurThumb, p.video, p.width, p.height, p.stickers, credit)
+                        }
+                    }
                     val image = load(st.previewUrl) ?: return@runCatching null
                     val card = RepostCard.render(image, g.name, load(g.photoUrl))
                     val f = java.io.File(repostCtx.cacheDir, "repost-${st.id}.jpg")
                     f.outputStream().use { card.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
                     StoryMedia.preparePhoto(repostCtx, android.net.Uri.fromFile(f))?.let { p ->
-                        StoryMedia.Prepared(p.jpeg, p.blurThumb, null, p.width, p.height, p.stickers,
-                            com.fariin.app.data.StoryRepost(st.authorUid, g.name, st.id, card = true))
+                        StoryMedia.Prepared(p.jpeg, p.blurThumb, null, p.width, p.height, p.stickers, credit)
                     }
                 }.getOrNull()
             }
