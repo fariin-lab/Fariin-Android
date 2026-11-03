@@ -102,6 +102,9 @@ data class ThreadActions(
     /** Select mode: the delete plan run at once, and several messages forwarded to the chats picked. */
     val onDeleteMany: (com.fariin.app.data.SelectRules.Plan) -> Unit = {},
     val onForwardManyTo: (List<Message>, List<String>) -> Unit = { _, _ -> },
+    /** The sticker panel: a built-in sticker or a GIF, with the reply it answers (or null). */
+    val onSendSticker: (com.fariin.app.data.StickerRef, Message?) -> Unit = { _, _ -> },
+    val onSendGif: (com.fariin.app.data.StickerGifRules.Gif, Message?) -> Unit = { _, _ -> },
 )
 
 
@@ -121,6 +124,7 @@ internal fun MessageMenu(
     onReply: (Message) -> Unit, onStartEdit: (Message) -> Unit, onCopy: (String) -> Unit,
     onInfo: (Message) -> Unit, onDelete: (Message) -> Unit,
     onSelect: (Message) -> Unit = {}, onEditHistory: (Message) -> Unit = {},
+    source: MenuSource? = null, preview: (@Composable () -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val now = System.currentTimeMillis().toDouble()
@@ -161,6 +165,24 @@ internal fun MessageMenu(
             clock.longValue = System.currentTimeMillis()
             kotlinx.coroutines.delay(1000 - clock.longValue % 1000)
         }
+    }
+    // The message is on screen: the iOS menu over it, in place (MessageMenuOverlay).
+    if (source != null && preview != null) {
+        val rows = items.map { it ->
+            MenuRow(
+                it.title,
+                if (it.icon != null) androidx.compose.ui.graphics.vector.rememberVectorPainter(it.icon)
+                else androidx.compose.ui.res.painterResource(it.iconRes),
+                it.destructive,
+                it.countdownTo?.let { until -> com.fariin.app.data.Disappearing.countdown(until - clock.longValue) },
+                it.run,
+            )
+        }
+        val mine = m.reactions[ui.me]
+        MessageMenuOverlay(source, rows, reactable = !m.deleted && m.sendState == null && !m.isSystem, mine = mine,
+            onReact = { e -> actions.onReact(m, MessageRules.nextReaction(mine, e)) },
+            onDismiss = onDismiss, preview = preview)
+        return
     }
     // Android: a modal bottom sheet (reaction capsule on top, the message, then the actions in one
     // rounded card, as the iOS menu's grouped list) in place of the iOS popover beside the bubble.

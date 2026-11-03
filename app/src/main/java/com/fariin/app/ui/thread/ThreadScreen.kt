@@ -2,6 +2,9 @@ package com.fariin.app.ui.thread
 
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionOnScreen
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.outlined.Mic
@@ -210,6 +213,11 @@ private fun ThreadContent(
     val c = Fariin.colors
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
     var menuFor by remember { mutableStateOf<Message?>(null) }
+    // Where each row sits, read only at the long press, and the pressed row's own copy for the
+    // lifted message (MessageMenuOverlay); the real row hides while its copy is up.
+    val rowCoords = remember { HashMap<String, androidx.compose.ui.layout.LayoutCoordinates>() }
+    var menuSource by remember { mutableStateOf<MenuSource?>(null) }
+    var menuPreview by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     val quickReaction = rememberQuickReaction()
     var postMenuFor by remember { mutableStateOf<Message?>(null) }
     var deleteFor by remember { mutableStateOf<Message?>(null) }
@@ -259,7 +267,8 @@ private fun ThreadContent(
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it },
             onSelect = { selected.clear(); selected.add(it.rowId); replyTo = null },
-            onEditHistory = { historyFor = it })
+            onEditHistory = { historyFor = it },
+            source = menuSource, preview = menuPreview)
     }
     historyFor?.let { m -> EditHistorySheet(ui.messages.firstOrNull { it.id == m.id } ?: m, actions) { historyFor = null } }
     // What the ticks point at, from the live list (iOS liveSelection): a row that went away drops out.
@@ -391,6 +400,15 @@ private fun ThreadContent(
                                 com.fariin.app.data.Disappearing.noticeLine(
                                     if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, m.disappearSeconds),
                                 icon = true)
+                            // A call record: the iOS call bubble (CallBubble.kt); tap asks, then calls back.
+                            m.isCall && ch == null -> {
+                                val theirs = ui.isGroup && m.callerUid != ui.me
+                                CallBubble(m, ui.me, is24h, myFill(), receivedFill(),
+                                    peerUid = if (ui.isGroup) null else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me),
+                                    title = ui.title, photoUrl = ui.photoUrl,
+                                    callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
+                                    callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                            }
                             m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else noticeText(m))
                             ch != null -> androidx.compose.runtime.CompositionLocalProvider(
                                 com.fariin.app.ui.channels.LocalPostViews provides
@@ -427,7 +445,20 @@ private fun ThreadContent(
                                 }
                             }
                             else -> SwipeRow(enabled = MessageRules.canReply(m), onReply = { replyTo = m; editing = null }) {
-                                Column(Modifier.fillMaxWidth().background(lit).combinedClickableLong { menuFor = m }
+                                Column(Modifier.fillMaxWidth()
+                                    .onGloballyPositioned { rowCoords[m.rowId] = it }
+                                    .graphicsLayer { alpha = if (menuFor?.rowId == m.rowId) 0f else 1f }
+                                    .background(lit).combinedClickableLong {
+                                        val lc = rowCoords[m.rowId]?.takeIf { it.isAttached }
+                                        menuSource = lc?.let { MenuSource(androidx.compose.ui.geometry.Rect(it.positionOnScreen(), it.size.toSize()), m.authorId == ui.me) }
+                                        menuPreview = {
+                                            Column(Modifier.fillMaxWidth()) {
+                                                MessageRow(ui, m, g, is24h, {}) {}
+                                                ReactionChips(m, ui, m.authorId == ui.me) {}
+                                            }
+                                        }
+                                        menuFor = m
+                                    }
                                     .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem, key = m.id + m.reactions[ui.me]) {
                                         actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], quickReaction))
                                     }) {
@@ -560,7 +591,17 @@ private fun ThreadContent(
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                         if (stop != null) actions.onNotice(stop) else onSendVoice(r)
                     }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
-                    initialDraft = actions.draft, onDraft = actions.onDraft)
+                    initialDraft = actions.draft, onDraft = actions.onDraft,
+                    // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
+                    me = ui.me,
+                    onSticker = { s ->
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.STICKERS)
+                        if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendSticker(s, r) }
+                    },
+                    onGif = { gif ->
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
+                        if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
+                    })
             }
         }
     }
@@ -698,6 +739,24 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             StoryReaction(ui, m, glyph, isMe, tick, is24h)
             return@Row
         }
+        // Stickers and GIFs (StickerGifBubbles.kt): the name, Forwarded and the quote above them.
+        if (m.isSticker || m.isGif) {
+            val header: @Composable () -> Unit = {
+                Column {
+                    if (showSender && g.first) Text(ui.names[m.authorId] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        color = senderColor(m.authorId), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (m.forwarded) Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
+                    m.replyTo?.let { ReplyQuote(it, ui, isMe) }
+                }
+            }
+            val fill = if (isMe) myFill() else receivedFill()
+            if (m.isSticker) StickerRow(m, isMe, shape, fill, header) { Meta(m, tick, isMe, is24h, onMedia = m.replyTo == null) }
+            else GifRow(m, shape, fill, (showSender && g.first) || m.forwarded || m.replyTo != null, header) {
+                Meta(m, tick, isMe, is24h, onMedia = true)
+            }
+            return@Row
+        }
         val kind = m.mediaKind
         if (kind == Message.MediaKind.PHOTO || kind == Message.MediaKind.VIDEO || kind == Message.MediaKind.ALBUM) {
             MediaRow(ui, m, g, is24h, shape, maxW, tick, isMe, showSender, kind, onView)
@@ -752,6 +811,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 m.deleted -> if (isMe && m.deletedBy == null) "You deleted this message" else "This message was deleted"
                 else -> m.bodyText
             }
+            // The sender's link card over the words (iOS: quote, card, then the text).
+            if (!m.deleted) m.linkPreview?.let { LinkPreviewCard(it, isMe) }
             TextWithMeta(
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
@@ -985,6 +1046,8 @@ private fun Composer(
     onSend: (String) -> Unit, onAttach: () -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
     prefill: Pair<String, String>? = null, onTyping: (Boolean) -> Unit = {},
     initialDraft: String = "", onDraft: (String) -> Unit = {},
+    me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
+    onGif: (com.fariin.app.data.StickerGifRules.Gif) -> Unit = {},
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1077,8 +1140,11 @@ private fun Composer(
                     emojiOpen = !emojiOpen
                     if (emojiOpen) keyboard?.hide() else keyboard?.show()
                 }) {
-                    Icon(if (emojiOpen) Icons.Filled.Keyboard else Icons.Outlined.EmojiEmotions,
-                        contentDescription = if (emojiOpen) "Keyboard" else "Emoji", tint = c.secondary)
+                    // iOS gifButton: the GIF mark opens the sticker panel, the keyboard mark brings the keys
+                    // back; dimmer than the mic (label at 55%).
+                    Icon(androidx.compose.ui.res.painterResource(if (emojiOpen) com.fariin.app.R.drawable.ic_keyboard else com.fariin.app.R.drawable.ic_gif),
+                        contentDescription = if (emojiOpen) "Keyboard" else "GIF", tint = c.label.copy(alpha = 0.55f),
+                        modifier = Modifier.size(24.dp))
                 }
                 }
             }
@@ -1132,7 +1198,7 @@ private fun Composer(
         }
         if (emojiOpen && !recording) {
             BackHandler { emojiOpen = false }
-            EmojiPanel { draft += it }
+            StickerPanel(me, onSticker = onSticker, onGif = onGif)
         }
     }
 }
