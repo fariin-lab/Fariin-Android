@@ -418,6 +418,9 @@ private fun ThreadContent(
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes.
                 com.fariin.app.ui.components.ThreadSkeleton()
+            } else if (ui.messages.isEmpty() && ui.isGroup && ui.channel == null && !ui.notAMember && ui.groupDoc.isNotEmpty()) {
+                // iOS encryptionNotice: an empty group shows its welcome card (GroupWelcomeCard.kt).
+                GroupWelcomeCard(ui, onOpenGroup = actions.onTitleClick, modifier = Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty()) {
                 Text("No messages here yet", fontSize = 15.sp, color = c.secondary, modifier = Modifier.align(Alignment.Center))
             }
