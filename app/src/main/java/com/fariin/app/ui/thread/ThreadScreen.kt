@@ -634,27 +634,19 @@ private fun noticeText(m: Message): String = when {
 @Composable
 private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}) {
     val c = Fariin.colors
-    // A soft fade of the page colour behind the header, so a photo passing under it never fights
-    // the name and buttons (owner 2026-11-03, side by side with the reference app).
-    Column(Modifier.fillMaxWidth()
-        .background(androidx.compose.ui.graphics.Brush.verticalGradient(
-            0f to c.bg.copy(alpha = 0.94f), 0.7f to c.bg.copy(alpha = 0.78f), 1f to c.bg.copy(alpha = 0f)))
-        .statusBarsPadding().padding(bottom = 10.dp)) {
+    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             // Back in its own floating circle, the chevron as iOS (ChatHeaderView).
             IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp).floating()) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Back", tint = c.label,
                     modifier = Modifier.padding(start = 6.dp).size(20.dp))
             }
-            // Photo and name in their own floating capsule, like the call buttons beside them, so they
-            // stay readable over whatever scrolls under; the whole capsule opens the profile.
-            Row(Modifier.weight(1f)) {
-            Row(Modifier.weight(1f, fill = false).floating(CircleShape).clickable(onClick = onTitleClick)
-                .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+            // Photo and name beside it; the whole block opens the profile.
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Avatar(ui.photoUrl, 40.dp, squircle = ui.channel != null)
                 Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f, fill = false)) {
+                Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(ui.title, style = MaterialTheme.typography.titleMedium, color = c.label,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -670,8 +662,6 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                     }
                 }
             }
-            }
-            Spacer(Modifier.width(8.dp))
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
         }
     }
