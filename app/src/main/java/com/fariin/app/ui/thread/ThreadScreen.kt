@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
@@ -335,6 +336,7 @@ private fun ThreadContent(
     // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
     // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
     var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
         OpenWhen(showPins) {
@@ -366,7 +368,7 @@ private fun ThreadContent(
             androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark) {
             LazyColumn(
                 Modifier.fillMaxSize(), state = listState, reverseLayout = true,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = 8.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
             ) {
                 itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId }) { _, i ->
                     val m = ui.messages[i]
@@ -448,112 +450,118 @@ private fun ThreadContent(
             if (!atBottom) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
                     scope.launch { listState.animateScrollToItem(0) }
-                }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp))
+                }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = with(density) { bottomBarPx.toDp() } + 12.dp))
             }
         }
-        if (selecting) {
-            val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
-                picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete) })
-            SelectionBar(
-                deleteEnabled = canDelete,
-                forwardEnabled = com.fariin.app.data.SelectRules.forwardable(picked),
-                copyEnabled = picked.any(MessageRules::canCopy),
-                busy = false,
-                onDelete = { bulkDelete = true },
-                onForward = { bulkForward = picked.sortedBy { it.createdAtMillis } },
-                onCopy = {
-                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(com.fariin.app.data.SelectRules.copyText(picked)))
-                    if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied")
-                    selected.clear()
-                },
-            )
-        } else if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
-            HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-            com.fariin.app.ui.channels.ChannelBottomBar(ch, ui.sendBlocked)
-        } else if (ui.receipts.iBlocked && !ui.isGroup) {
-            // iOS blockedBar: the action alone, in the text colour.
-            HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-            Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.TextButton(onClick = actions.onUnblock) {
-                    Text("Unblock", fontSize = 17.sp, color = c.label)
+        // The bottom bar floats over the end of the chat too (iOS paints no bar behind its controls):
+        // it takes no height of its own, draws over the list's last stretch, and the list is padded by it.
+        Column(Modifier.fillMaxWidth().zIndex(1f)
+            .layout { m, cs -> val pl = m.measure(cs); layout(pl.width, 0) { pl.place(0, -pl.height) } }
+            .onSizeChanged { bottomBarPx = it.height }) {
+            if (selecting) {
+                val canDelete = picked.isNotEmpty() && (!ui.isGroup ||
+                    picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete) })
+                SelectionBar(
+                    deleteEnabled = canDelete,
+                    forwardEnabled = com.fariin.app.data.SelectRules.forwardable(picked),
+                    copyEnabled = picked.any(MessageRules::canCopy),
+                    busy = false,
+                    onDelete = { bulkDelete = true },
+                    onForward = { bulkForward = picked.sortedBy { it.createdAtMillis } },
+                    onCopy = {
+                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(com.fariin.app.data.SelectRules.copyText(picked)))
+                        if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied")
+                        selected.clear()
+                    },
+                )
+            } else if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
+                HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+                com.fariin.app.ui.channels.ChannelBottomBar(ch, ui.sendBlocked)
+            } else if (ui.receipts.iBlocked && !ui.isGroup) {
+                // iOS blockedBar: the action alone, in the text colour.
+                HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+                Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.TextButton(onClick = actions.onUnblock) {
+                        Text("Unblock", fontSize = 17.sp, color = c.label)
+                    }
                 }
-            }
-        } else if (ui.notAMember) {
-            // iOS removedBar: one centred line where the composer was.
-            HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-            Text("You're no longer a member of this group", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.secondary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
-        } else if (ui.sendBlocked != null) {
-            HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-            Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
-                modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
-        } else {
-            replyTo?.let { r ->
-                ComposerBar(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
-                    com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText) { replyTo = null }
-            }
-            editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
-            val send: (String) -> Unit = { t ->
-                val r = replyTo
-                val e = editing
-                when {
-                    e != null -> { editing = null; if (t.trim() != e.text.trim()) actions.onEdit(e, t) }
-                    r != null -> { replyTo = null; actions.onSendReply(t, r) }
-                    else -> onSend(t)
+            } else if (ui.notAMember) {
+                // iOS removedBar: one centred line where the composer was.
+                HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+                Text("You're no longer a member of this group", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.secondary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
+            } else if (ui.sendBlocked != null) {
+                HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+                Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
+            } else {
+                replyTo?.let { r ->
+                    ComposerBar(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
+                        com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText) { replyTo = null }
                 }
+                editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
+                val send: (String) -> Unit = { t ->
+                    val r = replyTo
+                    val e = editing
+                    when {
+                        e != null -> { editing = null; if (t.trim() != e.text.trim()) actions.onEdit(e, t) }
+                        r != null -> { replyTo = null; actions.onSendReply(t, r) }
+                        else -> onSend(t)
+                    }
+                }
+                var attachOpen by remember { mutableStateOf(false) }
+                var pollOpen by remember { mutableStateOf(false) }
+                var locationOpen by remember { mutableStateOf(false) }
+                var contactOpen by remember { mutableStateOf(false) }
+                // What a group's members may send (iOS heldBackText / attachMediaOffText / slow mode):
+                // said in a snackbar before the send, the rules refuse it anyway.
+                val resolver = androidx.compose.ui.platform.LocalContext.current.contentResolver
+                val doc = ui.groupDoc
+                fun held(kind: com.fariin.app.data.GroupAdmins.SendKind): String? =
+                    if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.heldBack(doc, ui.me, kind) else null
+                fun slow(): String? = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
+                    ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
+                val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
+                val gatedSend: (String) -> Unit = { t ->
+                    val links = if (com.fariin.app.data.GroupAdmins.hasLink(t)) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
+                    val stop = slow() ?: links
+                    if (stop != null && editing == null) actions.onNotice(stop) else send(t)
+                }
+                if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false },
+                    onSendMedia = { uris, cap, once ->
+                        val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
+                            else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
+                        val stop = slow() ?: kinds.firstNotNullOfOrNull { held(it) }
+                        if (stop != null) actions.onNotice(stop) else onSendPick(uris, cap, once)
+                    },
+                    onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
+                    mediaOff = mediaOff,
+                    // iOS: the Poll tile is in groups only, held back like the other kinds.
+                    onPoll = if (ui.isGroup) ({
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.POLLS)
+                        if (stop != null) actions.onNotice(stop) else pollOpen = true
+                    }) else null,
+                    // Contact and location cards (CardSheets): sealed text markers, sent like a text.
+                    onLocation = {
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.LOCATION)
+                        if (stop != null) actions.onNotice(stop) else locationOpen = true
+                    })
+                // No Contact tile: iOS took it off the attach sheet ("No phone numbers anywhere", 46d10cb2).
+                // Received cards still draw and open; the picker below waits for a Share-from-profile entry.
+                if (pollOpen) PollComposer(onDismiss = { pollOpen = false }) { marker -> onSend(marker) }
+                if (locationOpen) LocationSheet(onDismiss = { locationOpen = false }) { lat, lon, label ->
+                    onSend(com.fariin.app.data.CardRules.locationText(lat, lon, label))
+                }
+                if (contactOpen) ContactPickSheet(ui.me, ui.cid, onDismiss = { contactOpen = false }) { card ->
+                    onSend(com.fariin.app.data.CardRules.contactText(card.uid, card.name, card.photo))
+                }
+                Composer(gatedSend, { attachOpen = true }, { r ->
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
+                        if (stop != null) actions.onNotice(stop) else onSendVoice(r)
+                    }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
+                    initialDraft = actions.draft, onDraft = actions.onDraft)
             }
-            var attachOpen by remember { mutableStateOf(false) }
-            var pollOpen by remember { mutableStateOf(false) }
-            var locationOpen by remember { mutableStateOf(false) }
-            var contactOpen by remember { mutableStateOf(false) }
-            // What a group's members may send (iOS heldBackText / attachMediaOffText / slow mode):
-            // said in a snackbar before the send, the rules refuse it anyway.
-            val resolver = androidx.compose.ui.platform.LocalContext.current.contentResolver
-            val doc = ui.groupDoc
-            fun held(kind: com.fariin.app.data.GroupAdmins.SendKind): String? =
-                if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.heldBack(doc, ui.me, kind) else null
-            fun slow(): String? = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
-                ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
-            val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
-            val gatedSend: (String) -> Unit = { t ->
-                val links = if (com.fariin.app.data.GroupAdmins.hasLink(t)) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
-                val stop = slow() ?: links
-                if (stop != null && editing == null) actions.onNotice(stop) else send(t)
-            }
-            if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false },
-                onSendMedia = { uris, cap, once ->
-                    val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
-                        else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
-                    val stop = slow() ?: kinds.firstNotNullOfOrNull { held(it) }
-                    if (stop != null) actions.onNotice(stop) else onSendPick(uris, cap, once)
-                },
-                onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
-                mediaOff = mediaOff,
-                // iOS: the Poll tile is in groups only, held back like the other kinds.
-                onPoll = if (ui.isGroup) ({
-                    val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.POLLS)
-                    if (stop != null) actions.onNotice(stop) else pollOpen = true
-                }) else null,
-                // Contact and location cards (CardSheets): sealed text markers, sent like a text.
-                onLocation = {
-                    val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.LOCATION)
-                    if (stop != null) actions.onNotice(stop) else locationOpen = true
-                })
-            // No Contact tile: iOS took it off the attach sheet ("No phone numbers anywhere", 46d10cb2).
-            // Received cards still draw and open; the picker below waits for a Share-from-profile entry.
-            if (pollOpen) PollComposer(onDismiss = { pollOpen = false }) { marker -> onSend(marker) }
-            if (locationOpen) LocationSheet(onDismiss = { locationOpen = false }) { lat, lon, label ->
-                onSend(com.fariin.app.data.CardRules.locationText(lat, lon, label))
-            }
-            if (contactOpen) ContactPickSheet(ui.me, ui.cid, onDismiss = { contactOpen = false }) { card ->
-                onSend(com.fariin.app.data.CardRules.contactText(card.uid, card.name, card.photo))
-            }
-            Composer(gatedSend, { attachOpen = true }, { r ->
-                    val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
-                    if (stop != null) actions.onNotice(stop) else onSendVoice(r)
-                }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
-                initialDraft = actions.draft, onDraft = actions.onDraft)
         }
     }
 }
@@ -1022,7 +1030,8 @@ private fun Composer(
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     val field = MaterialTheme.colorScheme.surfaceContainerHigh
-    Column(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding()) {
+    // A soft wash, not a bar: clear at the top, the page colour behind the controls (iOS composer).
+    Column(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg.copy(alpha = 0f), 0.45f to c.bg.copy(alpha = 0.92f), 1f to c.bg)).navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
             if (recording) {
                 Row(Modifier.weight(1f).height(48.dp).floating(RoundedCornerShape(24.dp)).padding(start = 16.dp),
