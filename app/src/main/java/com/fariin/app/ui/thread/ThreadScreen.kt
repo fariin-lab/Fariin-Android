@@ -218,6 +218,7 @@ private fun ThreadContent(
     val rowCoords = remember { HashMap<String, androidx.compose.ui.layout.LayoutCoordinates>() }
     var menuSource by remember { mutableStateOf<MenuSource?>(null) }
     var menuPreview by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
+    var menuLifted by remember { mutableStateOf<String?>(null) }   // the row whose copy is up
     val quickReaction = rememberQuickReaction()
     var postMenuFor by remember { mutableStateOf<Message?>(null) }
     var deleteFor by remember { mutableStateOf<Message?>(null) }
@@ -262,13 +263,13 @@ private fun ThreadContent(
         // The live copy: the long press keeps the row's first lambda, so a stamp, edit or
         // reaction that landed since (an expiresAt, say) would be missing from a held copy.
         val m = ui.messages.firstOrNull { it.rowId == m0.rowId } ?: m0
-        MessageMenu(m, ui, onDismiss = { menuFor = null }, actions = actions.copy(onForward = { forwardFor = it }),
+        MessageMenu(m, ui, onDismiss = { menuFor = null; menuLifted = null }, actions = actions.copy(onForward = { forwardFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it },
             onSelect = { selected.clear(); selected.add(it.rowId); replyTo = null },
             onEditHistory = { historyFor = it },
-            source = menuSource, preview = menuPreview)
+            source = menuSource, preview = menuPreview, onLifted = { menuLifted = m.rowId })
     }
     historyFor?.let { m -> EditHistorySheet(ui.messages.firstOrNull { it.id == m.id } ?: m, actions) { historyFor = null } }
     // What the ticks point at, from the live list (iOS liveSelection): a row that went away drops out.
@@ -447,7 +448,7 @@ private fun ThreadContent(
                             else -> SwipeRow(enabled = MessageRules.canReply(m), onReply = { replyTo = m; editing = null }) {
                                 Column(Modifier.fillMaxWidth()
                                     .onGloballyPositioned { rowCoords[m.rowId] = it }
-                                    .graphicsLayer { alpha = if (menuFor?.rowId == m.rowId) 0f else 1f }
+                                    .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
                                     .background(lit).combinedClickableLong {
                                         val lc = rowCoords[m.rowId]?.takeIf { it.isAttached }
                                         menuSource = lc?.let { MenuSource(androidx.compose.ui.geometry.Rect(it.positionOnScreen(), it.size.toSize()), m.authorId == ui.me) }

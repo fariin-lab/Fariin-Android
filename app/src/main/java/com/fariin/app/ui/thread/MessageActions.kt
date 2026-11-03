@@ -124,7 +124,7 @@ internal fun MessageMenu(
     onReply: (Message) -> Unit, onStartEdit: (Message) -> Unit, onCopy: (String) -> Unit,
     onInfo: (Message) -> Unit, onDelete: (Message) -> Unit,
     onSelect: (Message) -> Unit = {}, onEditHistory: (Message) -> Unit = {},
-    source: MenuSource? = null, preview: (@Composable () -> Unit)? = null,
+    source: MenuSource? = null, preview: (@Composable () -> Unit)? = null, onLifted: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val now = System.currentTimeMillis().toDouble()
@@ -181,7 +181,7 @@ internal fun MessageMenu(
         val mine = m.reactions[ui.me]
         MessageMenuOverlay(source, rows, reactable = !m.deleted && m.sendState == null && !m.isSystem, mine = mine,
             onReact = { e -> actions.onReact(m, MessageRules.nextReaction(mine, e)) },
-            onDismiss = onDismiss, preview = preview)
+            onDismiss = onDismiss, preview = preview, onLifted = onLifted)
         return
     }
     // Android: a modal bottom sheet (reaction capsule on top, the message, then the actions in one

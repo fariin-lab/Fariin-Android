@@ -107,7 +107,7 @@ private const val STRIP_COUNT = 15
  * back to 0.2, the bar fading over 0.2 s, the background over 0.4 s. Screen edges 8 (or the system
  * bars), card 250 wide with 45 rows and 33 corners, bar 56 tall (50 on a narrow phone).
  *
- * Android: a full-screen dialog window, so system back closes it. The blur is the chat's own
+ * Android: a full-screen focusable popup, so system back closes it. The blur is the chat's own
  * screen blurred in place (a RenderEffect on the activity's content, Android 12 and up; older
  * phones get the tint alone), always taken off when the menu goes. Not the window blur-behind:
  * on a real Pixel and the emulator that left the display showing stale frames after the menu.
@@ -121,6 +121,8 @@ internal fun MessageMenuOverlay(
     onReact: (String) -> Unit,
     onDismiss: () -> Unit,
     preview: @Composable () -> Unit,
+    /** The copy is on screen: only now may the real message hide (no frame with neither). */
+    onLifted: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val density = LocalDensity.current
@@ -133,6 +135,14 @@ internal fun MessageMenuOverlay(
     var closing by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf(false) }
     val springSpec = spring<Float>(dampingRatio = 0.8f, stiffness = 250f)
+    // The screen's edges, read from the chat's own window: the menu's window does not get them,
+    // and the card ran under the gesture bar (owner's Pixel recording, 2026-11-03).
+    // Raw from the view: the chat screen has already consumed the Compose insets on the way down.
+    val raw = androidx.core.view.ViewCompat.getRootWindowInsets(LocalView.current)
+        ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+            or androidx.core.view.WindowInsetsCompat.Type.ime())
+    val edgeTop = raw?.top ?: 0; val edgeBottom = raw?.bottom ?: 0
+    val edgeLeft = raw?.left ?: 0; val edgeRight = raw?.right ?: 0
 
     fun close(then: () -> Unit = {}) {
         if (closing) return
@@ -162,16 +172,19 @@ internal fun MessageMenuOverlay(
         open.animateTo(1f, springSpec)
     }
 
-    Dialog(
+    // A focusable popup over the whole window, not a dialog: a dialog window fades in the system's
+    // dark dim before anything of ours can draw (the grey flash in the owner's recording). Back
+    // and taps outside still close it.
+    androidx.compose.ui.window.Popup(
+        popupPositionProvider = remember {
+            object : androidx.compose.ui.window.PopupPositionProvider {
+                override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                                               layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize) = IntOffset.Zero
+            }
+        },
         onDismissRequest = { close() },
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        properties = androidx.compose.ui.window.PopupProperties(focusable = true, dismissOnClickOutside = false, clippingEnabled = false),
     ) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        LaunchedEffect(window) {
-            window ?: return@LaunchedEffect
-            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            window.setWindowAnimations(0)
-        }
         var origin by remember { mutableStateOf<Offset?>(null) }
         val tint = if (c.dark) Color.Black.copy(alpha = 0.6f) else Color(0f, 0.039f, 0.149f, 0.2f)
         BoxWithConstraints(
@@ -182,14 +195,13 @@ internal fun MessageMenuOverlay(
                 .pointerInput(Unit) { detectTapGestures { close() } },
         ) {
             val o = origin ?: return@BoxWithConstraints
+            LaunchedEffect(Unit) { androidx.compose.runtime.withFrameNanos { }; onLifted() }
             val pad = with(density) { 8.dp.toPx() }
             val gap = with(density) { 12.dp.toPx() }
-            val bars = WindowInsets.safeDrawing
-            val ime = WindowInsets.ime.getBottom(density)
-            val top = max(bars.getTop(density).toFloat(), pad)
-            val bottom = with(density) { maxHeight.toPx() } - max(max(bars.getBottom(density), ime).toFloat(), pad)
-            val left = max(bars.getLeft(density, androidx.compose.ui.unit.LayoutDirection.Ltr).toFloat(), pad)
-            val right = with(density) { maxWidth.toPx() } - max(bars.getRight(density, androidx.compose.ui.unit.LayoutDirection.Ltr).toFloat(), pad)
+            val top = max(edgeTop.toFloat(), pad)
+            val bottom = with(density) { maxHeight.toPx() } - max(edgeBottom.toFloat(), pad)
+            val left = max(edgeLeft.toFloat(), pad)
+            val right = with(density) { maxWidth.toPx() } - max(edgeRight.toFloat(), pad)
 
             val narrow = LocalConfiguration.current.screenWidthDp <= 375
             val barH = with(density) { (if (narrow) 50.dp else 56.dp).toPx() }
