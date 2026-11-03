@@ -90,6 +90,16 @@ class ViewerRulesTest {
         assertFalse(b.barDelete); assertTrue(b.barSave); assertFalse(b.menuDelete)
     }
 
+    @Test fun penOnlyForPhotosInAChatThatCanSend() {
+        val p = ViewerRules.chatPages(photo("m1", author = "them")).first
+        assertTrue(ViewerRules.buttons(p[0], p, me, chatCanDelete = true, chatCanSend = true).draw)
+        // All Media has no chat to send into.
+        assertFalse(ViewerRules.buttons(p[0], p, me, chatCanDelete = false).draw)
+        val m = photo("m1", author = "them").copy(type = "image", viewOnce = true)
+        val once = ViewerRules.chatPages(m, once = "cid" to "m1").first
+        assertFalse(ViewerRules.buttons(once[0], once, me, chatCanDelete = true, chatCanSend = true).draw)
+    }
+
     @Test fun titleIsYouOrTheName() {
         val mine = ViewerRules.chatPages(photo("m1")).first[0]
         val theirs = ViewerRules.chatPages(photo("m2", author = "them")).first[0]

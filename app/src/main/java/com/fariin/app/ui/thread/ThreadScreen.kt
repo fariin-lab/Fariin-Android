@@ -258,7 +258,7 @@ private fun ThreadContent(
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var viewing by remember { mutableStateOf<Viewing?>(null) }
-    viewing?.let { v -> MediaViewer(v, viewerHost(ui, actions)) { viewing = null } }
+    viewing?.let { v -> MediaViewer(v, viewerHost(ui, actions, onSendPick)) { viewing = null } }
     // Leaving the chat stops its note (iOS stops playback when the thread goes away).
     DisposableEffect(ui.cid) { onDispose { VoicePlayer.stop() } }
     val context = LocalContext.current

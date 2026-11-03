@@ -97,9 +97,12 @@ object ViewerRules {
         /** Save Image / Save Video in the menu. */
         val menuSave: Boolean,
         val menuDelete: Boolean,
+        /** The pen between Share and Delete / Save (iOS scribble.variable): draw on this photo and send
+         *  the copy to the chat. A photo only, never a view-once one, and only where the viewer can send. */
+        val draw: Boolean = false,
     )
 
-    fun buttons(page: Page, pages: List<Page>, me: String, chatCanDelete: Boolean): Buttons {
+    fun buttons(page: Page, pages: List<Page>, me: String, chatCanDelete: Boolean, chatCanSend: Boolean = false): Buttons {
         val locked = page.once != null
         val mine = page.authorId != null && page.authorId == me
         val delete = chatCanDelete && page.messageId != null && page.albumParent == null
@@ -112,6 +115,7 @@ object ViewerRules {
             saveAll = if (!locked && album > 1) album else 0,
             menuSave = !locked,
             menuDelete = delete,
+            draw = chatCanSend && !locked && !page.isVideo,
         )
     }
 

@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Collections
+import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -133,6 +134,10 @@ class ViewerHost(
     val nameOf: (String) -> String? = { null },
     val message: (String) -> Message? = { null },
     val deleteDialog: (@Composable (m: Message, title: String, onDismiss: () -> Unit, onDone: () -> Unit) -> Unit)? = null,
+    /** The pen's Send (iOS onSendEdited): the drawn-on copy goes to this chat as a new photo. Null = no pen. */
+    val sendEdited: ((photo: android.net.Uri, caption: String, viewOnce: Boolean) -> Unit)? = null,
+    /** The editor's view-once switch: one-to-one chats only, as the attach sheet. */
+    val allowViewOnce: Boolean = false,
 )
 
 internal fun viewerPages(v: Viewing): Pair<List<ViewerRules.Page>, Int> = when (v) {
@@ -234,7 +239,15 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
         }
     }
 
-    val buttons = ViewerRules.buttons(page, pages, me, host?.deleteDialog != null)
+    val buttons = ViewerRules.buttons(page, pages, me, host?.deleteDialog != null, chatCanSend = host?.sendEdited != null)
+    // The pen (iOS penEdit): the photo's plain copy opens in the editor, straight into drawing.
+    var drawOn by remember { mutableStateOf<android.net.Uri?>(null) }
+    val draw: () -> Unit = {
+        scope.launch {
+            val f = media.cached(page.url) ?: media.file(page.url, page.enc)
+            if (f != null) drawOn = android.net.Uri.fromFile(f)
+        }
+    }
     var askDelete by remember { mutableStateOf(false) }
     val save = rememberSaver(media)
     val share: () -> Unit = { scope.launch { sharePage(ctx, media, page) } }
@@ -290,7 +303,7 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
                 if (page.isVideo) VideoPanel(video, canShare = buttons.share, onShare = share)
                 else {
                     if (pages.size > 1) ThumbStrip(pages, pager)
-                    PhotoBar(buttons, onShare = share, onDelete = { askDelete = true },
+                    PhotoBar(buttons, onShare = share, onDraw = draw, onDelete = { askDelete = true },
                         onSave = { save(listOf(page)) }, onSaveAll = { save(ViewerRules.siblings(pages, page)) })
                 }
             }
@@ -302,6 +315,16 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
                 Icon(Icons.Filled.PlayArrow, "Play", tint = Fariin.colors.label, modifier = Modifier.size(40.dp))
             }
         }
+    }
+
+    drawOn?.let { u ->
+        val send = host?.sendEdited
+        PhotoDrawEditor(u, editOnly = false, onClose = { drawOn = null }, allowViewOnce = host?.allowViewOnce == true,
+            onSend = { photo, caption, once ->
+                send?.invoke(photo, caption, once)
+                // Back to the chat, where the edited copy is sending (iOS dismisses the viewer too).
+                drawOn = null; onClose()
+            })
     }
 
     if (askDelete) {
@@ -408,12 +431,17 @@ private fun MenuRow(text: String, icon: Painter, destructive: Boolean = false, o
 
 /** iOS bottomBar: 48 round buttons, Share at the start, Delete (mine) or Save (theirs) at the end. */
 @Composable
-private fun PhotoBar(b: ViewerRules.Buttons, onShare: () -> Unit, onDelete: () -> Unit, onSave: () -> Unit, onSaveAll: () -> Unit) {
+private fun PhotoBar(b: ViewerRules.Buttons, onShare: () -> Unit, onDraw: () -> Unit, onDelete: () -> Unit, onSave: () -> Unit, onSaveAll: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (b.share) BarButton(painterResource(com.fariin.app.R.drawable.ic_link_share), "Share", onClick = onShare)
         Spacer(Modifier.weight(1f))
+        // iOS scribble.variable: draw on this photo and send the copy here.
+        if (b.draw) {
+            BarButton(rememberVectorPainter(Icons.Outlined.Draw), "Draw", onClick = onDraw)
+            Spacer(Modifier.weight(1f))
+        }
         if (b.barDelete) BarButton(rememberVectorPainter(Icons.Outlined.Delete), "Delete", tint = c.red, onClick = onDelete)
         else if (b.barSave) {
             // iOS: an album asks which (Save All / Save This) from the same round button.
@@ -589,7 +617,7 @@ private suspend fun sharePage(ctx: android.content.Context, media: ChatMedia, p:
 }
 
 /** The chat's side of the viewer: names, the live message, and the chat's own delete question (DeleteDialog, one set of rules). */
-internal fun viewerHost(ui: ThreadUi, actions: ThreadActions): ViewerHost = ViewerHost(
+internal fun viewerHost(ui: ThreadUi, actions: ThreadActions, onSendPick: ((List<android.net.Uri>, String, Boolean) -> Unit)? = null): ViewerHost = ViewerHost(
     me = ui.me,
     // iOS shows the chat's name; in a group the sender's own name says more.
     nameOf = { uid -> if (ui.channel != null || !ui.isGroup) ui.title else ui.names[uid] ?: ui.title },
@@ -600,4 +628,18 @@ internal fun viewerHost(ui: ThreadUi, actions: ThreadActions): ViewerHost = View
             onDeleteForMe = { actions.onDeleteForMe(it); done() },
         ), title = title, onDismiss = dismiss)
     },
+    // Held back the same way as the attach sheet's photos: slow mode, then the group's photo rule.
+    // Only where the composer is (not a follower of a channel, not blocked, not removed).
+    sendEdited = onSendPick?.takeIf {
+        val ch = ui.channel
+        !(ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) && !(ui.receipts.iBlocked && !ui.isGroup) && !ui.notAMember
+    }?.let { pick -> { photo, caption, once ->
+        val doc = ui.groupDoc
+        val stop = if (!ui.isGroup || doc.isEmpty()) null else
+            com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
+                ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
+                ?: com.fariin.app.data.GroupAdmins.heldBack(doc, ui.me, com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
+        if (stop != null) actions.onNotice(stop) else pick(listOf(photo), caption, once && !ui.isGroup)
+    } },
+    allowViewOnce = !ui.isGroup,
 )

@@ -6,4 +6,6 @@
     <cache-path name="shared" path="shared-in/" />
     <!-- Story camera photos and clips, read back through the same path as a picked item (ui/stories/StoryCamera). -->
     <cache-path name="camera" path="story-camera/" />
+    <!-- A photo drawn on in the chat photo editor, sent or put back in the attach sheet (ui/thread/PhotoDrawEditor). -->
+    <cache-path name="edited" path="edited/" />
 </paths>

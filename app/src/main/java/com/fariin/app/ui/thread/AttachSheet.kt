@@ -72,8 +72,8 @@ import kotlinx.coroutines.withContext
 /**
  * The attach sheet, after iOS AttachSheetController + AttachRecentsStrip, built on the Android
  * Photo Picker (no photo or video permission, Play policy): the picker opens with the sheet, the
- * chosen photos and videos fill the grid edge to edge with a numbered tick on each (tap to drop
- * one), "Add photos or videos" opens the picker again, and File opens the document picker. Once
+ * chosen photos and videos fill the grid edge to edge with a numbered tick on each (the tick drops
+ * one, a tap on a photo opens the pen), "Add photos or videos" opens the picker again, and File opens the document picker. Once
  * something is chosen the bar is a caption field, a "View once" switch (one photo only, as iOS)
  * and Send.
  */
@@ -99,6 +99,8 @@ internal fun AttachSheet(
     val videos = remember { mutableStateListOf<Uri>() }
     var caption by remember { mutableStateOf("") }
     var viewOnce by remember { mutableStateOf(false) }
+    // A chosen photo open in the pen (iOS MediaApprovalView's pen: edit-only, straight into drawing).
+    var drawOn by remember { mutableStateOf<Uri?>(null) }
     val gallery = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(MediaRules.MEDIA_PER_PICK),
     ) { uris ->
@@ -138,7 +140,8 @@ internal fun AttachSheet(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(picked.toList(), key = { it.toString() }) { u ->
-                            PickedTile(u, u in videos, picked.indexOf(u) + 1) { picked.remove(u); videos.remove(u) }
+                            PickedTile(u, u in videos, picked.indexOf(u) + 1, onRemove = { picked.remove(u); videos.remove(u) },
+                                onDraw = { drawOn = u })
                         }
                         if (picked.size < MediaRules.MEDIA_PER_PICK) item { AddTile(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)), openGallery) }
                     }
@@ -190,6 +193,12 @@ internal fun AttachSheet(
             }
         }
     }
+    drawOn?.let { u ->
+        PhotoDrawEditor(u, editOnly = true, onClose = { drawOn = null }, onReturn = { edited ->
+            val i = picked.indexOf(u)
+            if (i >= 0 && edited != u) picked[i] = edited
+        })
+    }
 }
 
 @Composable
@@ -219,7 +228,7 @@ private fun SheetButton(label: String, icon: androidx.compose.ui.graphics.vector
 }
 
 @Composable
-private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> Unit) {
+private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> Unit, onDraw: () -> Unit) {
     val c = Fariin.colors
     val context = LocalContext.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
@@ -233,18 +242,22 @@ private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> 
             }.getOrNull()
         }
     }
-    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(c.secondary.copy(alpha = 0.15f)).clickable(onClick = onRemove)) {
+    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(c.secondary.copy(alpha = 0.15f))
+        // A photo opens in the pen; the numbered tick drops it. A video has no pen, so a tap drops it.
+        .clickable(onClick = if (isVideo) onRemove else onDraw)) {
         bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         if (isVideo) {
             Text("Video", color = Color.White, fontSize = 12.sp,
                 modifier = Modifier.align(Alignment.BottomStart).padding(5.dp)
                     .clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 5.dp, vertical = 1.dp))
         }
-        Box(
-            Modifier.align(Alignment.TopEnd).padding(5.dp).size(24.dp).clip(CircleShape).background(c.blue)
-                .border(1.5.dp, Color.White, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { Text("$number", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+        Box(Modifier.align(Alignment.TopEnd).size(40.dp).clickable(onClick = onRemove), contentAlignment = Alignment.TopEnd) {
+            Box(
+                Modifier.padding(5.dp).size(24.dp).clip(CircleShape).background(c.blue)
+                    .border(1.5.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Text("$number", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+        }
     }
 }
 
