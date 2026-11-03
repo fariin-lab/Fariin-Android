@@ -453,50 +453,12 @@ fun ChatListScreen(
                     }
                     val row: @Composable (Conversation) -> Unit = { conv ->
                         val ring = com.fariin.app.data.StoryRings.forChat(conv, me, stories, storyHidden)
-                        // iOS ChatListTable swipe actions: Read / Pin to the right, Archive / Delete / Mute
-                        // to the left, a full swipe left archives.
-                        val unreadMark = conv.hasUnreadMark(me)
-                        val pinnedNow = conv.isPinned(me)
-                        val mutedNow = conv.isMuted(me, System.currentTimeMillis().toDouble())
-                        val one = listOf(conv)
-                        fun save(done: String, write: suspend (Conversation) -> Boolean) = scope.launch {
-                            Snack.show(if (write(conv)) done else "Couldn't save. Check your connection and try again.")
-                        }
-                        val leading = listOf(
-                            SwipeAction(if (unreadMark) "Read" else "Unread", androidx.compose.ui.graphics.vector.rememberVectorPainter(fi(if (unreadMark) R.drawable.ic_menu_read else R.drawable.ic_menu_unread)), SwipeColors.blue) {
-                                save(if (unreadMark) "Marked as read" else "Marked as unread") { ChatListActions.setUnread(me, it, !unreadMark) }
-                            },
-                            SwipeAction(if (pinnedNow) "Unpin" else "Pin", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PushPin), SwipeColors.orange) {
-                                if (pinnedNow || !ChatListActions.pinsFull(me, state.chats, 1))
-                                    save(if (pinnedNow) "Unpinned" else "Pinned") { ChatListActions.setPinned(me, it, !pinnedNow) }
-                            },
-                        )
-                        val trailing = listOf(
-                            SwipeAction(if (showArchive) "Unarchive" else "Archive", androidx.compose.ui.graphics.vector.rememberVectorPainter(fi(R.drawable.ic_archive)), SwipeColors.gray) {
-                                val on = !showArchive
-                                scope.launch {
-                                    one.forEach { ChatListActions.setArchived(me, it, on) }
-                                    Snack.show(if (on) "Chat archived" else "Chat unarchived", action = "Undo") {
-                                        scope.launch { one.forEach { ChatListActions.setArchived(me, it, !on) } }
-                                    }
-                                }
-                            },
-                            SwipeAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Delete), SwipeColors.red) {
-                                selected = setOf(conv.id); confirmDelete = true
-                            },
-                            SwipeAction(if (mutedNow) "Unmute" else "Mute", androidx.compose.ui.graphics.vector.rememberVectorPainter(
-                                if (mutedNow) Icons.Filled.Notifications else Icons.Filled.NotificationsOff), SwipeColors.indigo) {
-                                save(if (mutedNow) "Unmuted" else "Muted") { ChatListActions.setMuted(me, it, !mutedNow) }
-                            },
-                        )
-                        SwipeActionsRow(leading, trailing, enabled = !selecting) {
                         ChatRow(conv, me, decryptor,
                             selected = conv.id in selected,
                             ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
                             onStoryTap = if (ring == null || selecting) null else ({ storyOpen = ring }),
                             onOpen = { if (selecting) toggle(conv) else onOpen(conv) },
                             onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) })
-                        }
                     }
                     val officialItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
                         item(key = com.fariin.app.data.OfficialChannel.CID, contentType = "chat") {

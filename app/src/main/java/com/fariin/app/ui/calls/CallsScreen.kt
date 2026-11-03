@@ -202,14 +202,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                                 onInfo = { nav.callLink(r.roomId) }, onLongClick = { picked = setOf(tag) })
                         } else {
                             val run = r as CallRun
-                            // iOS: swipe a call left to Delete it from this phone's history.
-                            com.fariin.app.ui.chats.SwipeActionsRow(leading = emptyList(), enabled = !selecting, trailing = listOf(
-                                com.fariin.app.ui.chats.SwipeAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Delete),
-                                    com.fariin.app.ui.chats.SwipeColors.red) {
-                                    com.fariin.app.data.HiddenCalls.hide(ctx, run.entries.map { it.id }.toSet())
-                                })) {
-                                CallRow(run, me, now, onInfo = { info = run }, onLongClick = { picked = setOf(tag) })
-                            }
+                            CallRow(run, me, now, onInfo = { info = run }, onLongClick = { picked = setOf(tag) })
                         }
                     }
                 }
