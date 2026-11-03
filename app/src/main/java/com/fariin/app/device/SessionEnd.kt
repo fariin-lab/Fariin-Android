@@ -48,6 +48,8 @@ object SessionEnd {
         NotificationPoster.clearAll(c)
         com.fariin.app.system.FariinWidget.clear(c)
         Push.clearAccount(c)
+        // The token outlives the account, so the Fariin chat's topics are left by hand.
+        com.fariin.app.push.OfficialPushTopics.sync(c, muted = false, signedIn = false)
         // The phone's copies of this account's chats: opened messages, the list, drafts, unsent
         // texts, opened media and faces. None of it survives into the next account (iOS SessionWipe).
         com.fariin.app.local.LocalCache.wipe()
