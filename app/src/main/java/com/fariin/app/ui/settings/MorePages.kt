@@ -39,7 +39,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /*
  * Settings pages after Kulan-iOS SettingsExtras.swift (Devices, Notifications), ChatsSettingsView,
@@ -54,13 +53,15 @@ internal const val PAGE_QUICK = "chats:quick"
 internal const val PAGE_STORAGE = "storage"
 internal const val PAGE_LESS_DATA = "storage:lessdata"
 internal const val PAGE_AUTODL = "storage:autodl:"
+internal const val PAGE_MANAGE_STORAGE = "storage:manage"
+internal const val PAGE_SENT_QUALITY = "storage:quality"
 internal const val PAGE_STORIES = "storiesSettings"
 internal const val PAGE_SEC_NOTIFS = "account:secnotifs"
 
 @Composable
 internal fun moreRoute(page: String, push: (String) -> Unit, pop: () -> Unit): Boolean {
     when {
-        page == PAGE_DEVICES -> DevicesPage(pop)
+        page == PAGE_DEVICES -> DevicesPage(pop, onCheckup = { push(PAGE_CHECKUP) })
         page == PAGE_NOTIFS -> NotificationsPage(pop)
         page == PAGE_CHATS -> ChatsSettingsPage(push, pop)
         page == PAGE_QUICK -> QuickReactionPage(pop)
@@ -70,6 +71,10 @@ internal fun moreRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
         page.startsWith(PAGE_AUTODL) -> page.removePrefix(PAGE_AUTODL).let { k ->
             ChoicePage(SettingsRules.autoKinds.first { it.first == k }.second, MEDIA_PREFS, "autodl.$k", SettingsRules.autoDefault(k), SettingsRules.autoPolicies, null, pop)
         }
+        page == PAGE_MANAGE_STORAGE -> ManageStoragePage(pop)
+        // iOS words, less the HD button line: Android has no per-send HD switch yet.
+        page == PAGE_SENT_QUALITY -> ChoicePage("Sent Media Quality", MEDIA_PREFS, com.fariin.app.media.SentQuality.KEY, "standard", SettingsRules.sentQuality,
+            "Standard sends photos up to 1280 px so they go fast. High sends photos up to 2560 px, using more data.", pop)
         page == PAGE_STORIES -> StoriesSettingsPage(push, pop)
         page == PAGE_STORY_EVERYONE -> StoryEveryonePage(pop)
         page == PAGE_STORY_MYCHATS -> StoryMyChatsPage(pop)
@@ -86,6 +91,9 @@ internal const val CHAT_PREFS = "fariin_chats"
 /** Pure words and choices, unit tested. */
 object SettingsRules {
     val lessData = listOf("never" to "Never", "cellular" to "Cellular Only", "always" to "Always")
+    val sentQuality = listOf("standard" to "Standard", "high" to "High")
+    /** Manage storage > Keep Media, iOS keepMediaDays (0 = forever). */
+    val keepDays = listOf(0 to "Forever", 30 to "30 days", 90 to "90 days")
     val autoPolicies = listOf("always" to "Wi-Fi and Cellular", "wifi" to "Wi-Fi", "never" to "Never")
     val autoKinds = listOf("photos" to "Photos", "videos" to "Videos", "audio" to "Audio", "documents" to "Documents")
     fun autoDefault(kind: String) = if (kind == "photos" || kind == "audio") "always" else "wifi"
@@ -142,7 +150,7 @@ private fun ChoicePage(title: String, prefsName: String, key: String, def: Strin
 private data class DeviceRow(val id: String, val model: String, val os: String, val app: String, val lastSeen: Long, val created: Long?, val location: String, val fcm: String?, val voip: String?)
 
 @Composable
-private fun DevicesPage(pop: () -> Unit) {
+private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val me = FirebaseAuth.getInstance().currentUser?.uid
@@ -198,6 +206,8 @@ private fun DevicesPage(pop: () -> Unit) {
     val mine = rows?.firstOrNull { it.id == thisId }
     val others = rows?.filter { it.id != thisId }.orEmpty()
     ScrollPage("Devices", pop) {
+        // The shield, the line and the Security Checkup button (iOS DevicesHeader).
+        DevicesCheckupHeader(onCheckup)
         ErrorNote(error)
         SettingsSection(header = "This device") {
             if (mine == null) Text(if (rows == null) "Loading..." else "This device is not registered yet. Check your connection.",
@@ -361,41 +371,79 @@ private fun QuickReactionPage(pop: () -> Unit) {
 
 // ---------------------------------------------------------------- Storage and Data
 
-private fun dirSize(f: File): Long = if (f.isFile) f.length() else (f.listFiles()?.sumOf { dirSize(it) } ?: 0L)
-
 @Composable
 private fun StorageDataPage(push: (String) -> Unit, pop: () -> Unit) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var cache by remember { mutableStateOf<Long?>(null) }
-    var confirm by remember { mutableStateOf(false) }
     val media = remember { ctx.getSharedPreferences(MEDIA_PREFS, Context.MODE_PRIVATE) }
     val calls = remember { ctx.getSharedPreferences("fariin_calls", Context.MODE_PRIVATE) }
     var tick by remember { mutableStateOf(0) }
-    LaunchedEffect(tick) { cache = withContext(Dispatchers.IO) { dirSize(ctx.cacheDir) + (ctx.externalCacheDir?.let { dirSize(it) } ?: 0L) } }
+    val isDefault = SettingsRules.autoKinds.all { (k, _) -> (media.getString("autodl.$k", null) ?: SettingsRules.autoDefault(k)) == SettingsRules.autoDefault(k) }
+    // iOS StorageDataView: Manage storage, Media auto-download (+ reset), Sent Media, Calls.
     ScrollPage("Storage and Data", pop) {
-        SettingsSection(header = "Storage", footer = "Photos, videos and voice messages kept on this phone after you open them. Clearing them frees space; they download again when you open them.") {
-            SettingsRow("Cache", value = cache?.let { SettingsRules.bytes(it) } ?: "...", trailing = Trailing.NONE)
-            SettingsRow("Clear Cache", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { confirm = true }
+        SettingsSection(header = "Storage") {
+            SettingsRow("Manage storage", last = true) { push(PAGE_MANAGE_STORAGE) }
         }
         SettingsSection(header = "Media auto-download", footer = "When media downloads by itself. Anything else downloads when you open it.") {
             for ((k, label) in SettingsRules.autoKinds) {
                 val v = media.getString("autodl.$k", SettingsRules.autoDefault(k)) ?: ""
-                SettingsRow(label, value = SettingsRules.label(SettingsRules.autoPolicies, v) + if (tick < 0) "" else "", last = k == "documents") { push(PAGE_AUTODL + k) }
+                SettingsRow(label, value = SettingsRules.label(SettingsRules.autoPolicies, v) + if (tick < 0) "" else "") { push(PAGE_AUTODL + k) }
             }
+            SettingsRow("Reset Auto-Download Settings", trailing = Trailing.NONE, titleColor = if (isDefault) Fariin.colors.secondary else Fariin.colors.label, last = true) {
+                if (!isDefault) { media.edit().apply { SettingsRules.autoKinds.forEach { (k, _) -> remove("autodl.$k") } }.apply(); tick++ }
+            }
+        }
+        SettingsSection(header = "Sent Media", footer = "Choose the quality you send photos and videos.") {
+            SettingsRow("Sent Media Quality", value = SettingsRules.label(SettingsRules.sentQuality, media.getString(com.fariin.app.media.SentQuality.KEY, "standard") ?: "standard"),
+                last = true) { push(PAGE_SENT_QUALITY) }
         }
         SettingsSection(header = "Calls", footer = "Using less data may improve calls on bad networks.") {
             SettingsRow("Use Less Data", value = SettingsRules.label(SettingsRules.lessData, calls.getString("calls.lessData", "never") ?: "never"), last = true) { push(PAGE_LESS_DATA) }
         }
     }
-    if (confirm) YesNo("Clear cache?", "Media you opened is removed from this phone. Your chats and messages stay.", "Clear", onYes = {
+}
+
+/**
+ * Manage storage (iOS ManageStoragePage). Android keeps every opened photo, video and voice note in
+ * one folder, so it is one row; the image cache and the rest of the app's scratch files are the
+ * other two. Everything here downloads again when it is opened: the server still has it.
+ */
+@Composable
+private fun ManageStoragePage(pop: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val media = remember { ctx.getSharedPreferences(MEDIA_PREFS, Context.MODE_PRIVATE) }
+    var keep by remember { mutableStateOf(media.getInt(com.fariin.app.media.StorageSweep.KEEP_KEY, 0)) }
+    var sizes by remember { mutableStateOf<com.fariin.app.media.StorageSweep.Sizes?>(null) }
+    var confirm by remember { mutableStateOf(false) }
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(tick) { sizes = withContext(Dispatchers.IO) { com.fariin.app.media.StorageSweep.sizes(ctx) } }
+    fun shown(n: Long?) = n?.let { if (it == 0L) "Zero KB" else SettingsRules.bytes(it) } ?: "..."
+    ScrollPage("Storage", pop) {
+        SettingsSection(header = "Storage by Type") {
+            SettingsRow("Chat Media", value = shown(sizes?.media), trailing = Trailing.NONE)
+            SettingsRow("Image Cache", value = shown(sizes?.images), trailing = Trailing.NONE)
+            SettingsRow("Temporary Files", value = shown(sizes?.temp), trailing = Trailing.NONE, last = true)
+        }
+        SettingsSection(header = "Keep Media", footer = "Older media is removed from this phone and downloads again when you open it.") {
+            SettingsRules.keepDays.forEachIndexed { i, (d, label) ->
+                CheckRow(label, keep == d, last = i == SettingsRules.keepDays.lastIndex) {
+                    keep = d
+                    media.edit().putInt(com.fariin.app.media.StorageSweep.KEEP_KEY, d).apply()
+                    scope.launch { withContext(Dispatchers.IO) { com.fariin.app.media.StorageSweep.sweep(ctx) }; tick++ }
+                }
+            }
+        }
+        SettingsSection {
+            val empty = sizes?.let { it.media + it.images + it.temp == 0L } ?: true
+            SettingsRow("Clear Cache", trailing = Trailing.NONE, titleColor = if (empty) Fariin.colors.secondary else Fariin.colors.red, last = true) { if (!empty) confirm = true }
+        }
+    }
+    if (confirm) YesNo("Clear cache?", "Photos, videos and voice messages you opened are removed from this phone. They download again when you open them. Your chats stay.", "Clear", onYes = {
         confirm = false
         scope.launch {
-            withContext(Dispatchers.IO) {
-                ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
-                ctx.externalCacheDir?.listFiles()?.forEach { it.deleteRecursively() }
-            }
+            withContext(Dispatchers.IO) { com.fariin.app.media.StorageSweep.clear(ctx) }
             runCatching { coil3.SingletonImageLoader.get(ctx).memoryCache?.clear() }
+            com.fariin.app.ui.thread.DecodedPictures.clear()
             tick++
         }
     }, onNo = { confirm = false })

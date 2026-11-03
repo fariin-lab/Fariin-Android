@@ -556,7 +556,7 @@ class ThreadRepository(
                     retryMedia[clientId] = work
                     work()
                 } else if (chunk.size == 1) {
-                    val prep = PhotoPrep.fromUri(context, chunk[0]) ?: error("photo not readable")
+                    val prep = PhotoPrep.fromUri(context, chunk[0], com.fariin.app.media.SentQuality.photo(context)) ?: error("photo not readable")
                     val local = File(m.localDir(), "send-$clientId.jpg").also { it.writeBytes(prep.jpeg) }
                     pending[clientId]?.let { p ->
                         pending[clientId] = p.copy(localPath = local.absolutePath, width = prep.width.toDouble(),
@@ -570,7 +570,7 @@ class ThreadRepository(
                     val parts = chunk.mapIndexed { i, u ->
                         if (kinds[i]) MediaSender.AlbumPart.Video(VideoPrep.fromUri(context, u, m.localDir(), "$clientId-$i")
                             ?: error("video not readable or over 64 MB"))
-                        else MediaSender.AlbumPart.Photo(PhotoPrep.fromUri(context, u) ?: error("photo not readable"))
+                        else MediaSender.AlbumPart.Photo(PhotoPrep.fromUri(context, u, com.fariin.app.media.SentQuality.photo(context)) ?: error("photo not readable"))
                     }
                     pending[clientId]?.let { p ->
                         pending[clientId] = p.copy(album = parts.mapIndexed { i, part ->
@@ -648,7 +648,7 @@ class ThreadRepository(
     /** A photo from the system picker: made ready like iOS (sendJPEG), then sent. */
     fun sendPhoto(context: Context, uri: Uri) {
         scope.launch(Dispatchers.IO) {
-            val prep = PhotoPrep.fromUri(context, uri) ?: return@launch
+            val prep = PhotoPrep.fromUri(context, uri, com.fariin.app.media.SentQuality.photo(context)) ?: return@launch
             sendPreparedPhoto(prep)
         }
     }

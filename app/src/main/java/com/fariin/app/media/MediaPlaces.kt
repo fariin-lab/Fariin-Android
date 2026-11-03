@@ -87,6 +87,14 @@ object AutoDownload {
 }
 
 /** Saving to the phone's gallery through MediaStore (no storage permission on Android 10+). */
+/** Settings > Storage and Data > Sent Media Quality (iOS `sentMediaQuality`, "standard" | "high"). Android has no
+ *  per-send HD button yet, so the setting is the size every photo goes at. */
+object SentQuality {
+    const val KEY = "sentMediaQuality"
+    fun high(c: Context): Boolean = c.getSharedPreferences(AutoDownload.PREFS, Context.MODE_PRIVATE).getString(KEY, "standard") == "high"
+    fun photo(c: Context): MediaRules.PhotoQuality = if (high(c)) MediaRules.PhotoQuality.HIGH else MediaRules.PhotoQuality.STANDARD
+}
+
 object GallerySaver {
     /** Android 8 and 9 still need the storage permission to write into Pictures. */
     fun needsPermission(c: Context): Boolean = Build.VERSION.SDK_INT < 29 &&
