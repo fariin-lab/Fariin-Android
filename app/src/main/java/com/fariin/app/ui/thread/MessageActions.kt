@@ -127,8 +127,10 @@ internal fun MessageMenu(
             if (MessageRules.canReply(m)) add(MenuItem("Reply", Icons.AutoMirrored.Filled.Reply) { onReply(m) })
             if (MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Filled.Forward) { actions.onForward(m) })
             if (canSaveToGallery(m)) add(MenuItem("Save", Icons.Filled.Download) { actions.onSave(m) })
-            if (MessageRules.canCopy(m)) add(MenuItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.text) })
-            if (MessageRules.canEdit(m, ui.me, now)) add(MenuItem("Edit", Icons.Filled.Edit) { onStartEdit(m) })
+            // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).
+            val card = com.fariin.app.data.CardRules.isCard(m.text)
+            if (MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.text) })
+            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Filled.Edit) { onStartEdit(m) })
             if (m.edited) add(MenuItem("Edit History", Icons.Filled.History) { onEditHistory(m) })
         }
         if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) })
@@ -187,7 +189,7 @@ internal fun MessageMenu(
             }
             // A one-line preview of the message being acted on.
             Text(
-                if (m.deleted) "This message was deleted" else m.bodyText.ifEmpty { "Message" },
+                if (m.deleted) "This message was deleted" else com.fariin.app.data.CardRules.previewWord(m.text) ?: m.bodyText.ifEmpty { "Message" },
                 style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),

@@ -65,6 +65,7 @@ fun peopleNav(nav: NavHostController) = PeopleNav(
     newCallLink = { nav.navigate("calllink/new") { launchSingleTop = true } },
     callLink = { nav.navigate("calllink/$it") { launchSingleTop = true } },
     joinLink = { key, video -> nav.navigate("joinlink/$key/${if (video) "video" else "voice"}") { launchSingleTop = true } },
+    chat = { nav.navigate("thread/$it") { popUpTo("main"); launchSingleTop = true } },
 )
 
 /** The live group document (read only), for Group Info. */

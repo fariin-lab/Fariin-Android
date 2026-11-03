@@ -168,6 +168,10 @@ object NotifBuilder {
         var text: String? = null
         if (p.cipher != null) text = usable(open(p.cipher, key, sender))
         if (text == null && p.isGroup) text = p.plainText
+        // A poll's marker is never shown raw: its question, as the app's safeText words it.
+        text?.let { t -> com.fariin.app.data.PollRules.parse(t)?.let { text = com.fariin.app.data.PollRules.safeText(it) } }
+        // A contact or location card says "Contact" / "Location", never its raw marker.
+        text?.let { t -> com.fariin.app.data.CardRules.previewWord(t)?.let { text = it } }
         val shownSender = direct?.name?.takeIf { it.isNotEmpty() } ?: sn
 
         val line: String

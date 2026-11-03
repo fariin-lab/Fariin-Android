@@ -15,6 +15,8 @@ data class PeopleNav(
     val callLink: (String) -> Unit = {},
     /** The join screen for a call link: its key (text form) and the type its path named. */
     val joinLink: (String, Boolean) -> Unit = { _, _ -> },
+    /** A chat by its id (a contact card's Message button). */
+    val chat: (String) -> Unit = {},
 )
 
 val LocalPeopleNav = staticCompositionLocalOf { PeopleNav() }

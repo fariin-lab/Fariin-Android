@@ -33,8 +33,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PhotoSizeSelectActual
+import androidx.compose.material.icons.filled.Poll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -82,6 +85,11 @@ internal fun AttachSheet(
     onSendFile: (Uri) -> Unit,
     /** A group where members may send neither photos nor videos: the grid is closed and says why. */
     mediaOff: String? = null,
+    /** The Poll button (groups only, as iOS); the sheet goes down and the poll composer opens. */
+    onPoll: (() -> Unit)? = null,
+    /** The Location page and the contact picker (CardSheets); the sheet goes down before either opens. */
+    onLocation: (() -> Unit)? = null,
+    onContact: (() -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -133,6 +141,9 @@ internal fun AttachSheet(
                 Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     SheetButton("Gallery", Icons.Filled.PhotoLibrary, openGallery)
                     SheetButton("File", Icons.AutoMirrored.Filled.InsertDriveFile) { files.launch(arrayOf("*/*")) }
+                    if (onPoll != null) SheetButton("Poll", Icons.Filled.Poll) { onDismiss(); onPoll() }
+                    if (onLocation != null) SheetButton("Location", Icons.Filled.Place) { onDismiss(); onLocation() }
+                    if (onContact != null) SheetButton("Contact", Icons.Filled.Person) { onDismiss(); onContact() }
                 }
             } else {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

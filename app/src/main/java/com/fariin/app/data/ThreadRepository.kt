@@ -424,7 +424,8 @@ class ThreadRepository(
     fun sendText(text: String, reply: Message?) {
         val t = text.trim()
         if (t.isEmpty()) return
-        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, it.bodyText.take(200)) }
+        // A card is quoted by its noun (iOS safeText), never by its raw marker.
+        val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
         // On disk BEFORE the network (iOS SendQueue.add), so a kill or an outage cannot lose it.
@@ -811,6 +812,8 @@ class ThreadRepository(
         // iOS replyEnc: {id, authorId, text sealed like the message}.
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.encryptForConversation(cid, reply.text))
         if (forwarded) msg["forwarded"] = true
+        // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
+        msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,
@@ -879,6 +882,8 @@ class ThreadRepository(
         // iOS replyEnc: {id, authorId, text sealed like the message}.
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.sealForGroup(reply.text, members, cid))
         if (forwarded) msg["forwarded"] = true
+        // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
+        msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
             "lastMessage" to cipher,
@@ -1113,7 +1118,7 @@ class ThreadRepository(
             val members = if (Wire.isGroupCid(cid)) freshMembers() else null
             val enc = seal(emoji, members)
             ref.update("reactions.$me", enc).await()
-            val snippet = m.bodyText.trim().take(60).takeIf { it.isNotEmpty() }
+            val snippet = (CardRules.previewWord(m.text) ?: m.bodyText).trim().take(60).takeIf { it.isNotEmpty() }
             try {
                 convRef.update(mapOf(
                     "lastReactionEnc" to enc, "lastReactionBy" to me, "lastReactionToAuthor" to m.authorId,

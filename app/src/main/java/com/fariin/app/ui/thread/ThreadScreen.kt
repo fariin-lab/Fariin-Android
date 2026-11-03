@@ -477,7 +477,7 @@ private fun ThreadContent(
         } else {
             replyTo?.let { r ->
                 ComposerBar(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
-                    r.bodyText) { replyTo = null }
+                    com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText) { replyTo = null }
             }
             editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
             val send: (String) -> Unit = { t ->
@@ -490,6 +490,9 @@ private fun ThreadContent(
                 }
             }
             var attachOpen by remember { mutableStateOf(false) }
+            var pollOpen by remember { mutableStateOf(false) }
+            var locationOpen by remember { mutableStateOf(false) }
+            var contactOpen by remember { mutableStateOf(false) }
             // What a group's members may send (iOS heldBackText / attachMediaOffText / slow mode):
             // said in a snackbar before the send, the rules refuse it anyway.
             val resolver = androidx.compose.ui.platform.LocalContext.current.contentResolver
@@ -512,7 +515,26 @@ private fun ThreadContent(
                     if (stop != null) actions.onNotice(stop) else onSendPick(uris, cap, once)
                 },
                 onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
-                mediaOff = mediaOff)
+                mediaOff = mediaOff,
+                // iOS: the Poll tile is in groups only, held back like the other kinds.
+                onPoll = if (ui.isGroup) ({
+                    val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.POLLS)
+                    if (stop != null) actions.onNotice(stop) else pollOpen = true
+                }) else null,
+                // Contact and location cards (CardSheets): sealed text markers, sent like a text.
+                onLocation = {
+                    val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.LOCATION)
+                    if (stop != null) actions.onNotice(stop) else locationOpen = true
+                })
+            // No Contact tile: iOS took it off the attach sheet ("No phone numbers anywhere", 46d10cb2).
+            // Received cards still draw and open; the picker below waits for a Share-from-profile entry.
+            if (pollOpen) PollComposer(onDismiss = { pollOpen = false }) { marker -> onSend(marker) }
+            if (locationOpen) LocationSheet(onDismiss = { locationOpen = false }) { lat, lon, label ->
+                onSend(com.fariin.app.data.CardRules.locationText(lat, lon, label))
+            }
+            if (contactOpen) ContactPickSheet(ui.me, ui.cid, onDismiss = { contactOpen = false }) { card ->
+                onSend(com.fariin.app.data.CardRules.contactText(card.uid, card.name, card.photo))
+            }
             Composer(gatedSend, { attachOpen = true }, { r ->
                     val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                     if (stop != null) actions.onNotice(stop) else onSendVoice(r)
@@ -684,6 +706,23 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 ViewOnceBody(m, ui.cid, isMe, onView) { Meta(m, tick, isMe, is24h) }
                 return@Column
             }
+            // A poll (PollBubble.kt): the card rides sealed in the text.
+            m.poll?.let { p ->
+                PollBody(m, p, PollContext(ui.cid, ui.me, ui.channel != null, ui.names, ui.photos), isMe,
+                    minOf(maxW - 28.dp, 300.dp)) { Meta(m, tick, isMe, is24h) }
+                return@Column
+            }
+            // Contact and location cards (CardBubbles.kt): markers in the sealed text, as iOS.
+            if (!m.deleted) {
+                com.fariin.app.data.CardRules.location(m.text)?.let { loc ->
+                    LocationBody(loc, isMe, minOf(maxW - 28.dp, 260.dp)) { Meta(m, tick, isMe, is24h) }
+                    return@Column
+                }
+                com.fariin.app.data.CardRules.contact(m.text)?.let { card ->
+                    ContactBody(card, isMe, ui.me, ui.cid, minOf(maxW - 28.dp, 260.dp)) { Meta(m, tick, isMe, is24h) }
+                    return@Column
+                }
+            }
             val ink = if (isMe) Color.White else c.label
             val body = when {
                 m.deleted -> if (isMe && m.deletedBy == null) "You deleted this message" else "This message was deleted"
@@ -816,7 +855,7 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
         Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (isMe) Color.White else bar, maxLines = 1)
             // A story reply quotes the story itself (iOS status quote): "Story" and its picture.
-            Text(if (r.isStatus) "Story" else r.text, fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.85f) else c.label,
+            Text(if (r.isStatus) "Story" else com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text, fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.85f) else c.label,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (r.isStatus && !r.storyThumb.isNullOrEmpty()) {

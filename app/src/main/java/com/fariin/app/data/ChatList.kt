@@ -50,6 +50,8 @@ object ChatList {
             c.isGroup && c.e2eeOff && c.lastIsPlainText -> c.lastMessageCipher
             else -> decryptor.previewText(c, me)
         }.let { t -> if (t != null && t.startsWith(PinRules.MARKER)) "Pinned a message" else t }   // iOS MainShell pin notice
+            .let { t -> if (t != null && PollRules.isPoll(t)) PollRules.PREVIEW else t }   // iOS MainShell poll row
+            .let { t -> CardRules.previewWord(t) ?: t }   // iOS MainShell contact / location rows
             ?: if (!c.lastImageUrl.isNullOrEmpty()) "Photo" else "Message"
         // In a group the line starts with who said it, as on iOS (never for my own lines), first name
         // only. System notices ("X created the group") stay bare (iOS lastSenderPrefix): they are

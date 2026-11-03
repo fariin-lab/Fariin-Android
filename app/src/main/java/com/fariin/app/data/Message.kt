@@ -13,8 +13,9 @@ import com.fariin.app.crypto.Wire
  * video's poster (`thumbUrl` + `thumbEnc`), `duration`, `waveform`, `uploading`, and an album's
  * `album` items.
  *
- * TODO (iOS has these): file, gif and sticker bodies beyond a label, link previews, polls, contact and location cards, reactions, view-once, story replies
+ * TODO (iOS has these): file, gif and sticker bodies beyond a label, link previews, reactions, view-once, story replies
  * and mentions, forwarded-from-channel, delete-for-me.
+ * Contact and location cards are sealed text markers, read by CardRules.
  */
 data class Message(
     val id: String,
@@ -73,6 +74,13 @@ data class Message(
     val expiresAtMillis: Double? = null,
     /** A timer notice carries the value it set (0 = turned off); null on every other message. */
     val disappearSeconds: Int? = null,
+    // ---- Polls (PollRules): the question and options ride sealed in `text`; these are clear.
+    /** The creator tapped Stop Poll (`pollClosed`). */
+    val pollClosed: Boolean = false,
+    /** A channel poll's tally by the server: option index to voters, all voters, when counted (ms). */
+    val pollCounts: Map<Int, Int> = emptyMap(),
+    val pollVoters: Int = 0,
+    val pollTallyAt: Double = 0.0,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
@@ -113,6 +121,9 @@ data class Message(
             else -> null
         }
 
+    /** The poll this message carries (iOS Message.poll), parsed once per copy. */
+    val poll: PollCard? by lazy { if (deleted) null else PollRules.parse(text) }
+
     /** An optimistic copy and its server echo share the clientId, so the row updates in place. */
     val rowId: String get() = clientId ?: id
 
@@ -123,6 +134,7 @@ data class Message(
     val bodyText: String
         get() = when {
             deleted -> ""
+            poll != null -> PollRules.safeText(poll!!)   // iOS safeText: never the raw marker
             text.isNotEmpty() -> text
             type == "image" || imageUrl != null -> "Photo"
             type == "video" || videoUrl != null -> "Video"
@@ -223,6 +235,15 @@ data class Message(
                 album = album,
                 expiresAtMillis = Conversation.millis(data["expiresAt"]).takeIf { it > 0 },
                 disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt(),
+                // Polls: Stop Poll, and a channel poll's server tally (iOS Polls.swift listenChannel).
+                pollClosed = data["pollClosed"] as? Boolean ?: false,
+                pollCounts = (data["pollCounts"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
+                    val i = (k as? String)?.toIntOrNull()
+                    val n = (v as? Number)?.toInt() ?: 0
+                    if (i != null && n > 0) i to n else null
+                }?.toMap() ?: emptyMap(),
+                pollVoters = (data["pollVoters"] as? Number)?.toInt() ?: 0,
+                pollTallyAt = (data["pollTallyAt"] as? Number)?.toDouble() ?: 0.0,
                 reactions = (data["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     val uid = k as? String ?: return@mapNotNull null
                     val raw = v as? String ?: return@mapNotNull null

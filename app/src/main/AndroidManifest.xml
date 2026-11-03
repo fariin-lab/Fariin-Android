@@ -20,6 +20,12 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- The proximity sensor turns the screen off at the ear during a voice call. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Share Location: asked only when the person picks Location in the attach sheet. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location.network" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:name=".FariinApp"
