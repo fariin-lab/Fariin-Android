@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -63,6 +64,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -132,8 +134,11 @@ import com.fariin.app.data.Story
 import com.fariin.app.data.StoryGroup
 import com.fariin.app.data.StoryRules
 import com.fariin.app.data.StoryService
+import com.fariin.app.data.StoryTapTarget
+import com.fariin.app.data.StoryTaps
 import com.fariin.app.data.StoryViewSummary
 import com.fariin.app.data.StoryViewer
+import com.fariin.app.data.TextLinks
 import com.fariin.app.data.ThreadRepository
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.people.ContactInfoScreen
@@ -187,7 +192,19 @@ fun StoryViewerDialog(
             else window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
             onDispose { }
         }
-        StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected })
+        // A fariin.com link tapped on a story opens its page in the app; the viewer goes first, so
+        // the page is not left under it.
+        val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+        val closing by rememberUpdatedState(onClose)
+        val routed = remember(nav) {
+            nav.copy(
+                contact = { closing(); nav.contact(it) }, myProfile = { closing(); nav.myProfile() },
+                chat = { closing(); nav.chat(it) }, joinLink = { k, v -> closing(); nav.joinLink(k, v) },
+            )
+        }
+        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.people.LocalPeopleNav provides routed) {
+            StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected })
+        }
     }
 }
 
@@ -235,6 +252,11 @@ fun StoryViewer(
     var replyFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(toast) { if (toast != null) { delay(1500); toast = null } }
+    // A link on a story, through the chats' own routing: a call link or a username opens in the
+    // app, any other address in the in-app browser (a Custom Tab).
+    val linkTap = com.fariin.app.ui.thread.rememberBubbleLinkTap(
+        remember(me) { com.fariin.app.ui.thread.ThreadUi(title = "", me = me) }) { toast = it }
+    val openLink: (String) -> Unit = { url -> linkTap(TextLinks.Span(0, url.length, TextLinks.Kind.WEB, url)) }
 
     BackHandler(enabled = profileUid != null || sheetFor != null) {
         if (profileUid != null) profileUid = null else sheet.close()
@@ -549,6 +571,7 @@ fun StoryViewer(
                     },
                     onEnd = { nextGroup() }, onBeforeStart = { previousGroup() },
                     onClose = { close() },
+                    onLink = openLink,
                     onDrag = { dy ->
                         if (!hero.live && dy > 0f) dragBegin()
                         dragTo(dy)
@@ -748,6 +771,8 @@ private fun StoryPage(
     onEnd: () -> Unit,
     onBeforeStart: () -> Unit,
     onClose: () -> Unit,
+    /** A link on the story was asked for: its tap area's Visit link, or a link in the caption. */
+    onLink: (String) -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: (dy: Float, vy: Float) -> Unit,
     onOpenViewers: (String) -> Unit,
@@ -784,7 +809,9 @@ private fun StoryPage(
     var progress by remember(story.id) { mutableFloatStateOf(0f) }
     // The ... menu holds the story still while it is open (iOS pauses under its menu).
     var menu by remember { mutableStateOf(false) }
-    val stopped = !active || paused || holding || menu
+    // A link area tapped once: its Visit link stands over it and the story holds still (iOS armTapArea).
+    var armed by remember(story.id) { mutableStateOf<StoryTapTarget?>(null) }
+    val stopped = !active || paused || holding || menu || armed != null
 
     fun goNext() { if (index + 1 < stories.size) index++ else onEnd() }
     fun goBack() { if (index > 0) index-- else onBeforeStart() }
@@ -884,6 +911,8 @@ private fun StoryPage(
         ) {
             StoryMedia(story, active = active && !stopped, onLoaded = { loaded = true },
                 onVideoProgress = { progress = it }, onVideoEnd = { goNext() }, isCurrentPage = active)
+            if (story.taps.isNotEmpty()) StoryTapLayer(story.taps, card.width, card.height, armed,
+                onArm = { armed = it }, onOpen = { url -> armed = null; onLink(url) })
 
             // Top shade, bars, header, inside the card: they fade with the drag like the bottom bar
             // (iOS chrome), so a card on its way down is the story alone (owner 2026-11-03).
@@ -960,7 +989,17 @@ private fun StoryPage(
 
             // The caption: 16 white, 16 in from the sides and 14 off the card's bottom edge (iOS).
             if (story.caption.isNotEmpty()) {
-                Text(story.caption, color = Color.White, fontSize = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                // Its web addresses open on a tap (iOS StoryLinkOpener); the rest of it is the story's.
+                val linked = remember(story.caption) {
+                    val spans = TextLinks.find(story.caption).filter { it.kind == TextLinks.Kind.WEB }
+                    androidx.compose.ui.text.AnnotatedString.Builder(story.caption).apply {
+                        for (sp in spans) addLink(androidx.compose.ui.text.LinkAnnotation.Clickable(sp.target,
+                            androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))) { onLink(sp.target) },
+                            sp.start, sp.end)
+                    }.toAnnotatedString()
+                }
+                Text(linked, color = Color.White, fontSize = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
                     style = TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.25f), blurRadius = 8f)),
                     modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
                         .graphicsLayer { alpha = chrome() }
@@ -1245,5 +1284,92 @@ private data class CardShape(val cx: Float, val cy: Float, val w: Float, val h: 
         val l = cx - w / 2f
         val t = cy - h / 2f
         return Outline.Rounded(RoundRect(l, t, l + w, t + h + below, CornerRadius(r)))
+    }
+}
+
+/**
+ * The link areas on a story (iOS StoryDetailView.tapAreas): invisible, laid over the card where the
+ * drawing already is. The first tap arms one and its "Visit link" stands under it (over it near the
+ * bottom); a tap on that opens the link, a tap anywhere else puts it away. Only the areas and,
+ * while one is armed, the catcher take touches, so every other tap still moves the story on.
+ */
+@Composable
+private fun StoryTapLayer(
+    taps: List<StoryTapTarget>,
+    cw: Float,
+    ch: Float,
+    armed: StoryTapTarget?,
+    onArm: (StoryTapTarget?) -> Unit,
+    onOpen: (String) -> Unit,
+) {
+    val d = LocalDensity.current
+    val floor = with(d) { 24.dp.toPx() }
+    taps.forEach { t ->
+        val r = StoryTaps.rect(t, cw, ch, floor)
+        Box(
+            Modifier.offset { IntOffset(r.left.roundToInt(), r.top.roundToInt()) }
+                .size(with(d) { r.width.toDp() }, with(d) { r.height.toDp() })
+                .graphicsLayer { rotationZ = Math.toDegrees(t.rotation).toFloat() }
+                .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
+                    onClickLabel = "Visit link") { if (armed != t) onArm(t) },
+        )
+    }
+    val a = armed ?: return
+    Box(Modifier.fillMaxSize().clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onArm(null) })
+    val r = StoryTaps.rect(a, cw, ch, floor)
+    val bubbleH = with(d) { (VISIT_ROW + VISIT_TAIL).dp.toPx() }
+    val gap = with(d) { 8.dp.toPx() }
+    val margin = with(d) { 60.dp.toPx() }
+    val above = StoryTaps.bubbleAbove(r, ch, bubbleH, gap, margin)
+    val cx = r.center.x.coerceIn(minOf(margin, cw / 2), maxOf(cw - margin, cw / 2))
+    val top = if (above) r.top - gap - bubbleH else r.bottom + gap
+    VisitLinkBubble(tailDown = above, onTap = { onOpen(a.url) },
+        modifier = Modifier.layout { m, c ->
+            val p = m.measure(c.copy(minWidth = 0, minHeight = 0))
+            layout(c.maxWidth, c.maxHeight) { p.place((cx - p.width / 2f).roundToInt(), top.roundToInt()) }
+        })
+}
+
+private const val VISIT_ROW = 50
+private const val VISIT_TAIL = 9
+
+/** iOS VisitLinkBubble: "Visit link >" on a dark rounded body, its tail pointing at the area. */
+@Composable
+private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modifier) {
+    val shape = remember(tailDown) { VisitBubbleShape(tailDown) }
+    Row(
+        modifier.shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f))
+            .clip(shape).background(Color(0xE61C1C1E)).clickable(onClick = onTap)
+            .padding(top = if (tailDown) 0.dp else VISIT_TAIL.dp, bottom = if (tailDown) VISIT_TAIL.dp else 0.dp)
+            .height(VISIT_ROW.dp).padding(start = 18.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Visit link", color = Color.White, fontSize = 17.sp)
+        Spacer(Modifier.width(6.dp))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+            tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Body and tail as one outline (iOS BubbleShape): 10 corners, a centred tail 18 wide and 9 tall. */
+private class VisitBubbleShape(private val tailDown: Boolean) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val tailH = VISIT_TAIL * density.density
+        val tailW = 18 * density.density
+        val rad = 10 * density.density
+        val bodyTop = if (tailDown) 0f else tailH
+        val bodyBottom = if (tailDown) size.height - tailH else size.height
+        val path = androidx.compose.ui.graphics.Path().apply {
+            addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, bodyTop, size.width, bodyBottom,
+                androidx.compose.ui.geometry.CornerRadius(rad)))
+            val mid = size.width / 2
+            if (tailDown) {
+                moveTo(mid - tailW / 2, bodyBottom - 1); lineTo(mid, size.height); lineTo(mid + tailW / 2, bodyBottom - 1)
+            } else {
+                moveTo(mid - tailW / 2, bodyTop + 1); lineTo(mid, 0f); lineTo(mid + tailW / 2, bodyTop + 1)
+            }
+            close()
+        }
+        return Outline.Generic(path)
     }
 }

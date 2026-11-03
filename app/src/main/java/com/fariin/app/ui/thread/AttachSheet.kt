@@ -73,7 +73,7 @@ import kotlinx.coroutines.withContext
  * The attach sheet, after iOS AttachSheetController + AttachRecentsStrip, built on the Android
  * Photo Picker (no photo or video permission, Play policy): the picker opens with the sheet, the
  * chosen photos and videos fill the grid edge to edge with a numbered tick on each (the tick drops
- * one, a tap on a photo opens the pen), "Add photos or videos" opens the picker again, and File opens the document picker. Once
+ * one, a tap on a photo opens the editor), "Add photos or videos" opens the picker again, and File opens the document picker. Once
  * something is chosen the bar is a caption field, a "View once" switch (one photo only, as iOS)
  * and Send.
  */
@@ -99,7 +99,9 @@ internal fun AttachSheet(
     val videos = remember { mutableStateListOf<Uri>() }
     var caption by remember { mutableStateOf("") }
     var viewOnce by remember { mutableStateOf(false) }
-    // A chosen photo open in the pen (iOS MediaApprovalView's pen: edit-only, straight into drawing).
+    // A chosen photo open in the editor. One photo chosen: the whole editor page (iOS
+    // ChatImageEditor: crop, pen, HD, its own caption and Send, which sends and closes the sheet).
+    // Two or more: the pen edit-only, the drawn copy back in its place (iOS MediaApprovalView's pen).
     var drawOn by remember { mutableStateOf<Uri?>(null) }
     val gallery = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(MediaRules.MEDIA_PER_PICK),
@@ -194,7 +196,10 @@ internal fun AttachSheet(
         }
     }
     drawOn?.let { u ->
-        PhotoDrawEditor(u, editOnly = true, onClose = { drawOn = null }, onReturn = { edited ->
+        if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false, onClose = { drawOn = null },
+            allowViewOnce = allowViewOnce,
+            onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); onDismiss() })
+        else PhotoDrawEditor(u, editOnly = true, onClose = { drawOn = null }, onReturn = { edited ->
             val i = picked.indexOf(u)
             if (i >= 0 && edited != u) picked[i] = edited
         })

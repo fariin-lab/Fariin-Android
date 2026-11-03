@@ -36,6 +36,8 @@ data class Story(
     val blurThumb: String = "",
     /** How many people are still in the audience; -1 when it is not mine to see. */
     val recipientsLeft: Int = -1,
+    /** The link areas drawn into the picture (iOS `stickers`, see [StoryTapTarget]). */
+    val taps: List<StoryTapTarget> = emptyList(),
 ) {
     /** The ring a story belongs to: its author, or "g:" + the group for a group's story. */
     val ringKey: String get() = groupId?.takeIf { it.isNotEmpty() }?.let { StoryGroup.GROUP_PREFIX + it } ?: authorUid
@@ -101,6 +103,7 @@ object StoryList {
             durationSec = (data["duration"] as? Number)?.toDouble() ?: 0.0,
             blurThumb = data["blurThumb"] as? String ?: "",
             recipientsLeft = (data["recipientUids"] as? List<*>)?.size ?: -1,
+            taps = StoryTaps.list(data["stickers"]),
         )
     }
 

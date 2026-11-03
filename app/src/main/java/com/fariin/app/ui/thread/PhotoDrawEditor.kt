@@ -107,6 +107,8 @@ private val EditorBlue = Color(0xFF3DA1FD)
  * editor page (X, the pen button, the caption with the view-once switch, and Send); Send hands the
  * edited copy to [onSend] for the same chat. From the attach sheet ([editOnly] true, iOS
  * MediaApprovalView's pen): the tick hands the edited copy straight back through [onReturn].
+ * [startDrawing] false opens on the editor page itself (iOS ChatImageEditor from a single photo
+ * tapped in the attach sheet), with the pen one tap away.
  *
  * X in the pen, or system back, leaves at once with nothing drawn and asks Discard / Keep Drawing
  * with lines on the photo, as iOS's Cancel does.
@@ -119,6 +121,7 @@ internal fun PhotoDrawEditor(
     allowViewOnce: Boolean = false,
     onSend: (Uri, String, Boolean) -> Unit = { _, _, _ -> },
     onReturn: (Uri) -> Unit = {},
+    startDrawing: Boolean = true,
 ) {
     var back by remember { mutableStateOf<() -> Unit>({ onClose() }) }
     Dialog(
@@ -128,7 +131,7 @@ internal fun PhotoDrawEditor(
         EditorWindow()
         // iOS: the editor is always dark, whatever the phone is set to.
         FariinTheme(dark = true) {
-            EditorBody(source, editOnly, allowViewOnce, onClose, onSend, onReturn) { back = it }
+            EditorBody(source, editOnly, startDrawing, allowViewOnce, onClose, onSend, onReturn) { back = it }
         }
     }
 }
@@ -154,7 +157,7 @@ private fun EditorWindow() {
 
 @Composable
 private fun EditorBody(
-    source: Uri, editOnly: Boolean, allowViewOnce: Boolean, onClose: () -> Unit,
+    source: Uri, editOnly: Boolean, startDrawing: Boolean, allowViewOnce: Boolean, onClose: () -> Unit,
     onSend: (Uri, String, Boolean) -> Unit, onReturn: (Uri) -> Unit, setBack: (() -> Unit) -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -173,7 +176,7 @@ private fun EditorBody(
     val picture = remember(base) { base?.asImageBitmap() }
 
     val edits = remember { StoryEdits() }
-    var drawing by remember { mutableStateOf(true) }   // iOS startDrawing: the pen is open on arrival
+    var drawing by remember { mutableStateOf(startDrawing) }   // iOS startDrawing: the pen is open on arrival
     var penHue by remember { mutableFloatStateOf(StoryEditRules.PEN_START_HUE) }
     var penWidth by remember { mutableFloatStateOf(StoryEditRules.PEN_START_WIDTH) }
     var highlighter by remember { mutableStateOf(false) }
