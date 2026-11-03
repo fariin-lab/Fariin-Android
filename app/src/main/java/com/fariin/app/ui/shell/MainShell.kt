@@ -156,6 +156,15 @@ fun MainShell(
     }
     val missed = calls?.let { com.fariin.app.data.CallsSeen.count(it, me, callsMark) } ?: 0
     val demo = me == DemoChats.ME   // debug demo mode: made-up data in every tab
+    // One stories feed for the app: the Stories tab and the rings on chat-list photos (iOS storiesRepo).
+    val stories: com.fariin.app.data.StoriesState = if (demo) DemoSettings.stories().second else {
+        val prof = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value
+        val convs by androidx.compose.runtime.rememberUpdatedState(chats.chats)
+        val profNow by androidx.compose.runtime.rememberUpdatedState(prof)
+        val repo = remember { com.fariin.app.data.StoriesRepository() }
+        remember(me) { repo.listen(me, { convs }, { profNow?.name?.ifEmpty { null } ?: "You" }, { profNow?.photoUrl }) }
+            .collectAsState(initial = com.fariin.app.data.StoriesState()).value
+    }
 
     // The chat list's camera button opens the Stories tab straight into its photo picker.
     var storyRequest by rememberSaveable { mutableIntStateOf(0) }
@@ -184,10 +193,10 @@ fun MainShell(
         Box(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)) {
             CompositionLocalProvider(LocalBottomBarInset provides inset, LocalTabReselect provides reselect) {
                 when (tab) {
-                    TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest)
+                    TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest, shared = if (demo) null else stories)
                     // The calls list scrolls under the bar and lifts its New Call button by the inset.
                     TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls)
-                    TAB_CHATS -> ChatListScreen(chats, me, decryptor,
+                    TAB_CHATS -> ChatListScreen(chats, me, decryptor, stories = stories,
                         onSettings = { select(TAB_SETTINGS) },
                         onNewStory = { storyRequest++; select(TAB_STORIES) })
                     else -> SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut)

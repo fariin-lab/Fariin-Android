@@ -109,6 +109,9 @@ import com.fariin.app.ui.components.FloatingBack
 import com.fariin.app.ui.components.FloatingIcon
 import com.fariin.app.ui.components.floating
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.thread.LocalOpenChat
@@ -141,8 +144,15 @@ fun ChatListScreen(
     onOpen: (Conversation) -> Unit = LocalOpenChat.current,
     onSettings: () -> Unit = {},
     onNewStory: () -> Unit = {},
+    stories: com.fariin.app.data.StoriesState = com.fariin.app.data.StoriesState(),
 ) {
     val c = Fariin.colors
+    // Rings on the photos (iOS storyRing): a tap on a ringed photo opens that story, not the chat.
+    val storyHidden by com.fariin.app.data.StoryMutes.set.collectAsState()
+    var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
+    storyOpen?.let { g ->
+        com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, state.chats, onClose = { storyOpen = null })
+    }
     val people = com.fariin.app.ui.people.LocalPeopleNav.current
     val channels = com.fariin.app.ui.channels.LocalChannelNav.current
     val scope = rememberCoroutineScope()
@@ -371,8 +381,11 @@ fun ChatListScreen(
                         }
                     }
                     val row: @Composable (Conversation) -> Unit = { conv ->
+                        val ring = com.fariin.app.data.StoryRings.forChat(conv, me, stories, storyHidden)
                         ChatRow(conv, me, decryptor,
                             selected = conv.id in selected,
+                            ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
+                            onStoryTap = if (ring == null || selecting) null else ({ storyOpen = ring }),
                             onOpen = { if (selecting) toggle(conv) else onOpen(conv) },
                             onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) })
                     }
@@ -572,6 +585,8 @@ fun ChatRow(
     selected: Boolean = false,
     onOpen: () -> Unit,
     onLongPress: () -> Unit = {},
+    ring: List<Boolean> = emptyList(),
+    onStoryTap: (() -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -598,7 +613,24 @@ fun ChatRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.padding(vertical = 10.dp)) {
-            Avatar(conv.displayPhoto(me), 56.dp, squircle = conv.isChannel)
+            // iOS ChatRow: with a story up the photo is 50 inside a 58 ring that overhangs the
+            // 56 slot by one all round; without, a flat 56.
+            Box(Modifier.size(56.dp).then(if (onStoryTap != null) Modifier.clickable(onClick = onStoryTap) else Modifier),
+                contentAlignment = Alignment.Center) {
+                Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 56.dp else 50.dp, squircle = conv.isChannel)
+                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(58.dp))
+            }
+            // Disappearing messages on: the timer badge on the photo's lower right, hanging 5 past
+            // it (iOS DisappearingAvatarBadge: 24 glass disc, grey timer).
+            if (conv.disappearSeconds > 0) {
+                Box(
+                    Modifier.align(Alignment.BottomEnd).offset(5.dp, 5.dp).size(24.dp).floating(CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(painterResource(R.drawable.ic_disappearing), contentDescription = "Disappearing messages on",
+                        tint = Color(0xFF8E8E93), modifier = Modifier.size(15.dp))
+                }
+            }
             // Selection mode: a tick badge on the photo, as Android messengers mark chosen rows.
             if (selected) {
                 Box(

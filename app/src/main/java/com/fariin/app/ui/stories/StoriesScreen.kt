@@ -96,7 +96,7 @@ import kotlinx.coroutines.delay
  * TODO: the more menu, the per-story ring segments.
  */
 @Composable
-fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0) {
+fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0, shared: StoriesState? = null) {
     val state: StoriesState
     val profile: MyProfile?
     if (demo != null) {
@@ -107,10 +107,13 @@ fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfi
         profile = remember(me) { profRepo.listen(me) }.collectFlow(null)
         val convs by rememberUpdatedState(conversations)
         val prof by rememberUpdatedState(profile)
-        val repo = remember { StoriesRepository() }
-        state = remember(me) {
-            repo.listen(me, { convs }, { prof?.name?.ifEmpty { null } ?: "You" }, { prof?.photoUrl })
-        }.collectFlow(StoriesState())
+        // The app's one feed when MainShell passes it (the chat list's rings read it too).
+        state = shared ?: run {
+            val repo = remember { StoriesRepository() }
+            remember(me) {
+                repo.listen(me, { convs }, { prof?.name?.ifEmpty { null } ?: "You" }, { prof?.photoUrl })
+            }.collectFlow(StoriesState())
+        }
     }
     StoriesScreen(me, conversations, profile, state, live = demo == null, addRequest)
 }
