@@ -89,6 +89,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.AlignmentLine
@@ -414,7 +415,16 @@ private fun ThreadContent(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 // Over a wallpaper the page-colour fade read as a pale band: it steps aside then.
-                .then(if (walled) Modifier else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg, 0.7f to c.bg.copy(alpha = 0.92f), 1f to c.bg.copy(alpha = 0f))))
+                .then(if (walled) Modifier else Modifier.drawBehind {
+                    // The page colour all the way down the header, then a 24 dp fade below it, so a
+                    // bubble passing under never shows behind the name or the call buttons (it did
+                    // when the fade ran out inside the header).
+                    val tail = 24.dp.toPx()
+                    val h = size.height + tail
+                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(
+                        0f to c.bg, (size.height / h) to c.bg.copy(alpha = 0.94f), 1f to c.bg.copy(alpha = 0f), endY = h),
+                        size = androidx.compose.ui.geometry.Size(size.width, h))
+                })
                 .onSizeChanged { topBarPx = it.height }) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
                     // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).
