@@ -114,8 +114,21 @@ object CallManager {
         // The calling sound from the dial to the pick-up, and the chime when their camera comes on (iOS).
         main.launch {
             var theirCam = false
+            var ringJob: kotlinx.coroutines.Job? = null
             ui.collect { u ->
-                if (CallToneRules.ringback(u.status)) CallTonePlayer.startRingback() else CallTonePlayer.stopRingback()
+                // The calling sound waits for the route to settle (owner 2026-11-03 on the Pixel: the
+                // first beeps came out loud, as on the speaker, then dropped to the ear). The call's
+                // own route is set again first, then the ring starts.
+                if (CallToneRules.ringback(u.status)) {
+                    if (ringJob == null) ringJob = main.launch {
+                        kotlinx.coroutines.delay(RINGBACK_SETTLE_MS)
+                        val now = _ui.value
+                        if (CallToneRules.ringback(now.status)) {
+                            CallAudio.setRoute(app, now.route.current)
+                            CallTonePlayer.startRingback()
+                        }
+                    }
+                } else { ringJob?.cancel(); ringJob = null; CallTonePlayer.stopRingback() }
                 if (CallToneRules.videoChime(theirCam, u.remoteCameraOn, u.status, u.held, System.currentTimeMillis())) CallTonePlayer.play(CallTone.VIDEO_ON)
                 theirCam = u.remoteCameraOn
             }
@@ -123,6 +136,7 @@ object CallManager {
     }
 
     private val status get() = _ui.value.status
+    private val RINGBACK_SETTLE_MS = 500L
     private fun move(e: CallEvent) { _ui.value = _ui.value.copy(status = CallMachine.reduce(status, e)) }
     private fun edit(f: (CallUi) -> CallUi) { _ui.value = f(_ui.value) }
 
