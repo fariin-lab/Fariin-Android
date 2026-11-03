@@ -17,7 +17,9 @@ import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import io.livekit.android.room.participant.ConnectionQuality
 import io.livekit.android.room.participant.Participant
+
 import io.livekit.android.room.track.Track
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.CoroutineScope
@@ -109,7 +111,17 @@ object GroupCallWire {
     }
 }
 
-data class GroupMember(val id: String, val name: String, val speaking: Boolean, val micOn: Boolean, val video: VideoTrack?)
+/**
+ * One person in the room. [id] is the uid (the participant identity). [speaking] is LiveKit's raw
+ * flag; the settled speaker the rings follow is [GroupCallUi.activeSpeaker].
+ */
+data class GroupMember(
+    val id: String, val name: String, val speaking: Boolean, val micOn: Boolean, val video: VideoTrack?,
+    val photo: String? = null, val role: CallRole = CallRole.PARTICIPANT, val poor: Boolean = false, val local: Boolean = false,
+)
+
+/** Someone at a call link's door (callLinks/{roomId}/requests/{uid}, status pending). */
+data class LinkRequest(val uid: String, val name: String, val photo: String?)
 
 data class GroupCallUi(
     val cid: String? = null,
@@ -124,6 +136,18 @@ data class GroupCallUi(
     val linkRoom: String? = null,
     /** The link needs the host's yes and it has not come yet. */
     val waiting: Boolean = false,
+    /** I started this call and nobody has come yet (iOS callingNow: "Ringing everyone…" and the pulse). */
+    val calling: Boolean = false,
+    val reconnecting: Boolean = false,
+    /** The group's own photo, for the waiting screen (iOS groupPhotoUrl). */
+    val groupPhoto: String? = null,
+    /** The settled speaker (iOS GroupCallSpeakerTracker), a member id. */
+    val activeSpeaker: String? = null,
+    /** I made this link: the people asking to join come to me. */
+    val linkCreator: Boolean = false,
+    val requests: List<LinkRequest> = emptyList(),
+    /** A short line the screen shows for a few seconds ("Couldn't answer. Try again."). */
+    val toast: String? = null,
 )
 
 /**
@@ -134,8 +158,8 @@ data class GroupCallUi(
  * bubble. A refused start asks the server to close a dead call once and tries again. The last
  * one out asks `groupCallClose` to end it (the old transaction when the server can not be reached).
  *
- * Not on Android yet: the group's ring screen on this side, roles and admin
- * actions, raised hands, call links, and growing a 1:1 into an `adhoc_` room.
+ * Not on Android yet: admin actions (mute, remove), raised hands, screen share, and growing a
+ * 1:1 into an `adhoc_` room.
  */
 object GroupCall {
     private const val TAG = "GroupCall"
@@ -162,10 +186,11 @@ object GroupCall {
      * [requireLive] true is the Join bar (never starts a call); false is the call button, which
      * joins a running call or starts one.
      */
-    fun join(context: Context, cid: String, title: String, video: Boolean, requireLive: Boolean = true) {
+    fun join(context: Context, cid: String, title: String, video: Boolean, requireLive: Boolean = true, mic: Boolean = true) {
         if (_ui.value.cid != null || CallManager.ui.value.status.live) return
-        recordId = null; startedHere = false; someoneCame = false; startedAtMs = null
-        _ui.value = GroupCallUi(cid = cid, title = title, connecting = true, cameraOn = video)
+        recordId = null; startedHere = false; someoneCame = false; startedAtMs = null; micWish = mic
+        _ui.value = GroupCallUi(cid = cid, title = title, connecting = true, cameraOn = video, micOn = mic)
+        loadGroupFaces(cid)
         val app = context.applicationContext
         appContext = app
         scope.launch {
@@ -190,12 +215,13 @@ object GroupCall {
      * approved asks for the pass again, denied ends with "Request denied". The title is opened
      * from the link doc's sealed name alongside. Never writes a group chat's call doc.
      */
-    fun joinLink(context: Context, key: CallLinkKey, video: Boolean) {
+    fun joinLink(context: Context, key: CallLinkKey, video: Boolean, mic: Boolean = true) {
         if (_ui.value.cid != null || CallManager.ui.value.status.live) return
-        recordId = null; startedHere = false; someoneCame = true; startedAtMs = null
+        recordId = null; startedHere = false; someoneCame = true; startedAtMs = null; micWish = mic
+        faces = emptyMap(); asked.clear()
         val roomId = key.roomId
         val tag = "link:$roomId"
-        _ui.value = GroupCallUi(cid = tag, title = CallLinkDefaults.NAME, connecting = true, cameraOn = video, linkRoom = roomId)
+        _ui.value = GroupCallUi(cid = tag, title = CallLinkDefaults.NAME, connecting = true, cameraOn = video, micOn = mic, linkRoom = roomId)
         val app = context.applicationContext
         appContext = app
         scope.launch {
@@ -203,6 +229,12 @@ object GroupCall {
             val enc = d?.get("encName") as? String
             val name = if (!enc.isNullOrEmpty()) key.decryptName(enc) else null
             if (!name.isNullOrEmpty() && _ui.value.cid == tag) _ui.value = _ui.value.copy(title = name)
+            // iOS isLinkCreator: the link's maker answers the people at the door.
+            val me = FirebaseAuth.getInstance().currentUser?.uid
+            if (me != null && d?.get("creatorUid") == me && _ui.value.cid == tag) {
+                _ui.value = _ui.value.copy(linkCreator = true)
+                listenRequests(tag, roomId)
+            }
         }
         scope.launch { askLinkPass(app, tag, roomId, video) }
     }
@@ -255,12 +287,23 @@ object GroupCall {
             try {
                 val r = LiveKit.create(app)
                 room = r
-                events = scope.launch { r.events.collect { e -> if (e is RoomEvent.Disconnected) leave() else refresh() } }
+                events = scope.launch {
+                    r.events.collect { e ->
+                        when (e) {
+                            is RoomEvent.Disconnected -> leave()
+                            is RoomEvent.Reconnecting -> { _ui.value = _ui.value.copy(reconnecting = true); refresh() }
+                            is RoomEvent.Reconnected -> { _ui.value = _ui.value.copy(reconnecting = false); refresh() }
+                            else -> refresh()
+                        }
+                    }
+                }
                 r.connect(pass.url, pass.token)
                 CallService.start(app, CallService.Mode.CALL, video && !pass.voiceOnly)
-                r.localParticipant.setMicrophoneEnabled(!pass.micBlocked)
+                val micOn = micWish && !pass.micBlocked
+                r.localParticipant.setMicrophoneEnabled(micOn)
                 if (video && !pass.voiceOnly) r.localParticipant.setCameraEnabled(true)
-                _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = !pass.micBlocked, cameraOn = video && !pass.voiceOnly)
+                _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = micOn, cameraOn = video && !pass.voiceOnly)
+                startSpeakerTicks(r)
                 refresh()
                 if (_ui.value.linkRoom != null) return@run
                 if (!requireLive && r.remoteParticipants.isEmpty()) start(cid, title, video, r)
@@ -314,6 +357,9 @@ object GroupCall {
             recordId = d["recordId"] as? String
             startedAtMs = (d["startedAt"] as? Timestamp)?.toDate()?.time
         }
+        // iOS GroupCallRinging.reportJoined: the server notes me as in the call, so my other
+        // phones stop ringing and the call's record counts me. An older server refuses it.
+        if (_ui.value.cid == cid) GroupRing.answer("joined", cid, startedAtMs)
     }
 
     /** The last one out: the server closes the call (room empty only), else the old transaction. */
@@ -346,16 +392,131 @@ object GroupCall {
         if (r.remoteParticipants.isNotEmpty()) someoneCame = true
         if (startedHere && !someoneCame) CallTonePlayer.startRingback() else CallTonePlayer.stopRingback()
         val all: List<Participant> = listOf<Participant>(r.localParticipant) + r.remoteParticipants.values
-        _ui.value = _ui.value.copy(members = all.map { p ->
+        val members = all.map { p ->
+            val uid = p.identity?.value ?: ""
+            val face = faces[uid]
+            val cam = p.getTrackPublication(Track.Source.CAMERA)
             GroupMember(
-                id = p.identity?.value ?: "",
-                name = p.name?.takeIf { it.isNotEmpty() } ?: if (p === r.localParticipant) "You" else "Member",
+                id = uid,
+                name = p.name?.takeIf { it.isNotEmpty() } ?: face?.first ?: if (p === r.localParticipant) "You" else "Member",
                 speaking = p.isSpeaking,
                 micOn = p.isMicrophoneEnabled,
-                video = p.getTrackPublication(Track.Source.CAMERA)?.track as? VideoTrack,
+                video = (cam?.track as? VideoTrack)?.takeIf { cam?.muted != true },
+                photo = face?.second,
+                role = CallRole.of(p.attributes["role"]),
+                poor = p.connectionQuality == ConnectionQuality.POOR || p.connectionQuality == ConnectionQuality.LOST,
+                local = p === r.localParticipant,
             )
-        })
+        }
+        members.filter { !it.local && it.id.isNotEmpty() && it.id !in faces && it.id !in asked }.forEach { loadFace(it.id) }
+        _ui.value = _ui.value.copy(members = members, calling = startedHere && !someoneCame)
+        tickSpeaker()
     }
+
+    // ------------------------------------------------------------ faces, speaker, link requests
+
+    /** uid -> (name, photo): the group's own lists for a group call, profiles for a link call. */
+    private var faces: Map<String, Pair<String?, String?>> = emptyMap()
+    private val asked = mutableSetOf<String>()
+    private var micWish = true
+    private val tracker = SpeakerTracker()
+    private var ticks: Job? = null
+
+    private fun loadGroupFaces(cid: String) {
+        faces = emptyMap(); asked.clear()
+        scope.launch {
+            val d = try { db.collection("conversations").document(cid).get().await().data } catch (_: Exception) { null } ?: return@launch
+            val names = (d["names"] as? Map<*, *>).orEmpty()
+            val photos = (d["photos"] as? Map<*, *>).orEmpty()
+            faces = (names.keys + photos.keys).mapNotNull { it as? String }.associateWith { u -> names[u] as? String to photos[u] as? String }
+            if (_ui.value.cid == cid) _ui.value = _ui.value.copy(groupPhoto = d["avatarUrl"] as? String)
+            refresh()
+        }
+    }
+
+    /** A person the group's lists do not know (a link call): their public profile, once. */
+    private fun loadFace(uid: String) {
+        asked += uid
+        scope.launch {
+            val d = try { db.collection("users").document(uid).get().await().data } catch (_: Exception) { null } ?: return@launch
+            faces = faces + (uid to ((d["name"] as? String) to (d["photoUrl"] as? String)?.takeIf { it.isNotEmpty() }))
+            refresh()
+        }
+    }
+
+    /** iOS: the speaker tracker is fed on every room change and on a 0.25 s tick. */
+    private fun startSpeakerTicks(r: Room) {
+        ticks?.cancel()
+        ticks = scope.launch { while (room === r) { tickSpeaker(); delay(250) } }
+    }
+
+    private fun tickSpeaker() {
+        val r = room ?: return
+        // My own tile never takes the ring while anyone else is here (iOS: local is never ranked).
+        val speaking = r.remoteParticipants.values.filter { it.isSpeaking }.mapNotNull { it.identity?.value }.toSet()
+        if (tracker.update(speaking, System.currentTimeMillis()) || _ui.value.activeSpeaker != tracker.activeSpeakerId) {
+            _ui.value = _ui.value.copy(activeSpeaker = tracker.activeSpeakerId)
+        }
+    }
+
+    private var requestsReg: ListenerRegistration? = null
+
+    /** iOS listenRequests: everyone at the link's door, oldest first. */
+    private fun listenRequests(tag: String, roomId: String) {
+        requestsReg?.remove()
+        requestsReg = db.collection("callLinks").document(roomId).collection("requests").whereEqualTo("status", "pending")
+            .addSnapshotListener { s, _ ->
+                if (_ui.value.cid != tag || s == null) return@addSnapshotListener
+                val list = s.documents.sortedBy { it.getTimestamp("at")?.toDate()?.time ?: 0L }
+                    .map { LinkRequest(it.id, it.getString("name") ?: "Member", it.getString("photoUrl")) }
+                _ui.value = _ui.value.copy(requests = list)
+            }
+    }
+
+    /** iOS answerRequest: the card goes at once; it comes back with a note if the server says no. */
+    fun answerRequest(uid: String, approve: Boolean) {
+        val g = _ui.value
+        val roomId = g.linkRoom ?: return
+        val who = g.requests.firstOrNull { it.uid == uid } ?: return
+        if (!g.linkCreator) return
+        _ui.value = g.copy(requests = g.requests - who)
+        scope.launch {
+            try {
+                functions.getHttpsCallable("answerCallLinkRequest").call(mapOf("roomId" to roomId, "uid" to uid, "approve" to approve)).await()
+            } catch (e: Exception) {
+                val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
+                if (_ui.value.linkRoom != roomId) return@launch
+                if (code == com.google.firebase.functions.FirebaseFunctionsException.Code.NOT_FOUND ||
+                    code == com.google.firebase.functions.FirebaseFunctionsException.Code.FAILED_PRECONDITION) return@launch
+                val now = _ui.value
+                _ui.value = now.copy(requests = if (now.requests.any { it.uid == uid }) now.requests else now.requests + who,
+                    toast = "Couldn't answer. Try again.")
+            }
+        }
+    }
+
+    /** iOS answerAllRequests: only the people that were on screen when the dialog opened. */
+    fun answerAll(approve: Boolean, uids: List<String>) {
+        val g = _ui.value
+        val roomId = g.linkRoom ?: return
+        if (!g.linkCreator) return
+        val before = g.requests.filter { it.uid in uids }
+        if (before.isEmpty()) return
+        _ui.value = g.copy(requests = g.requests - before.toSet())
+        scope.launch {
+            try {
+                functions.getHttpsCallable("answerAllCallLinkRequests")
+                    .call(mapOf("roomId" to roomId, "approve" to approve, "uids" to before.map { it.uid })).await()
+            } catch (_: Exception) {
+                if (_ui.value.linkRoom != roomId) return@launch
+                val now = _ui.value
+                _ui.value = now.copy(requests = now.requests + before.filter { b -> now.requests.none { it.uid == b.uid } },
+                    toast = "Couldn't answer everyone. Try again.")
+            }
+        }
+    }
+
+    fun clearToast() { if (_ui.value.toast != null) _ui.value = _ui.value.copy(toast = null) }
 
     fun toggleMic() {
         val on = !_ui.value.micOn
@@ -377,6 +538,9 @@ object GroupCall {
         val link = _ui.value.linkRoom
         if (cid != null && r != null && _ui.value.joined && link == null) closeIfLast(cid, wasAlone = r.remoteParticipants.isEmpty())
         requestReg?.remove(); requestReg = null
+        requestsReg?.remove(); requestsReg = null
+        ticks?.cancel(); ticks = null
+        tracker.update(emptySet(), Long.MAX_VALUE / 2)
         if (link != null && _ui.value.waiting) {
             // Giving up while still waiting withdraws the request (the rules allow it only while pending).
             FirebaseAuth.getInstance().currentUser?.uid?.let { me ->

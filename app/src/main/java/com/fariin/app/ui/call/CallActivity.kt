@@ -29,6 +29,8 @@ import com.fariin.app.call.CallPhase
 import com.fariin.app.call.GroupCall
 import com.fariin.app.call.GroupCallUi
 import com.fariin.app.call.GroupMember
+import com.fariin.app.call.GroupRing
+
 import com.fariin.app.ui.theme.FariinTheme
 
 /**
@@ -46,6 +48,7 @@ class CallActivity : ComponentActivity() {
         private const val EXTRA_GROUP = "group.cid"
         private const val EXTRA_START = "group.start"
         private const val EXTRA_LINK = "link.key"
+        private const val EXTRA_LOBBY = "lobby.key"
         const val EXTRA_DEMO = "callScreen"
 
         fun startDial(c: Context, uid: String, name: String, photo: String?, video: Boolean) {
@@ -59,7 +62,13 @@ class CallActivity : ComponentActivity() {
                 .putExtra(EXTRA_GROUP, cid).putExtra(EXTRA_NAME, title).putExtra(EXTRA_VIDEO, video).putExtra(EXTRA_START, start))
         }
 
-        /** A call link (its key in the text form): the join screen's Join. */
+        /** A call link (its key in the text form): the pre-join screen (iOS CallLobbyView), then the call. */
+        fun startLobby(c: Context, key: String, video: Boolean) {
+            c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(EXTRA_LOBBY, key).putExtra(EXTRA_VIDEO, video))
+        }
+
+        /** A call link (its key in the text form): straight in, no lobby. */
         fun startLink(c: Context, key: String, video: Boolean) {
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(EXTRA_LINK, key).putExtra(EXTRA_VIDEO, video))
@@ -86,7 +95,13 @@ class CallActivity : ComponentActivity() {
         if (ok && cameraAfterAsk) { if (groupMode) GroupCall.toggleCamera() else CallManager.toggleCamera() }
         cameraAfterAsk = false
     }
-    private var groupMode = false
+    private var groupMode by mutableStateOf(false)
+    /** The group ring screen (GroupRing's invite) is up. */
+    private var ringMode by mutableStateOf(false)
+    /** A link's pre-join screen, until its call has been joined once. */
+    private var lobbyKey by mutableStateOf<String?>(null)
+    private var lobbyVideo = true
+    private var lobbyJoined by mutableStateOf(false)
     /** Picture in picture: a video call shrinks into a small window when I leave the app. */
     private var inPip by mutableStateOf(false)
     private var demoGroup: GroupCallUi? = null
@@ -138,16 +153,29 @@ class CallActivity : ComponentActivity() {
         handle(intent)
         setContent {
             FariinTheme(dark = true) {
-                if (groupMode) {
+                if (ringMode) {
+                    val inv by GroupRing.invite.collectAsState()
+                    val i = inv
+                    // The ring ended (timed out, the call ended, answered on another phone): the screen goes.
+                    LaunchedEffect(i == null) { if (i == null && ringMode) finish() }
+                    // System back closes the screen; the ring goes on in its notification until the minute is over.
+                    androidx.activity.compose.BackHandler { finish() }
+                    if (i != null) IncomingGroupCallScreen(i, onIgnore = { GroupRing.decline(); finish() }, onJoin = { muted -> acceptRing(muted) })
+                } else if (groupMode) {
                     val live by GroupCall.ui.collectAsState()
                     val g = demoGroup ?: live
-                    LaunchedEffect(g.cid, g.connecting, g.notice) {
-                        if (demoGroup == null && g.cid == null && !g.connecting) {
+                    LaunchedEffect(g.joined) { if (g.joined) lobbyJoined = true }
+                    val inLobby = lobbyKey != null && !lobbyJoined
+                    LaunchedEffect(g.cid, g.connecting, g.notice, inLobby) {
+                        if (demoGroup == null && g.cid == null && !g.connecting && !inLobby) {
                             g.notice?.let { Toast.makeText(this@CallActivity, it, Toast.LENGTH_LONG).show(); GroupCall.clearNotice() }
                             finish()
                         }
                     }
-                    GroupCallScreen(g, onMic = { GroupCall.toggleMic() }, onCamera = { cameraToggle(GroupCall.ui.value.cameraOn) },
+                    LaunchedEffect(g.toast) { g.toast?.let { Toast.makeText(this@CallActivity, it, Toast.LENGTH_SHORT).show(); GroupCall.clearToast() } }
+                    if (inLobby) {
+                        CallLobbyScreen(lobbyKey!!, lobbyVideo, g, onLeave = { GroupCall.leave(); finish() }, onJoin = { video, mic -> joinFromLobby(video, mic) })
+                    } else GroupCallScreen(g, onMic = { micToggle() }, onCamera = { cameraToggle(GroupCall.ui.value.cameraOn) },
                         onLeave = { GroupCall.leave(); finish() })
                 } else {
                     val ui by CallManager.ui.collectAsState()
@@ -194,6 +222,30 @@ class CallActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         if (!inPip && !isChangingConfigurations) CallManager.closeNoAnswer()
+    }
+
+    /** Join on the ring screen: the mic asked for now; the camera only when access was already given. */
+    private fun acceptRing(muted: Boolean) {
+        val video = GroupRing.invite.value?.video == true
+        withMic(false, {
+            groupMode = true; ringMode = false
+            GroupRing.accept(this, muted, cameraAllowed = video && granted(Manifest.permission.CAMERA))
+        }, {
+            Toast.makeText(this, "Allow microphone access to make calls.", Toast.LENGTH_LONG).show()
+        })
+    }
+
+    /** The lobby's Join: in the way its two buttons were left (it asked for each when it was turned on). */
+    private fun joinFromLobby(video: Boolean, mic: Boolean) {
+        val key = lobbyKey?.let { com.fariin.app.call.CallLinkKey.ofText(it) } ?: return
+        GroupCall.joinLink(this, key, video && granted(Manifest.permission.CAMERA), mic = mic && granted(Manifest.permission.RECORD_AUDIO))
+    }
+
+    /** The group call's mute: turning the mic on asks for it if a muted join never had it. */
+    private fun micToggle() {
+        if (!GroupCall.ui.value.micOn && !granted(Manifest.permission.RECORD_AUDIO)) {
+            withMic(false, { GroupCall.toggleMic() }, {})
+        } else GroupCall.toggleMic()
     }
 
     private fun cameraToggle(on: Boolean) {
@@ -255,11 +307,21 @@ class CallActivity : ComponentActivity() {
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         i.getStringExtra(EXTRA_DEMO)?.takeIf { debuggable }?.let { demo(it); i.removeExtra(EXTRA_DEMO); return }
         when (i.action) {
+            GroupRing.ACTION_RING -> { i.action = null; if (GroupRing.invite.value != null) ringMode = true else finish(); return }
+            GroupRing.ACTION_DECLINE -> { i.action = null; GroupRing.decline(); finish(); return }
+            GroupRing.ACTION_ACCEPT -> { i.action = null; if (GroupRing.invite.value != null) { ringMode = true; acceptRing(false) } else finish(); return }
             CallNotifications.ACTION_ACCEPT -> withMic(CallManager.ui.value.status.video, { CallManager.accept() }, { CallManager.micDenied() })
             CallNotifications.ACTION_DECLINE -> { CallManager.decline(); finish() }
             CallNotifications.ACTION_HANGUP -> CallManager.hangUp()
         }
         i.action = null
+        i.getStringExtra(EXTRA_LOBBY)?.let { text ->
+            i.removeExtra(EXTRA_LOBBY)
+            if (GroupCall.ui.value.cid != null) { groupMode = true; return }   // already in a call: that call comes forward
+            groupMode = true; lobbyKey = text; lobbyJoined = false
+            lobbyVideo = i.getBooleanExtra(EXTRA_VIDEO, true)
+            return
+        }
         i.getStringExtra(EXTRA_LINK)?.let { text ->
             groupMode = true
             val video = i.getBooleanExtra(EXTRA_VIDEO, false)
@@ -304,13 +366,44 @@ class CallActivity : ComponentActivity() {
             "held" -> CallManager.demo(this, CallPhase.ACTIVE, video = false, held = true)
             "group" -> {
                 groupMode = true
-                demoGroup = GroupCallUi(cid = "demo", title = "Family", joined = true, members = listOf(
-                    GroupMember("me", "You", speaking = false, micOn = true, video = null),
-                    GroupMember("a", "Amina Yusuf", speaking = true, micOn = true, video = null),
+                demoGroup = GroupCallUi(cid = "demo", title = "Family", joined = true, activeSpeaker = "a", members = listOf(
+                    GroupMember("me", "You", speaking = false, micOn = true, video = null, local = true),
+                    GroupMember("a", "Amina Yusuf", speaking = true, micOn = true, video = null, role = com.fariin.app.call.CallRole.OWNER),
                     GroupMember("b", "Hodan Ali", speaking = false, micOn = false, video = null),
-                    GroupMember("c", "Omar Farah", speaking = false, micOn = true, video = null),
+                    GroupMember("c", "Omar Farah", speaking = false, micOn = true, video = null, poor = true),
                 ))
             }
+            // One other person: they fill the stage, my card bottom right.
+            "groupDuo" -> {
+                groupMode = true
+                demoGroup = GroupCallUi(cid = "demo", title = "Family", joined = true, members = listOf(
+                    GroupMember("me", "You", speaking = false, micOn = false, video = null, local = true),
+                    GroupMember("a", "Amina Yusuf", speaking = false, micOn = true, video = null),
+                ))
+            }
+            // Nine people: the 2 x 3 grid with the rest in the strip; a link's creator with two at the door.
+            "groupMany" -> {
+                groupMode = true
+                val names = listOf("Amina Yusuf", "Hodan Ali", "Omar Farah", "Bilan Noor", "Yusuf Aden", "Sahra Abdi", "Khadar Jama", "Ifrah Said")
+                demoGroup = GroupCallUi(cid = "demo", title = "Team call", joined = true, activeSpeaker = "p7", linkRoom = "demo", linkCreator = true,
+                    requests = listOf(com.fariin.app.call.LinkRequest("r1", "Faisal Warsame", null), com.fariin.app.call.LinkRequest("r2", "Nasra Ahmed", null)),
+                    members = listOf(GroupMember("me", "You", speaking = false, micOn = true, video = null, local = true)) +
+                        names.mapIndexed { n, s -> GroupMember("p${n + 1}", s, speaking = n == 6, micOn = n % 3 != 1, video = null) })
+            }
+            // A group chat's call I started, nobody here yet: the group's photo with the pulse.
+            "groupWaiting" -> {
+                groupMode = true
+                demoGroup = GroupCallUi(cid = "demo", title = "Family", joined = true, calling = true, members = listOf(
+                    GroupMember("me", "You", speaking = false, micOn = true, video = null, local = true)))
+            }
+            // The incoming group ring screen (no Firebase, no sound).
+            "groupRing" -> {
+                com.fariin.app.call.GroupRing.demo(com.fariin.app.call.GroupInvite("demo", "Family", video = false, startedBy = "a",
+                    startedAtMs = System.currentTimeMillis(), faces = listOf(com.fariin.app.call.RingFace("a", "Amina Yusuf", null))))
+                ringMode = true
+            }
+            // A link's pre-join screen (a made-up key: the server checks fail quietly here).
+            "lobby" -> { groupMode = true; lobbyKey = com.fariin.app.call.CallLinkKey.generate().text; lobbyVideo = true }
             else -> CallManager.demo(this, CallPhase.ACTIVE, video = false)
         }
     }

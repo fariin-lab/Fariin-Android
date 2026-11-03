@@ -44,6 +44,13 @@ class FariinMessagingService : FirebaseMessagingService() {
             com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, me)
             return
         }
+        // A group chat's call ringing me (server onGroupCallStarted: data {cid, type: "groupcall"}).
+        // With the app running the ring screen comes up (GroupRing); closed, Android drew the banner.
+        if (message.data["type"] == "groupcall") {
+            val cid = message.data["cid"].orEmpty()
+            android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }
+            return
+        }
         // "Posted a new story" (server notifyStoryFollowers; no cid, so it is not a chat push). With
         // the app closed the system draws it from the notification part; with the app open it comes
         // here and is drawn the same way. A tap opens the Stories tab.

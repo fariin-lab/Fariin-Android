@@ -112,6 +112,12 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
 import io.livekit.android.renderer.TextureViewRenderer
+import androidx.compose.animation.core.animateFloat
+
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.SignalWifiStatusbarConnectedNoInternet4
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.layout.heightIn
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -670,26 +676,30 @@ private fun CardVideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier
 // ====================================================================== group room
 
 /**
- * A group call after iOS GroupCallView: the header (the title over "N in call", the people button
- * at the end), the stage (a grid that fills the room, me first as "You"; a tap on someone makes them
- * large with everyone else in a strip under them, a tap on the large one goes back), and the
- * capsule: camera, mute, end. The header and capsule step aside on video as the 1:1 screen does.
- * [GroupCallUi.members] lists me first (GroupCall.refresh puts the local participant at the head).
+ * A group call after iOS GroupCallView: the header (the title over the status line, the people
+ * button at the end), the stage, the link creator's request cards, and the capsule: camera, mute,
+ * end. The header and capsule step aside on video as the 1:1 screen does. A group chat's call
+ * with nobody else here yet (and my camera off) shows the group's photo on black with the pulse
+ * while it rings (iOS groupWaiting + GroupCallRingingView). [GroupCallUi.members] lists me first.
  */
 @Composable
 fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit) {
     var focus by remember { mutableStateOf<String?>(null) }
     var people by remember { mutableStateOf(false) }
-    val meId = g.members.firstOrNull()?.id
-    LaunchedEffect(g.members.map { it.id }) { if (focus != null && g.members.none { it.id == focus }) focus = null }
-    val allowed = g.joined && !people && (g.cameraOn || g.members.any { it.video != null })
+    val me = g.members.firstOrNull { it.local } ?: g.members.firstOrNull()
+    val meId = me?.id
+    val remotes = g.members.filter { it.id != meId }
+    LaunchedEffect(g.members.map { it.id }) { if (focus != null && remotes.none { it.id == focus }) focus = null }
+    // iOS: no pin in the two-person look (the other person is the whole stage already).
+    LaunchedEffect(remotes.size) { if (remotes.size < 2) focus = null }
+    val allowed = g.joined && !people && g.requests.isEmpty() && (g.cameraOn || g.members.any { it.video != null })
     val chrome = rememberChrome(allowed)
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f, tween(280), label = "chrome")
+    val waitingScreen = g.linkRoom == null && !g.cameraOn && !g.waiting && (g.connecting || (g.joined && remotes.isEmpty()))
     Box(Modifier.fillMaxSize().background(Backdrop)) {
+        if (waitingScreen) GroupWaiting(g.groupPhoto, pulse = g.calling)
         Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            val status = if (g.waiting) "Waiting to be let in" else if (g.connecting) "Connecting…"
-                else if (g.joined && g.members.size <= 1) "No one else is here"
-                else if (g.joined) "${g.members.size} in call" else " "
+            val status = com.fariin.app.call.GroupCallWords.subtitle(g.waiting, g.connecting, g.reconnecting, g.joined, g.calling, g.members.size)
             CallHeader(
                 name = g.title, status = status, muted = false, mutedLabel = "", left = null, side = 44.dp,
                 right = { HeaderCircle(Icons.Filled.People, "Participants", 44.dp) { chrome.touch(); people = true } },
@@ -697,11 +707,15 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
             )
             Spacer(Modifier.height(2.dp))
             Box(Modifier.weight(1f).fillMaxWidth().plainTap { chrome.tap(allowed) }) {
-                GroupStage(g.members, meId, focus, onTile = { id ->
+                if (!waitingScreen) GroupStage(g.members, meId, g.activeSpeaker, focus, onTile = { id ->
                     chrome.touch()
-                    // My own tile on the grid does nothing (iOS); a tap on the large one goes back.
-                    focus = if (focus == id) null else if (id == meId && focus == null) null else id
+                    // My own tile does nothing (iOS); a tap on the large one goes back.
+                    focus = if (focus == id || id == meId || remotes.size < 2) null else id
                 })
+            }
+            if (g.linkCreator && g.requests.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                CallLinkRequestStack(g.requests, Modifier.padding(horizontal = 14.dp))
             }
             Spacer(Modifier.height(16.dp))
             ControlCapsule(Modifier.alpha(shown)) {
@@ -714,129 +728,281 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
             }
         }
         if (!chrome.visible) Box(Modifier.fillMaxSize().plainTap { chrome.touch() }.semantics { contentDescription = "Show call controls" })
-        if (people) ParticipantsSheet(g, meId) { people = false }
+        if (people) GroupCallParticipantsSheet(g, meId, onFocus = { id -> if (remotes.size >= 2) focus = id; people = false }) { people = false }
     }
 }
 
-private const val GridInset = 6
-private const val GridSpacing = 6
-
 /**
- * The stage. One person large while [focus] names someone (strip of 96 squares under them); else
- * the grid: one column up to two people, then two, rows sharing the height (up to three rows, so six
- * tiles fill the room; more scroll in fixed rows, as Android has no strip for the rest yet).
+ * iOS GroupCallRingingView as a group chat's call uses it while nobody has come: the group's
+ * photo (160) a little above the middle on plain black, two white rings 1.2 s apart pulsing out of
+ * it (each 2.4 s, ease-out, to 1.5 x, fading) while the call rings. No words: the header says them.
  */
 @Composable
-private fun GroupStage(members: List<GroupMember>, meId: String?, focus: String?, onTile: (String) -> Unit) {
-    val big = members.firstOrNull { it.id == focus }
-    if (big != null) {
-        Column(Modifier.fillMaxSize().padding(GridInset.dp)) {
-            MemberTile(big, big.id == meId, Modifier.weight(1f).fillMaxWidth(), large = true) { onTile(big.id) }
-            Spacer(Modifier.height(12.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(members.filter { it.id != big.id }, key = { it.id }) { m ->
-                    MemberTile(m, m.id == meId, Modifier.size(96.dp), strip = true) { onTile(m.id) }
-                }
+fun GroupWaiting(photo: String?, pulse: Boolean, size: Dp = 160.dp) {
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "pulse")
+    val phase by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+        tween(2400, easing = androidx.compose.animation.core.LinearEasing)), label = "phase")
+    Box(Modifier.fillMaxSize().padding(bottom = 60.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(size * 1.5f), contentAlignment = Alignment.Center) {
+            if (pulse) for (i in 0..1) {
+                val p = (phase + i * 0.5f) % 1f
+                val e = 1 - (1 - p) * (1 - p)
+                Box(Modifier.size(size).graphicsLayer { scaleX = 1 + 0.5f * e; scaleY = 1 + 0.5f * e; alpha = 0.9f * (1 - e) }
+                    .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape))
+            }
+            Box(Modifier.shadow(26.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))) {
+                Avatar(photo, size, Modifier.border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape))
             }
         }
-        return
     }
-    val cols = if (members.size <= 2) 1 else 2
-    val rows = (members.size + cols - 1) / cols
-    if (rows <= 3) {
-        Column(Modifier.fillMaxSize().padding(GridInset.dp), verticalArrangement = Arrangement.spacedBy(GridSpacing.dp)) {
-            members.chunked(cols).forEach { row ->
-                // A shorter last row keeps the full rows' tile width, centred.
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GridSpacing.dp)) {
-                    val gap = (cols - row.size) / 2f
-                    if (gap > 0) Spacer(Modifier.weight(gap))
-                    row.forEach { m ->
-                        MemberTile(m, m.id == meId, Modifier.fillMaxHeight().weight(1f)) { onTile(m.id) }
+}
+
+/** iOS GroupCallMotion.layout: spring(response 0.38, damping 1). */
+private fun <T> stageSpring() = spring<T>(dampingRatio = 1f, stiffness = 273f)
+
+/**
+ * The stage (iOS GroupCallGridView, GroupCallFocusView, GroupCallSelfView). Alone: my tile fills
+ * it. One other: they fill it and my camera is the 90 x 160 card at the bottom right (a tap makes it
+ * 170 x 300). Two or more: the grid (GroupCallLayout, me first) with the rest in the 96 strip under
+ * it, the active speaker always on the grid. A tapped person goes large over the strip of everyone
+ * else. Every tile moves to its new frame on the one stage spring.
+ */
+@Composable
+private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: String?, focus: String?, onTile: (String) -> Unit) {
+    val me = members.firstOrNull { it.id == meId }
+    val remotes = members.filter { it.id != meId }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = maxWidth.value
+        val h = maxHeight.value
+        val big = remotes.firstOrNull { it.id == focus }
+        when {
+            remotes.isEmpty() -> if (me != null) MemberTile(me, true, false, Modifier.fillMaxSize(), alone = true) {}
+            big != null -> FocusStage(big, members.filter { it.id != big.id }, meId, speaker, onTile)
+            else -> {
+                val full = com.fariin.app.call.GroupCallLayout.capacity(w, h)
+                val cells = if (remotes.size >= 2) members.size else remotes.size
+                val needsStrip = cells > full
+                val gridH = if (needsStrip) h - (com.fariin.app.call.GroupCallMetrics.STRIP_HEIGHT - com.fariin.app.call.GroupCallMetrics.INSET) else h
+                val cap = com.fariin.app.call.GroupCallLayout.capacity(w, gridH)
+                val ids = com.fariin.app.call.GroupStagePlan.gridIds(meId, remotes.map { it.id }, speaker, cap)
+                val layout = com.fariin.app.call.GroupCallLayout.grid(ids, w, gridH)
+                val byId = members.associateBy { it.id }
+                ids.forEach { id ->
+                    val f = layout.frames[id] ?: return@forEach
+                    val m = byId[id] ?: return@forEach
+                    androidx.compose.runtime.key(id) {
+                        val x by animateDpAsState(f.x.dp, stageSpring(), label = "x")
+                        val y by animateDpAsState(f.y.dp, stageSpring(), label = "y")
+                        val tw by animateDpAsState(f.w.dp, stageSpring(), label = "w")
+                        val th by animateDpAsState(f.h.dp, stageSpring(), label = "h")
+                        MemberTile(m, m.id == meId, m.id == speaker && m.id != meId, Modifier.offset(x, y).size(tw, th)) { onTile(m.id) }
                     }
-                    if (gap > 0) Spacer(Modifier.weight(gap))
                 }
+                if (layout.overflow.isNotEmpty()) {
+                    Strip(layout.overflow.mapNotNull { byId[it] }, meId, speaker, onTile,
+                        Modifier.align(Alignment.BottomStart).offset(y = 0.dp))
+                }
+                if (remotes.size == 1 && me != null) SelfCard(me, w, h, Modifier.align(Alignment.BottomEnd))
             }
         }
-    } else {
-        LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize().padding(horizontal = GridInset.dp),
-            horizontalArrangement = Arrangement.spacedBy(GridSpacing.dp), verticalArrangement = Arrangement.spacedBy(GridSpacing.dp)) {
-            items(members, key = { it.id }) { m -> MemberTile(m, m.id == meId, Modifier.fillMaxWidth().height(220.dp)) { onTile(m.id) } }
+    }
+}
+
+/** One person large (iOS GroupCallFocusView) over the strip of everyone else, me among them. */
+@Composable
+private fun FocusStage(big: GroupMember, others: List<GroupMember>, meId: String?, speaker: String?, onTile: (String) -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        MemberTile(big, false, big.id == speaker, Modifier.weight(1f).fillMaxWidth().padding(com.fariin.app.call.GroupCallMetrics.INSET.dp), large = true) { onTile(big.id) }
+        Strip(others, meId, speaker, onTile, Modifier)
+    }
+}
+
+/** iOS GroupCallStripView: 96 squares 4 apart, 16 from the leading edge, 12 under it. */
+@Composable
+private fun Strip(people: List<GroupMember>, meId: String?, speaker: String?, onTile: (String) -> Unit, modifier: Modifier) {
+    val m = com.fariin.app.call.GroupCallMetrics
+    LazyRow(modifier.fillMaxWidth().height(m.STRIP_HEIGHT.dp).padding(top = m.INSET.dp, bottom = m.STRIP_INSET.dp),
+        horizontalArrangement = Arrangement.spacedBy(m.STRIP_SPACING.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = m.STRIP_LEADING.dp, end = m.STRIP_LEADING.dp)) {
+        items(people, key = { it.id }) { p ->
+            MemberTile(p, p.id == meId, p.id == speaker && p.id != meId, Modifier.size(m.STRIP_TILE.dp), strip = true) { if (p.id != meId) onTile(p.id) }
         }
+    }
+}
+
+/** My card with one other person here (iOS GroupCallSelfView): 90 x 160, a tap grows it on a 0.3 s spring. */
+@Composable
+private fun SelfCard(me: GroupMember, stageW: Float, stageH: Float, modifier: Modifier) {
+    var expanded by remember { mutableStateOf(false) }
+    val (tw, th) = com.fariin.app.call.GroupStagePlan.selfSize(expanded, stageW, stageH)
+    val anim = spring<Dp>(dampingRatio = 1f, stiffness = 439f)
+    val w by animateDpAsState(tw.dp, anim, label = "selfW")
+    val h by animateDpAsState(th.dp, anim, label = "selfH")
+    val shape = RoundedCornerShape(com.fariin.app.call.GroupCallMetrics.TILE_CORNER.dp)
+    Box(modifier.padding(end = com.fariin.app.call.GroupCallMetrics.SELF_TRAILING.dp, bottom = com.fariin.app.call.GroupCallMetrics.STRIP_INSET.dp)
+        .shadow(4.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))) {
+        MemberTile(me, true, false, Modifier.size(w, h), pip = true) { expanded = !expanded }
     }
 }
 
 /**
- * One person's tile (iOS GroupCallTileView): video filling it, or their round photo centred on the
- * dark tile; the name ("You" on mine) in a small dark pill at the bottom start with the slashed mic
- * inside it while muted (a lone round badge on strip tiles); a green rim and glow while speaking.
+ * One person's tile (iOS GroupCallTileView): video filling it, or the camera-off look (a dark
+ * gradient with their round photo centred, sized by iOS avatarSize); the name ("You" on mine) in
+ * a dark pill at the bottom start with the slashed mic inside it while muted (a lone round badge
+ * on strip and pip tiles); the poor-network mark at the top start; the green rim and glow fading
+ * in over 0.2 s on the active speaker (iOS SpeakerGlow).
  */
 @Composable
-private fun MemberTile(m: GroupMember, isMe: Boolean, modifier: Modifier, large: Boolean = false, strip: Boolean = false, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    val glow = if (m.speaking) Modifier.shadow(10.dp, shape, clip = false, ambientColor = Green, spotColor = Green) else Modifier
-    BoxWithConstraints(modifier.then(glow).clip(shape).background(TileFill)
-        .then(if (m.speaking) Modifier.border(2.dp, Green.copy(alpha = 0.95f), shape) else Modifier)
-        .clickable(onClick = onClick)
-        .semantics { contentDescription = listOfNotNull(if (isMe) "You" else m.name, "muted".takeIf { !m.micOn }, "speaking".takeIf { m.speaking }).joinToString(", ") },
-        contentAlignment = Alignment.Center) {
-        val v = m.video
-        val w = maxWidth
-        val avatar = when { w > 180.dp -> 112.dp; w > 102.dp -> 96.dp; w > 48.dp -> w - 36.dp; else -> 16.dp }
-            .coerceAtMost((maxHeight - 16.dp).coerceAtLeast(16.dp))
-        if (v != null) LiveKitVideo(v, Modifier.fillMaxSize()) else Avatar(null, avatar)
-        val inset = if (w >= 170.dp) 8.dp else 4.dp
-        if (!strip && w >= 90.dp) {
-            Row(Modifier.align(Alignment.BottomStart).padding(inset).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
-                .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!m.micOn && !large) { Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
-                Text(if (isMe) "You" else m.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun MemberTile(
+    m: GroupMember, isMe: Boolean, activeSpeaker: Boolean, modifier: Modifier,
+    large: Boolean = false, strip: Boolean = false, pip: Boolean = false, alone: Boolean = false, onClick: () -> Unit,
+) {
+    val metrics = com.fariin.app.call.GroupCallMetrics
+    val shape = RoundedCornerShape(if (alone) 0.dp else metrics.TILE_CORNER.dp)
+    val glow by animateFloatAsState(if (activeSpeaker) 1f else 0f, tween(200), label = "glow")
+    Box(modifier) {
+        if (glow > 0f) Box(Modifier.matchParentSize().graphicsLayer { alpha = glow }
+            .shadow(14.dp, shape, clip = false, ambientColor = Green.copy(alpha = 0.35f), spotColor = Green.copy(alpha = 0.75f)))
+        BoxWithConstraints(Modifier.matchParentSize().clip(shape)
+            .background(Brush.verticalGradient(listOf(Color(0xFF383838), Color(0xFF1F1F1F))))
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = listOfNotNull(if (isMe) "You" else m.name, m.role.badge?.lowercase(), "speaking".takeIf { activeSpeaker },
+                    "muted".takeIf { !m.micOn }, "camera off".takeIf { m.video == null }, "poor connection".takeIf { m.poor }).joinToString(", ")
+            },
+            contentAlignment = Alignment.Center) {
+            val w = maxWidth.value
+            val hh = maxHeight.value
+            val v = m.video
+            if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = isMe)
+            else Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Avatar(m.photo, com.fariin.app.call.GroupStagePlan.avatarSize(w, hh).dp)
+                if (alone) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(m.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp))
+                }
             }
-        } else if (!m.micOn) {
-            Box(Modifier.align(Alignment.BottomStart).padding(inset).size(28.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            val inset = if (w >= 170) 8.dp else 4.dp
+            if (!strip && !pip && !alone && w >= 90) {
+                Row(Modifier.align(Alignment.BottomStart).padding(inset).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (!m.micOn && !large) { Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
+                    Text(if (isMe) "You" else m.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            } else if (!m.micOn && !large) {
+                val compact = pip && w < 60
+                Box(Modifier.align(Alignment.BottomStart).padding(inset).size(if (compact) 16.dp else 28.dp).clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(if (compact) 9.dp else 16.dp))
+                }
+            }
+            if (m.poor && !(pip && w < 60)) {
+                Box(Modifier.align(if (large) Alignment.TopEnd else Alignment.TopStart).padding(inset).size(22.dp).clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.SignalWifiStatusbarConnectedNoInternet4, null, tint = Color.White, modifier = Modifier.size(11.dp))
+                }
             }
         }
+        if (glow > 0f) Box(Modifier.matchParentSize().graphicsLayer { alpha = glow }
+            .border(metrics.SPEAKING_BORDER.dp, Green.copy(alpha = 0.95f), shape))
     }
 }
 
-/** The people in the call (iOS GroupCallParticipantsSheet's "In call" list): photo, name, mute mark. */
+/**
+ * The people in the call (iOS GroupCallParticipantsSheet): always dark, full height, "Participants"
+ * ("Waiting for others" while I am alone) with a close button at the end; the link creator's
+ * "N waiting to join" row; then "In call · N": a 36 photo with a thin green ring on the active
+ * speaker, the name (semibold while speaking, "You" on mine), the Host / Admin badge under it,
+ * and only the marks that say something: poor network, camera on, muted. A tap on someone shows
+ * them large and closes the sheet.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ParticipantsSheet(g: GroupCallUi, meId: String?, onClose: () -> Unit) {
+private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (String) -> Unit, onClose: () -> Unit) {
+    var showRequests by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF1C1C1E), contentColor = Color.White, scrimColor = Color.Black.copy(alpha = 0.4f)) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Text(g.title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
-            Row(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+        containerColor = Color.Black, contentColor = Color.White, scrimColor = Color.Black.copy(alpha = 0.4f)) {
+        Column(Modifier.fillMaxSize().padding(bottom = 24.dp)) {
+            Box(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp)) {
+                Text(com.fariin.app.call.GroupCallWords.sheetTitle(g.members.size <= 1), color = Color.White, fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
+                Box(Modifier.align(Alignment.CenterEnd).size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
+                    .clickable(onClick = onClose).semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            if (g.linkCreator && g.requests.isNotEmpty()) {
+                SheetSection {
+                    Row(Modifier.fillMaxWidth().height(48.dp).clickable { showRequests = true }.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.PersonAdd, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(com.fariin.app.call.GroupCallWords.waitingTitle(g.requests.size), color = Color(0xFF0A84FF), fontSize = 17.sp,
+                            modifier = Modifier.weight(1f))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                    }
+                }
+                Spacer(Modifier.height(20.dp))
+            }
+            Row(Modifier.padding(horizontal = 32.dp, vertical = 6.dp)) {
                 Text("In call", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Text(" · ${g.members.size}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
             }
-            Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(26.dp)).background(Color.White.copy(alpha = 0.06f))) {
-                g.members.forEach { m ->
-                    Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(null, 40.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Text(if (m.id == meId) "You" else m.name,
-                            color = Color.White, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Icon(if (m.micOn) Icons.Filled.Mic else Icons.Filled.MicOff, if (m.micOn) null else "Muted",
-                            tint = Color.White.copy(alpha = if (m.micOn) 0.35f else 0.9f), modifier = Modifier.size(20.dp))
+            SheetSection {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    items(g.members, key = { it.id }) { m ->
+                        val mine = m.id == meId
+                        val speaking = m.id == g.activeSpeaker && !mine
+                        val ring by animateFloatAsState(if (speaking) 1f else 0f, tween(200), label = "ring")
+                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                            .then(if (mine) Modifier else Modifier.clickable { onFocus(m.id) })
+                            .padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                                Avatar(m.photo, 36.dp)
+                                Box(Modifier.size(44.dp).graphicsLayer { alpha = ring }.border(2.dp, Green, CircleShape))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(if (mine) "You" else m.name, color = Color.White, fontSize = 17.sp,
+                                    fontWeight = if (speaking) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                m.role.badge?.let { Text(it, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp) }
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (m.poor) Icon(Icons.Filled.SignalWifiStatusbarConnectedNoInternet4, "Poor connection", tint = Color(0xFFFF9F0A), modifier = Modifier.size(20.dp))
+                                if (m.video != null) Icon(Icons.Filled.Videocam, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                if (!m.micOn) Icon(Icons.Filled.MicOff, "Muted", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                            }
+                        }
                     }
                 }
             }
         }
     }
+    if (showRequests) CallLinkBulkRequestsSheet(g.requests) { showRequests = false }
 }
 
-/** A LiveKit camera track in a tile. */
+/** iOS inset grouped section on the dark sheet. */
 @Composable
-private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifier: Modifier) {
+private fun SheetSection(content: @Composable () -> Unit) {
+    Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(Color(0xFF1C1C1E))) { content() }
+}
+
+/**
+ * A LiveKit camera track in a tile, on a TextureView renderer: tiles change size on the stage
+ * spring and the self card grows, and a TextureView scales with its layout where a SurfaceView
+ * would tear or flash.
+ */
+@Composable
+private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifier: Modifier, mirror: Boolean = false) {
     val room = GroupCall.room() ?: return
     AndroidView(modifier = modifier, factory = { ctx ->
-        io.livekit.android.renderer.SurfaceViewRenderer(ctx).also { room.initVideoRenderer(it) }
+        TextureViewRenderer(ctx).also { room.initVideoRenderer(it); it.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL) }
     }, update = { r ->
+        r.setMirror(mirror)
         val old = r.tag as? io.livekit.android.room.track.VideoTrack
         if (old !== track) { old?.removeRenderer(r); track.addRenderer(r); r.tag = track }
     }, onRelease = { r ->

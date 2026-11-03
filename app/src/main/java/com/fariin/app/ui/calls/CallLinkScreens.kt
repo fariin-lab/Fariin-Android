@@ -315,61 +315,15 @@ private fun NameDialog(initial: String, onDismiss: () -> Unit, onSave: (String) 
 }
 
 /**
- * The join screen for a tapped link (iOS pre-join lobby): the call's name (opened with the link's
- * key), who is in it, and Join (the link's type: a voice link joins without the camera). A link
- * that is gone or full says so and offers no Join. Without an answer from the server the page
- * still shows the link and Join works.
+ * A tapped link (or a link row in the Calls tab): the link's pre-join screen.
  */
 @Composable
 fun JoinLinkScreen(keyText: String, videoFromPath: Boolean, onBack: () -> Unit) {
-    val c = Fariin.colors
+    // The pre-join screen is iOS CallLobbyView now, in the call's own activity (CallLobbyScreen):
+    // the lobby and the call are one screen in two states, as on iOS. This route only hands over.
     val ctx = LocalContext.current
-    val key = remember(keyText) { CallLinkKey.ofText(keyText) }
-    var peek by remember { mutableStateOf<LinkPeek?>(null) }
-    var asked by remember { mutableStateOf(false) }
-    LaunchedEffect(key) {
-        if (key != null) peek = CallLinks.peek(key)
-        asked = true
-    }
-    val p = peek
-    val video = p?.video ?: videoFromPath
-    val blocked = key == null || p?.gone == true || p?.full == true
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        FariinTopBar("Join Call", onBack = onBack)
-        Column(Modifier.fillMaxSize().navigationBarsPadding().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(32.dp))
-            CallLinkAvatar(96.dp)
-            Spacer(Modifier.height(16.dp))
-            Text(p?.title ?: CallLinkDefaults.NAME, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (video) Icons.Filled.Videocam else Icons.Filled.Call, null, tint = c.secondary, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(if (video) "Video call link" else "Voice call link", fontSize = 15.sp, color = c.secondary)
-            }
-            Spacer(Modifier.height(10.dp))
-            val line = when {
-                key == null -> "This call link is no longer valid"
-                p != null -> CallLinkWire.peopleLine(p)
-                asked -> ""
-                else -> "Checking the link…"
-            }
-            if (line.isNotEmpty()) Text(line, fontSize = 15.sp, color = if (blocked) c.red else c.secondary, textAlign = TextAlign.Center)
-            if (p?.approval == true && !p.iAmCreator && !blocked) {
-                Spacer(Modifier.height(6.dp))
-                Text("The host will let you in.", fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center)
-            }
-            Spacer(Modifier.weight(1f))
-            Button(
-                onClick = { CallActivity.startLink(ctx, keyText, video); onBack() },
-                enabled = !blocked,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759), contentColor = Color.White),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text("Join", fontSize = 17.sp) }
-            Spacer(Modifier.height(8.dp))
-        }
-    }
+    LaunchedEffect(keyText) { CallActivity.startLobby(ctx, keyText, videoFromPath); onBack() }
+    Box(Modifier.fillMaxSize().background(Color.Black))
 }
 
 /** A saved link's row in the Calls tab (iOS linkRow): tap joins via the join screen, (i) its page. */
