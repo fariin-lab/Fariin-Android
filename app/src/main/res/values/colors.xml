@@ -3,4 +3,7 @@
     <color name="ic_launcher_background">#000000</color>
     <!-- The launch screen follows the phone's light or dark mode, as the iOS launch screen does. -->
     <color name="splash_background">#FFFFFF</color>
+    <!-- The Fariin mark's colour in a notification, the same blue the app's own notifications use
+         (black would vanish in a dark shade). -->
+    <color name="notification_accent">#1E88E5</color>
 </resources>

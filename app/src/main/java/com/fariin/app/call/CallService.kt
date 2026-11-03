@@ -98,7 +98,7 @@ object CallNotifications {
     fun showIncoming(c: Context, callId: String, name: String, video: Boolean) {
         val person = Person.Builder().setName(name).setImportant(true).build()
         val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
-            .setSmallIcon(R.drawable.ic_chat)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
             .setContentTitle(name)
             .setContentText(if (video) "Incoming video call" else "Incoming call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -124,7 +124,7 @@ object CallNotifications {
         val ui = CallManager.ui.value
         val person = Person.Builder().setName(ui.peerName.ifEmpty { "Fariin" }).build()
         return NotificationCompat.Builder(c, ONGOING_CHANNEL)
-            .setSmallIcon(R.drawable.ic_chat)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
             .setContentTitle(ui.peerName.ifEmpty { "Fariin" })
             .setContentText(if (ui.status.video) "Video call" else "Voice call")
             .setCategory(NotificationCompat.CATEGORY_CALL)

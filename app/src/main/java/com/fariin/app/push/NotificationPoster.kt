@@ -84,7 +84,7 @@ object NotificationPoster {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val b = NotificationCompat.Builder(c, spec.channel.id)
-            .setSmallIcon(R.drawable.ic_chat)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle(spec.title)
             .setContentText(spec.body)
@@ -172,7 +172,7 @@ object NotificationPoster {
         val n = nmc.activeNotifications.firstOrNull { it.tag == cid && it.id == ID }?.notification ?: return
         val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         val b = NotificationCompat.Builder(c, n.channelId)
-            .setSmallIcon(R.drawable.ic_chat)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle(n.extras.getCharSequence(android.app.Notification.EXTRA_TITLE))
             .setContentIntent(n.contentIntent)
@@ -203,7 +203,7 @@ object NotificationPoster {
         val tap = PendingIntent.getActivity(c, ("f$cid").hashCode(), ChatShortcuts.openIntent(c, cid),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(c, NotifChannel.MESSAGES.id)
-            .setSmallIcon(R.drawable.ic_chat)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle("Message not sent")
             .setContentText(if (name != null) "Your reply to $name could not be sent. Open the chat to try again."

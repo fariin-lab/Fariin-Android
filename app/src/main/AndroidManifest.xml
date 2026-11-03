@@ -177,7 +177,11 @@
             android:value="messages" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_chat" />
+            android:resource="@drawable/ic_stat_fariin" />
+        <!-- The mark's colour in the shade when Android draws a push itself (the app closed). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
         <!-- Received documents open in another app from cache/open (media worker). -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Fariin mark for the status bar and notifications: the speech bubble with its two eyes, one
+     colour (Android tints it), drawn from the app icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12.6,3.2C17.4,3.2 21,6.7 21,11.2C21,15.7 17.3,19.2 12.6,19.2C10.9,19.2 9.4,18.8 8.1,18.1C6.9,18.9 5.2,19.4 3.4,19.5C3.1,19.5 2.9,19.2 3.1,19C3.9,18.1 4.5,17.1 4.6,16C4.4,15.5 4.2,14.9 4.2,14.3L4.2,11.2C4.2,6.7 7.8,3.2 12.6,3.2ZM10.3,8.9C9.7,8.9 9.3,9.3 9.3,9.9L9.3,12.6C9.3,13.2 9.7,13.6 10.3,13.6C10.9,13.6 11.3,13.2 11.3,12.6L11.3,9.9C11.3,9.3 10.9,8.9 10.3,8.9ZM14.9,8.9C14.3,8.9 13.9,9.3 13.9,9.9L13.9,12.6C13.9,13.2 14.3,13.6 14.9,13.6C15.5,13.6 15.9,13.2 15.9,12.6L15.9,9.9C15.9,9.3 15.5,8.9 14.9,8.9Z" />
+</vector>
