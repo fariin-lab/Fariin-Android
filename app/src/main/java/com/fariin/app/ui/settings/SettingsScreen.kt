@@ -115,6 +115,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             page == PAGE_USERNAME -> UsernamePage(me, profile, pop)
             accountSecurityRoute(page, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             privacyRoute(page, push, pop) -> Unit
+            securityCheckupRoute(page, profile, demoProfile != null, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             moreRoute(page, push, pop) -> Unit
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
@@ -126,9 +127,9 @@ private const val PAGE_ACCOUNT = "account"
 private const val PAGE_APPEARANCE = "appearance"
 private const val PAGE_NIGHT = "night"
 private const val PAGE_ABOUT = "about"
-private const val PAGE_PASSWORD = "auth:password"
+internal const val PAGE_PASSWORD = "auth:password"
 private const val PAGE_RESET = "auth:reset:"
-private const val PAGE_PASSKEYS = "auth:passkeys"
+internal const val PAGE_PASSKEYS = "auth:passkeys"
 private const val SOON = "soon:"
 private fun soon(title: String) = SOON + title
 
