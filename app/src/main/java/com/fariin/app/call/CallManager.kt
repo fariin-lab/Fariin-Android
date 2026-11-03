@@ -677,11 +677,17 @@ object CallManager {
         val hadRow = ringRowWritten
         CallTelecom.end(CallRouting.disconnectCode(s.endReason, byUser, before.isCaller,
             wasIncomingRing = !before.isCaller && !before.accepted))
-        main.launch {
-            if (id == null) return@launch
+        // The other phone hears "ended" FIRST, sent the moment End is pressed (owner 2026-11-03: the
+        // iPhone showed "Reconnecting..." for a long while after Android hung up, because this write
+        // waited behind the chat's call row while the connection was already closed). The chat
+        // record goes alongside it, not before it.
+        if (id != null) main.launch {
             val caller = if (before.isCaller) myUid else peerUid
             if (outcome != null) signaling.recordCall(myUid, convId, id, caller, outcome, video, dur)
             else if (hadRow) signaling.deleteRingRow(convId, id)
+        }
+        main.launch {
+            if (id == null) return@launch
             if (!updateRemote) return@launch
             when {
                 before.isCaller && before.callDocCreated && !before.accepted && !connected -> {
