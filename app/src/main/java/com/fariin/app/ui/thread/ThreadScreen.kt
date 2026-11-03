@@ -436,7 +436,7 @@ private fun ThreadContent(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 // Over a wallpaper the page-colour fade read as a pale band: it steps aside then.
-                .then(if (walled) Modifier else Modifier.drawBehind {
+                .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) /* the same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind */ else Modifier.drawBehind {
                     // The page colour all the way down the header, then a 24 dp fade below it, so a
                     // bubble passing under never shows behind the name or the call buttons (it did
                     // when the fade ran out inside the header).

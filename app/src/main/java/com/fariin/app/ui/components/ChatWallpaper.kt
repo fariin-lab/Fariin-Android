@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -54,6 +55,28 @@ fun Modifier.chatWallpaper(cid: String): Modifier = composed {
     val pattern = if (w.theme?.pattern == true) WallpaperArt.pattern(ctx) else null
     val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
     drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true) }
+}
+
+/**
+ * The top slice of a chat's wallpaper, for the header strip: drawn as if it filled the window (so
+ * a gradient lines up with the chat's own, no seam) and clipped to this element.
+ */
+fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
+    val ctx = LocalContext.current
+    val c = Fariin.colors
+    val rootH = androidx.compose.ui.platform.LocalView.current.rootView.height.toFloat()
+    ChatLookStore.version.intValue
+    val w = ChatLookStore.wallpaper(ctx, cid)
+    val pattern = if (w.theme?.pattern == true) WallpaperArt.pattern(ctx) else null
+    val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    drawBehind {
+        val own = size
+        val full = androidx.compose.ui.geometry.Size(own.width, maxOf(rootH, own.height))
+        clipRect(0f, 0f, own.width, own.height) {
+            drawContext.size = full
+            try { drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true) } finally { drawContext.size = own }
+        }
+    }
 }
 
 /** Whether this chat draws a wallpaper (the thread's top and bottom fades step aside for it). */
