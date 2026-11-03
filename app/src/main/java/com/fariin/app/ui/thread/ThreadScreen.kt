@@ -442,7 +442,9 @@ private fun ThreadContent(
             }
             val timerMark = TimerMark(ui.disappearSeconds,
                 remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
-            androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term) {
+            val linkTap = rememberBubbleLinkTap(ui, actions.onNotice)
+            androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
+                LocalBubbleLinkTap provides linkTap) {
             LazyColumn(
                 Modifier.fillMaxSize(), state = listState, reverseLayout = true,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
@@ -920,6 +922,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 bold = remember(body, m.mentions, ui.names, m.deleted) {
                     if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
                 },
+                // iOS BubbleText: links, @usernames, emails and numbers tappable (BubbleLinks.kt).
+                linkInk = if (m.deleted) null else if (isMe) Color.White else c.blue,
             )
         }
         ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
@@ -978,7 +982,7 @@ private fun MediaRow(
         }
         if (caption != null) {
             Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                TextWithMeta(caption, LocalBubbleText.current.copy(color = ink)) { Meta(m, tick, isMe, is24h) }
+                TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue) { Meta(m, tick, isMe, is24h) }
             }
         }
     }
@@ -1101,12 +1105,17 @@ private fun tickDescription(t: Tick) = when (t) {
  * (iOS MessageRowLayout: `metaInlineGap` 5, `metaGap` under a full last line).
  */
 @Composable
-private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), meta: @Composable () -> Unit) {
+private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), linkInk: Color? = null, meta: @Composable () -> Unit) {
     val layoutRef = remember { arrayOfNulls<TextLayoutResult>(1) }
     Layout(content = {
         // In-chat search: the matched terms marked in yellow, never the whole bubble (iOS BubbleText).
         val term = LocalSearchTerm.current
-        Text(remember(text, term, bold) { mentionMarked(searchMarked(text, term), bold) }, style = style, onTextLayout = { layoutRef[0] = it })
+        // Outside the list (the long-press menu's copy) the links are drawn but take no taps.
+        val tap = LocalBubbleLinkTap.current ?: NoLinkTap
+        Text(remember(text, term, bold, linkInk, tap) {
+            val marked = mentionMarked(searchMarked(text, term), bold)
+            if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap)
+        }, style = style, onTextLayout = { layoutRef[0] = it })
         meta()
     }) { measurables, constraints ->
         val gap = 5.dp.roundToPx()

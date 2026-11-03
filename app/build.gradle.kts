@@ -117,6 +117,8 @@ dependencies {
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     // Notification Reply / Mark as read run as short expedited work, also with the app closed (system/).
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    // A link tapped in a message opens in a Custom Tab, the in-app browser (ui/thread/BubbleLinks.kt).
+    implementation("androidx.browser:browser:1.4.0")
     implementation(libs.kotlinx.coroutines.play.services)
     // libsodium, the library the iOS app's Crypto.swift uses (swift-sodium), so both sides speak
     // the same box/secretbox formats.
