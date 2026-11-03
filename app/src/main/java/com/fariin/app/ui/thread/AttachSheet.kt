@@ -143,7 +143,7 @@ internal fun AttachSheet(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(picked.toList(), key = { it.toString() }) { u ->
-                            PickedTile(u, u in videos, picked.indexOf(u) + 1, opens = picked.size > 1,
+                            PickedTile(u, u in videos, picked.indexOf(u) + 1,
                                 onRemove = { picked.remove(u); videos.remove(u) },
                                 onDraw = { if (picked.size > 1) pagerAt = picked.indexOf(u) else drawOn = u })
                         }
@@ -201,6 +201,9 @@ internal fun AttachSheet(
         if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false, onClose = { drawOn = null },
             allowViewOnce = allowViewOnce,
             onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); onDismiss() })
+        // One video chosen: the video editor (iOS VideoApprovalView), the trimmer and Send.
+        else if (picked.size == 1 && u in videos) VideoEditor(u, caption, onCaption = { caption = it }, onClose = { drawOn = null },
+            onSend = { cap -> drawOn = null; onSendMedia(listOf(u), cap, false); onDismiss() })
     }
     pagerAt?.let { at ->
         MediaPagerEditor(picked, videos, at, caption, onCaption = { caption = it }, onClose = { pagerAt = null },
@@ -235,7 +238,7 @@ private fun SheetButton(label: String, icon: androidx.compose.ui.graphics.vector
 }
 
 @Composable
-private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, opens: Boolean, onRemove: () -> Unit, onDraw: () -> Unit) {
+private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, onRemove: () -> Unit, onDraw: () -> Unit) {
     val c = Fariin.colors
     val context = LocalContext.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
@@ -250,9 +253,9 @@ private fun PickedTile(uri: Uri, isVideo: Boolean, number: Int, opens: Boolean, 
         }
     }
     Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(c.secondary.copy(alpha = 0.15f))
-        // A photo opens the editor, and with two or more chosen any item opens the pager on it; the
-        // numbered tick drops one. A lone video has no editor, so a tap drops it.
-        .clickable(onClick = if (isVideo && !opens) onRemove else onDraw)) {
+        // A photo opens the editor, a lone video the video editor, and with two or more chosen any
+        // item opens the pager on it; the numbered tick drops one.
+        .clickable(onClick = onDraw)) {
         bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         if (isVideo) {
             Text("Video", color = Color.White, fontSize = 12.sp,

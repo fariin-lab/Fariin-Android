@@ -39,7 +39,8 @@ class VideoPrep(
 
         suspend fun fromUri(context: Context, uri: Uri, outDir: File, id: String): VideoPrep? {
             val out = File(outDir, "send-$id.mp4")
-            val ok = transcode(context, uri, out)
+            val cut = VideoTrim.take(uri)
+            val ok = transcode(context, uri, out, cut)
             val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out) ?: return null
             if (file.length() > MAX_BYTES) { file.delete(); return null }
             return describe(file)
@@ -69,7 +70,8 @@ class VideoPrep(
             }
         }
 
-        private suspend fun transcode(context: Context, uri: Uri, out: File): Boolean = withContext(Dispatchers.Main) {
+        /** [cut] is the editor's kept range in ms; when the cut cannot be made the whole original goes (iOS exportTrimmed nil). */
+        private suspend fun transcode(context: Context, uri: Uri, out: File, cut: LongRange?): Boolean = withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val t = Transformer.Builder(context)
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
@@ -83,7 +85,12 @@ class VideoPrep(
                         }
                     })
                     .build()
-                val item = EditedMediaItem.Builder(MediaItem.fromUri(uri))
+                val media = MediaItem.Builder().setUri(uri).apply {
+                    if (cut != null) setClippingConfiguration(
+                        MediaItem.ClippingConfiguration.Builder()
+                            .setStartPositionMs(cut.first).setEndPositionMs(cut.last).build())
+                }.build()
+                val item = EditedMediaItem.Builder(media)
                     .setEffects(Effects(emptyList(), listOf(Presentation.createForShortSide(540))))
                     .build()
                 try {
@@ -104,4 +111,14 @@ class VideoPrep(
             }.getOrNull()
         }
     }
+}
+
+/**
+ * The editor's trim for a clip it hands to the send (iOS trimStart/trimEnd), read once by
+ * [VideoPrep.fromUri] and then forgotten, as [SentQuality.choose] is for a photo's HD.
+ */
+object VideoTrim {
+    private val cuts = java.util.concurrent.ConcurrentHashMap<String, LongRange>()
+    fun choose(uri: Uri, startMs: Long, endMs: Long) { cuts[uri.toString()] = startMs..endMs }
+    fun take(uri: Uri): LongRange? = cuts.remove(uri.toString())
 }

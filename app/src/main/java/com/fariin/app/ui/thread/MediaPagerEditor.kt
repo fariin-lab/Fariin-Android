@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -48,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -74,6 +74,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.fariin.app.media.BitmapDecode
 import com.fariin.app.media.MediaRules
 import com.fariin.app.media.SentQuality
+import com.fariin.app.media.VideoTrim
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.FariinTheme
 import kotlinx.coroutines.Dispatchers
@@ -89,7 +90,8 @@ import kotlinx.coroutines.withContext
  *
  * [items] and [videos] are the sheet's own lists: an edit replaces the item in place, a removal
  * takes it out of the sheet too (iOS onRemove), and the last removal closes the editor.
- * Not ported: the video trim strip (no trimmer on Android yet), so a video goes whole.
+ * A video page plays and pauses on a tap and has its own trimmer above the tools (iOS trimStrip);
+ * turning the page or raising the keyboard pauses every clip.
  */
 @Composable
 internal fun MediaPagerEditor(
@@ -134,6 +136,9 @@ private fun PagerBody(
     var penOn by remember { mutableStateOf<Uri?>(null) }
     var cropOn by remember { mutableStateOf<Pair<Uri, Bitmap>?>(null) }
     var busy by remember { mutableStateOf(false) }
+    // Each video's trim and play state, kept while the pages turn (iOS trimStart/trimEnd per id).
+    val trims = remember { mutableStateMapOf<Uri, TrimState>() }
+    fun trimFor(u: Uri) = trims.getOrPut(u) { TrimState(u) }
 
     // The media sits between the top bar and the bottom chrome; the bottom height is not taken
     // while the keyboard is up, so the pages never move with it (as the single editor).
@@ -143,6 +148,8 @@ private fun PagerBody(
     val imeNow = { ime.getBottom(density) > 0 }
     val topDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() } + (44 + 16).dp
     val bottomDp = with(density) { bottomPx.toDp() } + 12.dp
+    // iOS: a page turn, or the keyboard coming up, pauses everything.
+    LaunchedEffect(page, imeUp) { trims.values.forEach { it.pause() } }
 
     fun replace(old: Uri, new: Uri) {
         val i = items.indexOf(old)
@@ -171,6 +178,7 @@ private fun PagerBody(
         sent = true
         val list = items.toList()
         for (u in list) if (u !in videos) SentQuality.choose(u, hd)
+            else trims[u]?.takeIf { it.trimmed }?.let { VideoTrim.choose(u, it.start, it.end) }
         onSend(list, caption.trim())
     }
     setBack { if (cropOn != null) cropOn = null else onClose() }
@@ -179,7 +187,12 @@ private fun PagerBody(
         HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1,
             key = { i -> items.getOrNull(i)?.toString() ?: "$i" }) { i ->
             val u = items.getOrNull(i)
-            if (u != null) PagerPage(u, u in videos, Modifier.fillMaxSize().padding(top = topDp, bottom = bottomDp))
+            val m = Modifier.fillMaxSize().padding(top = topDp, bottom = bottomDp)
+            if (u != null && u in videos) {
+                val t = trimFor(u)
+                LaunchedEffect(u) { t.load(ctx, 8) }
+                TrimVideo(t, active = i == page, modifier = m)
+            } else if (u != null) PagerPage(u, m)
         }
 
         // The X, 12 in from the edge (iOS topBar). It closes the editor; the batch stays chosen.
@@ -196,6 +209,11 @@ private fun PagerBody(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // iOS: with the keyboard up only the caption and Send stay.
+            // A video page: its trimmer sits right above the tools (iOS).
+            val trim = current?.takeIf { it in videos }?.let { trims[it] }
+            if (!imeUp && trim != null && trim.thumbs.isNotEmpty() && trim.durationMs > 0) {
+                VideoTrimStrip(trim, Modifier.padding(horizontal = 20.dp))
+            }
             if (!imeUp) Box(Modifier.padding(horizontal = 16.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
                     // Crop and pen only make sense on a photo page; HD is for the whole batch.
@@ -251,25 +269,19 @@ private fun ToolCircle(onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(Modifier.size(40.dp).floating().clickable(onClick = onClick), contentAlignment = Alignment.Center) { content() }
 }
 
-/** One page: the photo, or the video's first frame with its play mark, fitted on black. */
+/** A photo page, fitted on black (a video page is [TrimVideo]). */
 @Composable
-private fun PagerPage(uri: Uri, isVideo: Boolean, modifier: Modifier) {
+private fun PagerPage(uri: Uri, modifier: Modifier) {
     val ctx = LocalContext.current
     val bmp by produceState<ImageBitmap?>(null, uri) {
         value = withContext(Dispatchers.IO) {
-            runCatching {
-                if (isVideo) android.media.MediaMetadataRetriever().run {
-                    try { setDataSource(ctx, uri); getFrameAtTime(0) } finally { release() }
-                }?.asImageBitmap()
-                else BitmapDecode.fromUri(ctx, uri, 2048)?.asImageBitmap()
-            }.getOrNull()
+            runCatching { BitmapDecode.fromUri(ctx, uri, 2048)?.asImageBitmap() }.getOrNull()
         }
     }
     Box(modifier, contentAlignment = Alignment.Center) {
         val b = bmp
         if (b == null) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
         else Image(b, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-        if (isVideo && b != null) Icon(Icons.Filled.PlayCircle, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(66.dp))
     }
 }
 
