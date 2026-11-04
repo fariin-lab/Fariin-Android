@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Explore
@@ -372,6 +373,16 @@ fun ChatListScreen(
                             act(if (unread) "Marked as unread" else "Marked as read") { ChatListActions.setUnread(me, it, unread) }
                         },
                         onSelectAll = { selected = shown.map { it.id }.toSet() },
+                        single = selectedConvs.singleOrNull()?.let { one ->
+                            val person = !one.isGroup && !one.isChannel
+                            SingleChatActions(
+                                infoLabel = when { one.isChannel -> "Channel Info"; one.isGroup -> "Group Info"; else -> "View Contact" },
+                                onInfo = {
+                                    selected = emptySet()
+                                    if (person) people.contact(one.otherUid(me)) else people.group(one.id)
+                                },
+                            )
+                        },
                     )
                     searching -> SearchBar(query, onQuery = { query = it }, onClose = { searching = false; query = "" })
                     else -> {
@@ -650,12 +661,19 @@ fun ChatListScreen(
     }
 }
 
+/** The selection menu's extra row when exactly one chat is picked: its info page. */
+private class SingleChatActions(
+    val infoLabel: String,
+    val onInfo: () -> Unit,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SelectionBar(
     count: Int, allPinned: Boolean, allMuted: Boolean, allUnread: Boolean, archive: Boolean,
     onClose: () -> Unit, onPin: () -> Unit, onMute: () -> Unit, onArchive: () -> Unit, onDelete: () -> Unit,
     onReadToggle: () -> Unit, onSelectAll: () -> Unit,
+    single: SingleChatActions? = null,
 ) {
     var more by remember { mutableStateOf(false) }
     val c = Fariin.colors
@@ -683,6 +701,11 @@ private fun SelectionBar(
                         onClick = { more = false; onReadToggle() })
                     DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) },
                         onClick = { more = false; onSelectAll() })
+                    // One chat picked: straight to its info page.
+                    single?.let { s ->
+                        DropdownMenuItem(text = { Text(s.infoLabel) }, leadingIcon = { Icon(Icons.Outlined.Info, null) },
+                            onClick = { more = false; s.onInfo() })
+                    }
                 }
             }
           }
