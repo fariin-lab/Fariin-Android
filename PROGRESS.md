@@ -544,3 +544,4 @@ Seen, not fixed (not today's regressions):
   - Left for the owner: confirm the stuck arrow is gone (3d0679e); press Delete Everything in Clear Chat History only on a test account; Play signing key into assetlinks.json once Play Console shows it.
   - Save to Photos now covers received videos when played (not device-tested: no received video on the Pixel).
   - Group Info menu: Save to Photos On/Off per group (tested on hh; hh is now stored as Off for itself).
+  - Per-chat storage page (Group Info > Storage Used) built as iOS, delete = Delete for Me (my call, iOS parity). Only the empty state seen on the Pixel.
