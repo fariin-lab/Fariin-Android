@@ -431,7 +431,17 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             // iOS NewGroupView: the photo and the name side by side in one rounded card.
             SettingsSection {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)).clickable(onClickLabel = "Set Group Photo", onClick = pick), contentAlignment = Alignment.Center) {
+                    // iOS: a tap offers Take Photo / Choose Photo (and Remove once one is set).
+                    var slotMenu by remember { mutableStateOf(false) }
+                    androidx.compose.material3.DropdownMenu(expanded = slotMenu, onDismissRequest = { slotMenu = false }) {
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
+                            leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) }, onClick = { slotMenu = false; picker.takePhoto() })
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
+                            leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = { slotMenu = false; pick() })
+                        if (photo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
+                            leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = c.red) }, onClick = { slotMenu = false; photo = null })
+                    }
+                    Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)).clickable(onClickLabel = "Set Group Photo") { slotMenu = true }, contentAlignment = Alignment.Center) {
                         val p = photo
                         if (p != null) {
                             val bmp = remember(p) { android.graphics.BitmapFactory.decodeByteArray(p, 0, p.size)?.asImageBitmap() }
@@ -918,8 +928,18 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 ) { Icon(Icons.Filled.Remove, "Remove Photo", tint = c.label, modifier = Modifier.size(18.dp)) }
             }
             Spacer(Modifier.height(12.dp))
-            Text("Set New Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                modifier = Modifier.clip(CircleShape).background(c.card).clickable(onClick = pick).padding(horizontal = 20.dp, vertical = 9.dp))
+            // Take Photo or Choose Photo (iOS NewGroup / EditGroup photo dialog); Remove is the badge.
+            var groupPhotoMenu by remember { mutableStateOf(false) }
+            Box {
+                Text("Set New Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                    modifier = Modifier.clip(CircleShape).background(c.card).clickable { groupPhotoMenu = true }.padding(horizontal = 20.dp, vertical = 9.dp))
+                androidx.compose.material3.DropdownMenu(expanded = groupPhotoMenu, onDismissRequest = { groupPhotoMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) }, onClick = { groupPhotoMenu = false; picker.takePhoto() })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = { groupPhotoMenu = false; pick() })
+                }
+            }
             Spacer(Modifier.height(8.dp))
             // Name and description in ONE card, a line between them (iOS EditGroupView).
             SettingsSection(footer = w("Optional. Shown on the group's info page.")) {
