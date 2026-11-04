@@ -102,6 +102,8 @@ data class Message(
     val storyMention: StoryMentionRef? = null,
     /** iOS Message.fwdChannel: the channel a forwarded post came from (sealed JSON on the wire). */
     val fwdChannel: FwdChannel? = null,
+    /** iOS isRestrictRequest: the "asked to turn off Restricted chat" line, answerable from the chat. */
+    val isRestrictRequest: Boolean = false,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
@@ -260,6 +262,7 @@ data class Message(
                 callVideo = data["callVideo"] as? Boolean ?: false,
                 callDuration = (data["callDuration"] as? Number)?.toInt(),
                 callJoinedUids = (data["joinedUids"] as? List<*>)?.filterIsInstance<String>(),
+                isRestrictRequest = data["restrictRequest"] == true,
                 callRungUids = (data["rungUids"] as? List<*>)?.filterIsInstance<String>(),
                 linkPreview = linkPreview,
                 fwdChannel = (data["fwdChannel"] as? String)?.takeIf { it.isNotEmpty() }?.let { v ->

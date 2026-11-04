@@ -23,6 +23,8 @@ object ChatsNow {
  */
 object ChatRestrictions {
     const val REQUEST_LIFETIME_MS = 24L * 3600 * 1000
+    /** The writes outlive the page that asked for them (a switch flipped, then Back). */
+    val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
     private val FIELDS = listOf("noScreenshots", "noForwarding", "noSaving")
     private val db get() = FirebaseFirestore.getInstance()
 

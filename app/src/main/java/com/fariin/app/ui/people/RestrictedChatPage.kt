@@ -27,7 +27,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +51,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> String, onBack: () -> Unit) {
     val c = Fariin.colors
-    val scope = rememberCoroutineScope()
     val conv = ChatsNow.list.firstOrNull { it.id == cid }
     var pending by remember { mutableStateOf<Boolean?>(null) }
     var askRequest by remember { mutableStateOf(false) }
@@ -65,8 +63,8 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
     val myRequestOpen = requestBy == me
     fun flip(on: Boolean) {
         when {
-            on -> { pending = true; scope.launch { ChatRestrictions.setMine(cid, me, myName(), true) } }
-            mine -> { pending = if (theirs) null else false; scope.launch { ChatRestrictions.setMine(cid, me, myName(), false) } }
+            on -> { pending = true; ChatRestrictions.scope.launch { ChatRestrictions.setMine(cid, me, myName(), true) } }
+            mine -> { pending = if (theirs) null else false; ChatRestrictions.scope.launch { ChatRestrictions.setMine(cid, me, myName(), false) } }
             theirs -> askRequest = true
         }
     }
@@ -100,10 +98,10 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
             }
             if (requestForMe) SettingsSection(header = "$them asked you to turn this off") {
                 SettingsRow("Turn Off", trailing = Trailing.NONE, titleColor = c.blue) {
-                    scope.launch { ChatRestrictions.answer(cid, me, myName(), accept = true) }
+                    ChatRestrictions.scope.launch { ChatRestrictions.answer(cid, me, myName(), accept = true) }
                 }
                 SettingsRow("Keep On", trailing = Trailing.NONE, last = true) {
-                    scope.launch { ChatRestrictions.answer(cid, me, myName(), accept = false) }
+                    ChatRestrictions.scope.launch { ChatRestrictions.answer(cid, me, myName(), accept = false) }
                 }
             } else if (myRequestOpen) SettingsSection {
                 Text("Waiting for $them to answer your request.", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
@@ -112,7 +110,7 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
     }
     if (askRequest) AlertDialog(onDismissRequest = { askRequest = false }, title = { Text("Ask $them to turn it off?") },
         text = { Text("$them turned on Restricted Chat, so only they can turn it off. They'll see your request in the chat.") },
-        confirmButton = { TextButton({ askRequest = false; scope.launch { ChatRestrictions.requestOff(cid, me, myName()) } }) {
+        confirmButton = { TextButton({ askRequest = false; ChatRestrictions.scope.launch { ChatRestrictions.requestOff(cid, me, myName()) } }) {
             Text("Send Request", color = c.blue) } },
         dismissButton = { TextButton({ askRequest = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
 }

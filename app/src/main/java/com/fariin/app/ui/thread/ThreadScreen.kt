@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -300,6 +301,22 @@ private fun ThreadContent(
     // What the ticks point at, from the live list (iOS liveSelection): a row that went away drops out.
     val picked = ui.messages.filter { it.rowId in selected }
     val restrictedNow = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
+    var restrictAnswer by remember { mutableStateOf(false) }
+    val ctxR = androidx.compose.ui.platform.LocalContext.current
+    if (restrictAnswer) {
+        fun answer(accept: Boolean) {
+            restrictAnswer = false
+            com.fariin.app.data.ChatRestrictions.scope.launch {
+                val myName = runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users")
+                    .document(ui.me).get().await().getString("name") }.getOrNull().orEmpty()
+                com.fariin.app.data.ChatRestrictions.answer(ui.cid, ui.me, myName, accept)
+            }
+        }
+        androidx.compose.material3.AlertDialog(onDismissRequest = { restrictAnswer = false }, title = { Text("Turn off Restricted chat?") },
+            text = { Text("${ui.title} asked you to turn it off. If you do, they can forward, copy and save from this chat again.") },
+            confirmButton = { androidx.compose.material3.TextButton({ answer(true) }) { Text("Turn Off", color = Fariin.colors.red) } },
+            dismissButton = { androidx.compose.material3.TextButton({ answer(false) }) { Text("Keep On", color = Fariin.colors.blue) } })
+    }
     LaunchedEffect(ui.messages) { selected.retainAll(ui.messages.map { it.rowId }.toSet()) }
     if (bulkDelete) BulkDeleteDialog(picked, ui, onDismiss = { bulkDelete = false }) { plan ->
         actions.onDeleteMany(plan); selected.clear()
@@ -545,6 +562,14 @@ private fun ThreadContent(
                                     callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
                                     callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
                             }
+                            // "X asked to turn off Restricted chat": answered here by the one it was
+                            // asked of, while it is still open (iOS restrictRequestTarget).
+                            m.isSystem && m.isRestrictRequest && m.authorId != ui.me -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) {
+                                val conv = com.fariin.app.data.ChatsNow.find(ui.cid)
+                                val by = conv?.let { com.fariin.app.data.ChatRestrictions.pendingRequestBy(it) }
+                                if (by != null && by != ui.me && com.fariin.app.data.ChatRestrictions.restrictedByMe(conv, ui.me)) restrictAnswer = true
+                                else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()
+                            }) { NoticePill(noticeText(m)) }
                             m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else noticeText(m))
                             ch != null -> androidx.compose.runtime.CompositionLocalProvider(
                                 com.fariin.app.ui.channels.LocalPostViews provides
