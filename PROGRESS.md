@@ -557,3 +557,4 @@ Seen, not fixed (not today's regressions):
   - App update notices (Android side done; server Kulan b76b34f platform-aware, NOT DEPLOYED; admin panel needs a platform picker).
   - Phone almost full sheet + download hold under 400 MB. Next: chat reading position (iOS ChatScrollStore).
   - Reading position per chat for the app run (lands within a row). Remaining from pass 2: profile photo history, session recovery.
+  - Chat list listener recovers after a server refusal (token refresh + backoff). Pass 2 done except DeviceLock (Android uses its own biometric App Lock), HealthReports/WeakLink (iOS-specific diagnostics).
