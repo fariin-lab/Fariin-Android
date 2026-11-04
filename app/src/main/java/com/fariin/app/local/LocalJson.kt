@@ -129,6 +129,7 @@ object LocalJson {
         m.callDuration?.let { put("callD", it) }
         m.callJoinedUids?.let { put("callJ", JSONArray(it)) }
         m.callRungUids?.let { put("callR", JSONArray(it)) }
+        m.storyMention?.let { put("sm", JSONObject().put("id", it.id).put("t", it.thumbUrl)) }
         m.linkPreview?.let { lp ->
             put("lp", JSONObject().put("u", lp.url).put("t", lp.title).put("d", lp.desc).apply {
                 lp.imageUrl?.let { put("i", it) }
@@ -178,6 +179,7 @@ object LocalJson {
             callerUid = s("caller"), callOutcome = s("callO"), callVideo = o.optBoolean("callV"),
             callDuration = if (o.has("callD")) o.getInt("callD") else null,
             callJoinedUids = strings(o.optJSONArray("callJ")), callRungUids = strings(o.optJSONArray("callR")),
+            storyMention = o.optJSONObject("sm")?.let { Message.StoryMentionRef(it.optString("id"), it.optString("t")) },
             linkPreview = o.optJSONObject("lp")?.let { lp ->
                 Message.LinkPreview(lp.optString("u"), lp.optString("t"), lp.optString("d"),
                     imageUrl = if (lp.has("i")) lp.getString("i") else null, imageEnc = encBack(lp.optJSONObject("ie")))

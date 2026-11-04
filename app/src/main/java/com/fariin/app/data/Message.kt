@@ -98,12 +98,17 @@ data class Message(
     val callRungUids: List<String>? = null,
     /** The sender's link card, opened (iOS LinkPreviewData); null when absent or unreadable. */
     val linkPreview: LinkPreview? = null,
+    /** iOS Message.storyMention: this message says "X mentioned you in a story" (1:1 only). */
+    val storyMention: StoryMentionRef? = null,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
     val sendState: SendState? = null,
 ) {
     enum class SendState { SENDING, FAILED }
+
+    /** The story a mention card points at, and its plain picture (iOS StoryMentionRef). */
+    data class StoryMentionRef(val id: String, val thumbUrl: String)
 
     /** iOS LinkPreviewData: fetched and sealed by the sender; the picture is a sealed file like a photo's. */
     data class LinkPreview(val url: String, val title: String, val desc: String,
@@ -253,6 +258,9 @@ data class Message(
                 callJoinedUids = (data["joinedUids"] as? List<*>)?.filterIsInstance<String>(),
                 callRungUids = (data["rungUids"] as? List<*>)?.filterIsInstance<String>(),
                 linkPreview = linkPreview,
+                storyMention = (data["storyMention"] as? Map<*, *>)?.let { sm ->
+                    (sm["id"] as? String)?.takeIf { it.isNotEmpty() }?.let { StoryMentionRef(it, sm["thumb"] as? String ?: "") }
+                },
                 type = type,
                 createdAtMillis = if (created > 0) created else nowMillis,
                 hasServerTime = created > 0,

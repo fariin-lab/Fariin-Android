@@ -991,7 +991,8 @@ class ThreadRepository(
     } catch (_: Exception) { null } ?: memberUids()
 
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
-                                   forwarded: Boolean = false, countsAsUnread: Boolean = true) {
+                                   forwarded: Boolean = false, countsAsUnread: Boolean = true,
+                                   storyMention: Message.StoryMentionRef? = null) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         val local = CryptoHub.listedConversation(cid)
@@ -1023,6 +1024,8 @@ class ThreadRepository(
         // iOS replyEnc: {id, authorId, text sealed like the message}.
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.encryptForConversation(cid, reply.text))
         if (forwarded) msg["forwarded"] = true
+        // A story mention card (iOS ChatService: the plain story id and thumbnail).
+        if (storyMention != null) msg["storyMention"] = mapOf("id" to storyMention.id, "thumb" to storyMention.thumbUrl)
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
@@ -1057,6 +1060,11 @@ class ThreadRepository(
         if (t.isEmpty()) return
         val clientId = UUID.randomUUID().toString().uppercase()
         turn.withLock { sendDirect(t, clientId, System.currentTimeMillis().toDouble(), ref) }
+    }
+
+    /** iOS StoryMentions: the mention message, its id fixed per story and person. */
+    suspend fun sendStoryMention(text: String, clientId: String, ref: Message.StoryMentionRef) {
+        turn.withLock { sendDirect(text, clientId, System.currentTimeMillis().toDouble(), storyMention = ref) }
     }
 
     private fun isKnock(startedBy: String, accepted: Boolean, lastSender: String) =

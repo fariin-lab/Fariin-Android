@@ -227,6 +227,8 @@ class StoryService(
                     )).await()
                 }
             }
+            // @names in the caption: a card in each mentioned person's chat with me (iOS StoryMentions).
+            StoryMentions.send(id, caption.trim(), if (isVideo) urls.second.ifEmpty { urls.first } else urls.first, recipients, me)
             if (custom) StoryPrivacyStore.linkStory(id, StoryPrivacyRules.KIND_CUSTOM, lists.map { it.id }, lists.joinToString(", ") { it.name })
             return id
         } catch (e: Exception) {

@@ -915,6 +915,11 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 contentAlignment = Alignment.Center,
             ) { Text("!", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }
+        // A story mention (iOS storyMentionRow): a centred card, not a bubble. 1:1 only.
+        m.storyMention?.takeIf { !ui.isGroup && !m.deleted }?.let { sm ->
+            StoryMentionCard(m, sm, ui.me, ui.title, receivedFill())
+            return@Row
+        }
         com.fariin.app.data.StoryReplyRules.reactionGlyph(m, showSender)?.let { glyph ->
             StoryReaction(ui, m, glyph, isMe, tick, is24h)
             return@Row
