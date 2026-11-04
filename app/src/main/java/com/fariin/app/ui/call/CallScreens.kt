@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
@@ -907,8 +908,21 @@ private fun CardVideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier
  */
 @Composable
 fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit = {},
-                    onMinimize: (() -> Unit)? = null, pip: Boolean = false) {
+                    onMinimize: (() -> Unit)? = null, pip: Boolean = false,
+                    onHand: (Boolean) -> Unit = {}, onReact: (String) -> Unit = {}) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalRaisedHands provides g.hands.toSet()) {
+        GroupCallStage(g, onMic, onCamera, onLeave, onShare, onMinimize, pip, onHand, onReact)
+    }
+}
+
+/** Raised hands in the call, read by every tile layout (iOS tile.isHandRaised). */
+internal val LocalRaisedHands = androidx.compose.runtime.compositionLocalOf { emptySet<String>() }
+
+@Composable
+private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit,
+                           onMinimize: (() -> Unit)?, pip: Boolean, onHand: (Boolean) -> Unit, onReact: (String) -> Unit) {
     var focus by remember { mutableStateOf<String?>(null) }
+    var more by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf(false) }
     val me = g.members.firstOrNull { it.local } ?: g.members.firstOrNull()
     val meId = me?.id
@@ -964,7 +978,38 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
                 Circle(if (g.micOn) Icons.Filled.Mic else Icons.Filled.MicOff, !g.micOn, if (g.micOn) "Mute" else "Unmute", 56.dp) {
                     chrome.touch(); onMic()
                 }
+                // iOS GroupCallMoreMenu: Raise Hand / Lower Hand and the reaction row.
+                if (g.joined) Box {
+                    Circle(Icons.Filled.MoreHoriz, false, "More", 56.dp) { chrome.touch(); more = true }
+                    androidx.compose.material3.DropdownMenu(more, onDismissRequest = { more = false }, containerColor = Color(0xFF2C2C2E)) {
+                        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                            com.fariin.app.call.GroupCall.QUICK_EMOJIS.forEach { e ->
+                                Box(Modifier.size(44.dp).clip(CircleShape).clickable { more = false; onReact(e) }, contentAlignment = Alignment.Center) {
+                                    Text(e, fontSize = 24.sp)
+                                }
+                            }
+                        }
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(if (g.myHand) "Lower Hand" else "Raise Hand", color = Color.White) },
+                            leadingIcon = { Text("\u270B", fontSize = 18.sp) },
+                            onClick = { more = false; onHand(!g.myHand) })
+                    }
+                }
                 EndCircle("End call", 56.dp, onLeave)
+            }
+        }
+        // iOS GroupCallSocialViews: reactions rise at the lower left with the sender's name, 4 s each.
+        Column(Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 16.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            g.reactions.forEach { r ->
+                androidx.compose.runtime.key(r.id) {
+                    Row(Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(r.emoji, fontSize = 22.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text(r.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
             }
         }
         if (!chrome.visible) Box(Modifier.fillMaxSize().plainTap { chrome.touch() }.semantics { contentDescription = "Show call controls" })
@@ -1133,6 +1178,7 @@ private fun MemberTile(
             if (!strip && !pip && !alone && w >= 90) {
                 Row(Modifier.align(Alignment.BottomStart).padding(inset).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
                     .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (m.id in LocalRaisedHands.current) { Text("\u270B", fontSize = 12.sp); Spacer(Modifier.width(4.dp)) }
                     if (!m.micOn && !large) { Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
                     Text(if (isMe) "You" else m.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -157,7 +157,14 @@ data class GroupCallUi(
     val sharing: Boolean = false,
     /** The system's consent dialog is up, or the share is being published. */
     val sharePending: Boolean = false,
+    /** Raised hands, oldest first, mine included (iOS GroupCallSocial.raisedHands). */
+    val hands: List<String> = emptyList(),
+    val myHand: Boolean = false,
+    /** Reactions on screen now, newest last (at most 5, each 4 s). */
+    val reactions: List<CallReaction> = emptyList(),
 )
+
+data class CallReaction(val id: Long, val uid: String, val name: String, val emoji: String)
 
 /**
  * A group chat's call, as iOS GroupCallService.start: ask `groupCallToken` for a pass, connect
@@ -303,6 +310,13 @@ object GroupCall {
                             is RoomEvent.Disconnected -> leave()
                             is RoomEvent.Reconnecting -> { _ui.value = _ui.value.copy(reconnecting = true); refresh() }
                             is RoomEvent.Reconnected -> { _ui.value = _ui.value.copy(reconnecting = false); refresh() }
+                            is RoomEvent.DataReceived -> if (e.topic == SOCIAL_TOPIC) social(e.data, e.participant?.identity?.value ?: "")
+                            // A newcomer learns my raised hand (iOS participantArrived).
+                            is RoomEvent.ParticipantConnected -> { if (_ui.value.myHand) sendSocial(handJson(true)); refresh() }
+                            is RoomEvent.ParticipantDisconnected -> {
+                                e.participant.identity?.value?.let { gone -> _ui.value = _ui.value.copy(hands = _ui.value.hands - gone) }
+                                refresh()
+                            }
                             else -> refresh()
                         }
                     }
@@ -616,4 +630,81 @@ object GroupCall {
     }
 
     fun clearNotice() { if (_ui.value.cid == null) _ui.value = GroupCallUi() }
+
+    // ---- Raised hands and reactions (iOS GroupCallSocial, the same wire) ----
+    // LiveKit data on the topic "kulan.social", small JSON: {"t":"hand","up":true} and
+    // {"t":"react","e":"<emoji>"}. Who sent it is always the room's word (the sender's identity),
+    // never anything in the payload. The server's own notes on this topic are not read here.
+    private const val SOCIAL_TOPIC = "kulan.social"
+    /** iOS quickEmojis: thumbs up, red heart, tears of joy, surprised, clapping, party. */
+    val QUICK_EMOJIS = listOf("\uD83D\uDC4D", "\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDE2E", "\uD83D\uDC4F", "\uD83C\uDF89")
+    private val socialStamps = HashMap<String, ArrayDeque<Long>>()
+    private var nextReaction = 1L
+
+    private fun handJson(up: Boolean) = org.json.JSONObject().put("t", "hand").put("up", up).toString()
+
+    private fun allow(uid: String, limit: Int, perMs: Long): Boolean {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val q = socialStamps.getOrPut(uid) { ArrayDeque() }
+        while (q.isNotEmpty() && now - q.first() > perMs) q.removeFirst()
+        if (q.size >= limit) return false
+        q.addLast(now); return true
+    }
+
+    private fun sendSocial(json: String): Boolean {
+        val r = room ?: return false
+        scope.launch {
+            runCatching {
+                r.localParticipant.publishData(json.toByteArray(), io.livekit.android.room.track.DataPublishReliability.RELIABLE,
+                    topic = SOCIAL_TOPIC)
+            }
+        }
+        return true
+    }
+
+    /** Raise or lower my hand (iOS setHand). */
+    fun setHand(up: Boolean) {
+        val me = room?.localParticipant?.identity?.value ?: return
+        if (up == _ui.value.myHand) return
+        val hands = if (up) (_ui.value.hands + me).distinct() else _ui.value.hands - me
+        _ui.value = _ui.value.copy(myHand = up, hands = hands)
+        sendSocial(handJson(up))
+    }
+
+    /** Send a reaction (iOS react): 3 a second at most, the limit the others hold me to. */
+    fun react(emoji: String) {
+        val me = room?.localParticipant?.identity?.value ?: return
+        if (emoji !in QUICK_EMOJIS || !allow(me, 3, 1_000)) return
+        if (sendSocial(org.json.JSONObject().put("t", "react").put("e", emoji).toString())) showReaction(me, "You", emoji)
+    }
+
+    private fun social(data: ByteArray, uid: String) {
+        if (data.size > 1024 || uid.isEmpty()) return
+        if (uid == room?.localParticipant?.identity?.value) return
+        val m = runCatching { org.json.JSONObject(String(data)) }.getOrNull() ?: return
+        val name = _ui.value.members.firstOrNull { it.id == uid }?.name ?: faces[uid]?.first ?: "Someone"
+        when (m.optString("t")) {
+            "hand" -> {
+                if (!m.has("up")) return
+                val up = m.optBoolean("up")
+                val hands = _ui.value.hands
+                if (up && uid !in hands) _ui.value = _ui.value.copy(hands = hands + uid)
+                else if (!up && uid in hands) _ui.value = _ui.value.copy(hands = hands - uid)
+            }
+            "react" -> {
+                val e = m.optString("e")
+                if (e.isEmpty() || e.length > 16 || !allow(uid, 3, 1_000)) return
+                showReaction(uid, name.take(40), e)
+            }
+        }
+    }
+
+    private fun showReaction(uid: String, name: String, emoji: String) {
+        val r = CallReaction(nextReaction++, uid, name, emoji)
+        _ui.value = _ui.value.copy(reactions = (_ui.value.reactions + r).takeLast(5))
+        scope.launch {
+            kotlinx.coroutines.delay(4_000)
+            _ui.value = _ui.value.copy(reactions = _ui.value.reactions.filter { it.id != r.id })
+        }
+    }
 }

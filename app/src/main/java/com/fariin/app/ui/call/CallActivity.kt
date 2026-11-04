@@ -194,7 +194,8 @@ class CallActivity : ComponentActivity() {
                         CallLobbyScreen(lobbyKey!!, lobbyVideo, g, onLeave = { GroupCall.leave(); finish() }, onJoin = { video, mic -> joinFromLobby(video, mic) })
                     } else GroupCallScreen(g, onMic = { micToggle() }, onCamera = { cameraToggle(GroupCall.ui.value.cameraOn) },
                         onLeave = { GroupCall.leave(); finish() }, onShare = { if (demoGroup == null) shareTapped() },
-                        onMinimize = { minimizeGroup() }, pip = inPip)
+                        onMinimize = { minimizeGroup() }, pip = inPip,
+                        onHand = { GroupCall.setHand(it) }, onReact = { GroupCall.react(it) })
                 } else {
                     val ui by CallManager.ui.collectAsState()
                     LaunchedEffect(ui.status.phase) { if (ui.status.phase == CallPhase.IDLE) finish() }
