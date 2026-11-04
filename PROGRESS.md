@@ -529,3 +529,4 @@ Seen, not fixed (not today's regressions):
   - Left: nothing small in code; owner items unchanged.
 - 2026-11-03 night (owner bug reports, Pixel): opening My Story jumped: the open flight aimed at a card placed before the window knew its status bar height, then snapped down; flight now follows the live card place. "0 Views" turning into "2 Views" + faces: stats fade in once known. Both checked frame by frame from screen recordings. Rows compare by value now (small gain going back to the list). Owner has more bugs to report one by one.
   - My Story: a pull down opened the viewers when the finger flicked back up as it lifted; only a drag that starts upward opens them now (tested on the Pixel: short pull springs back, swipe up opens viewers, long pull closes).
+  - Viewers carousel: a tapped side card flicked from a cropped tall card to the page's fitted picture; side cards fit the picture now (recording on the Pixel).
