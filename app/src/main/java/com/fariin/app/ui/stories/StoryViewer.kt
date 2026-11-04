@@ -1,5 +1,9 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Download
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
@@ -252,6 +256,9 @@ fun StoryViewer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val groups = remember { mutableStateListOf<StoryGroup>().apply { addAll(initialGroups) } }
+    // "..." > Edit Viewers on my own story (iOS ShareStorySheet editing): the audience page over it.
+    var editViewersFor by remember { mutableStateOf<Story?>(null) }
+    var updatingViewers by remember { mutableStateOf(false) }
     // The first-time guide (iOS StoryGuideHost): the story stands still under it.
     var guideUp by remember { mutableStateOf(StoryGuide.isOwed(context)) }
     val pager = rememberPagerState(initialPage = startGroup.coerceIn(0, maxOf(0, initialGroups.size - 1))) { groups.size }
@@ -650,7 +657,7 @@ fun StoryViewer(
                         convs.firstOrNull { !it.isGroup && it.users.contains(st.authorUid) && it.users.contains(me) }?.isBlockedByMe(me) == true) },
                     onRepost = { st -> startRepost(st, g) },
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
-                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp,
+                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null,
                     // The bars and caption go over the first third of the sheet's pull (iOS storySheetProgress).
                     chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
                     jumpTo = if (page == pager.currentPage) jumpTo else null,
@@ -696,6 +703,14 @@ fun StoryViewer(
                     onMediaLoaded = { pageLoaded[it] = true },
                     // iOS "..." > Hide Stories: hidden at once, and the viewer closes.
                     onHide = { uid -> com.fariin.app.data.StoryMutes.setHidden(context, uid, true); close() },
+                    onMenuAction = { st, key ->
+                        when (key) {
+                            "save" -> storyScope.launch { toast = StoryMenuActions.save(context, st) }
+                            "share" -> storyScope.launch { StoryMenuActions.shareLink(context, st, me) }
+                            "report" -> { storyScope.launch { StoryMenuActions.report(me, st) }; toast = "Reported" }
+                            "viewers" -> editViewersFor = st
+                        }
+                    },
                     onNotify = { uid, name ->
                         val on = com.fariin.app.data.StoryNotify.toggle(me, uid)
                         notifyBar = Triple(on, name, (notifyBar?.third ?: 0) + 1)
@@ -824,6 +839,24 @@ fun StoryViewer(
             }
         }
         if (guideUp && !hero.live) StoryGuideOverlay(onGotIt = { guideUp = false }, onExit = { close() })
+        editViewersFor?.let { st ->
+            Box(Modifier.fillMaxSize().background(com.fariin.app.ui.theme.Fariin.colors.bg)) {
+                ShareStoryAudiencePage(me, convs, myPhoto = groups.firstOrNull { it.key == st.ringKey }?.photoUrl, editing = st,
+                    busy = updatingViewers, onBack = { editViewersFor = null }) { choice, _, lists, _ ->
+                    updatingViewers = true
+                    storyScope.launch {
+                        toast = try {
+                            service.updateAudience(st, choice, lists, storyConvs(convs),
+                                com.fariin.app.data.StoryPrivacyStore.myFriends.value, com.fariin.app.data.StoryPrivacyStore.hidden.value)
+                            editViewersFor = null
+                            "Viewers updated"
+                        } catch (e: StoryService.PostRefused) { e.message }
+                        catch (e: Exception) { "Who can see this story hasn't changed. Check your connection and try again." }
+                        updatingViewers = false
+                    }
+                }
+            }
+        }
     }
 
     confirmDelete?.let { s ->
@@ -885,6 +918,8 @@ private fun StoryPage(
     onShown: (Story) -> Unit,
     onHide: (String) -> Unit,
     onNotify: (uid: String, name: String) -> Unit = { _, _ -> },
+    /** The "..." menu's other rows (iOS UserView.moreItems): "save", "viewers", "share", "report". */
+    onMenuAction: (Story, String) -> Unit = { _, _ -> },
     /** The story's picture or first frame is on screen. */
     onMediaLoaded: (String) -> Unit = {},
     /** A story of this ring to show now: the viewers row landed on it. */
@@ -1063,15 +1098,27 @@ private fun StoryPage(
                             }
                         }
                     }
-                    if (!mine) {
+                    run {
                         Box {
                             // The three-dot overflow (Android's), white, in the 44 target iOS gives its menu.
                             Box(Modifier.size(44.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
                                 Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color.White, modifier = Modifier.size(24.dp))
                             }
                             androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                val item: @Composable (String, androidx.compose.ui.graphics.vector.ImageVector, Color?, String) -> Unit = { t, icon, tint, key ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(t, color = tint ?: Color.Unspecified) },
+                                        leadingIcon = { Icon(icon, contentDescription = null, tint = tint ?: androidx.compose.material3.LocalContentColor.current, modifier = Modifier.size(22.dp)) },
+                                        onClick = { menu = false; onMenuAction(story, key) })
+                                }
+                                // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
+                                if (mine) {
+                                    item("Save", Icons.Filled.Download, null, "save")
+                                    if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", Icons.Filled.Group, null, "viewers")
+                                    if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", Icons.Filled.Share, null, "share")
+                                }
                                 // iOS: Get notifications first, for a person's story (not a group's).
-                                if (story.groupId == null) {
+                                if (!mine && story.groupId == null) {
                                     val notifyOn = story.authorUid in com.fariin.app.data.StoryNotify.on.collectAsState().value
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(com.fariin.app.data.StoryNotifyRules.menuTitle(notifyOn)) },
@@ -1082,11 +1129,14 @@ private fun StoryPage(
                                         onClick = { menu = false; onNotify(story.authorUid, group.name.ifEmpty { "Fariin user" }) },
                                     )
                                 }
-                                androidx.compose.material3.DropdownMenuItem(
+                                // Somebody else's story that anyone may pass on (the repost rule): Share Story.
+                                if (!mine && canRepost(story)) item("Share Story", Icons.Filled.Share, null, "share")
+                                if (!mine) androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("Hide Stories") },
                                     leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
                                     onClick = { menu = false; onHide(story.authorUid) },
                                 )
+                                if (!mine) item("Report", Icons.Filled.Flag, Color(0xFFFF3B30), "report")
                             }
                         }
                     }
