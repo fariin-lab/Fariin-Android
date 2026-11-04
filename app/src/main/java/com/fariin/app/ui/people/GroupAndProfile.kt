@@ -125,16 +125,34 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var historyGen by remember { mutableStateOf(0) }
+    val history = remember(historyGen) { com.fariin.app.data.ProfilePhotoHistory.files(appCtx, api.me).drop(1) }
     LaunchedEffect(Unit) { me = api.profile(api.me); name = me?.name ?: "" }
     // The picked photo goes to the circle cropper first (iOS ProfilePhotoCropper, its Avatar stage).
     val picker = rememberCirclePhotoPicker { jpeg ->
         scope.launch {
             busy = true
-            try { api.uploadPhoto(jpeg); me = api.profile(api.me) } catch (_: Exception) { error = "Couldn't upload the photo. Try again." }
+            try {
+                api.uploadPhoto(jpeg); me = api.profile(api.me)
+                com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, jpeg); historyGen++
+            } catch (_: Exception) { error = "Couldn't upload the photo. Try again." }
             busy = false
         }
     }
     val pick = picker.launch
+    // iOS ProfilePhotoSheet Recents: the photos I had before, tap one to use it again.
+    fun useAgain(f: java.io.File) {
+        if (busy) return
+        scope.launch {
+            busy = true
+            val bytes = runCatching { f.readBytes() }.getOrNull()
+            try { if (bytes != null) { api.uploadPhoto(bytes); me = api.profile(api.me); f.setLastModified(System.currentTimeMillis())
+                com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, bytes); f.delete(); historyGen++ } }
+            catch (_: Exception) { error = "Couldn't upload the photo. Try again." }
+            busy = false
+        }
+    }
     if (picker.pending != null) { picker.Host("Avatar", "Shown in chats, stories and groups"); return }
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
@@ -155,6 +173,20 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                 if (busy) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
             }
             Text("Set New Photo", fontSize = 17.sp, color = c.blue, modifier = Modifier.clickable(onClick = pick).padding(10.dp))
+            if (history.isNotEmpty()) {
+                Text("Recents", fontSize = 13.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
+                androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(history.size) { i ->
+                        val f = history[i]
+                        val bmp = com.fariin.app.ui.thread.rememberBitmap(f, 160)
+                        Box(Modifier.size(64.dp).clip(CircleShape).background(c.card).clickable { useAgain(f) }) {
+                            if (bmp != null) androidx.compose.foundation.Image(bmp, "Use this photo again",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
             SettingsSection(footer = "Enter your name and add a profile photo.") { Field(name, "Name") { name = it.take(64) } }
             SettingsSection {
