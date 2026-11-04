@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import com.fariin.app.data.SearchRecents
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -70,6 +71,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -245,6 +247,14 @@ fun ChatListScreen(
     val officialPinned = officialShown && !showArchive && official.state.pinned
     val officialIndex = if (officialShown && !officialPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < officialAt }.let { if (it < 0) rest.size else it } else rest.size
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
+    val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
+    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    LaunchedEffect(me) { SearchRecents.start(appCtx, me) }
+    // The search page is a page of its own: the tab bar goes while it is up (iOS).
+    DisposableEffect(searching) {
+        com.fariin.app.ui.shell.TabBarVisibility.hidden = searching
+        onDispose { com.fariin.app.ui.shell.TabBarVisibility.hidden = false }
+    }
 
     val toggle: (Conversation) -> Unit = { conv ->
         selected = if (conv.id in selected) selected - conv.id else selected + conv.id
@@ -459,7 +469,15 @@ fun ChatListScreen(
                             selected = conv.id in selected,
                             ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
                             onStoryTap = if (ring == null || selecting) null else ({ storyOpen = ring }),
-                            onOpen = { if (selecting) toggle(conv) else onOpen(conv) },
+                            onOpen = {
+                                if (selecting) toggle(conv)
+                                else {
+                                    // Opened from the search page: remembered under Recent, and the search
+                                    // closes behind it (iOS ChatSearchPage.select).
+                                    if (searching) { SearchRecents.recordChat(appCtx, me, conv); searching = false; query = "" }
+                                    onOpen(conv)
+                                }
+                            },
                             onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) })
                     }
                     val officialItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
@@ -469,7 +487,45 @@ fun ChatListScreen(
                             }
                         }
                     }
-                    if (pinned.isNotEmpty() || officialPinned) {
+                    // THE SEARCH PAGE (iOS ChatSearchPage, owner 2026-11-03: "supposed to be a separate
+                    // page"): nothing of the chat list while it is up. Empty: Recent. Typed: Chats,
+                    // Groups, Channels, then Global Search.
+                    if (searching) {
+                        if (q.isEmpty()) {
+                            val recents = SearchRecents.entries.toList()
+                            if (recents.isNotEmpty()) {
+                                item(key = "h-recent") { RecentHeader { SearchRecents.clear(appCtx, me) } }
+                                items(recents, key = { "r-" + it.id }, contentType = { "chat" }) { e ->
+                                    val conv = if (e.kind == "chat") byId[e.key] else null
+                                    if (conv != null) row(conv)
+                                    else if (e.kind == "person") {
+                                        val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
+                                        PersonRow(p) {
+                                            scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            val oneToOne = shown.filter { !it.isGroup && !it.isChannel }
+                            val groupsHit = shown.filter { it.isGroup && !it.isChannel }
+                            val channelsHit = shown.filter { it.isChannel }
+                            if (oneToOne.isNotEmpty() || officialShown) {
+                                item(key = "h-s-chats") { SectionHeader("Chats") }
+                                if (officialShown) officialItem()
+                                items(oneToOne, key = { it.id }, contentType = { "chat" }) { row(it) }
+                            }
+                            if (groupsHit.isNotEmpty()) {
+                                item(key = "h-s-groups") { SectionHeader("Groups") }
+                                items(groupsHit, key = { it.id }, contentType = { "chat" }) { row(it) }
+                            }
+                            if (channelsHit.isNotEmpty()) {
+                                item(key = "h-s-channels") { SectionHeader("Channels") }
+                                items(channelsHit, key = { it.id }, contentType = { "chat" }) { row(it) }
+                            }
+                        }
+                    }
+                    if (!searching && (pinned.isNotEmpty() || officialPinned)) {
                         item(key = "h-pinned") { SectionHeader("Pinned") }
                         if (officialPinned) officialItem()
                         items(pinned, key = { it.id }, contentType = { "chat" }) {
@@ -478,12 +534,14 @@ fun ChatListScreen(
                         item(key = "h-chats") { SectionHeader("Chats") }
                     }
                     // A chat that gets a new message glides to its new place instead of jumping.
-                    items(rest.subList(0, officialIndex), key = { it.id }, contentType = { "chat" }) {
-                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
-                    }
-                    if (officialShown && !officialPinned) officialItem()
-                    items(rest.subList(officialIndex, rest.size), key = { it.id }, contentType = { "chat" }) {
-                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                    if (!searching) {
+                        items(rest.subList(0, officialIndex), key = { it.id }, contentType = { "chat" }) {
+                            Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                        }
+                        if (officialShown && !officialPinned) officialItem()
+                        items(rest.subList(officialIndex, rest.size), key = { it.id }, contentType = { "chat" }) {
+                            Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                        }
                     }
                     // iOS ChatSearchPage: people under "Global Search", after everything local, the first
                     // three and then Show More. A tap opens the chat, which is what creates it.
@@ -491,7 +549,7 @@ fun ChatListScreen(
                         item(key = "h-global") { SectionHeader("Global Search") }
                         items(if (peopleAll) newPeople else newPeople.take(3), key = { "p-" + it.uid }) { p ->
                             PersonRow(p) {
-                                scope.launch { people.startChat(p)?.let { cid -> searching = false; query = ""; people.chat(cid) } }
+                                scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } }
                             }
                         }
                         if (!peopleAll && newPeople.size > 3) item(key = "p-more") {
@@ -697,6 +755,15 @@ private fun PersonRow(p: com.fariin.app.data.Person, onClick: () -> Unit) {
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.blue, maxLines = 1)
         }
+    }
+}
+
+/** iOS SearchSectionHeader: "Recent" with a Clear on the right. */
+@Composable
+private fun RecentHeader(onClear: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Recent", style = MaterialTheme.typography.titleSmall, color = Fariin.colors.blue, modifier = Modifier.weight(1f))
+        TextButton(onClick = onClear) { Text("Clear", color = Fariin.colors.blue) }
     }
 }
 

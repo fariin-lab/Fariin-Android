@@ -64,6 +64,7 @@ object SessionEnd {
         com.fariin.app.ui.thread.DecodedPictures.clear()   // decoded chat photos held in memory
         com.fariin.app.data.SharedMediaSource.clear()      // All Media's opened messages
         com.fariin.app.data.ContactNames.clear()       // names I gave people belong to the account
+        com.fariin.app.data.SearchRecents.wipe(c)      // what the account searched for
         com.fariin.app.data.Glow.Cache.clear(c)       // the Glowing grid's last answer, every account's
         com.fariin.app.data.ChatLookStore.wipe(c)      // wallpapers, chat colours, wallpaper photos
         com.fariin.app.local.AtRest.forgetKey()
