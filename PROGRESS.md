@@ -655,3 +655,8 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Channel info: same split (Followers, Channel Settings, Follow Requests while waiting; new
   channelsettings route). Built, NOT seen on device: no channel I admin on the Pixel account.
 - Checked, fine as is: Calls row tap calls back (as iOS); story card white = a white story.
+- Settings pass: switch rows had no dividers while arrow rows did (ba82396); Notifications, Chats,
+  Appearance, Storage, Account, Devices otherwise clean. Radio lists stay without lines (Android).
+  Found + fixed a slip of the colour sweep: Appearance bubble previews had turned black (836b8eb).
+- Stories: header camera removed (iOS owner order 2026-10-11, one door: My Story's camera); story
+  card gets a faint rim so a white story is visible. Seen on the Pixel.
