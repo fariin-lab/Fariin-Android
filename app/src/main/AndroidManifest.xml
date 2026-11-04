@@ -40,7 +40,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:enableOnBackInvokedCallback="true"
+        android:enableOnBackInvokedCallback="false"
         android:theme="@style/Theme.Fariin">
         <activity
             android:name=".MainActivity"
