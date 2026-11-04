@@ -938,6 +938,8 @@ private fun StoryPage(
                 tracker.addPosition(down.uptimeMillis, down.position)
                 var dx = 0f; var dy = 0f
                 var vertical = false
+                // Which way the drag went when it started: only an upward one can open the viewers.
+                var upward = false
                 var held = false
                 while (true) {
                     // Still and down for 220 ms is a hold (pause), not a tap.
@@ -950,12 +952,14 @@ private fun StoryPage(
                     // Counted before the up check: a fast flick can carry most of its travel in the last event.
                     val d = ch.positionChange()
                     dx += d.x; dy += d.y
-                    if (!vertical && abs(dy) > slop && abs(dy) > abs(dx) * 1.2f) vertical = true
+                    if (!vertical && abs(dy) > slop && abs(dy) > abs(dx) * 1.2f) { vertical = true; upward = dy < 0 }
                     if (!ch.pressed) {
                         if (vertical) {
                             val vy = tracker.calculateVelocity().y
-                            // My story: up past 40dp or a 300dp/s flick opens the viewers (iOS onSwipeUpEnded).
-                            if (mine && (dy < -StoryMotion.VIEWERS_DISTANCE * density || vy < -StoryMotion.VIEWERS_VELOCITY * density)) {
+                            // My story: a drag that started UP and went 40dp or flicked 300dp/s up opens the
+                            // viewers (iOS onSwipeUpEnded). A pull down never does, even if the finger
+                            // flicks back up as it lifts (owner 2026-11-03: a short pull down opened them).
+                            if (mine && upward && dy < 0 && (dy < -StoryMotion.VIEWERS_DISTANCE * density || vy < -StoryMotion.VIEWERS_VELOCITY * density)) {
                                 onDragEnd(0f, 0f); onOpenViewers(story.id)
                             } else onDragEnd(dy, vy)
                         } else if (!held && ch.isConsumed.not()) {
