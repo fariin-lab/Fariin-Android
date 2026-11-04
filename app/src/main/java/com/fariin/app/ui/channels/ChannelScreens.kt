@@ -2,6 +2,7 @@ package com.fariin.app.ui.channels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -182,10 +183,15 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
     var halfMade by remember { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var photo by remember { mutableStateOf<ByteArray?>(null) }
     val scope = rememberCoroutineScope()
+    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val picker = com.fariin.app.ui.photo.rememberCirclePhotoPicker { photo = it }
+    if (picker.pending != null) { picker.Host("Channel photo", "Shown in chats and on the channel page"); return }
     when (step) {
         0 -> Intro(onBack) { step = 1 }
-        1 -> Details(name, about, creating, error, onName = { name = it.take(ChannelRules.NAME_MAX) },
+        1 -> Details(name, about, creating, error, photo, picker, onRemovePhoto = { photo = null },
+            onName = { name = it.take(ChannelRules.NAME_MAX) },
             onAbout = { about = it.take(ChannelRules.ABOUT_MAX) }, onBack = { if (!creating) step = 0 }) {
             if (creating || name.isBlank()) return@Details
             creating = true; error = null
@@ -197,6 +203,8 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
                     halfMade = null
                     try { ChannelService.setDescription(id, about) } catch (_: Exception) {}
                     try { ChannelService.createPrimaryLink(id) } catch (_: Exception) {}
+                    // The photo picked on this page, best-effort: the channel stands without it.
+                    photo?.let { ph -> try { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(appCtx)).setGroupPhoto(id, ph) } catch (_: Exception) {} }
                     cid = id; creating = false; step = 2
                 } catch (_: Exception) { error = "Could not create the channel. Try again."; creating = false }
             }
@@ -265,23 +273,64 @@ private fun Field(value: String, placeholder: String, single: Boolean, onChange:
     }
 }
 
+/**
+ * iOS NewChannelView's details page (owner screenshot 2026-11-04): Next at the top end; one card
+ * with the squircle photo slot (camera) beside Channel Name; Description in its own card; the
+ * "Optional" note and the Channel Guidelines line under them.
+ */
 @Composable
-private fun Details(name: String, about: String, creating: Boolean, error: String?, onName: (String) -> Unit,
-                    onAbout: (String) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
+private fun Details(name: String, about: String, creating: Boolean, error: String?,
+                    photo: ByteArray?, picker: com.fariin.app.ui.photo.CirclePhotoPicker, onRemovePhoto: () -> Unit,
+                    onName: (String) -> Unit, onAbout: (String) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
     val c = Fariin.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var photoMenu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().imePadding().navigationBarsPadding()) {
-        com.fariin.app.ui.components.FloatingTopBar("New Channel", onBack = onBack, container = c.bgSecondary)
+        com.fariin.app.ui.components.FloatingTopBar("New Channel", onBack = onBack, container = c.bgSecondary) {
+            if (creating) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(end = 12.dp).size(22.dp))
+            else com.fariin.app.ui.components.FloatingTextAction("Next", enabled = name.isNotBlank(), onClick = onNext)
+        }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            Column(Modifier.padding(16.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
-                Field(name, "Channel name", true, onName)
-                HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+            Row(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                val shape = RoundedCornerShape(16.dp)
+                Box {
+                    Box(Modifier.size(56.dp).clip(shape).background(c.fieldFill).clickable(onClickLabel = "Set Channel Photo") { photoMenu = true },
+                        contentAlignment = Alignment.Center) {
+                        val bmp = remember(photo) { photo?.let { com.fariin.app.media.BitmapDecode.fromBytes(it, 200)?.asImageBitmap() } }
+                        if (bmp != null) androidx.compose.foundation.Image(bmp, "Channel photo",
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        else Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_group_camera), "Set Channel Photo",
+                            tint = c.label, modifier = Modifier.size(26.dp))
+                    }
+                    androidx.compose.material3.DropdownMenu(expanded = photoMenu, onDismissRequest = { photoMenu = false }) {
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") }, onClick = { photoMenu = false; picker.takePhoto() })
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") }, onClick = { photoMenu = false; picker.launch() })
+                        if (photo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
+                            onClick = { photoMenu = false; onRemovePhoto() })
+                    }
+                }
+                Box(Modifier.weight(1f)) { Field(name, "Channel Name", true, onName) }
+            }
+            Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card)) {
                 Field(about, "Description", false, onAbout)
             }
             Text("Optional. Tell people what your channel is about.", fontSize = 13.sp, color = c.secondary,
-                modifier = Modifier.padding(horizontal = 32.dp))
+                modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 8.dp))
+            // The guidelines line, its link in the label colour as iOS (the link opens the help page).
+            Text(androidx.compose.ui.text.buildAnnotatedString {
+                append("By creating a channel you agree to the ")
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = c.label))
+                append("Channel Guidelines")
+                pop()
+                append(".")
+            }, fontSize = 13.sp, color = c.secondary,
+                modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp).clickable {
+                    runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://help.fariin.com/channels/channel-guidelines"))) }
+                })
             error?.let { Text(it, fontSize = 14.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)) }
         }
-        BigButton("Next", enabled = name.isNotBlank(), busy = creating, onClick = onNext)
     }
 }
 
