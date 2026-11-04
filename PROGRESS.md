@@ -554,3 +554,4 @@ Seen, not fixed (not today's regressions):
   - Group call minimize (PiP for video, background for voice), not device-tested. Next: group call raise hand / reactions.
   - Group call raise hand + reactions (iOS wire), not run in a call. Next: official chat reactions/search/unread, then animated custom reactions.
   - Animated custom reactions play on chips and the reaction bar (not seen live: no channel offering them). Official chat already had reactions, search, unread (old note stale). Feature pass list now done.
+  - App update notices (Android side done; server Kulan b76b34f platform-aware, NOT DEPLOYED; admin panel needs a platform picker).
