@@ -176,6 +176,8 @@ data class Message(
             poll != null -> PollRules.safeText(poll!!)   // iOS safeText: never the raw marker
             type == "sticker" -> StickerGifRules.stickerLabel(stickerEmoji)
             type == "gif" -> "GIF"   // before the imageUrl check below: a GIF carries one too
+            // A call record (quoted in a reply bar or a reply): its kind, as the bubble's title.
+            isCall && text.isEmpty() -> if (callVideo) "Video call" else "Voice call"
             text.isNotEmpty() -> text
             type == "image" || imageUrl != null -> "Photo"
             type == "video" || videoUrl != null -> "Video"

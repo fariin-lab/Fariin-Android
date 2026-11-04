@@ -378,14 +378,15 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit, content: @Composabl
     }
 }
 
-/** The bar over the composer while replying or editing (iOS ReplyBar / edit bar). */
+/** The bar over the composer while replying or editing (iOS ReplyBar / edit bar); line and title
+ *  in the label colour, as iOS syncBanners (accent = .label), not the bubble blue. */
 @Composable
 internal fun ComposerBar(title: String, text: String, onClose: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().background(c.bg).padding(start = 14.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(3.dp).height(34.dp).background(c.blue))
+        Box(Modifier.width(3.dp).height(34.dp).background(c.label))
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-            Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.blue, maxLines = 1)
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
             Text(text, fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Cancel", tint = c.secondary) }
