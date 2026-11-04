@@ -64,7 +64,20 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
                 banned = { nav.navigate("channelbanned/$it") { launchSingleTop = true } },
                 reactions = { nav.navigate("channelreactions/$it") { launchSingleTop = true } },
                 requests = { nav.navigate("channelrequests/$it") { launchSingleTop = true } },
+                settings = { nav.navigate("channelsettings/$it") { launchSingleTop = true } },
             ))
+    }
+    composable("channelsettings/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        ChannelSettingsScreen(cid, me, onBack = { nav.popBackStack() }, nav = ChannelManageNav(
+            edit = { nav.navigate("channeledit/$it") { launchSingleTop = true } },
+            followers = { nav.navigate("channelfollowers/$it") { launchSingleTop = true } },
+            admins = { nav.navigate("channeladmins/$it") { launchSingleTop = true } },
+            links = { nav.navigate("channellinks/$it") { launchSingleTop = true } },
+            banned = { nav.navigate("channelbanned/$it") { launchSingleTop = true } },
+            reactions = { nav.navigate("channelreactions/$it") { launchSingleTop = true } },
+            requests = { nav.navigate("channelrequests/$it") { launchSingleTop = true } },
+        ))
     }
     // Channel management for its owner and admins (ChannelManage.kt).
     composable("channeledit/{cid}") { e ->

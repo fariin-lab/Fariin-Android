@@ -90,6 +90,35 @@ private fun toast(ctx: android.content.Context, text: String) = Toast.makeText(c
  */
 @Composable
 internal fun ChannelManageSection(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav) {
+    // iOS channel info (owner 2026-10-18/20): Followers and one Channel Settings row; the rest of the
+    // management is on that page. Follow Requests shows here too while someone is waiting.
+    val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = team.can(me, Right.INVITE_USERS))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Fariin.colors.card)) {
+        SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
+        SettingsRow("Channel Settings", icon = painterResource(R.drawable.ic_group_settings), last = reqs.isEmpty()) { nav.settings(info.cid) }
+        if (reqs.isNotEmpty()) SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
+            value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true) { nav.requests(info.cid) }
+    }
+}
+
+/** Channel Settings (iOS GroupSettingsView for a channel): the whole management list on its own page. */
+@Composable
+fun ChannelSettingsScreen(cid: String, me: String, onBack: () -> Unit, nav: ChannelManageNav) {
+    val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
+    val c = Fariin.colors
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Channel Settings", onBack)
+        if (doc["channel"] != true) return@Column
+        val info = ChannelInfo.from(cid, doc)
+        val shown = ChannelRules.subscriberCount(com.fariin.app.channel.ChannelFollows.adjusted(cid, info.followerCount), info.users.size)
+        Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            ChannelManageList(info, Team.from(doc), me, shown, nav)
+        }
+    }
+}
+
+@Composable
+private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Fariin.colors.card)) {
         if (team.can(me, Right.CHANGE_INFO)) {
             SettingsRow("Edit Channel", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Edit)) { nav.edit(info.cid) }
@@ -127,6 +156,7 @@ data class ChannelManageNav(
     val banned: (String) -> Unit = {},
     val reactions: (String) -> Unit = {},
     val requests: (String) -> Unit = {},
+    val settings: (String) -> Unit = {},
 )
 
 /** Edit Channel: the group editor in a channel's words and squircle (iOS EditGroupView). */
