@@ -403,12 +403,13 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             // iOS NewGroupView: the photo and the name side by side in one rounded card.
             SettingsSection {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(64.dp).clip(CircleShape).background(c.fieldFill).clickable(onClick = pick), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)).clickable(onClickLabel = "Set Group Photo", onClick = pick), contentAlignment = Alignment.Center) {
                         val p = photo
                         if (p != null) {
                             val bmp = remember(p) { android.graphics.BitmapFactory.decodeByteArray(p, 0, p.size)?.asImageBitmap() }
                             if (bmp != null) androidx.compose.foundation.Image(bmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        } else Text("Photo", fontSize = 13.sp, color = c.accent)
+                        } else Icon(painterResource(com.fariin.app.R.drawable.ic_group_camera), contentDescription = "Set Group Photo",
+                            tint = c.accent, modifier = Modifier.size(28.dp))   // iOS: the owner's camera drawing (2026-10-18)
                     }
                     Spacer(Modifier.width(4.dp))
                     Box(Modifier.weight(1f)) { Field(title, "Group Name") { title = it.take(100) } }
@@ -416,7 +417,9 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             }
             NewGroupTimerSection(timer) { timer = it }
             val members = people.filter { it.uid in picked }
-            SettingsSection(header = "Members · ${picked.size + 1}") {   // iOS NewGroupView: me included
+            // No "Members · N" heading on this page (iOS, owner 2026-10-20): it counted me but listed
+            // only the others, so two over one row read as a mistake.
+            SettingsSection {
                 members.forEach { p -> PersonRow(p.photoUrl, p.shownName, "", onClick = null) }
             }
         }
