@@ -269,8 +269,7 @@ private fun ThreadContent(
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var viewing by remember { mutableStateOf<Viewing?>(null) }
     viewing?.let { v -> MediaViewer(v, viewerHost(ui, actions, onSendPick)) { viewing = null } }
-    // Leaving the chat stops its note (iOS stops playback when the thread goes away).
-    DisposableEffect(ui.cid) { onDispose { VoicePlayer.stop() } }
+    // Leaving the chat no longer stops its note (iOS VoiceNotePlayer): it plays on, with the bar elsewhere.
     val context = LocalContext.current
     val is24h = remember { DateFormat.is24HourFormat(context) }
     val now = remember(ui.messages) { System.currentTimeMillis().toDouble() }
@@ -505,6 +504,9 @@ private fun ThreadContent(
                     if (search.matches.isNotEmpty()) { search.index = minOf(search.index + 1, search.matches.size - 1); goToMatch() }
                 })
                 else if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
+                // Another chat's voice message still playing: its bar under the header (iOS VoiceNoteBar).
+                val openChat = LocalOpenChat.current
+                if (!search.active && !selecting) VoiceNoteBar(ui.cid, ui.me) { cid -> com.fariin.app.data.ChatsNow.find(cid)?.let(openChat) }
                 // Search owns the top: the pinned bar hides while searching (iOS).
                 // A group's live call takes the pinned bar's place while it runs (iOS CallBarOrPin).
                 if (!search.active) com.fariin.app.ui.call.ThreadLiveCallBar(ui.cid, ui.isGroup && ui.channel == null && !ui.notAMember, ui.title) {

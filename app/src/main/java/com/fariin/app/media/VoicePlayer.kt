@@ -35,6 +35,9 @@ object VoicePlayer {
         val paused: Map<String, Long> = emptyMap(),
         val rates: Map<String, Float> = emptyMap(),
         val failed: Set<String> = emptySet(),
+        /** The chat the open note belongs to, and who sent it (the bar away from that chat). */
+        val cid: String? = null,
+        val author: String = "",
     )
 
     private val _state = MutableStateFlow(State())
@@ -54,7 +57,7 @@ object VoicePlayer {
     }
 
     /** Tap on the disc: play, pause, or resume [id]. [file] holds the plain bytes. */
-    fun toggle(context: Context, id: String, cid: String, file: File) {
+    fun toggle(context: Context, id: String, cid: String, file: File, author: String = "") {
         val s = _state.value
         val p = player
         if (s.id == id && p != null) {
@@ -67,7 +70,7 @@ object VoicePlayer {
                 _state.value = _state.value.copy(failed = _state.value.failed + id)
                 return@launch
             }
-            start(context, id, cid, playable)
+            start(context, id, cid, playable, author)
         }
     }
 
@@ -82,10 +85,16 @@ object VoicePlayer {
         save()
         player?.release(); player = null
         ticker?.cancel()
-        _state.value = _state.value.copy(id = null, playing = false, positionMs = 0)
+        _state.value = _state.value.copy(id = null, playing = false, positionMs = 0, cid = null)
     }
 
-    private fun start(context: Context, id: String, cid: String, file: File) {
+    /** The bar's control: pause the open note, or carry on from where it stopped. */
+    fun playPause() {
+        val p = player ?: return
+        if (p.isPlaying) p.pause() else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
+    }
+
+    private fun start(context: Context, id: String, cid: String, file: File, author: String) {
         save()
         player?.release()
         this.cid = cid
@@ -112,7 +121,7 @@ object VoicePlayer {
         _state.value.paused[id]?.let { p.seekTo(it) }
         p.play()
         player = p
-        _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id)
+        _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author)
         ticker?.cancel()
         ticker = main.launch { while (isActive) { tick(); delay(50) } }
     }

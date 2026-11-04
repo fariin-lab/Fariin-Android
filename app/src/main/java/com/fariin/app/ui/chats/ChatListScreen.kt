@@ -460,6 +460,10 @@ fun ChatListScreen(
                     // The search field heads the list and scrolls away with it, as iOS's does
                     // (owner 2026-11-03): one tap and the keyboard is up.
                     if (!showArchive && !searching) item(key = "search", contentType = "search") { SearchCapsule { searching = true } }
+                    // A voice message playing on after its chat was left (iOS VoiceNoteBar, under the header).
+                    if (!searching) item(key = "voicebar", contentType = "voicebar") {
+                        com.fariin.app.ui.thread.VoiceNoteBar(null, me) { cid -> (state.chats + state.archived).firstOrNull { it.id == cid }?.let { if (!selecting) onOpen(it) } }
+                    }
                     if (!showArchive && !searching && filter == FILTER_ALL && state.requests.isNotEmpty()) item(key = "requests", contentType = "requests") {
                         ListRow("Message Requests", fi(R.drawable.ic_message_request), trailing = "${state.requests.size}", badge = true,
                             subtitle = state.requests.joinToString(", ") { it.displayName(me) }, onClick = people.requests)

@@ -316,7 +316,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                             loading = true
                             val f = media.file(url!!, m.enc)
                             loading = false
-                            if (f != null) VoicePlayer.toggle(ctx, m.rowId, cid, f)
+                            if (f != null) VoicePlayer.toggle(ctx, m.rowId, cid, f, m.authorId)
                         }
                     },
                 contentAlignment = Alignment.Center,
