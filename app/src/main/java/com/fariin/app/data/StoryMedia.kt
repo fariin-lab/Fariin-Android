@@ -39,13 +39,13 @@ object StoryMedia {
      * picture by [draw], which gets the canvas and the pixels per edit-space unit, then encoded the
      * same way as a picked photo. Call off the main thread.
      */
-    fun bake(prepared: Prepared, draw: (android.graphics.Canvas, Float) -> Unit): Prepared? {
+    fun bake(prepared: Prepared, extraStickers: List<StoryTapTarget> = emptyList(), draw: (android.graphics.Canvas, Float) -> Unit): Prepared? {
         val opts = android.graphics.BitmapFactory.Options().apply { inMutable = true; inPreferredConfig = Bitmap.Config.ARGB_8888 }
         val bmp = android.graphics.BitmapFactory.decodeByteArray(prepared.jpeg, 0, prepared.jpeg.size, opts) ?: return null
         draw(android.graphics.Canvas(bmp), bmp.width / StoryEditRules.SPACE)
         val out = encodePhoto(bmp)
-        return if (prepared.stickers.isEmpty()) out
-            else Prepared(out.jpeg, out.blurThumb, out.video, out.width, out.height, prepared.stickers)
+        // The tap areas and a repost's credit go with the picture (the credit used to be dropped here).
+        return Prepared(out.jpeg, out.blurThumb, out.video, out.width, out.height, prepared.stickers + extraStickers, prepared.repostOf)
     }
 
     /** A picture drawn here (a text story, iOS renderTextStory): posted at its own size and [quality],

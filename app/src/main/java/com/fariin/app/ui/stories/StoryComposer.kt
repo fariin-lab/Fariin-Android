@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.Sell
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -152,6 +154,9 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
     var hoursMenu by remember { mutableStateOf(false) }
+    var stickerTray by remember { mutableStateOf(false) }
+    var askLink by remember { mutableStateOf(false) }
+    var askPlace by remember { mutableStateOf(false) }
     var audience by remember { mutableStateOf(textStory) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -213,6 +218,15 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         edits.texts.add(t)
         editingId = t.id
     }
+    // iOS chipSticker (Location, Link, Time): a white pill that moves like text; Link and Location
+    // become a tap area on the posted story.
+    fun addChip(label: String, link: String?) {
+        val k = StoryEditRules.SPACE / img.width.coerceAtLeast(1f)
+        val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, img.height * k / 2)
+        t.text = label; t.bg = StoryEditRules.Bg.SOLID; t.isChip = true; t.link = link
+        edits.drawingOnTop = false
+        edits.texts.add(t)
+    }
     fun openPen() { penSnapshot = edits.strokes.toList(); drawing = true }
     fun closePen(discard: Boolean) {
         if (discard) { edits.strokes.clear(); edits.strokes.addAll(penSnapshot) }
@@ -230,7 +244,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         if (canEdit) StoryEditCanvas(
             edits, img, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = { stroking = it },
-            onTapText = { editingId = it.id },
+            onTapText = { if (!it.isChip) editingId = it.id },
             onDrag = { _, p ->
                 dragging = true
                 val hot = StoryEditRules.isOverTrash(p.x, p.y, bin.x, bin.y, binSize, binSlop)
@@ -259,6 +273,12 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { openPen() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White)
+                }
+                if (media.video == null) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Sell, contentDescription = "Stickers", tint = Color.White)
+                    }
                 }
             }
             Box {
@@ -321,7 +341,9 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                     baking = true
                     scope.launch {
                         val baked = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                            runCatching { StoryMedia.bake(media) { c, k -> bakeStoryEdits(c, k, edits) } }.getOrNull()
+                            runCatching {
+                                StoryMedia.bake(media, chipTapTargets(edits, media.width, media.height)) { c, k -> bakeStoryEdits(c, k, edits) }
+                            }.getOrNull()
                         }
                         baking = false
                         if (baked != null) { posted = baked; audience = true }
@@ -330,6 +352,18 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             )
         }
         if (editingId >= 0) edits.texts.firstOrNull { it.id == editingId }?.let { StoryTextEditor(it, img, onDone = { finishText() }) }
+        if (stickerTray) StickerTray(onClose = { stickerTray = false },
+            onTime = { stickerTray = false; addChip("🕒 " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date()), null) },
+            onLink = { stickerTray = false; askLink = true },
+            onPlace = { stickerTray = false; askPlace = true })
+        if (askLink) ChipPrompt("Link", "https://", onDone = { raw ->
+            askLink = false
+            com.fariin.app.data.StoryChips.link(raw)?.let { (label, url) -> addChip("🔗 $label", url) }
+        }, onCancel = { askLink = false })
+        if (askPlace) ChipPrompt("Location", "Place name", onDone = { raw ->
+            askPlace = false
+            com.fariin.app.data.StoryChips.place(raw)?.let { (label, url) -> addChip("📍 $label", url) }
+        }, onCancel = { askPlace = false })
         if (baking) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)).clickable {}, contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = Color.White)
         }
@@ -367,3 +401,39 @@ suspend fun prepareStoryMedia(context: android.content.Context, uri: Uri): Resul
             Result.failure(e)
         }
     }
+
+/** iOS StoryStickerSheet's action pills: Location, Link, Time, on the dark tray. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun StickerTray(onClose: () -> Unit, onTime: () -> Unit, onLink: () -> Unit, onPlace: () -> Unit) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onClose, containerColor = Color(0xFF1C1C1E)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TrayPill("📍", "Location", Color(0xFFFF453A), onPlace)
+            TrayPill("🔗", "Link", Color(0xFF0A84FF), onLink)
+            TrayPill("🕒", "Time", Color(0xFFFF9F0A), onTime)
+        }
+    }
+}
+
+@Composable
+private fun TrayPill(glyph: String, title: String, tint: Color, onClick: () -> Unit) {
+    Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(glyph, fontSize = 16.sp)
+        Spacer(Modifier.width(6.dp))
+        Text(title, color = tint, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** One line for a Link or Location chip; Done adds it. */
+@Composable
+private fun ChipPrompt(title: String, hint: String, onDone: (String) -> Unit, onCancel: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onCancel,
+        title = { Text(title) },
+        text = {
+            androidx.compose.material3.OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text(hint) })
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { onDone(text) }, enabled = text.isNotBlank()) { Text("Done") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onCancel) { Text("Cancel") } })
+}

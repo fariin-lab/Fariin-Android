@@ -96,6 +96,10 @@ class StoryTextItem(val id: Long, cx: Float, cy: Float) {
     var font by mutableStateOf(Font.ROUNDED)
     var bg by mutableStateOf(Bg.PLAIN)
     val color get() = StoryEditRules.textColor(phase)
+    /** A sticker chip (iOS chipSticker: Location, Link, Time): moves and sizes like text, never opens the text editor. */
+    var isChip = false
+    /** What a tap on the posted chip opens (Link, Location); null for Time. */
+    var link: String? = null
 
     private var cached: StaticLayout? = null
     private var cacheKey: Any? = null
@@ -493,5 +497,21 @@ fun StoryPenBar(
             Spacer(Modifier.weight(1f))
             RoundButton(onDone, light = true) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = Color.Black) }
         }
+    }
+}
+
+/**
+ * The posted story's tap areas for the chips that open something (iOS chipSticker action): the chip's
+ * box, in fractions of the picture, centred where it sits, with its turn. [aspect] = width / height.
+ */
+fun chipTapTargets(e: StoryEdits, mediaW: Int, mediaH: Int): List<com.fariin.app.data.StoryTapTarget> {
+    if (mediaW <= 0 || mediaH <= 0) return emptyList()
+    val spaceH = StoryEditRules.SPACE * mediaH / mediaW
+    return e.texts.filter { it.isChip && !it.link.isNullOrEmpty() && it.text.isNotBlank() }.map { t ->
+        val l = t.layout()
+        com.fariin.app.data.StoryTapTarget(
+            x = (t.cx / StoryEditRules.SPACE).toDouble(), y = (t.cy / spaceH).toDouble(),
+            w = (boxW(l, t.bg) * t.scale / StoryEditRules.SPACE).toDouble(), h = (boxH(l, t.bg) * t.scale / spaceH).toDouble(),
+            rotation = Math.toRadians(t.rotation.toDouble()), url = t.link!!, aspect = mediaW.toDouble() / mediaH)
     }
 }
