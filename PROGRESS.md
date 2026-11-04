@@ -561,3 +561,4 @@ Seen, not fixed (not today's regressions):
   - Pass 3 (inside screens): Cancel Sending on uploads, Clear My Messages on profiles. Attach menu and chat header already match. Left: Share Profile (send a person's card to another chat).
   - Share Profile (card to chats). Profile page now matches iOS's menu (Export Chat is off on iOS).
   - Group Info: Report Spam / End Group / Delete Group. Group gaps left: Hide Members, member list filters (All Members / Members with roles), Share Invite Link wording.
+  - Hidden members honoured; call link Send. Stories and Calls screens otherwise match (gaps were admin-only or wording).
