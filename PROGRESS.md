@@ -551,3 +551,4 @@ Seen, not fixed (not today's regressions):
   - New Contact (7a0f5ef, not-found path tested), Things you can do card (needs a new account to see). Next: member roles editor.
   - Member tags (set from the member card, shown in group chats). Next: story location sticker.
   - Story stickers tray: Location / Link / Time chips with tap areas; repost credit no longer lost when text is baked in. Next: floating group-call window.
+  - Group call minimize (PiP for video, background for voice), not device-tested. Next: group call raise hand / reactions.
