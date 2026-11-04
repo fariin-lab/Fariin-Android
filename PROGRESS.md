@@ -682,3 +682,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Video viewer checked (sender, date, seek, pause, share): fine.
 - Photo viewer: grey band under the status bar (dialog window not edge to edge). Fixed; Pixel top
   pixels now (0,0,0), drag-down close still works. Person page rechecked: 5 circles fit.
+- Send + recording mic now use the chat colour (iOS sendTint); kream's orange chat had a blue Send.
+  Pixel: orange Send. Draft kept across reinstall, then cleared. Media tabs (Files/Voice/Links)
+  and voice playback from the list checked: fine. Fariin News page fine.
