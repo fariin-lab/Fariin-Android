@@ -199,6 +199,7 @@ fun GlowProfilePage(me: String, profile: MyProfile?, onEdit: () -> Unit, onBack:
                         Text(it, fontSize = 15.sp, color = Secondary, textAlign = TextAlign.Center,
                             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 2.dp))
                     }
+                    profile?.links?.let { com.fariin.app.ui.people.ProfileLinkChips(it, Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) }
                 }
                 val title = profile?.handle?.ifEmpty { null } ?: profile?.name?.ifEmpty { null } ?: "Glow"
                 if (AppFeatures.glow) StatsCard(glow.glowers.size, glow.glowing.size, faces,

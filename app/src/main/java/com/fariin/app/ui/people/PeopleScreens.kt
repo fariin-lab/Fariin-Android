@@ -480,6 +480,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             person?.about?.takeIf { it.isNotEmpty() }?.let { bio ->
                 SettingsSection { Text(bio, fontSize = 17.sp, color = c.label, modifier = Modifier.fillMaxWidth().padding(16.dp)) }
             }
+            person?.links?.let { ProfileLinkChips(it, Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) }
             if (uid != me) com.fariin.app.data.ContactNames.note(uid)?.let { NotesCard(it) }
             SettingsSection {
                 DisappearingRow(timer, short = true) { timerOpen = true }

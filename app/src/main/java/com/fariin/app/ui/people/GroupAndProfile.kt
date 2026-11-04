@@ -122,13 +122,15 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var me by remember { mutableStateOf<Person?>(null) }
     var name by remember { mutableStateOf("") }
+    var about by remember { mutableStateOf("") }
+    var links by remember { mutableStateOf<List<com.fariin.app.data.ProfileLink>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     var historyGen by remember { mutableStateOf(0) }
     val history = remember(historyGen) { com.fariin.app.data.ProfilePhotoHistory.files(appCtx, api.me).drop(1) }
-    LaunchedEffect(Unit) { me = api.profile(api.me); name = me?.name ?: "" }
+    LaunchedEffect(Unit) { me = api.profile(api.me); name = me?.name ?: ""; about = me?.about ?: ""; links = me?.links.orEmpty() }
     // The picked photo goes to the circle cropper first (iOS ProfilePhotoCropper, its Avatar stage).
     val picker = rememberCirclePhotoPicker { jpeg ->
         scope.launch {
@@ -154,6 +156,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
         }
     }
     if (picker.pending != null) { picker.Host("Avatar", "Shown in chats, stories and groups"); return }
+    if (page == "links") { ProfileLinksPage(api.me, links, onChanged = { links = it }, onBack = { page = "" }); return }
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
@@ -162,7 +165,12 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
             TextAction("Done", enabled = name.isNotBlank() && !busy) {
                 scope.launch {
                     busy = true
-                    try { if (name.trim() != me?.name) api.saveName(name); onBack() } catch (_: Exception) { error = "Couldn't save. Try again." }
+                    try {
+                        if (name.trim() != me?.name) api.saveName(name)
+                        // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
+                        if (me != null && about.trim() != me?.about?.trim()) com.fariin.app.data.ProfileWrites.saveAbout(api.me, about)
+                        onBack()
+                    } catch (_: Exception) { error = "Couldn't save. Try again." }
                     busy = false
                 }
             }
@@ -189,8 +197,23 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             SettingsSection(footer = "Enter your name and add a profile photo.") { Field(name, "Name") { name = it.take(64) } }
+            // iOS Bio: one paragraph, 140 characters, the count shown for the last 20.
+            val left = com.fariin.app.data.ProfileWrites.BIO_CHARS - about.length
+            SettingsSection(header = "Bio") {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Box(Modifier.weight(1f).padding(16.dp)) {
+                        if (about.isEmpty()) Text("A few words about you", fontSize = 17.sp, color = c.secondary)
+                        BasicTextField(about, { about = com.fariin.app.data.ProfileWrites.oneParagraph(it) },
+                            textStyle = TextStyle(fontSize = 17.sp, color = c.label), cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                    }
+                    if (left <= 20) Text("$left", fontSize = 13.sp, color = if (left == 0) c.red else c.secondary,
+                        modifier = Modifier.padding(end = 16.dp, bottom = 16.dp))
+                }
+            }
+            val linksOn = com.fariin.app.data.AppFeatures.value("profileLinks", false)
             SettingsSection {
-                SettingsRow("Username", value = me?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "None", last = true) { page = "username" }
+                SettingsRow("Username", value = me?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "None", last = !linksOn) { page = "username" }
+                if (linksOn) SettingsRow("Links", value = if (links.isEmpty()) "Add" else "${links.size}", last = true) { page = "links" }
             }
         }
     }

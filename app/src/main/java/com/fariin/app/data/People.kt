@@ -29,6 +29,8 @@ data class Person(
     val about: String = "",
     val privacy: Map<String, String> = emptyMap(),
     val hasKey: Boolean = true,
+    /** iOS UserProfile.links: up to two, shown under the bio (behind the profileLinks switch). */
+    val links: List<ProfileLink> = emptyList(),
 ) {
     val shownName: String get() = name.ifEmpty { handle.ifEmpty { "Fariin user" } }
 
@@ -41,6 +43,7 @@ data class Person(
             about = d["about"] as? String ?: "",
             privacy = (d["privacy"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap(),
             hasKey = !(d["publicKey"] as? String).isNullOrEmpty(),
+            links = ProfileLink.list(d["links"]),
         )
 
         /** Awaiting deletion or banned: never findable (iOS findByHandle filters). */

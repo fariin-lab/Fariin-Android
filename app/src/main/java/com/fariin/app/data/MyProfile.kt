@@ -15,6 +15,7 @@ data class MyProfile(
     val handle: String = "",
     val photoUrl: String? = null,
     val about: String = "",
+    val links: List<ProfileLink> = emptyList(),
 ) {
     companion object {
         fun fromFirestore(uid: String, data: Map<String, Any?>): MyProfile = MyProfile(
@@ -23,6 +24,7 @@ data class MyProfile(
             handle = data["handle"] as? String ?: "",
             photoUrl = (data["photoUrl"] as? String)?.takeIf { it.isNotEmpty() },
             about = data["about"] as? String ?: "",
+            links = ProfileLink.list(data["links"]),
         )
     }
 }

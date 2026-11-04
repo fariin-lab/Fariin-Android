@@ -158,3 +158,6 @@ private fun openWeb(ctx: Context, url: String, onFail: () -> Unit) {
 private fun start(ctx: Context, intent: Intent, onFail: () -> Unit) {
     try { ctx.startActivity(intent) } catch (_: ActivityNotFoundException) { onFail() } catch (_: SecurityException) { onFail() }
 }
+
+/** A web address from outside a bubble (a profile link): the same opener as a tapped link. */
+internal fun openWebLink(ctx: Context, uri: Uri) = openWeb(ctx, uri.toString()) {}
