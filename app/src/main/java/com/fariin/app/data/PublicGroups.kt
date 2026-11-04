@@ -44,6 +44,13 @@ object PublicGroups {
         }
     }
 
+    /** A bare fariin.com/<name> that is a public group's @name: its id, else null (iOS GroupDirectory.resolve). */
+    suspend fun resolveGroup(name: String): String? = runCatching {
+        val d = fns.getHttpsCallable("resolveUsername").withTimeout(8, TimeUnit.SECONDS)
+            .call(mapOf("username" to name.trim().removePrefix("@"), "groups" to true)).await().getData() as? Map<*, *>
+        if (d?.get("found") == true && d["kind"] == "group") (d["cid"] as? String)?.takeIf { com.fariin.app.channel.ChannelRules.safeId(it) } else null
+    }.getOrNull()
+
     /** "joined", "requested" or "already"; a refusal throws with the server's own words. */
     suspend fun join(cid: String): String = try {
         (fns.getHttpsCallable("joinPublicGroup").withTimeout(20, TimeUnit.SECONDS)

@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> Unit) {
+fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> Unit, onOpenChannel: ((String) -> Unit)? = null) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     var preview by remember { mutableStateOf<ChannelPreview?>(null) }
@@ -54,7 +54,8 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
     var requested by remember { mutableStateOf(false) }
     LaunchedEffect(cid) {
         when (val r = ChannelService.preview(cid)) {
-            is ChannelService.PreviewResult.Found -> preview = r.preview
+            // A channel's @name goes to the channel's own page, not a join sheet.
+            is ChannelService.PreviewResult.Found -> if (r.preview.isChannel && onOpenChannel != null) { onClose(); onOpenChannel(cid) } else preview = r.preview
             is ChannelService.PreviewResult.Refused -> problem = r.text
             is ChannelService.PreviewResult.Failed -> problem = r.text
         }
