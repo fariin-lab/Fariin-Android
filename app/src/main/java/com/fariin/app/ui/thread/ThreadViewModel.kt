@@ -104,6 +104,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         messages = s.messages,
         receipts = receipts,
         names = conv?.names ?: emptyMap(),
+        roles = if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupRole.all(s.conv) else emptyMap(),
         photos = conv?.photos ?: emptyMap(),
         loaded = s.loaded,
         synced = s.synced,

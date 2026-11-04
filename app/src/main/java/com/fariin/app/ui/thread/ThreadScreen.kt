@@ -127,6 +127,8 @@ data class ThreadUi(
     val messages: List<Message> = emptyList(),
     val receipts: Receipts = Receipts(),
     val names: Map<String, String> = emptyMap(),
+    /** Group members' tags (iOS roles), shown next to the sender's name. */
+    val roles: Map<String, com.fariin.app.data.GroupRole> = emptyMap(),
     val photos: Map<String, String> = emptyMap(),
     val loaded: Boolean = true,
     val synced: Boolean = true,
@@ -839,6 +841,22 @@ private val senderPalette = listOf(
     Color(0xFF34C759), Color(0xFF30B0C7), Color(0xFF5856D6), Color(0xFFFF3B30),
 )
 
+/** The sender's name in a group bubble, with their tag beside it (iOS role chip: its colour, else the name's). */
+@Composable
+private fun SenderLine(ui: ThreadUi, uid: String) {
+    val tint = senderColor(uid)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(ui.names[uid] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        ui.roles[uid]?.let { r ->
+            val chip = com.fariin.app.data.GroupRole.rgb(r.color)?.let { Color(0xFF000000 or it) } ?: tint
+            Spacer(Modifier.width(6.dp))
+            Text(r.display, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = chip, maxLines = 1,
+                modifier = Modifier.clip(CircleShape).background(chip.copy(alpha = 0.14f)).padding(horizontal = 6.dp, vertical = 1.5.dp))
+        }
+    }
+}
+
 /** BubblePalette.senderColor: the sum of the uid's characters into a fixed palette. */
 private fun senderColor(uid: String): Color = senderPalette[uid.sumOf { it.code } % senderPalette.size]
 
@@ -882,8 +900,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         if (m.isSticker || m.isGif) {
             val header: @Composable () -> Unit = {
                 Column {
-                    if (showSender && g.first) Text(ui.names[m.authorId] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                        color = senderColor(m.authorId), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (showSender && g.first) SenderLine(ui, m.authorId)
                     if (m.forwarded) Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                         color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
                     m.replyTo?.let { ReplyQuote(it, ui, isMe) }
@@ -907,8 +924,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp),
         ) {
             if (showSender && g.first) {
-                Text(ui.names[m.authorId] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    color = senderColor(m.authorId), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                SenderLine(ui, m.authorId)
                 Spacer(Modifier.height(1.dp))
             }
             if (m.forwarded && !m.deleted) {
@@ -990,8 +1006,7 @@ private fun MediaRow(
         if (header) {
             Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
                 if (showSender && g.first) {
-                    Text(ui.names[m.authorId] ?: "Someone", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                        color = senderColor(m.authorId), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    SenderLine(ui, m.authorId)
                 }
                 if (m.forwarded) Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                     color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)

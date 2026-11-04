@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Sell
 import com.fariin.app.ui.components.floating
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -435,6 +437,8 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
     var confirmBan by remember { mutableStateOf(false) }
     var transferring by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    var tagging by remember { mutableStateOf(false) }
+    if (tagging) TagEditorSheet(cid, me, uid, name, com.fariin.app.data.GroupRole.all(conv)[uid], onDone = { tagging = false })
     // iOS: the password dialog is the confirm; after a hand-over the card closes (I am no longer its owner).
     if (transferring) TransferOwnership(cid, conv["channel"] == true, uid, name, onDone = { transferring = false; onClose() },
         onEnd = { transferring = false })
@@ -488,6 +492,10 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                     if (uid == me && team.isStaff(me)) add(Triple("My Admin Rights", rememberVectorPainter(Icons.Filled.VerifiedUser)) { onClose(); open(GroupPage.Rights(uid)) })
                     if (!team.closed && com.fariin.app.data.OwnerTransfer.canTransfer(me, team.owner, uid, team.users))
                         add(Triple(com.fariin.app.data.OwnerTransfer.ROW, painterResource(R.drawable.ic_crown)) { transferring = true })
+                    // iOS member sheet's Tag (roles): the owner, or an admin who may change info.
+                    if (com.fariin.app.data.GroupRole.canSet(me, uid, conv))
+                        add(Triple(if (com.fariin.app.data.GroupRole.all(conv)[uid] == null) "Set Tag" else "Edit Tag",
+                            rememberVectorPainter(Icons.Filled.Sell)) { tagging = true })
                     if (uid != me) add(Triple("Open Profile", rememberVectorPainter(Icons.Filled.Person)) { onClose(); onProfile(uid) })
                 }
                 val red = buildList<Triple<String, Painter, () -> Unit>> {
@@ -1223,4 +1231,68 @@ private fun StepSlider(labels: List<String>, index: Int, onPick: (Int) -> Unit) 
 @Composable
 private fun Note(text: String) {
     Text(text, fontSize = 15.sp, color = Fariin.colors.secondary, modifier = Modifier.fillMaxWidth().padding(16.dp))
+}
+
+/**
+ * A member's tag (iOS member sheet "Tag"): a few words with a count, one of eight colours, Remove Tag,
+ * and Save. Everyone in the group sees it beside the name.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TagEditorSheet(cid: String, me: String, uid: String, name: String, current: com.fariin.app.data.GroupRole?, onDone: () -> Unit) {
+    val c = Fariin.colors
+    val scope = rememberCoroutineScope()
+    var text by remember { mutableStateOf(current?.text ?: "") }
+    var color by remember { mutableStateOf(current?.color) }
+    var busy by remember { mutableStateOf(false) }
+    val clean = com.fariin.app.data.GroupRole.clean(text)
+    val changed = clean != (current?.text ?: "") || (clean.isNotEmpty() && color != current?.color)
+    fun write(words: String) {
+        busy = true
+        scope.launch {
+            val ok = runCatching { com.fariin.app.data.GroupRole.set(cid, me, uid, words, current?.emoji, color) }.isSuccess
+            busy = false
+            if (ok) onDone() else com.fariin.app.ui.components.Snack.show("Could not save the tag. Try again.")
+        }
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDone,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (uid == me) "My Tag" else "Tag", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
+                TextButton(onClick = { write(clean) }, enabled = changed && !busy) { Text("Save", fontWeight = FontWeight.SemiBold) }
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).padding(horizontal = 14.dp)) {
+                Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Sell, null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    current?.emoji?.let { Text(it, fontSize = 17.sp); Spacer(Modifier.width(6.dp)) }
+                    androidx.compose.foundation.text.BasicTextField(text,
+                        { v -> text = com.fariin.app.data.GroupRole.fit(v, com.fariin.app.data.GroupRole.MAX_TEXT) },
+                        singleLine = true, enabled = !busy,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, color = c.label),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.blue), modifier = Modifier.weight(1f),
+                        decorationBox = { inner -> Box { if (text.isEmpty()) Text("Host, Teacher…", fontSize = 17.sp, color = c.secondary); inner() } })
+                    Text("${text.length}/${com.fariin.app.data.GroupRole.MAX_TEXT}", fontSize = 13.sp, color = c.secondary)
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    com.fariin.app.data.GroupRole.colors.forEach { (n, rgb) ->
+                        val on = (color ?: "grey") == n
+                        val tint = Color(0xFF000000 or rgb)
+                        Box(Modifier.weight(1f).height(44.dp).clickable(enabled = !busy) { color = if (n == "grey") null else n },
+                            contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(32.dp).then(if (on) Modifier.border(2.dp, tint, CircleShape) else Modifier).padding(3.dp)
+                                .clip(CircleShape).background(tint))
+                        }
+                    }
+                }
+            }
+            Text("A short word next to the name in this group, like Host or Teacher. Everyone in the group sees it.",
+                fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
+            if (current != null) SettingsSection {
+                SettingsRow("Remove Tag", titleColor = c.red, trailing = Trailing.NONE, last = true) { if (!busy) write("") }
+            }
+        }
+    }
 }
