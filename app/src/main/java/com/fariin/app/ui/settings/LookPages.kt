@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.foundation.layout.PaddingValues
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -669,6 +670,47 @@ private fun SliderBlock(title: String, value: Float, track: Brush, onChange: (Fl
                 Box(Modifier.fillMaxWidth().height(14.dp).clip(CircleShape).background(track))
                 Box(Modifier.offset(x = with(androidx.compose.ui.platform.LocalDensity.current) { (value * (wPx - thumbPx)).toDp() })
                     .size(thumb).shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White))
+            }
+        }
+    }
+}
+
+/**
+ * iOS Appearance "Chat Theme": a chat drawn as it looks now, over a strip of themes, one per
+ * gradient wallpaper with its own bubble colour. A tap puts that wallpaper and Auto colour on every
+ * chat (iOS applyToAllChats on both stores).
+ */
+@Composable
+internal fun ChatThemeBlock() {
+    val ctx = LocalContext.current
+    val c = Fariin.colors
+    val v = ChatLookStore.version.intValue
+    val current = remember(v) { ChatLookStore.defaultWallpaper(ctx) }
+    val chosen = remember(v) { ChatLookStore.globalChosen(ctx) }
+    val mine = remember(v) { ChatLookStore.globalColor(ctx) }
+    val pattern = WallpaperArt.pattern(ctx)
+    val photo = (current as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(170.dp).drawBehind { drawWallpaper(current, c.dark, c.bg, pattern, photo) }
+            .padding(horizontal = 14.dp, vertical = 16.dp)) {
+            // With no wallpaper the incoming bubble is the chat's grey, as in a chat with none.
+            if (current == ChatWallpaper.None) PreviewBubble("Good morning! 👋", mine = false, mineFill = null, modifier = Modifier.align(Alignment.TopStart))
+            else MockBubble("Good morning! 👋", mine = false, mineFill = null, modifier = Modifier.align(Alignment.TopStart))
+            MockBubble("Morning! How are you?", mine = true, mineFill = mine?.brush(), modifier = Modifier.align(Alignment.BottomEnd))
+        }
+        androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(ChatWallpapers.all.size) { i ->
+                val g = ChatWallpapers.all[i]
+                val w = ChatWallpaper.Gradient(g.id)
+                val selected = current == w && chosen == null
+                Column(Modifier.size(92.dp, 150.dp).clip(RoundedCornerShape(16.dp))
+                    .drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, null) }
+                    .then(if (selected) Modifier.border(2.5.dp, c.blue, RoundedCornerShape(16.dp)) else Modifier)
+                    .clickable { ChatLookStore.resetAllWallpapers(ctx, w); ChatLookStore.resetAllColors(ctx) }
+                    .padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(44.dp, 12.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.9f)))
+                    Box(Modifier.align(Alignment.End).size(44.dp, 12.dp).clip(CircleShape).background(g.autoColor.brush()))
+                }
             }
         }
     }

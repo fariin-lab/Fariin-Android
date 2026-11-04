@@ -142,6 +142,13 @@ object ChatLookStore {
         e.apply(); bump()
     }
 
+    /** iOS ChatColorStore.applyToAllChats(nil): every chat back to Auto, and the Settings colour too. */
+    fun resetAllColors(c: Context) {
+        val p = prefs(c); val e = p.edit()
+        p.all.keys.filter { it.startsWith("chatColor.") }.forEach { e.remove(it) }
+        e.apply(); bump()
+    }
+
     /** This chat's own colour pick; null = Auto (iOS ChatColorStore.chosen(for:)). */
     fun ownColor(c: Context, cid: String): ChatColorSpec? =
         prefs(c).getString(ChatLookRules.colorKey(cid), null).let { if (it == "__none__") null else ChatColorSpec.parse(it) }

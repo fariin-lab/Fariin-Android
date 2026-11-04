@@ -322,6 +322,7 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         PageBar("Appearance", onBack = pop)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
+            SettingsSection(header = "Chat Theme") { ChatThemeBlock() }
             SettingsSection {
                 SettingsRow("Chat Wallpaper") { push(PAGE_WALLPAPER) }
                 SettingsRow("Chat Color") { push(PAGE_CHAT_COLOR) }
