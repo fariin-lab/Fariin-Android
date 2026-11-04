@@ -53,9 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -180,10 +178,10 @@ fun MainShell(
     val storiesAsk by com.fariin.app.system.SystemRouter.storiesTabRequests.collectAsState()
     var storiesSeen by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(storiesAsk) { if (storiesAsk > storiesSeen) { storiesSeen = storiesAsk; tab = TAB_STORIES } }
-    val haptics = LocalHapticFeedback.current
     var reselect by rememberSaveable { mutableIntStateOf(0) }
+    // No vibration on a tab tap (owner 2026-11-03: remove it).
     val select: (Int) -> Unit = { t ->
-        if (t != tab) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick) else reselect++
+        if (t == tab) reselect++
         tab = t
     }
     // System back on another tab goes to Chats first, then leaves the app (Android tab apps).
