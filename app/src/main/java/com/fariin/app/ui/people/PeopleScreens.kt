@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.Call
 import com.fariin.app.data.isRestricted
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -474,6 +476,17 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 ActionTile("Message", androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline) { onOpenChat(cid) }
                 if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor)
+                // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
+                if (uid != me && !blocked) {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    val photo = person?.photoUrl ?: conv?.photos?.get(uid)
+                    ActionTile("Voice", androidx.compose.material.icons.Icons.Outlined.Call) {
+                        com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = false)
+                    }
+                    ActionTile("Video", androidx.compose.material.icons.Icons.Outlined.Videocam) {
+                        com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = true)
+                    }
+                }
                 ActionTile(if (muted) "Unmute" else "Mute",
                     if (muted) androidx.compose.material.icons.Icons.Outlined.Notifications
                     else androidx.compose.material.icons.Icons.Outlined.NotificationsOff) {
