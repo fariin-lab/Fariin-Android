@@ -612,6 +612,31 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
         AlertDialog(onDismissRequest = { removeError = null }, containerColor = c.card, title = { Text("Could not remove") }, text = { Text(e) },
             confirmButton = { TextButton({ removeError = null }) { Text("OK", color = c.accent) } })
     }
+    @Composable
+    fun memberRow(uid: String) {
+                                val removable = team.canRemove(me, uid)
+                                val open: (() -> Unit)? = if (team.isStaff(me)) ({ card = uid }) else if (uid == me) null else ({ onOpenPerson(uid) })
+                                val on = uid in picked
+                                MemberSwipeRow(enabled = removable && !selecting, onSwiped = { pendingRemove = listOf(uid) }) {
+                                    Box(Modifier.fillMaxWidth().background(if (on) c.blue.copy(alpha = 0.12f) else c.card)
+                                        .combinedClickable(
+                                            onClick = {
+                                                if (selecting) { if (removable) picked = if (on) picked - uid else picked + uid }
+                                                else open?.invoke()
+                                            },
+                                            onLongClick = if (removable && !selecting) ({ picked = setOf(uid) }) else null,
+                                        )) {
+                                        PersonLine(team.photos[uid]?.ifEmpty { null }, com.fariin.app.data.GroupMembers.shownName(g, uid, me)) {
+                                            com.fariin.app.data.GroupMembers.rank(g, uid)?.let { Text(it, fontSize = 14.sp, color = c.secondary) }
+                                            if (selecting && removable) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Icon(if (on) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null,
+                                                    tint = if (on) c.blue else c.secondary, modifier = Modifier.size(22.dp))
+                                            }
+                                        }
+                                    }
+                                }
+    }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         if (selecting) PageBar("${picked.size} Selected", onBack = { picked = emptySet() }) {
             androidx.compose.material3.IconButton({ pendingRemove = picked.toList() }) {
@@ -635,43 +660,29 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
         Box(Modifier.fillMaxSize()) {
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().imePadding(), state = listState,
                 contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
-                if (list.isEmpty()) item(key = "none") { SettingsSection { Note("No members found.") } }
-                sections.forEach { (letter, uids) ->
-                    item(key = "sec:$letter") {
-                        SettingsSection(header = letter.ifEmpty { null }) {
-                            uids.forEach { uid ->
-                                val removable = team.canRemove(me, uid)
-                                val open: (() -> Unit)? = if (team.isStaff(me)) ({ card = uid }) else if (uid == me) null else ({ onOpenPerson(uid) })
-                                val on = uid in picked
-                                MemberSwipeRow(enabled = removable && !selecting, onSwiped = { pendingRemove = listOf(uid) }) {
-                                    Box(Modifier.fillMaxWidth().background(if (on) c.blue.copy(alpha = 0.12f) else c.card)
-                                        .combinedClickable(
-                                            onClick = {
-                                                if (selecting) { if (removable) picked = if (on) picked - uid else picked + uid }
-                                                else open?.invoke()
-                                            },
-                                            onLongClick = if (removable && !selecting) ({ picked = setOf(uid) }) else null,
-                                        )) {
-                                        PersonLine(team.photos[uid]?.ifEmpty { null }, com.fariin.app.data.GroupMembers.shownName(g, uid, me)) {
-                                            com.fariin.app.data.GroupMembers.rank(g, uid)?.let { Text(it, fontSize = 14.sp, color = c.secondary) }
-                                            if (selecting && removable) {
-                                                Spacer(Modifier.width(8.dp))
-                                                Icon(if (on) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null,
-                                                    tint = if (on) c.blue else c.secondary, modifier = Modifier.size(22.dp))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Add Members first, as iOS GroupMembersView (its own section above everyone).
                 if (query.isEmpty() && (canAdd || canInvite) && !selecting) item(key = "add") {
                     SettingsSection {
                         if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.accent,
                             trailing = Trailing.NONE, last = !canInvite, onClick = onAddMembers)
                         if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.accent,
                             trailing = Trailing.NONE, last = true) { push(GroupPage.Links) }
+                    }
+                }
+                if (list.isEmpty()) item(key = "none") { SettingsSection { Note("No members found.") } }
+                // iOS (owner 2026-10-18): whoever holds a role, together at the top, so an admin sees
+                // them all in one place.
+                val withRoles = if (query.isEmpty()) list.filter { (doc["roles"] as? Map<*, *>)?.get(it) != null } else emptyList()
+                if (withRoles.isNotEmpty()) item(key = "roles") {
+                    SettingsSection(header = "Members with roles", footer = "Only admins can give a member a role.") {
+                        withRoles.forEach { uid -> memberRow(uid) }
+                    }
+                }
+                sections.forEach { (letter, uids) ->
+                    item(key = "sec:$letter") {
+                        SettingsSection(header = letter.ifEmpty { null }) {
+                            uids.forEach { uid -> memberRow(uid) }
+                        }
                     }
                 }
                 item(key = "end") { Spacer(Modifier.height(24.dp)) }
