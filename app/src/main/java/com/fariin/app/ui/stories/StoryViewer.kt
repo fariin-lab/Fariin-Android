@@ -189,6 +189,30 @@ fun StoryViewerDialog(
         DisposableEffect(window) {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             window?.setWindowAnimations(0)
+            // The bar areas are the viewer's own wall, not a grey band of this window's: grey bands
+            // stayed while the card flew home and snapped white the frame the window went (owner
+            // 2026-11-03, "flick" top and bottom on close).
+            window?.let { w ->
+                @Suppress("DEPRECATION") run {
+                    w.statusBarColor = android.graphics.Color.TRANSPARENT
+                    w.navigationBarColor = android.graphics.Color.TRANSPARENT
+                }
+                if (android.os.Build.VERSION.SDK_INT >= 29) { w.isStatusBarContrastEnforced = false; w.isNavigationBarContrastEnforced = false }
+            }
+            onDispose { }
+        }
+        // White bar icons over the story; the app's own the moment the card starts home, so the
+        // clock does not vanish on a light list and come back when the window goes.
+        var leaving by remember { mutableStateOf(false) }
+        val appDark = com.fariin.app.ui.theme.Fariin.colors.dark
+        val view = androidx.compose.ui.platform.LocalView.current
+        DisposableEffect(window, leaving) {
+            window?.let { w ->
+                androidx.core.view.WindowCompat.getInsetsController(w, view).apply {
+                    isAppearanceLightStatusBars = leaving && !appDark
+                    isAppearanceLightNavigationBars = leaving && !appDark
+                }
+            }
             onDispose { }
         }
         var secure by remember { mutableStateOf(false) }
@@ -208,7 +232,8 @@ fun StoryViewerDialog(
             )
         }
         androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.people.LocalPeopleNav provides routed) {
-            StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected })
+            StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected },
+                onLeaving = { leaving = true })
         }
     }
 }
@@ -221,6 +246,7 @@ fun StoryViewer(
     conversations: List<Conversation>,
     onClose: () -> Unit,
     onShown: (Story) -> Unit = {},
+    onLeaving: () -> Unit = {},
 ) {
     val service = remember(me) { StoryService(me) }
     val context = LocalContext.current
@@ -432,6 +458,7 @@ fun StoryViewer(
     /** Every way out: the swipe, the X, back, the last story ending. Same landing for all of them. */
     fun close(vy: Float = 0f) {
         if (hero.committing || hero.closed) return
+        onLeaving()
         if (!hero.staged || size == IntSize.Zero) { land(); return }
         heroJob[0]?.cancel()
         hero.committing = true
