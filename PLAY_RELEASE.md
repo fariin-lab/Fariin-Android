@@ -40,3 +40,5 @@ Prepared 2026-11-03. Steps marked **(you)** are the owner's buttons; the rest is
 - `index.html` line ~1079: "Android is not out yet." changes to the Play Store link.
 - `.well-known/assetlinks.json`: add the relation `delegate_permission/common.handle_all_urls` (next to the passkeys one) so fariin.com and call.fariin.com links open the Android app (the manifest already asks with autoVerify), and add the Play app signing SHA-256.
 I can make all three changes the moment the Play listing is live.
+
+- 2026-11-04: fariin.com/.well-known/assetlinks.json now has handle_all_urls as well (site commit dbe13b3), so App Links (calls, /u/, /g/, /s/) verify once the Play signing key fingerprint is added next to the upload key. Local benchmark builds use another key and stay unverified; test them with an explicit intent (adb shell am start -a android.intent.action.VIEW -d <url> com.fariin.app).

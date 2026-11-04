@@ -563,3 +563,20 @@ Seen, not fixed (not today's regressions):
   - Group Info: Report Spam / End Group / Delete Group. Group gaps left: Hide Members, member list filters (All Members / Members with roles), Share Invite Link wording.
   - Hidden members honoured; call link Send. Stories and Calls screens otherwise match (gaps were admin-only or wording).
   - Channel admin invite links open in-app. Channel gap left: Similar Channels card after following.
+
+- 2026-11-04: Similar Channels strip after following a channel (8dc9678). Not seen on device yet (needs a fresh follow).
+- 2026-11-04: Story mention cards, sending and receiving. Not seen on device yet (needs a story with an @name).
+- 2026-11-04: Forwarded-from-channel capsule, showing and sending. Not seen on device yet.
+- 2026-11-04: Bio editing in Edit Profile (seen on Pixel, not saved); profile links behind the profileLinks switch (off).
+- 2026-11-04: First-time story guide (new accounts only, not visible on the owner account).
+- 2026-11-04: Restricted chat read + enforced (menus, viewer, autosave, FLAG_SECURE) and the contact page. Page seen on Pixel; switch not flipped (would post to a real contact).
+- 2026-11-04: Story menu: own Save / Edit Viewers / Share, others Share Story / Report. Own menu seen on Pixel.
+- 2026-11-04: Official Fariin stories in the Stories list. Feed call works (no error); no official story live, so the row is not seen yet.
+- 2026-11-04: Story outbox (resume after kill). App starts clean on Pixel; resume path not exercised (would post a real story).
+- 2026-11-04: Followed channels stories + counts footer. No live channel story to see on the Pixel; no errors.
+- 2026-11-04: Restricted chat request answerable from the notice line.
+- 2026-11-04: Voice note keeps playing after leaving the chat + bar. Not exercised on device (no voice note on screen in test chats).
+- 2026-11-04: Group/channel invite link join sheet. Not exercised on device (no invite link in test chats).
+- 2026-11-04: Story links open in the app. Not exercised on device.
+- 2026-11-04: App Links for /u/ /g/ /s/ routed in-app (tested with explicit intents on Pixel: own profile opened, fake invite showed the refusal).
+- 2026-11-04: Site: assetlinks.json gained handle_all_urls (dbe13b3), live on fariin.com, www and call hosts.
