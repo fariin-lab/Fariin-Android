@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.Call
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -133,6 +135,8 @@ internal fun MessageMenu(
     onReply: (Message) -> Unit, onStartEdit: (Message) -> Unit, onCopy: (String) -> Unit,
     onInfo: (Message) -> Unit, onDelete: (Message) -> Unit,
     onSelect: (Message) -> Unit = {}, onEditHistory: (Message) -> Unit = {},
+    /** A call record's "Voice Call" / "Video Call" (iOS, owner 2026-08-13); null in a group. */
+    onCallBack: ((Message) -> Unit)? = null,
     source: MenuSource? = null, preview: (@Composable () -> Unit)? = null, onLifted: () -> Unit = {},
 ) {
     val c = Fariin.colors
@@ -142,6 +146,14 @@ internal fun MessageMenu(
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
         if (!m.deleted) {
             if (MessageRules.canReply(m)) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply) { onReply(m) })
+            // A call record: call back from here too, through the same confirm as its tap (iOS);
+            // not while the call is still ringing or going.
+            if (m.isCall && onCallBack != null) {
+                val age = (now - m.createdAtMillis) / 1000.0
+                val live = (m.callOutcome == "ringing" && age < 120) || (m.callOutcome == "ongoing" && age < 4 * 3600)
+                if (!live) add(MenuItem(if (m.callVideo) "Video Call" else "Voice Call",
+                    if (m.callVideo) Icons.Outlined.Videocam else Icons.Outlined.Call) { onCallBack(m) })
+            }
             if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
             if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download) {

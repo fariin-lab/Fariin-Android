@@ -245,6 +245,7 @@ private fun ThreadContent(
 ) {
     val c = Fariin.colors
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
+    var callBackFor by remember { mutableStateOf<Message?>(null) }
     var menuFor by remember { mutableStateOf<Message?>(null) }
     // Where each row sits, read only at the long press, and the pressed row's own copy for the
     // lifted message (MessageMenuOverlay); the real row hides while its copy is up.
@@ -302,7 +303,25 @@ private fun ThreadContent(
             onInfo = { infoFor = it }, onDelete = { deleteFor = it },
             onSelect = { selected.clear(); selected.add(it.rowId); replyTo = null },
             onEditHistory = { historyFor = it },
+            onCallBack = if (ui.isGroup) null else ({ callBackFor = it }),
             source = menuSource, preview = menuPreview, onLifted = { menuLifted = m.rowId })
+    }
+    // The call menu's "Voice Call" / "Video Call": the same question the bubble's tap asks.
+    callBackFor?.let { cm ->
+        val peer = com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me)
+        val callCtx = androidx.compose.ui.platform.LocalContext.current
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { callBackFor = null },
+            title = { Text(com.fariin.app.data.StickerGifRules.callBackTitle(cm.callVideo)) },
+            text = { Text(com.fariin.app.data.StickerGifRules.callBackQuestion(cm.callVideo, ui.title)) },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { callBackFor = null }) { Text("Cancel") } },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    callBackFor = null
+                    if (peer.isNotEmpty()) com.fariin.app.ui.call.CallActivity.startDial(callCtx, peer, ui.title, ui.photoUrl, video = cm.callVideo)
+                }) { Text("Call") }
+            },
+        )
     }
     historyFor?.let { m -> EditHistorySheet(ui.messages.firstOrNull { it.id == m.id } ?: m, actions) { historyFor = null } }
     // What the ticks point at, from the live list (iOS liveSelection): a row that went away drops out.
