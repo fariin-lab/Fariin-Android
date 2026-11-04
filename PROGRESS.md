@@ -685,3 +685,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Send + recording mic now use the chat colour (iOS sendTint); kream's orange chat had a blue Send.
   Pixel: orange Send. Draft kept across reinstall, then cleared. Media tabs (Files/Voice/Links)
   and voice playback from the list checked: fine. Fariin News page fine.
+- Calls (i): opened an off-style Call info page; now the profile (1:1) / group chat (group) as iOS
+  2026-10-28. Pixel: kream's profile, back returns to Calls. Missed filter fine. Sticker + GIF
+  panels fine. Account email row has no value on iOS either.
