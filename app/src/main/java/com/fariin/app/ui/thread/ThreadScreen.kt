@@ -361,6 +361,29 @@ private fun ThreadContent(
         stick = listState.firstVisibleItemIndex <= 1
     }
 
+    // iOS ChatScrollStore: where this chat was being read, for this run of the app only. Unread
+    // messages win (above); otherwise a chat left scrolled up opens where it was left, and one left
+    // at the newest message opens at the newest. A relaunch starts every chat at the newest.
+    var restoredPlace by remember { mutableStateOf(false) }
+    LaunchedEffect(ui.messages.size, dividerId) {
+        if (restoredPlace || dividerId != null || ui.messages.isEmpty()) return@LaunchedEffect
+        val (rowId, offset) = ChatReadingPositions.get(ui.cid) ?: run { restoredPlace = true; return@LaunchedEffect }
+        val i = ui.messages.indexOfFirst { it.rowId == rowId }
+        if (i < 0) return@LaunchedEffect
+        restoredPlace = true
+        withFrameNanos { }
+        listState.scrollToItem(ui.messages.size - 1 - i, offset)
+        stick = false
+    }
+    DisposableEffect(ui.cid) {
+        onDispose {
+            val first = listState.layoutInfo.visibleItemsInfo.firstOrNull()
+            val key = first?.key as? String
+            if (listState.firstVisibleItemIndex <= 1 || key == null) ChatReadingPositions.clear(ui.cid)
+            else ChatReadingPositions.save(ui.cid, key, listState.firstVisibleItemScrollOffset)
+        }
+    }
+
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(220, delayMillis = 40) else null }
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
@@ -1495,3 +1518,11 @@ private fun OpenWhen(open: androidx.compose.runtime.State<Boolean>, content: @Co
 
 /** The open chat's id, for bubbles that need it (Save to Photos' once-per-message ledger). */
 internal val LocalThreadCid = androidx.compose.runtime.staticCompositionLocalOf { "" }
+
+/** iOS ChatScrollStore: each chat's reading place (the row at the bottom edge and its offset), for this run only. */
+internal object ChatReadingPositions {
+    private val byCid = HashMap<String, Pair<String, Int>>()
+    fun save(cid: String, rowId: String, offset: Int) { byCid[cid] = rowId to offset }
+    fun clear(cid: String) { byCid.remove(cid) }
+    fun get(cid: String): Pair<String, Int>? = byCid[cid]
+}
