@@ -713,3 +713,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Chat list read ticks: were the accent (black), iOS draws them 0A84FF blue. Fixed; no read row on
   screen to see it right now. Old TODO "list shows a tick for a pending message": already done.
 - Checked fine: Forward sheet, App Icon page, mic tap hint (mic opens ~0.2 s on a tap, normal).
+- Group Members page: Add Members card moved to the top, "Members with roles" section (iOS
+  2026-10-18) when any member has a role. Pixel (hh, no roles): list fine, Add on top. Roles
+  section not seen (no group with roles on this account). Chat list unread time = accent, as iOS.
