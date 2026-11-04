@@ -40,7 +40,7 @@ internal fun PowerSavingPage(pop: () -> Unit) {
             },
         ) {
             SwitchRow("Blur effects", ch.blur, enabled = !forced) { set(PowerSaving.K_BLUR, it) }
-            SwitchRow("Animations", ch.animations, enabled = !forced) { set(PowerSaving.K_ANIM, it) }
+            SwitchRow("Animations", ch.animations, enabled = !forced, last = true) { set(PowerSaving.K_ANIM, it) }
         }
         SettingsSection(header = "Media") {
             SwitchRow("Autoplay videos", ch.autoplayVideos, enabled = !forced) { set(PowerSaving.K_VIDEO, it) }

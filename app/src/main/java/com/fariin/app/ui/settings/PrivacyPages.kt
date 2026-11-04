@@ -62,7 +62,6 @@ import kotlinx.coroutines.tasks.await
 internal val SwitchGreen = Color(0xFF34C759)
 
 /** A Material switch row: the title at the start, the switch at the end, the whole row toggles it. */
-@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true, last: Boolean = false, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
@@ -77,6 +76,8 @@ internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true,
             colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent, checkedBorderColor = c.accent),
         )
     }
+    // The same full-width line as [SettingsRow], so a card of switches and arrows reads as one list.
+    if (!last) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
 
 /** A single-choice row, Android style: a radio button at the start (iOS drew a check at the end). */
