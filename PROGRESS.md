@@ -716,3 +716,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Group Members page: Add Members card moved to the top, "Members with roles" section (iOS
   2026-10-18) when any member has a role. Pixel (hh, no roles): list fine, Add on top. Roles
   section not seen (no group with roles on this account). Chat list unread time = accent, as iOS.
+- Chat list filter: nothing showed a filter was on (Channels left one row, looked like chats gone).
+  Now "Unread ×" etc. under the title (iOS 2026-10-31), tap = all chats. Pixel checked. No channel
+  this account admins, so Channel Settings still unseen on device.
