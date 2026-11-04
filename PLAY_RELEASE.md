@@ -34,3 +34,9 @@ Prepared 2026-11-03. Steps marked **(you)** are the owner's buttons; the rest is
   and text with the app closed (waits for the Apple review to finish).
 - Two-phone tests: calls iPhone<->Android (voice, video, screen share), group calls, reply swipe.
 - versionCode/versionName (now 1 / 1.0) go up with every upload.
+
+## Launch day: the website (fariin-web) tells Android visitors "not yet" today
+- `download.html`: the Android branch says "Fariin is on iPhone for now; Android is planned." Put the Play Store address there (same place as APP_STORE_URL) and the "Get it on Google Play" wording.
+- `index.html` line ~1079: "Android is not out yet." changes to the Play Store link.
+- `.well-known/assetlinks.json`: add the relation `delegate_permission/common.handle_all_urls` (next to the passkeys one) so fariin.com and call.fariin.com links open the Android app (the manifest already asks with autoVerify), and add the Play app signing SHA-256.
+I can make all three changes the moment the Play listing is live.
