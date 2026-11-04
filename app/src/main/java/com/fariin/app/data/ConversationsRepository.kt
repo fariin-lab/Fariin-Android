@@ -46,7 +46,9 @@ class ConversationsRepository(
             // without touching the data, and the row's clock must turn into a tick then.
             .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, error ->
                 if (error != null) {
-                    trySend(State.Failed(error.message ?: "Could not load chats"))
+                    // Firestore ends a refused listener for good; the caller attaches a new one
+                    // (ChatsViewModel, iOS SessionRecovery). Until then the list keeps what it has.
+                    close(error)
                     return@addSnapshotListener
                 }
                 if (snap == null) return@addSnapshotListener

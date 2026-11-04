@@ -1,5 +1,7 @@
 package com.fariin.app.ui.chats
 
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.flow.retryWhen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fariin.app.data.ChatList
@@ -37,6 +39,19 @@ class ChatsViewModel(
     private var burnJob: kotlinx.coroutines.Job? = null
 
     val state: StateFlow<ChatsUiState> = repo.listen(me)
+        // iOS SessionRecovery: a refused listener comes back. A fresh token, then a new listener, on
+        // 1 s, 3 s, 10 s, 30 s, 60 s and every 60 s after; it stops only when the session itself is
+        // over (account removed or disabled), which the sign-out path then handles.
+        .retryWhen { cause, attempt ->
+            val ended = runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await() }
+                .exceptionOrNull() is com.google.firebase.auth.FirebaseAuthInvalidUserException
+            if (ended || com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                emit(ConversationsRepository.State.Failed(cause.message ?: "Could not load chats")); false
+            } else {
+                kotlinx.coroutines.delay(longArrayOf(1_000, 3_000, 10_000, 30_000, 60_000)[minOf(attempt.toInt(), 4)])
+                true
+            }
+        }
         // Channels I follow are not in their `users`, so they come from my follow list (iOS
         // ConversationsRepository merges ChannelFollows.conversations the same way).
         .combine(com.fariin.app.channel.ChannelFollows.docs.combine(com.fariin.app.channel.ChannelFollows.entries) { _, _ -> Unit }) { s, _ ->
