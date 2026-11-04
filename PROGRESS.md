@@ -727,3 +727,13 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Edit Group Set New Photo menu (Take / Choose) seen on the Pixel (hh), left without saving.
 - Device testing in this pass is on the owner's Pixel (0B251FDD4000WB), not the fariin_pixel AVD,
   per the owner's order for the WhatsApp comparison.
+- Owner screenshots (17:39): New Channel Android vs iOS. Ported iOS details page: squircle photo slot
+  (Take/Choose/Remove, saved after create) beside Channel Name, Description own card, Guidelines line
+  with link, Next on top (1bc9fe7). Seen on the Pixel.
+- Owner report "Private -> Public while creating crashes": no crash on record (crash buffer empty,
+  no Crashlytics fatal). The app was closed at 17:40:56 by MY debug install while he was on that
+  page. His channel "kk" was made. Found a real gap instead: channel type could not be changed
+  after creation (display-only row). Channel Settings now has Channel Type (type page in channel
+  words) + Protect Content; duplicate card removed (197c22c). Pixel: Private -> Public on kk, typed
+  kkzz123 -> "available", app alive, NOT saved. The new Channel Settings page finally seen on device.
+- Rule for me: check the screen is mine before every install (owner may be on the phone).
