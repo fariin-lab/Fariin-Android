@@ -635,5 +635,9 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   phone's camera app, the photo joins the chosen ones. Checked on the Pixel: shot taken, tile
   shown with caption + Send; nothing sent.
 - Message long-press menu and swipe-to-reply (both sides): already as good as WhatsApp.
-- NEXT (owner ask 14:40): a sent video shows as a photo, then turns into a video while sending.
-  He allows sending one of his screen recordings to kream in Fariin to test.
+- Video send (owner report 14:40): frames of a real send to kream showed ~3 s of an empty photo
+  block, then a blurred thumb, then the poster. Fixed: video bubble from the tap, first frame and
+  length read from the file at once, the phone's poster kept after the server copy lands. Re-sent
+  on the Pixel: real frame within 0.3 s, sharp throughout. 3 test videos sent to kream (allowed).
+- NEXT (owner ask 14:45): Android uses a fixed blue in places where iOS uses black / the theme
+  colour. Sweep every hard-coded blue (c.blue) and match iOS.
