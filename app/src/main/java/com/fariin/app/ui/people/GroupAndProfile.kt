@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.QrCode
@@ -521,6 +522,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // The owner's and admins' settings (iOS Group Settings); members do not see them.
                 GroupManageRows(conv, me, cid) { pages.add(it) }
                 // Who may change it: the owner and admins with Change info (iOS GroupSettingsView).
+                // iOS settingsCard: Storage Used, this chat's files on this phone.
+                SettingsRow("Storage Used", icon = rememberVectorPainter(Icons.Outlined.Storage)) {
+                    pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))
+                }
                 DisappearingRow(timer, short = false, last = !iAmAdmin) {
                     if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
                     else notice = com.fariin.app.data.Disappearing.refusal(conv, me)

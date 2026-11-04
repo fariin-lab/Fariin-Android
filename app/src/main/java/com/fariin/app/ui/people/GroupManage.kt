@@ -139,6 +139,8 @@ sealed interface GroupPage {
     data object RecentActions : GroupPage
     /** iOS GroupInfoView › Statistics: the `groupStats` page (GroupStatsPage.kt). */
     data class Stats(val title: String) : GroupPage
+    /** iOS GroupInfoView › Storage Used: this chat's files on this phone (ChatStorage.kt). */
+    data class Storage(val title: String) : GroupPage
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
@@ -198,6 +200,7 @@ internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, 
         GroupPage.JoinRequests -> JoinRequestsPage(cid, pop)
         GroupPage.RecentActions -> RecentActionsPage(cid, me, pop)
         is GroupPage.Stats -> GroupStatsPage(cid, top.title, pop)
+        is GroupPage.Storage -> ChatStoragePage(cid, me, top.title, pop)
         GroupPage.ChooseOwner -> {
             val doc = liveGroupDoc(cid)
             if (doc.isEmpty()) Loading() else ChooseNewOwnerPage(cid, me, doc, pop) { stack.clear(); onHandedOver() }
