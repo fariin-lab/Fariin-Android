@@ -719,3 +719,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Chat list filter: nothing showed a filter was on (Channels left one row, looked like chats gone).
   Now "Unread ×" etc. under the title (iOS 2026-10-31), tap = all chats. Pixel checked. No channel
   this account admins, so Channel Settings still unseen on device.
+- Snackbar action ("Undo") was Material purple; now the bar's text colour. Archive + Undo tested on
+  adnnaina (archived, undone; earlier test also unarchived by hand). Archive page fine.
