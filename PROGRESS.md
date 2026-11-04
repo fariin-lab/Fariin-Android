@@ -710,3 +710,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Scroll frames on the Pixel (benchmark build, 5 fling pairs, gfxinfo): chat list Fariin 2.1% janky
   p90 20 / p99 28 ms vs WhatsApp 0.85% p90 19 / p99 24; inside a chat Fariin 0.18% p90 14 / p99 18
   vs WhatsApp 1.32% p90 18 / p99 26. No scroll work needed.
+- Chat list read ticks: were the accent (black), iOS draws them 0A84FF blue. Fixed; no read row on
+  screen to see it right now. Old TODO "list shows a tick for a pending message": already done.
+- Checked fine: Forward sheet, App Icon page, mic tap hint (mic opens ~0.2 s on a tap, normal).
