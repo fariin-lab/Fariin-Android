@@ -692,3 +692,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   (Reply, Delete; no reactions, as iOS canReact). Tap still asks first. Left: iOS also offers
   Voice/Video Call and Select in that menu; Android Select skips calls by design.
 - Checked fine: New Call page, Calls search, Share profile QR, Settings search -> Blocked Users.
+- Call menu now has Voice Call / Video Call (iOS), via the same confirm. Pixel: menu shows it, tap
+  -> "Call kream?", cancelled, no call placed.
