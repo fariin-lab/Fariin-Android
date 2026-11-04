@@ -52,6 +52,9 @@ object Forwarder {
 
     /** The source's channel card when [sourceCid] is a channel: its doc as followed, else read once. */
     private suspend fun channelJson(sourceCid: String): String? {
+        // A 1:1 chat, or a chat the list knows is not a channel, is never asked about.
+        if (sourceCid.contains('_')) return null
+        com.fariin.app.data.ChatsNow.find(sourceCid)?.let { if (!it.isChannel) return null }
         val d = com.fariin.app.channel.ChannelFollows.docs.value[sourceCid]
             ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
                 .document(sourceCid).get().await().data as Map<String, Any?>? }.getOrNull() ?: return null

@@ -36,6 +36,8 @@ object OfficialStories {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _stories = MutableStateFlow<List<Story>>(emptyList())
     val stories: StateFlow<List<Story>> = _stories
+    /** Moves on every watch, so the ring redraws as seen (the list itself does not change). */
+    val seenTick = MutableStateFlow(0)
     private var app: Context? = null
     private var seededFor: String? = null
     private var lastFetch = 0L
@@ -129,7 +131,7 @@ object OfficialStories {
         FirebaseFirestore.getInstance().collection("officialStories").document(raw).collection("views").document(viewId)
             .set(mapOf("at" to FieldValue.serverTimestamp(), "named" to receipts))
             .addOnFailureListener { android.util.Log.w("OfficialStories", "view not written", it) }
-        _stories.value = _stories.value.toList()   // the ring redraws as seen
+        seenTick.value++   // the ring redraws as seen
     }
 
     private fun seenIds(c: Context): Set<String> {

@@ -63,9 +63,10 @@ object StoryOutbox {
             }
             val id = dir.name
             val doc = FirebaseFirestore.getInstance().collection("stories").document(id)
-            val existing = runCatching { doc.get().await() }.getOrNull()
-            if (existing?.getString("mediaUrl")?.isNotEmpty() == true) { dir.deleteRecursively(); continue }   // it did land
-            if (existing?.exists() == true) runCatching { doc.delete().await() }
+            // Unreadable (offline): wait for a start that can tell whether it landed, never guess.
+            val existing = runCatching { doc.get(com.google.firebase.firestore.Source.SERVER).await() }.getOrNull() ?: continue
+            if (existing.getString("mediaUrl")?.isNotEmpty() == true) { dir.deleteRecursively(); continue }   // it did land
+            if (existing.exists()) runCatching { doc.delete().await() }
             val media = prepared(dir, o) ?: run { dir.deleteRecursively(); null } ?: continue
             val choice = runCatching { StoryAudienceChoice.valueOf(o.getString("choice")) }.getOrNull() ?: run { dir.deleteRecursively(); null } ?: continue
             val picked = o.optJSONArray("picked")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }.orEmpty()

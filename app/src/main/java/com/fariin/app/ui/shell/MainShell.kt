@@ -170,7 +170,8 @@ fun MainShell(
     // Fariin's own stories join the list as one more ring (iOS OfficialStories): first while unseen.
     val officialList by com.fariin.app.data.OfficialStories.stories.collectAsState()
     LaunchedEffect(me) { if (!demo) com.fariin.app.data.OfficialStories.refresh(context) }
-    val officialGroup = if (demo) null else com.fariin.app.data.OfficialStories.group(context, officialList)
+    val officialSeen by com.fariin.app.data.OfficialStories.seenTick.collectAsState()
+    val officialGroup = if (demo) null else remember(officialList, officialSeen) { com.fariin.app.data.OfficialStories.group(context, officialList) }
     val stories = officialGroup?.let { g ->
         storiesOwn.copy(others = if (g.hasUnseen) listOf(g) + storiesOwn.others else storiesOwn.others + g)
     } ?: storiesOwn
