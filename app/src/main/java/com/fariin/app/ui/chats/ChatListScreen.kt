@@ -72,6 +72,7 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -793,8 +794,11 @@ fun ChatRow(
     val keys by CryptoHub.keysEpoch.collectAsState()
     val preview = remember(conv, me, keys) { ChatList.previewLine(conv, me, decryptor) { null } }
     // iOS: a chat with unsent words in its box says "Draft:" (red) and the words, not the last line.
-    val drafts by com.fariin.app.local.Drafts.map.collectAsState()
-    val draft = drafts[conv.id]
+    // Only this chat's draft: reading the whole map redrew every row whenever any chat's draft
+    // changed, which leaving a chat does (it saves or clears that chat's draft).
+    val drafts = com.fariin.app.local.Drafts.map.collectAsState()
+    val draftState = remember(conv.id) { derivedStateOf { drafts.value[conv.id] } }
+    val draft = draftState.value
     // iOS previewRow: a small grey glyph before a pin notice, a contact or a location.
     val glyph = if (draft.isNullOrEmpty()) ChatList.previewIcon(preview) else null
     val line = if (glyph != null) androidx.compose.ui.text.buildAnnotatedString {
