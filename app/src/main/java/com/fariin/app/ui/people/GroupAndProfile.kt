@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.PhotoCamera
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -180,7 +183,32 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                 Avatar(me?.photoUrl, 110.dp)
                 if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
             }
-            Text("Set New Photo", fontSize = 17.sp, color = c.accent, modifier = Modifier.clickable(onClick = pick).padding(10.dp))
+            // iOS ProfilePhotoSheet: Camera, Photo Library, and Remove while there is a photo.
+            var photoMenu by remember { mutableStateOf(false) }
+            var askRemove by remember { mutableStateOf(false) }
+            Box {
+                Text("Set New Photo", fontSize = 17.sp, color = c.accent, modifier = Modifier.clickable { photoMenu = true }.padding(10.dp))
+                androidx.compose.material3.DropdownMenu(expanded = photoMenu, onDismissRequest = { photoMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) }, onClick = { photoMenu = false; picker.takePhoto() })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = { photoMenu = false; pick() })
+                    if (!me?.photoUrl.isNullOrEmpty()) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
+                        leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = c.red) }, onClick = { photoMenu = false; askRemove = true })
+                }
+            }
+            if (askRemove) AlertDialog(onDismissRequest = { askRemove = false }, containerColor = c.card,
+                title = { Text("Remove your photo?") },
+                text = { Text("People will see your initial instead.") },
+                dismissButton = { TextButton({ askRemove = false }) { Text("Cancel", color = c.accent) } },
+                confirmButton = { TextButton({
+                    askRemove = false
+                    scope.launch {
+                        busy = true
+                        try { api.removePhoto(); me = api.profile(api.me) } catch (_: Exception) { error = "Couldn't remove the photo. Try again." }
+                        busy = false
+                    }
+                }) { Text("Remove", color = c.red) } })
             if (history.isNotEmpty()) {
                 Text("Recents", fontSize = 13.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
                 androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),

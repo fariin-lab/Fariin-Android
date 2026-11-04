@@ -85,6 +85,8 @@ interface PeopleApi {
     suspend fun claimUsername(h: String)
     suspend fun saveName(name: String)
     suspend fun uploadPhoto(jpegOrAny: ByteArray)
+    /** iOS ProfileStore.removePhoto: no picture, back to the letter. */
+    suspend fun removePhoto() {}
     suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?): String
     suspend fun addMembers(cid: String, uids: List<String>): String?
     suspend fun leaveGroup(cid: String)
@@ -273,6 +275,29 @@ class FirestorePeople(
         val refStr = PhotoRef.reference(path, System.currentTimeMillis())
         db.collection("users").document(me).set(mapOf("photoUrl" to refStr, "photoThumb" to ""), SetOptions.merge()).await()
         updateMyConvs(mapOf("photos.$me" to refStr))
+    }
+
+    /**
+     * ProfileStore.removePhoto: both crops cleared everywhere (photo and poster, the profile and
+     * every chat's copy), 1:1s in batches, groups one by one and best-effort (their rules list
+     * fields, one refusal must not undo the 1:1 clears), then the stored files.
+     */
+    override suspend fun removePhoto() {
+        db.collection("users").document(me).set(mapOf("photoUrl" to "", "posterUrl" to "", "photoThumb" to ""), SetOptions.merge()).await()
+        val fields = mapOf<String, Any>("photos.$me" to "", "posters.$me" to "")
+        try {
+            val docs = db.collection("conversations").whereArrayContains("users", me).get().await().documents
+            val (groups, ones) = docs.partition { it.getString("type") == "group" }
+            for (chunk in ones.chunked(450)) {
+                val b = db.batch()
+                for (d in chunk) b.update(d.reference, fields)
+                try { b.commit().await() } catch (_: Exception) {}
+            }
+            for (d in groups) try { d.reference.update(fields).await() } catch (_: Exception) {}
+        } catch (_: Exception) {}
+        val st = FirebaseStorage.getInstance().reference
+        try { st.child("profiles/$me.jpg").delete().await() } catch (_: Exception) {}
+        try { st.child("profiles/$me-poster.jpg").delete().await() } catch (_: Exception) {}
     }
 
     private suspend fun isContact(uid: String): Boolean =

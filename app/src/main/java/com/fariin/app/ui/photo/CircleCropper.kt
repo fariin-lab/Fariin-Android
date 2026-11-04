@@ -190,6 +190,8 @@ private fun cut(src: Bitmap, r: IntArray): ByteArray? = runCatching {
  */
 class CirclePhotoPicker internal constructor(
     val launch: () -> Unit,
+    /** The phone's camera (iOS ProfilePhotoAction.camera); the shot goes to the same cropper. */
+    val takePhoto: () -> Unit,
     val pending: Uri?,
     private val clear: () -> Unit,
     private val onJpeg: (ByteArray) -> Unit,
@@ -207,8 +209,29 @@ fun rememberCirclePhotoPicker(onJpeg: (ByteArray) -> Unit): CirclePhotoPicker {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) pending = uri
     }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var shot by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) shot?.let { pending = it } }
+    val openCamera = {
+        runCatching {
+            val dir = java.io.File(ctx.cacheDir, "chat-camera").apply { mkdirs() }
+            val u = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files",
+                java.io.File(dir, "photo-${System.currentTimeMillis()}.jpg"))
+            shot = u
+            camera.launch(u)
+        }.onFailure { com.fariin.app.ui.components.Snack.show("Couldn't open the camera.") }
+        Unit
+    }
+    val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) openCamera() else com.fariin.app.ui.components.Snack.show("Allow the camera in Settings to take a photo.")
+    }
     return CirclePhotoPicker(
         launch = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        takePhoto = {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED) openCamera()
+            else askCamera.launch(android.Manifest.permission.CAMERA)
+        },
         pending = pending,
         clear = { pending = null },
         onJpeg = onJpeg,
