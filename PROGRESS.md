@@ -543,3 +543,4 @@ Seen, not fixed (not today's regressions):
   - Screen Security switched back ON on the Pixel (verified FLAG_SECURE). My Profile already has iOS's newer Posted stories card (no gap). Storage: Android's Clear Cache covers what iOS calls Clear Media (Android media re-downloads by design); iOS's per-chat storage page (biggest first, select, delete from this phone) is still missing on Android.
   - Left for the owner: confirm the stuck arrow is gone (3d0679e); press Delete Everything in Clear Chat History only on a test account; Play signing key into assetlinks.json once Play Console shows it.
   - Save to Photos now covers received videos when played (not device-tested: no received video on the Pixel).
+  - Group Info menu: Save to Photos On/Off per group (tested on hh; hh is now stored as Off for itself).
