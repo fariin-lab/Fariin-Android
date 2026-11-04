@@ -76,9 +76,23 @@ object Passkeys {
     private suspend fun call(name: String, data: Map<String, Any?> = emptyMap()): Map<*, *> =
         fn.getHttpsCallable(name).call(data).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
 
+    /**
+     * The server's challenge, asked for when the Passkeys page opens so Add shows the phone's sheet at
+     * once instead of after a server round trip (a sleeping server can take seconds). Used once; the
+     * server keeps a challenge 5 minutes, so one older than 4 is asked for again.
+     */
+    private var ready: Pair<Map<*, *>, Long>? = null
+
+    suspend fun prefetchRegistration() {
+        if (ready?.let { System.currentTimeMillis() - it.second < 4 * 60_000 } == true) return
+        ready = runCatching { call("passkeyRegistrationOptions") to System.currentTimeMillis() }.getOrNull()
+    }
+
     /** One passkey for the signed-in account, saved in the phone's password manager. */
     suspend fun register(activity: Activity, auth: AuthRepository, label: String = "Passkey") {
-        val start = call("passkeyRegistrationOptions")
+        val cached = ready?.takeIf { System.currentTimeMillis() - it.second < 4 * 60_000 }?.first
+        ready = null
+        val start = cached ?: call("passkeyRegistrationOptions")
         val options = start["options"] as? Map<*, *>
         val challengeId = start["challengeId"] as? String
         if (options == null || challengeId == null) throw IllegalStateException("Could not start adding a passkey.")

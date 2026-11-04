@@ -280,7 +280,12 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
     var error by remember { mutableStateOf<String?>(null) }
     var toDelete by remember { mutableStateOf<Passkeys.Row?>(null) }
     suspend fun load() { try { rows = Passkeys.list(); error = null } catch (e: Exception) { error = AuthRepository.codeMessageFor(e) }; loading = false }
-    LaunchedEffect(Unit) { if (demoRows == null) load() }
+    LaunchedEffect(Unit) {
+        if (demoRows != null) return@LaunchedEffect
+        // The challenge for Add, fetched beside the list so the sheet opens at once on the tap.
+        launch { Passkeys.prefetchRegistration() }
+        load()
+    }
     fun add() {
         val act = ctx.findActivity() ?: return
         error = null

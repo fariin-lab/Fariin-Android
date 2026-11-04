@@ -583,3 +583,4 @@ Seen, not fixed (not today's regressions):
 - 2026-11-04: Public groups/channels in Global Search + join sheet. Search runs clean on Pixel; no public group matched test words, rows not seen.
 - 2026-11-04: @name links resolve public groups/channels (unknown name still says so, checked on Pixel).
 - 2026-11-04: Rechecked the open items in this log against the code: official chat reactions / Mark as Unread / Clear History, inline attach Recents, in-app banner sound/vibrate/preview switches are all built. Profile Layout is hidden on iOS by the owner (Flags.profileLayoutChoice), so not ported. Location map picture still left out on purpose (needs a map service key).
+- 2026-11-04: Profile Voice / Video circles (seen on Pixel, not tapped).
