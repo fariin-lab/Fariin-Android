@@ -929,8 +929,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             val header: @Composable () -> Unit = {
                 Column {
                     if (showSender && g.first) SenderLine(ui, m.authorId)
-                    if (m.forwarded) Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
+                    if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null)
                     m.replyTo?.let { ReplyQuote(it, ui, isMe) }
                 }
             }
@@ -956,8 +955,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 Spacer(Modifier.height(1.dp))
             }
             if (m.forwarded && !m.deleted) {
-                Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
+                ForwardedTag(m, isMe, ui.channel != null)
             }
             m.replyTo?.takeIf { !m.deleted }?.let { ReplyQuote(it, ui, isMe) }
             if (kind == Message.MediaKind.VOICE) {
@@ -1036,8 +1034,7 @@ private fun MediaRow(
                 if (showSender && g.first) {
                     SenderLine(ui, m.authorId)
                 }
-                if (m.forwarded) Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
+                if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null)
                 m.replyTo?.let { ReplyQuote(it, ui, isMe) }
             }
         }

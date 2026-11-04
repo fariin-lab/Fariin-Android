@@ -100,6 +100,8 @@ data class Message(
     val linkPreview: LinkPreview? = null,
     /** iOS Message.storyMention: this message says "X mentioned you in a story" (1:1 only). */
     val storyMention: StoryMentionRef? = null,
+    /** iOS Message.fwdChannel: the channel a forwarded post came from (sealed JSON on the wire). */
+    val fwdChannel: FwdChannel? = null,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
@@ -109,6 +111,8 @@ data class Message(
 
     /** The story a mention card points at, and its plain picture (iOS StoryMentionRef). */
     data class StoryMentionRef(val id: String, val thumbUrl: String)
+
+    data class FwdChannel(val cid: String, val title: String, val photoUrl: String, val username: String)
 
     /** iOS LinkPreviewData: fetched and sealed by the sender; the picture is a sealed file like a photo's. */
     data class LinkPreview(val url: String, val title: String, val desc: String,
@@ -258,6 +262,12 @@ data class Message(
                 callJoinedUids = (data["joinedUids"] as? List<*>)?.filterIsInstance<String>(),
                 callRungUids = (data["rungUids"] as? List<*>)?.filterIsInstance<String>(),
                 linkPreview = linkPreview,
+                fwdChannel = (data["fwdChannel"] as? String)?.takeIf { it.isNotEmpty() }?.let { v ->
+                    val clear = open(v, author)
+                    runCatching { org.json.JSONObject(clear) }.getOrNull()?.let { o ->
+                        o.optString("c").takeIf { it.isNotEmpty() }?.let { FwdChannel(it, o.optString("t"), o.optString("p"), o.optString("u")) }
+                    }
+                },
                 storyMention = (data["storyMention"] as? Map<*, *>)?.let { sm ->
                     (sm["id"] as? String)?.takeIf { it.isNotEmpty() }?.let { StoryMentionRef(it, sm["thumb"] as? String ?: "") }
                 },

@@ -68,6 +68,15 @@ class MediaSender(
 
     private fun others(members: List<String>?) = members ?: listOf(other)
 
+    /** A forward from a channel: its {c,t,p,u} JSON, sealed onto each message written (iOS sealedFwdChannel). */
+    var fwdChannelJson: String? = null
+
+    private suspend fun setMsg(batch: com.google.firebase.firestore.WriteBatch, ref: com.google.firebase.firestore.DocumentReference,
+                               members: List<String>?, msg: Map<String, Any>) {
+        val fc = sealOrNull(fwdChannelJson, members)
+        batch.set(ref, if (fc != null) msg + ("fwdChannel" to fc) else msg)
+    }
+
     /** End-to-end encrypted bytes go up as application/octet-stream (storage.rules `chat/`). */
     private suspend fun upload(cipher: ByteArray, path: String, onProgress: ((Float) -> Unit)? = null): String {
         require(cipher.size < MediaRules.STORAGE_CHAT_LIMIT) { "file too large" }
@@ -110,7 +119,7 @@ class MediaSender(
         val blur = if (viewOnce) null else sealOrNull(prep.blurhash, members)
         val thumb = if (viewOnce) null else sealOrNull(prep.thumbB64, members)
         val batch = db.batch()
-        batch.set(msgRef, MediaMessages.image(me, url, meta, captionCipher, clientTs, clientId, prep.width, prep.height,
+        setMsg(batch, msgRef, members, MediaMessages.image(me, url, meta, captionCipher, clientTs, clientId, prep.width, prep.height,
             blur, thumb, FieldValue.serverTimestamp(), viewOnce = viewOnce, forwarded = forwarded))
         // A view-once photo publishes NO thumbnail to the conversation doc (iOS audit).
         batch.update(convRef, MediaMessages.convUpdate(me,
@@ -140,7 +149,7 @@ class MediaSender(
         media?.store(thumbUrl, v.poster.jpeg)
         val captionCipher = sealOrNull(caption.trim(), members) ?: ""
         val batch = db.batch()
-        batch.set(msgRef, MediaMessages.videoAnnounce(me, thumbUrl, thMeta, v.duration, v.width.toDouble(), v.height.toDouble(),
+        setMsg(batch, msgRef, members, MediaMessages.videoAnnounce(me, thumbUrl, thMeta, v.duration, v.width.toDouble(), v.height.toDouble(),
             captionCipher, clientTs, clientId, sealOrNull(v.poster.blurhash, members), sealOrNull(v.poster.thumbB64, members),
             forwarded, FieldValue.serverTimestamp()))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.videoPreview(v.duration), others(members),
@@ -175,7 +184,7 @@ class MediaSender(
             }
         }
         val batch = db.batch()
-        batch.set(msgRef, MediaMessages.file(me, f.name, f.bytes.size, meta, clientTs, clientId, thumbUrl, thumbMeta,
+        setMsg(batch, msgRef, members, MediaMessages.file(me, f.name, f.bytes.size, meta, clientTs, clientId, thumbUrl, thumbMeta,
             forwarded, FieldValue.serverTimestamp()))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.FILE_PREVIEW, others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1)))
@@ -230,7 +239,7 @@ class MediaSender(
         val first = when (val p = parts.first()) { is AlbumPart.Photo -> p.prep; is AlbumPart.Video -> p.prep.poster }
         val captionCipher = sealOrNull(caption.trim(), members) ?: ""
         val batch = db.batch()
-        batch.set(msgRef, MediaMessages.album(me, tiles, captionCipher, clientTs, clientId,
+        setMsg(batch, msgRef, members, MediaMessages.album(me, tiles, captionCipher, clientTs, clientId,
             sealOrNull(first.blurhash, members), sealOrNull(first.thumbB64, members), forwarded, FieldValue.serverTimestamp()))
         val cover = tiles.firstOrNull { !it.isVideo } ?: tiles.first()
         val ordered = listOf(cover) + tiles.filter { it !== cover }
@@ -250,7 +259,7 @@ class MediaSender(
         val (cipher, meta) = sealBytes(data, members)
         val msgRef = convRef.collection("messages").document(clientId)
         val batch = db.batch()
-        batch.set(msgRef, MediaMessages.audio(me, meta, duration, waveform, clientTs, clientId, FieldValue.serverTimestamp(), forwarded))
+        setMsg(batch, msgRef, members, MediaMessages.audio(me, meta, duration, waveform, clientTs, clientId, FieldValue.serverTimestamp(), forwarded))
         batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.voicePreview(duration), others(members),
             FieldValue.serverTimestamp(), FieldValue.increment(1)))
         batch.commit().await()

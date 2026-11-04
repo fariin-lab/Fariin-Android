@@ -1,5 +1,6 @@
 package com.fariin.app.media
 
+import kotlinx.coroutines.tasks.await
 import android.content.Context
 import com.fariin.app.crypto.FariinCrypto
 import com.fariin.app.data.Message
@@ -30,12 +31,33 @@ object Forwarder {
         // Open the source once, then send per target.
         val payload = runCatching { open(context, src, m) }.getOrNull()
         val failed = mutableListOf<String>()
+        // A post forwarded out of a channel says which channel (iOS forwardMessage + sealedFwdChannel);
+        // one already forwarded from a channel keeps its channel. Never written into a channel.
+        val fromChannel = channelJson(sourceCid) ?: m.fwdChannel?.let { json(it.cid, it.title, it.photoUrl, it.username) }
         for (t in targets.distinct().take(MediaRules.FORWARD_CHATS_AT_ONCE)) {
             val fwd = MediaMessages.isForward(m.forwarded, sourceCid, t)
-            val ok = runCatching { sendTo(context, me, crypto, t, m, payload, fwd) }.isSuccess
+            val fc = fromChannel?.takeIf { !isChannel(t) }
+            val ok = runCatching { sendTo(context, me, crypto, t, m, payload, fwd, fc) }.isSuccess
             if (!ok) failed += t
         }
         failed
+    }
+
+    private fun json(cid: String, title: String, photo: String, username: String) =
+        org.json.JSONObject().put("c", cid).put("t", title).put("p", photo).put("u", username).toString()
+
+    private fun isChannel(cid: String): Boolean =
+        com.fariin.app.channel.ChannelFollows.docs.value[cid]?.get("channel") == true ||
+            com.fariin.app.data.LiveStories.chats.any { it.id == cid && it.isChannel }
+
+    /** The source's channel card when [sourceCid] is a channel: its doc as followed, else read once. */
+    private suspend fun channelJson(sourceCid: String): String? {
+        val d = com.fariin.app.channel.ChannelFollows.docs.value[sourceCid]
+            ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
+                .document(sourceCid).get().await().data as Map<String, Any?>? }.getOrNull() ?: return null
+        val info = com.fariin.app.channel.ChannelInfo.from(sourceCid, d)
+        if (!info.isChannel) return null
+        return json(sourceCid, info.title, info.avatarUrl.orEmpty(), info.username)
     }
 
     private sealed class Payload {
@@ -80,10 +102,11 @@ object Forwarder {
 
     private suspend fun sendTo(
         context: Context, me: String, crypto: FariinCrypto, target: String, m: Message, payload: Payload?, fwd: Boolean,
+        fwdChannelJson: String?,
     ) {
         val ts = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
-        val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto))
+        val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto)).also { it.fwdChannelJson = fwdChannelJson }
         when (payload ?: throw SourceUnavailable()) {
             is Payload.Photo -> sender.image((payload as Payload.Photo).prep, m.text, false, fwd, clientId, ts)
             is Payload.Video -> sender.video((payload as Payload.Video).prep, m.text, fwd, clientId, ts)
@@ -91,7 +114,7 @@ object Forwarder {
             is Payload.Voice -> sender.audio((payload as Payload.Voice).bytes, m.duration ?: 0.0, m.waveform, fwd, clientId, ts)
             is Payload.Doc -> sender.file((payload as Payload.Doc).prep, fwd, clientId, ts)
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
-                .sendForwardedText(m.text, fwd)
+                .sendForwardedText(m.text, fwd, fwdChannelJson)
         }
     }
 }

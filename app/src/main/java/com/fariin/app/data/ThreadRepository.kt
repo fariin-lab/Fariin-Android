@@ -720,13 +720,14 @@ class ThreadRepository(
         (context.contentResolver.getType(uri) ?: "").startsWith("video/")
 
     /** A text forwarded into this chat (iOS sendText with `forwarded`), straight to the server. */
-    suspend fun sendForwardedText(text: String, forwarded: Boolean) {
+    suspend fun sendForwardedText(text: String, forwarded: Boolean, fwdChannelJson: String? = null) {
         val t = text.trim()
         if (t.isEmpty()) return
         val clientId = UUID.randomUUID().toString().uppercase()
         val ts = System.currentTimeMillis().toDouble()
         turn.withLock {
-            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded) else sendDirect(t, clientId, ts, null, forwarded)
+            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson)
+            else sendDirect(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson)
         }
     }
 
@@ -992,7 +993,7 @@ class ThreadRepository(
 
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                    forwarded: Boolean = false, countsAsUnread: Boolean = true,
-                                   storyMention: Message.StoryMentionRef? = null) {
+                                   storyMention: Message.StoryMentionRef? = null, fwdChannelJson: String? = null) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         val local = CryptoHub.listedConversation(cid)
@@ -1025,6 +1026,8 @@ class ThreadRepository(
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.encryptForConversation(cid, reply.text))
         if (forwarded) msg["forwarded"] = true
         // A story mention card (iOS ChatService: the plain story id and thumbnail).
+        // The channel a forwarded post came from, sealed like the text (iOS sealedFwdChannel).
+        fwdChannelJson?.let { j -> runCatching { crypto.encryptForConversation(cid, j) }.getOrNull()?.let { msg["fwdChannel"] = it } }
         if (storyMention != null) msg["storyMention"] = mapOf("id" to storyMention.id, "thumb" to storyMention.thumbUrl)
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
@@ -1087,7 +1090,7 @@ class ThreadRepository(
 
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                   forwarded: Boolean = false, countsAsUnread: Boolean = true,
-                                  mentions: List<String> = emptyList()) {
+                                  mentions: List<String> = emptyList(), fwdChannelJson: String? = null) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
@@ -1104,6 +1107,7 @@ class ThreadRepository(
         // iOS sendGroupText: the uids in the clear, for the server's "mentioned you" push.
         if (mentions.isNotEmpty()) msg["mentions"] = mentions
         if (forwarded) msg["forwarded"] = true
+        fwdChannelJson?.let { j -> runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwdChannel"] = it } }
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
