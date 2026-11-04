@@ -3,6 +3,7 @@ package com.fariin.app.ui.calls
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.foundation.layout.Arrangement
@@ -270,7 +271,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, onInfo: () -> Unit, onL
     val ctx = LocalContext.current
     Column {
         Row(
-            Modifier.fillMaxWidth().combinedClickable(onLongClick = onLongClick) { callBack(ctx, call, call.video) }.padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
+            Modifier.fillMaxWidth().listPress(onLongClick = onLongClick) { callBack(ctx, call, call.video) }.padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(call.photoUrl, 46.dp, squircle = false)
