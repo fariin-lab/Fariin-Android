@@ -456,11 +456,12 @@ private class ShellMotion {
         return entering to p
     }
 
-    /** Matches Motion's popEnter / exit: fade in 190 ms after 60, fade out in 90; slide a tenth. */
+    /** Matches Motion's popEnter / exit: fade in over the whole back, fade out over COVER_FADE_MS; slide a tenth. */
     val alpha: Float get() {
         val (entering, p) = progress() ?: return 1f
-        return if (entering) com.fariin.app.ui.components.Motion.Decelerate.transform(((p * 250f - 60f) / 190f).coerceIn(0f, 1f))
-        else 1f - com.fariin.app.ui.components.Motion.Accelerate.transform((p * 300f / 90f).coerceIn(0f, 1f))
+        val m = com.fariin.app.ui.components.Motion
+        return if (entering) m.Decelerate.transform(p)
+        else 1f - m.Accelerate.transform((p * m.ENTER_MS / m.COVER_FADE_MS).coerceIn(0f, 1f))
     }
     val shift: Float get() {
         val (entering, p) = progress() ?: return 0f

@@ -33,8 +33,13 @@ object Motion {
     /** Read outside composition (NavHost transition lambdas are not composable). */
     val on: Boolean get() = PowerSaving.state.value.animations
 
-    private const val ENTER_MS = 300
-    private const val EXIT_MS = 250
+    // Measured against the big Android messenger on the Pixel 5 (owner 2026-11-04: ours felt
+    // slow and the tap's grey never showed): a quicker page, and a crossfade in which the page
+    // being left stays on screen while the new one arrives, so the tapped row's grey is seen.
+    const val ENTER_MS = 220
+    const val EXIT_MS = 200
+    /** How long the page being covered takes to fade (it used to vanish in 90 ms). */
+    const val COVER_FADE_MS = 180
     /** How far a page slides in the Material shared X axis: a short push, not a full-width slide. */
     private fun shift(full: Int) = full / 10
 
@@ -44,25 +49,25 @@ object Motion {
     fun enter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         if (!on) EnterTransition.None
         else slideInHorizontally(tween(ENTER_MS, easing = Decelerate)) { shift(it) } +
-            fadeIn(tween(ENTER_MS - 90, delayMillis = 60, easing = Decelerate))
+            fadeIn(tween(ENTER_MS - 40, easing = Decelerate))
     }
 
     fun exit(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         if (!on) ExitTransition.None
         else slideOutHorizontally(tween(ENTER_MS, easing = Decelerate)) { -shift(it) } +
-            fadeOut(tween(90, easing = Accelerate))
+            fadeOut(tween(COVER_FADE_MS, easing = Accelerate))
     }
 
     fun popEnter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         if (!on) EnterTransition.None
         else slideInHorizontally(tween(EXIT_MS, easing = Decelerate)) { -shift(it) } +
-            fadeIn(tween(EXIT_MS - 60, delayMillis = 60, easing = Decelerate))
+            fadeIn(tween(EXIT_MS, easing = Decelerate))
     }
 
     fun popExit(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         if (!on) ExitTransition.None
         else slideOutHorizontally(tween(EXIT_MS, easing = Accelerate)) { shift(it) } +
-            fadeOut(tween(90, easing = Accelerate))
+            fadeOut(tween(EXIT_MS - 50, easing = Accelerate))
     }
 
     /** A soft spring with a little bounce: reaction chips, badges. */

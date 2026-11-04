@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.animation.togetherWith
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -110,6 +111,25 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
     }
     // The grey page under the white section cards (iOS grouped background).
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
+      // Pages move as the chats do (Motion): a short slide and a crossfade, so the tapped row's
+      // grey is still there while the next page arrives (it used to swap with no motion at all).
+      androidx.compose.animation.AnimatedContent(targetState = stack, label = "settings", transitionSpec = {
+        val m = com.fariin.app.ui.components.Motion
+        val forward = targetState.size >= initialState.size
+        when {
+            !m.on -> androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+            forward -> (androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(m.ENTER_MS, easing = m.Decelerate)) { it / 10 } +
+                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(m.ENTER_MS - 40, easing = m.Decelerate))) togetherWith
+                (androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(m.ENTER_MS, easing = m.Decelerate)) { -it / 10 } +
+                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(m.COVER_FADE_MS, easing = m.Accelerate)))
+            else -> (androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(m.EXIT_MS, easing = m.Decelerate)) { -it / 10 } +
+                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(m.EXIT_MS, easing = m.Decelerate))) togetherWith
+                (androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(m.EXIT_MS, easing = m.Accelerate)) { it / 10 } +
+                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(m.EXIT_MS - 50, easing = m.Accelerate)))
+        }
+      }) { shownStack ->
+        val page = shownStack.lastOrNull()
+        Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
         when {
             page == null -> SettingsHome(profile, push, homeScroll)
             page == PAGE_ACCOUNT -> AccountPage(profile, demoProfile != null, push, pop, onSignOut)
@@ -136,6 +156,8 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             page == PAGE_PASSKEYS -> com.fariin.app.ui.auth.PasskeysPage(remember { AuthRepository() }, pop, demoRows = if (demoProfile != null) emptyList() else null)
             else -> ComingSoonPage(page.removePrefix(SOON), pop)
         }
+        }
+      }
     }
 }
 
