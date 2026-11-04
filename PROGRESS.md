@@ -695,4 +695,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Call menu now has Voice Call / Video Call (iOS), via the same confirm. Pixel: menu shows it, tap
   -> "Call kream?", cancelled, no call placed.
 - Reply/edit bar: label colour (iOS syncBanners accent = .label), quoted call now "Voice call"
-  instead of an empty line. Pixel checked. Call bubbles have no swipe-to-reply (menu Reply works).
+  instead of an empty line. Pixel checked. Call bubbles now swipe to reply too (checked: no call dialog).
