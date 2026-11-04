@@ -645,3 +645,13 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   list. FAB, new-call button, unread badges, headers, dialog buttons, switches/sliders/radios,
   cursors, spinners -> accent with onAccent on fills; Material containers neutral grey. Seen on
   the Pixel: chats, calls, stories, settings, privacy.
+- Person page: a 5th circle (Search) overflowed the row and its label wrapped letter by letter,
+  leaving a tall empty band; circles now spread over the width (e972f2e). Restricted Chat and
+  Verify Encryption got their iOS icons so the rows line up. Seen on the Pixel.
+- Group Info (owner 14:58 "flooding the whole page"): management moved behind one Group Settings
+  row as iOS (owner 2026-10-18 order). Info card = Storage Used, Group Settings, Join Requests while
+  waiting, Statistics. Settings page = Disappearing, Recent Actions, Type, Links, Requests, Members,
+  Admins, Banned, Permissions. Seen on the Pixel (hh group), timer page opens and back returns.
+- Channel info: same split (Followers, Channel Settings, Follow Requests while waiting; new
+  channelsettings route). Built, NOT seen on device: no channel I admin on the Pixel account.
+- Checked, fine as is: Calls row tap calls back (as iOS); story card white = a white story.
