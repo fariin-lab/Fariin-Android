@@ -1017,7 +1017,7 @@ private fun Ticks(conv: Conversation, me: String) {
     Icon(
         androidx.compose.ui.res.painterResource(if (delivered) R.drawable.ic_tick_double else R.drawable.ic_tick_single),
         contentDescription = if (read) "Read" else if (delivered) "Delivered" else "Sent",
-        tint = if (read) c.accent else c.secondary,
+        tint = if (read) c.blue else c.secondary,   // iOS: read is blue (0A84FF) in the list
     )
 }
 
