@@ -619,3 +619,12 @@ Done this session (motion, from the owner's frame-by-frame videos of WhatsApp vs
 Start the comparison with: chat list (long press, menu, filters, archive, swipe), then a chat
 (attach, long press, swipe reply, header menu, contact info), then Settings page by page, then
 Calls and Updates. Log each finding and fix here, one commit each.
+
+## WhatsApp usability comparison: findings and fixes (started 2026-11-04 14:28)
+Owner's steer mid-session: "we don't mean to clone that app, only have what matters". So: add only
+what makes Fariin easier to use, never a feature just because WhatsApp has it.
+- Chat list long press: same bar as WhatsApp (pin, mute, archive, delete, more). Added one row:
+  one chat picked -> View Contact / Group Info / Channel Info (af926f6). Left out on purpose:
+  Block, Add Chat Shortcut, Lock chat, Favorites, Lists.
+- Chat header: Search was only reachable via the info page. Header now has a floating overflow
+  with Search and Mute/Unmute (1719633). Installed on the Pixel; Search opened and found "kaka".
