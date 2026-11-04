@@ -177,3 +177,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.play.services)
 }
+
+composeCompiler {
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("app/compose-stability.conf"))
+}

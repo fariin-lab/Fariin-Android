@@ -11,6 +11,7 @@ import com.google.firebase.Timestamp
  * channel follower state (users/{me}/channels), the private block list (BlockList), saved contact
  * names, group moderation (`mod`), roles, restrictions, timers.
  */
+@androidx.compose.runtime.Immutable
 data class Conversation(
     val id: String,
     val users: List<String> = emptyList(),
