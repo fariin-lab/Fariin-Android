@@ -203,7 +203,14 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                                 onInfo = { nav.callLink(r.roomId) }, onLongClick = { picked = setOf(tag) })
                         } else {
                             val run = r as CallRun
-                            CallRow(run, me, now, onInfo = { info = run }, onLongClick = { picked = setOf(tag) })
+                            // iOS (owner 2026-10-28): a person's (i) opens their profile, a group call's
+                            // opens the group's chat; the Calls page has no separate call info page.
+                            CallRow(run, me, now, onInfo = {
+                                val g = run.latest.groupCid
+                                if (g != null) nav.chat(g)
+                                else if (run.latest.otherUid.isNotEmpty()) nav.contact(run.latest.otherUid)
+                                else info = run
+                            }, onLongClick = { picked = setOf(tag) })
                         }
                     }
                 }
