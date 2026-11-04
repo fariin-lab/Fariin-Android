@@ -566,7 +566,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         return
     }
     if (DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
-    if (GroupPages(cid, me, pages, onOpenPerson, onAddMembers = { adding = true }, onHandedOver = {
+    if (GroupPages(cid, me, pages, onOpenPerson, onAddMembers = { adding = true }, onTimer = {
+            if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
+            else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
+        }, onHandedOver = {
             // No Undo after a hand-over (iOS): the transfer is done, so the leave runs now.
             com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
             com.fariin.app.data.LeaveUndo.commit()
@@ -625,20 +628,22 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Spacer(Modifier.height(20.dp))
             if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
             if (iAmMember) SettingsSection {
-                // The owner's and admins' settings (iOS Group Settings); members do not see them.
-                GroupManageRows(conv, me, cid) { pages.add(it) }
-                // Who may change it: the owner and admins with Change info (iOS GroupSettingsView).
-                // iOS settingsCard: Storage Used, this chat's files on this phone.
-                SettingsRow("Storage Used", icon = rememberVectorPainter(Icons.Outlined.Storage)) {
+                // iOS settingsCard (owner 2026-10-18/20): Storage Used, then for the owner and admins one
+                // Group Settings row (the management lives on that page) and Join Requests while
+                // someone waits; a member's Disappearing Messages row stays here, read-only.
+                SettingsRow("Storage Used", icon = rememberVectorPainter(Icons.Outlined.Storage), last = !iAmAdmin && timer <= 0 && !showStats) {
                     pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))
                 }
-                DisappearingRow(timer, short = false, last = !iAmAdmin) {
-                    if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
-                    else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
+                if (!iAmAdmin && timer > 0) DisappearingRow(timer, short = false, last = !showStats) {
+                    notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
-                // iOS Group Settings chat section: Recent Actions (the server's admin log), owner and admins only.
-                if (iAmAdmin) SettingsRow("Recent Actions", icon = rememberVectorPainter(Icons.Filled.History),
-                    last = !showStats) { pages.add(GroupPage.RecentActions) }
+                if (iAmAdmin) {
+                    val waiting = rememberJoinRequests(cid, allowed = team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS) && !team.closed)
+                    SettingsRow("Group Settings", icon = painterResource(com.fariin.app.R.drawable.ic_group_settings),
+                        last = !showStats && waiting.isEmpty()) { pages.add(GroupPage.Settings) }
+                    if (waiting.isNotEmpty()) SettingsRow("Join Requests", icon = painterResource(com.fariin.app.R.drawable.ic_gs_join_requests),
+                        value = com.fariin.app.data.JoinRequests.rowValue(waiting.size), last = !showStats) { pages.add(GroupPage.JoinRequests) }
+                }
                 // Statistics (iOS showStatsRow): owner and admins of a big enough group, last row.
                 if (showStats) SettingsRow("Statistics", icon = painterResource(com.fariin.app.R.drawable.ic_statistics), last = true) {
                     pages.add(GroupPage.Stats(conv["title"] as? String ?: "Group"))

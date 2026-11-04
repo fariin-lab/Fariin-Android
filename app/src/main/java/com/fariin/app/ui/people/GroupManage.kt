@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.filled.History
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -143,6 +144,8 @@ sealed interface GroupPage {
     data class Stats(val title: String) : GroupPage
     /** iOS GroupInfoView › Storage Used: this chat's files on this phone (ChatStorage.kt). */
     data class Storage(val title: String) : GroupPage
+    /** iOS GroupSettingsView: the group's management on its own page, behind one row of the info page. */
+    data object Settings : GroupPage
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
@@ -177,13 +180,36 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = 
         SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "$banned") { open(GroupPage.Banned) }
     }
     val (on, of) = GroupAdmins.permissionCount(conv)
-    SettingsRow("Permissions", icon = painterResource(R.drawable.ic_gs_permissions), value = "$on/$of") { open(GroupPage.Permissions) }
+    SettingsRow("Permissions", icon = painterResource(R.drawable.ic_gs_permissions), value = "$on/$of", last = true) { open(GroupPage.Permissions) }
+}
+
+/**
+ * Group Settings (iOS GroupSettingsView, owner 2026-10-18): who-can-do-what and the group's
+ * management on their own page, so the info page is not a wall of admin rows. Chat (Disappearing
+ * Messages, Recent Actions), then joining, people and permissions ([GroupManageRows]).
+ */
+@Composable
+private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open: (GroupPage) -> Unit, onTimer: () -> Unit) {
+    val c = Fariin.colors
+    val doc = liveGroupDoc(cid)
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Group Settings", onBack)
+        if (doc.isEmpty()) { Loading(); return@Column }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+            SettingsSection {
+                DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false, onClick = onTimer)
+                SettingsRow("Recent Actions", icon = rememberVectorPainter(Icons.Filled.History), last = true) { open(GroupPage.RecentActions) }
+            }
+            SettingsSection { GroupManageRows(doc, me, cid, open) }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
 }
 
 /** Draws the page on top of the stack; back pops it. False when nothing is pushed. */
 @Composable
 internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, onOpenPerson: (String) -> Unit,
-                        onAddMembers: () -> Unit = {}, onHandedOver: () -> Unit = {}): Boolean {
+                        onAddMembers: () -> Unit = {}, onHandedOver: () -> Unit = {}, onTimer: () -> Unit = {}): Boolean {
     val top = stack.lastOrNull() ?: return false
     val pop: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
     val push: (GroupPage) -> Unit = { stack.add(it) }
@@ -201,6 +227,7 @@ internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, 
         GroupPage.Banned -> BannedUsersPage(cid, pop)
         GroupPage.JoinRequests -> JoinRequestsPage(cid, pop)
         GroupPage.RecentActions -> RecentActionsPage(cid, me, pop)
+        GroupPage.Settings -> GroupSettingsPage(cid, me, pop, push, onTimer)
         is GroupPage.Stats -> GroupStatsPage(cid, top.title, pop)
         is GroupPage.Storage -> ChatStoragePage(cid, me, top.title, pop)
         GroupPage.ChooseOwner -> {
