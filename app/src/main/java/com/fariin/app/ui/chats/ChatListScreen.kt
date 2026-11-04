@@ -250,6 +250,11 @@ fun ChatListScreen(
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
     val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var gsUndo by remember { mutableStateOf(false) }
+    val screenCtx = androidx.compose.ui.platform.LocalContext.current
+    val myProfile = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value
+    val myPhoto = myProfile?.photoUrl
+    val myHandle = myProfile?.handle
     LaunchedEffect(me) { SearchRecents.start(appCtx, me) }
     // The search page is a page of its own: the tab bar goes while it is up (iOS).
     DisposableEffect(searching) {
@@ -431,6 +436,7 @@ fun ChatListScreen(
         },
     ) { pad ->
         // The list runs under the title bar (padded by it), everything else sits below it.
+        Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             when {
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
@@ -560,6 +566,29 @@ fun ChatListScreen(
                     }
                 }
             }
+        }
+        // iOS getStartedLayer: Things you can do, for a new account with a short list.
+        val gsVersion = GetStartedStore.version.intValue
+        val gsShown = !state.loading && state.error == null && !searching && !selecting && !showArchive && filter == FILTER_ALL &&
+            GetStartedStore.accountIsNew() && state.chats.count { !it.isChannel } < GetStartedStore.CHAT_LIMIT
+        val gsCards = remember(gsVersion, gsShown, myPhoto) { if (gsShown) GetStartedStore.cards(appCtx, me, hasPhoto = !myPhoto.isNullOrEmpty()) else emptyList() }
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+            if (gsCards.isNotEmpty()) GetStartedBanner(gsCards,
+                onTap = { card ->
+                    when (card) {
+                        GetStartedCard.NEW_GROUP -> people.newGroup()
+                        GetStartedCard.INVITE -> com.fariin.app.ui.settings.shareInvite(screenCtx, myHandle)
+                        GetStartedCard.ADD_PHOTO -> people.editProfile()
+                        GetStartedCard.CHAT_COLOR -> { com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_COLOR); onSettings() }
+                    }
+                },
+                onRemove = { GetStartedStore.remove(appCtx, me, it) },
+                onHideAll = {
+                    GetStartedStore.finish(appCtx, me); gsUndo = true
+                    scope.launch { kotlinx.coroutines.delay(5_000); gsUndo = false }
+                })
+            else if (gsUndo) GetStartedUndo { gsUndo = false; GetStartedStore.reopen(appCtx, me) }
+        }
         }
     }
 

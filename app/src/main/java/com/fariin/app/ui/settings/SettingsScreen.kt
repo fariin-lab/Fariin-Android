@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,6 +93,9 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
     val push: (String) -> Unit = { stack = stack + it }
     val pop: () -> Unit = { stack = stack.dropLast(1) }
     BackHandler(enabled = stack.isNotEmpty(), onBack = pop)
+    // A page asked for from outside Settings (the chat list's Things you can do > Chat color).
+    val asked by SettingsLink.requests.collectAsState()
+    LaunchedEffect(asked) { asked?.let { stack = listOf(it); SettingsLink.requests.value = null } }
     // A second tap on Settings: back to the first page, then to the top.
     val homeScroll = rememberScrollState()
     com.fariin.app.ui.shell.OnTabReselect {
@@ -452,4 +456,10 @@ private fun UsernamePage(me: String, profile: MyProfile?, pop: () -> Unit) {
     Box(Modifier.fillMaxSize().padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
         com.fariin.app.ui.people.UsernameScreen(api, profile?.handle.orEmpty(), onBack = pop)
     }
+}
+
+/** Opens one Settings page from elsewhere in the app; the Settings tab picks it up when it shows. */
+object SettingsLink {
+    val requests = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    fun request(page: String) { requests.value = page }
 }
