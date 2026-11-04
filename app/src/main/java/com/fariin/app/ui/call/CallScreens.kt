@@ -906,7 +906,8 @@ private fun CardVideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier
  * while it rings (iOS groupWaiting + GroupCallRingingView). [GroupCallUi.members] lists me first.
  */
 @Composable
-fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit = {}) {
+fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit = {},
+                    onMinimize: (() -> Unit)? = null, pip: Boolean = false) {
     var focus by remember { mutableStateOf<String?>(null) }
     var people by remember { mutableStateOf(false) }
     val me = g.members.firstOrNull { it.local } ?: g.members.firstOrNull()
@@ -932,8 +933,11 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
         if (waitingScreen) GroupWaiting(g.groupPhoto, pulse = g.calling)
         Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = com.fariin.app.call.GroupCallWords.subtitle(g.waiting, g.connecting, g.reconnecting, g.joined, g.calling, g.members.size)
-            CallHeader(
-                name = g.title, status = status, muted = false, mutedLabel = "", left = null, side = 44.dp,
+            // In the small window (picture in picture) only the people show, as iOS's floating card.
+            if (!pip) CallHeader(
+                name = g.title, status = status, muted = false, mutedLabel = "",
+                left = onMinimize?.let { m -> { HeaderCircle(Icons.Filled.CloseFullscreen, "Minimize call", 44.dp) { chrome.touch(); m() } } },
+                side = 44.dp,
                 right = { HeaderCircle(Icons.Filled.People, "Participants", 44.dp) { chrome.touch(); people = true } },
                 modifier = Modifier.alpha(shown),
             )
@@ -950,7 +954,7 @@ fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onL
                 CallLinkRequestStack(g.requests, Modifier.padding(horizontal = 14.dp))
             }
             Spacer(Modifier.height(16.dp))
-            ControlCapsule(Modifier.alpha(shown)) {
+            if (!pip) ControlCapsule(Modifier.alpha(shown)) {
                 val shareOn = g.sharing || g.sharePending
                 ShareCircle(lit = g.sharing, on = shareOn, enabled = shareOn || (g.joined && presenter == null), size = 56.dp) {
                     chrome.touch(); onShare()

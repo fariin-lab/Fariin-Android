@@ -193,7 +193,8 @@ class CallActivity : ComponentActivity() {
                     if (inLobby) {
                         CallLobbyScreen(lobbyKey!!, lobbyVideo, g, onLeave = { GroupCall.leave(); finish() }, onJoin = { video, mic -> joinFromLobby(video, mic) })
                     } else GroupCallScreen(g, onMic = { micToggle() }, onCamera = { cameraToggle(GroupCall.ui.value.cameraOn) },
-                        onLeave = { GroupCall.leave(); finish() }, onShare = { if (demoGroup == null) shareTapped() })
+                        onLeave = { GroupCall.leave(); finish() }, onShare = { if (demoGroup == null) shareTapped() },
+                        onMinimize = { minimizeGroup() }, pip = inPip)
                 } else {
                     val ui by CallManager.ui.collectAsState()
                     LaunchedEffect(ui.status.phase) { if (ui.status.phase == CallPhase.IDLE) finish() }
@@ -297,6 +298,21 @@ class CallActivity : ComponentActivity() {
         val u = CallManager.ui.value
         if (pipAllowed() && CallRouting.pipWanted(u.status.phase, u.cameraOn, u.remoteCameraOn)) {
             try { enterPictureInPictureMode(pipParams(true)); return } catch (_: Exception) {}
+        }
+        moveTaskToBack(true)
+    }
+
+    /**
+     * A group call shrinks (iOS GroupFloatingCallWindow): with a camera on anywhere, into the
+     * picture-in-picture window showing the people; voice only, behind the app, where the ongoing
+     * call notification and the chat's live call bar bring it back.
+     */
+    private fun minimizeGroup() {
+        val g = GroupCall.ui.value
+        if (pipAllowed() && (g.cameraOn || g.members.any { it.video != null || it.screen != null })) {
+            try {
+                enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16)).build()); return
+            } catch (_: Exception) {}
         }
         moveTaskToBack(true)
     }
