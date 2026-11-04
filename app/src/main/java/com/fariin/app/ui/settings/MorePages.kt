@@ -327,6 +327,7 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     val ctx = LocalContext.current
     val p = remember { ctx.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE) }
     var links by remember { mutableStateOf(p.getBoolean("linkPreviewsEnabled", true)) }
+    var savePhotos by remember { mutableStateOf(p.getBoolean(com.fariin.app.media.AutoSaveMedia.KEY, false)) }
     var archive by remember { mutableStateOf(p.getBoolean("unknownChats.autoArchive", false)) }
     var size by remember { mutableStateOf(p.getString("chat.textSize", "medium") ?: "medium") }
     val quick = p.getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️"
@@ -341,6 +342,9 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         SettingsSection {
             SettingsRow("Quick Reaction", value = quick) { push(PAGE_QUICK) }
             SettingsRow("Night Mode", value = com.fariin.app.data.AppearancePrefs.current(ctx).label, last = true) { push("night") }
+        }
+        SettingsSection(footer = "Automatically save received photos to your gallery.") {
+            SwitchRow("Save to Photos", savePhotos, last = true) { savePhotos = it; p.edit().putBoolean(com.fariin.app.media.AutoSaveMedia.KEY, it).apply() }
         }
         SettingsSection(footer = "Show a preview card for links you type or paste. Your phone contacts the site to build it, before the message is sent.") {
             SwitchRow("Link Previews", links, last = true) { links = it; p.edit().putBoolean("linkPreviewsEnabled", it).apply() }

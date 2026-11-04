@@ -209,7 +209,9 @@ fun ThreadScreen(
     if (wallpaperOpen && groupShared && ui.groupDoc.isNotEmpty() && !com.fariin.app.data.GroupRules.canEditInfo(ui.me, ui.groupDoc)) wallpaperOpen = false
     Box(Modifier.fillMaxSize()) {
         androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
-            ThreadContent(ui, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+            androidx.compose.runtime.CompositionLocalProvider(LocalThreadCid provides ui.cid) {
+                ThreadContent(ui, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+            }
         }
         if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid, shared = groupShared) { wallpaperOpen = false }
     }
@@ -1004,9 +1006,10 @@ private fun MediaRow(
         when (kind) {
             Message.MediaKind.PHOTO -> {
                 val url = m.localPath ?: m.imageUrl
+                val threadCid = LocalThreadCid.current
                 PictureBox(m, url, m.enc, maxW, RectangleShape, captionW, busy, onOpen = {
                     url?.let { onView(Viewing.Photo(it, if (m.localPath != null) null else m.enc, msg = m)) }
-                }, overlay = capsule)
+                }, overlay = capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null)
             }
             Message.MediaKind.VIDEO -> {
                 val ready = m.videoUrl != null
@@ -1014,7 +1017,10 @@ private fun MediaRow(
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
                 }, overlay = { VideoOverlay(m, ready); capsule() })
             }
-            else -> AlbumMosaic(m, maxW, onView, capsule)
+            else -> {
+                val threadCid = LocalThreadCid.current
+                AlbumMosaic(m, maxW, onView, capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null)
+            }
         }
         if (caption != null) {
             Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
@@ -1471,3 +1477,6 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier =
 private fun OpenWhen(open: androidx.compose.runtime.State<Boolean>, content: @Composable () -> Unit) {
     if (open.value) content()
 }
+
+/** The open chat's id, for bubbles that need it (Save to Photos' once-per-message ledger). */
+internal val LocalThreadCid = androidx.compose.runtime.staticCompositionLocalOf { "" }

@@ -219,6 +219,8 @@ internal fun MetaCapsule(modifier: Modifier = Modifier, content: @Composable () 
 internal fun PictureBox(
     m: Message, url: String?, enc: EncMeta?, maxW: Dp, shape: Shape, captionWidth: Float,
     busy: Boolean, onOpen: () -> Unit, overlay: @Composable () -> Unit = {},
+    /** "cid/messageId" of a received photo Save to Photos may copy once it has come down. */
+    autoSaveId: String? = null,
 ) {
     val (wDp, hDp) = MediaRules.photoBox(m.width, m.height, maxW.value, captionWidth)
     val px = with(LocalDensity.current) { minOf(wDp, hDp).dp.roundToPx() }
@@ -227,6 +229,11 @@ internal fun PictureBox(
     val kind = if (m.mediaKind == Message.MediaKind.PHOTO) AutoDownload.Kind.PHOTOS else null
     val got = rememberGatedFile(url, enc, kind)
     val bmp = rememberBitmap(got.file, px)
+    val saveCtx = LocalContext.current
+    LaunchedEffect(got.file, autoSaveId) {
+        val f = got.file ?: return@LaunchedEffect
+        autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, it, f, isVideo = false) }
+    }
     val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
     Box(
         Modifier.size(wDp.dp, hDp.dp).clip(shape).background(Fariin.colors.secondary.copy(alpha = 0.18f))

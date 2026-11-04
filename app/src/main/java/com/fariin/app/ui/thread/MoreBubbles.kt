@@ -198,7 +198,10 @@ internal fun ViewOnceBody(m: Message, cid: String, isMe: Boolean, onView: (Viewi
  * tiles split evenly; a video tile has the play disc and its length. Tap opens that tile.
  */
 @Composable
-internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsule: @Composable () -> Unit) {
+internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsule: @Composable () -> Unit,
+    /** "cid/messageId" when Save to Photos may copy this received album's photos (each once). */
+    autoSaveId: String? = null) {
+    val saveCtx = androidx.compose.ui.platform.LocalContext.current
     val side = minOf(maxW.value, 320f)
     val items = m.album.take(MediaRules.ALBUM_MAX_ITEMS)
     val rows = MediaRules.albumRows(items.size)
@@ -212,11 +215,16 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                 // One wide tile on top of three; the other rows square-ish.
                 val h = when { count == 1 && items.size == 1 -> side; count == 1 -> side * 0.6f; count == 2 -> side / 2f; else -> side / 3f }
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    row.forEach { item ->
+                    val rowStart = start - count
+                    row.forEachIndexed { ri, item ->
                         val w = (side - 2f * (count - 1)) / count
                         // A tile's picture follows auto-download (a video tile's poster always comes down).
                         val got = rememberGatedFile(item.imageUrl, item.enc, if (item.isVideo) null else AutoDownload.Kind.PHOTOS)
                         val bmp = rememberBitmap(got.file, 400)
+                        if (!item.isVideo) androidx.compose.runtime.LaunchedEffect(got.file, autoSaveId) {
+                            val f = got.file ?: return@LaunchedEffect
+                            autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/${rowStart + ri}", f, isVideo = false) }
+                        }
                         val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
                         Box(
                             Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
