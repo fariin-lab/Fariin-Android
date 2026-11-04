@@ -1,5 +1,20 @@
 package com.fariin.app
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.State
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.Transition
+import androidx.compose.animation.EnterExitState
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.OnBackPressedDispatcher
 import coil3.request.allowRgb565
 import android.content.pm.ApplicationInfo
 import android.os.Bundle
@@ -263,19 +278,42 @@ class MainActivity : ComponentActivity() {
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
             com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav, people),
             com.fariin.app.ui.channels.LocalChannelNav provides com.fariin.app.ui.channels.channelNav(nav)) {
+            // The main shell is built once and kept under every page, the way large messengers keep
+            // their list alive, so coming back to it costs no rebuild (that was ~50 ms of main-thread
+            // work, two dropped frames, on the Pixel 5). The "main" page in the host is see-through;
+            // its own transition (predictive back included) drives the shell's slide and fade, and
+            // while another page is up the shell takes no touches, back presses or accessibility focus.
+            val shell = remember { ShellMotion() }
+            val top by nav.currentBackStackEntryAsState()
+            val onTop = top?.destination?.route.let { it == null || it == "main" }
+            val inertBack = remember { object : OnBackPressedDispatcherOwner {
+                override val onBackPressedDispatcher = OnBackPressedDispatcher()
+                override val lifecycle get() = this@MainActivity.lifecycle
+            } }
+            Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().graphicsLayer {
+                alpha = if (shell.shown) shell.alpha?.value ?: 1f else 0f
+                translationX = (shell.shift?.value ?: 0f) * size.width
+            }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
+                CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides if (onTop) this@MainActivity else inertBack) {
+                    MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } })
+                }
+                if (!onTop) Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                    awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
+                })
+            }
             NavHost(nav, startDestination = "main",
                 enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),
                 popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
                 peopleRoutes(nav, people, chats = { chats.chats }, requests = { chats.requests },
                     groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
                 channelRoutes(nav, me, chats = { chats.chats })
-                composable("main") {
-                    MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } })
-                }
+                composable("main") { shell.Follow(transition) }
                 composable("thread/{cid}") { entry ->
                     val cid = entry.arguments?.getString("cid") ?: return@composable
                     ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
                 }
+            }
             }
         }
     }
@@ -357,6 +395,39 @@ class MainActivity : ComponentActivity() {
                     })
                 }
             }
+        }
+    }
+}
+
+/**
+ * The kept-alive shell's motion, read from the see-through "main" page's own enter/exit transition
+ * so it matches Motion's shared X axis (a short slide and a fade) and follows a predictive back.
+ */
+private class ShellMotion {
+    var shown by mutableStateOf(true)
+    var alpha by mutableStateOf<State<Float>?>(null)
+    var shift by mutableStateOf<State<Float>?>(null)
+
+    @Composable
+    fun Follow(t: Transition<EnterExitState>) {
+        val anim = com.fariin.app.ui.components.Motion.on
+        val a = t.animateFloat(transitionSpec = {
+            when {
+                !anim -> snap()
+                EnterExitState.PreEnter isTransitioningTo EnterExitState.Visible -> tween(190, 60, com.fariin.app.ui.components.Motion.Decelerate)
+                else -> tween(90, easing = com.fariin.app.ui.components.Motion.Accelerate)
+            }
+        }, label = "shellAlpha") { if (it == EnterExitState.Visible) 1f else 0f }
+        val dx = t.animateFloat(transitionSpec = {
+            when {
+                !anim -> snap()
+                EnterExitState.PreEnter isTransitioningTo EnterExitState.Visible -> tween(250, easing = com.fariin.app.ui.components.Motion.Decelerate)
+                else -> tween(300, easing = com.fariin.app.ui.components.Motion.Decelerate)
+            }
+        }, label = "shellShift") { if (it == EnterExitState.Visible) 0f else -0.1f }
+        DisposableEffect(Unit) {
+            alpha = a; shift = dx; shown = true
+            onDispose { shown = false; alpha = null; shift = null }
         }
     }
 }
