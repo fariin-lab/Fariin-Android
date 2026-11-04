@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Close
@@ -341,6 +342,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val scope = rememberCoroutineScope()
     val me = api.me
     var person by remember { mutableStateOf<Person?>(null) }
+    var addingToGroup by remember { mutableStateOf(false) }
     var blocked by remember { mutableStateOf(false) }
     var muted by remember(conv) { mutableStateOf(conv?.isMuted(me, System.currentTimeMillis().toDouble()) == true) }
     var safety by remember { mutableStateOf<String?>(null) }
@@ -407,11 +409,15 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
             // under Glow Story and a divider when Glow is on, as iOS orders the menu.
             val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
+            val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
-                if (fromChat) { androidx.compose.material3.HorizontalDivider(color = c.separator); ChangeWallpaperItem { close(); wallpaper() } }
+                if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
+                if (addToGroup != null) AddToGroupItem { close(); addToGroup() }
+                if (fromChat) ChangeWallpaperItem { close(); wallpaper() }
             }
-            else if (fromChat) ContactInfoMenu(onWallpaper = wallpaper)
+            else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup)
         }
+        if (addingToGroup) AddToGroupSheet(api, uid, person?.shownName ?: conv?.displayName(me) ?: "", onDismiss = { addingToGroup = false })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
             Spacer(Modifier.height(10.dp))
@@ -452,7 +458,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 
 /** The contact page's three-dot menu (iOS ContactInfoView moreMenu): Change Wallpaper for this chat. */
 @Composable
-private fun ContactInfoMenu(onWallpaper: () -> Unit) {
+private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Unit)? = null) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
@@ -460,9 +466,18 @@ private fun ContactInfoMenu(onWallpaper: () -> Unit) {
             onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
         androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-            ChangeWallpaperItem { open = false; onWallpaper() }
+            if (onAddToGroup != null) AddToGroupItem { open = false; onAddToGroup() }
+            if (onWallpaper != null) ChangeWallpaperItem { open = false; onWallpaper() }
         }
     }
+}
+
+/** iOS ContactInfoView menu: "Add to a Group" (AddToGroup.kt). */
+@Composable
+private fun AddToGroupItem(onClick: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.material3.DropdownMenuItem(text = { Text("Add to a Group", color = c.label) },
+        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.GroupAdd, null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable
