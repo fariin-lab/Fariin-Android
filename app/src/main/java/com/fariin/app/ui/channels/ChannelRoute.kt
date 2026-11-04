@@ -77,7 +77,12 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
             banned = { nav.navigate("channelbanned/$it") { launchSingleTop = true } },
             reactions = { nav.navigate("channelreactions/$it") { launchSingleTop = true } },
             requests = { nav.navigate("channelrequests/$it") { launchSingleTop = true } },
+            type = { nav.navigate("channeltype/$it") { launchSingleTop = true } },
         ))
+    }
+    composable("channeltype/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        com.fariin.app.ui.people.GroupPagesHost(cid, me, com.fariin.app.ui.people.GroupPage.Type, onExit = { nav.popBackStack() })
     }
     // Channel management for its owner and admins (ChannelManage.kt).
     composable("channeledit/{cid}") { e ->

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -112,7 +113,25 @@ fun ChannelSettingsScreen(cid: String, me: String, onBack: () -> Unit, nav: Chan
         val info = ChannelInfo.from(cid, doc)
         val shown = ChannelRules.subscriberCount(com.fariin.app.channel.ChannelFollows.adjusted(cid, info.followerCount), info.users.size)
         Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-            ChannelManageList(info, Team.from(doc), me, shown, nav)
+            val team = Team.from(doc)
+            // Type and Protect Content first, as iOS GroupSettingsView's joining and privacy parts:
+            // the type could not be changed after the channel was made (owner 2026-11-04).
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+            var protect by androidx.compose.runtime.remember(info.restricted) { androidx.compose.runtime.mutableStateOf(info.restricted) }
+            var problem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+            if (team.isOwner(me)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
+                    SettingsRow("Channel Type", icon = painterResource(R.drawable.ic_gs_group_type), value = if (info.isPublic) "Public" else "Private") { nav.type(cid) }
+                    com.fariin.app.ui.settings.SwitchRow("Protect Content", protect, last = true) { v ->
+                        protect = v; problem = null
+                        scope.launch { try { ChannelService.setProtected(cid, v) } catch (_: Exception) { protect = !v; problem = "Couldn't save. Try again." } }
+                    }
+                }
+                Text(problem ?: ChannelRules.protectFooter(protect), fontSize = 13.sp, color = if (problem != null) c.red else c.secondary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                Spacer(Modifier.height(10.dp))
+            }
+            ChannelManageList(info, team, me, shown, nav)
         }
     }
 }
@@ -157,6 +176,7 @@ data class ChannelManageNav(
     val reactions: (String) -> Unit = {},
     val requests: (String) -> Unit = {},
     val settings: (String) -> Unit = {},
+    val type: (String) -> Unit = {},
 )
 
 /** Edit Channel: the group editor in a channel's words and squircle (iOS EditGroupView). */

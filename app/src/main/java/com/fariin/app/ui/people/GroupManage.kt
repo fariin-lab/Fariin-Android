@@ -897,6 +897,10 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
     if (doc.isEmpty()) { Loading(); return }
     val current = if (doc["isPublic"] == true) doc["username"] as? String ?: "" else ""
     val isPublicNow = current.isNotEmpty()
+    // A channel's own words on the same page (iOS GroupTypeView with ChannelWords).
+    val ch = doc["channel"] == true
+    val noun = if (ch) "channel" else "group"
+    val Noun = if (ch) "Channel" else "Group"
     val showPublic = wantsPublic ?: isPublicNow
     val typed = name ?: current
     val changed = typed != current
@@ -914,33 +918,33 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
         saving = true
         scope.launch {
             try { com.fariin.app.channel.ChannelService.setLink(cid, value); onBack() }
-            catch (e: Exception) { problem = com.fariin.app.channel.ChannelService.errorText(e, "Could not save the group link. Try again.") }
+            catch (e: Exception) { problem = com.fariin.app.channel.ChannelService.errorText(e, "Could not save the link. Try again.") }
             saving = false
         }
     }
     if (confirmPrivate) AlertDialog(onDismissRequest = { confirmPrivate = false }, containerColor = c.card,
-        title = { Text("Make this group private?") },
-        text = { Text("fariin.com/$current will stop working. The link stays reserved for this group for 30 days, then anyone can take it.") },
+        title = { Text("Make this $noun private?") },
+        text = { Text("fariin.com/$current will stop working. The link stays reserved for this $noun for 30 days, then anyone can take it.") },
         confirmButton = { TextButton({ confirmPrivate = false; save("") }) { Text("Make Private", color = c.red) } },
         dismissButton = { TextButton({ confirmPrivate = false }) { Text("Cancel", color = c.accent) } })
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not save") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
-        PageBar("Group Type", onBack, action = {
+        PageBar("$Noun Type", onBack, action = {
             if (saving) BusyMark() else Text("Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = if (showPublic && changed && ok) c.accent else c.secondary,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable(enabled = showPublic && changed && ok) { save(typed) }
                     .padding(horizontal = 18.dp, vertical = 11.dp))
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-            SettingsSection(header = "Group Type", footer = if (showPublic) "Anyone can find this group in search and join it without an invite."
-                else "People can join only with an invite link, or when an admin adds them.") {
-                TypeLine("Public Group", showPublic) { wantsPublic = true }
-                TypeLine("Private Group", !showPublic, last = true) { if (isPublicNow) confirmPrivate = true else wantsPublic = false }
+            SettingsSection(header = "$Noun Type", footer = if (showPublic) (if (ch) "Anyone can find this channel in search and follow it." else "Anyone can find this group in search and join it without an invite.")
+                else if (ch) "People can follow only with an invite link." else "People can join only with an invite link, or when an admin adds them.") {
+                TypeLine("Public $Noun", showPublic) { wantsPublic = true }
+                TypeLine("Private $Noun", !showPublic, last = true) { if (isPublicNow) confirmPrivate = true else wantsPublic = false }
             }
             if (showPublic) {
                 SettingsSection(header = "Public Link", footer = when {
-                    !changed && typed.isNotEmpty() -> "People can open this group with fariin.com/$typed."
+                    !changed && typed.isNotEmpty() -> "People can open this $noun with fariin.com/$typed."
                     note != null -> note
                     else -> "Pick a link of ${com.fariin.app.channel.ChannelRules.LINK_MIN} to ${com.fariin.app.channel.ChannelRules.LINK_MAX} characters: letters, numbers and _."
                 }) {

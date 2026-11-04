@@ -242,8 +242,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         Spacer(Modifier.height(12.dp))
                         ChannelManageSection(info, team, me, shownCount, manage)
                     }
-                    Spacer(Modifier.height(12.dp))
-                    AdminCard(info)
+                    // Channel Type and Protect Content live on Channel Settings now (as iOS).
                 }
                 Spacer(Modifier.height(20.dp))
                 Card {
