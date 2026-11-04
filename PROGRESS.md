@@ -580,3 +580,6 @@ Seen, not fixed (not today's regressions):
 - 2026-11-04: Story links open in the app. Not exercised on device.
 - 2026-11-04: App Links for /u/ /g/ /s/ routed in-app (tested with explicit intents on Pixel: own profile opened, fake invite showed the refusal).
 - 2026-11-04: Site: assetlinks.json gained handle_all_urls (dbe13b3), live on fariin.com, www and call hosts.
+- 2026-11-04: Public groups/channels in Global Search + join sheet. Search runs clean on Pixel; no public group matched test words, rows not seen.
+- 2026-11-04: @name links resolve public groups/channels (unknown name still says so, checked on Pixel).
+- 2026-11-04: Rechecked the open items in this log against the code: official chat reactions / Mark as Unread / Clear History, inline attach Recents, in-app banner sound/vibrate/preview switches are all built. Profile Layout is hidden on iOS by the owner (Flags.profileLayoutChoice), so not ported. Location map picture still left out on purpose (needs a map service key).
