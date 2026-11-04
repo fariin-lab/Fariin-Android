@@ -14,6 +14,9 @@ Prepared 2026-11-03. Steps marked **(you)** are the owner's buttons; the rest is
    - Upload key SHA-256: `8B:03:57:3F:54:8C:89:54:1C:36:5E:30:35:E3:A2:19:E1:46:B3:58:1A:42:79:D1:E5:3F:8A:54:ED:70:58:33`
 2. After step 2.3 below, add the **App signing key** SHA-1 and SHA-256 that Play Console shows
    (Google re-signs the app; without these, Google sign-in fails in the Play version).
+   The same App signing SHA-256 also goes into `fariin-web/.well-known/assetlinks.json` (next to the
+   upload key already there, live since 2026-11-03), or passkeys will not work in the Play version.
+   I can do this one myself once the fingerprint is known.
 3. App Check > Apps > Android > register **Play Integrity** (and enable the App Check API when asked).
    Do NOT press "Enforce" yet: enforcement is a separate decision for iOS and Android together.
 
