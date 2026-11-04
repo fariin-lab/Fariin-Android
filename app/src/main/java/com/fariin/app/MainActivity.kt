@@ -236,7 +236,10 @@ class MainActivity : ComponentActivity() {
             if (list.isNotEmpty()) withContext(Dispatchers.Default) { NotifStore.saveChats(applicationContext, me, list) }
             // Recent chats as conversation shortcuts: share sheet, launcher, notification settings.
             if (list.isNotEmpty()) com.fariin.app.system.ChatShortcuts.publish(applicationContext, me, list)
+            // The chats about to be opened, warmed (iOS ChatHistoryPreloader).
+            com.fariin.app.data.ChatHistoryPreloader.refresh(list, me, openChat)
         }
+        DisposableEffect(me) { onDispose { com.fariin.app.data.ChatHistoryPreloader.stopAll() } }
         // The home screen widget: the same list, its previews opened again once a missing key lands.
         // Collected here, not keyed on the drawn state: the list keeps changing while the app is
         // behind the home screen, where nothing is drawn.
