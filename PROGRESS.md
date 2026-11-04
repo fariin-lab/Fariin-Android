@@ -639,5 +639,9 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   block, then a blurred thumb, then the poster. Fixed: video bubble from the tap, first frame and
   length read from the file at once, the phone's poster kept after the server copy lands. Re-sent
   on the Pixel: real frame within 0.3 s, sharp throughout. 3 test videos sent to kream (allowed).
-- NEXT (owner ask 14:45): Android uses a fixed blue in places where iOS uses black / the theme
-  colour. Sweep every hard-coded blue (c.blue) and match iOS.
+- Colours (owner ask 14:45): iOS tints everything .primary (black / white at night) and keeps
+  system blue only for bubble fill, Send, links, selection ticks, scroll-down unread count, call
+  link button, location pin, poll ticks. Android had ~315 fixed blues; now ~60 remain, all in that
+  list. FAB, new-call button, unread badges, headers, dialog buttons, switches/sliders/radios,
+  cursors, spinners -> accent with onAccent on fills; Material containers neutral grey. Seen on
+  the Pixel: chats, calls, stories, settings, privacy.
