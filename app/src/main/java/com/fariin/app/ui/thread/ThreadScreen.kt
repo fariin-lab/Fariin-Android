@@ -1424,7 +1424,7 @@ private fun Composer(
             Spacer(Modifier.width(8.dp))
             if (draft.isNotBlank() && !recording) {
                 Box(
-                    Modifier.size(48.dp).floating(fill = c.blue).clickable {
+                    Modifier.size(48.dp).floating(fill = myFill()).clickable {
                         val t = draft
                         val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
                         picks = emptyMap()
@@ -1437,7 +1437,7 @@ private fun Composer(
                 }
             } else {
                 Box(
-                    Modifier.size(48.dp).floating(fill = if (recording) c.blue else null)
+                    Modifier.size(48.dp).floating(fill = if (recording) myFill() else null)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
