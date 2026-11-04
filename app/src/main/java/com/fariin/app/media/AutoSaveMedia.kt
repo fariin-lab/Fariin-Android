@@ -25,10 +25,23 @@ object AutoSaveMedia {
 
     fun isOn(c: Context): Boolean = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
 
+    // Per chat (iOS ChatChoice, Group Info's menu): "always" or "never" overrides the Settings
+    // switch for that chat; nothing stored = follow Settings.
+    private fun chatKey(cid: String) = "$KEY.chat.$cid"
+    fun savesMedia(c: Context, cid: String): Boolean =
+        when (c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(chatKey(cid), null)) {
+            "always" -> true
+            "never" -> false
+            else -> isOn(c)
+        }
+    fun setChat(c: Context, cid: String, on: Boolean) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(chatKey(cid), if (on) "always" else "never").apply()
+    }
+
     /** [id] is "cid/messageId". The id is claimed before the copy and given back if it fails. */
     fun save(c: Context, id: String, file: File, isVideo: Boolean) {
         val app = c.applicationContext
-        if (!isOn(app) || GallerySaver.needsPermission(app) || !claim(app, id)) return
+        if (!savesMedia(app, id.substringBefore('/')) || GallerySaver.needsPermission(app) || !claim(app, id)) return
         scope.launch {
             if (!GallerySaver.save(app, file, isVideo)) release(app, id)
         }

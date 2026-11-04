@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.QrCode
@@ -487,7 +488,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
         // may change its info: back to the chat, which opens its picker. Save to Photos waits for auto-save.
-        PageBar("Group Info", onBack = onBack, action = if (canEdit || inviteLink != null) ({
+        PageBar("Group Info", onBack = onBack, action = ({
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (canEdit) TextAction("Edit", enabled = true) { editing = true }
                 GroupInfoMenu(onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }) else null,
@@ -495,9 +496,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
                         .putExtra(android.content.Intent.EXTRA_TEXT, inviteLink)
                     ctx.startActivity(android.content.Intent.createChooser(send, null))
-                }) else null, onQr = { showQr = true })
+                }) else null, onQr = { showQr = true }, saveCid = cid)
             }
-        }) else null)
+        }))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(conv["avatarUrl"] as? String, 100.dp,
                 modifier = if (canEdit) Modifier.clickable { editing = true } else Modifier)
@@ -644,10 +645,12 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
 
 /** The group page's three-dot menu (iOS GroupInfoView moreMenuItems, menuGroupItems). */
 @Composable
-private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit) {
-    if (onWallpaper == null && onShare == null) return
+private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit, saveCid: String? = null) {
+    if (onWallpaper == null && onShare == null && saveCid == null) return
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    var saveOn by remember(saveCid, open) { mutableStateOf(saveCid?.let { com.fariin.app.media.AutoSaveMedia.savesMedia(ctx, it) } ?: false) }
     Box {
         com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "More",
             onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
@@ -664,6 +667,11 @@ private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, on
                     leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.QrCode, null, tint = c.label) },
                     onClick = { open = false; onQr() })
             }
+            // iOS menuMediaItems: this group's own Save to Photos, over the Settings switch.
+            if (saveCid != null) androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Save to Photos: ${if (saveOn) "On" else "Off"}", color = c.label) },
+                leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Download, null, tint = c.label) },
+                onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); open = false })
         }
     }
 }
