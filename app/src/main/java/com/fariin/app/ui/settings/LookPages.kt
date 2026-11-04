@@ -234,11 +234,12 @@ private fun WallTile(w: ChatWallpaper, current: ChatWallpaper, modifier: Modifie
     val solid = w as? ChatWallpaper.Solid
     Box(modifier.height(150.dp).clip(shape)
         .drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo) }
-        .then(if (solid != null) Modifier.border(1.dp, c.label.copy(alpha = 0.10f), shape) else Modifier)
+        // The plain page ("no wallpaper") is the page colour too, so it gets the same rim a solid has.
+        .then(if (solid != null || w == ChatWallpaper.None) Modifier.border(1.dp, c.label.copy(alpha = 0.10f), shape) else Modifier)
         .combinedClickable(onLongClick = onLong, onClick = onTap),
         contentAlignment = Alignment.Center) {
         if (current == w) {
-            val darkTick = solid != null && !ChatWallpapers.isDark(solid.hex)
+            val darkTick = (solid != null && !ChatWallpapers.isDark(solid.hex)) || (w == ChatWallpaper.None && !c.dark)
             // iOS: the white tick carries a soft black shadow (0.5, radius 3); a dimmed copy under it here.
             if (!darkTick) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black.copy(alpha = 0.35f),
                 modifier = Modifier.size(32.dp).offset(y = 1.dp))
