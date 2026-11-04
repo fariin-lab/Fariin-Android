@@ -577,7 +577,18 @@ internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.
     Column(modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = c.label, modifier = Modifier.size(24.dp))
+            // Fariin's own drawings, as iOS PosterActionIcon (filled bubble, phone, camera and the
+            // owner's bells); the stock outline glyphs read as old (owner 2026-11-04).
+            val own = when (text) {
+                "Message" -> com.fariin.app.R.drawable.ic_chat
+                "Voice" -> com.fariin.app.R.drawable.ic_tab_calls
+                "Video" -> com.fariin.app.R.drawable.ic_call_video
+                "Mute" -> com.fariin.app.R.drawable.ic_bell_off
+                "Unmute" -> com.fariin.app.R.drawable.ic_bell
+                else -> null
+            }
+            if (own != null) Icon(androidx.compose.ui.res.painterResource(own), contentDescription = null, tint = c.label, modifier = Modifier.size(24.dp))
+            else Icon(icon, contentDescription = null, tint = c.label, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
         Text(text, fontSize = 13.sp, color = c.label, maxLines = 1, softWrap = false)

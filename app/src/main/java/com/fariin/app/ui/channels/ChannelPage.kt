@@ -289,7 +289,10 @@ private fun ActionCircle(icon: ImageVector, label: String, dimmed: Boolean, onCl
     Column(Modifier.width(72.dp).alpha(if (dimmed) 0.45f else 1f).clickable(onClick = onClick).semantics { contentDescription = label },
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = c.label, modifier = Modifier.size(24.dp))
+            // The owner's bells for Mute / Unmute, as iOS (ic_bell_off mutes, ic_bell unmutes).
+            val own = when (label) { "Mute" -> com.fariin.app.R.drawable.ic_bell_off; "Unmute" -> com.fariin.app.R.drawable.ic_bell; else -> null }
+            if (own != null) Icon(androidx.compose.ui.res.painterResource(own), null, tint = c.label, modifier = Modifier.size(24.dp))
+            else Icon(icon, null, tint = c.label, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
         Text(label, fontSize = 13.sp, color = c.label, maxLines = 1)
