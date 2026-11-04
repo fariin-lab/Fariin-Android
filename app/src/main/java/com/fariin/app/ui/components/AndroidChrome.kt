@@ -107,6 +107,11 @@ fun SnackHost(bottomOffset: androidx.compose.ui.unit.Dp = 80.dp) {
         }
     }
     Box(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(bottom = bottomOffset), contentAlignment = Alignment.BottomCenter) {
-        SnackbarHost(host)
+        // The action word in the bar's own text colour: Material's default is its purple
+        // inverse-primary, which is no colour of this app (iOS is black and white).
+        SnackbarHost(host) { data ->
+            androidx.compose.material3.Snackbar(data, actionColor = androidx.compose.material3.MaterialTheme.colorScheme.inverseOnSurface,
+                actionContentColor = androidx.compose.material3.MaterialTheme.colorScheme.inverseOnSurface)
+        }
     }
 }
