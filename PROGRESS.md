@@ -694,3 +694,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Checked fine: New Call page, Calls search, Share profile QR, Settings search -> Blocked Users.
 - Call menu now has Voice Call / Video Call (iOS), via the same confirm. Pixel: menu shows it, tap
   -> "Call kream?", cancelled, no call placed.
+- Reply/edit bar: label colour (iOS syncBanners accent = .label), quoted call now "Voice call"
+  instead of an empty line. Pixel checked. Call bubbles have no swipe-to-reply (menu Reply works).
