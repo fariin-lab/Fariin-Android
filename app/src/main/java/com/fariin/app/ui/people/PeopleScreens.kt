@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.outlined.GroupAdd
@@ -348,6 +349,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val me = api.me
     var person by remember { mutableStateOf<Person?>(null) }
     var addingToGroup by remember { mutableStateOf(false) }
+    var askClearMine by remember { mutableStateOf(false) }
     var blocked by remember { mutableStateOf(false) }
     var muted by remember(conv) { mutableStateOf(conv?.isMuted(me, System.currentTimeMillis().toDouble()) == true) }
     var safety by remember { mutableStateOf<String?>(null) }
@@ -415,13 +417,26 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // under Glow Story and a divider when Glow is on, as iOS orders the menu.
             val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
             val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
+            val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ askClearMine = true }) else null
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
                 if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
                 if (addToGroup != null) AddToGroupItem { close(); addToGroup() }
                 if (fromChat) ChangeWallpaperItem { close(); wallpaper() }
+                if (clearMine != null) ClearMineItem { close(); clearMine() }
             }
-            else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup)
+            else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup, onClearMine = clearMine)
         }
+        if (askClearMine) androidx.compose.material3.AlertDialog(onDismissRequest = { askClearMine = false },
+            title = { Text("Clear your messages?") },
+            text = { Text("This deletes the messages you sent in this chat. It can't be undone.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = {
+                askClearMine = false
+                conv?.id?.let { id -> scope.launch {
+                    val ok = com.fariin.app.ui.chats.ChatListActions.clearMyMessages(me, id)
+                    com.fariin.app.ui.components.Snack.show(if (ok) "Your messages were cleared" else "Couldn't clear. Check your connection and try again.")
+                } }
+            }) { Text("Clear", color = c.red) } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { askClearMine = false }) { Text("Cancel") } })
         if (addingToGroup) AddToGroupSheet(api, uid, person?.shownName ?: conv?.displayName(me) ?: "", onDismiss = { addingToGroup = false })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
@@ -463,7 +478,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 
 /** The contact page's three-dot menu (iOS ContactInfoView moreMenu): Change Wallpaper for this chat. */
 @Composable
-private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Unit)? = null) {
+private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Unit)? = null, onClearMine: (() -> Unit)? = null) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
@@ -473,8 +488,17 @@ private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Uni
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             if (onAddToGroup != null) AddToGroupItem { open = false; onAddToGroup() }
             if (onWallpaper != null) ChangeWallpaperItem { open = false; onWallpaper() }
+            if (onClearMine != null) ClearMineItem { open = false; onClearMine() }
         }
     }
+}
+
+/** iOS ContactInfoView menu: "Clear My Messages" (every message I sent in this chat, for both of us). */
+@Composable
+private fun ClearMineItem(onClick: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.material3.DropdownMenuItem(text = { Text("Clear My Messages", color = c.red) },
+        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Delete, null, tint = c.red) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Add to a Group" (AddToGroup.kt). */

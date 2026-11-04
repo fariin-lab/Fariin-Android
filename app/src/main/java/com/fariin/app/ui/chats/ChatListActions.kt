@@ -56,6 +56,14 @@ object ChatListActions {
     suspend fun deleteForMe(me: String, c: Conversation): Boolean =
         merge(me, c.id, mapOf("clearedAt" to mapOf(me to System.currentTimeMillis().toDouble()), "unreadCount" to mapOf(me to 0)))
 
+    /** iOS ChatService.clearMyMessages: every message I sent in [cid], deleted, 450 a batch. */
+    suspend fun clearMyMessages(me: String, cid: String): Boolean = runCatching {
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val docs = db.collection("conversations").document(cid).collection("messages")
+            .whereEqualTo("authorId", me).get().await().documents
+        docs.chunked(450).forEach { part -> db.batch().also { b -> part.forEach { b.delete(it.reference) } }.commit().await() }
+    }.isSuccess
+
     /** True when pinning [adding] more would pass the cap; says so in a snackbar. */
     fun pinsFull(me: String, all: List<Conversation>, adding: Int): Boolean {
         val pinned = all.count { it.isPinned(me) }
