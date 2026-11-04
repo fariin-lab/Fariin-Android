@@ -552,3 +552,4 @@ Seen, not fixed (not today's regressions):
   - Member tags (set from the member card, shown in group chats). Next: story location sticker.
   - Story stickers tray: Location / Link / Time chips with tap areas; repost credit no longer lost when text is baked in. Next: floating group-call window.
   - Group call minimize (PiP for video, background for voice), not device-tested. Next: group call raise hand / reactions.
+  - Group call raise hand + reactions (iOS wire), not run in a call. Next: official chat reactions/search/unread, then animated custom reactions.
