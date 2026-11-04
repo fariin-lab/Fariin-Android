@@ -252,6 +252,8 @@ fun StoryViewer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val groups = remember { mutableStateListOf<StoryGroup>().apply { addAll(initialGroups) } }
+    // The first-time guide (iOS StoryGuideHost): the story stands still under it.
+    var guideUp by remember { mutableStateOf(StoryGuide.isOwed(context)) }
     val pager = rememberPagerState(initialPage = startGroup.coerceIn(0, maxOf(0, initialGroups.size - 1))) { groups.size }
     val convs by rememberUpdatedState(conversations)
     // Repost (iOS beginRepost): the original drawn as a card, then the story composer with the credit.
@@ -648,7 +650,7 @@ fun StoryViewer(
                         convs.firstOrNull { !it.isGroup && it.users.contains(st.authorUid) && it.users.contains(me) }?.isBlockedByMe(me) == true) },
                     onRepost = { st -> startRepost(st, g) },
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
-                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value,
+                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp,
                     // The bars and caption go over the first third of the sheet's pull (iOS storySheetProgress).
                     chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
                     jumpTo = if (page == pager.currentPage) jumpTo else null,
@@ -821,6 +823,7 @@ fun StoryViewer(
                     })
             }
         }
+        if (guideUp && !hero.live) StoryGuideOverlay(onGotIt = { guideUp = false }, onExit = { close() })
     }
 
     confirmDelete?.let { s ->
