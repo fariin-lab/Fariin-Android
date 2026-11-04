@@ -1117,7 +1117,9 @@ private fun MediaRow(
             }
             Message.MediaKind.VIDEO -> {
                 val ready = m.videoUrl != null
-                PictureBox(m, m.thumbUrl, m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
+                // My video still going up: the poster on this phone, sharp from the first frame.
+                val local = m.localPath?.takeIf { java.io.File(it).exists() }
+                PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
                 }, overlay = { VideoOverlay(m, ready); capsule() })
             }

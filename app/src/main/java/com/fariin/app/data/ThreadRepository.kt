@@ -593,8 +593,11 @@ class ThreadRepository(
             val words = if (n == 0) caption.trim() else ""
             val ts = tap + n
             val once = viewOnce && chunk.size == 1
+            // A lone video is a video bubble from the first frame (owner 2026-11-04: it showed as a
+            // photo, then turned into a video while sending).
+            val loneVideo = chunk.size == 1 && isVideoUri(context, chunk[0])
             pending[clientId] = Message(
-                id = clientId, authorId = me, text = words, type = if (chunk.size == 1) "image" else "album",
+                id = clientId, authorId = me, text = words, type = if (loneVideo) "video" else if (chunk.size == 1) "image" else "album",
                 createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
                 sendState = Message.SendState.SENDING, viewOnce = once,
             )
@@ -602,8 +605,17 @@ class ThreadRepository(
             runMediaSend(clientId) {
                 val kinds = chunk.map { isVideoUri(context, it) }
                 if (chunk.size == 1 && kinds[0]) {
+                    // The first frame and length straight from the file, before the slower prep.
+                    quickVideoFrame(context, chunk[0], File(m.localDir(), "poster-$clientId.jpg"))?.let { (f, w, h, d) ->
+                        pending[clientId]?.let { p ->
+                            pending[clientId] = p.copy(localPath = f.absolutePath, width = w, height = h, duration = d)
+                        }
+                        rebuild()
+                    }
                     val v = VideoPrep.fromUri(context, chunk[0], m.localDir(), clientId) ?: error("video not readable or over 64 MB")
                     val poster = File(m.localDir(), "poster-$clientId.jpg").also { it.writeBytes(v.poster.jpeg) }
+                    // The server's copy keeps drawing this poster until its own has loaded (no blur step).
+                    localFiles[clientId] = poster.absolutePath
                     pending[clientId]?.let { p ->
                         pending[clientId] = p.copy(type = "video", localPath = poster.absolutePath, width = v.width.toDouble(),
                             height = v.height.toDouble(), duration = v.duration, thumb = v.poster.thumbB64)
@@ -733,6 +745,22 @@ class ThreadRepository(
         try { msgRef(messageId).delete().await() } catch (_: Exception) {}
         rewriteSummaryAfterDelete()
     }
+
+    private data class QuickFrame(val file: File, val w: Double, val h: Double, val duration: Double?)
+
+    /** A video's first frame as a JPEG on this phone, with its size and length; null when unreadable. */
+    private fun quickVideoFrame(context: Context, uri: Uri, out: File): QuickFrame? = runCatching {
+        val r = android.media.MediaMetadataRetriever()
+        try {
+            r.setDataSource(context, uri)
+            val bmp = r.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return null
+            val scale = minOf(1f, 720f / maxOf(bmp.width, bmp.height))
+            val small = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true) else bmp
+            out.outputStream().use { small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, it) }
+            val ms = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toDoubleOrNull()
+            QuickFrame(out, small.width.toDouble(), small.height.toDouble(), ms?.let { it / 1000.0 })
+        } finally { r.release() }
+    }.getOrNull()
 
     private fun isVideoUri(context: Context, uri: Uri): Boolean =
         (context.contentResolver.getType(uri) ?: "").startsWith("video/")

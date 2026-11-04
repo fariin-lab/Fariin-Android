@@ -200,5 +200,7 @@ object LocalJson {
     /** What a chat's file keeps: server-known rows only (no unsent copy, no local file), newest
      *  [cap] of them, oldest first as the thread holds them. */
     fun windowToKeep(sortedOldestFirst: List<Message>, cap: Int): List<Message> =
-        sortedOldestFirst.filter { it.sendState == null && it.localPath == null && !it.uploading }.takeLast(cap)
+        sortedOldestFirst.filter { it.sendState == null && !it.uploading &&
+            // A sent video keeps its phone poster on screen; the row itself is a finished server row.
+            (it.localPath == null || it.mediaKind == Message.MediaKind.VIDEO && it.videoUrl != null) }.takeLast(cap)
 }
