@@ -628,3 +628,12 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   Block, Add Chat Shortcut, Lock chat, Favorites, Lists.
 - Chat header: Search was only reachable via the info page. Header now has a floating overflow
   with Search and Mute/Unmute (1719633). Installed on the Pixel; Search opened and found "kaka".
+- Attach sheet: + opened the photo picker straight over the sheet, and backing out closed both
+  (owner's one-back ask, 2026-11-03), so File / Location / Poll were unreachable without first
+  picking a photo. Now the sheet opens first (short card + sources), one back still closes it,
+  photos are one tap on Gallery or the card. Added Camera (iOS has it in the attach bar): the
+  phone's camera app, the photo joins the chosen ones. Checked on the Pixel: shot taken, tile
+  shown with caption + Send; nothing sent.
+- Message long-press menu and swipe-to-reply (both sides): already as good as WhatsApp.
+- NEXT (owner ask 14:40): a sent video shows as a photo, then turns into a video while sending.
+  He allows sending one of his screen recordings to kream in Fariin to test.
