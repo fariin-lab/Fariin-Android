@@ -2,6 +2,7 @@ package com.fariin.app.ui.chats
 
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.catch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fariin.app.data.ChatList
@@ -52,6 +53,9 @@ class ChatsViewModel(
                 true
             }
         }
+        // Given up (signed out, account gone): the refusal ends here. Passed on, it closed the app
+        // the moment Log Out signed the account out under a live chat list.
+        .catch { e -> emit(ConversationsRepository.State.Failed(e.message ?: "Could not load chats")) }
         // Channels I follow are not in their `users`, so they come from my follow list (iOS
         // ConversationsRepository merges ChannelFollows.conversations the same way).
         .combine(com.fariin.app.channel.ChannelFollows.docs.combine(com.fariin.app.channel.ChannelFollows.entries) { _, _ -> Unit }) { s, _ ->

@@ -17,7 +17,15 @@ import com.google.firebase.auth.FirebaseAuth
  */
 object SessionEnd {
     /** Log out tapped here: our own record goes, so it does not linger as a ghost in the list. */
+    /** True while Log Out runs, so the app shows "Logging out…" instead of standing still. */
+    val signingOut = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     suspend fun signOut(c: Context) {
+        signingOut.value = true
+        try { signOutSteps(c) } finally { signingOut.value = false }
+    }
+
+    private suspend fun signOutSteps(c: Context) {
         DeviceRegistry.init(c)
         // iOS SessionWipe: "offline" goes out while the account can still write it.
         com.fariin.app.data.Presence.set(online = false, context = c)
