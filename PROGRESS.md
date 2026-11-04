@@ -696,3 +696,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   -> "Call kream?", cancelled, no call placed.
 - Reply/edit bar: label colour (iOS syncBanners accent = .label), quoted call now "Voice call"
   instead of an empty line. Pixel checked. Call bubbles now swipe to reply too (checked: no call dialog).
+- Profile photo: Set New Photo menu = Take Photo / Choose Photo / Remove Photo (iOS). Pixel: menu,
+  camera -> shot -> cropper opens, cancelled. Remove NOT exercised (would wipe the owner's photo).
