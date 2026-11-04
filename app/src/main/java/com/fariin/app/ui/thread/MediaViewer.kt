@@ -182,6 +182,18 @@ private fun ViewerWindow() {
     SideEffect {
         (view.parent as? DialogWindowProvider)?.window?.let { w ->
             w.setDimAmount(0f)
+            // Edge to edge under clear bars: the dialog stopped at the status bar, so a grey band
+            // of the page behind showed above the black viewer.
+            w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+            WindowCompat.setDecorFitsSystemWindows(w, false)
+            @Suppress("DEPRECATION") run {
+                w.statusBarColor = android.graphics.Color.TRANSPARENT
+                w.navigationBarColor = android.graphics.Color.TRANSPARENT
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 29) { w.isStatusBarContrastEnforced = false; w.isNavigationBarContrastEnforced = false }
+            if (android.os.Build.VERSION.SDK_INT >= 28) w.attributes = w.attributes.apply {
+                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
             WindowCompat.getInsetsController(w, view).apply {
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = false
