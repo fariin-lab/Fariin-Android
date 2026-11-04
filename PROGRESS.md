@@ -702,3 +702,8 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   in New Group). Pixel: New Group menu seen, nothing created.
 - Set Wallpaper: "no wallpaper" tile invisible (white on white, white tick); rim + dark tick added.
   Chat Color page fine. Pixel checked.
+- Cold start on the Pixel (am start -W, force-stop between): WhatsApp 456-514 ms; Fariin DEBUG
+  3.44-3.52 s; Fariin BENCHMARK (release code + R8, same key) 565-724 ms. The gap is debug-build
+  overhead, no fix needed. The benchmark build is now on the Pixel (installs over debug, keeps the
+  account; a debug install goes back over it the same way).
+- Message Text Size Large checked in a chat (fine), set back to Medium. App Icon page not reached.
