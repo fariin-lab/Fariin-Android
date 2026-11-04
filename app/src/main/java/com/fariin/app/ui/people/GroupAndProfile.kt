@@ -427,6 +427,57 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var adding by remember { mutableStateOf(start == "add") }
     var picked by remember { mutableStateOf(setOf<String>()) }
     var askLeave by remember { mutableStateOf(false) }
+    var askReport by remember { mutableStateOf(false) }
+    var askEnd by remember { mutableStateOf(false) }
+    var askDelete by remember { mutableStateOf(false) }
+    val exitScope = rememberCoroutineScope()
+    fun callable(name: String, done: String) {
+        exitScope.launch {
+            val ok = runCatching {
+                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable(name).call(mapOf("cid" to cid)).await()
+            }.isSuccess
+            com.fariin.app.ui.components.Snack.show(if (ok) done else "Could not do that. Check your connection and try again.")
+        }
+    }
+    if (askReport) AlertDialog(onDismissRequest = { askReport = false }, title = { Text("Report Spam?") },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton({
+                    askReport = false
+                    // iOS: report, then leave and block the group so it cannot add me back.
+                    exitScope.launch { api.report("", cid, "group") }
+                    com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
+                        api.leaveGroup(cid)
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+                            .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
+                    }
+                    onLeft()
+                }) { Text("Report and Leave", color = c.red) }
+                TextButton({ askReport = false; exitScope.launch { api.report("", cid, "group") }
+                    com.fariin.app.ui.components.Snack.show("Thanks. Fariin's moderators will review this group.") }) { Text("Report", color = c.blue) }
+                TextButton({ askReport = false }) { Text("Cancel", color = c.blue) }
+            }
+        })
+    if (askEnd) AlertDialog(onDismissRequest = { askEnd = false }, title = { Text("End This Group?") },
+        text = { Text("Nobody will be able to send messages or start calls, and invite links stop working. Messages stay. This can't be undone.") },
+        confirmButton = { TextButton({ askEnd = false; callable("endGroup", "The group has ended.") }) { Text("End Group", color = c.red) } },
+        dismissButton = { TextButton({ askEnd = false }) { Text("Cancel", color = c.blue) } })
+    if (askDelete) AlertDialog(onDismissRequest = { askDelete = false }, title = { Text("Delete Group?") },
+        text = { Text("This permanently deletes the group and all its messages for everyone. This cannot be undone.") },
+        confirmButton = { TextButton({
+            askDelete = false
+            // iOS LeaveGroupUndo .deleteGroup: gone from the list at once, Undo for a few seconds, then the server deletes it.
+            com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
+                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable("deleteGroup").call(mapOf("cid" to cid)).await()
+            }
+            com.fariin.app.ui.components.Snack.show("Group deleted.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
+                com.fariin.app.data.LeaveUndo.undo()
+            }
+            onLeft()
+        }) { Text("Delete for Everyone", color = c.red) } },
+        dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.blue) } })
     var notice by remember { mutableStateOf<String?>(null) }
     var timerOpen by remember { mutableStateOf(false) }
     val timer = (conv["disappearSeconds"] as? Number)?.toInt() ?: 0
@@ -597,7 +648,16 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
             // A group I am no longer in: no Leave (iOS: no Leave, Report, End or Delete for it).
             if (iAmMember) SettingsSection {
-                SettingsRow("Leave Group", titleColor = c.red, trailing = Trailing.NONE, last = true) { askLeave = true }
+                // iOS exit card: Leave Group, and Report Spam for a member who is not staff (unless the
+                // group turned reports off); the owner's End Group and Delete Group in their own card.
+                val canReport = !iAmAdmin && conv["groupNoReport"] != true
+                SettingsRow("Leave Group", titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
+                if (canReport) SettingsRow("Report Spam", titleColor = c.red, trailing = Trailing.NONE, last = true) { askReport = true }
+            }
+            if (iAmMember && owner == me) SettingsSection {
+                val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
+                if (!ended) SettingsRow("End Group", titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
+                SettingsRow("Delete Group", titleColor = c.red, trailing = Trailing.NONE, last = true) { askDelete = true }
             }
             Spacer(Modifier.height(30.dp))
         }
