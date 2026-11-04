@@ -688,3 +688,7 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Calls (i): opened an off-style Call info page; now the profile (1:1) / group chat (group) as iOS
   2026-10-28. Pixel: kream's profile, back returns to Calls. Missed filter fine. Sticker + GIF
   panels fine. Account email row has no value on iOS either.
+- Call bubble: long press asked "Call kream?" (no long-press handler). Now the message menu
+  (Reply, Delete; no reactions, as iOS canReact). Tap still asks first. Left: iOS also offers
+  Voice/Video Call and Select in that menu; Android Select skips calls by design.
+- Checked fine: New Call page, Calls search, Share profile QR, Settings search -> Blocked Users.
