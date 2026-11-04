@@ -165,6 +165,8 @@ class MainActivity : ComponentActivity() {
                     notice?.let { SignedOutNotice(it) { notice = null } }
                     // A message for another chat while the app is open (push/InAppNotify).
                     if (me != null) com.fariin.app.ui.components.InAppBannerHost() else LaunchedEffect(Unit) { com.fariin.app.push.InAppNotify.reset() }
+                    // A required or suggested update from the server covers everything (iOS AppUpdateGate).
+                    com.fariin.app.system.AppUpdateLayer()
                 }
                 // One snackbar for the whole app (Android toasts and banners).
                 com.fariin.app.ui.components.SnackHost()
@@ -332,6 +334,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         started = true
+        com.fariin.app.system.AppUpdateGate.onForeground(this)
         PushRouter.activeChatId = openChat
         DeviceRegistry.startHeartbeat()
     }

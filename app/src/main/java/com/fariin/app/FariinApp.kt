@@ -96,6 +96,8 @@ class FariinApp : Application() {
             com.fariin.app.data.BlockList.follow(uid)
         }
         com.fariin.app.security.AppLock.install(this)
+        // Update campaigns: the last answer shows at once, then the server is asked (iOS AppUpdateGate).
+        if (!local) com.fariin.app.system.AppUpdateGate.start(this)
         // The home screen widget follows App Lock and Message Preview as they are switched.
         com.fariin.app.system.FariinWidget.init(this)
     }
