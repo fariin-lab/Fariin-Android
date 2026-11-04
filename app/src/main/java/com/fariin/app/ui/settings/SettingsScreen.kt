@@ -118,14 +118,10 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
         val forward = targetState.size >= initialState.size
         when {
             !m.on -> androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
-            forward -> (androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(m.ENTER_MS, easing = m.Decelerate)) { it / 10 } +
-                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(m.ENTER_MS - 40, easing = m.Decelerate))) togetherWith
-                (androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(m.ENTER_MS, easing = m.Decelerate)) { -it / 10 } +
-                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(m.COVER_FADE_MS, easing = m.Accelerate)))
-            else -> (androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(m.EXIT_MS, easing = m.Decelerate)) { -it / 10 } +
-                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(m.EXIT_MS, easing = m.Decelerate))) togetherWith
-                (androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(m.EXIT_MS, easing = m.Accelerate)) { it / 10 } +
-                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(m.EXIT_MS - 50, easing = m.Accelerate)))
+            // Opening: the new page comes in on top, the one under it stands still.
+            forward -> m.pageIn() togetherWith m.pageStill()
+            // Back: the top page leaves, drawn above the page it uncovers.
+            else -> (androidx.compose.animation.EnterTransition.None togetherWith m.pageOut()).apply { targetContentZIndex = -1f }
         }
       }) { shownStack ->
         val page = shownStack.lastOrNull()

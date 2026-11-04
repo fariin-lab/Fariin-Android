@@ -35,6 +35,8 @@ object Presence {
 
     /** My privacy map as last read (the profile listener or a write below). */
     fun noteMyPrivacy(p: Map<String, String>) { myPrivacy = p }
+    /** The last of my own privacy settings seen this run (a chat seeds its presence rules with it). */
+    fun myPrivacyNow(): Map<String, String>? = myPrivacy
 
     suspend fun set(online: Boolean, context: Context? = null) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return

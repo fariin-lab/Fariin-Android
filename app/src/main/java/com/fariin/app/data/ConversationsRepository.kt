@@ -69,6 +69,7 @@ class ConversationsRepository(
         // ESTIMATE, as iOS reads `data(with: .estimate)`: a pending server time shows as now
         // instead of dropping the chat to the bottom.
         val data = doc.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()
+        ThreadSeed.noteConv(doc.id, data)   // a chat opened from here draws its ticks from the first frame
         val conv = Conversation.fromFirestore(doc.id, data)
         return if (doc.metadata.hasPendingWrites()) conv.copy(localPending = true) else conv
     }

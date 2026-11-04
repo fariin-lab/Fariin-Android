@@ -383,7 +383,10 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
     }
 
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, dragHandle = null,
-        shape = com.fariin.app.ui.components.SheetShape, containerColor = Color.Transparent) {
+        shape = com.fariin.app.ui.components.SheetShape, containerColor = Color.Transparent,
+        // Its own painted ground runs to the bottom edge, under the gesture bar; left inset, the page
+        // behind showed through the strip there (owner 2026-11-04 screenshot).
+        contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) }) {
         FariinTheme(dark = dark) {
             val c = Fariin.colors
             Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp).clip(com.fariin.app.ui.components.SheetShape).onSizeChanged { canvas = it }) {

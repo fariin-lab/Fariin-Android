@@ -80,7 +80,22 @@ class ThreadRepository(
     )
 
     private val convRef = db.collection("conversations").document(cid)
-    private val _state = MutableStateFlow(State())
+    // Drawn from the first frame as it will stay (ThreadSeed): the chat list's copy of this
+    // conversation (ticks, title) and the last presence seen, until the listeners answer.
+    private val _state = MutableStateFlow(run {
+        val seedConv = ThreadSeed.conv(cid).orEmpty()
+        val p = if (Wire.isGroupCid(cid)) null else ThreadSeed.presence(Wire.otherUid(cid, me))
+        State(
+            receipts = if (seedConv.isEmpty()) Receipts() else Receipts.from(seedConv, me, cid), conv = seedConv,
+            otherOnline = p?.online ?: false, otherLastActive = p?.lastActive,
+            otherPrivacy = p?.theirPrivacy.orEmpty(), myPrivacy = p?.myPrivacy ?: Presence.myPrivacyNow().orEmpty(),
+        )
+    })
+    private fun notePresence() {
+        if (Wire.isGroupCid(cid)) return
+        val s = _state.value
+        ThreadSeed.notePresence(Wire.otherUid(cid, me), ThreadSeed.PresenceSeen(s.otherOnline, s.otherLastActive, s.otherPrivacy, s.myPrivacy))
+    }
     val state: StateFlow<State> = _state.asStateFlow()
 
     private val order = ThreadOrder()
@@ -222,16 +237,19 @@ class ThreadRepository(
             val d = snap.data
             _state.update { it.copy(otherOnline = d?.get("online") as? Boolean ?: false,
                 otherLastActive = d?.get("lastActive")?.let { v -> Conversation.millis(v) }?.takeIf { v -> v > 0 } ?: it.otherLastActive) }
+            notePresence()
         }
         otherReg = users.document(other).addSnapshotListener { snap, _ ->
             val d = snap?.data ?: return@addSnapshotListener
             _state.update { it.copy(otherPrivacy = Presence.privacyOf(d)) }
+            notePresence()
         }
         myReg = users.document(me).addSnapshotListener { snap, _ ->
             val d = snap?.data ?: return@addSnapshotListener
             val p = Presence.privacyOf(d)
             Presence.noteMyPrivacy(p)
             _state.update { it.copy(myPrivacy = p) }
+            notePresence()
         }
     }
 

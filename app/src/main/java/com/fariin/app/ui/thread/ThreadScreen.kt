@@ -850,9 +850,9 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                                 contentDescription = "Disappearing messages on", tint = c.secondary, modifier = Modifier.size(16.dp))
                         }
                     }
-                    if (ui.subtitle.isNotEmpty()) {
-                        Text(ui.subtitle, style = MaterialTheme.typography.bodySmall, color = c.secondary, maxLines = 1)
-                    }
+                    // The second line's room is kept even while it is empty, so the name never jumps when
+                    // "online" or "typing…" arrives (owner 2026-11-04).
+                    Text(ui.subtitle.ifEmpty { " " }, style = MaterialTheme.typography.bodySmall, color = c.secondary, maxLines = 1)
                 }
             }
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)

@@ -456,18 +456,9 @@ private class ShellMotion {
         return entering to p
     }
 
-    /** Matches Motion's popEnter / exit: fade in over the whole back, fade out over COVER_FADE_MS; slide a tenth. */
-    val alpha: Float get() {
-        val (entering, p) = progress() ?: return 1f
-        val m = com.fariin.app.ui.components.Motion
-        return if (entering) m.Decelerate.transform(p)
-        else 1f - m.Accelerate.transform((p * m.ENTER_MS / m.COVER_FADE_MS).coerceIn(0f, 1f))
-    }
-    val shift: Float get() {
-        val (entering, p) = progress() ?: return 0f
-        val d = com.fariin.app.ui.components.Motion.Decelerate.transform(p)
-        return if (entering) -0.1f * (1f - d) else -0.1f * d
-    }
+    /** The list under a page stands still while the page on top moves (Motion: the reference app's rule). */
+    val alpha: Float get() = 1f
+    val shift: Float get() = 0f
 
     @Composable
     fun Follow(tr: Transition<EnterExitState>) {

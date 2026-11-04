@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.listPress
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
@@ -84,7 +85,7 @@ internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true,
 internal fun CheckRow(title: String, selected: Boolean, last: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().listPress(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         androidx.compose.material3.RadioButton(selected = selected, onClick = onClick,
@@ -246,7 +247,7 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
     val c = Fariin.colors
     Column {
         Row(
-            Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            Modifier.fillMaxWidth().then(if (onClick != null) Modifier.listPress(onClick = onClick) else Modifier)
                 .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
