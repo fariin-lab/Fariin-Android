@@ -721,3 +721,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   this account admins, so Channel Settings still unseen on device.
 - Snackbar action ("Undo") was Material purple; now the bar's text colour. Archive + Undo tested on
   adnnaina (archived, undone; earlier test also unarchived by hand). Archive page fine.
+- Theme: secondary / inversePrimary / surfaceTint were Material purple defaults; set to the app's
+  colours (157efdc). Members rows: swipe-is-not-tap (listPress). Pixel: swipe on You does nothing,
+  tap on kream opens the member card.
