@@ -56,6 +56,11 @@ class ChatMedia(
             url.startsWith("/") -> File(url).takeIf { it.exists() }
             else -> {
                 cached(url)?.let { return@withContext it }
+                // A nearly full phone downloads nothing (iOS LowStorage): held, and the sheet says why.
+                if (com.fariin.app.system.LowStorage.tooFullToDownload(context)) {
+                    withContext(Dispatchers.Main) { com.fariin.app.system.LowStorage.warnForDownload(context) }
+                    return@withContext null
+                }
                 coroutineScope {
                     val job = inflight.getOrPut(url) { async { download(url, enc) } }
                     try { job.await() } finally { inflight.remove(url, job) }

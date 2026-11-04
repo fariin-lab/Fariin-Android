@@ -167,6 +167,10 @@ class MainActivity : ComponentActivity() {
                     if (me != null) com.fariin.app.ui.components.InAppBannerHost() else LaunchedEffect(Unit) { com.fariin.app.push.InAppNotify.reset() }
                     // A required or suggested update from the server covers everything (iOS AppUpdateGate).
                     com.fariin.app.system.AppUpdateLayer()
+                    if (me != null) {
+                        com.fariin.app.system.LowStorageSheet()
+                        LaunchedEffect(Unit) { kotlinx.coroutines.delay(2_000); com.fariin.app.system.LowStorage.checkAndWarn(applicationContext) }
+                    }
                 }
                 // One snackbar for the whole app (Android toasts and banners).
                 com.fariin.app.ui.components.SnackHost()
@@ -335,6 +339,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         started = true
         com.fariin.app.system.AppUpdateGate.onForeground(this)
+        com.fariin.app.system.LowStorage.checkAndWarn(applicationContext)
         PushRouter.activeChatId = openChat
         DeviceRegistry.startHeartbeat()
     }
