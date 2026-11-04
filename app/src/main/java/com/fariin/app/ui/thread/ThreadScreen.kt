@@ -566,11 +566,27 @@ private fun ThreadContent(
                             // A call record: the iOS call bubble (CallBubble.kt); tap asks, then calls back.
                             m.isCall && ch == null -> {
                                 val theirs = ui.isGroup && m.callerUid != ui.me
-                                CallBubble(m, ui.me, is24h, myFill(), receivedFill(),
-                                    peerUid = if (ui.isGroup) null else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me),
-                                    title = ui.title, photoUrl = ui.photoUrl,
-                                    callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
-                                    callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                                // A long press opens the message menu like any bubble; it used to fall
+                                // through to the bubble's tap and ask "Call them?" (Pixel, 2026-11-04).
+                                Box(Modifier.fillMaxWidth()
+                                    .onGloballyPositioned { rowCoords[m.rowId] = it }
+                                    .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
+                                    .combinedClickableLong {
+                                        val lc = rowCoords[m.rowId]?.takeIf { it.isAttached }
+                                        menuSource = lc?.let { MenuSource(androidx.compose.ui.geometry.Rect(it.positionOnScreen(), it.size.toSize()), m.authorId == ui.me) }
+                                        menuPreview = {
+                                            CallBubble(m, ui.me, is24h, myFill(), receivedFill(), peerUid = null, title = ui.title, photoUrl = ui.photoUrl,
+                                                callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
+                                                callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                                        }
+                                        menuFor = m
+                                    }) {
+                                    CallBubble(m, ui.me, is24h, myFill(), receivedFill(),
+                                        peerUid = if (ui.isGroup) null else com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me),
+                                        title = ui.title, photoUrl = ui.photoUrl,
+                                        callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
+                                        callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                                }
                             }
                             // "X asked to turn off Restricted chat": answered here by the one it was
                             // asked of, while it is still open (iOS restrictRequestTarget).
