@@ -1,5 +1,9 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -33,8 +37,24 @@ fun Modifier.listPress(enabled: Boolean = true, onLongClick: (() -> Unit)? = nul
     var lastDown by remember { mutableStateOf(Offset.Zero) }
     LaunchedEffect(press) { press.interactions.collect { if (it is PressInteraction.Press) lastDown = it.pressPosition } }
     val scope = rememberCoroutineScope()
-    combinedClickable(interactionSource = press, indication = ripple(), enabled = enabled, onLongClick = onLongClick,
+    // A finger that travelled past the touch slop was a swipe, not a tap. The tap detector only
+    // gives up when the finger leaves the row or a scroll takes it, so a sideways swipe across a
+    // chat row opened the chat (WhatsApp comparison 2026-11-04). Watched, never consumed.
+    var moved by remember { mutableStateOf(false) }
+    val slop = androidx.compose.ui.platform.LocalViewConfiguration.current.touchSlop
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            moved = false
+            while (true) {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                if ((change.position - down.position).getDistance() > slop) moved = true
+                if (!change.pressed) break
+            }
+        }
+    }.combinedClickable(interactionSource = press, indication = ripple(), enabled = enabled, onLongClick = onLongClick,
         onClick = {
+            if (moved) return@combinedClickable
             scope.launch {
                 val p = PressInteraction.Press(lastDown)
                 press.emit(p)
