@@ -42,3 +42,5 @@ Prepared 2026-11-03. Steps marked **(you)** are the owner's buttons; the rest is
 I can make all three changes the moment the Play listing is live.
 
 - 2026-11-04: fariin.com/.well-known/assetlinks.json now has handle_all_urls as well (site commit dbe13b3), so App Links (calls, /u/, /g/, /s/) verify once the Play signing key fingerprint is added next to the upload key. Local benchmark builds use another key and stay unverified; test them with an explicit intent (adb shell am start -a android.intent.action.VIEW -d <url> com.fariin.app).
+
+- Launch day, website: in fariin-web/get.js set PLAY_STORE to https://play.google.com/store/apps/details?id=com.fariin.app and raise the ?v= number on download.html, link-user.html, link-group.html and link-call.html. Android visitors then get Google Play, and Open on a link page opens the app (or Google Play). Before that they are told Fariin is on iPhone for now (site commits b830b7b, 41aca5e, d07e2e2).
