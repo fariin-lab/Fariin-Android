@@ -8,4 +8,6 @@
     <cache-path name="camera" path="story-camera/" />
     <!-- A photo drawn on in the chat photo editor, sent or put back in the attach sheet (ui/thread/PhotoDrawEditor). -->
     <cache-path name="edited" path="edited/" />
+    <!-- A photo taken with the attach sheet's Camera (ui/thread/AttachSheet). -->
+    <cache-path name="chatcam" path="chat-camera/" />
 </paths>

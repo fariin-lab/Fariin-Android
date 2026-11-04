@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.filled.PhotoSizeSelectActual
 import androidx.compose.material.icons.outlined.Poll
@@ -44,7 +45,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -71,7 +71,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * The attach sheet, after iOS AttachSheetController + AttachRecentsStrip, built on the Android
- * Photo Picker (no photo or video permission, Play policy): the picker opens with the sheet, the
+ * Photo Picker (no photo or video permission, Play policy). The sheet opens first with its sources
+ * (Gallery, Camera, File, Poll, Location, Contact) in view, one back closes it; the
  * chosen photos and videos fill the grid edge to edge with a numbered tick on each (the tick drops
  * one, a tap on a photo opens the editor, with two or more the pager editor), "Add photos or videos" opens the picker again, and File opens the document picker. Once
  * something is chosen the bar is a caption field, a "View once" switch (one photo only, as iOS)
@@ -107,8 +108,6 @@ internal fun AttachSheet(
     val gallery = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(MediaRules.MEDIA_PER_PICK),
     ) { uris ->
-        // Backed out of the picker with nothing chosen: the sheet goes too (one back, not two).
-        if (uris.isEmpty() && picked.isEmpty()) { onDismiss(); return@rememberLauncherForActivityResult }
         for (u in uris) if (u !in picked && picked.size < MediaRules.MEDIA_PER_PICK) {
             picked += u
             if ((context.contentResolver.getType(u) ?: "").startsWith("video/")) videos += u
@@ -118,8 +117,34 @@ internal fun AttachSheet(
         if (mediaOff != null) com.fariin.app.ui.components.Snack.show(mediaOff)
         else gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
     }
-    // The library opens with the sheet (iOS shows recents at once), unless the group has media off.
-    LaunchedEffect(Unit) { if (mediaOff == null) openGallery() }
+    // The picker no longer opens with the sheet: it covered the sheet, so File, Camera, Location and
+    // Poll could not be reached without choosing a photo first (WhatsApp comparison, 2026-11-04).
+    // Camera: the phone's own camera app (iOS UIImagePickerController .camera); the photo joins the
+    // chosen ones, so caption, editor and Send work as for a picked photo.
+    var shotUri by remember { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val u = shotUri
+        if (ok && u != null && picked.size < MediaRules.MEDIA_PER_PICK) picked += u
+    }
+    val launchCamera = {
+        runCatching {
+            val dir = java.io.File(context.cacheDir, "chat-camera").apply { mkdirs() }
+            val f = java.io.File(dir, "shot-${System.currentTimeMillis()}.jpg")
+            val u = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", f)
+            shotUri = u
+            camera.launch(u)
+        }.onFailure { com.fariin.app.ui.components.Snack.show("Couldn't open the camera.") }
+        Unit
+    }
+    val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) launchCamera() else com.fariin.app.ui.components.Snack.show("Allow the camera in Settings to take a photo.")
+    }
+    val openCamera = {
+        if (mediaOff != null) com.fariin.app.ui.components.Snack.show(mediaOff)
+        else if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED) launchCamera()
+        else askCamera.launch(android.Manifest.permission.CAMERA)
+    }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { onSendFile(uri); onDismiss() }
     }
@@ -131,7 +156,8 @@ internal fun AttachSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet,
         containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(bottom = 8.dp)) {
-            Box(Modifier.fillMaxWidth().height(330.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(22.dp)).background(c.card)) {
+            // Nothing chosen yet: a short card, so the sources sit near the thumb.
+            Box(Modifier.fillMaxWidth().height(if (picked.isEmpty()) 180.dp else 330.dp).padding(horizontal = 12.dp).clip(RoundedCornerShape(22.dp)).background(c.card)) {
                 if (picked.isEmpty() && mediaOff != null) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(mediaOff, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(24.dp))
@@ -155,6 +181,7 @@ internal fun AttachSheet(
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
                     .floating(RoundedCornerShape(32.dp)).padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     SheetButton("Gallery", Icons.Outlined.PhotoLibrary, openGallery)
+                    SheetButton("Camera", Icons.Outlined.PhotoCamera, openCamera)
                     SheetButton("File", Icons.AutoMirrored.Outlined.InsertDriveFile) { files.launch(arrayOf("*/*")) }
                     if (onPoll != null) SheetButton("Poll", Icons.Outlined.Poll) { onDismiss(); onPoll() }
                     if (onLocation != null) SheetButton("Location", Icons.Outlined.Place) { onDismiss(); onLocation() }
