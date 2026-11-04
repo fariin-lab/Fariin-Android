@@ -231,6 +231,16 @@ fun ChatListScreen(
         peopleCache[key] = found
         peopleHits = found
     }
+    // Public groups and channels by @name (iOS GroupDirectory.search, groupsOnly), the same pause.
+    var groupHits by remember { mutableStateOf<List<com.fariin.app.data.PublicGroupHit>>(emptyList()) }
+    var publicGroupOpen by remember { mutableStateOf<String?>(null) }
+    publicGroupOpen?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { publicGroupOpen = null },
+        onOpenChat = { cid -> searching = false; query = ""; people.chat(cid) }) }
+    LaunchedEffect(q, searching) {
+        if (!searching || q.trim('@').length < 3) { groupHits = emptyList(); return@LaunchedEffect }
+        kotlinx.coroutines.delay(400)
+        groupHits = com.fariin.app.data.PublicGroups.search(q)
+    }
     val newPeople = run {
         val known = shown.filter { !it.isGroup }.map { it.otherUid(me) }.toSet()
         peopleHits.filter { it.uid != me && it.uid !in known }
@@ -566,6 +576,22 @@ fun ChatListScreen(
                         if (!peopleAll && newPeople.size > 3) item(key = "p-more") {
                             Text("Show More", color = c.blue, style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.fillMaxWidth().clickable { peopleAll = true }.padding(horizontal = 86.dp, vertical = 12.dp))
+                        }
+                    }
+                    // Public groups and channels I am not in yet, after the people (iOS ChatSearchPage).
+                    val newGroups = groupHits.filter { h -> !h.isMember && state.chats.none { it.id == h.cid } }
+                    if (searching && newPeople.isEmpty() && newGroups.isNotEmpty()) item(key = "h-global") { SectionHeader("Global Search") }
+                    if (searching) items(newGroups, key = { "g-" + it.cid }) { h ->
+                        Row(Modifier.fillMaxWidth().clickable {
+                            if (h.isChannel) channels.page(h.cid) else publicGroupOpen = h.cid
+                        }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(h.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp), squircle = h.isChannel)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(h.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+                                    color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(h.subtitle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
+                            }
                         }
                     }
                 }
