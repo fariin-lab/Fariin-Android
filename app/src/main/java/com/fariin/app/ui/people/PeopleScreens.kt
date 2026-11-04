@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Search
@@ -46,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -110,55 +112,47 @@ internal fun SearchField(value: String, placeholder: String, onChange: (String) 
 }
 
 /**
- * New Chat (iOS NewChatView + ChatSearchPage): New Group on top, my chats filtered by name as I
- * type, and under them "Global search" from the server (searchUsernames; under three letters
- * the exact @username). A person who asks for a Chat Key is asked for it first.
+ * New Chat (iOS NewChatView): one card to make things (New Group, New Channel, Invite Friends),
+ * "Frequently contacted" (the three latest, once there are six people or more), then everyone I
+ * have chatted with, A to Z. The search matches those people on this phone only (owner
+ * 2026-10-18, "your chats only"): finding someone new is the Chats page's search. New Contact and
+ * Find Channels are not here (owner 2026-09-30 / 2026-10-31 on iOS).
  */
 @Composable
 fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit, onOpenChat: (String) -> Unit, onNewGroup: () -> Unit) {
     val c = Fariin.colors
-    val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var q by remember { mutableStateOf("") }
-    var found by remember { mutableStateOf<List<Person>>(emptyList()) }
-    var searching by remember { mutableStateOf(false) }
-    var keyFor by remember { mutableStateOf<Person?>(null) }
-    var newContact by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(q) {
-        found = emptyList()
-        if (q.trim().removePrefix("@").isEmpty()) { searching = false; return@LaunchedEffect }
-        searching = true
-        delay(350)
-        found = api.search(q)
-        searching = false
-    }
     val me = api.me
-    val local = chats.filter { !it.isGroup && q.isNotBlank() && it.displayName(me).contains(q.trim().removePrefix("@"), ignoreCase = true) }
-    fun start(p: Person) = scope.launch {
-        val cid = Wire.directCid(me, p.uid)
-        val friend = chats.any { it.id == cid && (it.startedBy.isEmpty() || it.accepted) }
-        if (p.privacy["messages"] == "contacts" && !friend && api.chatKeyExists(p.uid) == true) { keyFor = p; return@launch }
-        try { onOpenChat(api.openChat(p)) } catch (_: Exception) { error = "Couldn't open the chat. Check your connection and try again." }
+    val myHandle = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value?.handle
+    // 1:1 people only, not cleared, and not someone whose request I have not answered (iOS).
+    val people = remember(chats, me) {
+        chats.filter { !it.isGroup && !it.isChannel && !it.isCleared(me) && !(it.startedBy.isNotEmpty() && it.startedBy != me && !it.accepted) }
+            .filter { it.displayName(me).isNotBlank() }
     }
-    keyFor?.let { p -> ChatKeySheet(api, p, onDismiss = { keyFor = null }) { cid -> keyFor = null; onOpenChat(cid) } }
-    error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
-        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
+    val frequent = remember(people) { if (people.size >= 6) people.sortedByDescending { it.updatedAtMillis }.take(3) else emptyList() }
+    val sections = remember(people, me) {
+        people.groupBy { conv -> conv.displayName(me).trim().firstOrNull()?.takeIf { it.isLetter() }?.uppercaseChar()?.toString() ?: "#" }
+            .toSortedMap(compareBy<String> { it == "#" }.thenBy { it })
+            .mapValues { (_, list) -> list.sortedBy { it.displayName(me).lowercase() } }
+    }
+    val needle = q.trim().removePrefix("@")
+    val matches = if (needle.isEmpty()) emptyList() else people.filter { it.displayName(me).contains(needle, ignoreCase = true) }
+        .sortedBy { it.displayName(me).lowercase() }
+    @Composable
+    fun person(conv: Conversation) = PersonRow(conv.displayPhoto(me), conv.displayName(me), "", onClick = { onOpenChat(conv.id) })
 
-    if (newContact) { NewContactPage(api, onBack = { newContact = false }, onOpenChat = onOpenChat); return }
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         com.fariin.app.ui.components.FloatingTopBar("New Chat", onBack = onBack)
-        SearchField(q, "Search by name or @username") { q = it }
-        LazyColumn(Modifier.fillMaxSize()) {
-            if (q.isBlank()) {
+        SearchField(q, "Search your chats") { q = it }
+        LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
+            if (needle.isEmpty()) {
                 item {
-                    // New Group and the channels (iOS NewChatView: New channel, and Find Channels on the
-                    // same page) share one floating rounded card, an inset hairline between them.
                     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
                     val actions = listOf(
                         Triple("New Group", onNewGroup, Icons.Filled.Groups),
-                        Triple("New Contact", { newContact = true }, Icons.Filled.PersonAdd),
                         Triple("New Channel", channelNav.create, Icons.Filled.Campaign),
-                        Triple("Find Channels", channelNav.find, Icons.Filled.Explore),
+                        Triple("Invite Friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, Icons.Filled.Share),
                     )
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
                         .floating(RoundedCornerShape(20.dp))) {
@@ -174,25 +168,24 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                             }
                         }
                     }
-                    Text("Find people by their @username.", fontSize = 13.sp, color = c.secondary,
-                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp))
                 }
-            }
-            if (local.isNotEmpty()) item { Header("Chats") }
-            items(local, key = { "l" + it.id }) { conv ->
-                PersonRow(conv.displayPhoto(me), conv.displayName(me), "", onClick = { onOpenChat(conv.id) })
-            }
-            if (q.isNotBlank()) item { Header("Global search") }
-            if (searching) item {
-                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                if (frequent.isNotEmpty()) {
+                    item { Header("Frequently contacted") }
+                    items(frequent, key = { "f" + it.id }) { person(it) }
                 }
-            }
-            items(found, key = { "g" + it.uid }) { p ->
-                PersonRow(p.photoUrl, p.shownName, if (p.handle.isNotEmpty()) "@${p.handle}" else "", onClick = { start(p) })
-            }
-            if (!searching && q.isNotBlank() && found.isEmpty()) item {
-                Text("No one found with that username.", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
+                if (people.isEmpty()) item {
+                    Text("No chats yet", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp))
+                }
+                sections.forEach { (letter, list) ->
+                    item(key = "h$letter") { Header(letter) }
+                    items(list, key = { "p" + it.id }) { person(it) }
+                }
+            } else {
+                item { Header("Results") }
+                items(matches, key = { "m" + it.id }) { person(it) }
+                if (matches.isEmpty()) item {
+                    Text("No chats match “$needle”", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
+                }
             }
         }
     }
