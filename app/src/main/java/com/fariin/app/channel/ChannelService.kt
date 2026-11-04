@@ -46,6 +46,10 @@ object ChannelService {
                 it.code == FirebaseFunctionsException.Code.FAILED_PRECONDITION || it.code == FirebaseFunctionsException.Code.INVALID_ARGUMENT
         }?.message?.takeIf { it.isNotBlank() } ?: fallback
 
+    /** iOS ChannelService.similar: up to 10 channels like this one (none under 1,000 followers). */
+    suspend fun similar(cid: String): List<DiscoveredChannel> =
+        runCatching { DiscoveredChannel.list(call("getSimilarChannels", mapOf("cid" to cid))) }.getOrDefault(emptyList())
+
     suspend fun discover(): List<DiscoveredChannel> =
         DiscoveredChannel.list(call("discoverChannels", buildMap { region()?.let { put("country", it) } }))
 

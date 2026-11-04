@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.material.icons.filled.Close
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -266,6 +267,8 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
         (ch.problem ?: notice)?.let {
             Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 8.dp))
         }
+        // iOS SimilarChannels: after following in this run, a strip of channels like this one, until its X.
+        if (joined && SimilarChannelsStore.showsAfterFollow(ch.info.cid)) SimilarChannelsStrip(ch.info.cid)
         if (banned) {
             Text("You're banned from this channel.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(c.card).padding(14.dp))
@@ -277,7 +280,7 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                 Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(25.dp)).background(fill)
                     .combinedClickable(
                         onClick = {
-                            if (!joined) ch.onFollow()
+                            if (!joined) { SimilarChannelsStore.followed(ch.info.cid); ch.onFollow() }
                             else ch.onMute(if (ch.muted) null else 0.0)
                         },
                         onLongClick = { if (joined) menu = true },
@@ -307,6 +310,46 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                         })
                     }
                     DropdownMenuItem(text = { Text("Mute Forever", color = c.red) }, onClick = { menu = false; ch.onMute(0.0) })
+                }
+            }
+        }
+    }
+}
+
+/** Which channels show "Similar Channels": followed in this run of the app, and not closed with the X. */
+internal object SimilarChannelsStore {
+    private val just = androidx.compose.runtime.mutableStateListOf<String>()
+    private val cache = HashMap<String, List<com.fariin.app.channel.DiscoveredChannel>>()
+    fun followed(cid: String) { if (cid !in just) just.add(cid) }
+    fun showsAfterFollow(cid: String) = cid in just
+    fun close(cid: String) { just.remove(cid) }
+    suspend fun load(cid: String) = cache[cid] ?: com.fariin.app.channel.ChannelService.similar(cid).also { cache[cid] = it }
+}
+
+/** iOS SimilarChannelsStrip: "Similar Channels", an X, and up to 10 small channel cards in a row. */
+@Composable
+private fun SimilarChannelsStrip(cid: String) {
+    val c = Fariin.colors
+    val nav = LocalChannelNav.current
+    val list by androidx.compose.runtime.produceState<List<com.fariin.app.channel.DiscoveredChannel>?>(null, cid) { value = SimilarChannelsStore.load(cid) }
+    val shown = list?.take(10).orEmpty()
+    if (shown.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(20.dp)).background(c.card).padding(vertical = 10.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Similar Channels", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
+            Box(Modifier.size(28.dp).clip(CircleShape).clickable { SimilarChannelsStore.close(cid) }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Close, "Close Similar Channels", tint = c.secondary, modifier = Modifier.size(16.dp))
+            }
+        }
+        androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            items(shown.size) { i ->
+                val ch = shown[i]
+                Column(Modifier.width(70.dp).clickable { nav.page(ch.cid) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    com.fariin.app.ui.components.Avatar(ch.photoUrl, 54.dp, squircle = true)
+                    Text(ch.title, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(com.fariin.app.channel.ChannelRules.followersLine(ch.followerCount), fontSize = 10.sp, color = c.secondary, maxLines = 1)
                 }
             }
         }
