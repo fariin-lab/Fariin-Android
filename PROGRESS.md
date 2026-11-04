@@ -698,3 +698,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   instead of an empty line. Pixel checked. Call bubbles now swipe to reply too (checked: no call dialog).
 - Profile photo: Set New Photo menu = Take Photo / Choose Photo / Remove Photo (iOS). Pixel: menu,
   camera -> shot -> cropper opens, cancelled. Remove NOT exercised (would wipe the owner's photo).
+- Group photos: New Group slot + Edit Group Set New Photo now Take Photo / Choose Photo (+ Remove
+  in New Group). Pixel: New Group menu seen, nothing created.
