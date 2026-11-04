@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.History
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -107,62 +109,71 @@ internal fun ChannelManageSection(info: ChannelInfo, team: Team, me: String, sho
 fun ChannelSettingsScreen(cid: String, me: String, onBack: () -> Unit, nav: ChannelManageNav) {
     val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
     val c = Fariin.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val api = androidx.compose.runtime.remember(me) { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(ctx.applicationContext)) }
+    var timerOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val timer = (doc["disappearSeconds"] as? Number)?.toInt() ?: 0
+    if (com.fariin.app.ui.people.DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Channel Settings", onBack)
         if (doc["channel"] != true) return@Column
         val info = ChannelInfo.from(cid, doc)
         val shown = ChannelRules.subscriberCount(com.fariin.app.channel.ChannelFollows.adjusted(cid, info.followerCount), info.users.size)
-        Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-            val team = Team.from(doc)
-            // Type and Protect Content first, as iOS GroupSettingsView's joining and privacy parts:
-            // the type could not be changed after the channel was made (owner 2026-11-04).
-            val scope = androidx.compose.runtime.rememberCoroutineScope()
-            var protect by androidx.compose.runtime.remember(info.restricted) { androidx.compose.runtime.mutableStateOf(info.restricted) }
-            var problem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
-            if (team.isOwner(me)) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
-                    SettingsRow("Channel Type", icon = painterResource(R.drawable.ic_gs_group_type), value = if (info.isPublic) "Public" else "Private") { nav.type(cid) }
-                    com.fariin.app.ui.settings.SwitchRow("Protect Content", protect, last = true) { v ->
-                        protect = v; problem = null
-                        scope.launch { try { ChannelService.setProtected(cid, v) } catch (_: Exception) { protect = !v; problem = "Couldn't save. Try again." } }
-                    }
-                }
-                Text(problem ?: ChannelRules.protectFooter(protect), fontSize = 13.sp, color = if (problem != null) c.red else c.secondary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                Spacer(Modifier.height(10.dp))
-            }
-            ChannelManageList(info, team, me, shown, nav)
+        val team = Team.from(doc)
+        Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            ChannelManageList(info, team, me, shown, nav,
+                inviteOn = !(doc["inviteCode"] as? String).isNullOrEmpty(),
+                timer = timer, onTimer = { timerOpen = true }, onRecent = { nav.recent(cid) })
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
+/**
+ * iOS GroupSettingsView for a channel (owner screenshot 2026-11-04), card by card: Channel Type,
+ * Invite Link, Follow Requests | Followers, Administrators, Banned Users | Reactions |
+ * Disappearing Messages, Recent Actions. Edit is the info page's Edit; Protect Content sits on
+ * the Channel Type page.
+ */
 @Composable
-private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Fariin.colors.card)) {
-        if (team.can(me, Right.CHANGE_INFO)) {
-            SettingsRow("Edit Channel", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Edit)) { nav.edit(info.cid) }
-        }
-        // iOS Channel Settings joining section: the invite links (Add users right).
-        if (team.can(me, Right.INVITE_USERS)) {
-            SettingsRow("Invite Links", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link)) { nav.links(info.cid) }
-            // iOS GroupSettingsView: Follow Requests under the same right, "None" or how many wait.
+private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav,
+                              inviteOn: Boolean, timer: Int, onTimer: () -> Unit, onRecent: () -> Unit) {
+    val c = Fariin.colors
+    @Composable
+    fun Card(content: @Composable () -> Unit) =
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) { content() }
+    val owner = team.isOwner(me)
+    val invite = team.can(me, Right.INVITE_USERS)
+    if (owner || invite) Card {
+        if (owner) SettingsRow("Channel Type", icon = painterResource(R.drawable.ic_gs_group_type),
+            value = if (info.isPublic) "Public" else "Private", last = !invite) { nav.type(info.cid) }
+        if (invite) {
             val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = true)
+            SettingsRow("Invite Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link),
+                value = if (inviteOn) "On" else "Off") { nav.links(info.cid) }
             SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
-                value = com.fariin.app.data.JoinRequests.rowValue(reqs.size)) { nav.requests(info.cid) }
+                value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true) { nav.requests(info.cid) }
         }
+    }
+    val canBan = team.can(me, Right.BAN_USERS)
+    Card {
         SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
-        val canBan = team.can(me, Right.BAN_USERS)
-        val canReact = team.can(me, Right.CHANGE_INFO)
-        SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sorted().size}", last = !canBan && !canReact) {
+        SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sorted().size}", last = !canBan) {
             nav.admins(info.cid)
         }
-        if (canBan) SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "${info.bannedUids.size}", last = !canReact) {
+        if (canBan) SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "${info.bannedUids.size}", last = true) {
             nav.banned(info.cid)
         }
-        // What followers may react with (iOS channelPostsSection): the picks themselves, else Any / Off.
-        if (canReact) SettingsRow("Reactions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.EmojiEmotions),
-            value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
+    }
+    // What followers may react with (iOS channelPostsSection): the picks themselves, else Any / Off.
+    if (team.can(me, Right.CHANGE_INFO)) Card {
+        SettingsRow("Reactions", value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
             else com.fariin.app.data.ChannelReactions.value(info.reactMode), last = true) { nav.reactions(info.cid) }
+    }
+    Card {
+        com.fariin.app.ui.people.DisappearingRow(timer, short = false, onClick = onTimer)
+        SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.History), last = true, onClick = onRecent)
     }
 }
 
@@ -177,6 +188,7 @@ data class ChannelManageNav(
     val requests: (String) -> Unit = {},
     val settings: (String) -> Unit = {},
     val type: (String) -> Unit = {},
+    val recent: (String) -> Unit = {},
 )
 
 /** Edit Channel: the group editor in a channel's words and squircle (iOS EditGroupView). */

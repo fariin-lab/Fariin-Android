@@ -942,6 +942,22 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                 TypeLine("Public $Noun", showPublic) { wantsPublic = true }
                 TypeLine("Private $Noun", !showPublic, last = true) { if (isPublicNow) confirmPrivate = true else wantsPublic = false }
             }
+            // A channel's Protect Content lives here, under its type (iOS channel type page).
+            if (ch) {
+                val info = com.fariin.app.channel.ChannelInfo.from(cid, doc)
+                var protect by remember(info.restricted) { mutableStateOf(info.restricted) }
+                var protectProblem by remember { mutableStateOf<String?>(null) }
+                SettingsSection(header = "Saving and Copying",
+                    footer = protectProblem ?: com.fariin.app.channel.ChannelRules.protectFooter(protect)) {
+                    com.fariin.app.ui.settings.SwitchRow("Protect Content", protect, last = true) { v ->
+                        protect = v; protectProblem = null
+                        scope.launch {
+                            try { com.fariin.app.channel.ChannelService.setProtected(cid, v) }
+                            catch (_: Exception) { protect = !v; protectProblem = "Couldn't save. Try again." }
+                        }
+                    }
+                }
+            }
             if (showPublic) {
                 SettingsSection(header = "Public Link", footer = when {
                     !changed && typed.isNotEmpty() -> "People can open this $noun with fariin.com/$typed."

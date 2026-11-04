@@ -78,7 +78,12 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
             reactions = { nav.navigate("channelreactions/$it") { launchSingleTop = true } },
             requests = { nav.navigate("channelrequests/$it") { launchSingleTop = true } },
             type = { nav.navigate("channeltype/$it") { launchSingleTop = true } },
+            recent = { nav.navigate("channelrecent/$it") { launchSingleTop = true } },
         ))
+    }
+    composable("channelrecent/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@composable
+        com.fariin.app.ui.people.GroupPagesHost(cid, me, com.fariin.app.ui.people.GroupPage.RecentActions, onExit = { nav.popBackStack() })
     }
     composable("channeltype/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@composable
