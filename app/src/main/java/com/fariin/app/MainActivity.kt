@@ -292,8 +292,8 @@ class MainActivity : ComponentActivity() {
             } }
             Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().graphicsLayer {
-                alpha = if (shell.shown) shell.alpha?.value ?: 1f else 0f
-                translationX = (shell.shift?.value ?: 0f) * size.width
+                alpha = if (shell.shown) shell.alpha else 0f
+                translationX = shell.shift * size.width
             }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
                 CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides if (onTop) this@MainActivity else inertBack) {
                     MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } })
@@ -405,29 +405,39 @@ class MainActivity : ComponentActivity() {
  */
 private class ShellMotion {
     var shown by mutableStateOf(true)
-    var alpha by mutableStateOf<State<Float>?>(null)
-    var shift by mutableStateOf<State<Float>?>(null)
+    private var t by mutableStateOf<Transition<EnterExitState>?>(null)
+
+    // READ ONLY: the shell's slide and fade are worked out from how far the "main" page's own
+    // transition has played. Nothing is added to that transition (it used to carry two
+    // animateFloat children), so the nav host's page change always finishes on its own: a page
+    // change frozen half way left a chat on screen over a back stack already at "main", where the
+    // arrow did nothing and the back gesture left the app (owner 2026-11-03).
+    private fun progress(): Pair<Boolean, Float>? {
+        val tr = t ?: return null
+        val entering = tr.targetState == EnterExitState.Visible
+        if (tr.currentState == tr.targetState) return entering to 1f
+        val total = tr.totalDurationNanos
+        val p = if (total <= 0L) 1f else (tr.playTimeNanos.toFloat() / total).coerceIn(0f, 1f)
+        return entering to p
+    }
+
+    /** Matches Motion's popEnter / exit: fade in 190 ms after 60, fade out in 90; slide a tenth. */
+    val alpha: Float get() {
+        val (entering, p) = progress() ?: return 1f
+        return if (entering) com.fariin.app.ui.components.Motion.Decelerate.transform(((p * 250f - 60f) / 190f).coerceIn(0f, 1f))
+        else 1f - com.fariin.app.ui.components.Motion.Accelerate.transform((p * 300f / 90f).coerceIn(0f, 1f))
+    }
+    val shift: Float get() {
+        val (entering, p) = progress() ?: return 0f
+        val d = com.fariin.app.ui.components.Motion.Decelerate.transform(p)
+        return if (entering) -0.1f * (1f - d) else -0.1f * d
+    }
 
     @Composable
-    fun Follow(t: Transition<EnterExitState>) {
-        val anim = com.fariin.app.ui.components.Motion.on
-        val a = t.animateFloat(transitionSpec = {
-            when {
-                !anim -> snap()
-                EnterExitState.PreEnter isTransitioningTo EnterExitState.Visible -> tween(190, 60, com.fariin.app.ui.components.Motion.Decelerate)
-                else -> tween(90, easing = com.fariin.app.ui.components.Motion.Accelerate)
-            }
-        }, label = "shellAlpha") { if (it == EnterExitState.Visible) 1f else 0f }
-        val dx = t.animateFloat(transitionSpec = {
-            when {
-                !anim -> snap()
-                EnterExitState.PreEnter isTransitioningTo EnterExitState.Visible -> tween(250, easing = com.fariin.app.ui.components.Motion.Decelerate)
-                else -> tween(300, easing = com.fariin.app.ui.components.Motion.Decelerate)
-            }
-        }, label = "shellShift") { if (it == EnterExitState.Visible) 0f else -0.1f }
-        DisposableEffect(Unit) {
-            alpha = a; shift = dx; shown = true
-            onDispose { shown = false; alpha = null; shift = null }
+    fun Follow(tr: Transition<EnterExitState>) {
+        DisposableEffect(tr) {
+            t = tr; shown = true
+            onDispose { if (t === tr) { shown = false; t = null } }
         }
     }
 }
