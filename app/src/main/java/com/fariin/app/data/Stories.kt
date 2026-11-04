@@ -40,6 +40,9 @@ data class Story(
     val taps: List<StoryTapTarget> = emptyList(),
     /** The credit of a repost (iOS repostOf), null for an original story. */
     val repostOf: StoryRepost? = null,
+    /** An official story's button (iOS buttonText / buttonUrl); empty for everyone else's. */
+    val buttonText: String = "",
+    val buttonUrl: String = "",
 ) {
     /** The ring a story belongs to: its author, or "g:" + the group for a group's story. */
     val ringKey: String get() = groupId?.takeIf { it.isNotEmpty() }?.let { StoryGroup.GROUP_PREFIX + it } ?: authorUid

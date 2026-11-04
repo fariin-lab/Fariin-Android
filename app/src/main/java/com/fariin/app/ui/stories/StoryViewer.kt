@@ -663,6 +663,8 @@ fun StoryViewer(
                     jumpTo = if (page == pager.currentPage) jumpTo else null,
                     summaries = summaries, service = service, who = who,
                     onSeen = { s ->
+                        // Fariin's own story: seen on this phone and one view document, no receipt to anyone.
+                        if (com.fariin.app.data.OfficialStories.isOfficial(s)) { com.fariin.app.data.OfficialStories.recordView(context, s, receipts); return@StoryPage }
                         if (s.authorUid != me && marked.add(s.id)) {
                             val wm = watermarks[s.ringKey]
                             if (StoryRules.advancesWatermark(wm, s.createdAtMs)) watermarks[s.ringKey] = s.createdAtMs + 1
@@ -1111,6 +1113,9 @@ private fun StoryPage(
                                         leadingIcon = { Icon(icon, contentDescription = null, tint = tint ?: androidx.compose.material3.LocalContentColor.current, modifier = Modifier.size(22.dp)) },
                                         onClick = { menu = false; onMenuAction(story, key) })
                                 }
+                                // Fariin's own story offers Save and nothing else (iOS StorySaveSeam).
+                                val official = com.fariin.app.data.OfficialStories.isOfficial(story)
+                                if (official) item("Save", Icons.Filled.Download, null, "save")
                                 // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
                                 if (mine) {
                                     item("Save", Icons.Filled.Download, null, "save")
@@ -1118,7 +1123,7 @@ private fun StoryPage(
                                     if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", Icons.Filled.Share, null, "share")
                                 }
                                 // iOS: Get notifications first, for a person's story (not a group's).
-                                if (!mine && story.groupId == null) {
+                                if (!mine && !official && story.groupId == null) {
                                     val notifyOn = story.authorUid in com.fariin.app.data.StoryNotify.on.collectAsState().value
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(com.fariin.app.data.StoryNotifyRules.menuTitle(notifyOn)) },
@@ -1130,13 +1135,13 @@ private fun StoryPage(
                                     )
                                 }
                                 // Somebody else's story that anyone may pass on (the repost rule): Share Story.
-                                if (!mine && canRepost(story)) item("Share Story", Icons.Filled.Share, null, "share")
-                                if (!mine) androidx.compose.material3.DropdownMenuItem(
+                                if (!mine && !official && canRepost(story)) item("Share Story", Icons.Filled.Share, null, "share")
+                                if (!mine && !official) androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("Hide Stories") },
                                     leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
                                     onClick = { menu = false; onHide(story.authorUid) },
                                 )
-                                if (!mine) item("Report", Icons.Filled.Flag, Color(0xFFFF3B30), "report")
+                                if (!mine && !official) item("Report", Icons.Filled.Flag, Color(0xFFFF3B30), "report")
                             }
                         }
                     }
@@ -1173,6 +1178,7 @@ private fun StoryPage(
                 .navigationBarsPadding().imePadding(),
         ) {
             if (mine) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) }, onDelete = { onDelete(story) })
+            else if (com.fariin.app.data.OfficialStories.isOfficial(story)) OfficialStoryButton(story, onLink)
             else ReplyBar(story, service, canReply = canReply(story), showLike = receipts, onFocus = onReplyFocus,
                 onRepost = if (canRepost(story)) ({ onRepost(story) }) else null,
                 onSend = { t, reaction -> onReply(story, t, reaction) }, onLike = { onLike(story, it) })
@@ -1553,5 +1559,16 @@ private class VisitBubbleShape(private val tailDown: Boolean) : Shape {
             close()
         }
         return Outline.Generic(path)
+    }
+}
+
+/** An official story's foot (iOS): no reply field or heart; its button when the admins gave it one. */
+@Composable
+private fun OfficialStoryButton(story: Story, onLink: (String) -> Unit) {
+    if (story.buttonText.isEmpty() || story.buttonUrl.isEmpty()) { Spacer(Modifier.height(56.dp)); return }
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(48.dp).clip(CircleShape)
+        .background(Color.White).clickable { onLink(story.buttonUrl) }, contentAlignment = Alignment.Center) {
+        Text(story.buttonText, color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp))
     }
 }

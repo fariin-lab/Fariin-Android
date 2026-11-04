@@ -65,6 +65,7 @@ object SessionEnd {
         com.fariin.app.data.SharedMediaSource.clear()      // All Media's opened messages
         com.fariin.app.data.ContactNames.clear()       // names I gave people belong to the account
         com.fariin.app.data.SearchRecents.wipe(c)      // what the account searched for
+        com.fariin.app.data.OfficialStories.reset(c)  // the next account must not inherit this one's feed
         com.fariin.app.data.ProfilePhotoHistory.wipe(c)  // my past profile photos
         com.fariin.app.data.Glow.Cache.clear(c)       // the Glowing grid's last answer, every account's
         com.fariin.app.data.ChatLookStore.wipe(c)      // wallpapers, chat colours, wallpaper photos

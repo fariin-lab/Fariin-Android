@@ -159,7 +159,7 @@ fun MainShell(
     val missed = calls?.let { com.fariin.app.data.CallsSeen.count(it, me, callsMark) } ?: 0
     val demo = me == DemoChats.ME   // debug demo mode: made-up data in every tab
     // One stories feed for the app: the Stories tab and the rings on chat-list photos (iOS storiesRepo).
-    val stories: com.fariin.app.data.StoriesState = if (demo) DemoSettings.stories().second else {
+    val storiesOwn: com.fariin.app.data.StoriesState = if (demo) DemoSettings.stories().second else {
         val prof = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value
         val convs by androidx.compose.runtime.rememberUpdatedState(chats.chats)
         val profNow by androidx.compose.runtime.rememberUpdatedState(prof)
@@ -167,6 +167,13 @@ fun MainShell(
         remember(me) { repo.listen(me, { convs }, { profNow?.name?.ifEmpty { null } ?: "You" }, { profNow?.photoUrl }) }
             .collectAsState(initial = com.fariin.app.data.StoriesState()).value
     }
+    // Fariin's own stories join the list as one more ring (iOS OfficialStories): first while unseen.
+    val officialList by com.fariin.app.data.OfficialStories.stories.collectAsState()
+    LaunchedEffect(me) { if (!demo) com.fariin.app.data.OfficialStories.refresh(context) }
+    val officialGroup = if (demo) null else com.fariin.app.data.OfficialStories.group(context, officialList)
+    val stories = officialGroup?.let { g ->
+        storiesOwn.copy(others = if (g.hasUnseen) listOf(g) + storiesOwn.others else storiesOwn.others + g)
+    } ?: storiesOwn
     // The same feed for screens outside the tabs (a chat's story mention card asks if a story is live).
     LaunchedEffect(stories) { com.fariin.app.data.LiveStories.state.value = stories }
     LaunchedEffect(chats.chats) { com.fariin.app.data.ChatsNow.list = chats.chats }
