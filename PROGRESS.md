@@ -680,3 +680,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   name page (iOS 2026-10-20). Seen on the Pixel, nothing created. Add Members lists accepted chats
   only (pending requests left out): on purpose.
 - Video viewer checked (sender, date, seek, pause, share): fine.
+- Photo viewer: grey band under the status bar (dialog window not edge to edge). Fixed; Pixel top
+  pixels now (0,0,0), drag-down close still works. Person page rechecked: 5 circles fit.
