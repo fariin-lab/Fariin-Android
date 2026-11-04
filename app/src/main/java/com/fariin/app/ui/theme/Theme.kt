@@ -97,6 +97,9 @@ fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable (
     val scheme = if (dark) {
         darkColorScheme(
             primary = c.accent, onPrimary = c.onAccent,
+            // No Material purple anywhere: secondary, the inverse (snackbar) action and the tint
+            // Material lays over raised surfaces all follow the app's black and white.
+            secondary = c.accent, onSecondary = c.onAccent, inversePrimary = c.onAccent, surfaceTint = Color.Transparent,
             background = c.bg, onBackground = c.label,
             surface = c.bg, onSurface = c.label,
             surfaceVariant = c.card, onSurfaceVariant = c.secondary,
@@ -114,6 +117,9 @@ fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable (
     } else {
         lightColorScheme(
             primary = c.accent, onPrimary = c.onAccent,
+            // No Material purple anywhere: secondary, the inverse (snackbar) action and the tint
+            // Material lays over raised surfaces all follow the app's black and white.
+            secondary = c.accent, onSecondary = c.onAccent, inversePrimary = c.onAccent, surfaceTint = Color.Transparent,
             background = c.bg, onBackground = c.label,
             surface = c.bg, onSurface = c.label,
             surfaceVariant = c.bgSecondary, onSurfaceVariant = c.secondary,
