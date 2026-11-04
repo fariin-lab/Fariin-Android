@@ -545,3 +545,4 @@ Seen, not fixed (not today's regressions):
   - Save to Photos now covers received videos when played (not device-tested: no received video on the Pixel).
   - Group Info menu: Save to Photos On/Off per group (tested on hh; hh is now stored as Off for itself).
   - Per-chat storage page (Group Info > Storage Used) built as iOS, delete = Delete for Me (my call, iOS parity). Only the empty state seen on the Pixel.
+  - Rows read only their own draft (all rows were recomposing on back via the drafts map). Back frame ~37-41 ms; remaining cost is spread (composition + two pages on the GPU), no single cause left.
