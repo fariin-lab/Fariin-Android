@@ -119,6 +119,17 @@ internal class VideoCtl {
 internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chromeHidden: Boolean, onTap: () -> Unit) {
     val ctx = LocalContext.current
     val file = rememberPlainFile(p.url, p.enc)
+    // Settings > Chats > Save to Photos: a received video goes to the gallery once it has come down
+    // here (Android fetches a video when it is played). Never mine, never view-once.
+    val saveCtx = androidx.compose.ui.platform.LocalContext.current
+    val saveCid = LocalThreadCid.current
+    LaunchedEffect(file) {
+        val f = file ?: return@LaunchedEffect
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val mid = p.messageId ?: return@LaunchedEffect
+        if (p.once == null && p.authorId != null && p.authorId != me && saveCid.isNotEmpty())
+            com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$saveCid/$mid/v/${p.key}", f, isVideo = true)
+    }
     val poster = rememberBitmap(rememberPlainFile(p.posterUrl, p.posterEnc), 720)
     val tap by rememberUpdatedState(onTap)
     Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }, contentAlignment = Alignment.Center) {
