@@ -104,7 +104,7 @@ private fun Field(value: String, placeholder: String, onChange: (String) -> Unit
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
         if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.secondary)
         BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-            cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+            cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -159,7 +159,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     if (page == "links") { ProfileLinksPage(api.me, links, onChanged = { links = it }, onBack = { page = "" }); return }
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
-        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
+        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Edit Profile", onBack = onBack, action = {
             TextAction("Done", enabled = name.isNotBlank() && !busy) {
@@ -178,9 +178,9 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(contentAlignment = Alignment.Center) {
                 Avatar(me?.photoUrl, 110.dp)
-                if (busy) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
             }
-            Text("Set New Photo", fontSize = 17.sp, color = c.blue, modifier = Modifier.clickable(onClick = pick).padding(10.dp))
+            Text("Set New Photo", fontSize = 17.sp, color = c.accent, modifier = Modifier.clickable(onClick = pick).padding(10.dp))
             if (history.isNotEmpty()) {
                 Text("Recents", fontSize = 13.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
                 androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
@@ -204,7 +204,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                     Box(Modifier.weight(1f).padding(16.dp)) {
                         if (about.isEmpty()) Text("A few words about you", fontSize = 17.sp, color = c.secondary)
                         BasicTextField(about, { about = com.fariin.app.data.ProfileWrites.oneParagraph(it) },
-                            textStyle = TextStyle(fontSize = 17.sp, color = c.label), cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                            textStyle = TextStyle(fontSize = 17.sp, color = c.label), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
                     }
                     if (left <= 20) Text("$left", fontSize = 13.sp, color = if (left == 0) c.red else c.secondary,
                         modifier = Modifier.padding(end = 16.dp, bottom = 16.dp))
@@ -373,7 +373,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     val pick = picker.launch
     if (picker.pending != null) { picker.Host("Group photo", "Shown in chats and on the group page"); return }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
-        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
+        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     // The bar floats: back in its circle, Next / Create in a capsule (iOS NewGroupView's glass bar buttons).
     val bar: @Composable (String, () -> Unit, @Composable () -> Unit) -> Unit = { t, back, action ->
         com.fariin.app.ui.components.FloatingTopBar(t, onBack = back, container = c.bgSecondary) {
@@ -408,7 +408,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                         if (p != null) {
                             val bmp = remember(p) { android.graphics.BitmapFactory.decodeByteArray(p, 0, p.size)?.asImageBitmap() }
                             if (bmp != null) androidx.compose.foundation.Image(bmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        } else Text("Photo", fontSize = 13.sp, color = c.blue)
+                        } else Text("Photo", fontSize = 13.sp, color = c.accent)
                     }
                     Spacer(Modifier.width(4.dp))
                     Box(Modifier.weight(1f)) { Field(title, "Group Name") { title = it.take(100) } }
@@ -478,14 +478,14 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     onLeft()
                 }) { Text("Report and Leave", color = c.red) }
                 TextButton({ askReport = false; exitScope.launch { api.report("", cid, "group") }
-                    com.fariin.app.ui.components.Snack.show("Thanks. Fariin's moderators will review this group.") }) { Text("Report", color = c.blue) }
-                TextButton({ askReport = false }) { Text("Cancel", color = c.blue) }
+                    com.fariin.app.ui.components.Snack.show("Thanks. Fariin's moderators will review this group.") }) { Text("Report", color = c.accent) }
+                TextButton({ askReport = false }) { Text("Cancel", color = c.accent) }
             }
         })
     if (askEnd) AlertDialog(onDismissRequest = { askEnd = false }, title = { Text("End This Group?") },
         text = { Text("Nobody will be able to send messages or start calls, and invite links stop working. Messages stay. This can't be undone.") },
         confirmButton = { TextButton({ askEnd = false; callable("endGroup", "The group has ended.") }) { Text("End Group", color = c.red) } },
-        dismissButton = { TextButton({ askEnd = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ askEnd = false }) { Text("Cancel", color = c.accent) } })
     if (askDelete) AlertDialog(onDismissRequest = { askDelete = false }, title = { Text("Delete Group?") },
         text = { Text("This permanently deletes the group and all its messages for everyone. This cannot be undone.") },
         confirmButton = { TextButton({
@@ -500,7 +500,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
             onLeft()
         }) { Text("Delete for Everyone", color = c.red) } },
-        dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } })
     var notice by remember { mutableStateOf<String?>(null) }
     var timerOpen by remember { mutableStateOf(false) }
     val timer = (conv["disappearSeconds"] as? Number)?.toInt() ?: 0
@@ -524,7 +524,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     // iOS: the Search circle goes back to the group's chat and opens its search; only from that chat.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
-        confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
+        confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     if (askLeave) {
         val plan = GroupRules.leavePlan(me, "", conv)
         AlertDialog(onDismissRequest = { askLeave = false }, title = { Text("Leave Group?") },
@@ -534,7 +534,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 Column(horizontalAlignment = Alignment.End) {
                     if (com.fariin.app.data.OwnerTransfer.offersChooseAnother(me, owner, users)) {
                         TextButton({ askLeave = false; pages.add(GroupPage.ChooseOwner) }) {
-                            Text(com.fariin.app.data.OwnerTransfer.CHOOSE_ANOTHER, color = c.blue)
+                            Text(com.fariin.app.data.OwnerTransfer.CHOOSE_ANOTHER, color = c.accent)
                         }
                     }
                     TextButton({
@@ -546,7 +546,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         }
                         onLeft()
                     }) { Text("Leave", color = c.red) }
-                    TextButton({ askLeave = false }) { Text("Cancel", color = c.blue) }
+                    TextButton({ askLeave = false }) { Text("Cancel", color = c.accent) }
                 }
             }, containerColor = c.card)
     }
@@ -659,11 +659,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 .clickable { pages.add(GroupPage.Members) }.padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("${users.size} Member${if (users.size == 1) "" else "s"}", style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                    color = c.blue, modifier = Modifier.weight(1f))
-                Icon(Icons.Filled.Search, "Search members", tint = c.blue, modifier = Modifier.size(20.dp))
+                    color = c.accent, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.Search, "Search members", tint = c.accent, modifier = Modifier.size(20.dp))
             }
             SettingsSection {
-                if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) SettingsRow("Add Members", titleColor = c.blue, trailing = Trailing.NONE) { adding = true }
+                if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) SettingsRow("Add Members", titleColor = c.accent, trailing = Trailing.NONE) { adding = true }
                 shownMembers.forEach { u ->
                     PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "Member", "",
                         // An admin opens the member card (Make Group Admin, Ban from Group...); others the profile.
@@ -722,7 +722,7 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
     val title = conv["title"] as? String ?: "Group"
     var solo by remember { mutableStateOf(false) }
     if (solo) AlertDialog(onDismissRequest = { solo = false }, title = { Text(circles.SOLO_TITLE) }, text = { Text(circles.SOLO_TEXT) },
-        confirmButton = { TextButton({ solo = false }) { Text("OK", color = c.blue) } }, containerColor = c.card)
+        confirmButton = { TextButton({ solo = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     fun call(video: Boolean) {
         when (val t = circles.callTap(groupCall.cid, oneCall.status.live, cid, ended, mayStart, live, memberCount)) {
             com.fariin.app.data.GroupInfoCircles.CallTap.Restore -> com.fariin.app.ui.call.CallActivity.startGroup(ctx, cid, title, video)
@@ -841,10 +841,10 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
     LaunchedEffect(focusDescription) { if (focusDescription) { delay(350); runCatching { descFocus.requestFocus() } } }
     if (confirmRemove) AlertDialog(onDismissRequest = { confirmRemove = false }, title = { Text(w("Remove group photo?")) },
         confirmButton = { TextButton({ confirmRemove = false; newPhoto = null; removePhoto = true }) { Text("Remove", color = c.red) } },
-        dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+        dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = {
-            if (saving) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+            if (saving) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
             else TextAction("Save", enabled = trimmed.isNotEmpty() && changed) {
                 saving = true; error = null
                 scope.launch {
@@ -916,7 +916,7 @@ private fun DescriptionCard(desc: String) {
         Text(desc, fontSize = 17.sp, color = c.label, maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             onTextLayout = { if (!expanded) folds = it.hasVisualOverflow })
-        if (folds && !expanded) Text("more", fontSize = 17.sp, color = c.blue, modifier = Modifier.align(Alignment.End))
+        if (folds && !expanded) Text("more", fontSize = 17.sp, color = c.accent, modifier = Modifier.align(Alignment.End))
     }
 }
 
@@ -931,7 +931,7 @@ private fun DescriptionField(value: String, focus: FocusRequester, onChange: (St
         Box(Modifier.fillMaxWidth()) {
             if (value.isEmpty()) Text("Description", fontSize = 17.sp, color = c.secondary)
             BasicTextField(value, onChange, maxLines = 5, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth().focusRequester(focus))
         }
         val left = GroupRules.DESC_MAX - value.length
         Text("${value.length}/${GroupRules.DESC_MAX}", fontSize = 13.sp, color = if (left <= 0) c.red else c.secondary,

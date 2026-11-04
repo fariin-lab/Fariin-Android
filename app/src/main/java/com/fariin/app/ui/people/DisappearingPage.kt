@@ -66,7 +66,7 @@ fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: (
     if (custom) CustomTimeDialog(selected, onDismiss = { custom = false }) { selected = it; custom = false }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Disappearing Messages", onBack = onBack, action = {
-            IconButton(onClick = { onApply(selected) }) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = c.blue) }
+            IconButton(onClick = { onApply(selected) }) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = c.accent) }
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Text(Disappearing.pageHeader(isChannel), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
@@ -92,12 +92,12 @@ private fun CustomTimeDialog(seconds: Int, onDismiss: () -> Unit, onSet: (Int) -
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { value = (value - 1).coerceIn(unit.range) }, enabled = value > unit.range.first) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Less", tint = c.blue)
+                        Icon(Icons.Filled.Remove, contentDescription = "Less", tint = c.accent)
                     }
                     Text("$value", fontSize = 32.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                         modifier = Modifier.width(72.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     IconButton(onClick = { value = (value + 1).coerceIn(unit.range) }, enabled = value < unit.range.last) {
-                        Icon(Icons.Filled.Add, contentDescription = "More", tint = c.blue)
+                        Icon(Icons.Filled.Add, contentDescription = "More", tint = c.accent)
                     }
                 }
                 Spacer(Modifier.size(8.dp))
@@ -109,15 +109,15 @@ private fun CustomTimeDialog(seconds: Int, onDismiss: () -> Unit, onSet: (Int) -
                 }
             }
         },
-        confirmButton = { TextButton({ onSet(value * unit.seconds) }) { Text("Set", color = c.blue, fontWeight = FontWeight.SemiBold) } },
-        dismissButton = { TextButton(onDismiss) { Text("Cancel", color = c.blue) } })
+        confirmButton = { TextButton({ onSet(value * unit.seconds) }) { Text("Set", color = c.accent, fontWeight = FontWeight.SemiBold) } },
+        dismissButton = { TextButton(onDismiss) { Text("Cancel", color = c.accent) } })
 }
 
 @Composable
 private fun UnitChip(text: String, on: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
     FilterChip(selected = on, onClick = onClick, label = { Text(text) },
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.blue.copy(alpha = 0.16f), selectedLabelColor = c.blue))
+        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.accent.copy(alpha = 0.16f), selectedLabelColor = c.accent))
 }
 
 /** The row on a chat's info page: Fariin's timer icon, the title, the value under it. */
@@ -148,7 +148,7 @@ internal fun NewGroupTimerSection(seconds: Int, onChange: (Int) -> Unit) {
                 if (choices.none { it.second == seconds }) choices.add(Disappearing.newGroupLabel(seconds) to seconds)
                 for ((label, secs) in choices) DropdownMenuItem(
                     text = { Text(label, color = c.label) },
-                    trailingIcon = { if (secs == seconds) Icon(Icons.Filled.Check, null, tint = c.blue) },
+                    trailingIcon = { if (secs == seconds) Icon(Icons.Filled.Check, null, tint = c.accent) },
                     onClick = { open = false; onChange(secs) })
             }
         }
@@ -168,11 +168,11 @@ internal fun DisappearingEditor(api: PeopleApi, cid: String, isGroup: Boolean, c
     var error by remember { mutableStateOf<String?>(null) }
     fun write(s: Int) = scope.launch { if (!api.setDisappear(cid, s)) error = Disappearing.NOT_CHANGED }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) }, containerColor = c.card,
-        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }) }
+        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }) }
     pending?.let { s -> AlertDialog(onDismissRequest = { pending = null }, containerColor = c.card,
         title = { Text(Disappearing.CONFIRM_TITLE) }, text = { Text(Disappearing.confirmText(s)) },
-        confirmButton = { TextButton({ pending = null; write(s) }) { Text("Turn On", color = c.blue) } },
-        dismissButton = { TextButton({ pending = null }) { Text("Cancel", color = c.blue) } }) }
+        confirmButton = { TextButton({ pending = null; write(s) }) { Text("Turn On", color = c.accent) } },
+        dismissButton = { TextButton({ pending = null }) { Text("Cancel", color = c.accent) } }) }
     if (!open) return false
     DisappearingMessagesPage(current, onBack = onClose) { s ->
         onClose()

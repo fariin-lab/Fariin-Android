@@ -141,7 +141,7 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (r.verified) {
                         Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.accent, modifier = Modifier.size(15.dp))
                     }
                     if (r.official) {
                         Spacer(Modifier.width(4.dp))
@@ -156,10 +156,10 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.height(32.dp).clip(CircleShape).background(if (mine) c.bgSecondary else c.blue)
+            Modifier.height(32.dp).clip(CircleShape).background(if (mine) c.bgSecondary else c.accent)
                 .clickable(enabled = !mine, onClick = onFollow).padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(if (mine) "Following" else "Follow", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (mine) c.secondary else Color.White) }
+        ) { Text(if (mine) "Following" else "Follow", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (mine) c.secondary else c.onAccent) }
     }
 }
 
@@ -215,8 +215,8 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
             // A made-up channel post, as the iOS intro shows one (ChannelIntroPreview).
             Column(Modifier.width(260.dp).clip(RoundedCornerShape(20.dp)).background(c.bgSecondary).padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(c.blue.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Campaign, null, tint = c.blue, modifier = Modifier.size(20.dp))
+                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(c.accent.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Campaign, null, tint = c.accent, modifier = Modifier.size(20.dp))
                     }
                     Spacer(Modifier.width(8.dp))
                     Column {
@@ -248,10 +248,10 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
 private fun BigButton(text: String, enabled: Boolean, busy: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).height(52.dp).clip(CircleShape)
-        .background(if (enabled) c.blue else c.blue.copy(alpha = 0.4f)).clickable(enabled = enabled && !busy, onClick = onClick),
+        .background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f)).clickable(enabled = enabled && !busy, onClick = onClick),
         contentAlignment = Alignment.Center) {
-        if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-        else Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        if (busy) CircularProgressIndicator(color = c.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+        else Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
     }
 }
 
@@ -261,7 +261,7 @@ private fun Field(value: String, placeholder: String, single: Boolean, onChange:
     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
         if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.tertiary)
         BasicTextField(value, onChange, singleLine = single, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-            cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+            cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -325,7 +325,7 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
                 Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card).padding(16.dp)) {
                     Text("fariin.com/", fontSize = 17.sp, color = c.secondary)
                     BasicTextField(link, { link = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                        cursorBrush = SolidColor(c.blue), modifier = Modifier.weight(1f))
+                        cursorBrush = SolidColor(c.accent), modifier = Modifier.weight(1f))
                 }
                 Foot(linkNote ?: "Pick a link of ${ChannelRules.LINK_MIN} to ${ChannelRules.LINK_MAX} characters: letters, numbers and _.",
                     if (linkOk) Color(0xFF34C759) else null)
@@ -389,6 +389,6 @@ private fun ToggleRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)
         .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-        com.fariin.app.ui.components.FariinSwitch(on, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.blue, checkedThumbColor = Color.White))
+        com.fariin.app.ui.components.FariinSwitch(on, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent))
     }
 }

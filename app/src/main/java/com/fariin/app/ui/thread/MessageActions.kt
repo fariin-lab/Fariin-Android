@@ -280,7 +280,7 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
                 }
                 if (!ui.isGroup) TextButton(onClick = { onDismiss(); actions.onDeleteForMe(m) }) { Text("Delete for Me", color = c.red) }
                 else if (m.sendState != null) TextButton(onClick = { onDismiss(); actions.onDeleteForMe(m) }) { Text("Delete", color = c.red) }
-                TextButton(onClick = onDismiss) { Text("Cancel", color = c.blue) }
+                TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent) }
             }
         },
         containerColor = c.card,

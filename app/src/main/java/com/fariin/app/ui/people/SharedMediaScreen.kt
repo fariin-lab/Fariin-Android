@@ -157,7 +157,7 @@ internal fun SharedMediaCard(cid: String, state: SharedMediaState, onSeeAll: () 
                 .padding(vertical = 14.dp)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("All Media", style = MaterialTheme.typography.titleMedium, color = c.label, modifier = Modifier.weight(1f))
-                    Text("See All", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = c.blue)
+                    Text("See All", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = c.accent)
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.secondary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.height(10.dp))
@@ -229,7 +229,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                                 SharedMedia.Filter.entries.forEach { f ->
                                     DropdownMenuItem(text = { Text(f.label, color = c.label) }, onClick = { filter = f; menu = false },
-                                        trailingIcon = { if (f == filter) Icon(Icons.Filled.Check, null, tint = c.blue) })
+                                        trailingIcon = { if (f == filter) Icon(Icons.Filled.Check, null, tint = c.accent) })
                                 }
                             }
                         }
@@ -346,7 +346,7 @@ private fun LinkRow(m: Message, link: SharedMedia.Link) {
     }.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(link.host, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1)
         Text(m.text, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(link.url, style = MaterialTheme.typography.bodySmall, color = c.blue, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(link.url, style = MaterialTheme.typography.bodySmall, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
 }

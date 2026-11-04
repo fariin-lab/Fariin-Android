@@ -182,8 +182,8 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
 @Composable
 private fun CapsuleButton(title: String, enabled: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
-    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled) c.blue else c.blue.copy(alpha = 0.4f))
+    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f))
         .clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
     }
 }

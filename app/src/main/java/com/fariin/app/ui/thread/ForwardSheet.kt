@@ -78,7 +78,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
             ) {
                 if (query.isEmpty()) Text("Search", fontSize = 17.sp, color = c.secondary)
                 BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                    cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                    cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
             }
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {

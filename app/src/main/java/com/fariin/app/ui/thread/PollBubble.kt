@@ -251,7 +251,7 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
             .padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Poll Results", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
-                TextButton(onClick = onDismiss) { Text("Done", color = c.blue, fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = onDismiss) { Text("Done", color = c.accent, fontWeight = FontWeight.SemiBold) }
             }
             if (poll.isQuiz) Text("Quiz", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
             Text(poll.question, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
@@ -455,7 +455,7 @@ private fun Field(value: String, hint: String, maxLines: Int, onChange: (String)
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 12.dp), contentAlignment = Alignment.CenterStart) {
         if (value.isEmpty()) Text(hint, fontSize = 17.sp, color = c.secondary)
-        BasicTextField(value, onChange, textStyle = TextStyle(fontSize = 17.sp, color = c.label), cursorBrush = SolidColor(c.blue),
+        BasicTextField(value, onChange, textStyle = TextStyle(fontSize = 17.sp, color = c.label), cursorBrush = SolidColor(c.accent),
             maxLines = maxLines, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth())
     }
 }

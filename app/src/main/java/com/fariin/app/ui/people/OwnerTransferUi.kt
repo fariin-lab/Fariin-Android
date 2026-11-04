@@ -101,7 +101,7 @@ internal fun TransferOwnership(cid: String, isChannel: Boolean, heir: String, na
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)) {
             Box(Modifier.size(88.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)).background(c.card),
                 contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.blue, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
+                CircularProgressIndicator(color = c.accent, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
             }
         }
         "password" -> AlertDialog(onDismissRequest = { password = ""; onEnd() }, containerColor = c.card,
@@ -113,23 +113,23 @@ internal fun TransferOwnership(cid: String, isChannel: Boolean, heir: String, na
                     OutlinedTextField(password, { password = it }, singleLine = true, placeholder = { Text("Password") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = c.blue, cursorColor = c.blue),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = c.accent, cursorColor = c.accent),
                         modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = { TextButton(onClick = { confirm() }, enabled = password.isNotEmpty()) {
-                Text("Confirm", color = if (password.isNotEmpty()) c.blue else c.secondary) } },
-            dismissButton = { TextButton({ password = ""; onEnd() }) { Text("Cancel", color = c.blue) } })
+                Text("Confirm", color = if (password.isNotEmpty()) c.accent else c.secondary) } },
+            dismissButton = { TextButton({ password = ""; onEnd() }) { Text("Cancel", color = c.accent) } })
         // No Create Password page opens from here on Android yet, so iOS's Settings wording with OK only.
         "nopassword" -> AlertDialog(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.NO_PASSWORD_TITLE) },
             text = { Text(OwnerTransfer.noPasswordMessage(isChannel, hasAddress = false)) },
-            confirmButton = { TextButton(onEnd) { Text("OK", color = c.blue) } })
+            confirmButton = { TextButton(onEnd) { Text("OK", color = c.accent) } })
         "refused" -> AlertDialog(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.CANT_TITLE) },
-            text = { Text(message) }, confirmButton = { TextButton(onEnd) { Text("OK", color = c.blue) } })
+            text = { Text(message) }, confirmButton = { TextButton(onEnd) { Text("OK", color = c.accent) } })
         "failed" -> AlertDialog(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.FAILED_TITLE) },
             text = { Text(message) },
-            confirmButton = { TextButton({ step = "password" }) { Text("Try Again", color = c.blue) } },
-            dismissButton = { TextButton(onEnd) { Text("Cancel", color = c.blue) } })
+            confirmButton = { TextButton({ step = "password" }) { Text("Try Again", color = c.accent) } },
+            dismissButton = { TextButton(onEnd) { Text("Cancel", color = c.accent) } })
     }
 }
 
@@ -161,7 +161,7 @@ internal fun ChooseNewOwnerPage(cid: String, me: String, conv: Map<String, Any?>
             SettingsSection(footer = OwnerTransfer.chooseFooter(isChannel)) {
                 shown.forEach { (uid, name) ->
                     PersonLine(team.photos[uid]?.ifEmpty { null }, name, onClick = { if (picked == null) { failure = null; picked = uid to name } }) {
-                        if (picked?.first == uid) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        if (picked?.first == uid) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -207,7 +207,7 @@ internal fun JoinRequestsPage(cid: String, onBack: () -> Unit) {
         }
     }
     problem?.let { p -> AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
-        text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } }) }
+        text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } }) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(JoinRequests.title(isChannel), onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
@@ -235,7 +235,7 @@ internal fun JoinRequestsPage(cid: String, onBack: () -> Unit) {
 @Composable
 private fun Pill(text: String, filled: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
-    Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (filled) androidx.compose.ui.graphics.Color.White else c.label,
-        modifier = Modifier.clip(CircleShape).background(if (filled) c.blue else c.fieldFill)
+    Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (filled) c.onAccent else c.label,
+        modifier = Modifier.clip(CircleShape).background(if (filled) c.accent else c.fieldFill)
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp))
 }

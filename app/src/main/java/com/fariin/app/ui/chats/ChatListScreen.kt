@@ -451,8 +451,8 @@ fun ChatListScreen(
                     IconButton(onClick = onNewStory, modifier = Modifier.size(48.dp).floating()) {
                         Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story", tint = c.label)
                     }
-                    IconButton(onClick = people.newChat, modifier = Modifier.size(56.dp).floating(fill = c.blue)) {
-                        Icon(Icons.Outlined.Edit, contentDescription = "New Chat", tint = Color.White)
+                    IconButton(onClick = people.newChat, modifier = Modifier.size(56.dp).floating(fill = c.accent)) {
+                        Icon(Icons.Outlined.Edit, contentDescription = "New Chat", tint = c.onAccent)
                     }
                 }
             }
@@ -587,7 +587,7 @@ fun ChatListScreen(
                             }
                         }
                         if (!peopleAll && newPeople.size > 3) item(key = "p-more") {
-                            Text("Show More", color = c.blue, style = MaterialTheme.typography.bodyLarge,
+                            Text("Show More", color = c.accent, style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.fillMaxWidth().clickable { peopleAll = true }.padding(horizontal = 86.dp, vertical = 12.dp))
                         }
                     }
@@ -804,9 +804,9 @@ private fun ListRow(title: String, icon: ImageVector, trailing: String?, subtitl
         if (trailing != null) {
             Spacer(Modifier.width(8.dp))
             if (badge) Box(
-                Modifier.height(20.dp).defaultMinSize(minWidth = 20.dp).clip(CircleShape).background(c.blue).padding(horizontal = 5.dp),
+                Modifier.height(20.dp).defaultMinSize(minWidth = 20.dp).clip(CircleShape).background(c.accent).padding(horizontal = 5.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text(trailing, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1) }
+            ) { Text(trailing, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.onAccent, maxLines = 1) }
             else Text(trailing, style = MaterialTheme.typography.labelLarge, color = c.secondary)
         }
     }
@@ -821,7 +821,7 @@ private fun Centered(text: String, action: Pair<String, () -> Unit>? = null) {
             Spacer(Modifier.height(16.dp))
             Box(Modifier.height(44.dp).floating(CircleShape).clickable(onClick = action.second).padding(horizontal = 22.dp),
                 contentAlignment = Alignment.Center) {
-                Text(action.first, style = MaterialTheme.typography.labelLarge, color = Fariin.colors.blue)
+                Text(action.first, style = MaterialTheme.typography.labelLarge, color = Fariin.colors.accent)
             }
         }
     }
@@ -838,7 +838,7 @@ private fun PersonRow(p: com.fariin.app.data.Person, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(p.name.ifEmpty { p.handle }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.blue, maxLines = 1)
+            if (p.handle.isNotEmpty()) Text("@" + p.handle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
         }
     }
 }
@@ -847,15 +847,15 @@ private fun PersonRow(p: com.fariin.app.data.Person, onClick: () -> Unit) {
 @Composable
 private fun RecentHeader(onClear: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Recent", style = MaterialTheme.typography.titleSmall, color = Fariin.colors.blue, modifier = Modifier.weight(1f))
-        TextButton(onClick = onClear) { Text("Clear", color = Fariin.colors.blue) }
+        Text("Recent", style = MaterialTheme.typography.titleSmall, color = Fariin.colors.accent, modifier = Modifier.weight(1f))
+        TextButton(onClick = onClear) { Text("Clear", color = Fariin.colors.accent) }
     }
 }
 
 @Composable
 private fun SectionHeader(text: String) {
     Text(
-        text, style = MaterialTheme.typography.titleSmall, color = Fariin.colors.blue,
+        text, style = MaterialTheme.typography.titleSmall, color = Fariin.colors.accent,
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
     )
 }
@@ -948,7 +948,7 @@ fun ChatRow(
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                Text(time, style = MaterialTheme.typography.labelMedium, color = if (unread > 0) c.blue else c.secondary, maxLines = 1)
+                Text(time, style = MaterialTheme.typography.labelMedium, color = if (unread > 0) c.accent else c.secondary, maxLines = 1)
             }
             Row(verticalAlignment = Alignment.Top) {
                 // The last photo or video poster beside the words (iOS lastImageUrl, media worker).
@@ -978,22 +978,22 @@ fun ChatRow(
                     }
                     if (conv.lastIsMine(me) && !conv.isChannel) Ticks(conv, me)
                     if (conv.hasUnreadReply(me)) {
-                        Box(Modifier.size(20.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(20.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Someone replied to you",
-                                tint = Color.White, modifier = Modifier.size(12.dp))
+                                tint = c.onAccent, modifier = Modifier.size(12.dp))
                         }
                     }
                     if (unread > 0) {
                         Box(
                             Modifier.height(20.dp).defaultMinSize(minWidth = 20.dp).clip(CircleShape)
-                                .background(if (muted) c.secondary else c.blue).padding(horizontal = 5.dp),
+                                .background(if (muted) c.secondary else c.accent).padding(horizontal = 5.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(if (unread > 99) "99+" else "$unread", fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                                fontWeight = FontWeight.Bold, color = c.onAccent, maxLines = 1)
                         }
                     } else if (conv.manuallyUnread(me)) {
-                        Box(Modifier.size(12.dp).clip(CircleShape).background(c.blue))
+                        Box(Modifier.size(12.dp).clip(CircleShape).background(c.accent))
                     }
                 }
             }

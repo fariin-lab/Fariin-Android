@@ -149,9 +149,9 @@ fun AppUpdateLayer() {
             Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(u.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
                 if (u.message.isNotEmpty()) Text(u.message, fontSize = 16.sp, color = c.secondary, textAlign = TextAlign.Center)
-                Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(c.blue).clickable { AppUpdateGate.openStore(ctx, u) },
+                Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(c.accent).clickable { AppUpdateGate.openStore(ctx, u) },
                     contentAlignment = Alignment.Center) {
-                    Text("Update", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Update", color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

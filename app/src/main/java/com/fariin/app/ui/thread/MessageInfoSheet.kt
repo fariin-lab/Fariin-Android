@@ -57,7 +57,7 @@ internal fun MessageInfoSheet(m: Message, ui: ThreadUi, is24h: Boolean, onDismis
             Text("Message Info", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.align(Alignment.Center))
             TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Text("Done", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
+                Text("Done", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent)
             }
         }
         LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {

@@ -282,7 +282,7 @@ internal fun PinnedMessagesSheet(
                         pinned.forEach { onUnpin(it.id) }
                         onDismiss()
                     }.padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
-                        Text("Unpin All", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
+                        Text("Unpin All", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent)
                     }
                 }
             }
@@ -365,7 +365,7 @@ internal fun BulkDeleteDialog(picked: List<Message>, ui: ThreadUi, onDismiss: ()
             Column(horizontalAlignment = Alignment.End) {
                 if (hasMine) TextButton(onClick = { go(true) }) { Text("Delete for Everyone", color = c.red) }
                 if (!ui.isGroup) TextButton(onClick = { go(false) }) { Text("Delete for Me", color = c.red) }
-                TextButton(onClick = onDismiss) { Text("Cancel", color = c.blue) }
+                TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent) }
             }
         },
         containerColor = c.card,

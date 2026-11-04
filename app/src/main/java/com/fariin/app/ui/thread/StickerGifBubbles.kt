@@ -378,7 +378,7 @@ internal fun GifSearchSheet(onDismiss: () -> Unit, onPick: (StickerGifRules.Gif)
                 Box(Modifier.weight(1f)) {
                     if (query.isEmpty()) Text("Search GIFs", fontSize = 17.sp, color = c.secondary)
                     BasicTextField(query, { query = it }, singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label), cursorBrush = SolidColor(c.blue),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label), cursorBrush = SolidColor(c.accent),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus))
                 }
             }

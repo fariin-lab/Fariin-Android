@@ -191,10 +191,10 @@ internal fun AttachSheet(
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onePhoto && allowViewOnce) {
                         Box(
-                            Modifier.size(44.dp).floating(fill = if (viewOnce) c.blue else null)
+                            Modifier.size(44.dp).floating(fill = if (viewOnce) c.accent else null)
                                 .clickable { viewOnce = !viewOnce },
                             contentAlignment = Alignment.Center,
-                        ) { Text("1", color = if (viewOnce) Color.White else c.label, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                        ) { Text("1", color = if (viewOnce) c.onAccent else c.label, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
                         Spacer(Modifier.width(8.dp))
                     }
                     Box(
@@ -203,7 +203,7 @@ internal fun AttachSheet(
                     ) {
                         if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
                         BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                            cursorBrush = SolidColor(c.blue), maxLines = 5, modifier = Modifier.fillMaxWidth())
+                            cursorBrush = SolidColor(c.accent), maxLines = 5, modifier = Modifier.fillMaxWidth())
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
@@ -243,9 +243,9 @@ private fun AddTile(modifier: Modifier, onAdd: () -> Unit) {
     val c = Fariin.colors
     Column(modifier.background(c.secondary.copy(alpha = 0.06f)).clickable(onClick = onAdd),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Filled.PhotoSizeSelectActual, null, tint = c.blue, modifier = Modifier.size(36.dp))
+        Icon(Icons.Filled.PhotoSizeSelectActual, null, tint = c.accent, modifier = Modifier.size(36.dp))
         Spacer(Modifier.height(6.dp))
-        Text("Add photos or videos", fontSize = 14.sp, color = c.blue, fontWeight = FontWeight.SemiBold,
+        Text("Add photos or videos", fontSize = 14.sp, color = c.accent, fontWeight = FontWeight.SemiBold,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 8.dp))
     }
 }
@@ -257,7 +257,7 @@ private fun SheetButton(label: String, icon: androidx.compose.ui.graphics.vector
     Column(Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = c.blue, modifier = Modifier.size(26.dp))
+            Icon(icon, null, tint = c.label, modifier = Modifier.size(26.dp))
         }
         Spacer(Modifier.height(2.dp))
         Text(label, fontSize = 12.sp, color = c.label)

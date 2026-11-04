@@ -206,7 +206,7 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                     } catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
                 }
             }) { Text(if (ban) "Ban" else "Remove", color = c.red) } },
-            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = c.blue) } })
+            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = c.accent) } })
     }
 
     val admins = team.sorted()
@@ -234,8 +234,8 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
     }
     if (linkInstead.isNotEmpty()) AlertDialog(onDismissRequest = { linkInstead = emptyList() }, containerColor = c.card,
         title = { Text("Send Invite Link") }, text = { Text(com.fariin.app.data.ChannelAddFollowers.inviteInstead(linkInstead)) },
-        confirmButton = { TextButton({ linkInstead = emptyList(); shareLink() }) { Text("Share Link", color = c.blue) } },
-        dismissButton = { TextButton({ linkInstead = emptyList() }) { Text("Cancel", color = c.blue) } })
+        confirmButton = { TextButton({ linkInstead = emptyList(); shareLink() }) { Text("Share Link", color = c.accent) } },
+        dismissButton = { TextButton({ linkInstead = emptyList() }) { Text("Cancel", color = c.accent) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Followers", onBack)
         PullToRefreshBox(refreshing, onRefresh = {
@@ -245,9 +245,9 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
                 if (mayInvite) SettingsSection {
                     SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonAdd),
-                        titleColor = c.blue, trailing = Trailing.NONE) { if (!adding) picking = true }
+                        titleColor = c.accent, trailing = Trailing.NONE) { if (!adding) picking = true }
                     SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link),
-                        titleColor = c.blue, trailing = Trailing.NONE, last = true) { shareLink() }
+                        titleColor = c.accent, trailing = Trailing.NONE, last = true) { shareLink() }
                 }
                 SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
                     admins.forEach { uid ->
@@ -263,7 +263,7 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                     }
                     when {
                         loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                            CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                         }
                         failed -> Note(ChannelAdmins.FOLLOWERS_FAILED)
                         followerRows.isEmpty() && !more -> Note(ChannelAdmins.NO_FOLLOWERS)
@@ -292,7 +292,7 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
             SettingsSection(footer = ChannelAdmins.ADMINS_FOOTER) {
                 if (team.can(me, Right.ADD_ADMINS)) {
                     SettingsRow("Add Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonAdd),
-                        titleColor = c.blue, trailing = Trailing.NONE) { picking = true }
+                        titleColor = c.accent, trailing = Trailing.NONE) { picking = true }
                 }
                 team.sorted().forEach { uid ->
                     // Tap an admin for what they can do (and Dismiss Admin, where I may).
@@ -341,15 +341,15 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
                     catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
                     busy = false
                 }
-            }) { Text("Make Admin", color = c.blue) } },
-            dismissButton = { TextButton({ asking = null }) { Text("Cancel", color = c.blue) } })
+            }) { Text("Make Admin", color = c.accent) } },
+            dismissButton = { TextButton({ asking = null }) { Text("Cancel", color = c.accent) } })
     }
     val q = query.trim()
     val list = rows.filter { it.uid !in exclude }
     val shown = if (q.isEmpty()) list else list.filter { it.name.contains(q, ignoreCase = true) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Choose Follower", onClose, action = {
-            if (busy) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+            if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
         })
         SearchField(query, "Search") { query = it }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
@@ -360,7 +360,7 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
                 }
                 when {
                     loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                     }
                     shown.isEmpty() -> Note(if (failed) ChannelAdmins.PICK_FAILED else if (q.isEmpty()) ChannelAdmins.PICK_EMPTY else ChannelAdmins.PICK_NONE)
                 }
@@ -407,7 +407,7 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
     }
     problem?.let { p ->
         AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
-            text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } })
+            text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     }
     if (confirmDismiss) AlertDialog(onDismissRequest = { confirmDismiss = false }, containerColor = c.card,
         title = { Text("Dismiss $name as admin?") },
@@ -419,11 +419,11 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
                 saving = false
             }
         }) { Text("Dismiss Admin", color = c.red) } },
-        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = {
-            if (saving) CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+            if (saving) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally) {
@@ -499,7 +499,7 @@ internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabl
         .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
         com.fariin.app.ui.components.FariinSwitch(on, onCheckedChange = null, enabled = enabled,
-            colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White))
+            colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent))
     }
     if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
 }

@@ -63,7 +63,7 @@ fun NotificationsExplainer(onDone: () -> Unit) {
         Spacer(Modifier.weight(1f))
         Icon(
             painterResource(R.drawable.ic_notifications), contentDescription = null,
-            tint = c.blue, modifier = Modifier.size(108.dp).padding(16.dp),
+            tint = c.accent, modifier = Modifier.size(108.dp).padding(16.dp),
         )
         Text(
             "Allow notifications so you don't miss messages",

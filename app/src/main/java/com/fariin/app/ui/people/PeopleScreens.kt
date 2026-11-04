@@ -142,7 +142,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
     }
     keyFor?.let { p -> ChatKeySheet(api, p, onDismiss = { keyFor = null }) { cid -> keyFor = null; onOpenChat(cid) } }
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
-        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
+        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
 
     if (newContact) { NewContactPage(api, onBack = { newContact = false }, onOpenChat = onOpenChat); return }
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
@@ -166,11 +166,11 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                             if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 64.dp))
                             Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(40.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                                    Icon(icon, null, tint = c.blue)
+                                Box(Modifier.size(40.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                                    Icon(icon, null, tint = c.accent)
                                 }
                                 Spacer(Modifier.width(12.dp))
-                                Text(label, fontSize = 17.sp, color = c.blue)
+                                Text(label, fontSize = 17.sp, color = c.accent)
                             }
                         }
                     }
@@ -253,7 +253,7 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
                             }, contentAlignment = Alignment.Center) {
                             when (k) {
                                 "del" -> Icon(Icons.AutoMirrored.Filled.Backspace, "Delete", tint = c.label)
-                                "Paste" -> Text("Paste", fontSize = 17.sp, color = c.blue)
+                                "Paste" -> Text("Paste", fontSize = 17.sp, color = c.accent)
                                 else -> Text(k, fontSize = 28.sp, color = c.label)
                             }
                         }
@@ -262,7 +262,7 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
             }
             Spacer(Modifier.height(12.dp))
             val enabled = ChatKey.isValid(pin) && !busy
-            Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(if (enabled) c.blue else c.blue.copy(alpha = 0.35f))
+            Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(if (enabled) c.accent else c.accent.copy(alpha = 0.35f))
                 .clickable(enabled = enabled) {
                     busy = true
                     scope.launch {
@@ -270,8 +270,8 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
                         busy = false
                     }
                 }, contentAlignment = Alignment.Center) {
-                if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                else Text("Enter", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                if (busy) CircularProgressIndicator(color = c.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                else Text("Enter", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
             }
         }
     }
@@ -296,11 +296,11 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
                 pendingDelete = null
                 scope.launch { if (api.declineRequest(conv.id)) gone = gone + conv.id else failed = true }
             }) { Text("Delete", color = c.red) } },
-            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
     if (failed) AlertDialog(onDismissRequest = { failed = false }, title = { Text("Couldn't do that") },
         text = { Text("Check your connection and try again.") },
-        confirmButton = { TextButton({ failed = false }) { Text("OK", color = c.blue) } }, containerColor = c.card)
+        confirmButton = { TextButton({ failed = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     val list = requests.filter { it.id !in gone }
     Column(Modifier.fillMaxSize().background(c.bg)) {
         PageBar("Message Requests", onBack = onBack)
@@ -320,7 +320,7 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
                 Column {
                     PersonRow(conv.displayPhoto(me), conv.displayName(me), "Wants to message you", onClick = { onOpenChat(conv.id) })
                     Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 16.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Pill("Accept", c.blue, Color.White) {
+                        Pill("Accept", c.accent, c.onAccent) {
                             scope.launch { if (api.acceptRequest(conv.id)) { gone = gone + conv.id; onOpenChat(conv.id) } else failed = true }
                         }
                         Pill("Delete", c.fieldFill, c.red) { pendingDelete = conv }
@@ -401,7 +401,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 }
             }
         },
-        confirmButton = { TextButton({ showSafety = false }) { Text("Done", color = c.blue) } }, containerColor = c.card)
+        confirmButton = { TextButton({ showSafety = false }) { Text("Done", color = c.accent) } }, containerColor = c.card)
     ask?.let { what ->
         val block = what == "block"
         AlertDialog(onDismissRequest = { ask = null },
@@ -415,11 +415,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     else notice = if (api.report(uid, cid, "spam")) "Thanks. Your report was sent." else "Check your connection and try again."
                 }
             }) { Text(if (block) (if (blocked) "Unblock" else "Block") else "Report", color = c.red) } },
-            dismissButton = { TextButton({ ask = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+            dismissButton = { TextButton({ ask = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
     if (glowOn) com.fariin.app.ui.glow.GlowDoorHost(glowDoor)
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
-        confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
+        confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("", onBack = onBack) {
@@ -619,7 +619,7 @@ private fun NewContactPage(api: PeopleApi, onBack: () -> Unit, onOpenChat: (Stri
         com.fariin.app.ui.settings.PageBar("New Contact", onBack = onBack) {
             androidx.compose.material3.IconButton(onClick = { add() }, enabled = canSave) {
                 if (working) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Filled.Check, "Add contact", tint = if (canSave) c.blue else c.secondary)
+                else Icon(Icons.Filled.Check, "Add contact", tint = if (canSave) c.accent else c.secondary)
             }
         }
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -649,7 +649,7 @@ private fun PlainField(value: String, hint: String, start: androidx.compose.ui.u
     val c = Fariin.colors
     androidx.compose.foundation.text.BasicTextField(value, onChange, singleLine = true,
         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, color = c.label),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.blue),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
         modifier = Modifier.fillMaxWidth().height(52.dp).padding(start = start, end = 18.dp),
         decorationBox = { inner ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {

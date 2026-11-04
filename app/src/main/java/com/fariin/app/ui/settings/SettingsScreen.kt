@@ -252,7 +252,7 @@ private fun Capsule(title: String, onClick: () -> Unit, modifier: Modifier) {
     // A floating white capsule with the blue title (iOS glass buttons), not Material's tonal fill.
     Box(modifier.height(44.dp).floating(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center) {
-        Text(title, style = androidx.compose.material3.MaterialTheme.typography.labelLarge, color = Fariin.colors.blue)
+        Text(title, style = androidx.compose.material3.MaterialTheme.typography.labelLarge, color = Fariin.colors.accent)
     }
 }
 

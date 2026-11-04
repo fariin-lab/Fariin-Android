@@ -110,7 +110,7 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth(),
+                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = if (onSearch != null) androidx.compose.foundation.text.KeyboardOptions(
                     imeAction = androidx.compose.ui.text.input.ImeAction.Search) else androidx.compose.foundation.text.KeyboardOptions.Default,
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
@@ -130,12 +130,12 @@ fun FloatingSegments(options: List<String>, selected: Int, onSelect: (Int) -> Un
         options.forEachIndexed { i, label ->
             val on = i == selected
             Box(
-                Modifier.height(30.dp).clip(CircleShape).background(if (on) c.blue else Color.Transparent)
+                Modifier.height(30.dp).clip(CircleShape).background(if (on) c.accent else Color.Transparent)
                     .clickable { onSelect(i) }.padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(label, fontSize = 15.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (on) Color.White else c.label)
+                    color = if (on) c.onAccent else c.label)
             }
         }
     }
@@ -146,7 +146,7 @@ fun FloatingSegments(options: List<String>, selected: Int, onSelect: (Int) -> Un
 fun FloatingTextAction(text: String, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.Text(text, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-        color = if (enabled) c.blue else c.secondary,
+        color = if (enabled) c.label else c.secondary,
         modifier = modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape)
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 18.dp, vertical = 11.dp))
 }

@@ -134,7 +134,7 @@ fun GetStartedUndo(onUndo: () -> Unit) {
     Row(Modifier.padding(bottom = 24.dp).floating(CircleShape).clickable(onClick = onUndo).padding(horizontal = 18.dp, vertical = 12.dp)) {
         Text("Card hidden", fontSize = 15.sp, color = c.secondary)
         Spacer(Modifier.size(10.dp))
-        Text("Undo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
+        Text("Undo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent)
     }
 }
 

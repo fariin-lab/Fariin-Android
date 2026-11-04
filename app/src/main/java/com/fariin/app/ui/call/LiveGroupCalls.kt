@@ -154,9 +154,9 @@ fun LiveGroupCallRow(live: LiveCall, conv: Conversation?) {
 @Composable
 private fun JoinPill(text: String, label: String, onClick: () -> Unit) {
     val c = Fariin.colors
-    Box(Modifier.height(32.dp).clip(CircleShape).background(c.blue).clickable(onClick = onClick)
+    Box(Modifier.height(32.dp).clip(CircleShape).background(c.accent).clickable(onClick = onClick)
         .semantics { contentDescription = label }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(text, color = c.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -230,8 +230,8 @@ private fun CallBar(live: LiveCall, conv: Conversation?, title: String) {
             Text(sub, fontSize = 12.sp, color = c.secondary, maxLines = 1)
         }
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.heightIn(min = 32.dp).clip(CircleShape).background(c.blue).padding(horizontal = 16.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-            Text("JOIN", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Box(Modifier.heightIn(min = 32.dp).clip(CircleShape).background(c.accent).padding(horizontal = 16.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+            Text("JOIN", color = c.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
                             .background(com.fariin.app.ui.theme.Fariin.colors.card, androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
                             .padding(horizontal = 28.dp, vertical = 22.dp),
                             horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                            androidx.compose.material3.CircularProgressIndicator(color = com.fariin.app.ui.theme.Fariin.colors.blue)
+                            androidx.compose.material3.CircularProgressIndicator(color = com.fariin.app.ui.theme.Fariin.colors.accent)
                             androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(14.dp))
                             androidx.compose.material3.Text("Logging out…", color = com.fariin.app.ui.theme.Fariin.colors.label)
                         }

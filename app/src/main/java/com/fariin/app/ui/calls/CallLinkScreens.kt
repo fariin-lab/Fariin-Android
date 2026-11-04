@@ -86,7 +86,7 @@ private const val NET_ERROR = "Check your connection and try again."
 fun CallLinkAvatar(size: Dp) {
     val c = Fariin.colors
     Box(Modifier.size(size).clip(CircleShape).background(c.blue.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-        Icon(Icons.Filled.Link, null, tint = c.blue, modifier = Modifier.size(size * 0.48f))
+        Icon(Icons.Filled.Link, null, tint = c.accent, modifier = Modifier.size(size * 0.48f))
     }
 }
 
@@ -141,10 +141,10 @@ fun CreateCallLinkScreen(onClose: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 Text(NET_ERROR, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(16.dp))
-                TextButton(onClick = { attempt++ }) { Text("Try again", color = c.blue) }
+                TextButton(onClick = { attempt++ }) { Text("Try again", color = c.accent) }
             }
             else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.blue, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
             }
         }
     }
@@ -233,7 +233,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
                     try { CallLinks.setApproval(s.roomId, on) } catch (_: Exception) { s.approval = before; error = "Couldn't change setting" }
                 }
             }
-            Text("Call Type", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.blue,
+            Text("Call Type", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.accent,
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
             for ((label, video) in listOf("Video" to true, "Voice" to false)) {
                 Row(Modifier.fillMaxWidth().clickable(enabled = s.video != null && s.video != video) {
@@ -276,11 +276,11 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
                 try { CallLinks.delete(saved); onDeleted?.invoke() } catch (_: Exception) { error = "Couldn't delete the call link" }
             }
         }) { Text("Delete", color = c.red) } },
-        dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.blue) } },
+        dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } },
         containerColor = c.card,
     )
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, title = { Text(e) }, text = { Text(NET_ERROR) },
-        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
+        confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
 }
 
 @Composable
@@ -288,7 +288,7 @@ private fun RoundAction(icon: androidx.compose.ui.graphics.vector.ImageVector, l
     val c = Fariin.colors
     Column(modifier.clip(RoundedCornerShape(16.dp)).background(c.card).clickable(onClick = onClick).padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = c.blue)
+        Icon(icon, null, tint = c.accent)
         Spacer(Modifier.height(4.dp))
         Text(label, fontSize = 14.sp, color = c.label)
     }
@@ -327,8 +327,8 @@ private fun NameDialog(initial: String, onDismiss: () -> Unit, onSave: (String) 
             OutlinedTextField(text, { text = CallLinkDefaults.clamp(it) }, singleLine = true,
                 supportingText = { Text("${text.codePointCount(0, text.length)}/${CallLinkDefaults.MAX_NAME_LENGTH}") })
         },
-        confirmButton = { TextButton({ onSave(text) }) { Text("Save", color = c.blue) } },
-        dismissButton = { TextButton(onDismiss) { Text("Cancel", color = c.blue) } },
+        confirmButton = { TextButton({ onSave(text) }) { Text("Save", color = c.accent) } },
+        dismissButton = { TextButton(onDismiss) { Text("Cancel", color = c.accent) } },
         containerColor = c.card,
     )
 }

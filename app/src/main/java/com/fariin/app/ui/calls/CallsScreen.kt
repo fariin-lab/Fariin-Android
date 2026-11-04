@@ -162,11 +162,11 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         androidx.compose.material3.AlertDialog(onDismissRequest = { askDelete = false }, containerColor = c.card,
             title = { Text(com.fariin.app.data.HiddenCalls.deleteTitle(picked.size - links, links)) },
             confirmButton = { androidx.compose.material3.TextButton({ askDelete = false; deletePicked() }) { Text("Delete", color = c.red) } },
-            dismissButton = { androidx.compose.material3.TextButton({ askDelete = false }) { Text("Cancel", color = c.blue) } })
+            dismissButton = { androidx.compose.material3.TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } })
     }
     if (linkFailed) androidx.compose.material3.AlertDialog(onDismissRequest = { linkFailed = false }, containerColor = c.card,
         text = { Text("Couldn't delete the call link. Check your connection and try again.") },
-        confirmButton = { androidx.compose.material3.TextButton({ linkFailed = false }) { Text("OK", color = c.blue) } })
+        confirmButton = { androidx.compose.material3.TextButton({ linkFailed = false }) { Text("OK", color = c.accent) } })
     var info by remember { mutableStateOf<CallRun?>(null) }
     info?.let { r ->
         CallInfoScreen(r, me, onBack = { info = null }, onCall = { video -> callBack(ctx, r.latest, video) })
@@ -210,7 +210,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         }
     }
     if (!selecting) com.fariin.app.ui.components.FloatingIcon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call",
-        onClick = { nav.newCall() }, tint = androidx.compose.ui.graphics.Color.White, fill = c.blue,
+        onClick = { nav.newCall() }, tint = c.onAccent, fill = c.accent,
         modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp + com.fariin.app.ui.shell.bottomBarInset()).size(58.dp))
     }
 }

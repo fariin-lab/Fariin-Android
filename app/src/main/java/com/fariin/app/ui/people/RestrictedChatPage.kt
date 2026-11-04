@@ -97,7 +97,7 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
                 }
             }
             if (requestForMe) SettingsSection(header = "$them asked you to turn this off") {
-                SettingsRow("Turn Off", trailing = Trailing.NONE, titleColor = c.blue) {
+                SettingsRow("Turn Off", trailing = Trailing.NONE, titleColor = c.accent) {
                     ChatRestrictions.scope.launch { ChatRestrictions.answer(cid, me, myName(), accept = true) }
                 }
                 SettingsRow("Keep On", trailing = Trailing.NONE, last = true) {
@@ -111,6 +111,6 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
     if (askRequest) AlertDialog(onDismissRequest = { askRequest = false }, title = { Text("Ask $them to turn it off?") },
         text = { Text("$them turned on Restricted Chat, so only they can turn it off. They'll see your request in the chat.") },
         confirmButton = { TextButton({ askRequest = false; ChatRestrictions.scope.launch { ChatRestrictions.requestOff(cid, me, myName()) } }) {
-            Text("Send Request", color = c.blue) } },
-        dismissButton = { TextButton({ askRequest = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+            Text("Send Request", color = c.accent) } },
+        dismissButton = { TextButton({ askRequest = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
 }

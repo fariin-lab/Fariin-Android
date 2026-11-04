@@ -140,7 +140,7 @@ private fun ProfileLinkEditPage(existing: ProfileLink?, onSave: (ProfileLink) ->
     }
     if (confirm && onDelete != null) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Delete this link?") },
         confirmButton = { TextButton({ confirm = false; onDelete() }) { Text("Delete Link", color = c.red) } },
-        dismissButton = { TextButton({ confirm = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+        dismissButton = { TextButton({ confirm = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
 }
 
 @Composable
@@ -150,7 +150,7 @@ private fun PlainLine(value: String, placeholder: String, keyboard: KeyboardType
         if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.secondary)
         BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
             keyboardOptions = KeyboardOptions(keyboardType = keyboard, autoCorrectEnabled = false),
-            cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+            cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
     }
 }
 

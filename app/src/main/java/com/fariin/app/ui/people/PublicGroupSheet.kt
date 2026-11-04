@@ -85,7 +85,7 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                         else -> "Join Group"
                     }
                     val enabled = !joining && !sent
-                    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled) c.blue else c.blue.copy(alpha = 0.4f))
+                    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f))
                         .clickable(enabled = enabled) {
                             if (p.isMember) { onClose(); onOpenChat(cid); return@clickable }
                             joining = true; problem = null
@@ -96,7 +96,7 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                                 joining = false
                             }
                         }, contentAlignment = Alignment.Center) {
-                        Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                        Text(title, color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 problem != null -> Text(problem!!, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 24.dp))

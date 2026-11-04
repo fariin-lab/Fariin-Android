@@ -139,8 +139,8 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
                         .floating(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
                         .clickable(onClick = onCreateLink).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(46.dp).clip(CircleShape).background(c.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Link, null, tint = c.blue)
+                        Box(Modifier.size(46.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Link, null, tint = c.accent)
                         }
                         Spacer(Modifier.width(14.dp))
                         Column {
@@ -170,7 +170,7 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
 
 @Composable
 private fun Header(text: String) {
-    Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Fariin.colors.blue,
+    Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Fariin.colors.accent,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp))
 }
 
@@ -183,10 +183,10 @@ private fun TargetRow(t: CallTarget, onVoice: () -> Unit, onVideo: () -> Unit) {
         Spacer(Modifier.width(14.dp))
         Text(t.name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconButton(onClick = onVoice) {
-            Icon(Icons.Filled.Call, if (t.groupCid != null) "Group voice call" else "Voice call", tint = c.blue)
+            Icon(Icons.Filled.Call, if (t.groupCid != null) "Group voice call" else "Voice call", tint = c.accent)
         }
         IconButton(onClick = onVideo) {
-            Icon(Icons.Filled.Videocam, if (t.groupCid != null) "Group video call" else "Video call", tint = c.blue)
+            Icon(Icons.Filled.Videocam, if (t.groupCid != null) "Group video call" else "Video call", tint = c.accent)
         }
     }
 }

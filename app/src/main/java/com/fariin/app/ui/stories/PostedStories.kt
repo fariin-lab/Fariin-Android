@@ -127,7 +127,7 @@ fun PostedStoriesPage(
                 Text("Nothing in ${filter.title}", color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Text(filter.explain, color = c.secondary, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 40.dp))
-                TextButton(onClick = { filter = PostedStoriesRules.Filter.ALL }) { Text("Clear Filter", color = c.blue) }
+                TextButton(onClick = { filter = PostedStoriesRules.Filter.ALL }) { Text("Clear Filter", color = c.accent) }
             }
             else -> LazyVerticalGrid(
                 GridCells.Fixed(3), Modifier.fillMaxSize(),

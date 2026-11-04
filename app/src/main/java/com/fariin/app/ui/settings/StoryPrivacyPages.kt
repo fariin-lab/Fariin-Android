@@ -229,13 +229,13 @@ private fun ModeRow(title: String, detail: String?, selected: Boolean, edit: Boo
         verticalAlignment = Alignment.CenterVertically,
     ) {
         androidx.compose.material3.RadioButton(selected = selected, onClick = onClick,
-            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.blue))
+            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.accent))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = c.label)
             if (detail != null) Text(detail, style = MaterialTheme.typography.bodyMedium, color = c.secondary)
         }
-        if (edit) Text("Edit", color = c.blue, fontSize = 15.sp)
+        if (edit) Text("Edit", color = c.accent, fontSize = 15.sp)
     }
     if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
@@ -265,7 +265,7 @@ private fun StoryPeoplePicker(
     val rest = shown.filter { it.uid !in selected }
     Column(Modifier.fillMaxSize()) {
         PageBar(title, onBack = onBack, action = {
-            TextButton(onClick = onSave, enabled = canSave) { Text(saveTitle, color = if (canSave) c.blue else c.secondary, fontSize = 16.sp) }
+            TextButton(onClick = onSave, enabled = canSave) { Text(saveTitle, color = if (canSave) c.accent else c.secondary, fontSize = 16.sp) }
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
             Box(
@@ -275,7 +275,7 @@ private fun StoryPeoplePicker(
             ) {
                 if (search.isEmpty()) Text("Name or username", color = c.secondary, fontSize = 16.sp)
                 BasicTextField(search, { search = it.take(60) }, singleLine = true,
-                    textStyle = TextStyle(color = c.label, fontSize = 16.sp), cursorBrush = SolidColor(c.blue),
+                    textStyle = TextStyle(color = c.label, fontSize = 16.sp), cursorBrush = SolidColor(c.accent),
                     modifier = Modifier.fillMaxWidth())
             }
             if (people.isEmpty()) {

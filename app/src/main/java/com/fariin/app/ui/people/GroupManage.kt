@@ -226,14 +226,14 @@ internal fun GroupPagesHost(cid: String, me: String, start: GroupPage, onExit: (
 private fun Loading() = Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary))
 
 @Composable
-private fun BusyMark() = CircularProgressIndicator(color = Fariin.colors.blue, strokeWidth = 2.dp,
+private fun BusyMark() = CircularProgressIndicator(color = Fariin.colors.accent, strokeWidth = 2.dp,
     modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
 
 @Composable
 private fun Problem(text: String?, onDone: () -> Unit) {
     val c = Fariin.colors
     if (text != null) AlertDialog(onDismissRequest = onDone, containerColor = c.card, title = { Text("Could not do that") },
-        text = { Text(text) }, confirmButton = { TextButton(onDone) { Text("OK", color = c.blue) } })
+        text = { Text(text) }, confirmButton = { TextButton(onDone) { Text("OK", color = c.accent) } })
 }
 
 // ---- Administrators (iOS GroupAdminsView) -----------------------------------------------------
@@ -249,7 +249,7 @@ private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection(footer = GroupAdmins.ADMINS_FOOTER) {
                 if (team.may(me, Right.ADD_ADMINS) && team.others().isNotEmpty()) {
-                    SettingsRow("Add Admin", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.blue,
+                    SettingsRow("Add Admin", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.accent,
                         trailing = Trailing.NONE) { push(GroupPage.Choose) }
                 }
                 team.sortedAdmins().forEach { uid ->
@@ -319,7 +319,7 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
     Problem(problem) { problem = null }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Add Admin", onDone, action = {
-            if (busy) BusyMark() else Text("Add", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.blue,
+            if (busy) BusyMark() else Text("Add", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable {
                     busy = true
                     scope.launch {
@@ -387,7 +387,7 @@ private fun AdminRightsPage(cid: String, me: String, uid: String, onBack: () -> 
                 saving = false
             }
         }) { Text("Dismiss Admin", color = c.red) } },
-        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = { if (saving) BusyMark() })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
@@ -456,22 +456,22 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                 GroupManage.promote(cid, uid, GroupAdmins.startRights(team.grantable(me)).let { GroupAdmins.toWrite(it, team.grantable(me)) }, team)
                 Snack.show("$name is now an admin")
             }
-        }) { Text("Make Admin", color = c.blue) } },
-        dismissButton = { TextButton({ confirmPromote = false }) { Text("Cancel", color = c.blue) } })
+        }) { Text("Make Admin", color = c.accent) } },
+        dismissButton = { TextButton({ confirmPromote = false }) { Text("Cancel", color = c.accent) } })
     if (confirmDismiss) AlertDialog(onDismissRequest = { confirmDismiss = false }, containerColor = c.card,
         title = { Text("Dismiss $name as admin?") },
         confirmButton = { TextButton({
             confirmDismiss = false
             run { GroupManage.demote(cid, uid); Snack.show("$name is no longer an admin") }
         }) { Text("Dismiss Admin", color = c.red) } },
-        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
     if (confirmBan) AlertDialog(onDismissRequest = { confirmBan = false }, containerColor = c.card,
         title = { Text("Ban $name?") }, text = { Text(GroupAdmins.BAN_BODY) },
         confirmButton = { TextButton({
             confirmBan = false
             run { GroupManage.removeMember(cid, uid, name); Snack.show("$name was removed from the group.") }
         }) { Text("Ban", color = c.red) } },
-        dismissButton = { TextButton({ confirmBan = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmBan = false }) { Text("Cancel", color = c.accent) } })
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = c.bgSecondary) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(team.photos[uid]?.ifEmpty { null }, 96.dp)
@@ -579,11 +579,11 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                     else if (done > 0) Snack.show("$done member${if (done == 1) " was" else "s were"} removed from the group.")
                 }
             }) { Text("Remove", color = c.red) } },
-            dismissButton = { TextButton({ pendingRemove = null }) { Text("Cancel", color = c.blue) } })
+            dismissButton = { TextButton({ pendingRemove = null }) { Text("Cancel", color = c.accent) } })
     }
     removeError?.let { e ->
         AlertDialog(onDismissRequest = { removeError = null }, containerColor = c.card, title = { Text("Could not remove") }, text = { Text(e) },
-            confirmButton = { TextButton({ removeError = null }) { Text("OK", color = c.blue) } })
+            confirmButton = { TextButton({ removeError = null }) { Text("OK", color = c.accent) } })
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         if (selecting) PageBar("${picked.size} Selected", onBack = { picked = emptySet() }) {
@@ -598,7 +598,7 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                 androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     listOf("By Name" to false, "Admins First" to true).forEach { (label, v) ->
                         androidx.compose.material3.DropdownMenuItem(text = { Text(label, color = c.label) },
-                            trailingIcon = { if (adminsFirst == v) Icon(Icons.Filled.Check, null, tint = c.blue) },
+                            trailingIcon = { if (adminsFirst == v) Icon(Icons.Filled.Check, null, tint = c.accent) },
                             onClick = { adminsFirst = v; sortOpen = false })
                     }
                 }
@@ -641,9 +641,9 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                 }
                 if (query.isEmpty() && (canAdd || canInvite) && !selecting) item(key = "add") {
                     SettingsSection {
-                        if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.blue,
+                        if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.accent,
                             trailing = Trailing.NONE, last = !canInvite, onClick = onAddMembers)
-                        if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.blue,
+                        if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.accent,
                             trailing = Trailing.NONE, last = true) { push(GroupPage.Links) }
                     }
                 }
@@ -690,7 +690,7 @@ private fun LetterIndex(letters: List<String>, modifier: Modifier, onPick: (Stri
         .pointerInput(letters) { detectVerticalDragGestures { change, _ -> onPick(at(change.position.y)) } },
         horizontalAlignment = Alignment.CenterHorizontally) {
         letters.forEach {
-            Text(it, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.blue,
+            Text(it, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
         }
     }
@@ -736,7 +736,7 @@ private fun BannedUsersPage(cid: String, onBack: () -> Unit) {
                                 try { GroupManage.unban(cid, uid) } catch (e: Exception) { problem = failText(e, "Couldn't unban. Try again.") }
                                 busy = null
                             }
-                        }) { Text("Unban", color = c.blue, fontSize = 16.sp) }
+                        }) { Text("Unban", color = c.accent, fontSize = 16.sp) }
                     }
                 }
             }
@@ -787,7 +787,7 @@ private fun PermissionsPage(cid: String, me: String, onBack: () -> Unit) {
                             Icon(if (mediaOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, "Show the kinds", tint = c.secondary)
                         }
                         com.fariin.app.ui.components.FariinSwitch(allOn, onCheckedChange = if (canEdit) ({ v -> flip("media.all", v) { GroupManage.setAllMedia(cid, v) } }) else null,
-                            enabled = canEdit, colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White))
+                            enabled = canEdit, colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent))
                     }
                     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                     if (mediaOpen) SendKind.entries.forEach { k ->
@@ -823,7 +823,7 @@ private fun PermissionsPage(cid: String, me: String, onBack: () -> Unit) {
                     }
                     Slider(index.toFloat(), onValueChange = { slowDraft = kotlin.math.round(it).toInt() }, enabled = canEdit,
                         valueRange = 0f..(GroupAdmins.slowSteps.size - 1).toFloat(), steps = GroupAdmins.slowSteps.size - 2,
-                        colors = SliderDefaults.colors(thumbColor = c.blue, activeTrackColor = c.blue),
+                        colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
                         onValueChangeFinished = {
                             val d = slowDraft ?: return@Slider
                             val secs = GroupAdmins.slowSteps[d].first
@@ -885,13 +885,13 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
         title = { Text("Make this group private?") },
         text = { Text("fariin.com/$current will stop working. The link stays reserved for this group for 30 days, then anyone can take it.") },
         confirmButton = { TextButton({ confirmPrivate = false; save("") }) { Text("Make Private", color = c.red) } },
-        dismissButton = { TextButton({ confirmPrivate = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmPrivate = false }) { Text("Cancel", color = c.accent) } })
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not save") },
-        text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } })
+        text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
         PageBar("Group Type", onBack, action = {
             if (saving) BusyMark() else Text("Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                color = if (showPublic && changed && ok) c.blue else c.secondary,
+                color = if (showPublic && changed && ok) c.accent else c.secondary,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable(enabled = showPublic && changed && ok) { save(typed) }
                     .padding(horizontal = 18.dp, vertical = 11.dp))
         })
@@ -912,7 +912,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                         Box(Modifier.weight(1f)) {
                             if (typed.isEmpty()) Text("link", fontSize = 17.sp, color = c.secondary)
                             BasicTextField(typed, { name = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                                cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -990,20 +990,20 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
     // Only once the group is known: an empty doc read as "not public" and made a link for a public one.
     LaunchedEffect(cid, doc.isNotEmpty()) { if (doc.isNotEmpty() && list == null) reload() }
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't change the link") },
-        text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } })
+        text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     if (confirmReset) AlertDialog(onDismissRequest = { confirmReset = false }, containerColor = c.card, title = { Text("Reset Link") },
         text = { Text("A new link replaces this one, and the current link stops working for everyone who has it.") },
         confirmButton = { TextButton({ confirmReset = false; change("The link was not reset. The old one still works. Try again.") { GroupManage.createPrimary(cid) } }) { Text("Reset Link", color = c.red) } },
-        dismissButton = { TextButton({ confirmReset = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmReset = false }) { Text("Cancel", color = c.accent) } })
     if (confirmDeleteAll) AlertDialog(onDismissRequest = { confirmDeleteAll = false }, containerColor = c.card, title = { Text("Delete All Revoked") },
         text = { Text("Revoked links are removed from this list for good.") },
         confirmButton = { TextButton({ confirmDeleteAll = false; change("The revoked links were not deleted. Try again.") { GroupManage.deleteAllRevoked(cid) } }) { Text("Delete All", color = c.red) } },
-        dismissButton = { TextButton({ confirmDeleteAll = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmDeleteAll = false }) { Text("Cancel", color = c.accent) } })
     revokeTarget?.let { l ->
         AlertDialog(onDismissRequest = { revokeTarget = null }, containerColor = c.card, title = { Text("Revoke Link") },
             text = { Text("The link stops working at once. It moves to Revoked Links.") },
             confirmButton = { TextButton({ revokeTarget = null; change("The link was not revoked. Try again.") { GroupManage.revokeLink(cid, l.code) } }) { Text("Revoke", color = c.red) } },
-            dismissButton = { TextButton({ revokeTarget = null }) { Text("Cancel", color = c.blue) } })
+            dismissButton = { TextButton({ revokeTarget = null }) { Text("Cancel", color = c.accent) } })
     }
     detail?.let { l ->
         val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1050,7 +1050,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                                 Text(p.statusLine(now).substringBefore(" · "), fontSize = 14.sp, color = c.secondary,
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             } else {
-                                SettingsRow(if (working) "Creating..." else "Create Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.blue,
+                                SettingsRow(if (working) "Creating..." else "Create Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.accent,
                                     trailing = Trailing.NONE, last = true) { change("The link was not created. Try again.") { GroupManage.createPrimary(cid) } }
                             }
                         }
@@ -1074,7 +1074,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                         }
                     }
                     SettingsSection(header = "More Links", footer = "Make extra links that end after a time or a number of people.") {
-                        SettingsRow("Create a New Link", icon = rememberVectorPainter(Icons.Filled.Add), titleColor = c.blue, trailing = Trailing.NONE,
+                        SettingsRow("Create a New Link", icon = rememberVectorPainter(Icons.Filled.Add), titleColor = c.accent, trailing = Trailing.NONE,
                             last = l.links.isEmpty()) { onEdit(null) }
                         l.links.forEachIndexed { i, x -> LinkRow(x, now, last = i == l.links.lastIndex) { detail = x } }
                     }
@@ -1085,7 +1085,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                 }
                 loadError != null -> SettingsSection {
                     Note(loadError ?: "")
-                    SettingsRow("Try Again", titleColor = c.blue, trailing = Trailing.NONE, last = true) { scope.launch { reload() } }
+                    SettingsRow("Try Again", titleColor = c.accent, trailing = Trailing.NONE, last = true) { scope.launch { reload() } }
                 }
                 else -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { BusyMark() }
             }
@@ -1163,10 +1163,10 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
     var problem by remember { mutableStateOf<String?>(null) }
     val isChannel = liveGroupDoc(cid)["channel"] == true
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't save the link") },
-        text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.blue) } })
+        text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
         PageBar(if (link == null) "New Link" else "Edit Link", onDone, action = {
-            if (saving) BusyMark() else Text(if (link == null) "Create" else "Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.blue,
+            if (saving) BusyMark() else Text(if (link == null) "Create" else "Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable {
                     saving = true
                     val f = hashMapOf<String, Any?>("name" to name.trim(), "requestApproval" to approval)
@@ -1188,7 +1188,7 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
                 Box(Modifier.fillMaxWidth().padding(16.dp)) {
                     if (name.isEmpty()) Text("Link name (optional)", fontSize = 17.sp, color = c.secondary)
                     BasicTextField(name, { name = it.take(32) }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                        cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                        cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
                 }
             }
             SettingsSection(footer = "An admin approves each person who asks to join with this link.") {
@@ -1224,7 +1224,7 @@ private fun StepSlider(labels: List<String>, index: Int, onPick: (Int) -> Unit) 
         }
         Slider(index.toFloat(), onValueChange = { onPick(kotlin.math.round(it).toInt().coerceIn(0, labels.lastIndex)) },
             valueRange = 0f..maxOf(1, labels.lastIndex).toFloat(), steps = maxOf(0, labels.size - 2),
-            colors = SliderDefaults.colors(thumbColor = c.blue, activeTrackColor = c.blue))
+            colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent))
     }
 }
 
@@ -1272,7 +1272,7 @@ private fun TagEditorSheet(cid: String, me: String, uid: String, name: String, c
                         { v -> text = com.fariin.app.data.GroupRole.fit(v, com.fariin.app.data.GroupRole.MAX_TEXT) },
                         singleLine = true, enabled = !busy,
                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, color = c.label),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.blue), modifier = Modifier.weight(1f),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent), modifier = Modifier.weight(1f),
                         decorationBox = { inner -> Box { if (text.isEmpty()) Text("Host, Teacher…", fontSize = 17.sp, color = c.secondary); inner() } })
                     Text("${text.length}/${com.fariin.app.data.GroupRole.MAX_TEXT}", fontSize = 13.sp, color = c.secondary)
                 }

@@ -119,7 +119,7 @@ private fun Page(content: @Composable () -> Unit) {
 private fun BarButton(title: String, enabled: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
     TextButton(onClick = onClick, enabled = enabled) {
-        Text(title, color = if (enabled) c.blue else c.secondary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = if (enabled) c.accent else c.secondary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -144,7 +144,7 @@ private fun EmojiHeader(emoji: String, title: String? = null, onChange: (() -> U
             Text(title, color = c.label, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 24.dp))
         }
-        if (onChange != null) TextButton(onClick = onChange) { Text("Change Emoji", color = c.blue, fontSize = 17.sp, fontWeight = FontWeight.Medium) }
+        if (onChange != null) TextButton(onClick = onChange) { Text("Change Emoji", color = c.accent, fontSize = 17.sp, fontWeight = FontWeight.Medium) }
     }
 }
 
@@ -243,7 +243,7 @@ fun SelectViewersPage(
             ) {
                 if (search.isEmpty()) Text("Name or username", color = c.secondary, fontSize = 16.sp)
                 BasicTextField(search, { search = it.take(60) }, singleLine = true,
-                    textStyle = TextStyle(color = c.label, fontSize = 16.sp), cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                    textStyle = TextStyle(color = c.label, fontSize = 16.sp), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -257,7 +257,7 @@ private fun NameField(name: String, onName: (String) -> Unit, focus: FocusReques
         Box(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
             if (name.isEmpty()) Text("Story Name (Required)", color = c.secondary, fontSize = 17.sp)
             BasicTextField(name, { onName(StoryPrivacyRules.clampName(it)) }, singleLine = true,
-                textStyle = TextStyle(color = c.label, fontSize = 17.sp), cursorBrush = SolidColor(c.blue),
+                textStyle = TextStyle(color = c.label, fontSize = 17.sp), cursorBrush = SolidColor(c.accent),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus))
         }
     }

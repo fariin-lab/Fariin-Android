@@ -67,7 +67,7 @@ fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
         title = { Text("Delete nickname and note?") },
         text = { Text("This removes the name and note you saved. Their profile name shows again.") },
         confirmButton = { TextButton({ confirmDelete = false; ContactNames.remove(uid); onBack() }) { Text("Delete", color = c.red) } },
-        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
         PageBar("Set nickname", onBack = onBack) {
@@ -88,7 +88,7 @@ fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
                 Box(Modifier.fillMaxWidth().padding(16.dp)) {
                     if (note.isEmpty()) Text("Note", fontSize = 17.sp, color = c.secondary)
                     BasicTextField(note, { note = GroupRules.oneParagraph(it, ContactNames.NOTE_LIMIT) }, maxLines = 5,
-                        textStyle = TextStyle(fontSize = 17.sp, color = c.label), cursorBrush = SolidColor(c.blue),
+                        textStyle = TextStyle(fontSize = 17.sp, color = c.label), cursorBrush = SolidColor(c.accent),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Note" })
                 }
@@ -107,7 +107,7 @@ private fun NameField(value: String, placeholder: String, onChange: (String) -> 
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
         if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, color = c.secondary)
         BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-            cursorBrush = SolidColor(c.blue), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+            cursorBrush = SolidColor(c.accent), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
             // The hint is drawn text, so the field carries its name for screen readers.
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = placeholder })
     }

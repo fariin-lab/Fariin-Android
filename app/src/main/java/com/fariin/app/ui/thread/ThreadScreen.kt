@@ -322,7 +322,7 @@ private fun ThreadContent(
         androidx.compose.material3.AlertDialog(onDismissRequest = { restrictAnswer = false }, title = { Text("Turn off Restricted chat?") },
             text = { Text("${ui.title} asked you to turn it off. If you do, they can forward, copy and save from this chat again.") },
             confirmButton = { androidx.compose.material3.TextButton({ answer(true) }) { Text("Turn Off", color = Fariin.colors.red) } },
-            dismissButton = { androidx.compose.material3.TextButton({ answer(false) }) { Text("Keep On", color = Fariin.colors.blue) } })
+            dismissButton = { androidx.compose.material3.TextButton({ answer(false) }) { Text("Keep On", color = Fariin.colors.accent) } })
     }
     LaunchedEffect(ui.messages) { selected.retainAll(ui.messages.map { it.rowId }.toSet()) }
     if (bulkDelete) BulkDeleteDialog(picked, ui, onDismiss = { bulkDelete = false }) { plan ->
@@ -1404,7 +1404,7 @@ private fun Composer(
                             draft = it.text
                         },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label),
-                        cursorBrush = SolidColor(c.blue),
+                        cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
                         modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false },
                     )

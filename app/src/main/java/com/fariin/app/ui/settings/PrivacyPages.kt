@@ -74,7 +74,7 @@ internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true,
             color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f))
         com.fariin.app.ui.components.FariinSwitch(
             checked = checked, onCheckedChange = onChange, enabled = enabled,
-            colors = SwitchDefaults.colors(checkedTrackColor = c.blue, checkedThumbColor = Color.White, checkedBorderColor = c.blue),
+            colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent, checkedBorderColor = c.accent),
         )
     }
 }
@@ -89,7 +89,7 @@ internal fun CheckRow(title: String, selected: Boolean, last: Boolean = false, o
         verticalAlignment = Alignment.CenterVertically,
     ) {
         androidx.compose.material3.RadioButton(selected = selected, onClick = onClick,
-            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.blue))
+            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.accent))
         Spacer(Modifier.width(16.dp))
         Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge, color = c.label, modifier = Modifier.weight(1f))
     }
@@ -257,7 +257,7 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
                 Text(name, fontSize = 17.sp, color = c.label, maxLines = 1)
                 if (sub != null) Text(sub, fontSize = 13.sp, color = c.secondary, maxLines = 1)
             }
-            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.blue, modifier = Modifier.size(22.dp))
+            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(22.dp))
             trailing?.invoke()
         }
         if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)

@@ -171,23 +171,23 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
 
     notice?.let { n ->
         AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) }, containerColor = c.card,
-            confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.blue) } })
+            confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } })
     }
     if (confirmReport) AlertDialog(onDismissRequest = { confirmReport = false }, containerColor = c.card,
         title = { Text("Report this channel?") }, text = { Text("Fariin's moderators will review it.") },
         confirmButton = { TextButton({ confirmReport = false; scope.launch { reported = ChannelService.report(info.cid) } }) { Text("Report", color = c.red) } },
-        dismissButton = { TextButton({ confirmReport = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmReport = false }) { Text("Cancel", color = c.accent) } })
     if (confirmLeave) AlertDialog(onDismissRequest = { confirmLeave = false }, containerColor = c.card,
         title = { Text("Leave ${info.title}?") }, text = { Text("You will stop getting its posts.") },
         confirmButton = { TextButton({ confirmLeave = false; leave(fromUndo = false) }) { Text("Leave Channel", color = c.red) } },
-        dismissButton = { TextButton({ confirmLeave = false }) { Text("Cancel", color = c.blue) } })
+        dismissButton = { TextButton({ confirmLeave = false }) { Text("Cancel", color = c.accent) } })
 
     // The grey page with white cards and floating action circles (iOS ChannelInfo on grouped background).
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         Column(Modifier.fillMaxSize()) {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             PageBar("", onBack, action = if (canEdit) ({
-                TextButton({ manage.edit(info.cid) }) { Text("Edit", color = c.blue, fontSize = 17.sp) }
+                TextButton({ manage.edit(info.cid) }) { Text("Edit", color = c.accent, fontSize = 17.sp) }
             }) else null)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally) {
@@ -198,7 +198,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     if (info.verified) {
                         Spacer(Modifier.width(6.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.accent, modifier = Modifier.size(22.dp))
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -220,7 +220,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     if (info.username.isNotEmpty()) {
                         if (info.description.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                         Column(Modifier.fillMaxWidth().clickable { share() }.padding(16.dp)) {
-                            Text("fariin.com/${info.username}", fontSize = 16.sp, color = c.blue)
+                            Text("fariin.com/${info.username}", fontSize = 16.sp, color = c.accent)
                             Text("Link", fontSize = 13.sp, color = c.secondary)
                         }
                     }
@@ -269,7 +269,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Text("Following “${info.title}”", fontSize = 15.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(14.dp))
-                Text("Undo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
+                Text("Undo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent)
             }
         }
     }
@@ -331,7 +331,7 @@ private fun AdminCard(info: ChannelInfo) {
                 com.fariin.app.ui.components.FariinSwitch(protect, onCheckedChange = { v ->
                     protect = v; problem = null
                     scope.launch { try { ChannelService.setProtected(info.cid, v) } catch (e: Exception) { protect = !v; problem = "Couldn't save. Try again." } }
-                }, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.blue, checkedThumbColor = Color.White))
+                }, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent))
             }
         }
         Text(problem ?: ChannelRules.protectFooter(protect), fontSize = 13.sp, color = if (problem != null) c.red else c.secondary,

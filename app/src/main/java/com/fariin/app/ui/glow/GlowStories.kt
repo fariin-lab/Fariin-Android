@@ -180,8 +180,8 @@ fun GlowingHeading(onClick: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Text("Glowing", style = MaterialTheme.typography.titleSmall, color = c.blue)
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.blue, modifier = Modifier.size(18.dp))
+        Text("Glowing", style = MaterialTheme.typography.titleSmall, color = c.accent)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
     }
 }
 

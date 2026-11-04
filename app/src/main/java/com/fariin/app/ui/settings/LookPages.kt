@@ -470,7 +470,7 @@ private fun EditablePhoto(img: Bitmap, canvas: IntSize, zoom: Float, pan: Offset
 private fun MockBubble(text: String, mine: Boolean, mineFill: Brush?, modifier: Modifier = Modifier, size: Int = 15, corner: Int = 18) {
     val c = Fariin.colors
     val shape = RoundedCornerShape(corner.dp)
-    val bg = if (mine) Modifier.background(mineFill ?: androidx.compose.ui.graphics.SolidColor(c.blue), shape)
+    val bg = if (mine) Modifier.background(mineFill ?: androidx.compose.ui.graphics.SolidColor(c.accent), shape)
     else Modifier.background(c.card.copy(alpha = 0.88f), shape)
     Text(text, fontSize = size.sp, color = if (mine) Color.White else c.label,
         modifier = modifier.widthIn(max = 300.dp).clip(shape).then(bg).padding(horizontal = 14.dp, vertical = 9.dp))
@@ -532,7 +532,7 @@ private fun ChatColorPage(pop: () -> Unit) {
             val circles = buildList<@Composable (Modifier) -> Unit> {
                 add { m ->
                     ColorCircle(selected == null, m, onTap = { ChatLookStore.setDefaultColor(ctx, null) }) {
-                        Box(Modifier.fillMaxSize().clip(CircleShape).background(ChatLookStore.globalAuto(ctx)?.brush() ?: androidx.compose.ui.graphics.SolidColor(c.blue)),
+                        Box(Modifier.fillMaxSize().clip(CircleShape).background(ChatLookStore.globalAuto(ctx)?.brush() ?: androidx.compose.ui.graphics.SolidColor(c.accent)),
                             contentAlignment = Alignment.Center) { Text("Auto", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White) }
                     }
                 }
@@ -575,7 +575,7 @@ private fun PreviewBubble(text: String, mine: Boolean, mineFill: Brush?, modifie
     val c = Fariin.colors
     val shape = RoundedCornerShape(17.dp)
     Text(text, fontSize = 14.sp, color = if (mine) Color.White else c.label,
-        modifier = modifier.clip(shape).background(if (mine) mineFill ?: androidx.compose.ui.graphics.SolidColor(c.blue) else androidx.compose.ui.graphics.SolidColor(systemGray5(c.dark)), shape)
+        modifier = modifier.clip(shape).background(if (mine) mineFill ?: androidx.compose.ui.graphics.SolidColor(c.accent) else androidx.compose.ui.graphics.SolidColor(systemGray5(c.dark)), shape)
             .padding(horizontal = 13.dp, vertical = 8.dp))
 }
 

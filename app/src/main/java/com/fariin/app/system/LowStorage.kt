@@ -101,17 +101,17 @@ fun LowStorageSheet() {
                 "Delete large videos from your gallery and from your chats",
                 "Remove downloaded music, podcasts or films").forEachIndexed { i, t ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(26.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
-                        Text("${i + 1}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Box(Modifier.size(26.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                        Text("${i + 1}", color = c.onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.width(12.dp))
                     Text(t, fontSize = 15.sp, color = c.label)
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(c.blue).clickable { LowStorage.need.value = null },
+            Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(c.accent).clickable { LowStorage.need.value = null },
                 contentAlignment = Alignment.Center) {
-                Text("OK", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text("OK", color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }

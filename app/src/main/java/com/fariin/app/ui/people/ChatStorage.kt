@@ -140,7 +140,7 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
             onBack = if (selecting) null else pop,
             action = if (!list.isNullOrEmpty()) ({
                 TextButton(onClick = { selecting = !selecting; if (!selecting) selected = emptySet() }) {
-                    Text(if (selecting) "Done" else "Select", color = c.blue, fontSize = 17.sp)
+                    Text(if (selecting) "Done" else "Select", color = c.accent, fontSize = 17.sp)
                 }
             }) else null)
         Box(Modifier.weight(1f)) {
@@ -163,7 +163,7 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                             DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, containerColor = c.card) {
                                 ChatStorageRules.Sort.entries.forEach { s ->
                                     DropdownMenuItem(text = { Text(s.label, color = c.label) }, onClick = { sort = s; sortOpen = false },
-                                        trailingIcon = if (s == sort) ({ Icon(Icons.Filled.Check, null, tint = c.blue) }) else null)
+                                        trailingIcon = if (s == sort) ({ Icon(Icons.Filled.Check, null, tint = c.accent) }) else null)
                                 }
                             }
                         }
@@ -186,10 +186,10 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                                 onClick = { if (!selecting) selecting = true; toggle(item.m.id) })) {
                             val bmp = rememberBitmap(item.picture, 360)
                             if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                            else Box(Modifier.fillMaxSize().background(c.blue.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                                if (item.kind == ChatStorageRules.Kind.VOICE) Icon(Icons.Filled.Mic, null, tint = c.blue, modifier = Modifier.size(34.dp))
+                            else Box(Modifier.fillMaxSize().background(c.accent.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                                if (item.kind == ChatStorageRules.Kind.VOICE) Icon(Icons.Filled.Mic, null, tint = c.accent, modifier = Modifier.size(34.dp))
                                 else Text(item.m.fileName?.substringAfterLast('.', "")?.uppercase()?.take(4)?.ifEmpty { null } ?: "FILE",
-                                    fontWeight = FontWeight.Bold, color = c.blue, fontSize = 16.sp)
+                                    fontWeight = FontWeight.Bold, color = c.accent, fontSize = 16.sp)
                             }
                             Text(SettingsRules.bytes(item.bytes), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).clip(CircleShape)
@@ -212,7 +212,7 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(c.bgSecondary).navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { selected = if (all) emptySet() else list.map { it.m.id }.toSet() }) {
-                        Text(if (all) "Deselect All" else "Select All", color = c.blue, fontSize = 17.sp)
+                        Text(if (all) "Deselect All" else "Select All", color = c.accent, fontSize = 17.sp)
                     }
                     Spacer(Modifier.weight(1f))
                     TextButton(enabled = selected.isNotEmpty(), onClick = { confirm = true }) {

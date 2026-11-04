@@ -107,7 +107,7 @@ internal fun CardField(
         BasicTextField(
             value, onChange, enabled = enabled, singleLine = true,
             textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-            cursorBrush = SolidColor(c.blue),
+            cursorBrush = SolidColor(c.accent),
             visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else keyboard, autoCorrectEnabled = false,
                 imeAction = if (imeDone != null) androidx.compose.ui.text.input.ImeAction.Go else androidx.compose.ui.text.input.ImeAction.Default),
@@ -124,7 +124,7 @@ internal fun BarAction(text: String, enabled: Boolean, busy: Boolean = false, co
     val c = Fariin.colors
     if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp).size(20.dp))
     else TextButton(onClick = onClick, enabled = enabled) {
-        Text(text, fontWeight = FontWeight.SemiBold, color = if (enabled) color ?: c.blue else c.tertiary)
+        Text(text, fontWeight = FontWeight.SemiBold, color = if (enabled) color ?: c.accent else c.tertiary)
     }
 }
 
@@ -152,7 +152,7 @@ internal fun SignInAgainSection(onVerified: () -> Unit) {
         // The keyboard's Go verifies too: on a small phone the keyboard covers the Verify row.
         CardField(password, "Your current password", secret = true, enabled = !busy, last = false, imeDone = { verify() }) { password = it }
         SettingsRow(if (busy) "Checking..." else "Verify", trailing = Trailing.NONE,
-            titleColor = if (password.isEmpty() || busy) c.tertiary else c.blue, last = error == null) { verify() }
+            titleColor = if (password.isEmpty() || busy) c.tertiary else c.accent, last = error == null) { verify() }
         error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.padding(16.dp)) }
     }
 }
@@ -317,7 +317,7 @@ private fun TwoStepPage(push: (String) -> Unit, pop: () -> Unit) {
                     if (masked.isNotEmpty()) SettingsRow("Recovery email", value = masked, trailing = Trailing.NONE, last = true)
                 } else Text(TwoStepRules.recoveryFooter(masked), fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp))
                 SettingsSection {
-                    SettingsRow("Change Additional Password", trailing = Trailing.NONE, titleColor = c.blue) { push(PAGE_TWOSTEP_SET + "change") }
+                    SettingsRow("Change Additional Password", trailing = Trailing.NONE, titleColor = c.accent) { push(PAGE_TWOSTEP_SET + "change") }
                     SettingsRow("Turn Off Two-step Verification", trailing = Trailing.NONE, titleColor = c.red, last = true) { push(PAGE_TWOSTEP_OFF) }
                 }
                 ErrorNote(error)
@@ -442,12 +442,12 @@ private fun DisableAdditionalPasswordPage(pop: () -> Unit) {
 internal fun TwoStepRecoveryRows(busy: Boolean, sent: Boolean, code: String, onCode: (String) -> Unit, onStart: () -> Unit, onFinish: () -> Unit) {
     val c = Fariin.colors
     SettingsSection {
-        SettingsRow("I forgot this password", trailing = Trailing.NONE, titleColor = if (busy) c.tertiary else c.blue, last = true) { if (!busy) onStart() }
+        SettingsRow("I forgot this password", trailing = Trailing.NONE, titleColor = if (busy) c.tertiary else c.accent, last = true) { if (!busy) onStart() }
     }
     if (sent) SettingsSection(footer = "We sent a code to your recovery email.") {
         CardField(code, "6-digit code", keyboard = KeyboardType.NumberPassword, last = false, onChange = onCode)
         val ready = code.length == 6 && !busy
-        SettingsRow("Turn Off With Code", trailing = Trailing.NONE, titleColor = if (ready) c.blue else c.tertiary, last = true) { if (ready) onFinish() }
+        SettingsRow("Turn Off With Code", trailing = Trailing.NONE, titleColor = if (ready) c.accent else c.tertiary, last = true) { if (ready) onFinish() }
     }
 }
 

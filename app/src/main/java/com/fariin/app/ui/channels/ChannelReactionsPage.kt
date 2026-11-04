@@ -132,7 +132,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                         save()
                     }.heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                        if (mode == value) Icon(Icons.Filled.Check, null, tint = c.blue)
+                        if (mode == value) Icon(Icons.Filled.Check, null, tint = c.accent)
                     }
                     if (i < 2) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                 }

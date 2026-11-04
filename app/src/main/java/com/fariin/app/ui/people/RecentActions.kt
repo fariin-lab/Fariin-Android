@@ -176,7 +176,7 @@ internal fun RecentActionsPage(cid: String, me: String, onBack: () -> Unit) {
         PageBar("Recent Actions", onBack, action = {
             FloatingIcon(Icons.Filled.FilterList, if (filtering) "Filter, on" else "Filter",
                 onClick = { if (events.isNotEmpty()) showFilter = true },
-                tint = when { events.isEmpty() -> c.tertiary; filtering -> c.blue; else -> c.label },
+                tint = when { events.isEmpty() -> c.tertiary; filtering -> c.accent; else -> c.label },
                 modifier = Modifier.padding(end = 8.dp))
         })
         PullToRefreshBox(refreshing, onRefresh = { refreshing = true; scope.launch { load(false); refreshing = false } },
@@ -326,7 +326,7 @@ private fun typeIcon(e: AdminLog.Event): ImageVector = when (e.type) {
 private fun MoreLoader(onShown: () -> Unit) {
     LaunchedEffect(Unit) { onShown() }
     Box(Modifier.fillMaxWidth().padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = Fariin.colors.blue, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+        CircularProgressIndicator(color = Fariin.colors.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -450,7 +450,7 @@ private fun SwitchRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onChange(!on) }.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-        Switch(on, onChange, colors = SwitchDefaults.colors(checkedTrackColor = c.blue))
+        Switch(on, onChange, colors = SwitchDefaults.colors(checkedTrackColor = c.accent))
     }
     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
 }

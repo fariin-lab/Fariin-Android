@@ -178,7 +178,7 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
                     when {
                         h == null && historyFailed -> Card {
                             Text("Could not load your history", color = c.secondary)
-                            Text("Try Again", color = c.blue, fontSize = 17.sp, modifier = Modifier.clickable {
+                            Text("Try Again", color = c.accent, fontSize = 17.sp, modifier = Modifier.clickable {
                                 historyFailed = false; scope.launch { loadHistory() } })
                         }
                         h == null -> Card { CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 20.dp), color = c.secondary) }
@@ -246,7 +246,7 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
                             when {
                                 list == null && countriesFailed -> {
                                     Text("Could not load countries", color = c.secondary)
-                                    Text("Try Again", color = c.blue, fontSize = 17.sp, modifier = Modifier.clickable {
+                                    Text("Try Again", color = c.accent, fontSize = 17.sp, modifier = Modifier.clickable {
                                         countriesFailed = false; scope.launch { loadCountries() } })
                                 }
                                 list == null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = c.secondary)

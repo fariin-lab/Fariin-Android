@@ -252,8 +252,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         .semantics { contentDescription = "Posted Stories" },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("My Story", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.blue)
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.blue, modifier = Modifier.size(18.dp))
+                    Text("My Story", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.accent)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
                 }
             }
             item {
@@ -293,7 +293,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Viewed Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.blue)
+                        Text("Viewed Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.accent)
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             if (viewedCollapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
@@ -312,7 +312,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Hidden Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.blue)
+                        Text("Hidden Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.accent)
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             if (hiddenCollapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
@@ -426,7 +426,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
 @Composable
 private fun Heading(title: String) {
     Text(
-        title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Fariin.colors.blue,
+        title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Fariin.colors.accent,
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
     )
 }

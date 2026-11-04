@@ -113,9 +113,9 @@ fun AdminInviteSheet(code: String, onClose: () -> Unit, onOpenChannel: (String) 
                     if (i.state == "open" && i.forMe) {
                         Text("Admins post in the channel and can change its name, photo and settings. Followers never see who the admins are.",
                             fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center)
-                        Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(25.dp)).background(c.blue)
+                        Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(25.dp)).background(c.accent)
                             .clickable(enabled = !busy) { answer(true) }, contentAlignment = Alignment.Center) {
-                            Text("Accept", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Accept", color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         }
                         TextButton(onClick = { answer(false) }, enabled = !busy) { Text("Decline", color = c.red) }
                     }

@@ -211,7 +211,7 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                     if (approximate) {
                         TextButton(onClick = {
                             ask.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                        }, modifier = Modifier.padding(start = 8.dp)) { Text("Use precise location", color = c.blue) }
+                        }, modifier = Modifier.padding(start = 8.dp)) { Text("Use precise location", color = c.accent) }
                     }
                 }
                 else -> Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
@@ -229,7 +229,7 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                         singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { runSearch() }),
-                        cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                        cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
                 }
                 when {
                     searching -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
@@ -271,7 +271,7 @@ private fun Blocked(text: String, button: String, onClick: () -> Unit) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
-        TextButton(onClick = onClick) { Text(button, color = c.blue) }
+        TextButton(onClick = onClick) { Text(button, color = c.accent) }
     }
 }
 
@@ -385,7 +385,7 @@ internal fun ContactPickSheet(me: String, cid: String, onDismiss: () -> Unit, on
             ) {
                 if (query.isEmpty()) Text("Search", fontSize = 17.sp, color = c.secondary)
                 BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                    cursorBrush = SolidColor(c.blue), modifier = Modifier.fillMaxWidth())
+                    cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
             }
             if (people.isEmpty()) {
                 Text("People you chat with show up here.", fontSize = 15.sp, color = c.secondary,

@@ -156,7 +156,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                     rejecting = false
                 }
             }) { Text("Reject", color = c.red) } },
-            dismissButton = { TextButton({ pendingReject = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+            dismissButton = { TextButton({ pendingReject = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
     // Forward: the note goes as its words, marked forwarded, like a forwarded chat message (iOS forwardable).
     forwardTexts?.let { texts ->
@@ -172,17 +172,17 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         AlertDialog(onDismissRequest = { pendingDelete = null },
             title = { Text(if (ids.size == 1) "Delete this message?" else "Delete ${ids.size} messages?") },
             confirmButton = { TextButton({ OfficialChannel.hide(ids); pendingDelete = null; picked.clear() }) { Text("Delete for Me", color = c.red) } },
-            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+            dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
     // Delete All in the selection bar clears the whole chat for me (iOS showClearConfirm).
     if (confirmClear) {
         AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear this chat?") },
             confirmButton = { TextButton({ OfficialChannel.clearHistory(); confirmClear = false; picked.clear() }) { Text("Clear", color = c.red) } },
-            dismissButton = { TextButton({ confirmClear = false }) { Text("Cancel", color = c.blue) } }, containerColor = c.card)
+            dismissButton = { TextButton({ confirmClear = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
     rejectResult?.let { text ->
         AlertDialog(onDismissRequest = { rejectResult = null }, text = { Text(text) },
-            confirmButton = { TextButton({ rejectResult = null }) { Text("OK", color = c.blue) } }, containerColor = c.card)
+            confirmButton = { TextButton({ rejectResult = null }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     }
 
     // The grey page with the notes as white rounded cards and no hard lines at the bar edges
@@ -276,7 +276,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             Text("${picked.size} Selected", style = MaterialTheme.typography.titleSmall, color = c.label,
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             androidx.compose.material3.IconButton({ forwardTexts = pickedNotes().map { it.plainText } }) {
-                Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = "Forward", tint = c.blue)
+                Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = "Forward", tint = c.accent)
             }
         }
         // The normal chat's up/down and "n of N" (iOS searchNavBar); up is older.
@@ -295,7 +295,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         }
         // Somebody who blocked this chat before keeps Unblock to get it back (iOS: no Block since 2026-10-31).
         else if (view.state.blocked) TextButton({ OfficialChannel.setBlocked(false) },
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 4.dp)) { Text("Unblock", color = c.blue) }
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 4.dp)) { Text("Unblock", color = c.accent) }
         else Text(OfficialChannel.CANNOT_REPLY, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 16.dp, horizontal = 16.dp))
@@ -436,7 +436,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(timeLabel(latest.sortAt, DateFormat.is24HourFormat(context)), style = MaterialTheme.typography.labelMedium,
-                    color = if (unread > 0) c.blue else c.secondary, maxLines = 1)
+                    color = if (unread > 0) c.accent else c.secondary, maxLines = 1)
             }
             Row(verticalAlignment = Alignment.Top) {
                 Text(latest.preview, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
@@ -444,9 +444,9 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 if (unread > 0) {
                     Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape)
-                        .background(if (muted) c.secondary else c.blue).padding(horizontal = 6.dp, vertical = 2.dp),
+                        .background(if (muted) c.secondary else c.accent).padding(horizontal = 6.dp, vertical = 2.dp),
                         contentAlignment = Alignment.Center) {
-                        Text(if (unread > 99) "99+" else "$unread", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                        Text(if (unread > 99) "99+" else "$unread", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.onAccent, maxLines = 1)
                     }
                 }
             }

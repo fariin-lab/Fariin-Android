@@ -194,7 +194,7 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp))
             Text(RestoreRules.body(handle), fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp))
             Spacer(Modifier.height(34.dp))
-            Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(c.blue)
+            Box(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(c.accent)
                 .clickable(enabled = !working) {
                     act {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("You are logged out.")
@@ -203,8 +203,8 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
                         onRestored()
                     }
                 }, contentAlignment = Alignment.Center) {
-                if (working) CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                else Text("Cancel Deletion", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = androidx.compose.ui.graphics.Color.White)
+                if (working) CircularProgressIndicator(color = c.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                else Text("Cancel Deletion", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
             }
             Text(RestoreRules.deadline(days), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp))
             error?.let { Text(it, fontSize = 13.sp, color = c.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp)) }

@@ -116,7 +116,7 @@ fun GlowWriteFailed(show: Boolean, onDismiss: () -> Unit) {
     if (!show) return
     val c = Fariin.colors
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Couldn't update") }, text = { Text("Try again in a moment.") },
-        confirmButton = { TextButton(onDismiss) { Text("OK", color = c.blue) } }, containerColor = c.card)
+        confirmButton = { TextButton(onDismiss) { Text("OK", color = c.accent) } }, containerColor = c.card)
 }
 
 /** A screen's empty or failed state (iOS ContentUnavailableView): a mark, a title, a line, a button. */
@@ -133,8 +133,8 @@ fun GlowUnavailable(title: String, body: String, icon: (@Composable () -> Unit)?
         Text(body, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
         if (action != null) {
             Spacer(Modifier.height(16.dp))
-            Box(Modifier.clip(CircleShape).background(c.blue).clickable(onClick = onAction).padding(horizontal = 18.dp, vertical = 10.dp)) {
-                Text(action, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Box(Modifier.clip(CircleShape).background(c.accent).clickable(onClick = onAction).padding(horizontal = 18.dp, vertical = 10.dp)) {
+                Text(action, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
             }
         }
     }
