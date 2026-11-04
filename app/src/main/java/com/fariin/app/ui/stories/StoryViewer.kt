@@ -1115,11 +1115,8 @@ private fun StoryMedia(
             // The row's thumbnail until the photo is in (iOS shows the preview first), so a story
             // the viewers row lands on is never an empty card while its photo loads.
             var shown by remember(story.id) { mutableStateOf(false) }
-            if (!shown && story.thumbUrl.isNotEmpty()) {
-                AsyncImage(story.thumbUrl, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            }
-            AsyncImage(story.mediaUrl, contentDescription = null, contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(), onSuccess = { shown = true; onLoaded() })
+            if (!shown && story.thumbUrl.isNotEmpty()) StoryPhoto(story.thumbUrl)
+            StoryPhoto(story.mediaUrl, onLoaded = { shown = true; onLoaded() })
             return@Box
         }
         AsyncImage(story.thumbUrl.ifEmpty { null }, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())

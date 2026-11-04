@@ -94,7 +94,11 @@ class StoryService(
             StoryViewer(d.id, name, photo, d.getTimestamp("viewedAt")?.toDate()?.time ?: System.currentTimeMillis(),
                 d.getString("reaction"))
         }.sortedByDescending { it.viewedAtMs }
-    } catch (_: Exception) { null }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        // A newer read replaced this one (the views listener fires as it attaches): not a failure,
+        // or the sheet flashed "Couldn't load viewers" on every open (owner 2026-11-03).
+        throw e
+    } catch (e: Exception) { android.util.Log.w("StoryService", "viewers read failed for $storyId", e); null }
 
     /**
      * iOS viewSummary: the server's counter (`meta/views`: count, reactionCount, recent, repostCount)
