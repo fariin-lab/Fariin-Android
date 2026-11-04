@@ -84,6 +84,10 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
     var groupInvite by remember { mutableStateOf<String?>(null) }
     groupInvite?.let { code -> com.fariin.app.ui.people.JoinGroupSheet(code, onClose = { groupInvite = null },
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
+    // A story link opens the story here when I may see it (iOS routes /s/ links to the viewer).
+    var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
+    storyOpen?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(now.me, listOf(g), 0,
+        com.fariin.app.data.ChatsNow.list, onClose = { storyOpen = null }) }
     if (notFound) AlertDialog(
         onDismissRequest = { notFound = false },
         title = { Text("Sorry, this user doesn't seem to exist.") },
@@ -121,7 +125,12 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                     val h = com.fariin.app.data.QrRules.handleFrom(sp.target)
                     val adminCode = com.fariin.app.ui.channels.AdminInviteLink.code(sp.target)
                     val groupCode = com.fariin.app.ui.people.GroupInviteLink.code(sp.target)
+                    val storyLink = StoryLinks.parse(sp.target)
                     when {
+                        storyLink != null -> scope.launch {
+                            val g = StoryLinks.open(storyLink.first, storyLink.second)
+                            if (g != null) storyOpen = g else notice("This story is no longer available.")
+                        }
                         adminCode != null -> invite = adminCode
                         groupCode != null -> groupInvite = groupCode
                         call != null -> nav.joinLink(call.text, com.fariin.app.call.CallLinkKey.linkSaysVideo(sp.target))
@@ -167,3 +176,27 @@ private fun start(ctx: Context, intent: Intent, onFail: () -> Unit) {
 
 /** A web address from outside a bubble (a profile link): the same opener as a tapped link. */
 internal fun openWebLink(ctx: Context, uri: Uri) = openWeb(ctx, uri.toString()) {}
+
+/** A story's address, fariin.com/<name>/s/<id> or fariin.com/s/<id> (PostedStoriesRules.storyLink). */
+internal object StoryLinks {
+    private val re = Regex("^https?://(www\\.)?fariin\\.com/(?:([A-Za-z0-9_.]{1,40})/)?s/([A-Za-z0-9_-]{4,64})/?$", RegexOption.IGNORE_CASE)
+
+    /** (@name or null, story id). */
+    fun parse(url: String): Pair<String?, String>? = re.find(url.trim())?.let { m ->
+        (m.groupValues[2].ifEmpty { null }) to m.groupValues[3]
+    }
+
+    /** The story as a one-story ring, when it is live and mine to see: the story itself, else its public copy. */
+    suspend fun open(handle: String?, id: String): com.fariin.app.data.StoryGroup? {
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val direct = runCatching { db.collection("stories").document(id).get().await() }.getOrNull()
+            ?.data?.let { com.fariin.app.data.StoryList.parse(id, it) }
+        val story = direct ?: handle?.let { h -> handleOwner(h) }?.let { owner ->
+            runCatching { db.collection("users").document(owner).collection("publicStories").document(id).get().await() }
+                .getOrNull()?.data?.let { com.fariin.app.data.StoryList.parse(id, it) }
+        } ?: return null
+        if (story.expiresAtMs <= System.currentTimeMillis()) return null
+        val u = runCatching { db.collection("users").document(story.authorUid).get().await() }.getOrNull()
+        return com.fariin.app.data.StoryGroup(story.authorUid, u?.getString("name").orEmpty(), u?.getString("photoUrl"), listOf(story))
+    }
+}
