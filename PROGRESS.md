@@ -531,3 +531,4 @@ Seen, not fixed (not today's regressions):
   - My Story: a pull down opened the viewers when the finger flicked back up as it lifted; only a drag that starts upward opens them now (tested on the Pixel: short pull springs back, swipe up opens viewers, long pull closes).
   - Viewers carousel: a tapped side card flicked from a cropped tall card to the page's fitted picture; side cards fit the picture now (recording on the Pixel).
   - Story photos drawn as iOS on page and carousel (fill if tall, else fitted on a gradient of the photo's edge colours; cards always rounded). Viewers sheet no longer flashes "Couldn't load viewers" (a cancelled read counted as a failure).
+  - Story close: grey status/nav bands of the viewer window snapped white at the end; bars transparent now and icons switch as the close starts (60 fps recording on the Pixel).
