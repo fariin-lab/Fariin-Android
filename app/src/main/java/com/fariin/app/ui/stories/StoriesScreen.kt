@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -226,9 +227,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        // Title at the start, the actions (camera, overflow) as floating circles at the end.
+        // Title at the start, the overflow at the end. No camera here: iOS took add-story off the
+        // header (owner 2026-10-11, "I don't need it"); the camera on My Story's row posts.
         com.fariin.app.ui.components.FloatingTopBar("Stories", actions = {
-            com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.PhotoCamera, contentDescription = "Add Story", onClick = addStory)
             // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
             Box {
                 com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { moreOpen = true })
@@ -515,6 +516,9 @@ private fun StoryRow(
                     .clip(shape).background(c.placeholderFill),
                 contentAlignment = Alignment.Center,
             ) {
+                // A faint rim over the picture (the same 7% line as the floating controls), so a white
+                // story still reads as a card on the white page instead of a hole beside the back card.
+                Box(Modifier.matchParentSize().zIndex(1f).border(0.5.dp, c.label.copy(alpha = 0.12f), shape))
                 when {
                     // Debug demo data only: a plain colour instead of a picture.
                     thumbUrl.startsWith("demo:") -> Box(Modifier.fillMaxSize().background(demoColor(thumbUrl)))
