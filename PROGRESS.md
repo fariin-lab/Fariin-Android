@@ -549,3 +549,4 @@ Seen, not fixed (not today's regressions):
   - Older LEFT/TODO notes in this file are partly stale: checked tonight and already built: in-app banner drops blocked senders, official topics left at sign-out, 1:1 No answer card (NoAnswerCard). Re-check any old LEFT item against the code before building it.
 - 2026-11-04 feature pass (iOS Views vs Android): missing were Add to a Group (done), New Contact, Things you can do card, member roles editor, story location sticker, floating group-call window, animated custom reactions; plus group-call raise hand/reactions and official chat reactions/search/unread.
   - New Contact (7a0f5ef, not-found path tested), Things you can do card (needs a new account to see). Next: member roles editor.
+  - Member tags (set from the member card, shown in group chats). Next: story location sticker.
