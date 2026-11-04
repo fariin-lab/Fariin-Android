@@ -976,7 +976,8 @@ fun ChatRow(
                     if (conv.isPinned(me) && unread == 0) {
                         Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = c.tertiary, modifier = Modifier.size(16.dp))
                     }
-                    if (conv.lastIsMine(me) && !conv.isChannel) Ticks(conv, me)
+                    // Never beside a call: it is a record, not a message with a sent / read state (iOS).
+                    if (conv.lastIsMine(me) && !conv.isChannel && !(preview.startsWith("↗ ") || preview.startsWith("📞 ") || preview.startsWith("📹 "))) Ticks(conv, me)
                     if (conv.hasUnreadReply(me)) {
                         Box(Modifier.size(20.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Someone replied to you",

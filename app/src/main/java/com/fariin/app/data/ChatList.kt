@@ -76,6 +76,22 @@ object ChatList {
     }
 
     /** The preview line under the name. */
+    /**
+     * iOS MainShell call rows (owner 2026-09-26): one marker reaches both phones, so the direction
+     * comes from who placed the call. An unanswered call I made is "Voice call" / "Video call";
+     * only the person called sees "Missed". Null when [text] is not a call marker.
+     */
+    fun callWords(text: String, mine: Boolean): String? = when (text) {
+        "📞 Missed call", "📞 Declined call" -> if (mine) "↗ Voice call" else "📞 Missed voice call"
+        "📞 Call" -> "📞 Voice call"
+        "📹 Missed video call", "📹 Declined video call" -> if (mine) "↗ Video call" else "📹 Missed video call"
+        "📹 Video call" -> "📹 Video call"
+        else -> null
+    }
+
+    /** A call record, not a message: no sent / read ticks beside it (iOS). */
+    fun isCallMarker(raw: String): Boolean = callWords(raw, false) != null
+
     fun previewLine(c: Conversation, me: String, decryptor: MessageDecryptor, senderName: (String) -> String?): String {
         reactionPreview(c, me, decryptor, senderName)?.let { return it }
         if (c.lastMessageCipher.isEmpty() && c.lastImageUrl.isNullOrEmpty()) return ""
@@ -86,6 +102,7 @@ object ChatList {
             .let { t -> if (t != null && PollRules.isPoll(t)) PollRules.PREVIEW else t }   // iOS MainShell poll row
             .let { t -> CardRules.previewWord(t) ?: t }   // iOS MainShell contact / location rows
             ?: if (!c.lastImageUrl.isNullOrEmpty()) "Photo" else "Message"
+        callWords(text, c.lastIsMine(me))?.let { return it }
         // In a group the line starts with who said it, as on iOS (never for my own lines), first name
         // only. System notices ("X created the group") stay bare (iOS lastSenderPrefix): they are
         // plain words, not a sealed "enc" line, a media marker or a member's plain-text line.
