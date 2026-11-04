@@ -39,6 +39,20 @@ class ChatsViewModel(
     private val burnTick = kotlinx.coroutines.flow.MutableStateFlow(0)
     private var burnJob: kotlinx.coroutines.Job? = null
 
+    /** Suspends until [me] is the signed-in account again. */
+    private suspend fun signedInAgain() {
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
+            val l = object : com.google.firebase.auth.FirebaseAuth.AuthStateListener {
+                override fun onAuthStateChanged(a: com.google.firebase.auth.FirebaseAuth) {
+                    if (a.currentUser?.uid == me && cont.isActive) { a.removeAuthStateListener(this); cont.resume(Unit) {} }
+                }
+            }
+            auth.addAuthStateListener(l)
+            cont.invokeOnCancellation { auth.removeAuthStateListener(l) }
+        }
+    }
+
     val state: StateFlow<ChatsUiState> = repo.listen(me)
         // iOS SessionRecovery: a refused listener comes back. A fresh token, then a new listener, on
         // 1 s, 3 s, 10 s, 30 s, 60 s and every 60 s after; it stops only when the session itself is
@@ -46,8 +60,13 @@ class ChatsViewModel(
         .retryWhen { cause, attempt ->
             val ended = runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await() }
                 .exceptionOrNull() is com.google.firebase.auth.FirebaseAuthInvalidUserException
-            if (ended || com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+            if (ended) {
                 emit(ConversationsRepository.State.Failed(cause.message ?: "Could not load chats")); false
+            } else if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != me) {
+                // Logged out (this list outlives it, kept per account): wait quietly for this same
+                // account to sign back in, then listen again. Without this the list stayed on the
+                // refusal it got at Log Out after a one-tap sign-in back.
+                signedInAgain(); true
             } else {
                 kotlinx.coroutines.delay(longArrayOf(1_000, 3_000, 10_000, 30_000, 60_000)[minOf(attempt.toInt(), 4)])
                 true
