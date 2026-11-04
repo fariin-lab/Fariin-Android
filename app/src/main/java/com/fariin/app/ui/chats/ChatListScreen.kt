@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import com.fariin.app.data.SearchRecents
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
@@ -847,6 +848,27 @@ fun ChatRow(
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
+    // The tap's grey: Android's own ripple, from where the finger was, the way Android lists press a
+    // row (owner 2026-11-04: the big messengers show it, ours never did). The list holds a quick tap's
+    // press back to tell it from a scroll, so on release the row is pressed again from the finger's
+    // point and the chat opens after the system's pressed-state duration, as a RecyclerView /
+    // ListView item click does (ViewConfiguration.getPressedStateDuration).
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    var lastDown by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    LaunchedEffect(press) {
+        press.interactions.collect { if (it is androidx.compose.foundation.interaction.PressInteraction.Press) lastDown = it.pressPosition }
+    }
+    val rowScope = rememberCoroutineScope()
+    val open: () -> Unit = {
+        rowScope.launch {
+            val p = androidx.compose.foundation.interaction.PressInteraction.Press(lastDown)
+            press.emit(p)
+            kotlinx.coroutines.delay(android.view.ViewConfiguration.getPressedStateDuration().toLong())
+            onOpen()
+            kotlinx.coroutines.delay(200)
+            press.emit(androidx.compose.foundation.interaction.PressInteraction.Release(p))
+        }
+    }
     val unread = if (conv.isBlockedByMe(me)) 0 else conv.unread(me)
     val now = System.currentTimeMillis().toDouble()
     val muted = conv.isMuted(me, now)
@@ -872,7 +894,7 @@ fun ChatRow(
     Row(
         Modifier.fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f) else Color.Transparent)
-            .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
+            .combinedClickable(interactionSource = press, indication = androidx.compose.material3.ripple(), onClick = open, onLongClick = onLongPress)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
