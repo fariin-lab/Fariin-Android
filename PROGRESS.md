@@ -525,4 +525,5 @@ Seen, not fixed (not today's regressions):
 - 2026-11-03 late (solo): video HD toggle (f0bfb0c); story repost as iOS (b93774a): repost button left of the heart on Everyone photo stories, the original drawn as a credited card, composer, repostOf written on the story and its public copy. Tested on emulator-5554 (alice reposted Bobby's story; Firestore has repostOf with card true).
   - Repost credit: the middle of a repost shows the original author, a tap opens their profile (e0bb613). Video repost (tested: Carol's video reposted by alice, repostOf on a video story).
   - Sticker creator framing: drag and pinch inside the square, Send crops what it shows (tested drag on a tall photo; the sent sticker matched).
-  - Left (code, small): the slow first frame back to the chat list.
+  - Back to the chat list: the main shell is kept alive under every page; on the Pixel the worst frame went 63-79 ms -> 41-54 ms (drawing ~42 -> ~5 ms). The ~20 ms left is the list recomposing because leaving a chat marks it read (real data change); a later pass could make rows skip better.
+  - Left: nothing small in code; owner items unchanged.
