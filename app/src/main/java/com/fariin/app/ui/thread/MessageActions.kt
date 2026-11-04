@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.automirrored.outlined.Forward
 import androidx.compose.material.icons.outlined.Download
@@ -144,6 +145,10 @@ internal fun MessageMenu(
             if (MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy) { onCopy(m.text) })
             if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit) { onStartEdit(m) })
             if (m.edited) add(MenuItem("Edit History", Icons.Outlined.History) { onEditHistory(m) })
+        }
+        // iOS: a photo, video, album or GIF still going up can be stopped from its menu, not only its ring.
+        if (m.sendState == Message.SendState.SENDING && (m.mediaKind != null || m.isGif)) uploadCancelFor(m)?.let { cancel ->
+            add(MenuItem("Cancel Sending", Icons.Outlined.Cancel, destructive = true) { cancel() })
         }
         if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) })
         if (!m.deleted) {
