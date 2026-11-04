@@ -676,3 +676,7 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Chat list call rows: the caller saw red-meaning "Missed call" + ticks for a call they made.
   Now iOS words (↗ Voice call / Video call for mine, Missed for the callee), no ticks. Test added.
   Seen on the Pixel (kream, adnan abdi rows).
+- New Group: photo slot = iOS camera drawing (ic_group_camera), no "Members · N" heading on the
+  name page (iOS 2026-10-20). Seen on the Pixel, nothing created. Add Members lists accepted chats
+  only (pending requests left out): on purpose.
+- Video viewer checked (sender, date, seek, pause, share): fine.
