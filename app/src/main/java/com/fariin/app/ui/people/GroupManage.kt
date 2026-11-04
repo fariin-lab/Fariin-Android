@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Sell
 import com.fariin.app.ui.components.floating
@@ -619,13 +620,11 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                                 val on = uid in picked
                                 MemberSwipeRow(enabled = removable && !selecting, onSwiped = { pendingRemove = listOf(uid) }) {
                                     Box(Modifier.fillMaxWidth().background(if (on) c.blue.copy(alpha = 0.12f) else c.card)
-                                        .combinedClickable(
-                                            onClick = {
-                                                if (selecting) { if (removable) picked = if (on) picked - uid else picked + uid }
-                                                else open?.invoke()
-                                            },
-                                            onLongClick = if (removable && !selecting) ({ picked = setOf(uid) }) else null,
-                                        )) {
+                                        // The shared row press: a sideways swipe is not a tap.
+                                        .listPress(onLongClick = if (removable && !selecting) ({ picked = setOf(uid) }) else null) {
+                                            if (selecting) { if (removable) picked = if (on) picked - uid else picked + uid }
+                                            else open?.invoke()
+                                        }) {
                                         PersonLine(team.photos[uid]?.ifEmpty { null }, com.fariin.app.data.GroupMembers.shownName(g, uid, me)) {
                                             com.fariin.app.data.GroupMembers.rank(g, uid)?.let { Text(it, fontSize = 14.sp, color = c.secondary) }
                                             if (selecting && removable) {
