@@ -331,6 +331,9 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     var archive by remember { mutableStateOf(p.getBoolean("unknownChats.autoArchive", false)) }
     var size by remember { mutableStateOf(p.getString("chat.textSize", "medium") ?: "medium") }
     val quick = p.getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️"
+    var confirmClear by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
+    val clearScope = rememberCoroutineScope()
     ScrollPage("Chats", pop) {
         SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
             SettingsRow("Chat Key", last = true) { push(PAGE_CHAT_KEY) }
@@ -352,7 +355,28 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         SettingsSection(header = "New Chats from Your Chat Key", footer = "When someone uses your Chat Key to message you, the chat goes to Archived, muted.") {
             SwitchRow("Automatically Archive", archive, last = true) { archive = it; p.edit().putBoolean("unknownChats.autoArchive", it).apply() }
         }
+        // iOS ChatsSettingsView: the last row, red, with what it does written under it.
+        SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {
+            SettingsRow("Clear Chat History", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { if (!clearing) confirmClear = true }
+        }
     }
+    if (confirmClear) YesNo("Clear Chat History?",
+        "Are you sure you want to permanently delete all chat history, including messages, photos, videos, documents, voice messages, and call history, from all of your devices? This action cannot be undone.",
+        "Delete Everything", onYes = {
+            confirmClear = false
+            val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@YesNo
+            clearing = true
+            clearScope.launch {
+                // Each chat as the per-chat Delete does it (clearedAt, written on the server so every
+                // device of mine follows). My copy only: the other person keeps theirs. Channels I
+                // follow are left as they are (iOS unfollows them here; clearing is not leaving).
+                val ok = com.fariin.app.data.CryptoHub.listedAll().filter { !it.isFollower(me) }
+                    .map { com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, it) }.all { it }
+                com.fariin.app.data.OfficialChannel.clearHistory()
+                clearing = false
+                com.fariin.app.ui.components.Snack.show(if (ok) "Chat history cleared" else "Couldn't clear every chat. Check your connection and try again.")
+            }
+        }, onNo = { confirmClear = false })
 }
 
 @Composable
