@@ -532,3 +532,6 @@ Seen, not fixed (not today's regressions):
   - Viewers carousel: a tapped side card flicked from a cropped tall card to the page's fitted picture; side cards fit the picture now (recording on the Pixel).
   - Story photos drawn as iOS on page and carousel (fill if tall, else fitted on a gradient of the photo's edge colours; cards always rounded). Viewers sheet no longer flashes "Couldn't load viewers" (a cancelled read counted as a failure).
   - Story close: grey status/nav bands of the viewer window snapped white at the end; bars transparent now and icons switch as the close starts (60 fps recording on the Pixel).
+  - Tab bar: no vibration on a tab tap (owner). Search is its own page as iOS (Recent / Chats / Groups / Channels / Global Search, tab bar hidden), tested on the Pixel.
+  - Screen Security: owner saw the switch on but Recents showing content; on the Pixel the saved setting was off while the page showed on. Turned on again it works (FLAG_SECURE set, screenshots blocked, survives restart); the cause of the mismatch is not found yet.
+  - Thread back arrow after the photo viewer (owner): not reproduced on the current build (back, X, swipe-down close, second photo; arrow and gesture both return to the list). Asked the owner how the chat was opened.
