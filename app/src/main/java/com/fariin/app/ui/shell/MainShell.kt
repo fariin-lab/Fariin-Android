@@ -177,6 +177,16 @@ fun MainShell(
     // The same feed for screens outside the tabs (a chat's story mention card asks if a story is live).
     LaunchedEffect(stories) { com.fariin.app.data.LiveStories.state.value = stories }
     LaunchedEffect(chats.chats) { com.fariin.app.data.ChatsNow.list = chats.chats }
+    // A story post the app died in the middle of (StoryOutbox): finished once the chat list is here.
+    var outboxRan by remember(me) { mutableStateOf(false) }
+    LaunchedEffect(me, chats.chats.isNotEmpty()) {
+        if (!demo && !outboxRan && chats.chats.isNotEmpty()) {
+            outboxRan = true
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.fariin.app.data.StoryOutbox.resume(context, me, com.fariin.app.ui.stories.storyConvs(chats.chats))
+            }
+        }
+    }
 
     // The chat list's camera button opens the Stories tab straight into its photo picker.
     var storyRequest by rememberSaveable { mutableIntStateOf(0) }

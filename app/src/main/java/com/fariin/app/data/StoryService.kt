@@ -170,6 +170,8 @@ class StoryService(
         myFriends: StoryListDoc = StoryPrivacyRules.defaultMyFriends,
         hiddenFrom: Set<String> = emptySet(),
         lists: List<StoryListDoc> = emptyList(),
+        /** The outbox's id, so a resumed post writes the story it promised (StoryOutbox). */
+        fixedId: String? = null,
     ): String {
         if (me.isEmpty()) throw PostRefused("Not signed in.")
         // A custom post names the people of its ticked lists (iOS postToLists: the union).
@@ -188,7 +190,7 @@ class StoryService(
             throw PostRefused(EMPTY_AUDIENCE)
         if (choice.needsPeople && recipients.isEmpty()) throw PostRefused("Pick at least one person.")
         countAgainstBudget()
-        val id = StoryRules.newStoryId()
+        val id = fixedId ?: StoryRules.newStoryId()
         val doc = db.collection("stories").document(id)
         val expires = Timestamp(Date(System.currentTimeMillis() + hours * 3_600_000L))
         val isVideo = media.video != null

@@ -107,21 +107,27 @@ object StoryUploads {
     val state = MutableStateFlow<State?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun start(me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
+    fun start(context: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
               hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false,
               lists: List<com.fariin.app.data.StoryListDoc> = emptyList()) {
         state.value = State.Uploading
         // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
         val myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
         val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
+        val app = context.applicationContext
         scope.launch {
+            // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start.
+            val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists)
             state.value = try {
-                StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists)
+                StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket)
+                ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
                 null
             } catch (e: StoryService.PostRefused) {
+                ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
                 State.Failed(e.message ?: "Couldn't post your story.")
             } catch (e: Exception) {
                 android.util.Log.w("StoryPost", "post failed", e)
+                ticket?.let { com.fariin.app.data.StoryOutbox.release(it) }
                 State.Failed("Couldn't post your story. Check your connection and try again.")
             }
         }
@@ -151,6 +157,7 @@ fun StoryComposerDialog(
 
 @Composable
 private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
     var hoursMenu by remember { mutableStateOf(false) }
@@ -369,7 +376,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         }
         if (audience) {
             ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
-                StoryUploads.start(me, posted, caption, choice, picked, hours, storyConvs(conversations), capture, lists)
+                StoryUploads.start(ctx, me, posted, caption, choice, picked, hours, storyConvs(conversations), capture, lists)
                 onPosted()
             }
         }
