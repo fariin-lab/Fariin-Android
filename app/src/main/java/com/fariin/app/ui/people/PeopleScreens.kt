@@ -473,7 +473,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             person?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 16.sp, color = c.secondary) }
             Spacer(Modifier.height(16.dp))
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            // Spread over the width: with Search too, five circles at a fixed 28 dp gap ran past the
+            // edge and the last label wrapped letter by letter into a tall empty band.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ActionTile("Message", androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline) { onOpenChat(cid) }
                 if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor)
                 // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
@@ -506,9 +508,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 DisappearingRow(timer, short = true) { timerOpen = true }
                 // iOS: Restricted chat, for a chat that exists (the switch lives on it).
                 val chatNow = com.fariin.app.data.ChatsNow.find(cid)
+                // Each row with its iOS icon, so the three line up (only the first had one).
                 if (uid != me && chatNow != null) SettingsRow("Restricted Chat",
+                    icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_restricted_chat),
                     value = if (chatNow.isRestricted) "On" else "Off") { restrictOpen = true }
-                SettingsRow("Verify Encryption", last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
+                SettingsRow("Verify Encryption", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_verify_encryption), last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
             }
             // iOS: after the settings card, and only when the chat has photos or videos.
             SharedMediaCard(cid, shared) { allMedia = true }
@@ -582,7 +586,7 @@ internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.
             Icon(icon, contentDescription = null, tint = c.label, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
-        Text(text, fontSize = 13.sp, color = c.label)
+        Text(text, fontSize = 13.sp, color = c.label, maxLines = 1, softWrap = false)
     }
 }
 
