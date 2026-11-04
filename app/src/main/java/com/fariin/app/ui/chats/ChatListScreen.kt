@@ -401,8 +401,15 @@ fun ChatListScreen(
                             // looks weak" beside the reference apps). Status words stay plain.
                             title = {
                                 // No mark beside it (owner 2026-11-03: "remove the black round").
-                                if (title == "Fariin") Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (title == "Fariin") Column {
                                     Text("Fariin", fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = c.label)
+                                    // The filter in use, under the title (iOS, owner 2026-10-31): without it a
+                                    // filtered list looked like chats had gone. A tap goes back to all chats.
+                                    val filterName = when (filter) {
+                                        FILTER_UNREAD -> "Unread"; FILTER_GROUPS -> "Groups"; FILTER_CHANNELS -> "Channels"; else -> null
+                                    }
+                                    if (filterName != null) Text("$filterName  ×", fontSize = 13.sp, color = c.secondary,
+                                        modifier = Modifier.clickable(onClickLabel = "Show all chats") { filter = FILTER_ALL })
                                 } else Text(title, style = MaterialTheme.typography.titleLarge)
                             },
                             // The bar's buttons float in their own circles, as the chat screen's back does.
