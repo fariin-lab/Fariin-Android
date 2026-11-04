@@ -1,5 +1,11 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -162,6 +168,8 @@ data class ThreadUi(
     val disappearSeconds: Int = 0,
     /** A group's own document, for what its members may send (GroupAdmins: memberSend, slow mode). */
     val groupDoc: Map<String, Any?> = emptyMap(),
+    /** My mute on this chat for the header menu's Mute row; null leaves the row out. */
+    val muted: Boolean? = null,
 )
 
 /** The timer in force and since when, for the bubble's timer mark (iOS MessageRowContext.timer). */
@@ -503,7 +511,7 @@ private fun ThreadContent(
                     keyboard?.hide()
                     if (search.matches.isNotEmpty()) { search.index = minOf(search.index + 1, search.matches.size - 1); goToMatch() }
                 })
-                else if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick)
+                else if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
                 // Another chat's voice message still playing: its bar under the header (iOS VoiceNoteBar).
                 val openChat = LocalOpenChat.current
                 if (!search.active && !selecting) VoiceNoteBar(ui.cid, ui.me) { cid -> com.fariin.app.data.ChatsNow.find(cid)?.let(openChat) }
@@ -825,7 +833,7 @@ private fun noticeText(m: Message): String = when {
 }
 
 @Composable
-private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}) {
+private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}, onToggleMute: () -> Unit = {}) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -856,6 +864,32 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                 }
             }
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
+            HeaderMenu(ui, onToggleMute)
+        }
+    }
+}
+
+/**
+ * The header's overflow (Android top bar): Search in this chat and Mute, the two things people
+ * reach for most, without a trip through the info page.
+ */
+@Composable
+private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
+    if (ui.cid.isEmpty()) return
+    val c = Fariin.colors
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.padding(start = 6.dp, end = 4.dp)) {
+        IconButton(onClick = { open = true }, modifier = Modifier.size(44.dp).floating()) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                onClick = { open = false; InChatSearchLink.request(ui.cid) })
+            ui.muted?.let { muted ->
+                DropdownMenuItem(text = { Text(if (muted) "Unmute" else "Mute") },
+                    leadingIcon = { Icon(if (muted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff, null) },
+                    onClick = { open = false; onToggleMute() })
+            }
         }
     }
 }

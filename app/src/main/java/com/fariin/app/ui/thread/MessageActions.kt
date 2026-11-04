@@ -84,6 +84,8 @@ data class ThreadActions(
     /** The list reached (true) or left (false) the newest message. */
     val onAtBottom: (Boolean) -> Unit = {},
     val onTitleClick: () -> Unit = {},
+    /** The header menu's Mute / Unmute. */
+    val onToggleMute: () -> Unit = {},
     val onUnblock: () -> Unit = {},
     /** Shown in a small notice ("Copied", "Saved to Photos"). */
     val onNotice: (String) -> Unit = {},

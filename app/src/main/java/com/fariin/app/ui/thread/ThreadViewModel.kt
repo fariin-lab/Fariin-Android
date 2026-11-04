@@ -127,6 +127,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
         groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
         notAMember = s.former && channel == null,
+        muted = conv?.takeIf { !s.former }?.isMuted(me, System.currentTimeMillis().toDouble()),
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
@@ -156,6 +157,15 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             if (channel != null) channelNav.page(cid) else if (conv?.isGroup == true) nav.group(cid) else conv?.otherUid(me)?.takeIf { it.isNotEmpty() }?.let(nav.contact)
         },
         onNotice = { notice = it },
+        onToggleMute = {
+            conv?.let { cv ->
+                val on = !cv.isMuted(me, System.currentTimeMillis().toDouble())
+                vm.viewModelScope.launch {
+                    notice = if (com.fariin.app.ui.chats.ChatListActions.setMuted(me, cv, on)) (if (on) "Muted" else "Unmuted")
+                        else "Check your connection and try again."
+                }
+            }
+        },
         onForwardTo = { m, targets ->
             vm.viewModelScope.launch {
                 val failed = com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets)
