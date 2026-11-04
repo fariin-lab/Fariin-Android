@@ -361,7 +361,7 @@ private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: 
                             .background(if (e == mine) c.label.copy(alpha = 0.08f) else Color.Transparent)
                             .clickable { onPick(e) },
                         contentAlignment = Alignment.Center,
-                    ) { Text(e, fontSize = emojiSize) }
+                    ) { ReactionGlyph(e, emojiSize, with(density) { (sidePx * 0.8f).toDp() }) }
                 }
             }
         }

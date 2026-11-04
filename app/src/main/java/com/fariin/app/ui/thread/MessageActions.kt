@@ -307,7 +307,7 @@ internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (Stri
                     .padding(horizontal = 7.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(chip.emoji, fontSize = 15.sp)
+                ReactionGlyph(chip.emoji, 15.sp, 20.dp)
                 if (chip.faces.isEmpty()) {
                     Spacer(Modifier.width(3.dp))
                     Text("${chip.count}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label)
