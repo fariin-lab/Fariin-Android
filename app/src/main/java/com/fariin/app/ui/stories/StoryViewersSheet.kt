@@ -278,7 +278,10 @@ internal fun ViewersCarousel(
                         val url = s.listThumb
                         if (url.startsWith("demo:")) Box(Modifier.fillMaxSize().background(
                             runCatching { Color(android.graphics.Color.parseColor(url.removePrefix("demo:"))) }.getOrDefault(Color.Gray)))
-                        else AsyncImage(url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        // Fit, as the story page draws it: a cropped side card turned into the page's
+                        // letterboxed picture the moment it became the live one (owner 2026-11-03, a wide
+                        // photo went from a tall rounded card to a thin strip).
+                        else AsyncImage(url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
                         Box(Modifier.fillMaxSize().graphicsLayer { alpha = geo(sheet.fraction).placement(i - sheet.row.value).dim }.background(Color.Black))
                     }
                 }
