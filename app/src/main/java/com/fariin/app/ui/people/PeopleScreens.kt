@@ -5,6 +5,7 @@ import androidx.compose.material.icons.outlined.Call
 import com.fariin.app.data.isRestricted
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -91,7 +92,7 @@ import kotlinx.coroutines.launch
 internal fun PersonRow(photo: String?, name: String, sub: String, onClick: (() -> Unit)?, trailing: @Composable () -> Unit = {}) {
     val c = Fariin.colors
     Row(
-        Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().let { if (onClick != null) it.listPress(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Avatar(photo, 44.dp)

@@ -3,6 +3,7 @@ package com.fariin.app.ui.calls
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -177,7 +178,7 @@ private fun Header(text: String) {
 @Composable
 private fun TargetRow(t: CallTarget, onVoice: () -> Unit, onVideo: () -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().clickable(onClick = onVoice).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+    Row(Modifier.fillMaxWidth().listPress(onClick = onVoice).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Avatar(t.photo, 46.dp, squircle = t.groupCid != null)
         Spacer(Modifier.width(14.dp))
