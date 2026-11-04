@@ -325,8 +325,11 @@ fun StoryViewer(
     // Which story of my ring the row landed on, for its page to show.
     var jumpTo by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(sheetFor) { if (sheetFor == null) jumpTo = null }
-    val topInset = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
-    val bottomInset = WindowInsets.navigationBars.getBottom(LocalDensity.current).toFloat()
+    // Live, not captured: this window learns its status bar height a frame or two after it opens,
+    // and a flight that fixed its target on the first frame landed that much too high, then
+    // jumped down (owner 2026-11-03, "something jump" opening My Story).
+    val topInset by rememberUpdatedState(WindowInsets.statusBars.getTop(LocalDensity.current).toFloat())
+    val bottomInset by rememberUpdatedState(WindowInsets.navigationBars.getBottom(LocalDensity.current).toFloat())
 
     // ---- The zoom: out of the tapped card, back into it (iOS StoryZoomPresenter + the hero drag) ----
     val density = LocalDensity.current.density
@@ -409,8 +412,11 @@ fun StoryViewer(
         hero.visible = true
         // Seated first, flown after: the first frames go to building the page, not to the spring's clock.
         withFrameMillis { }; withFrameMillis { }
+        val from = a.center
         runHero(0f, rest(), 1f, 0f, StoryMotion.OPEN_STIFFNESS, StoryMotion.OPEN_SETTLE,
-            cover = StoryMotion::coverOut, crop = StoryMotion::coverOut, dimFloor = { it }) {
+            cover = StoryMotion::coverOut, crop = StoryMotion::coverOut, dimFloor = { it },
+            // Aim at where the card is now, every frame, so the landing is where the page sits.
+            extra = { t -> hero.center = androidx.compose.ui.geometry.lerp(from, rest(), t) }) {
             hero.live = false; hero.cover = 0f; hero.crop = 0f
         }
     }
@@ -1179,8 +1185,17 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
     val count = summary?.count ?: 0
     val faces = summary?.recent ?: emptyList()
     val full = StoryRules.oneTimeFull(story)
+    // The numbers fade in once they are known, instead of "0 Views" turning into the real count
+    // a moment after the story opens (owner 2026-11-03).
+    // A count that never comes still shows the bar after a moment, so Views can always be opened.
+    var waited by remember(story.id) { mutableStateOf(false) }
+    LaunchedEffect(story.id) { kotlinx.coroutines.delay(1500); waited = true }
+    val ready = summary != null || waited
+    val shown by androidx.compose.animation.core.animateFloatAsState(if (ready) 1f else 0f,
+        androidx.compose.animation.core.tween(160), label = "ownerStats")
     Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.clickable { onViews() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.graphicsLayer { alpha = shown }.clickable(enabled = ready) { onViews() }.padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             if (faces.isNotEmpty()) {
                 Box(Modifier.width((26 + (faces.size - 1) * 18).dp).height(26.dp)) {
                     faces.forEachIndexed { i, v ->
