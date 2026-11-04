@@ -559,3 +559,4 @@ Seen, not fixed (not today's regressions):
   - Reading position per chat for the app run (lands within a row). Remaining from pass 2: profile photo history, session recovery.
   - Chat list listener recovers after a server refusal (token refresh + backoff). Pass 2 done except DeviceLock (Android uses its own biometric App Lock), HealthReports/WeakLink (iOS-specific diagnostics).
   - Pass 3 (inside screens): Cancel Sending on uploads, Clear My Messages on profiles. Attach menu and chat header already match. Left: Share Profile (send a person's card to another chat).
+  - Share Profile (card to chats). Profile page now matches iOS's menu (Export Chat is off on iOS).
