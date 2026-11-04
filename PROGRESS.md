@@ -594,3 +594,28 @@ Seen, not fixed (not today's regressions):
 - 2026-11-04: b4d1616 installed on the Pixel. kream opened 3 times: name at the top line with "last seen" under it from the first read each time.
 - 2026-11-04: Back is now a solid full-width slide (220 ms), never a fade: Android predictive back held a fading page part-way and showed both pages washed together (owner photo). Settings row lines run full width (owner photo). Installed.
 - 2026-11-04: Predictive back off (enableOnBackInvokedCallback=false), as WhatsApp: holding the back swipe shows only the system arrow, the chat does not move until release, then the normal back motion. Installed.
+
+## NEXT SESSION: WhatsApp usability comparison (owner order, 2026-11-04 14:25)
+Owner: "use WhatsApp as a normal person, compare everything (chat list, chats, settings, calls,
+updates), take your time, 2 days if needed, until Fariin is as usable as the big apps."
+Rules from the owner for this job:
+- On the Pixel (0B251FDD4000WB) you may message, call, make a group or a channel in WhatsApp with
+  ONE person only: "adnan". Nobody else. Everything else in WhatsApp: look only.
+- Do not message or call the owner's real Fariin contacts.
+- Say before installing on the Pixel (an install closes Fariin while he uses it).
+- Screenshots: `scratchpad/shot.sh <name>` idea (adb exec-out screencap -p, scale 360). The
+  uiautomator dump crashes on WhatsApp sometimes; `tools/ui.py tap` takes TEXT, not x y (use
+  `adb shell input tap x y` for coordinates).
+- Study the reference app's open-source Android code for how (DrKLO/Telegram on GitHub, raw files
+  via curl), never copy code. No brand names in our code or commits ("the reference app").
+Done this session (motion, from the owner's frame-by-frame videos of WhatsApp vs Fariin):
+- Row tap: ripple held PRESS_HOLD_MS = 200 ms before the chat opens (ui/components/ListPress.kt),
+  on chat rows and Settings rows.
+- Open: only the new page moves (fade in + 48 dp), 150 ms; the list under it stays still.
+- Back: a 90 ms fade, no slide (Motion.pageOut). Predictive back OFF in the manifest, so a held
+  back swipe shows only the system arrow, as WhatsApp.
+- Chat first frame steady (ThreadSeed: ticks + presence known before listeners answer; header
+  keeps its second line).
+Start the comparison with: chat list (long press, menu, filters, archive, swipe), then a chat
+(attach, long press, swipe reply, header menu, contact info), then Settings page by page, then
+Calls and Updates. Log each finding and fix here, one commit each.

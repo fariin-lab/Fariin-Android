@@ -38,8 +38,8 @@ object Motion {
     // while sliding 48 dp in from the right; back, the top page fades out while sliding 48 dp right.
     // The page underneath stands still, no slide and no fade. 150 ms on DecelerateInterpolator(1.5).
     const val PAGE_MS = 150
-    /** Back slides the whole width, so it gets a little longer than the 48 dp opening. */
-    const val PAGE_BACK_MS = 220
+    /** Back is a short fade. */
+    const val PAGE_BACK_MS = 90
     /** DecelerateInterpolator(1.5): 1 - (1 - t)^3. */
     val PageEase = androidx.compose.animation.core.Easing { t -> 1f - (1f - t) * (1f - t) * (1f - t) }
     /** 48 dp in pixels (NavHost transition lambdas are not composable, so the screen's own density). */
@@ -48,13 +48,11 @@ object Motion {
     fun pageIn(): EnterTransition =
         slideInHorizontally(tween(PAGE_MS, easing = PageEase)) { pageShiftPx } + fadeIn(tween(PAGE_MS, easing = PageEase))
     /**
-     * Back: the page stays solid and slides off to the right, uncovering the one under it. Never a
-     * fade (owner 2026-11-04): Android's back gesture holds this motion part-way while the thumb
-     * waits, and a fading page held there showed both pages washed together. The reference app's
-     * own swipe-back moves the page solid with the finger too.
+     * Back: the page fades away in a few frames, no slide, uncovering the one under it, as the big
+     * Android messenger does (owner's video, 2026-11-04: its chat was gone in 3 or 4 frames; ours
+     * slid the whole width over 20). Predictive back is off, so this only plays after release.
      */
-    fun pageOut(): ExitTransition =
-        slideOutHorizontally(tween(PAGE_BACK_MS, easing = PageEase)) { it }
+    fun pageOut(): ExitTransition = fadeOut(tween(PAGE_BACK_MS, easing = PageEase))
     /** The page underneath: shown as it is, the whole time the top page moves. */
     fun pageStill(): ExitTransition =
         fadeOut(tween(PAGE_MS, easing = androidx.compose.animation.core.Easing { if (it < 1f) 0f else 1f }))
