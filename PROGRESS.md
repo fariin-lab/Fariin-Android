@@ -665,3 +665,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - New Chat was an action card over an empty page until a @username was typed (WhatsApp lists
   contacts at once). Ported iOS NewChatView: New Group / New Channel / Invite Friends, Frequently
   contacted (3, from 6 people), A-Z people, local search. Seen on the Pixel.
+- Bug: a sideways swipe on a chat row opened the chat (tap detector kept it). listPress now drops
+  the click past touch slop. Pixel: two swipes stay on the list, a tap opens jini.
+- Chat list global username search still works after New Chat went local-only (kream -> @kreamq).
