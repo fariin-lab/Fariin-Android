@@ -130,8 +130,8 @@ internal fun SettingsRow(
             Icon(Icons.Filled.NorthEast, contentDescription = null, tint = c.secondary, modifier = Modifier.padding(start = 8.dp).size(18.dp))
         }
     }
-    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator,
-        modifier = Modifier.padding(start = if (icon != null) 72.dp else 16.dp))
+    // Full width, edge to edge of the card (owner 2026-11-04).
+    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
 
 @Composable

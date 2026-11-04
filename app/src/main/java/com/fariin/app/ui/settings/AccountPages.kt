@@ -251,6 +251,6 @@ private fun Fact(title: String, detail: String, last: Boolean = false) {
                 Text(detail, fontSize = 13.sp, color = c.secondary)
             }
         }
-        if (!last) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+        if (!last) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
     }
 }

@@ -115,7 +115,7 @@ internal fun CardField(
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
 
 /** The bar's text action (Send code, Confirm, Save, Turn Off), a spinner while the server works. */

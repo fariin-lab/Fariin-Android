@@ -248,7 +248,7 @@ private fun DeviceLine(d: DeviceRow, thisDevice: Boolean, now: Long, last: Boole
                 fontSize = 15.sp, color = c.secondary)
             Text(SettingsRules.deviceLine(thisDevice, d.lastSeen, now, d.location), fontSize = 15.sp, color = c.secondary)
         }
-        if (!last) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+        if (!last) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
     }
 }
 

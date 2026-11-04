@@ -260,7 +260,7 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
             if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.blue, modifier = Modifier.size(22.dp))
             trailing?.invoke()
         }
-        if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 64.dp))
+        if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
     }
 }
 

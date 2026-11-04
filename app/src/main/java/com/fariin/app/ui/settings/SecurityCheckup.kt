@@ -400,7 +400,7 @@ private fun CheckupRow(icon: ImageVector?, tint: Color, title: String, subtitle:
             Text(subtitle, fontSize = 15.sp, color = c.secondary)
         }
     }
-    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 72.dp))
+    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
 
 /** "Is this you?" for devices that signed in since the last review. Yes marks them reviewed; No goes to Devices. */
@@ -432,7 +432,7 @@ private fun DeviceReviewPage(onClose: () -> Unit, onYes: (Context) -> Unit, onNo
                             Text(SecurityCheckupRules.deviceDetail(d.location, d.createdMs?.let { SecurityCheckup.ago(it) }), fontSize = 15.sp, color = c.secondary)
                         }
                     }
-                    if (i != devices.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 70.dp))
+                    if (i != devices.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                 }
             }
         }

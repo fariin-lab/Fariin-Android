@@ -237,7 +237,7 @@ private fun ModeRow(title: String, detail: String?, selected: Boolean, edit: Boo
         }
         if (edit) Text("Edit", color = c.blue, fontSize = 15.sp)
     }
-    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 56.dp))
+    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
 
 /**
