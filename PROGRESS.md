@@ -707,3 +707,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   overhead, no fix needed. The benchmark build is now on the Pixel (installs over debug, keeps the
   account; a debug install goes back over it the same way).
 - Message Text Size Large checked in a chat (fine), set back to Medium. App Icon page not reached.
+- Scroll frames on the Pixel (benchmark build, 5 fling pairs, gfxinfo): chat list Fariin 2.1% janky
+  p90 20 / p99 28 ms vs WhatsApp 0.85% p90 19 / p99 24; inside a chat Fariin 0.18% p90 14 / p99 18
+  vs WhatsApp 1.32% p90 18 / p99 26. No scroll work needed.
