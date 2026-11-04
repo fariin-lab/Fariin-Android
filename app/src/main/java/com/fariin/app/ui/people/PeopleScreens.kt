@@ -350,6 +350,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var person by remember { mutableStateOf<Person?>(null) }
     var addingToGroup by remember { mutableStateOf(false) }
     var askClearMine by remember { mutableStateOf(false) }
+    var sharingProfile by remember { mutableStateOf(false) }
+    val shareCtx = androidx.compose.ui.platform.LocalContext.current
     var blocked by remember { mutableStateOf(false) }
     var muted by remember(conv) { mutableStateOf(conv?.isMuted(me, System.currentTimeMillis().toDouble()) == true) }
     var safety by remember { mutableStateOf<String?>(null) }
@@ -418,13 +420,16 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
             val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
             val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ askClearMine = true }) else null
+            val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
                 if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
+                if (shareProfile != null) ShareProfileItem { close(); shareProfile() }
                 if (addToGroup != null) AddToGroupItem { close(); addToGroup() }
                 if (fromChat) ChangeWallpaperItem { close(); wallpaper() }
                 if (clearMine != null) ClearMineItem { close(); clearMine() }
             }
-            else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup, onClearMine = clearMine)
+            else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup,
+                onClearMine = clearMine, onShare = shareProfile)
         }
         if (askClearMine) androidx.compose.material3.AlertDialog(onDismissRequest = { askClearMine = false },
             title = { Text("Clear your messages?") },
@@ -437,6 +442,21 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 } }
             }) { Text("Clear", color = c.red) } },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { askClearMine = false }) { Text("Cancel") } })
+        if (sharingProfile) com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { sharingProfile = false }, title = "Share Profile") { targets ->
+            sharingProfile = false
+            val shownName = person?.shownName ?: conv?.displayName(me) ?: ""
+            val photo = person?.photoUrl ?: conv?.photos?.get(uid) ?: ""
+            val card = com.fariin.app.data.CardRules.CONTACT + uid + "|" + photo + "|" + shownName
+            val crypto = com.fariin.app.data.CryptoHub.get(shareCtx.applicationContext)
+            scope.launch {
+                var ok = true
+                for (cid in targets) {
+                    val repo = com.fariin.app.data.ThreadRepository.openOrQuiet(cid, me, crypto, scope)
+                    try { repo.sendForwardedText(card, forwarded = false) } catch (_: Exception) { ok = false }
+                }
+                com.fariin.app.ui.components.Snack.show(if (ok) "Sent" else "Couldn't send. Try again.")
+            }
+        }
         if (addingToGroup) AddToGroupSheet(api, uid, person?.shownName ?: conv?.displayName(me) ?: "", onDismiss = { addingToGroup = false })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
@@ -478,7 +498,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 
 /** The contact page's three-dot menu (iOS ContactInfoView moreMenu): Change Wallpaper for this chat. */
 @Composable
-private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Unit)? = null, onClearMine: (() -> Unit)? = null) {
+private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Unit)? = null, onClearMine: (() -> Unit)? = null,
+                            onShare: (() -> Unit)? = null) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
@@ -486,11 +507,21 @@ private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Uni
             onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
         androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+            if (onShare != null) ShareProfileItem { open = false; onShare() }
             if (onAddToGroup != null) AddToGroupItem { open = false; onAddToGroup() }
             if (onWallpaper != null) ChangeWallpaperItem { open = false; onWallpaper() }
             if (onClearMine != null) ClearMineItem { open = false; onClearMine() }
         }
     }
+}
+
+/** iOS ContactInfoView menu: "Share Profile" (this person's card, sent to the chats I pick). */
+@Composable
+private fun ShareProfileItem(onClick: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.material3.DropdownMenuItem(text = { Text("Share Profile", color = c.label) },
+        leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label,
+            modifier = Modifier.size(24.dp)) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Clear My Messages" (every message I sent in this chat, for both of us). */
