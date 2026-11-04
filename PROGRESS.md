@@ -673,3 +673,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   real row (it would ring); same code as the chat rows, which were verified.
 - Same fix on New Call rows (tap = call) and the shared PersonRow (New Chat, member lists).
   Pixel: swipe on kream in New Chat stays, tap on adli opens the chat.
+- Chat list call rows: the caller saw red-meaning "Missed call" + ticks for a call they made.
+  Now iOS words (↗ Voice call / Video call for mine, Missed for the callee), no ticks. Test added.
+  Seen on the Pixel (kream, adnan abdi rows).
