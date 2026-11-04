@@ -585,3 +585,5 @@ Seen, not fixed (not today's regressions):
 - 2026-11-04: Rechecked the open items in this log against the code: official chat reactions / Mark as Unread / Clear History, inline attach Recents, in-app banner sound/vibrate/preview switches are all built. Profile Layout is hidden on iOS by the owner (Flags.profileLayoutChoice), so not ported. Location map picture still left out on purpose (needs a map service key).
 - 2026-11-04: Profile Voice / Video circles (seen on Pixel, not tapped).
 - 2026-11-04: Passkeys page fetches the Add challenge up front (bfbae86). Website link pages detect Android: iPhone-only line now, Google Play after launch via get.js (checked in Chrome on the Pixel).
+- 2026-11-04: Log Out crash fixed (chat list retry rethrew PERMISSION_DENIED after sign-out) + Logging out overlay. Needs the owner to log out once to confirm.
+- 2026-11-04: Log Out VERIFIED on the Pixel: Log out -> login page with the saved account, app stayed open, no new crash record; one tap on the saved account signed back in to the chat list.
