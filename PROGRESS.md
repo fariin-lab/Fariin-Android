@@ -546,3 +546,4 @@ Seen, not fixed (not today's regressions):
   - Group Info menu: Save to Photos On/Off per group (tested on hh; hh is now stored as Off for itself).
   - Per-chat storage page (Group Info > Storage Used) built as iOS, delete = Delete for Me (my call, iOS parity). Only the empty state seen on the Pixel.
   - Rows read only their own draft (all rows were recomposing on back via the drafts map). Back frame ~37-41 ms; remaining cost is spread (composition + two pages on the GPU), no single cause left.
+  - Older LEFT/TODO notes in this file are partly stale: checked tonight and already built: in-app banner drops blocked senders, official topics left at sign-out, 1:1 No answer card (NoAnswerCard). Re-check any old LEFT item against the code before building it.
