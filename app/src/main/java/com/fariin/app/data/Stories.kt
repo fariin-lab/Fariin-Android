@@ -189,6 +189,7 @@ class StoriesRepository(
             var byToken = emptyList<Story>()
             var byLegacy = emptyList<Story>()
             var mine = emptyList<Story>()
+            var channels = emptyList<Story>()
             val watermarks = mutableMapOf<String, Long>()
             val profiles = mutableMapOf<String, Pair<String, String?>>()
             val asked = mutableSetOf<String>()
@@ -196,9 +197,10 @@ class StoriesRepository(
 
             fun rebuild() {
                 if (heard != 7) return
-                val all = byToken + byLegacy + mine
+                val all = byToken + byLegacy + mine + channels
                 val known = convs().filter { !it.isGroup }.map { it.otherUid(me) }.toSet()
-                val unknown = all.map { it.authorUid }.toSet() - known - me - asked
+                // A channel story's ring is the channel's; its poster's profile is never asked for.
+                val unknown = (byToken + byLegacy + mine).map { it.authorUid }.toSet() - known - me - asked
                 for (u in unknown) {
                     if (u.isEmpty() || u.contains('/')) continue
                     asked += u
@@ -206,7 +208,7 @@ class StoriesRepository(
                         val snap = runCatching { db.collection("users").document(u).get().await() }.getOrNull()
                         if (snap != null && snap.exists()) {
                             profiles[u] = (snap.getString("name") ?: "") to snap.getString("photoUrl")
-                            trySend(StoryList.build(me, byToken + byLegacy + mine, convs(), profiles, watermarks, myName(), myPhoto()))
+                            trySend(StoryList.build(me, byToken + byLegacy + mine + channels, convs(), profiles, watermarks, myName(), myPhoto()))
                         }
                     }
                 }
@@ -234,6 +236,9 @@ class StoriesRepository(
                     }
                     rebuild()
                 }
+            // Followed channels' stories (iOS channelStoryIds): one more source for the same rings.
+            ChannelStories.start(me)
+            launch { ChannelStories.stories.collect { channels = it; rebuild() } }
             awaitClose { regs.forEach { it.remove() } }
         }
 }

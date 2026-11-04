@@ -1179,6 +1179,11 @@ private fun StoryPage(
         ) {
             if (mine) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) }, onDelete = { onDelete(story) })
             else if (com.fariin.app.data.OfficialStories.isOfficial(story)) OfficialStoryButton(story, onLink)
+            // A followed channel's story (iOS ChannelStoryFooter): nobody messages the channel from it;
+            // views, reposts and likes for everyone, and Share.
+            else if (com.fariin.app.data.ChannelStories.isFollowerStory(story, me)) ChannelStoryFooter(story, service, receipts,
+                onRepost = if (canRepost(story)) ({ onRepost(story) }) else null,
+                onLike = { onLike(story, it) }, onShare = { onMenuAction(story, "share") })
             else ReplyBar(story, service, canReply = canReply(story), showLike = receipts, onFocus = onReplyFocus,
                 onRepost = if (canRepost(story)) ({ onRepost(story) }) else null,
                 onSend = { t, reaction -> onReply(story, t, reaction) }, onLike = { onLike(story, it) })
@@ -1570,5 +1575,62 @@ private fun OfficialStoryButton(story: Story, onLink: (String) -> Unit) {
         .background(Color.White).clickable { onLink(story.buttonUrl) }, contentAlignment = Alignment.Center) {
         Text(story.buttonText, color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp))
+    }
+}
+
+/**
+ * A followed channel's story foot (iOS ChannelStoryFooterView): views, reposts (a button when
+ * reposting is allowed) and likes, from `stories/{id}/meta/public` which the server keeps; the
+ * heart likes it (with read receipts on, as iOS); Share on the right.
+ */
+@Composable
+private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Boolean, onRepost: (() -> Unit)?,
+                               onLike: (Boolean) -> Unit, onShare: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var views by remember(story.id) { mutableIntStateOf(0) }
+    var likes by remember(story.id) { mutableIntStateOf(0) }
+    var reposts by remember(story.id) { mutableIntStateOf(0) }
+    var liked by remember(story.id) { mutableStateOf(false) }
+    var delta by remember(story.id) { mutableIntStateOf(0) }
+    LaunchedEffect(story.id) { if (receipts) liked = !service.myReaction(story.id).isNullOrEmpty() }
+    DisposableEffect(story.id) {
+        val reg = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("stories").document(story.id)
+            .collection("meta").document("public").addSnapshotListener { snap, _ ->
+                val next = (snap?.get("likes") as? Number)?.toInt() ?: 0
+                if (next != likes) delta = 0
+                views = (snap?.get("views") as? Number)?.toInt() ?: 0
+                likes = next
+                reposts = (snap?.get("reposts") as? Number)?.toInt() ?: 0
+            }
+        onDispose { reg.remove() }
+    }
+    fun n(v: Int) = when { v >= 1_000_000 -> "%.1fM".format(v / 1e6); v >= 1_000 -> "%.1fK".format(v / 1e3); else -> "$v" }.replace(".0", "")
+    val toast: (String) -> Unit = { android.widget.Toast.makeText(ctx, it, android.widget.Toast.LENGTH_SHORT).show() }
+    Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Visibility, "Views", tint = Color.White, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(7.dp)); Text(n(views), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        }
+        Row(Modifier.then(if (onRepost != null) Modifier.clickable { onRepost() } else Modifier), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Repeat, "Reposts", tint = Color.White, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(7.dp)); Text(n(reposts), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        }
+        Row(Modifier.clickable {
+            when {
+                !receipts -> toast("Turn on Read Receipts for stories to like them.")
+                !story.allowsReplies && !liked -> toast("Likes are turned off for this story.")
+                else -> { liked = !liked; delta += if (liked) 1 else -1; onLike(liked) }
+            }
+        }, verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (liked) "Unlike" else "Like",
+                tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(23.dp))
+            Spacer(Modifier.width(7.dp)); Text(n(maxOf(0, likes + delta)), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        }
+        Spacer(Modifier.weight(1f))
+        if (story.audienceLabel == "everyone" && !story.oneTime && !story.captureProtected)
+            Box(Modifier.size(44.dp).clickable(onClick = onShare), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Share, "Share", tint = Color.White, modifier = Modifier.size(22.dp))
+            }
     }
 }
