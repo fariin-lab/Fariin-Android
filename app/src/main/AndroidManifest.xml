@@ -66,6 +66,21 @@
                 <data android:path="/call" />
                 <data android:path="/call/" />
             </intent-filter>
+            <!-- Profile, group / channel invite and story links (the paths iOS claims in
+                 apple-app-site-association): fariin.com/u/<name>, /g/<code>, /s/<id>, /<name>/s/<id>.
+                 Routed in the app by ui/thread/BubbleLinks.kt ExternalLinkHost. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="fariin.com" />
+                <data android:host="www.fariin.com" />
+                <data android:pathPrefix="/u/" />
+                <data android:pathPrefix="/g/" />
+                <data android:pathPrefix="/s/" />
+                <data android:pathPattern="/.*/s/.*" />
+            </intent-filter>
             <!-- The web landing page's "Open" button: kulan://video/<id>, kulan://voice/<id>, kulan://call/<key>. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

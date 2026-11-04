@@ -287,6 +287,8 @@ class MainActivity : ComponentActivity() {
         CompositionLocalProvider(LocalOpenChat provides { conv -> nav.navigate("thread/${conv.id}") { launchSingleTop = true } },
             com.fariin.app.ui.people.LocalPeopleNav provides com.fariin.app.ui.people.peopleNav(nav, people),
             com.fariin.app.ui.channels.LocalChannelNav provides com.fariin.app.ui.channels.channelNav(nav)) {
+            // A profile, invite or story link opened from outside the app (App Links).
+            com.fariin.app.ui.thread.ExternalLinkHost(me)
             // The main shell is built once and kept under every page, the way large messengers keep
             // their list alive, so coming back to it costs no rebuild (that was ~50 ms of main-thread
             // work, two dropped frames, on the Pixel 5). The "main" page in the host is see-through;
@@ -366,6 +368,7 @@ class MainActivity : ComponentActivity() {
     private fun takeCallLink(intent: Intent?) {
         if (intent?.action != Intent.ACTION_VIEW) return
         if (com.fariin.app.call.CallLinkRouter.take(intent.dataString)) intent.data = null
+        else if (com.fariin.app.ui.thread.ExternalLinks.take(intent.dataString)) intent.data = null
         else if (intent.data != null) android.widget.Toast.makeText(this, "This call link is no longer valid", android.widget.Toast.LENGTH_LONG).show()
     }
 

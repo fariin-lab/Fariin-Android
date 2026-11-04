@@ -9,6 +9,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -198,5 +199,33 @@ internal object StoryLinks {
         if (story.expiresAtMs <= System.currentTimeMillis()) return null
         val u = runCatching { db.collection("users").document(story.authorUid).get().await() }.getOrNull()
         return com.fariin.app.data.StoryGroup(story.authorUid, u?.getString("name").orEmpty(), u?.getString("photoUrl"), listOf(story))
+    }
+}
+
+/** Profile, invite and story links handed to the app from outside (the manifest's App Links). */
+object ExternalLinks {
+    val pending = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val re = Regex("^https?://(www\\.)?fariin\\.com/(u/|g/|s/|[A-Za-z0-9_.]{1,40}/s/)", RegexOption.IGNORE_CASE)
+
+    fun take(url: String?): Boolean {
+        val u = url?.trim() ?: return false
+        if (!re.containsMatchIn(u)) return false
+        pending.value = u
+        return true
+    }
+}
+
+/** Opens a pending outside link exactly as the same link tapped in a chat would open. */
+@Composable
+fun ExternalLinkHost(me: String) {
+    val ctx = LocalContext.current
+    val url by ExternalLinks.pending.collectAsState()
+    val tap = rememberBubbleLinkTap(ThreadUi(title = "", me = me)) { msg ->
+        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
+    androidx.compose.runtime.LaunchedEffect(url) {
+        val u = url ?: return@LaunchedEffect
+        ExternalLinks.pending.value = null
+        tap(TextLinks.Span(0, u.length, TextLinks.Kind.WEB, u))
     }
 }
