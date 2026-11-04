@@ -562,3 +562,4 @@ Seen, not fixed (not today's regressions):
   - Share Profile (card to chats). Profile page now matches iOS's menu (Export Chat is off on iOS).
   - Group Info: Report Spam / End Group / Delete Group. Group gaps left: Hide Members, member list filters (All Members / Members with roles), Share Invite Link wording.
   - Hidden members honoured; call link Send. Stories and Calls screens otherwise match (gaps were admin-only or wording).
+  - Channel admin invite links open in-app. Channel gap left: Similar Channels card after following.
