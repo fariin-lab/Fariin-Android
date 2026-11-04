@@ -724,3 +724,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Theme: secondary / inversePrimary / surfaceTint were Material purple defaults; set to the app's
   colours (157efdc). Members rows: swipe-is-not-tap (listPress). Pixel: swipe on You does nothing,
   tap on kream opens the member card.
+- Edit Group Set New Photo menu (Take / Choose) seen on the Pixel (hh), left without saving.
+- Device testing in this pass is on the owner's Pixel (0B251FDD4000WB), not the fariin_pixel AVD,
+  per the owner's order for the WhatsApp comparison.
