@@ -668,3 +668,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Bug: a sideways swipe on a chat row opened the chat (tap detector kept it). listPress now drops
   the click past touch slop. Pixel: two swipes stay on the list, a tap opens jini.
 - Chat list global username search still works after New Chat went local-only (kream -> @kreamq).
+- Same swipe bug on Calls: a sideways swipe on a call row PLACED A CALL (to kream, 15:36, hung up
+  after ~4 s, my test). Call rows + call link rows now use listPress. Not re-tested by swipe on a
+  real row (it would ring); same code as the chat rows, which were verified.
