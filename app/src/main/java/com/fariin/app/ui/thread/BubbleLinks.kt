@@ -76,6 +76,10 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
     val notice by rememberUpdatedState(onNotice)
     var notFound by remember { mutableStateOf(false) }
     var opening by remember { mutableStateOf<String?>(null) }
+    // A channel admin invite link opens its page here, not the website (iOS ChannelAdminInviteView).
+    var invite by remember { mutableStateOf<String?>(null) }
+    val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+    invite?.let { code -> com.fariin.app.ui.channels.AdminInviteSheet(code, onClose = { invite = null }, onOpenChannel = { channelNav.open(it) }) }
     if (notFound) AlertDialog(
         onDismissRequest = { notFound = false },
         title = { Text("Sorry, this user doesn't seem to exist.") },
@@ -111,7 +115,9 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                 TextLinks.Kind.WEB -> {
                     val call = com.fariin.app.call.CallLinkKey.fromLink(sp.target)
                     val h = com.fariin.app.data.QrRules.handleFrom(sp.target)
+                    val adminCode = com.fariin.app.ui.channels.AdminInviteLink.code(sp.target)
                     when {
+                        adminCode != null -> invite = adminCode
                         call != null -> nav.joinLink(call.text, com.fariin.app.call.CallLinkKey.linkSaysVideo(sp.target))
                         h != null -> handle(h)
                         else -> openWeb(ctx, sp.target) { notice("No app here can open this link") }
