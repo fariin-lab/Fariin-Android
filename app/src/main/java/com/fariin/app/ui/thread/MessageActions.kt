@@ -136,13 +136,18 @@ internal fun MessageMenu(
     val c = Fariin.colors
     val now = System.currentTimeMillis().toDouble()
     val items = buildList {
+        // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
+        val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
         if (!m.deleted) {
             if (MessageRules.canReply(m)) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply) { onReply(m) })
-            if (MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward) { actions.onForward(m) })
-            if (canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download) { actions.onSave(m) })
+            if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward) {
+                if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
+            if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download) {
+                if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })
             // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).
             val card = com.fariin.app.data.CardRules.isCard(m.text)
-            if (MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy) { onCopy(m.text) })
+            if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy) {
+                if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) onCopy(m.text) })
             if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit) { onStartEdit(m) })
             if (m.edited) add(MenuItem("Edit History", Icons.Outlined.History) { onEditHistory(m) })
         }

@@ -51,7 +51,7 @@ internal fun StoryMentionCard(m: Message, sm: Message.StoryMentionRef, me: Strin
     val feed by LiveStories.state.collectAsState()
     val live = LiveStories.find(feed, sm.id, m.authorId)
     var open by remember { mutableStateOf<StoryGroup?>(null) }
-    open?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, LiveStories.chats, onClose = { open = null }) }
+    open?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, com.fariin.app.data.ChatsNow.list, onClose = { open = null }) }
 
     fun line(before: String, after: String) = buildAnnotatedString {
         append(before)

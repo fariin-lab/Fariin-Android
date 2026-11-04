@@ -48,7 +48,7 @@ object Forwarder {
 
     private fun isChannel(cid: String): Boolean =
         com.fariin.app.channel.ChannelFollows.docs.value[cid]?.get("channel") == true ||
-            com.fariin.app.data.LiveStories.chats.any { it.id == cid && it.isChannel }
+            com.fariin.app.data.ChatsNow.list.any { it.id == cid && it.isChannel }
 
     /** The source's channel card when [sourceCid] is a channel: its doc as followed, else read once. */
     private suspend fun channelJson(sourceCid: String): String? {

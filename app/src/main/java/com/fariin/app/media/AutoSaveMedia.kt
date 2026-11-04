@@ -28,7 +28,9 @@ object AutoSaveMedia {
     // Per chat (iOS ChatChoice, Group Info's menu): "always" or "never" overrides the Settings
     // switch for that chat; nothing stored = follow Settings.
     private fun chatKey(cid: String) = "$KEY.chat.$cid"
-    fun savesMedia(c: Context, cid: String): Boolean =
+    fun savesMedia(c: Context, cid: String): Boolean = !com.fariin.app.data.ChatRestrictions.isOn(cid) && savesMediaSetting(c, cid)
+
+    private fun savesMediaSetting(c: Context, cid: String): Boolean =
         when (c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(chatKey(cid), null)) {
             "always" -> true
             "never" -> false

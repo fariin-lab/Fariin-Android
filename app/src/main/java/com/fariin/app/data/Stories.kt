@@ -238,8 +238,6 @@ class StoriesRepository(
 /** The app's one stories feed (MainShell), for screens outside the tabs. */
 object LiveStories {
     val state = kotlinx.coroutines.flow.MutableStateFlow(StoriesState())
-    /** The chat list, which the viewer needs for names and replies. */
-    @Volatile var chats: List<Conversation> = emptyList()
 
     /** A live story by id and author, as a one-story group the viewer can open; null when gone. */
     fun find(s: StoriesState, storyId: String, authorUid: String): Pair<StoryGroup, Story>? {

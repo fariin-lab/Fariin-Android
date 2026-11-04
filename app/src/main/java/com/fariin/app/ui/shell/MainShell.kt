@@ -169,7 +169,7 @@ fun MainShell(
     }
     // The same feed for screens outside the tabs (a chat's story mention card asks if a story is live).
     LaunchedEffect(stories) { com.fariin.app.data.LiveStories.state.value = stories }
-    LaunchedEffect(chats.chats) { com.fariin.app.data.LiveStories.chats = chats.chats }
+    LaunchedEffect(chats.chats) { com.fariin.app.data.ChatsNow.list = chats.chats }
 
     // The chat list's camera button opens the Stories tab straight into its photo picker.
     var storyRequest by rememberSaveable { mutableIntStateOf(0) }

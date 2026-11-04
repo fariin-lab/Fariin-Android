@@ -239,7 +239,10 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
         }
     }
 
+    val restricted = com.fariin.app.data.ChatRestrictions.isOn(LocalThreadCid.current)
+    RestrictedWindow(restricted)
     val buttons = ViewerRules.buttons(page, pages, me, host?.deleteDialog != null, chatCanSend = host?.sendEdited != null)
+        .let { if (restricted) it.copy(share = false, barSave = false, saveAll = 0, menuSave = false, draw = false) else it }
     // The pen (iOS penEdit): the photo's plain copy opens in the editor, straight into drawing.
     var drawOn by remember { mutableStateOf<android.net.Uri?>(null) }
     val draw: () -> Unit = {

@@ -63,7 +63,7 @@ internal fun ForwardedTag(m: Message, isMe: Boolean, inChannel: Boolean) {
     val scope = rememberCoroutineScope()
     val entries by ChannelFollows.entries.collectAsState()
     var followedHere by remember { mutableStateOf(false) }
-    val following = followedHere || entries.containsKey(fc.cid) || LiveStories.chats.any { it.id == fc.cid }
+    val following = followedHere || entries.containsKey(fc.cid) || com.fariin.app.data.ChatsNow.list.any { it.id == fc.cid }
     val ink = if (isMe) Color.White else c.label
     Row(
         Modifier.padding(vertical = 2.dp).height(32.dp).clip(CircleShape)

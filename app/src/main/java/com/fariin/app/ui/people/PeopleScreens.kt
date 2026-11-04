@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.data.isRestricted
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -378,6 +379,12 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val shared = rememberSharedMedia(cid, me)
     var allMedia by remember { mutableStateOf(false) }
     if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
+    var restrictOpen by remember { mutableStateOf(false) }
+    if (restrictOpen) {
+        val myName = remember { mutableStateOf("") }
+        LaunchedEffect(Unit) { myName.value = api.profile(me)?.shownName.orEmpty() }
+        RestrictedChatPage(cid, me, name.ifEmpty { "They" }, { myName.value }, onBack = { restrictOpen = false }); return
+    }
     if (showSafety) AlertDialog(onDismissRequest = { showSafety = false }, title = { Text("Verify Encryption") },
         text = {
             Column {
@@ -484,6 +491,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             if (uid != me) com.fariin.app.data.ContactNames.note(uid)?.let { NotesCard(it) }
             SettingsSection {
                 DisappearingRow(timer, short = true) { timerOpen = true }
+                // iOS: Restricted chat, for a chat that exists (the switch lives on it).
+                val chatNow = com.fariin.app.data.ChatsNow.find(cid)
+                if (uid != me && chatNow != null) SettingsRow("Restricted Chat",
+                    value = if (chatNow.isRestricted) "On" else "Off") { restrictOpen = true }
                 SettingsRow("Verify Encryption", last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
             }
             // iOS: after the settings card, and only when the chat has photos or videos.

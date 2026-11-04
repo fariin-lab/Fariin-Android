@@ -209,6 +209,8 @@ fun ThreadScreen(
     // A group's wallpaper is everyone's: its picker opens only for someone who may change group info.
     val groupShared = ui.isGroup && ui.channel == null
     if (wallpaperOpen && groupShared && ui.groupDoc.isNotEmpty() && !com.fariin.app.data.GroupRules.canEditInfo(ui.me, ui.groupDoc)) wallpaperOpen = false
+    // Restricted chat: no screenshots or screen recording while it is open (FLAG_SECURE), as iOS hides it from capture.
+    RestrictedWindow(com.fariin.app.data.ChatRestrictions.isOn(ui.cid))
     Box(Modifier.fillMaxSize()) {
         androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
             androidx.compose.runtime.CompositionLocalProvider(LocalThreadCid provides ui.cid) {
@@ -297,6 +299,7 @@ private fun ThreadContent(
     historyFor?.let { m -> EditHistorySheet(ui.messages.firstOrNull { it.id == m.id } ?: m, actions) { historyFor = null } }
     // What the ticks point at, from the live list (iOS liveSelection): a row that went away drops out.
     val picked = ui.messages.filter { it.rowId in selected }
+    val restrictedNow = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
     LaunchedEffect(ui.messages) { selected.retainAll(ui.messages.map { it.rowId }.toSet()) }
     if (bulkDelete) BulkDeleteDialog(picked, ui, onDismiss = { bulkDelete = false }) { plan ->
         actions.onDeleteMany(plan); selected.clear()
@@ -649,8 +652,8 @@ private fun ThreadContent(
                     picked.any { it.sendState != null || MessageRules.canDeleteForEveryone(it, ui.me, ui.adminMayDelete) })
                 SelectionBar(
                     deleteEnabled = canDelete,
-                    forwardEnabled = com.fariin.app.data.SelectRules.forwardable(picked),
-                    copyEnabled = picked.any(MessageRules::canCopy),
+                    forwardEnabled = !restrictedNow && com.fariin.app.data.SelectRules.forwardable(picked),
+                    copyEnabled = !restrictedNow && picked.any(MessageRules::canCopy),
                     busy = false,
                     onDelete = { bulkDelete = true },
                     onForward = { bulkForward = picked.sortedBy { it.createdAtMillis } },
@@ -1520,6 +1523,22 @@ private fun OpenWhen(open: androidx.compose.runtime.State<Boolean>, content: @Co
 
 /** The open chat's id, for bubbles that need it (Save to Photos' once-per-message ledger). */
 internal val LocalThreadCid = androidx.compose.runtime.staticCompositionLocalOf { "" }
+
+/** FLAG_SECURE on this window while [on]; off again follows App Lock / Screen Security. */
+@Composable
+internal fun RestrictedWindow(on: Boolean) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(on) {
+        val w = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            ?: (view.context as? android.app.Activity)?.window
+            ?: (view.context as? android.content.ContextWrapper)?.baseContext?.let { it as? android.app.Activity }?.window
+        val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
+        if (on) w?.addFlags(secure)
+        onDispose {
+            if (on && !com.fariin.app.security.AppLock.secureWindows(view.context)) w?.clearFlags(secure)
+        }
+    }
+}
 
 /** iOS ChatScrollStore: each chat's reading place (the row at the bottom edge and its offset), for this run only. */
 internal object ChatReadingPositions {

@@ -65,6 +65,11 @@ data class Conversation(
     val startedBy: String = "",
     val accepted: Boolean = true,
     val reqOff: Boolean = false,
+    /** Restricted chat (iOS): each person's own switch, and the older shared fields. */
+    val restrictedBy: Map<String, Boolean> = emptyMap(),
+    val restrictLegacy: Boolean = false,
+    val restrictRequestBy: String? = null,
+    val restrictRequestAtMs: Long = 0,
     val deletedUsers: List<String> = emptyList(),
     /** `rk`: keys a member released for old sealed group items (nonce b64 to key b64). */
     val releasedKeys: Map<String, String> = emptyMap(),
@@ -245,6 +250,11 @@ data class Conversation(
                 // Absent means "from before message requests existed": accepted.
                 accepted = data["accepted"] as? Boolean ?: (data["startedBy"] == null),
                 reqOff = data["reqOff"] as? Boolean ?: false,
+                restrictedBy = (data["restrictedBy"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    (k as? String)?.takeIf { v == true }?.let { it to true } }?.toMap() ?: emptyMap(),
+                restrictLegacy = listOf("noScreenshots", "noForwarding", "noSaving").any { data[it] == true },
+                restrictRequestBy = (data["restrictRequest"] as? Map<*, *>)?.get("by") as? String,
+                restrictRequestAtMs = ((data["restrictRequest"] as? Map<*, *>)?.get("at") as? com.google.firebase.Timestamp)?.toDate()?.time ?: 0L,
                 deletedUsers = stringList(data["deletedUsers"]),
                 releasedKeys = stringMap(data["rk"]),
                 postCount = maxOf(0, (data["postCount"] as? Number)?.toInt() ?: 0),
