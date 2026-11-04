@@ -65,7 +65,7 @@ internal fun linkMarked(
  * web address opens straight away with no "Open link?" (owner, 2026-10-13) in the in-app browser
  * (a Custom Tab), a video link in its own app when one is installed. An email opens the mail app,
  * a number the dialler with it filled in (nothing is dialled).
- * Group, story and public-name links have no page of their own here yet, so they open the site.
+ * A group or channel invite link opens its join page; story and public-name links open the site.
  */
 @Composable
 internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (TextLinks.Span) -> Unit {
@@ -80,6 +80,10 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
     var invite by remember { mutableStateOf<String?>(null) }
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     invite?.let { code -> com.fariin.app.ui.channels.AdminInviteSheet(code, onClose = { invite = null }, onOpenChannel = { channelNav.open(it) }) }
+    // A group or channel invite link opens its join page here (iOS JoinGroupSheet).
+    var groupInvite by remember { mutableStateOf<String?>(null) }
+    groupInvite?.let { code -> com.fariin.app.ui.people.JoinGroupSheet(code, onClose = { groupInvite = null },
+        onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
     if (notFound) AlertDialog(
         onDismissRequest = { notFound = false },
         title = { Text("Sorry, this user doesn't seem to exist.") },
@@ -116,8 +120,10 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                     val call = com.fariin.app.call.CallLinkKey.fromLink(sp.target)
                     val h = com.fariin.app.data.QrRules.handleFrom(sp.target)
                     val adminCode = com.fariin.app.ui.channels.AdminInviteLink.code(sp.target)
+                    val groupCode = com.fariin.app.ui.people.GroupInviteLink.code(sp.target)
                     when {
                         adminCode != null -> invite = adminCode
+                        groupCode != null -> groupInvite = groupCode
                         call != null -> nav.joinLink(call.text, com.fariin.app.call.CallLinkKey.linkSaysVideo(sp.target))
                         h != null -> handle(h)
                         else -> openWeb(ctx, sp.target) { notice("No app here can open this link") }
