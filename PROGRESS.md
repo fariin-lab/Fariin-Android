@@ -660,3 +660,8 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   Found + fixed a slip of the colour sweep: Appearance bubble previews had turned black (836b8eb).
 - Stories: header camera removed (iOS owner order 2026-10-11, one door: My Story's camera); story
   card gets a faint rim so a white story is visible. Seen on the Pixel.
+- Dark mode checked after the colour change (chats, chat, settings, edit pages): fine; FAB white
+  with black pen as iOS. Night Mode put back to System after.
+- New Chat was an action card over an empty page until a @username was typed (WhatsApp lists
+  contacts at once). Ported iOS NewChatView: New Group / New Channel / Invite Friends, Frequently
+  contacted (3, from 6 people), A-Z people, local search. Seen on the Pixel.
