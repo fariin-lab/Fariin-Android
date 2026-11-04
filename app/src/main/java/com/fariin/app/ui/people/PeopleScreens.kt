@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
@@ -116,6 +118,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
     var found by remember { mutableStateOf<List<Person>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var keyFor by remember { mutableStateOf<Person?>(null) }
+    var newContact by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(q) {
         found = emptyList()
@@ -137,6 +140,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.blue) } }, containerColor = c.card) }
 
+    if (newContact) { NewContactPage(api, onBack = { newContact = false }, onOpenChat = onOpenChat); return }
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         com.fariin.app.ui.components.FloatingTopBar("New Chat", onBack = onBack)
         SearchField(q, "Search by name or @username") { q = it }
@@ -148,6 +152,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
                     val actions = listOf(
                         Triple("New Group", onNewGroup, Icons.Filled.Groups),
+                        Triple("New Contact", { newContact = true }, Icons.Filled.PersonAdd),
                         Triple("New Channel", channelNav.create, Icons.Filled.Campaign),
                         Triple("Find Channels", channelNav.find, Icons.Filled.Explore),
                     )
@@ -499,4 +504,77 @@ internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.
         Spacer(Modifier.height(6.dp))
         Text(text, fontSize = 13.sp, color = c.label)
     }
+}
+
+/**
+ * New Contact (iOS NewContactView): First and Last Name in one card, the @username under it, and a
+ * tick that finds them, keeps the name on this phone only (ContactNames) and opens the chat.
+ * Fariin has no phone numbers, so the username is how a contact is found.
+ */
+@Composable
+private fun NewContactPage(api: PeopleApi, onBack: () -> Unit, onOpenChat: (String) -> Unit) {
+    val c = Fariin.colors
+    val scope = rememberCoroutineScope()
+    var first by remember { mutableStateOf("") }
+    var last by remember { mutableStateOf("") }
+    var handle by remember { mutableStateOf("") }
+    var working by remember { mutableStateOf(false) }
+    var notFound by remember { mutableStateOf(false) }
+    val clean = handle.trim().trimStart('@').lowercase().filter { it.isLetterOrDigit() || it == '_' || it == '.' }
+    val canSave = clean.isNotEmpty() && !working
+    fun add() {
+        if (!canSave) return
+        working = true
+        scope.launch {
+            val p = runCatching { api.byHandle(clean) }.getOrNull()
+            if (p == null || p.uid == api.me) { working = false; notFound = true; return@launch }
+            com.fariin.app.data.ContactNames.setCard(p.uid, com.fariin.app.data.ContactCard(first.trim(), last.trim()))
+            val cid = runCatching { api.openChat(p) }.getOrNull()
+            working = false
+            if (cid != null) onOpenChat(cid) else notFound = true
+        }
+    }
+    androidx.activity.compose.BackHandler { onBack() }
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        com.fariin.app.ui.settings.PageBar("New Contact", onBack = onBack) {
+            androidx.compose.material3.IconButton(onClick = { add() }, enabled = canSave) {
+                if (working) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                else Icon(Icons.Filled.Check, "Add contact", tint = if (canSave) c.blue else c.secondary)
+            }
+        }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
+                PlainField(first, "First Name") { first = it }
+                HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 18.dp))
+                PlainField(last, "Last Name") { last = it }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).padding(start = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("@", color = c.secondary, fontSize = 17.sp)
+                    PlainField(handle, "username", start = 2.dp) { handle = it }
+                }
+                Text("Fariin finds people by @username: there are no phone numbers. The name you enter is how they'll show in your chats.",
+                    fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
+            }
+        }
+    }
+    if (notFound) androidx.compose.material3.AlertDialog(onDismissRequest = { notFound = false },
+        text = { Text("Sorry, this user doesn't seem to exist.") },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { notFound = false }) { Text("OK") } })
+}
+
+@Composable
+private fun PlainField(value: String, hint: String, start: androidx.compose.ui.unit.Dp = 18.dp, onChange: (String) -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.foundation.text.BasicTextField(value, onChange, singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, color = c.label),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.blue),
+        modifier = Modifier.fillMaxWidth().height(52.dp).padding(start = start, end = 18.dp),
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) Text(hint, fontSize = 17.sp, color = c.secondary)
+                inner()
+            }
+        })
 }

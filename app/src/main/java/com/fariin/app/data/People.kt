@@ -63,6 +63,9 @@ data class Person(
 interface PeopleApi {
     val me: String
     suspend fun search(query: String): List<Person>
+    /** Exactly the owner of this @username, or null (iOS ChatService.findByHandle). */
+    suspend fun byHandle(handle: String): Person? =
+        search(handle).firstOrNull { it.handle.equals(handle.trim().trimStart('@'), ignoreCase = true) }
     suspend fun profile(uid: String): Person?
     suspend fun chatKeyExists(uid: String): Boolean?
     /** The chat id the key opened, or the failure sentence. */
@@ -114,6 +117,8 @@ class FirestorePeople(
     }
 
     /** ChatService.searchUsers: under 3 letters the exact handle; else `searchUsernames` (8 s), else exact. */
+    override suspend fun byHandle(handle: String): Person? = findByHandle(handle)
+
     override suspend fun search(query: String): List<Person> {
         var q = query.trim().lowercase()
         if (q.startsWith("@")) q = q.drop(1)
