@@ -560,3 +560,4 @@ Seen, not fixed (not today's regressions):
   - Chat list listener recovers after a server refusal (token refresh + backoff). Pass 2 done except DeviceLock (Android uses its own biometric App Lock), HealthReports/WeakLink (iOS-specific diagnostics).
   - Pass 3 (inside screens): Cancel Sending on uploads, Clear My Messages on profiles. Attach menu and chat header already match. Left: Share Profile (send a person's card to another chat).
   - Share Profile (card to chats). Profile page now matches iOS's menu (Export Chat is off on iOS).
+  - Group Info: Report Spam / End Group / Delete Group. Group gaps left: Hide Members, member list filters (All Members / Members with roles), Share Invite Link wording.
