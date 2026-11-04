@@ -1,5 +1,6 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.material.icons.automirrored.filled.Send
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -176,6 +177,21 @@ fun CallLinkDetailsScreen(roomId: String, onBack: () -> Unit) {
 private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?, saved: SavedCallLink? = null) {
     val c = Fariin.colors
     val ctx = LocalContext.current
+    var sendingLink by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    val sendScope = androidx.compose.runtime.rememberCoroutineScope()
+    val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    if (sendingLink && myUid != null) com.fariin.app.ui.thread.ForwardSheet(myUid, onDismiss = { sendingLink = false }, title = "Send Link") { targets ->
+        sendingLink = false
+        val url = s.url ?: return@ForwardSheet
+        val crypto = com.fariin.app.data.CryptoHub.get(ctx.applicationContext)
+        sendScope.launch {
+            var ok = true
+            for (cid in targets) try {
+                com.fariin.app.data.ThreadRepository.openOrQuiet(cid, myUid, crypto, sendScope).sendForwardedText(url, forwarded = false)
+            } catch (_: Exception) { ok = false }
+            com.fariin.app.ui.components.Snack.show(if (ok) "Sent" else "Couldn't send. Try again.")
+        }
+    }
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
@@ -201,6 +217,8 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
             ) { Text("Join Call", fontSize = 16.sp) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // iOS CallLinkShareRows "Send": the link into Fariin chats picked here.
+            RoundAction(Icons.AutoMirrored.Filled.Send, "Send", Modifier.weight(1f)) { if (s.url != null) { onUsed(); sendingLink = true } }
             RoundAction(Icons.Filled.ContentCopy, "Copy link", Modifier.weight(1f)) { s.url?.let { onUsed(); copyLink(ctx, it) } }
             RoundAction(Icons.Filled.Share, "Share link", Modifier.weight(1f)) { s.url?.let { onUsed(); shareLink(ctx, it) } }
         }
