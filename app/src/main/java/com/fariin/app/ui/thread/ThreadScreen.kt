@@ -587,6 +587,8 @@ private fun ThreadContent(
                                 val theirs = ui.isGroup && m.callerUid != ui.me
                                 // A long press opens the message menu like any bubble; it used to fall
                                 // through to the bubble's tap and ask "Call them?" (Pixel, 2026-11-04).
+                                // A swipe replies, as on every other bubble (iOS allows Reply on a call).
+                                SwipeRow(enabled = MessageRules.canReply(m), onReply = { replyTo = m; editing = null }) {
                                 Box(Modifier.fillMaxWidth()
                                     .onGloballyPositioned { rowCoords[m.rowId] = it }
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
@@ -605,6 +607,7 @@ private fun ThreadContent(
                                         title = ui.title, photoUrl = ui.photoUrl,
                                         callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
                                         callerPhoto = if (theirs) ui.photos[m.callerUid ?: m.authorId] else null)
+                                }
                                 }
                             }
                             // "X asked to turn off Restricted chat": answered here by the one it was
