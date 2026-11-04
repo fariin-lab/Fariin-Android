@@ -308,7 +308,9 @@ class MainActivity : ComponentActivity() {
                 peopleRoutes(nav, people, chats = { chats.chats }, requests = { chats.requests },
                     groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
                 channelRoutes(nav, me, chats = { chats.chats })
-                composable("main") { shell.Follow(transition) }
+                // A real (see-through) box, never an empty page: with nothing to measure, the page
+                // change back to it could freeze half way (owner 2026-11-03, the stuck back arrow).
+                composable("main") { Box(Modifier.fillMaxSize()); shell.Follow(transition) }
                 composable("thread/{cid}") { entry ->
                     val cid = entry.arguments?.getString("cid") ?: return@composable
                     ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
