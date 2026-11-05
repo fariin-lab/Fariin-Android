@@ -69,6 +69,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Report
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -689,7 +696,20 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 modifier = if (canEdit) Modifier.clickable { editing = true } else Modifier)
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
-            Text("Group · ${com.fariin.app.data.GroupRules.memberCount(users.size)}", fontSize = 15.sp, color = c.secondary)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                val faces = users.take(3)
+                if (conv["hideMembers"] != true && faces.isNotEmpty()) {
+                    Box(Modifier.size(width = (22 + 14 * (faces.size - 1)).dp, height = 24.dp)) {
+                        faces.forEachIndexed { i, u ->
+                            Box(Modifier.offset(x = (14 * i).dp).size(24.dp).clip(CircleShape).background(c.bgSecondary).padding(1.5.dp)) {
+                                Avatar(photos[u]?.ifEmpty { null }, 21.dp)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text("${users.size} Member${if (users.size == 1) "" else "s"}", fontSize = 17.sp, color = c.secondary)
+            }
             // No description yet: whoever may edit is offered one, in grey; it opens Edit Group (iOS).
             if (desc.isEmpty() && canEdit) Text("Add group description...", fontSize = 17.sp, color = c.secondary,
                 textAlign = TextAlign.Center,
@@ -706,7 +726,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // iOS settingsCard (owner 2026-10-18/20): Storage Used, then for the owner and admins one
                 // Group Settings row (the management lives on that page) and Join Requests while
                 // someone waits; a member's Disappearing Messages row stays here, read-only.
-                SettingsRow("Storage Used", icon = rememberVectorPainter(Icons.Outlined.Storage), last = !iAmAdmin && timer <= 0 && !showStats) {
+                SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats) {
                     pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))
                 }
                 if (!iAmAdmin && timer > 0) DisappearingRow(timer, short = false, last = !showStats) {
@@ -738,12 +758,20 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
                 .clickable { pages.add(GroupPage.Members) }.padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text("${users.size} Member${if (users.size == 1) "" else "s"}", style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                    color = c.accent, modifier = Modifier.weight(1f))
-                Icon(Icons.Filled.Search, "Search members", tint = c.accent, modifier = Modifier.size(20.dp))
+                Text("${users.size} Member${if (users.size == 1) "" else "s"}", fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                    color = c.secondary)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "All members", tint = c.secondary, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.weight(1f))
             }
             SettingsSection {
-                if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) SettingsRow("Add Members", titleColor = c.accent, trailing = Trailing.NONE) { adding = true }
+                if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) Row(Modifier.fillMaxWidth().clickable { adding = true }
+                    .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Add, null, tint = c.label, modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Text("Add Members", fontSize = 17.sp, color = c.label)
+                }
                 shownMembers.forEach { u ->
                     PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "Member", "",
                         // An admin opens the member card (Make Group Admin, Ban from Group...); others the profile.
@@ -761,13 +789,13 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // iOS exit card: Leave Group, and Report Spam for a member who is not staff (unless the
                 // group turned reports off); the owner's End Group and Delete Group in their own card.
                 val canReport = !iAmAdmin && conv["groupNoReport"] != true
-                SettingsRow("Leave Group", titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
-                if (canReport) SettingsRow("Report Spam", titleColor = c.red, trailing = Trailing.NONE, last = true) { askReport = true }
+                SettingsRow("Leave Group", icon = rememberVectorPainter(Icons.AutoMirrored.Outlined.Logout), titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
+                if (canReport) SettingsRow("Report Spam", icon = rememberVectorPainter(Icons.Outlined.Report), titleColor = c.red, trailing = Trailing.NONE, last = true) { askReport = true }
             }
             if (iAmMember && owner == me) SettingsSection {
                 val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
-                if (!ended) SettingsRow("End Group", titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
-                SettingsRow("Delete Group", titleColor = c.red, trailing = Trailing.NONE, last = true) { askDelete = true }
+                if (!ended) SettingsRow("End Group", icon = rememberVectorPainter(Icons.Outlined.Cancel), titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
+                SettingsRow("Delete Group", icon = rememberVectorPainter(Icons.Outlined.Delete), titleColor = c.red, trailing = Trailing.NONE, last = true) { askDelete = true }
             }
             Spacer(Modifier.height(30.dp))
         }
