@@ -223,6 +223,10 @@ class ShareActivity : ComponentActivity() {
         /** The stream's bytes in cache/shared-in/<id>/<name>, served by our FileProvider so
          *  the send path reads the type from the extension. */
         fun copyIn(c: Context, u: Uri, type: String?): Uri? = try {
+            // Only another app's content may come in. A file:// path or our own provider's address
+            // would be opened with Fariin's own rights, so a hostile app could pass one of our
+            // private files (keys, the chat cache) under a harmless name and have it sent.
+            require(ShareIntake.isForeignContent(u.scheme, u.authority, c.packageName)) { "not another app's content" }
             val name = c.contentResolver.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cur ->
                 if (cur.moveToFirst()) cur.getString(0) else null
             }

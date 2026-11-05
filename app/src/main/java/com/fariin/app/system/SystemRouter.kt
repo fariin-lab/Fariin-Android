@@ -35,6 +35,17 @@ object SystemRouter {
 
 /** What arrived through the share sheet, sorted the way the send path takes it. Pure. */
 object ShareIntake {
+    /** A shared stream is taken only as content:// from ANOTHER app: never file://, never our own
+     *  authorities (com.fariin.app.files and any other provider of ours). */
+    fun isForeignContent(scheme: String?, authority: String?, ourPackage: String): Boolean {
+        if (!scheme.equals("content", ignoreCase = true)) return false
+        // "0@com.fariin.app.files" (a user id before @) still reaches our own provider.
+        val a = authority?.lowercase()?.substringAfterLast('@')?.trim() ?: return false
+        if (a.isEmpty()) return false
+        val us = ourPackage.lowercase()
+        return a.split(';').none { it == us || it.startsWith("$us.") }
+    }
+
     enum class Kind { MEDIA, FILE }
 
     /** Photos and videos go as a photo/video message (albums when several); anything else as a file. */
