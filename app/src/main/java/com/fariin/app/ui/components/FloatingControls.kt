@@ -45,25 +45,29 @@ import com.fariin.app.ui.theme.Fariin
  * Calls, StoriesTabView); the chat screen's Header is the Android reference.
  */
 
-/** One bar icon in a 44 circle. */
+/**
+ * One bar icon, 44 to touch. PLAIN on the page (owner 2026-11-04: "remove that white background");
+ * [circle] keeps the floating circle where an icon sits on a photo or video. A [fill] colour always
+ * draws its circle.
+ */
 @Composable
 fun FloatingIcon(painter: Painter, contentDescription: String?, onClick: () -> Unit, modifier: Modifier = Modifier,
-                 tint: Color = Fariin.colors.label, fill: Color? = null) {
-    IconButton(onClick = onClick, modifier = modifier.size(44.dp).floating(fill = fill)) {
+                 tint: Color = Fariin.colors.label, fill: Color? = null, circle: Boolean = false) {
+    IconButton(onClick = onClick, modifier = modifier.size(44.dp).then(if (circle || fill != null) Modifier.floating(fill = fill) else Modifier)) {
         Icon(painter, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
 @Composable
 fun FloatingIcon(icon: ImageVector, contentDescription: String?, onClick: () -> Unit, modifier: Modifier = Modifier,
-                 tint: Color = Fariin.colors.label, fill: Color? = null) =
-    FloatingIcon(rememberVectorPainter(icon), contentDescription, onClick, modifier, tint, fill)
+                 tint: Color = Fariin.colors.label, fill: Color? = null, circle: Boolean = false) =
+    FloatingIcon(rememberVectorPainter(icon), contentDescription, onClick, modifier, tint, fill, circle)
 
-/** Back as the chat screen has it: the chevron in a floating circle. */
+/** Back: the chevron, plain on the page; [circle] on a photo or video (see [FloatingIcon]). */
 @Composable
-fun FloatingBack(onBack: () -> Unit, modifier: Modifier = Modifier, contentDescription: String = "Back") {
+fun FloatingBack(onBack: () -> Unit, modifier: Modifier = Modifier, contentDescription: String = "Back", circle: Boolean = false) {
     val c = Fariin.colors
-    IconButton(onClick = onBack, modifier = modifier.size(44.dp).floating()) {
+    IconButton(onClick = onBack, modifier = modifier.size(44.dp).then(if (circle) Modifier.floating() else Modifier)) {
         Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = contentDescription, tint = c.label,
             modifier = Modifier.padding(start = 6.dp).size(20.dp))
     }

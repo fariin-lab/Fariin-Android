@@ -407,11 +407,11 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 14.dp)) {
                         com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Close", onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onClose() } },
-                            modifier = Modifier.align(Alignment.CenterStart))
+                            modifier = Modifier.align(Alignment.CenterStart), circle = true)
                         Text("Preview", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                         com.fariin.app.ui.components.FloatingIcon(if (dark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
                             if (dark) "Show in light mode" else "Show in dark mode", onClick = { previewDark = !dark },
-                            modifier = Modifier.align(Alignment.CenterEnd))
+                            modifier = Modifier.align(Alignment.CenterEnd), circle = true)
                     }
                     Spacer(Modifier.weight(1f))
                     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

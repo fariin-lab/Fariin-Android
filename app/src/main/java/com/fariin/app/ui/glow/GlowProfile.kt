@@ -219,7 +219,7 @@ fun GlowProfilePage(me: String, profile: MyProfile?, onEdit: () -> Unit, onBack:
         com.fariin.app.ui.theme.FariinTheme(dark = true) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().height(64.dp).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                FloatingBack(onBack)
+                FloatingBack(onBack, circle = true)
                 Spacer(Modifier.weight(1f))
                 FloatingTextAction("Edit", onClick = onEdit)
             }
