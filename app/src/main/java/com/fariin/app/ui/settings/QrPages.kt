@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -407,7 +409,7 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                     PosterAction(rememberVectorPainter(Icons.Outlined.Download), if (saving) "Saving..." else "Save", Modifier.weight(1f), enabled = !saving) {
                         if (com.fariin.app.media.GallerySaver.needsPermission(ctx)) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else doSave()
                     }
-                    PosterAction(rememberVectorPainter(Icons.Outlined.Link), "Copy link", Modifier.weight(1f)) {
+                    PosterAction(rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), "Copy link", Modifier.weight(1f)) {
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("Fariin link", link))
                         flash("Link copied")
@@ -580,13 +582,13 @@ internal fun ScanQrPage(onMyCode: () -> Unit, onClose: () -> Unit, onDone: () ->
                     modifier = Modifier.align(Alignment.CenterHorizontally).floating(CircleShape).padding(horizontal = 16.dp, vertical = 10.dp))
                 Spacer(Modifier.height(40.dp))
                 Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    GlassCircle(rememberVectorPainter(Icons.Outlined.PhotoLibrary), "Choose a photo") {
+                    GlassCircle(rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album)), "Choose a photo") {
                         pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }
                     Spacer(Modifier.weight(1f))
                     Row(Modifier.floating(CircleShape).clickable(onClick = onMyCode).padding(horizontal = 20.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.QrCode, contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
                         Text("My code", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label)
                     }
                     Spacer(Modifier.weight(1f))
@@ -609,7 +611,7 @@ private fun GlassCircle(painter: Painter, label: String, onClick: () -> Unit) {
 private fun CameraOffCard(ctx: Context) {
     Column(Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically)) {
-        Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
         Text("Camera access is off", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         Text("Fariin needs the camera to scan a QR code. Turn it on in Settings, or pick a photo of a code with the button below.",
             fontSize = 15.sp, color = Color.White.copy(alpha = 0.75f), textAlign = TextAlign.Center)

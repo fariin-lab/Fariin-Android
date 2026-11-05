@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.filled.History
 import android.widget.Toast
@@ -150,7 +152,7 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
             value = if (info.isPublic) "Public" else "Private", last = !invite) { nav.type(info.cid) }
         if (invite) {
             val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = true)
-            SettingsRow("Invite Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link),
+            SettingsRow("Invite Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
                 value = if (inviteOn) "On" else "Off") { nav.links(info.cid) }
             SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
                 value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true) { nav.requests(info.cid) }
@@ -306,9 +308,9 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
         }, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
                 if (mayInvite) SettingsSection {
-                    SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonAdd),
+                    SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)),
                         titleColor = c.accent, trailing = Trailing.NONE) { if (!adding) picking = true }
-                    SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Link),
+                    SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
                         titleColor = c.accent, trailing = Trailing.NONE, last = true) { shareLink() }
                 }
                 SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
@@ -353,7 +355,7 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection(footer = ChannelAdmins.ADMINS_FOOTER) {
                 if (team.can(me, Right.ADD_ADMINS)) {
-                    SettingsRow("Add Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonAdd),
+                    SettingsRow("Add Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)),
                         titleColor = c.accent, trailing = Trailing.NONE) { picking = true }
                 }
                 team.sorted().forEach { uid ->

@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoCamera
@@ -190,9 +192,9 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                 Text("Set New Photo", fontSize = 17.sp, color = c.accent, modifier = Modifier.clickable { photoMenu = true }.padding(10.dp))
                 androidx.compose.material3.DropdownMenu(expanded = photoMenu, onDismissRequest = { photoMenu = false }) {
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
-                        leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) }, onClick = { photoMenu = false; picker.takePhoto() })
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { photoMenu = false; picker.takePhoto() })
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
-                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = { photoMenu = false; pick() })
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { photoMenu = false; pick() })
                     if (!me?.photoUrl.isNullOrEmpty()) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
                         leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = c.red) }, onClick = { photoMenu = false; askRemove = true })
                 }
@@ -435,9 +437,9 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                     var slotMenu by remember { mutableStateOf(false) }
                     androidx.compose.material3.DropdownMenu(expanded = slotMenu, onDismissRequest = { slotMenu = false }) {
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
-                            leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) }, onClick = { slotMenu = false; picker.takePhoto() })
+                            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { slotMenu = false; picker.takePhoto() })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
-                            leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = { slotMenu = false; pick() })
+                            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { slotMenu = false; pick() })
                         if (photo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
                             leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = c.red) }, onClick = { slotMenu = false; photo = null })
                     }
@@ -796,10 +798,10 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
     }
     val off = Modifier.alpha(0.45f)
     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        ActionTile("Voice", Icons.Outlined.Call, if (ready) Modifier else off) { call(video = false) }
-        ActionTile("Video", Icons.Outlined.Videocam, if (ready) Modifier else off) { call(video = true) }
+        ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), if (ready) Modifier else off) { call(video = false) }
+        ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), if (ready) Modifier else off) { call(video = true) }
         Box {
-            ActionTile(if (muted) "Unmute" else "Mute", if (muted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff) { muteOpen = true }
+            ActionTile(if (muted) "Unmute" else "Mute", if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off)) { muteOpen = true }
             androidx.compose.material3.DropdownMenu(muteOpen, onDismissRequest = { muteOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                 border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                 Text(if (muted) circles.mutedLabel(until, now, android.text.format.DateFormat.is24HourFormat(ctx)) else circles.MUTE_HEADER,
@@ -830,14 +832,14 @@ private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, on
         androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-                leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Wallpaper, null, tint = c.label) },
+                leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
                 onClick = { open = false; onWallpaper() })
             if (onShare != null) {
                 androidx.compose.material3.DropdownMenuItem(text = { Text("Share Group", color = c.label) },
                     leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label, modifier = Modifier.size(24.dp)) },
                     onClick = { open = false; onShare() })
                 androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
-                    leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.QrCode, null, tint = c.label) },
+                    leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
                     onClick = { open = false; onQr() })
             }
             // iOS menuMediaItems: this group's own Save to Photos, over the Settings switch.
@@ -935,9 +937,9 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                     modifier = Modifier.clip(CircleShape).background(c.card).clickable { groupPhotoMenu = true }.padding(horizontal = 20.dp, vertical = 9.dp))
                 androidx.compose.material3.DropdownMenu(expanded = groupPhotoMenu, onDismissRequest = { groupPhotoMenu = false }) {
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
-                        leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) }, onClick = { groupPhotoMenu = false; picker.takePhoto() })
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { groupPhotoMenu = false; picker.takePhoto() })
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
-                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = { groupPhotoMenu = false; pick() })
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { groupPhotoMenu = false; pick() })
                 }
             }
             Spacer(Modifier.height(8.dp))

@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
@@ -948,9 +949,15 @@ fun ChatRow(
                         color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    // The blue verified tick beside a verified channel's name (iOS chat list).
+                    if (conv.verified) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Filled.Verified, contentDescription = "Verified",
+                            tint = c.blue, modifier = Modifier.size(16.dp))
+                    }
                     if (muted) {
                         Spacer(Modifier.width(6.dp))
-                        Icon(Icons.Filled.NotificationsOff, contentDescription = "Muted",
+                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted",
                             tint = c.tertiary, modifier = Modifier.size(15.dp))
                     }
                 }

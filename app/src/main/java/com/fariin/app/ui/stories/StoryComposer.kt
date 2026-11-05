@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -298,9 +299,13 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             // end (iOS); it rises with the keyboard.
             val imeDp = with(density) { WindowInsets.ime.getBottom(density).toDp() }
             val lift = maxOf(imeDp + 8.dp, EDIT_BAR + navDp + 12.dp)
+            // Keyboard up: a tap anywhere on the picture puts it away (owner 2026-11-04).
+            if (imeDp > 0.dp) Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                detectTapGestures { focus.clearFocus(force = true); keyboard?.hide(); captionArmed = false }
+            })
             Row(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = lift).padding(horizontal = 12.dp).fillMaxWidth()
-                    .clip(RoundedCornerShape(26.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    .clip(RoundedCornerShape(26.dp)).background(Color.Black).padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
@@ -315,7 +320,10 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                         modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed })
                 }
                 Box {
-                    Box(Modifier.size(44.dp).clip(CircleShape).clickable { hoursMenu = true }, contentAlignment = Alignment.Center) {
+                    // Picking a lifetime must not hand the caption the focus (and the keyboard).
+                    Box(Modifier.size(44.dp).clip(CircleShape).clickable {
+                        captionArmed = false; focus.clearFocus(force = true); keyboard?.hide(); hoursMenu = true
+                    }, contentAlignment = Alignment.Center) {
                         Box(Modifier.size(26.dp).border(1.3.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
                             Text("$hours", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
@@ -327,7 +335,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                             DropdownMenuItem(
                                 text = { Text("$h Hours") },
                                 trailingIcon = { if (h == hours) Icon(Icons.Filled.Check, contentDescription = null) },
-                                onClick = { hours = h; hoursMenu = false },
+                                onClick = { captionArmed = false; hours = h; hoursMenu = false; focus.clearFocus(force = true) },
                             )
                         }
                     }

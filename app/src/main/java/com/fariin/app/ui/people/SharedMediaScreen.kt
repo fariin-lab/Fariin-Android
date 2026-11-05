@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.res.vectorResource
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -260,7 +261,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                     SharedMedia.Tab.VOICE -> Rows(state.loaded, state.lists.voice.isEmpty(), SharedMedia.Tab.VOICE, Icons.Outlined.Mic) {
                         items(state.lists.voice, key = { it.id }) { m -> VoiceRow(cid, m) }
                     }
-                    SharedMedia.Tab.LINKS -> Rows(state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, Icons.Outlined.Link) {
+                    SharedMedia.Tab.LINKS -> Rows(state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)) {
                         items(state.lists.links, key = { it.first.id }) { (m, link) -> LinkRow(m, link) }
                     }
                 }
@@ -275,7 +276,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
 private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, onOpen: (SharedMedia.Item) -> Unit) {
     val c = Fariin.colors
     val sections = remember(media) { SharedMedia.sections(media, System.currentTimeMillis().toDouble()) }
-    if (loaded && media.isEmpty()) { EmptyTab(SharedMedia.Tab.MEDIA, Icons.Outlined.PhotoLibrary); return }
+    if (loaded && media.isEmpty()) { EmptyTab(SharedMedia.Tab.MEDIA, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album)); return }
     LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // While the first answer is on its way: grey tiles, not a spinner (iOS gridSkeleton).

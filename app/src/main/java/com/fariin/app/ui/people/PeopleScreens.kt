@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Call
 import com.fariin.app.data.isRestricted
@@ -151,7 +153,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                 item {
                     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
                     val actions = listOf(
-                        Triple("New Group", onNewGroup, Icons.Filled.Groups),
+                        Triple("New Group", onNewGroup, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)),
                         Triple("New Channel", channelNav.create, Icons.Filled.Campaign),
                         Triple("Invite Friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, Icons.Filled.Share),
                     )
@@ -468,16 +470,16 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 if (uid != me && !blocked) {
                     val ctx = androidx.compose.ui.platform.LocalContext.current
                     val photo = person?.photoUrl ?: conv?.photos?.get(uid)
-                    ActionTile("Voice", androidx.compose.material.icons.Icons.Outlined.Call) {
+                    ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice)) {
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = false)
                     }
-                    ActionTile("Video", androidx.compose.material.icons.Icons.Outlined.Videocam) {
+                    ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video)) {
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = true)
                     }
                 }
                 ActionTile(if (muted) "Unmute" else "Mute",
-                    if (muted) androidx.compose.material.icons.Icons.Outlined.Notifications
-                    else androidx.compose.material.icons.Icons.Outlined.NotificationsOff) {
+                    if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
+                    else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off)) {
                     scope.launch { if (api.setMuted(cid, !muted)) muted = !muted else notice = "Check your connection and try again." }
                 }
                 if (fromChat && uid != me) ActionTile("Search", androidx.compose.material.icons.Icons.Filled.Search) {
@@ -559,7 +561,7 @@ private fun AddToGroupItem(onClick: () -> Unit) {
 private fun ChangeWallpaperItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Wallpaper, null, tint = c.label) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable

@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Notifications
@@ -925,7 +927,7 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })
             ui.muted?.let { muted ->
                 DropdownMenuItem(text = { Text(if (muted) "Unmute" else "Mute") },
-                    leadingIcon = { Icon(if (muted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff, null) },
+                    leadingIcon = { Icon(if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), null) },
                     onClick = { open = false; onToggleMute() })
             }
         }

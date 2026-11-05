@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -348,7 +350,7 @@ private fun CardCount(summary: StoryViewSummary?, modifier: Modifier) {
     val views = summary?.count ?: 0
     val likes = summary?.reactionCount ?: 0
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         Text(compact(views), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         if (likes > 0) {
             Spacer(Modifier.width(4.dp))
@@ -605,11 +607,11 @@ private fun ViewerRow(
                         onClick = { menu = false; onSendMessage() })
                     DropdownMenuItem(
                         text = { Text(if (isHidden) "Don't hide my stories from ${v.name}" else "Hide my stories from ${v.name}") },
-                        leadingIcon = { Icon(if (isHidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, contentDescription = null) },
+                        leadingIcon = { Icon(if (isHidden) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views_off), contentDescription = null) },
                         onClick = { menu = false; onToggleHidden() })
                     // Destructive and last.
                     DropdownMenuItem(text = { Text("Block ${v.name}", color = Fariin.colors.red) },
-                        leadingIcon = { Icon(Icons.Outlined.Block, contentDescription = null, tint = Fariin.colors.red) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), contentDescription = null, tint = Fariin.colors.red) },
                         onClick = { menu = false; onBlock() })
                 }
                 }

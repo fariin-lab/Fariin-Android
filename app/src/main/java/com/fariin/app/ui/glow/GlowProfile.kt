@@ -1,5 +1,7 @@
 package com.fariin.app.ui.glow
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -307,7 +309,7 @@ fun PostedTile(s: PostedStory, onClick: () -> Unit) {
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(52.dp)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)))))
             Row(Modifier.align(Alignment.BottomStart).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(GlowRules.countShort(v), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }

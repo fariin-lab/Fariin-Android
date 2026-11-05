@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Group
@@ -1119,7 +1121,7 @@ private fun StoryPage(
                                 // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
                                 if (mine) {
                                     item("Save", Icons.Filled.Download, null, "save")
-                                    if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", Icons.Filled.Group, null, "viewers")
+                                    if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), null, "viewers")
                                     if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", Icons.Filled.Share, null, "share")
                                 }
                                 // iOS: Get notifications first, for a person's story (not a group's).
@@ -1295,7 +1297,7 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
                     }
                 }
             } else {
-                Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(8.dp))
             Text(StoryRules.viewsLabel(count, full), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
@@ -1394,7 +1396,7 @@ private fun ReplyBar(
             } else if (showLike || onRepost != null) {
                 // iOS repost button (ic_repost), left of the heart, only where the story may be passed on.
                 if (onRepost != null) Box(Modifier.size(44.dp).clip(CircleShape).clickable { onRepost() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Repeat, contentDescription = "Repost", tint = Color.White, modifier = Modifier.size(26.dp))
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_repost), contentDescription = "Repost", tint = Color.White, modifier = Modifier.size(26.dp))
                 }
                 // iOS likeButton: the bare heart on the black, in a 44 target, no plate.
                 if (showLike)
@@ -1609,11 +1611,11 @@ private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Bo
     Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(22.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Visibility, "Views", tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), "Views", tint = Color.White, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(7.dp)); Text(n(views), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         }
         Row(Modifier.then(if (onRepost != null) Modifier.clickable { onRepost() } else Modifier), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Repeat, "Reposts", tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_repost), "Reposts", tint = Color.White, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(7.dp)); Text(n(reposts), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         }
         Row(Modifier.clickable {

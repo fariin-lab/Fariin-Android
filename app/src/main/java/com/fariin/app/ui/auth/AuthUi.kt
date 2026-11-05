@@ -1,5 +1,6 @@
 package com.fariin.app.ui.auth
 
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -267,7 +268,7 @@ internal fun AuthField(
         }
         if (onReveal != null) {
             IconButton(onClick = onReveal, modifier = Modifier.size(30.dp)) {
-                Icon(if (reveal) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                Icon(if (reveal) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views_off) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views),
                     contentDescription = if (reveal) "Hide password" else "Show password", tint = c.secondary, modifier = Modifier.size(18.dp))
             }
         }

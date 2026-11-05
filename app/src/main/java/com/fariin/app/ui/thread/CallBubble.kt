@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,7 +72,7 @@ internal fun CallBubble(
     val iconTint = if (look.missedIncoming) red else if (look.mine) Color.White else accent
     val disc = if (look.mine) Color.White.copy(alpha = 0.22f) else (if (look.missedIncoming) red else accent).copy(alpha = 0.14f)
     val icon = when (look.icon) {
-        CallIcon.VIDEO -> Icons.Filled.Videocam
+        CallIcon.VIDEO -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video)
         CallIcon.VIDEO_MISSED -> Icons.Filled.VideocamOff
         CallIcon.PHONE_IN -> Icons.AutoMirrored.Filled.CallReceived
         CallIcon.PHONE_OUT -> Icons.AutoMirrored.Filled.CallMade

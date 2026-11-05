@@ -1,5 +1,7 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.automirrored.filled.Send
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -87,7 +89,7 @@ private const val NET_ERROR = "Check your connection and try again."
 fun CallLinkAvatar(size: Dp) {
     val c = Fariin.colors
     Box(Modifier.size(size).clip(CircleShape).background(c.blue.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-        Icon(Icons.Filled.Link, null, tint = c.accent, modifier = Modifier.size(size * 0.48f))
+        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.accent, modifier = Modifier.size(size * 0.48f))
     }
 }
 
@@ -360,7 +362,7 @@ fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onIn
                 Text(link.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Link, null, tint = c.secondary, modifier = Modifier.size(13.dp))
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.secondary, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Call Link", fontSize = 14.sp, color = c.secondary, maxLines = 1)
                 }

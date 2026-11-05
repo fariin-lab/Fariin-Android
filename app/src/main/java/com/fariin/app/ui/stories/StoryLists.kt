@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -447,7 +449,7 @@ fun NewAudienceButton(canAddCustom: Boolean, onCustom: () -> Unit, onOneTime: ((
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             NewItem("New Custom Story", "Visible only to specific people.", painterResource(R.drawable.ic_story_folder), canAddCustom) { open = false; onCustom() }
-            NewItem("New Group Story", "Share to the members of a group you run.", rememberVectorPainter(Icons.Outlined.Groups), onGroup != null) { open = false; onGroup?.invoke() }
+            NewItem("New Group Story", "Share to the members of a group you run.", rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)), onGroup != null) { open = false; onGroup?.invoke() }
             NewItem("One-Time Story", "Can only be viewed once by each recipient.", rememberVectorPainter(Icons.Outlined.LocalFireDepartment), onOneTime != null) { open = false; onOneTime?.invoke() }
         }
     }

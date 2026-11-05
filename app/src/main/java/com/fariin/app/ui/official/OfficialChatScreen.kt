@@ -1,5 +1,6 @@
 package com.fariin.app.ui.official
 
+import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -431,7 +432,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                     Icon(Icons.Filled.Verified, contentDescription = "Official", tint = c.blue, modifier = Modifier.size(17.dp))
                     if (muted) {
                         Spacer(Modifier.width(6.dp))
-                        Icon(Icons.Filled.NotificationsOff, contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))
+                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))
                     }
                 }
                 Spacer(Modifier.width(8.dp))

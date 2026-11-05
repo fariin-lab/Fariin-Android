@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.runtime.LaunchedEffect
@@ -152,7 +153,7 @@ internal fun MessageMenu(
                 val age = (now - m.createdAtMillis) / 1000.0
                 val live = (m.callOutcome == "ringing" && age < 120) || (m.callOutcome == "ongoing" && age < 4 * 3600)
                 if (!live) add(MenuItem(if (m.callVideo) "Video Call" else "Voice Call",
-                    if (m.callVideo) Icons.Outlined.Videocam else Icons.Outlined.Call) { onCallBack(m) })
+                    if (m.callVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice)) { onCallBack(m) })
             }
             if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })

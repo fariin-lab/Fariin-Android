@@ -199,7 +199,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     if (info.verified) {
                         Spacer(Modifier.width(6.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.accent, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -275,13 +275,14 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     }
 }
 
+@androidx.compose.runtime.Composable
 private fun iconFor(a: Action): ImageVector = when (a) {
     Action.FOLLOW -> Icons.Filled.Add
     Action.LEAVE -> Icons.AutoMirrored.Outlined.ExitToApp
     Action.SHARE -> Icons.Outlined.Share
     Action.SEARCH -> Icons.Filled.Search
-    Action.MUTE -> Icons.Outlined.NotificationsOff
-    Action.UNMUTE -> Icons.Outlined.Notifications
+    Action.MUTE -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off)
+    Action.UNMUTE -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
 }
 
 @Composable

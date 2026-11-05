@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -300,21 +301,22 @@ private fun DetailBlock(d: AdminLog.Detail, groupPhoto: String?) {
 
 
 /** The kind of action in the face's small badge (iOS typeIcon). */
+@androidx.compose.runtime.Composable
 private fun typeIcon(e: AdminLog.Event): ImageVector = when (e.type) {
     "member_added" -> Icons.Outlined.PersonAddAlt
     "member_removed" -> Icons.Outlined.PersonRemove
     "member_unbanned", "join_approved" -> Icons.Outlined.HowToReg
     "join_denied" -> Icons.Outlined.PersonOff
-    "admin_added", "admin_rights" -> Icons.Outlined.StarOutline
+    "admin_added", "admin_rights" -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_star_outline)
     "admin_removed" -> Icons.Outlined.RemoveModerator
     "owner_changed" -> Icons.Outlined.WorkspacePremium
     "restricted" -> Icons.Outlined.PanTool
     "unrestricted" -> Icons.Outlined.DoNotTouch
-    "roles" -> Icons.Outlined.Sell
-    "info" -> if (e.fields == listOf("photo")) Icons.Outlined.PhotoCamera else Icons.Outlined.Edit
+    "roles" -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker)
+    "info" -> if (e.fields == listOf("photo")) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera) else Icons.Outlined.Edit
     "settings" -> Icons.Outlined.Settings
     "pinned", "unpinned" -> Icons.Outlined.PushPin
-    "link_created", "link_edited", "link_revoked", "link_deleted", "links_reset" -> Icons.Filled.Link
+    "link_created", "link_edited", "link_revoked", "link_deleted", "links_reset" -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)
     "username_set" -> Icons.Outlined.AlternateEmail
     "made_private" -> Icons.Outlined.Lock
     "group_ended" -> Icons.Filled.Close
@@ -439,7 +441,7 @@ private fun kindIcon(k: AdminLog.Kind): Painter = when (k) {
     AdminLog.Kind.RESTRICTIONS -> painterResource(R.drawable.ic_gs_banned)
     AdminLog.Kind.ADMINS -> painterResource(R.drawable.ic_gs_admins)
     AdminLog.Kind.INFO -> painterResource(R.drawable.ic_gs_permissions)
-    AdminLog.Kind.LINKS -> rememberVectorPainter(Icons.Filled.Link)
+    AdminLog.Kind.LINKS -> rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy))
     AdminLog.Kind.PINS -> rememberVectorPainter(Icons.Outlined.PushPin)
     AdminLog.Kind.FARIIN -> rememberVectorPainter(Icons.Outlined.VerifiedUser)
 }

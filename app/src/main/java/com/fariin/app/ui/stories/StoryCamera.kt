@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -566,7 +568,7 @@ private fun StoryCamera(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(40.dp))
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(40.dp))
                 Text("Camera access is off. Enable it in Settings", color = Color.White, fontSize = 15.sp, textAlign = TextAlign.Center)
                 Text(
                     "Open Settings", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,

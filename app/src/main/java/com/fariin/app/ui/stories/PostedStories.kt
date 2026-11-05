@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -140,7 +142,7 @@ fun PostedStoriesPage(
                             if (folder.kind == "everyone") Avatar(myPhoto, 28.dp)
                             else Box(Modifier.size(28.dp).clip(CircleShape).background(if (folder.kind == "custom") Color.Gray else Color(0xFFFF9500)),
                                 contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             }
                             Spacer(Modifier.width(10.dp))
                             Text(folder.name, color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -155,7 +157,7 @@ fun PostedStoriesPage(
                             // iOS hold menu: Edit Viewers, Share (only a story that went to Everyone), Delete.
                             DropdownMenu(expanded = menuFor == s.id, onDismissRequest = { menuFor = null }) {
                                 if (PostedStoriesRules.canEditViewers(s)) DropdownMenuItem(text = { Text("Edit Viewers") },
-                                    leadingIcon = { Icon(Icons.Filled.Group, contentDescription = null) },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), contentDescription = null) },
                                     onClick = { menuFor = null; editViewers = s })
                                 if (PostedStoriesRules.canShare(s)) DropdownMenuItem(text = { Text("Share") },
                                     leadingIcon = { Icon(painterResource(R.drawable.ic_link_share), contentDescription = null, modifier = Modifier.size(24.dp)) },

@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -56,7 +58,7 @@ internal fun LocationBody(loc: CardRules.Location, isMe: Boolean, width: Dp, met
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(if (isMe) Color.White else c.red), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Place, null, tint = if (isMe) c.red else Color.White, modifier = Modifier.size(26.dp))
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), null, tint = if (isMe) c.red else Color.White, modifier = Modifier.size(26.dp))
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {

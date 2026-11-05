@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
@@ -142,7 +144,7 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (r.verified) {
                         Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.accent, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
                     }
                     if (r.official) {
                         Spacer(Modifier.width(4.dp))
@@ -235,7 +237,7 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
                 Spacer(Modifier.height(10.dp))
                 Text("Golden hour on the coast tonight", fontSize = 15.sp, color = c.label)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Visibility, null, tint = c.secondary, modifier = Modifier.size(10.dp))
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(10.dp))
                     Spacer(Modifier.width(2.dp))
                     Text("9.1K", fontSize = 11.sp, color = c.secondary)
                 }

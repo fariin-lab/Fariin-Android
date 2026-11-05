@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -346,7 +348,7 @@ private fun RailTile(uri: Uri, isVideo: Boolean, current: Boolean, onTap: () -> 
         ) {
             val pic = thumb?.first
             if (pic != null) Image(pic, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            else if (isVideo) Icon(Icons.Filled.Videocam, null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(14.dp))
+            else if (isVideo) Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(14.dp))
             // The ring is drawn over the picture, as iOS's overlay.
             if (current) Box(Modifier.fillMaxSize().border(2.5.dp, EditorBlue, tile))
             val ms = thumb?.second ?: 0L

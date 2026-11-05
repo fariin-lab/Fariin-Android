@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -249,7 +251,7 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Box(Modifier.size(36.dp).clip(CircleShape).background(c.red), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.Place, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), null, tint = Color.White, modifier = Modifier.size(20.dp))
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {

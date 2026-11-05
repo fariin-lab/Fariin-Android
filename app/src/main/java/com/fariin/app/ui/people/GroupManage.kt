@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Sell
@@ -166,7 +168,7 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = 
         SettingsRow("Group Type", icon = painterResource(R.drawable.ic_gs_group_type), value = if (isPublic) "Public" else "Private") { open(GroupPage.Type) }
     }
     if (team.may(me, Right.INVITE_USERS)) {
-        SettingsRow("Invite Links", icon = rememberVectorPainter(Icons.Filled.Link),
+        SettingsRow("Invite Links", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
             value = if ((conv["inviteCode"] as? String).isNullOrEmpty()) "Off" else "On") { open(GroupPage.Links) }
         // iOS GroupSettingsView joining section: the people waiting through a link with Approve New Members.
         val reqs = rememberJoinRequests(cid, allowed = cid.isNotEmpty() && !team.closed)
@@ -277,7 +279,7 @@ private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection(footer = GroupAdmins.ADMINS_FOOTER) {
                 if (team.may(me, Right.ADD_ADMINS) && team.others().isNotEmpty()) {
-                    SettingsRow("Add Admin", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.accent,
+                    SettingsRow("Add Admin", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)), titleColor = c.accent,
                         trailing = Trailing.NONE) { push(GroupPage.Choose) }
                 }
                 team.sortedAdmins().forEach { uid ->
@@ -523,12 +525,12 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                     // iOS member sheet's Tag (roles): the owner, or an admin who may change info.
                     if (com.fariin.app.data.GroupRole.canSet(me, uid, conv))
                         add(Triple(if (com.fariin.app.data.GroupRole.all(conv)[uid] == null) "Set Tag" else "Edit Tag",
-                            rememberVectorPainter(Icons.Filled.Sell)) { tagging = true })
+                            rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker))) { tagging = true })
                     if (uid != me) add(Triple("Open Profile", rememberVectorPainter(Icons.Filled.Person)) { onClose(); onProfile(uid) })
                 }
                 val red = buildList<Triple<String, Painter, () -> Unit>> {
                     if (manage && team.isAdmin(uid)) add(Triple("Dismiss Admin", rememberVectorPainter(Icons.Filled.PersonRemove)) { confirmDismiss = true })
-                    if (team.canRemove(me, uid)) add(Triple("Ban from Group", rememberVectorPainter(Icons.Filled.Block)) { confirmBan = true })
+                    if (team.canRemove(me, uid)) add(Triple("Ban from Group", rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block))) { confirmBan = true })
                 }
                 rows.forEachIndexed { i, (t, p, a) -> SettingsRow(t, icon = p, trailing = Trailing.NONE, last = i == rows.lastIndex && red.isEmpty(), onClick = a) }
                 red.forEachIndexed { i, (t, p, a) -> SettingsRow(t, icon = p, titleColor = c.red, trailing = Trailing.NONE, last = i == red.lastIndex, onClick = a) }
@@ -662,9 +664,9 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                 // Add Members first, as iOS GroupMembersView (its own section above everyone).
                 if (query.isEmpty() && (canAdd || canInvite) && !selecting) item(key = "add") {
                     SettingsSection {
-                        if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(Icons.Filled.PersonAdd), titleColor = c.accent,
+                        if (canAdd) SettingsRow("Add Members", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)), titleColor = c.accent,
                             trailing = Trailing.NONE, last = !canInvite, onClick = onAddMembers)
-                        if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.accent,
+                        if (canInvite) SettingsRow("Invite Via Group Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), titleColor = c.accent,
                             trailing = Trailing.NONE, last = true) { push(GroupPage.Links) }
                     }
                 }
@@ -1075,7 +1077,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                         SettingsRow("Copy", icon = rememberVectorPainter(Icons.Filled.ContentCopy), trailing = Trailing.NONE) { copy(ctx, l.url); detail = null }
                         SettingsRow("Share", icon = rememberVectorPainter(Icons.Filled.Share), trailing = Trailing.NONE) { share(ctx, l.url); detail = null }
                         SettingsRow("Edit", icon = rememberVectorPainter(Icons.Filled.Edit), trailing = Trailing.NONE) { detail = null; onEdit(l) }
-                        SettingsRow("Revoke Link", icon = rememberVectorPainter(Icons.Filled.Block), titleColor = c.red, trailing = Trailing.NONE, last = true) { detail = null; revokeTarget = l }
+                        SettingsRow("Revoke Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block)), titleColor = c.red, trailing = Trailing.NONE, last = true) { detail = null; revokeTarget = l }
                     } else {
                         SettingsRow("Delete Link", icon = rememberVectorPainter(Icons.Filled.Delete), titleColor = c.red, trailing = Trailing.NONE, last = true) {
                             detail = null; change("The link was not deleted. Try again.") { GroupManage.deleteLink(cid, l.code) }
@@ -1107,7 +1109,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                                 Text(p.statusLine(now).substringBefore(" · "), fontSize = 14.sp, color = c.secondary,
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             } else {
-                                SettingsRow(if (working) "Creating..." else "Create Link", icon = rememberVectorPainter(Icons.Filled.Link), titleColor = c.accent,
+                                SettingsRow(if (working) "Creating..." else "Create Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), titleColor = c.accent,
                                     trailing = Trailing.NONE, last = true) { change("The link was not created. Try again.") { GroupManage.createPrimary(cid) } }
                             }
                         }
@@ -1191,7 +1193,7 @@ private fun LinkRow(l: GroupLink, now: Double, last: Boolean, onClick: () -> Uni
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(40.dp).clip(CircleShape).background(tint), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Link, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -1322,7 +1324,7 @@ private fun TagEditorSheet(cid: String, me: String, uid: String, name: String, c
             }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).padding(horizontal = 14.dp)) {
                 Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Sell, null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker), null, tint = c.secondary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     current?.emoji?.let { Text(it, fontSize = 17.sp); Spacer(Modifier.width(6.dp)) }
                     androidx.compose.foundation.text.BasicTextField(text,

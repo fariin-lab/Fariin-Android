@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.content.ActivityNotFoundException
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -178,7 +180,7 @@ internal fun ViewOnceBody(m: Message, cid: String, isMe: Boolean, onView: (Viewi
                 Modifier.size(30.dp).clip(CircleShape).background(if (spent) Color.Transparent else ink.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center,
             ) {
-                if (spent) Icon(Icons.Filled.Block, null, tint = ink.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
+                if (spent) Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), null, tint = ink.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
                 else Text("1", color = ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
             Spacer(Modifier.width(8.dp))

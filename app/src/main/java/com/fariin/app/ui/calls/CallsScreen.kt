@@ -1,5 +1,7 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -298,7 +300,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, onInfo: () -> Unit, onL
                         contentDescription = null, tint = c.secondary, modifier = Modifier.size(12.dp),
                     )
                     if (call.video) {
-                        Icon(Icons.Filled.Videocam, contentDescription = null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = null, tint = c.secondary, modifier = Modifier.size(14.dp))
                     }
                     Spacer(Modifier.width(4.dp))
                     val dir = CallHistory.directionText(call, me, now)

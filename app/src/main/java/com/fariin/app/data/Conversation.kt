@@ -48,6 +48,8 @@ data class Conversation(
     val avatarUrl: String? = null,
     /** Firestore `channel`. */
     val isChannel: Boolean = false,
+    /** Verified by Fariin (channels; a moderation label cancels it, as ChannelInfo). */
+    val verified: Boolean = false,
     /** A group whose document says `e2ee == false`. */
     val e2eeOff: Boolean = false,
     val lastPlainTag: String? = null,
@@ -236,6 +238,7 @@ data class Conversation(
                 avatarUrl = data["avatarUrl"] as? String,
                 groupWallpaper = if (type == "group") data["wallpaper"] as? String else null,
                 isChannel = data["channel"] as? Boolean ?: false,
+                verified = (data["verified"] as? Boolean ?: false) && (data["label"] as? String).isNullOrEmpty(),
                 e2eeOff = type == "group" && (data["e2ee"] as? Boolean) == false,
                 lastPlainTag = data["lastPlainTag"] as? String,
                 disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt() ?: 0,

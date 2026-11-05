@@ -1,5 +1,7 @@
 package com.fariin.app.ui.glow
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.activity.compose.BackHandler
@@ -463,9 +465,9 @@ private fun StoryRow(thumb: Thumb, isVideo: Boolean, detail: String, views: Int?
                         runCatching { Base64.decode(thumb.base64, Base64.DEFAULT).let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
                     }
                     if (bmp != null) Image(bmp.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    else Icon(if (isVideo) Icons.Filled.Videocam else Icons.Filled.Photo, null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                    else Icon(if (isVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else Icons.Filled.Photo, null, tint = c.secondary, modifier = Modifier.size(14.dp))
                 }
-                Thumb.Missing -> Icon(if (isVideo) Icons.Filled.Videocam else Icons.Filled.Photo, null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                Thumb.Missing -> Icon(if (isVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else Icons.Filled.Photo, null, tint = c.secondary, modifier = Modifier.size(14.dp))
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -476,7 +478,7 @@ private fun StoryRow(thumb: Thumb, isVideo: Boolean, detail: String, views: Int?
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Visibility, null, tint = c.label, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp))
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.label, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp))
                 Text(views?.let(GlowRules::countShort) ?: "–", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {

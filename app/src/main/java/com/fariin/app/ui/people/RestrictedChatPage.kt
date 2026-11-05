@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -86,7 +88,7 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
                         Icons.AutoMirrored.Outlined.Forward to "Can't forward messages to other chats",
                         Icons.Outlined.ContentCopy to "Can't copy text from this chat",
                         Icons.Outlined.Download to "Can't save or share photos and videos from this chat",
-                        Icons.Outlined.PhotoLibrary to "Can't save media from this chat to their gallery automatically",
+                        ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album) to "Can't save media from this chat to their gallery automatically",
                     ).forEach { (icon, text) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(icon, null, tint = c.label, modifier = Modifier.size(22.dp))

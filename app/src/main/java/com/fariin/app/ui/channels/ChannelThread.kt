@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.Close
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
@@ -110,7 +111,7 @@ val LocalPostViews = compositionLocalOf<Int?> { null }
 @Composable
 fun PostViews(color: Color) {
     val v = LocalPostViews.current ?: return
-    Icon(Icons.Filled.Visibility, contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
+    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
     Spacer(Modifier.width(2.dp))
     Text(ChannelRules.compactCount(v) + "  ", fontSize = 11.sp, color = color, maxLines = 1,
         modifier = Modifier.semantics { contentDescription = "$v views" })
@@ -293,7 +294,7 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                 }, label = "barText") { t ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (t != "Follow") {
-                            Icon(if (t == "Unmute") Icons.Filled.Notifications else Icons.Filled.NotificationsOff, null,
+                            Icon(if (t == "Unmute") ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), null,
                                 tint = c.label, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                         }

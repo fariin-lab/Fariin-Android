@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import androidx.compose.ui.res.vectorResource
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -112,7 +113,7 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
                             .combinedClickable(onLongClick = { menu = true }, onClick = { onTap(card) }).padding(vertical = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(54.dp).floating(CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(card.icon, null, tint = c.label, modifier = Modifier.size(26.dp))
+                                Icon(if (card == GetStartedCard.NEW_GROUP) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members) else card.icon, null, tint = c.label, modifier = Modifier.size(26.dp))
                             }
                             Spacer(Modifier.height(6.dp))
                             Text(card.title, fontSize = 13.sp, color = c.label, maxLines = 1)

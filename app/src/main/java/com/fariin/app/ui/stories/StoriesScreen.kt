@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -240,7 +242,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, tint = c.label) },
                         onClick = { moreOpen = false; privacyPages.add(com.fariin.app.ui.settings.PAGE_STORIES) })
                     if (glowOn) androidx.compose.material3.DropdownMenuItem(text = { Text("Notifications", color = c.label) },
-                        leadingIcon = { Icon(Icons.Outlined.Notifications, contentDescription = null, tint = c.label) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell), contentDescription = null, tint = c.label) },
                         trailingIcon = if (glowUnread) { { Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent)) } } else null,
                         onClick = { moreOpen = false; glowNotifs = true })
                 }

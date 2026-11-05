@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,7 +59,7 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: 
                 Avatar(photo, 92.dp)
                 if (canEdit && photo.isNullOrEmpty()) Box(Modifier.align(Alignment.BottomEnd).size(32.dp).floating(CircleShape),
                     contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.PhotoCamera, contentDescription = null, tint = c.label, modifier = Modifier.size(16.dp))
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = c.label, modifier = Modifier.size(16.dp))
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -69,7 +70,7 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: 
         }
         if (canEdit || canAdd) Row {
             if (canAdd) WelcomeCircle(Icons.Outlined.PersonAddAlt, "Add Members") { onStep("add") }
-            if (canLink) WelcomeCircle(Icons.Outlined.Link, "Group Link") { onStep("link") }
+            if (canLink) WelcomeCircle(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), "Group Link") { onStep("link") }
             if (canEdit) WelcomeCircle(Icons.Outlined.Edit,
                 if (GroupRules.description(doc).isEmpty()) "Description" else "Edit") { onStep("edit") }
         }

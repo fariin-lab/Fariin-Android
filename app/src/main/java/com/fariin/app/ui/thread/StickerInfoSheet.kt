@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -98,7 +100,7 @@ internal fun StickerInfoSheet(m: Message, onDismiss: () -> Unit) {
                             working = false
                         }
                     }, verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.StarOutline, null, tint = c.label, modifier = Modifier.size(22.dp))
+                        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_star_outline), null, tint = c.label, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(14.dp))
                         Text(if (favorite) "Remove from Favorites" else "Add to Favorites", fontSize = 17.sp, color = c.label)
                     }

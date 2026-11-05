@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.net.Uri
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -180,11 +182,11 @@ internal fun AttachSheet(
             if (picked.isEmpty()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
                     .floating(RoundedCornerShape(32.dp)).padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    SheetButton("Gallery", Icons.Outlined.PhotoLibrary, openGallery)
-                    SheetButton("Camera", Icons.Outlined.PhotoCamera, openCamera)
+                    SheetButton("Gallery", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), openGallery)
+                    SheetButton("Camera", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), openCamera)
                     SheetButton("File", Icons.AutoMirrored.Outlined.InsertDriveFile) { files.launch(arrayOf("*/*")) }
                     if (onPoll != null) SheetButton("Poll", Icons.Outlined.Poll) { onDismiss(); onPoll() }
-                    if (onLocation != null) SheetButton("Location", Icons.Outlined.Place) { onDismiss(); onLocation() }
+                    if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location)) { onDismiss(); onLocation() }
                     if (onContact != null) SheetButton("Contact", Icons.Outlined.Person) { onDismiss(); onContact() }
                 }
             } else {

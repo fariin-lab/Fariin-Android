@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -85,7 +87,7 @@ fun ProfileLinksPage(me: String, initial: List<ProfileLink>, onChanged: (List<Pr
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
             SettingsSection(footer = if (atCeiling) "You can have up to ${ProfileLink.MAX_PER_USER} links on your profile." else null) {
                 if (!atCeiling) LinkRow(Icons.Filled.Add, "Add Link", null, last = links.isEmpty()) { editing = -1 to null }
-                links.forEachIndexed { i, l -> LinkRow(Icons.Filled.Link, l.title, l.displayUrl, last = i == links.lastIndex) { editing = i to l } }
+                links.forEachIndexed { i, l -> LinkRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), l.title, l.displayUrl, last = i == links.lastIndex) { editing = i to l } }
             }
             error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp)) }
         }
@@ -166,7 +168,7 @@ fun ProfileLinkChips(links: List<ProfileLink>, modifier: Modifier = Modifier, on
             Row(Modifier.clip(CircleShape).background(if (onDark) Color.White.copy(alpha = 0.2f) else c.card)
                 .clickable { l.openUrl?.let { u -> com.fariin.app.ui.thread.openWebLink(ctx, u) } }
                 .padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Link, null, tint = ink, modifier = Modifier.size(14.dp))
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = ink, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(l.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))

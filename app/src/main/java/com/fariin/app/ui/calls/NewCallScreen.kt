@@ -1,5 +1,7 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -141,7 +143,7 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
                         .clickable(onClick = onCreateLink).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(46.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Link, null, tint = c.accent)
+                            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.accent)
                         }
                         Spacer(Modifier.width(14.dp))
                         Column {
@@ -184,10 +186,10 @@ private fun TargetRow(t: CallTarget, onVoice: () -> Unit, onVideo: () -> Unit) {
         Spacer(Modifier.width(14.dp))
         Text(t.name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconButton(onClick = onVoice) {
-            Icon(Icons.Filled.Call, if (t.groupCid != null) "Group voice call" else "Voice call", tint = c.accent)
+            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), if (t.groupCid != null) "Group voice call" else "Voice call", tint = c.accent)
         }
         IconButton(onClick = onVideo) {
-            Icon(Icons.Filled.Videocam, if (t.groupCid != null) "Group video call" else "Video call", tint = c.accent)
+            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), if (t.groupCid != null) "Group video call" else "Video call", tint = c.accent)
         }
     }
 }
