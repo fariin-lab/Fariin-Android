@@ -381,21 +381,13 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         LaunchedEffect(Unit) { myName.value = api.profile(me)?.shownName.orEmpty() }
         RestrictedChatPage(cid, me, name.ifEmpty { "They" }, { myName.value }, onBack = { restrictOpen = false }); return
     }
-    if (showSafety) AlertDialog(onDismissRequest = { showSafety = false }, title = { Text("Verify Encryption") },
-        text = {
-            Column {
-                Text("Compare these numbers with $name, in person or on a call. If they match, your chat is end-to-end encrypted with the right person.",
-                    fontSize = 15.sp, color = c.secondary)
-                Spacer(Modifier.height(14.dp))
-                val s = safety
-                if (s == null) Text("Their key isn't available yet. Try again when they have opened Fariin.", fontSize = 15.sp, color = c.label)
-                else SafetyNumber.grouped(s).chunked(4).forEach { row ->
-                    Text(row.joinToString("   "), fontSize = 18.sp, color = c.label, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                }
-            }
-        },
-        confirmButton = { TextButton({ showSafety = false }) { Text("Done", color = c.accent) } }, containerColor = c.card)
+    // The full Encryption page, as iOS VerifyEncryptionView (the old dialog wrapped the numbers).
+    if (showSafety) {
+        var myPhotoUrl by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) { myPhotoUrl = api.profile(me)?.photoUrl }
+        VerifyEncryptionPage(cid, name, person?.photoUrl ?: conv?.photos?.get(uid), myPhotoUrl, safety, onClose = { showSafety = false })
+        return
+    }
     ask?.let { what ->
         val block = what == "block"
         AlertDialog(onDismissRequest = { ask = null },

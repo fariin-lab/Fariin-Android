@@ -653,7 +653,7 @@ private fun ScanTarget(locked: Boolean) {
 
 /** The camera: a preview and a frame reader that hands every QR code it reads to [onCode]. */
 @Composable
-private fun CameraFeed(owner: androidx.lifecycle.LifecycleOwner, onCamera: (androidx.camera.core.Camera) -> Unit, onCode: (String) -> Unit) {
+internal fun CameraFeed(owner: androidx.lifecycle.LifecycleOwner, onCamera: (androidx.camera.core.Camera) -> Unit, onCode: (String) -> Unit) {
     val ctx = LocalContext.current
     val worker = remember { Executors.newSingleThreadExecutor() }
     var provider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
