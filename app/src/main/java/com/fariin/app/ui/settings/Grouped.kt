@@ -131,8 +131,12 @@ internal fun SettingsRow(
         }
     }
     // Full width, edge to edge of the card (owner 2026-11-04).
-    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+    // No line between rows (owner 2026-11-04: "just leave the rounded way, remove the lines").
+    if (!last && SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
+
+/** Lines between settings rows; off by the owner's word 2026-11-04 (flip to bring them back). */
+internal const val SHOW_ROW_LINES = false
 
 @Composable
 internal fun vec(v: ImageVector): Painter = rememberVectorPainter(v)

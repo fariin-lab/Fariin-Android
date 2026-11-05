@@ -288,3 +288,52 @@ internal fun ChatListThumb(conv: com.fariin.app.data.Conversation, show: Boolean
             modifier = Modifier.padding(top = 1.dp, end = 5.dp).size(20.dp).clip(RoundedCornerShape(4.dp)))
     }
 }
+
+/**
+ * Whether a quote of [o] carries a picture (iOS replyThumb, composer banner and bubble quote): a
+ * photo, an album's first tile, a video's poster, a GIF or a sticker. Never for a deleted or
+ * view-once original: a quote must not draw a picture the bubble itself keeps hidden.
+ */
+internal fun hasReplyThumb(o: Message?): Boolean {
+    if (o == null || o.deleted || o.viewOnce) return false
+    if (o.isSticker || o.isGif) return true
+    return when (o.mediaKind) {
+        Message.MediaKind.PHOTO -> o.localPath != null || !o.imageUrl.isNullOrEmpty()
+        Message.MediaKind.ALBUM -> o.album.isNotEmpty()
+        Message.MediaKind.VIDEO -> o.localPath != null || !o.thumbUrl.isNullOrEmpty()
+        else -> false
+    }
+}
+
+/** The quote's small square picture for [o] ([hasReplyThumb]), opened by the bubble's own loaders. */
+@Composable
+internal fun ReplyThumb(o: Message, side: Dp, modifier: Modifier = Modifier) {
+    val box = modifier.size(side).clip(RoundedCornerShape(6.dp))
+    if (o.isSticker) {
+        StickerArt(o.stickerPack!!, o.stickerId!!, o.imageUrl, o.enc, box, still = true)
+        return
+    }
+    val fill = Fariin.colors.secondary.copy(alpha = 0.15f)
+    if (o.isGif) {
+        // A still frame: no animated decoder, so the first frame only.
+        coil3.compose.AsyncImage(o.imageUrl, contentDescription = null, contentScale = ContentScale.Crop,
+            modifier = box.background(fill))
+        return
+    }
+    val local = remember(o.localPath) { o.localPath?.let { java.io.File(it) }?.takeIf { it.exists() } }
+    val (url, enc) = when (o.mediaKind) {
+        Message.MediaKind.PHOTO -> o.imageUrl to o.enc
+        Message.MediaKind.ALBUM -> o.album.firstOrNull()?.let { it.imageUrl to it.enc } ?: (null to null)
+        Message.MediaKind.VIDEO -> o.thumbUrl to o.thumbEnc
+        else -> null to null
+    }
+    val got = rememberGatedFile(if (local == null) url else null, enc, AutoDownload.Kind.PHOTOS)
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { side.roundToPx() }
+    val bmp = rememberBitmap(local ?: got.file, px)
+    Box(box.background(fill), contentAlignment = Alignment.Center) {
+        if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (o.mediaKind == Message.MediaKind.VIDEO) {
+            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(side * 0.5f))
+        }
+    }
+}

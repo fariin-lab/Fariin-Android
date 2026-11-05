@@ -7,7 +7,7 @@ package com.fariin.app.data
  */
 object StoryRings {
     fun forChat(c: Conversation, me: String, s: StoriesState, hidden: Set<String>): StoryGroup? {
-        if (c.isChannel) return null
+        // A channel is a group here (iOS storyRing): its stories come from the channel story feed.
         if (!c.isGroup) {
             val other = c.otherUid(me)
             if (other.isEmpty() || other in hidden) return null

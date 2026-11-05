@@ -920,7 +920,7 @@ fun ChatRow(
             Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClick = onStoryTap) else Modifier),
                 contentAlignment = Alignment.Center) {
                 Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel)
-                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp))
+                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp), squircle = conv.isChannel)
             }
             // Disappearing messages on: the timer badge on the photo's lower right, hanging 5 past
             // it (iOS DisappearingAvatarBadge: 24 glass disc, grey timer).

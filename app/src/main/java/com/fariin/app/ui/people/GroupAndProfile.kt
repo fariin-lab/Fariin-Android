@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.outlined.Delete
@@ -126,8 +127,11 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     var me by remember { mutableStateOf<Person?>(null) }
-    var name by remember { mutableStateOf("") }
+    var first by remember { mutableStateOf("") }
+    var last by remember { mutableStateOf("") }
+    val name = "$first $last".trim()
     var about by remember { mutableStateOf("") }
+    var askDiscard by remember { mutableStateOf(false) }
     var links by remember { mutableStateOf<List<com.fariin.app.data.ProfileLink>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf("") }
@@ -135,7 +139,12 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     var historyGen by remember { mutableStateOf(0) }
     val history = remember(historyGen) { com.fariin.app.data.ProfilePhotoHistory.files(appCtx, api.me).drop(1) }
-    LaunchedEffect(Unit) { me = api.profile(api.me); name = me?.name ?: ""; about = me?.about ?: ""; links = me?.links.orEmpty() }
+    LaunchedEffect(Unit) {
+        me = api.profile(api.me)
+        val parts = (me?.name ?: "").split(" ", limit = 2)
+        first = parts.getOrElse(0) { "" }; last = parts.getOrElse(1) { "" }
+        about = me?.about ?: ""; links = me?.links.orEmpty()
+    }
     // The picked photo goes to the circle cropper first (iOS ProfilePhotoCropper, its Avatar stage).
     val picker = rememberCirclePhotoPicker { jpeg ->
         scope.launch {
@@ -166,8 +175,19 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Edit Profile", onBack = onBack, action = {
-            TextAction("Done", enabled = name.isNotBlank() && !busy) {
+        val changed = me != null && (name != (me?.name ?: "").trim() || about.trim() != (me?.about ?: "").trim())
+        val close = { if (changed) askDiscard = true else onBack() }
+        androidx.activity.compose.BackHandler(onBack = close)
+        if (askDiscard) AlertDialog(onDismissRequest = { askDiscard = false }, containerColor = c.card,
+            title = { Text("Discard changes?") }, text = { Text("Your changes are not saved yet.") },
+            dismissButton = { TextButton({ askDiscard = false }) { Text("Keep Editing", color = c.accent) } },
+            confirmButton = { TextButton({ askDiscard = false; onBack() }) { Text("Discard Changes", color = c.red) } })
+        Box(Modifier.fillMaxWidth().statusBarsPadding().height(64.dp).padding(horizontal = 12.dp)) {
+            Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { close() },
+                contentAlignment = Alignment.Center) { Icon(androidx.compose.material.icons.Icons.Filled.Close, null, tint = c.label) }
+            Text("Edit Profile", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
+            Box(Modifier.align(Alignment.CenterEnd)) {
+            TextAction("Save", enabled = changed && name.isNotBlank() && !busy) {
                 scope.launch {
                     busy = true
                     try {
@@ -179,17 +199,21 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                     busy = false
                 }
             }
-        })
+            }
+        }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.Center) {
-                Avatar(me?.photoUrl, 110.dp)
+            var photoMenu by remember { mutableStateOf(false) }
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.clip(CircleShape).clickable { photoMenu = true }, contentAlignment = Alignment.Center) {
+                Avatar(me?.photoUrl, 120.dp)
                 if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
             }
             // iOS ProfilePhotoSheet: Camera, Photo Library, and Remove while there is a photo.
-            var photoMenu by remember { mutableStateOf(false) }
             var askRemove by remember { mutableStateOf(false) }
+            Spacer(Modifier.height(12.dp))
             Box {
-                Text("Set New Photo", fontSize = 17.sp, color = c.accent, modifier = Modifier.clickable { photoMenu = true }.padding(10.dp))
+                Text("Edit Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                    modifier = Modifier.clip(CircleShape).background(c.card).clickable { photoMenu = true }.padding(horizontal = 20.dp, vertical = 8.dp))
                 androidx.compose.material3.DropdownMenu(expanded = photoMenu, onDismissRequest = { photoMenu = false }) {
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
                         leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { photoMenu = false; picker.takePhoto() })
@@ -226,7 +250,12 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            SettingsSection(footer = "Enter your name and add a profile photo.") { Field(name, "Name") { name = it.take(64) } }
+            Spacer(Modifier.height(8.dp))
+            SettingsSection {
+                Field(first, "First name") { first = it.take(40) }
+                Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(c.separator))
+                Field(last, "Last name") { last = it.take(40) }
+            }
             // iOS Bio: one paragraph, 140 characters, the count shown for the last 20.
             val left = com.fariin.app.data.ProfileWrites.BIO_CHARS - about.length
             SettingsSection(header = "Bio") {

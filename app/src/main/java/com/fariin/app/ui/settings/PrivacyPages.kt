@@ -77,7 +77,7 @@ internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true,
         )
     }
     // The same full-width line as [SettingsRow], so a card of switches and arrows reads as one list.
-    if (!last) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+    if (!last && SHOW_ROW_LINES) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
 
 /** A single-choice row, Android style: a radio button at the start (iOS drew a check at the end). */

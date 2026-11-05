@@ -346,7 +346,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val me = api.me
-    var person by remember { mutableStateOf<Person?>(null) }
+    // The copy from the last visit draws at once; the fresh read replaces it (no bio popping in).
+    var person by remember { mutableStateOf<Person?>(ProfileMemo.get(uid)) }
     var addingToGroup by remember { mutableStateOf(false) }
     var askClearMine by remember { mutableStateOf(false) }
     var sharingProfile by remember { mutableStateOf(false) }
@@ -357,7 +358,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var showSafety by remember { mutableStateOf(false) }
     var ask by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(uid) { person = api.profile(uid); blocked = api.isBlocked(uid) }
+    LaunchedEffect(uid) { api.profile(uid)?.let { person = it; ProfileMemo.put(uid, it) }; blocked = api.isBlocked(uid) }
     // A name I saved for them wins (iOS ContactNames); Edit opens Set nickname.
     val name = com.fariin.app.data.ContactNames.name(uid) ?: person?.shownName ?: conv?.names?.get(uid) ?: ""
     val cid = conv?.id ?: Wire.directCid(me, uid)
@@ -487,6 +488,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 }
             }
             Spacer(Modifier.height(20.dp))
+            // First visit: the rest waits for the profile (at most 1.5 s) so it lands in one piece.
+            var waited by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { kotlinx.coroutines.delay(1500); waited = true }
+            if (person == null && !waited) return@Column
             person?.about?.takeIf { it.isNotEmpty() }?.let { bio ->
                 SettingsSection { Text(bio, fontSize = 17.sp, color = c.label, modifier = Modifier.fillMaxWidth().padding(16.dp)) }
             }
@@ -660,4 +665,11 @@ private fun PlainField(value: String, hint: String, start: androidx.compose.ui.u
                 inner()
             }
         })
+}
+
+/** People's profiles as last read this session, so a page opens complete (bio included). */
+internal object ProfileMemo {
+    private val map = java.util.concurrent.ConcurrentHashMap<String, Person>()
+    fun get(uid: String): Person? = map[uid]
+    fun put(uid: String, p: Person) { map[uid] = p }
 }

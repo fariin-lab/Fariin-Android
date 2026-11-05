@@ -44,7 +44,9 @@ fun FariinSwitch(
     val track by animateColorAsState(if (checked) SwitchGreen else c.label.copy(alpha = 0.16f), label = "switchTrack")
     val x by animateDpAsState(if (checked) 22.dp else 2.dp, spring(dampingRatio = 0.75f, stiffness = 600f), label = "switchKnob")
     val tap = if (onCheckedChange != null)
-        Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange) else Modifier
+        Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange,
+            // No ripple: it drew a grey square around the round switch on every flip (owner 2026-11-04).
+            interactionSource = null, indication = null) else Modifier
     Box(modifier.then(tap).padding(4.dp).alpha(if (enabled) 1f else 0.45f), contentAlignment = Alignment.CenterStart) {
         Box(Modifier.size(width = 51.dp, height = 31.dp).clip(CircleShape).background(track))
         Box(Modifier.offset(x = x).size(27.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(Color.White))

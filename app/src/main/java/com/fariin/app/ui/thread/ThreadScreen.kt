@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.MoreVert
@@ -762,7 +763,8 @@ private fun ThreadContent(
             } else {
                 replyTo?.let { r ->
                     ComposerBar(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
-                        com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText) { replyTo = null }
+                        com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText,
+                        thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp) }) else null) { replyTo = null }
                 }
                 editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
                 // The box's words, for the link card above it (LinkDraftBar).
@@ -891,6 +893,11 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(ui.title, style = MaterialTheme.typography.titleMedium, color = c.label,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        // A verified channel: the blue tick beside its name (iOS ChatHeaderView).
+                        if (ui.channel?.info?.verified == true) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(17.dp))
+                        }
                         // The timer is on: a small mark beside the name (iOS ChatHeaderView secondary icon).
                         if (ui.disappearSeconds > 0) {
                             Spacer(Modifier.width(4.dp))
@@ -1050,6 +1057,11 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
             return@Row
         }
+        // A typed story reply (iOS StoryReplyChrome): "You replied to their story" and the story's
+        // card above the bubble, on the sender's side; the bubble then has no quote of its own.
+        val story = m.replyTo?.takeIf { it.isStatus && !m.deleted }
+        Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
+        if (story != null) StoryReplyHeader(ui, m, story, isMe)
         Column(
             Modifier.widthIn(max = maxW).clip(shape).background(if (isMe) myFill() else receivedFill())
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp),
@@ -1061,7 +1073,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             if (m.forwarded && !m.deleted) {
                 ForwardedTag(m, isMe, ui.channel != null)
             }
-            m.replyTo?.takeIf { !m.deleted }?.let { ReplyQuote(it, ui, isMe) }
+            m.replyTo?.takeIf { !m.deleted && !it.isStatus }?.let { ReplyQuote(it, ui, isMe) }
             if (kind == Message.MediaKind.VOICE) {
                 VoiceBody(m, ui.cid, isMe, maxW * 0.89f - 26.dp) { Meta(m, tick, isMe, is24h) }
                 return@Column
@@ -1110,7 +1122,46 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 linkInk = if (m.deleted) null else if (isMe) Color.White else c.blue,
             )
         }
+        }
         ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
+    }
+}
+
+/**
+ * Above a typed story reply (iOS MessageRowLayout storyReplyPlan): the caption in 12 secondary,
+ * 5 under it the 80 x 140 story card with a 5 wide grey bar on the outside, 9 apart, and a gap to
+ * the bubble. The card opens the story while it is live; once gone (or no picture), "Story
+ * unavailable" in its place.
+ */
+@Composable
+private fun StoryReplyHeader(ui: ThreadUi, m: Message, r: Message.ReplyRef, isMe: Boolean) {
+    val c = Fariin.colors
+    val caption = com.fariin.app.data.StoryReplyRules.caption(isMe, r.authorId == ui.me, ui.names[m.authorId] ?: ui.title)
+    val feed by com.fariin.app.data.LiveStories.state.collectAsState()
+    val live = com.fariin.app.data.LiveStories.find(feed, r.id, r.authorId)
+    var open by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
+    open?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { open = null }) }
+    Column(Modifier.padding(bottom = 4.dp), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
+        Text(caption, fontSize = 12.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp))
+        Spacer(Modifier.height(5.dp))
+        if (live == null || r.storyThumb.isNullOrEmpty()) {
+            Text("Story unavailable", fontSize = 12.sp, color = c.secondary.copy(alpha = 0.6f), maxLines = 1,
+                modifier = Modifier.padding(horizontal = 2.dp))
+            return@Column
+        }
+        val card: @Composable () -> Unit = {
+            coil3.compose.AsyncImage(r.storyThumb, contentDescription = "Story",
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.width(80.dp).height(140.dp).clip(RoundedCornerShape(14.dp))
+                    .background(c.secondary.copy(alpha = 0.15f)).clickable { open = live.first })
+        }
+        val bar: @Composable () -> Unit = {
+            Box(Modifier.width(5.dp).height(140.dp).clip(RoundedCornerShape(2.5.dp)).background(c.label.copy(alpha = 0.35f)))
+        }
+        Row {
+            if (isMe) { card(); Spacer(Modifier.width(9.dp)); bar() } else { bar(); Spacer(Modifier.width(9.dp)); card() }
+        }
     }
 }
 
@@ -1232,6 +1283,12 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
             .background(if (isMe) Color.White.copy(alpha = 0.18f) else bar.copy(alpha = 0.12f)),
     ) {
         Box(Modifier.width(3.dp).height(38.dp).background(bar))
+        // The quoted photo, video poster, GIF or sticker (iOS QuoteChrome thumb, 34 square), read
+        // from the original in this chat; none once it is deleted or view-once.
+        val original = if (r.isStatus) null else remember(r.id, ui.messages) { ui.messages.firstOrNull { it.id == r.id } }
+        if (original != null && hasReplyThumb(original)) {
+            ReplyThumb(original, 34.dp, Modifier.padding(start = 4.dp).align(Alignment.CenterVertically))
+        }
         Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (isMe) Color.White else bar, maxLines = 1)
             // A story reply quotes the story itself (iOS status quote): "Story" and its picture.

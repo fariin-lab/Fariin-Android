@@ -20,8 +20,25 @@ import com.fariin.app.ui.theme.Fariin
  * (#505052 dark, #CACACA light); gaps of two line widths, round caps, at most twenty arcs.
  */
 @Composable
-fun StoryRing(seen: List<Boolean>, modifier: Modifier = Modifier, lineWidth: Dp = 2.dp) {
+fun StoryRing(seen: List<Boolean>, modifier: Modifier = Modifier, lineWidth: Dp = 2.dp, squircle: Boolean = false) {
     val grey = if (Fariin.colors.dark) Color(0xFF505052) else Color(0xFFCACACA)
+    // A channel's ring follows its rounded-square photo (iOS StoryRingView squircle): one outline,
+    // the gradient while any story is unseen, grey once all are seen.
+    if (squircle) {
+        Canvas(modifier) {
+            val w = lineWidth.toPx()
+            val d = minOf(size.width, size.height)
+            val unseen = seen.any { !it }
+            val r = (d - w) * 0.3f
+            val tl = Offset((size.width - d) / 2 + w / 2, (size.height - d) / 2 + w / 2)
+            val sz = Size(d - w, d - w)
+            val st = Stroke(width = if (unseen) w else maxOf(1.dp.toPx(), w * 0.66f))
+            if (unseen) drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF34C76F), Color(0xFF3DA1FD))), tl, sz,
+                androidx.compose.ui.geometry.CornerRadius(r, r), style = st)
+            else drawRoundRect(grey, tl, sz, androidx.compose.ui.geometry.CornerRadius(r, r), style = st)
+        }
+        return
+    }
     Canvas(modifier) {
         val arcs = StoryRings.condensed(seen)
         val n = maxOf(1, arcs.size)
