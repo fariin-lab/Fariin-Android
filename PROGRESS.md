@@ -798,3 +798,4 @@ For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by des
 - Accessibility scan (10 screens): 30 unlabeled controls named; now 0.
 - Process death: Android killed Fariin in the background; reopening lands back in the same chat, Back goes to the list, no crash.
 - Deep sleep (forced doze 60 s): reconnects at once on return. Battery Saver (unplugged): long-press menu drops the blur. Phone settings restored.
+- For the owner: iOS chat rows have swipe actions (Read/Pin left, Mute/Archive/Delete right); Android has long-press select only. Not built tonight (touches list scrolling); say if you want it.
