@@ -291,11 +291,16 @@ private fun ViewerBody(
             if (opened || box == Size.Zero) return@LaunchedEffect
             val id = HeroPose.identity(box)
             // No bubble to grow out of (scrolled away, an album tile): the picture fades in where it sits.
-            flight = (targetFor(page) ?: id.copy(bg = 0f, alpha = 0f)) to id
+            val tgt = targetFor(page)
+            flight = (tgt ?: id.copy(bg = 0f, alpha = 0f)) to id
             flightT.snapTo(0f)
             opened = true
-            flightT.animateTo(1f, heroSpec)
-            flight = null
+            // The open runs in the viewer's own scope: this effect was being cancelled a frame in
+            // (seen on the Pixel), which left the picture frozen at the bubble and the viewer
+            // invisible over the chat. Whatever happens, it ends on the full-screen page.
+            scope.launch {
+                try { flightT.animateTo(1f, heroSpec) } finally { flight = null }
+            }
         }
     }
     /** Close: into the current page's bubble when it is on screen, else a fade where it is. */
