@@ -796,3 +796,4 @@ Fixed: crash on refused server call (app keeps running); long-press menu on long
 Checked OK: send/offline/reply/edit/delete/photo/voice/reaction/pin/search, dark mode, rotation, scroll speed, memory, startup 0.5 s, chat open speed vs reference, groups, channels, all Settings pages, 609 unit tests.
 For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by design); App Check API is off on the Firebase project; story photo picker is the system one (same as iOS).
 - Accessibility scan (10 screens): 30 unlabeled controls named; now 0.
+- Process death: Android killed Fariin in the background; reopening lands back in the same chat, Back goes to the list, no crash.
