@@ -770,3 +770,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 ## Night run 2026-11-05 (owner asleep, full autonomy)
 - Crash safety: uncaught server refusals in coroutines logged as non-fatal, app keeps running (tested with a forced PERMISSION_DENIED).
 - Long-press menu: very long messages vanished; now a readable full-size slice shows (Pixel).
+- Long-press blur cost measured (90th pct 32ms -> 21-24ms with stepped blur); weak phones (<4GB) tint only.
