@@ -28,6 +28,7 @@ class FariinApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CoroutineSafety.install()   // an uncaught server refusal in a coroutine no longer closes the app
+        com.fariin.app.ui.thread.Emoji3DArt.preload(this)   // reaction art ready before the first long press
         com.fariin.app.media.ChatSounds.init(this)
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open

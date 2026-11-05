@@ -84,6 +84,14 @@ object Emoji3DArt {
 
     fun cached(name: String): androidx.compose.ui.graphics.ImageBitmap? = bitmaps.get(name)
 
+    /** All the art decoded once, off the main thread, at app start: the long-press bar drew an
+     *  empty capsule for ~10 frames while its six were read the first time (owner's video). */
+    fun preload(ctx: android.content.Context) {
+        Thread({
+            runCatching { ctx.assets.list("emoji3d")?.forEach { f -> val n = f.removeSuffix(".webp"); if (bitmaps.get(n) == null) load(ctx, n) } }
+        }, "emoji3d-preload").apply { priority = Thread.MIN_PRIORITY }.start()
+    }
+
     fun load(ctx: android.content.Context, name: String): androidx.compose.ui.graphics.ImageBitmap? = runCatching {
         ctx.assets.open("emoji3d/$name.webp").use { android.graphics.BitmapFactory.decodeStream(it) }
             ?.asImageBitmap()?.also { bitmaps.put(name, it) }

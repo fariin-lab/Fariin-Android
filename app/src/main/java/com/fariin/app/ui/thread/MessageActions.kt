@@ -138,7 +138,7 @@ internal fun MessageMenu(
     onSelect: (Message) -> Unit = {}, onEditHistory: (Message) -> Unit = {},
     /** A call record's "Voice Call" / "Video Call" (iOS, owner 2026-08-13); null in a group. */
     onCallBack: ((Message) -> Unit)? = null,
-    source: MenuSource? = null, preview: (@Composable () -> Unit)? = null, onLifted: () -> Unit = {},
+    source: MenuSource? = null, preview: (@Composable () -> Unit)? = null, onLifted: () -> Unit = {}, onLanded: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val now = System.currentTimeMillis().toDouble()
@@ -212,7 +212,7 @@ internal fun MessageMenu(
         val mine = m.reactions[ui.me]
         MessageMenuOverlay(source, rows, reactable = !m.deleted && m.sendState == null && !m.isSystem && !m.isCall, mine = mine,
             onReact = { e -> actions.onReact(m, MessageRules.nextReaction(mine, e)) },
-            onDismiss = onDismiss, preview = preview, onLifted = onLifted)
+            onDismiss = onDismiss, preview = preview, onLifted = onLifted, onLanded = onLanded)
         return
     }
     // Android: a modal bottom sheet (reaction capsule on top, the message, then the actions in one

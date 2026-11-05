@@ -309,7 +309,7 @@ private fun ThreadContent(
             onSelect = { selected.clear(); selected.add(it.rowId); replyTo = null },
             onEditHistory = { historyFor = it },
             onCallBack = if (ui.isGroup) null else ({ callBackFor = it }),
-            source = menuSource, preview = menuPreview, onLifted = { menuLifted = m.rowId })
+            source = menuSource, preview = menuPreview, onLifted = { menuLifted = m.rowId }, onLanded = { menuLifted = null })
     }
     // The call menu's "Voice Call" / "Video Call": the same question the bubble's tap asks.
     callBackFor?.let { cm ->

@@ -125,6 +125,8 @@ internal fun MessageMenuOverlay(
     preview: @Composable () -> Unit,
     /** The copy is on screen: only now may the real message hide (no frame with neither). */
     onLifted: () -> Unit = {},
+    /** The copy has landed: the real message may show again (called before [onDismiss]). */
+    onLanded: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val density = LocalDensity.current
@@ -152,7 +154,16 @@ internal fun MessageMenuOverlay(
         startScale = 1f
         scope.launch { barAlpha.animateTo(0f, tween(200)) }
         scope.launch { scrim.animateTo(0f, tween(400, easing = EaseInOut)) }
-        scope.launch { open.animateTo(0f, springSpec); onDismiss(); then() }
+        scope.launch {
+            open.animateTo(0f, springSpec)
+            // The real message shows again first, and the chat draws it under the copy, before the
+            // menu's window goes: removing both in one frame left the row empty for a frame
+            // (owner's video, 2026-11-05).
+            onLanded()
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            onDismiss(); then()
+        }
     }
 
     // The blur, on the background's own clock as iOS's blur view alpha is.
