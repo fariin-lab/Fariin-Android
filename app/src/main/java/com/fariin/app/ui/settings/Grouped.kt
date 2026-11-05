@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -91,8 +92,8 @@ enum class Trailing { CHEVRON, OUT_LINK, NONE }
 
 /**
  * A Material list row: 24dp icon in a 40dp slot, the title in bodyLarge and the [value] as the
- * supporting line under it (Android settings), ripple on tap. [trailing] CHEVRON draws nothing
- * (Android rows do not), OUT_LINK keeps the small arrow for pages that leave the app. A thin line
+ * value beside the title as iOS (a long one under it), ripple on tap. [trailing] CHEVRON draws the
+ * iOS chevron on a tappable row (owner 2026-11-04), OUT_LINK keeps the small arrow for pages that leave the app. A thin line
  * under every row but the [last] of its card, starting at the title (iOS).
  */
 @Composable
@@ -121,11 +122,21 @@ internal fun SettingsRow(
             }
             Spacer(Modifier.width(16.dp))
         }
+        // iOS (owner 2026-11-04, Storage and Data side by side): a short value sits on the right of
+        // the title's line before the chevron; a long one (a sentence) stays under the title.
+        val side = value != null && value.length <= SIDE_VALUE_MAX
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = titleColor ?: c.label)
-            if (value != null) {
+            if (value != null && !side) {
                 Text(value, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2)
             }
+        }
+        if (side) Text(value!!, style = MaterialTheme.typography.bodyLarge, color = c.secondary, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 12.dp).widthIn(max = 200.dp))
+        if (trailing == Trailing.CHEVRON && onClick != null) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
+                modifier = Modifier.padding(start = 4.dp).size(24.dp))
         }
         if (trailing == Trailing.OUT_LINK) {
             Icon(Icons.Filled.NorthEast, contentDescription = null, tint = c.secondary, modifier = Modifier.padding(start = 8.dp).size(18.dp))
@@ -135,6 +146,9 @@ internal fun SettingsRow(
     // No line between rows (owner 2026-11-04: "just leave the rounded way, remove the lines").
     if (!last && SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
+
+/** The longest value drawn beside the title (iOS); longer ones go under it. */
+private const val SIDE_VALUE_MAX = 24
 
 /** Lines between settings rows; off by the owner's word 2026-11-04 (flip to bring them back). */
 internal const val SHOW_ROW_LINES = false
