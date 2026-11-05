@@ -773,3 +773,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Long-press blur cost measured (90th pct 32ms -> 21-24ms with stepped blur); weak phones (<4GB) tint only.
 - Small-phone + 130% text pass: tab label + story subtitle fixed; other pages fit. Phone display restored.
 - Security: share sheet refused file:// and our own provider (could leak private files); tests + Pixel check.
+- User-flow pass with kream: text, offline send + reconnect (Waiting for network shown), swipe reply, edit, delete for everyone, photo + caption: all work. Fixed: caption hidden under keyboard at half sheet.
