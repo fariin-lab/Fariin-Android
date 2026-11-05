@@ -1581,7 +1581,7 @@ private fun OfficialStoryButton(story: Story, onLink: (String) -> Unit) {
 }
 
 /**
- * A followed channel's story foot (iOS ChannelStoryFooterView): views, reposts (a button when
+ * A followed channel's story foot (iOS ChannelStoryFooterView, minus views): reposts (a button when
  * reposting is allowed) and likes, from `stories/{id}/meta/public` which the server keeps; the
  * heart likes it (with read receipts on, as iOS); Share on the right.
  */
@@ -1610,10 +1610,8 @@ private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Bo
     val toast: (String) -> Unit = { android.widget.Toast.makeText(ctx, it, android.widget.Toast.LENGTH_SHORT).show() }
     Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), "Views", tint = Color.White, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(7.dp)); Text(n(views), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
-        }
+        // No view count for followers (owner 2026-11-04: "how can they see views? only repost or like").
+        // The channel's owner and admins see views on their own viewers bar.
         Row(Modifier.then(if (onRepost != null) Modifier.clickable { onRepost() } else Modifier), verticalAlignment = Alignment.CenterVertically) {
             Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_repost), "Reposts", tint = Color.White, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(7.dp)); Text(n(reposts), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
