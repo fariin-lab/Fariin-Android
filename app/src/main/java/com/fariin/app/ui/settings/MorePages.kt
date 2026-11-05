@@ -23,6 +23,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -384,16 +390,34 @@ private fun QuickReactionPage(pop: () -> Unit) {
     val ctx = LocalContext.current
     val p = remember { ctx.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE) }
     var v by remember { mutableStateOf(p.getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️") }
+    val c = Fariin.colors
     ScrollPage("Quick Reaction", pop) {
-        SettingsSection(header = "Choose your quick reaction", footer = "Double tap a message to react with it.") {
-            for (row in SettingsRules.quickChoices.chunked(5)) Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                for (e in row) Box(
-                    Modifier.size(52.dp).then(if (e == v) Modifier.padding(0.dp) else Modifier)
+        // iOS QuickReactionView: a sample message wearing the chosen reaction, then the choices.
+        Text("Double tap on a message to react", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
+            modifier = Modifier.padding(start = 28.dp, top = 12.dp, bottom = 8.dp))
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 18.dp)) {
+            Text("I hope you're enjoying your day as much as I am.", fontSize = 17.sp, color = c.label,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(c.card)
+                    .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 16.dp))
+            Box(Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 14.dp).size(36.dp).clip(CircleShape).background(c.card),
+                contentAlignment = Alignment.Center) { Text(v, fontSize = 20.sp) }
+        }
+        Text("Choose your quick reaction", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
+            modifier = Modifier.padding(start = 28.dp, top = 8.dp, bottom = 10.dp))
+        for (row in SettingsRules.quickChoices.chunked(5)) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly) {
+            for (e in row) {
+                val on = e == v
+                Box(
+                    Modifier.size(60.dp).clip(CircleShape).background(if (on) c.label.copy(alpha = 0.16f) else c.card)
+                        .then(if (on) Modifier.border(2.5.dp, c.label, CircleShape) else Modifier)
                         .clickable { v = e; p.edit().putString(SettingsRules.QUICK_KEY, e).apply() },
                     contentAlignment = Alignment.Center,
-                ) { Text(e, fontSize = if (e == v) 34.sp else 26.sp) }
+                ) { Text(e, fontSize = 30.sp) }
             }
         }
+        Text("Double tap any message to send this reaction.", fontSize = 14.sp, color = c.secondary,
+            modifier = Modifier.padding(start = 28.dp, top = 12.dp))
     }
 }
 

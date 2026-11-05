@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -83,8 +85,14 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
     // iOS StorySettingsView: the same rows as Share Story, + New in the header (no One-Time or Group here).
     SettingsSection(header = "Stories", footer = "Stories disappear after 24 hours. Choose who can see them.",
         headerAction = { com.fariin.app.ui.stories.NewAudienceButton(StoryPrivacyStore.canAddCustom, onCustom = { creating = true }) }) {
-        SettingsRow("Everyone", value = StoryPrivacyRules.everyoneSubtitle()) { push(PAGE_STORY_EVERYONE) }
-        SettingsRow("My Chats", value = StoryPrivacyRules.myChatsSubtitle(myFriends), last = custom.isEmpty()) { push(PAGE_STORY_MYCHATS) }
+        // iOS StorySettingsView: my photo on Everyone, the orange people circle on My Chats.
+        val myPhoto = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value?.photoUrl
+        AudienceBadgeRow({
+            if (!myPhoto.isNullOrEmpty()) com.fariin.app.ui.components.Avatar(myPhoto, 40.dp)
+            else AudienceCircle(Fariin.colors.blue, androidx.compose.material.icons.Icons.Filled.Public)
+        }, "Everyone", StoryPrivacyRules.everyoneSubtitle(), last = false) { push(PAGE_STORY_EVERYONE) }
+        AudienceBadgeRow({ AudienceCircle(androidx.compose.ui.graphics.Color(0xFFFF9500), androidx.compose.material.icons.Icons.Filled.People) },
+            "My Chats", StoryPrivacyRules.myChatsSubtitle(myFriends), last = custom.isEmpty()) { push(PAGE_STORY_MYCHATS) }
         for ((i, l) in custom.withIndex()) {
             Row(
                 Modifier.fillMaxWidth().clickable { push(PAGE_STORY_CUSTOM + l.id) }.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -108,6 +116,28 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
             val people = remember { com.fariin.app.ui.stories.storyPeople(me, CryptoHub.listedAll()) }
             com.fariin.app.ui.stories.CreateCustomStoryFlow(people, onCreated = { creating = false }, onCancel = { creating = false })
         }
+    }
+}
+
+/** A Stories audience row with its round badge (iOS StorySettingsView). */
+@Composable
+private fun AudienceBadgeRow(badge: @Composable () -> Unit, title: String, sub: String, last: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        badge()
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = Fariin.colors.label, maxLines = 1)
+            Text(sub, style = MaterialTheme.typography.bodyMedium, color = Fariin.colors.secondary, maxLines = 1)
+        }
+    }
+    if (!last && SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = Fariin.colors.separator, modifier = Modifier.padding(start = 68.dp))
+}
+
+@Composable
+private fun AudienceCircle(color: androidx.compose.ui.graphics.Color, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(color), contentAlignment = Alignment.Center) {
+        androidx.compose.material3.Icon(icon, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(22.dp))
     }
 }
 

@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.fariin.app.ui.components.floating
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -376,12 +377,12 @@ private fun NightModePage(pop: () -> Unit) {
                     ) {
                         val shape = RoundedCornerShape(16.dp)
                         Box(
-                            Modifier.fillMaxWidth().height(74.dp).clip(shape)
-                                .border(if (sel) 2.dp else 1.dp, if (sel) c.accent else c.label.copy(alpha = 0.08f), shape),
+                            Modifier.fillMaxWidth().height(84.dp).clip(shape)
+                                .border(if (sel) 2.5.dp else 1.dp, if (sel) c.label else c.label.copy(alpha = 0.08f), shape),
                         ) { ModeThumb(mode) }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            mode.label, fontSize = 13.sp, color = if (sel) c.accent else c.secondary,
+                            mode.label, fontSize = 15.sp, color = if (sel) c.label else c.secondary,
                             fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
@@ -393,28 +394,29 @@ private fun NightModePage(pop: () -> Unit) {
     }
 }
 
-/** A tiny chat drawn in the mode's colours; System is split light and dark. */
+/** iOS NightModeView's tiles: a grey or black card, a bubble bar and a blue bar; System split on a diagonal. */
 @Composable
 private fun ModeThumb(mode: AppAppearance) {
-    @Composable
-    fun half(dark: Boolean, modifier: Modifier) {
-        val bg = if (dark) Color(0xFF121214) else Color.White
-        val them = if (dark) Color(0xFF26262B) else Color(0xFFF2F2F2)
-        val mine = if (dark) Color.White else Color.Black
-        Column(modifier.background(bg).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.width(34.dp).height(10.dp).clip(CircleShape).background(them))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                Box(Modifier.width(28.dp).height(10.dp).clip(CircleShape).background(mine))
-            }
-            Box(Modifier.width(22.dp).height(10.dp).clip(CircleShape).background(them))
+    val blue = Fariin.colors.blue
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+        val w = size.width; val h = size.height
+        fun scene(dark: Boolean) {
+            drawRect(if (dark) Color(0xFF1A1A1A) else Color(0xFFEDEDED))
+            val r = androidx.compose.ui.geometry.CornerRadius(h * 0.09f)
+            drawRoundRect(if (dark) Color(0xFF3A3A3C) else Color.White,
+                androidx.compose.ui.geometry.Offset(w * 0.11f, h * 0.28f), androidx.compose.ui.geometry.Size(w * 0.49f, h * 0.18f), r)
+            drawRoundRect(blue, androidx.compose.ui.geometry.Offset(w * 0.40f, h * 0.56f), androidx.compose.ui.geometry.Size(w * 0.49f, h * 0.18f), r)
         }
-    }
-    when (mode) {
-        AppAppearance.LIGHT -> half(false, Modifier.fillMaxSize())
-        AppAppearance.DARK -> half(true, Modifier.fillMaxSize())
-        AppAppearance.SYSTEM -> Row(Modifier.fillMaxSize()) {
-            half(false, Modifier.weight(1f).fillMaxSize())
-            half(true, Modifier.weight(1f).fillMaxSize())
+        when (mode) {
+            AppAppearance.LIGHT -> scene(false)
+            AppAppearance.DARK -> scene(true)
+            AppAppearance.SYSTEM -> {
+                scene(false)
+                val cut = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.62f, 0f); lineTo(w, 0f); lineTo(w, h); lineTo(w * 0.38f, h); close()
+                }
+                clipPath(cut) { scene(true) }
+            }
         }
     }
 }
