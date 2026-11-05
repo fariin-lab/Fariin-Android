@@ -216,7 +216,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         Column(Modifier.fillMaxSize()) {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             PageBar("", onBack, action = if (canEdit) ({
-                TextButton({ manage.edit(info.cid) }) { Text("Edit", color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+                com.fariin.app.ui.components.FloatingTextAction("Edit") { manage.edit(info.cid) }
             }) else null)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally) {
@@ -288,7 +288,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     if (role != Role.ADMIN) FootRow(if (reported) "Reported" else "Report Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report),
                         if (reported) c.secondary else c.red) { if (!reported) confirmReport = true }
                     if (role == Role.FOLLOWER) {
-                        HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
+                        if (com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
                         FootRow("Leave Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
                     }
                     if (role == Role.ADMIN && team?.isOwner(me) == true) FootRow("Delete Channel", Icons.Outlined.Delete, c.red) { askDelete = true }

@@ -106,7 +106,7 @@ private fun LinkRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title
             if (!sub.isNullOrEmpty()) Text(sub, fontSize = 15.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-    if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
+    if (!last && com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
 }
 
 /** iOS ProfileLinkEditView: URL, then Title ("the name shown on your profile"), Save, Delete Link. */
