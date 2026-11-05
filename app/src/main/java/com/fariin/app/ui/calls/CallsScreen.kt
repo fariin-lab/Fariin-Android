@@ -127,6 +127,13 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     val shown = CallHistory.filter(calls.filter { it.id !in hidden }, me, missedOnly, now).filter { q.isEmpty() || it.name.lowercase().contains(q) }
     val runs = CallHistory.runs(shown, me, now)
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+    // The people in the list, read ahead: their page opens with the bio already there.
+    val warmCtx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(runs.size) {
+        com.fariin.app.ui.people.ProfileMemo.warm(
+            com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(warmCtx.applicationContext)),
+            runs.mapNotNull { r -> r.latest.otherUid.takeIf { it.isNotEmpty() && r.latest.groupCid == null } })
+    }
     LaunchedEffect(me) { if (me.isNotEmpty() && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) com.fariin.app.call.CallLinks.watch(me) }
     val allLinks by com.fariin.app.call.CallLinks.links.collectAsState()
     val links = if (missedOnly) emptyList() else allLinks.filter { q.isEmpty() || it.title.lowercase().contains(q) }

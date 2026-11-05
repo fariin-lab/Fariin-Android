@@ -221,6 +221,10 @@ internal fun PictureBox(
     busy: Boolean, onOpen: () -> Unit, overlay: @Composable () -> Unit = {},
     /** "cid/messageId" of a received photo Save to Photos may copy once it has come down. */
     autoSaveId: String? = null,
+    /** The viewer page this picture opens ([MediaOrigins.keyOf]): the zoom grows out of it and lands back in it. */
+    originKey: String? = null,
+    /** The corners the picture shows with in its bubble. */
+    originRadius: Dp = 18.dp,
 ) {
     val (wDp, hDp) = MediaRules.photoBox(m.width, m.height, maxW.value, captionWidth)
     val px = with(LocalDensity.current) { minOf(wDp, hDp).dp.roundToPx() }
@@ -236,7 +240,9 @@ internal fun PictureBox(
     }
     val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
     Box(
-        Modifier.size(wDp.dp, hDp.dp).clip(shape).background(Fariin.colors.secondary.copy(alpha = 0.18f))
+        Modifier.size(wDp.dp, hDp.dp)
+            .heroSource(originKey, originRadius, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == originKey }
+            .clip(shape).background(Fariin.colors.secondary.copy(alpha = 0.18f))
             .clickable(enabled = bmp != null || waits, onClick = { if (bmp != null) onOpen() else got.start() }),
     ) {
         if (bmp != null) {

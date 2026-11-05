@@ -1,5 +1,8 @@
 package com.fariin.app.ui.chats
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import com.fariin.app.data.SearchRecents
@@ -511,6 +514,7 @@ fun ChatListScreen(
                             selected = conv.id in selected,
                             ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
                             onStoryTap = if (ring == null || selecting) null else ({ storyOpen = ring }),
+                            storyKey = ring?.key,
                             onOpen = {
                                 if (selecting) toggle(conv)
                                 else {
@@ -877,6 +881,8 @@ fun ChatRow(
     onLongPress: () -> Unit = {},
     ring: List<Boolean> = emptyList(),
     onStoryTap: (() -> Unit)? = null,
+    /** The story group this photo opens: the viewer zooms out of it and back into it (hero). */
+    storyKey: String? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -917,7 +923,21 @@ fun ChatRow(
         Box(Modifier.padding(vertical = 9.dp)) {
             // The reference app's Android row: a 54 photo, 9 above and below (72 tall). With a story up
             // the photo is 48 inside a 56 ring overhanging the slot by one all round (iOS's 2 gap).
-            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClick = onStoryTap) else Modifier),
+            val view = androidx.compose.ui.platform.LocalView.current
+            val half = with(androidx.compose.ui.platform.LocalDensity.current) { (if (conv.isChannel) 48.dp * 0.3f else 24.dp).toPx() }
+            if (storyKey != null) androidx.compose.runtime.DisposableEffect(storyKey) {
+                onDispose { com.fariin.app.ui.stories.StoryOrigins.rects.remove(storyKey); com.fariin.app.ui.stories.StoryOrigins.radii.remove(storyKey) }
+            }
+            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClick = onStoryTap) else Modifier)
+                .then(if (storyKey == null) Modifier else Modifier.onGloballyPositioned { lc ->
+                    val loc = IntArray(2); view.getLocationOnScreen(loc)
+                    val p = lc.positionInWindow()
+                    // The 48 photo inside the 54 slot, in screen pixels (the viewer is its own window).
+                    val inset = (lc.size.width - lc.size.width * 48f / 54f) / 2
+                    com.fariin.app.ui.stories.StoryOrigins.rects[storyKey] = androidx.compose.ui.geometry.Rect(
+                        p.x + loc[0] + inset, p.y + loc[1] + inset, p.x + loc[0] + lc.size.width - inset, p.y + loc[1] + lc.size.height - inset)
+                    com.fariin.app.ui.stories.StoryOrigins.radii[storyKey] = half
+                }.graphicsLayer { alpha = if (com.fariin.app.ui.stories.StoryOrigins.hiddenKey == storyKey) 0f else 1f }),
                 contentAlignment = Alignment.Center) {
                 Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel)
                 if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp), squircle = conv.isChannel)

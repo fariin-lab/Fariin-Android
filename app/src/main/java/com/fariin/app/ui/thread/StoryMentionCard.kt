@@ -70,7 +70,9 @@ internal fun StoryMentionCard(m: Message, sm: Message.StoryMentionRef, me: Strin
             horizontalAlignment = Alignment.CenterHorizontally) {
             coil3.compose.AsyncImage(sm.thumbUrl.ifEmpty { live.second.thumbUrl }, contentDescription = "Story",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.width(100.dp).height(142.dp).clip(RoundedCornerShape(14.dp))
+                modifier = Modifier.width(100.dp).height(142.dp)
+                    .storyCardSource(live.first.key, open != null)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(c.secondary.copy(alpha = 0.15f)).clickable { open = live.first })
             Spacer(Modifier.height(12.dp))
             Text(if (mine) line("You mentioned ", " in a story") else line("", " mentioned you in a story"),

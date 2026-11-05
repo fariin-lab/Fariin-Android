@@ -5,6 +5,7 @@ import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateDpAsState
@@ -70,6 +71,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
@@ -78,6 +81,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -168,20 +172,28 @@ private const val BACK_STIFFNESS = 1260f
 @Composable
 internal fun MediaViewer(v: Viewing, host: ViewerHost? = null, onClose: () -> Unit) {
     val (pages, start) = remember(v) { viewerPages(v) }
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        ViewerWindow()
+    // Opened from a chat bubble: the picture zooms out of the bubble and back (MediaOrigins). All
+    // Media has no bubbles on screen, so it keeps the plain window fade.
+    val zooms = v !is Viewing.Pages
+    // Back runs the same close as the X: the body fills this in.
+    val closer = remember { arrayOfNulls<() -> Unit>(1) }
+    Dialog(onDismissRequest = { closer[0]?.invoke() ?: onClose() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        ViewerWindow(zooms)
         // iOS: this screen is always dark, whatever the phone is set to (.environment(\.colorScheme, .dark)).
-        FariinTheme(dark = true) { ViewerBody(pages, start, host, onClose) }
+        FariinTheme(dark = true) { ViewerBody(pages, start, host, onClose, zooms, closer) }
     }
 }
 
 /** The dialog's own window: no dim (the drag-close fades to the chat behind) and light bar icons on the black. */
 @Composable
-private fun ViewerWindow() {
+private fun ViewerWindow(zooms: Boolean) {
     val view = LocalView.current
     SideEffect {
         (view.parent as? DialogWindowProvider)?.window?.let { w ->
             w.setDimAmount(0f)
+            // The zoom paints its own coming and going: the window itself neither fades in nor out.
+            if (zooms) w.setWindowAnimations(0)
             // Edge to edge under clear bars: the dialog stopped at the status bar, so a grey band
             // of the page behind showed above the black viewer.
             w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
@@ -203,7 +215,10 @@ private fun ViewerWindow() {
 }
 
 @Composable
-private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHost?, onClose: () -> Unit) {
+private fun ViewerBody(
+    pages: List<ViewerRules.Page>, start: Int, host: ViewerHost?, onClose: () -> Unit,
+    zooms: Boolean = false, closer: Array<(() -> Unit)?> = arrayOfNulls(1),
+) {
     val ctx = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -231,13 +246,82 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
     var closing by remember { mutableStateOf(false) }
     val scrubPx = with(density) { SCRUB_DISTANCE.toPx() }
     val scrub = { min(1f, (hypot(drag.x, drag.y) / scrubPx).coerceIn(0f, 1f) / 0.8f) }
+    // ---- The zoom: out of the tapped bubble on open, back into the page's own bubble on close ----
+    val hostView = LocalView.current
+    var box by remember { mutableStateOf(Size.Zero) }
+    /** A flight from one pose to another on [flightT]; null = the page follows the drag. */
+    var flight by remember { mutableStateOf<Pair<HeroPose, HeroPose>?>(null) }
+    val flightT = remember { Animatable(0f) }
+    // Until the opening flight is set up (the window's size is known), nothing shows, so the
+    // picture never flashes full screen before it leaves the bubble.
+    var opened by remember { mutableStateOf(!zooms) }
+    fun anchorFor(key: String): Rect? {
+        if (!zooms || box == Size.Zero) return null
+        val r = MediaOrigins.rects[key] ?: return null
+        if (r.width < 1f || r.height < 1f) return null
+        val loc = IntArray(2)
+        hostView.getLocationOnScreen(loc)
+        val w = r.translate(-loc[0].toFloat(), -loc[1].toFloat())
+        // Scrolled away under the bars or off the screen: no landing, the fade instead.
+        return w.takeIf { it.overlaps(Rect(Offset.Zero, box)) }
+    }
+    fun aspectOf(p: ViewerRules.Page): Float? {
+        val m = p.messageId?.let { id -> host?.message?.invoke(id) } ?: return null
+        val (w, h) = if (p.albumParent != null) {
+            val a = p.key.substringAfterLast('-').toIntOrNull()?.let { m.album.getOrNull(it) }
+            a?.width to a?.height
+        } else m.width to m.height
+        return if (w != null && h != null && w > 0 && h > 0) (w / h).toFloat() else null
+    }
+    fun targetFor(p: ViewerRules.Page): HeroPose? = anchorFor(p.key)?.let { a ->
+        HeroPose.onto(a, box, aspectOf(p), MediaOrigins.radii[p.key] ?: 0f)
+    }
+    fun dragPose(): HeroPose {
+        val sc = scrub()
+        return HeroPose(drag.x, drag.y, 1f - 0.2f * sc, Rect(Offset.Zero, box), 0f, 1f - sc)
+    }
+    /** What the current page draws this frame. */
+    fun pose(): HeroPose = flight?.let { (a, b) -> HeroPose.lerp(a, b, flightT.value) } ?: dragPose()
+    val heroSpec = tween<Float>(250, easing = FastOutSlowInEasing)
+    if (zooms) {
+        // The hole in the chat follows the page on screen, so the landing fills the bubble it left.
+        LaunchedEffect(page.key) { if (!closing) MediaOrigins.hiddenKey = page.key }
+        DisposableEffect(Unit) { onDispose { MediaOrigins.hiddenKey = null } }
+        LaunchedEffect(box != Size.Zero) {
+            if (opened || box == Size.Zero) return@LaunchedEffect
+            val id = HeroPose.identity(box)
+            // No bubble to grow out of (scrolled away, an album tile): the picture fades in where it sits.
+            flight = (targetFor(page) ?: id.copy(bg = 0f, alpha = 0f)) to id
+            flightT.snapTo(0f)
+            opened = true
+            flightT.animateTo(1f, heroSpec)
+            flight = null
+        }
+    }
+    /** Close: into the current page's bubble when it is on screen, else a fade where it is. */
+    fun closeAnimated() {
+        if (closing) return
+        if (!zooms || box == Size.Zero) { onClose(); return }
+        closing = true
+        val from = pose()
+        val to = targetFor(page) ?: from.copy(bg = 0f, alpha = 0f)
+        scope.launch {
+            flight = from to to
+            flightT.snapTo(0f)
+            flightT.animateTo(1f, if (to.alpha == 0f) tween(200, easing = LinearEasing) else heroSpec)
+            onClose()
+        }
+    }
+    closer[0] = ::closeAnimated
     val release: (Offset) -> Unit = { v ->
         dragging = false
         val dy = with(density) { drag.y.toDp().value }
         val vy = with(density) { v.y.toDp().value }
         // iOS MediaDismiss `.ended`: past 120 and not travelling back up fast, or a 1000/s flick.
         val commit = (dy > 120f && vy > -300f) || (vy > 1000f && dy > 20f)
-        scope.launch {
+        // The dragged picture lands in its bubble when that is on screen.
+        if (commit && targetFor(page) != null) closeAnimated()
+        else scope.launch {
             val a = Animatable(drag, Offset.VectorConverter)
             if (commit) {
                 closing = true
@@ -267,8 +351,9 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
     val save = rememberSaver(media)
     val share: () -> Unit = { scope.launch { sharePage(ctx, media, page) } }
 
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - scrub() }.background(Color.Black))
+    Box(Modifier.fillMaxSize().onSizeChanged { box = Size(it.width.toFloat(), it.height.toFloat()) }
+        .graphicsLayer { alpha = if (opened) 1f else 0f }) {
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = pose().bg }.background(Color.Black))
         HorizontalPager(
             pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { pages[it].key },
             userScrollEnabled = zoom <= ZOOM_FIT && !dragging && !closing,
@@ -276,14 +361,17 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
             val p = pages[i]
             val current = i == pager.currentPage
             Box(Modifier.fillMaxSize().dismissDrag(
-                canBegin = { current && zoom <= ZOOM_FIT && !closing && !pager.isScrollInProgress },
+                canBegin = { current && zoom <= ZOOM_FIT && !closing && flight == null && !pager.isScrollInProgress },
                 onStart = { dragging = true }, onMove = { drag = it }, onEnd = release,
             )) {
                 Box(Modifier.fillMaxSize().graphicsLayer {
                     if (current) {
-                        translationX = drag.x; translationY = drag.y
-                        val s = 1f - 0.2f * scrub()
-                        scaleX = s; scaleY = s
+                        val ps = pose()
+                        translationX = ps.tx; translationY = ps.ty
+                        scaleX = ps.scale; scaleY = ps.scale
+                        alpha = ps.alpha
+                        // In flight: cropped to the bubble's frame and corners (radius in the page's own px).
+                        if (flight != null) { shape = HeroClip(ps.clip, ps.radius / ps.scale); clip = true }
                     }
                 }) {
                     if (p.isVideo) VideoPage(p, current, video, chromeHidden, onTap = toggle)
@@ -296,10 +384,10 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
             }
         }
         val chromeAlpha = enter * shown
-        if (chromeAlpha > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = chromeAlpha * (1f - scrub()) }) {
+        if (chromeAlpha > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = chromeAlpha * pose().bg }) {
             Column(Modifier.fillMaxSize()) {
                 ViewerHeader(ViewerRules.title(page, me, host?.nameOf ?: { null }), dateLine(ctx, page.atMillis), page.isVideo,
-                    onBack = onClose) { dismiss ->
+                    onBack = { closeAnimated() }) { dismiss ->
                     if (buttons.saveAll > 1) {
                         MenuRow("Save All (${buttons.saveAll})", rememberVectorPainter(Icons.Outlined.Collections)) {
                             dismiss(); save(ViewerRules.siblings(pages, page))
@@ -338,7 +426,7 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
             onSend = { photo, caption, once ->
                 send?.invoke(photo, caption, once)
                 // Back to the chat, where the edited copy is sending (iOS dismisses the viewer too).
-                drawOn = null; onClose()
+                drawOn = null; closeAnimated()
             })
     }
 
@@ -346,7 +434,7 @@ private fun ViewerBody(pages: List<ViewerRules.Page>, start: Int, host: ViewerHo
         val m = page.messageId?.let { id -> host?.message?.invoke(id) }
         val dialog = host?.deleteDialog
         if (m == null || dialog == null) askDelete = false
-        else dialog(m, if (page.isVideo) "Delete this video?" else "Delete this photo?", { askDelete = false }, onClose)
+        else dialog(m, if (page.isVideo) "Delete this video?" else "Delete this photo?", { askDelete = false }, { closeAnimated() })
     }
 }
 

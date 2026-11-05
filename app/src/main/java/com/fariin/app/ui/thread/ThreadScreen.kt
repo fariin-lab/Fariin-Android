@@ -813,6 +813,10 @@ private fun ThreadContent(
                         if (stop != null) actions.onNotice(stop) else pollOpen = true
                     }) else null,
                     // Contact and location cards (CardSheets): sealed text markers, sent like a text.
+                    onGif = { gif ->
+                        val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
+                        if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
+                    },
                     onLocation = {
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.LOCATION)
                         if (stop != null) actions.onNotice(stop) else locationOpen = true
@@ -1153,7 +1157,9 @@ private fun StoryReplyHeader(ui: ThreadUi, m: Message, r: Message.ReplyRef, isMe
         val card: @Composable () -> Unit = {
             coil3.compose.AsyncImage(r.storyThumb, contentDescription = "Story",
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.width(80.dp).height(140.dp).clip(RoundedCornerShape(14.dp))
+                modifier = Modifier.width(80.dp).height(140.dp)
+                    .storyCardSource(live.first.key, open != null)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(c.secondary.copy(alpha = 0.15f)).clickable { open = live.first })
         }
         val bar: @Composable () -> Unit = {
@@ -1204,7 +1210,8 @@ private fun MediaRow(
                 val threadCid = LocalThreadCid.current
                 PictureBox(m, url, m.enc, maxW, RectangleShape, captionW, busy, onOpen = {
                     url?.let { onView(Viewing.Photo(it, if (m.localPath != null) null else m.enc, msg = m)) }
-                }, overlay = capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null)
+                }, overlay = capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null,
+                    originKey = MediaOrigins.keyOf(m))
             }
             Message.MediaKind.VIDEO -> {
                 val ready = m.videoUrl != null
@@ -1212,7 +1219,7 @@ private fun MediaRow(
                 val local = m.localPath?.takeIf { java.io.File(it).exists() }
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
-                }, overlay = { VideoOverlay(m, ready); capsule() })
+                }, overlay = { VideoOverlay(m, ready); capsule() }, originKey = MediaOrigins.keyOf(m))
             }
             else -> {
                 val threadCid = LocalThreadCid.current
@@ -1243,6 +1250,11 @@ private fun StoryReaction(ui: ThreadUi, m: Message, glyph: String, isMe: Boolean
     val glyphBox = 56.dp
     val overhang = 22.dp
     val glyphSize = with(androidx.compose.ui.platform.LocalDensity.current) { 46.dp.toSp() }
+    // The card opens the story while it is live, zooming out of the card as a typed reply's does.
+    val feed by com.fariin.app.data.LiveStories.state.collectAsState()
+    val live = if (r.storyThumb.isNullOrEmpty()) null else com.fariin.app.data.LiveStories.find(feed, r.id, r.authorId)
+    var open by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
+    open?.let { sg -> com.fariin.app.ui.stories.StoryViewerDialog(ui.me, listOf(sg), 0, com.fariin.app.data.ChatsNow.list, onClose = { open = null }) }
     Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
         Text(caption, fontSize = 12.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
@@ -1251,8 +1263,11 @@ private fun StoryReaction(ui: ThreadUi, m: Message, glyph: String, isMe: Boolean
             val card: @Composable () -> Unit = {
                 coil3.compose.AsyncImage(r.storyThumb, contentDescription = "Story",
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.width(80.dp).height(140.dp).clip(RoundedCornerShape(14.dp))
-                        .background(c.secondary.copy(alpha = 0.15f)))
+                    modifier = Modifier.width(80.dp).height(140.dp)
+                        .then(if (live == null) Modifier else Modifier.storyCardSource(live.first.key, open != null))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(c.secondary.copy(alpha = 0.15f))
+                        .then(if (live == null) Modifier else Modifier.clickable { open = live.first }))
             }
             val bar: @Composable () -> Unit = {
                 Box(Modifier.width(5.dp).height(140.dp).clip(RoundedCornerShape(2.5.dp)).background(c.label.copy(alpha = 0.35f)))

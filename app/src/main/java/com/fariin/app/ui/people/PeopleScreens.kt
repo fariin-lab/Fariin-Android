@@ -456,6 +456,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }
         }
         if (addingToGroup) AddToGroupSheet(api, uid, person?.shownName ?: conv?.displayName(me) ?: "", onDismiss = { addingToGroup = false })
+        // First visit: the whole page waits for the profile (at most 1.5 s) and lands in one piece;
+        // drawing the photo and buttons first let the bio push in under them (owner 2026-11-04).
+        var waited by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay(1500); waited = true }
+        if (person == null && !waited) return@Column
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
             Spacer(Modifier.height(10.dp))
@@ -488,10 +493,6 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 }
             }
             Spacer(Modifier.height(20.dp))
-            // First visit: the rest waits for the profile (at most 1.5 s) so it lands in one piece.
-            var waited by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { kotlinx.coroutines.delay(1500); waited = true }
-            if (person == null && !waited) return@Column
             person?.about?.takeIf { it.isNotEmpty() }?.let { bio ->
                 SettingsSection { Text(bio, fontSize = 17.sp, color = c.label, modifier = Modifier.fillMaxWidth().padding(16.dp)) }
             }
@@ -670,6 +671,12 @@ private fun PlainField(value: String, hint: String, start: androidx.compose.ui.u
 /** People's profiles as last read this session, so a page opens complete (bio included). */
 internal object ProfileMemo {
     private val map = java.util.concurrent.ConcurrentHashMap<String, Person>()
+    private val asked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    /** Read these people's profiles ahead (once each), so their page opens complete. */
+    suspend fun warm(api: PeopleApi, uids: List<String>) {
+        for (u in uids.distinct().take(20)) if (u.isNotEmpty() && asked.add(u) && !map.containsKey(u))
+            runCatching { api.profile(u) }.getOrNull()?.let { map[u] = it }
+    }
     fun get(uid: String): Person? = map[uid]
     fun put(uid: String, p: Person) { map[uid] = p }
 }

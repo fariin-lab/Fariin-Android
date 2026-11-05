@@ -42,7 +42,9 @@ internal fun StoryPhoto(url: String?, modifier: Modifier = Modifier, onLoaded: (
         AsyncImage(url, contentDescription = null,
             contentScale = if (fills) ContentScale.Crop else ContentScale.Fit,
             modifier = Modifier.fillMaxSize(),
+            onError = { e -> android.util.Log.w("StoryPhoto", "load failed ${url?.take(140)}: ${e.result.throwable}") },
             onSuccess = { s ->
+                android.util.Log.i("StoryPhoto", "loaded ${s.result.image.width}x${s.result.image.height} ${url?.take(90)}")
                 val img = s.result.image
                 if (img.width > 0) aspect = img.height.toFloat() / img.width
                 if (canvas == null && url != null) scope.launch {

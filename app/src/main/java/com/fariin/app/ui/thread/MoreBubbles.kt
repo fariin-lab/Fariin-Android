@@ -229,7 +229,10 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                         }
                         val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
                         Box(
-                            Modifier.offset(tile.x.dp, tile.y.dp).size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
+                            Modifier.offset(tile.x.dp, tile.y.dp).size(w.dp, h.dp)
+                                // The viewer zooms out of this tile and back into it (hero).
+                                .heroSource(MediaOrigins.keyOf(m, tile.index), 18.dp, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == MediaOrigins.keyOf(m, tile.index) }
+                                .background(Fariin.colors.secondary.copy(alpha = 0.18f))
                                 .clickable(enabled = (bmp != null || waits) && !busy) {
                                     val v = item.videoUrl
                                     if (bmp == null) got.start()
