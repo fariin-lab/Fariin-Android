@@ -762,3 +762,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   (whole page waits on first visit; Calls list prefetches profiles).
 - Other session (same tree) committed: album mosaic, Settings icons, attach sheet grid/folders/GIF/
   Files, FAB lift, plain bar icons; it is now doing the attach sheet half/full detents.
+- Recorded on the Pixel: chat-list ring story open + close into the avatar; single photo open,
+  drag-down follows the finger and lands back in the bubble, no coloured block left (996a732).
