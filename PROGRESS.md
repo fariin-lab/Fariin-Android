@@ -795,3 +795,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 Fixed: crash on refused server call (app keeps running); long-press menu on long messages; blur cost + Power Saving rule; small screens / big text (tab names, story subtitle, chat header); share sheet could leak private files; caption under keyboard; + sheet height and closing; Chats tab rebuilt on every switch; offline title on Stories/Settings; channel Edit button; story reply strip stuck.
 Checked OK: send/offline/reply/edit/delete/photo/voice/reaction/pin/search, dark mode, rotation, scroll speed, memory, startup 0.5 s, chat open speed vs reference, groups, channels, all Settings pages, 609 unit tests.
 For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by design); App Check API is off on the Firebase project; story photo picker is the system one (same as iOS).
+- Accessibility scan (5 main screens): 4 unlabeled controls named; now 0.
