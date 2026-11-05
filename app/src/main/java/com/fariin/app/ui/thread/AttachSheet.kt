@@ -140,7 +140,7 @@ internal fun AttachSheet(
     // The round button: photos -> folders; folders -> photos; inside a folder or GIFs -> back one step.
     val albumButton = {
         when {
-            page == SheetPage.GIFS -> page = SheetPage.PHOTOS
+            page == SheetPage.GIFS || page == SheetPage.FILES -> page = SheetPage.PHOTOS
             page == SheetPage.ALBUMS -> page = SheetPage.PHOTOS
             folder != null -> { folder = null; page = SheetPage.ALBUMS }
             else -> page = SheetPage.ALBUMS
@@ -178,7 +178,8 @@ internal fun AttachSheet(
         else askCamera.launch(android.Manifest.permission.CAMERA)
     }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) { onSendFile(uri); onDismiss() }
+        // Kept for the Files page's Recent list (iOS RecentFiles), then sent.
+        if (uri != null) { RecentFiles.record(context, uri); onSendFile(uri); onDismiss() }
     }
     val onePhoto = picked.size == 1 && picked[0] !in videos
     if (!onePhoto || !allowViewOnce) viewOnce = false
@@ -194,6 +195,12 @@ internal fun AttachSheet(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(mediaOff, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(24.dp))
                 }
+            } else if (page == SheetPage.FILES) {
+                AttachFilesPage(onBack = { page = SheetPage.PHOTOS },
+                    onBrowse = { files.launch(arrayOf("*/*")) },
+                    onGallery = { files.launch(arrayOf("image/*", "video/*")) },
+                    onAudio = { files.launch(arrayOf("audio/*")) },
+                    onSend = { u -> RecentFiles.record(context, u); onSendFile(u); onDismiss() })
             } else if (page == SheetPage.GIFS && onGif != null) {
                 Box(Modifier.fillMaxSize().padding(bottom = 84.dp)) { GifTab { g -> onGif(g); onDismiss() } }
             } else if (page == SheetPage.ALBUMS) {
@@ -224,7 +231,11 @@ internal fun AttachSheet(
                     }
                 }
             }
-            if (picked.isEmpty()) {
+            // The phone's Back steps out of a page (folders, GIFs, Files) before it closes the sheet.
+            androidx.activity.compose.BackHandler(enabled = backShown) { albumButton() }
+            if (page == SheetPage.FILES) {
+                // The Files page has its own bar; no sources, no caption.
+            } else if (picked.isEmpty()) {
                 // iOS sourceBar: the round album button LEFT (a back arrow once a list is open), the
                 // sources in one capsule RIGHT: GIF, Files, Location, Poll (groups only).
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -239,7 +250,7 @@ internal fun AttachSheet(
                         val w = if (onPoll != null) 58.dp else 72.dp
                         if (onGif != null) SheetButton("GIF", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gif_tile), w,
                             selected = page == SheetPage.GIFS) { page = SheetPage.GIFS }
-                        SheetButton("Files", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), w) { files.launch(arrayOf("*/*")) }
+                        SheetButton("Files", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), w) { page = SheetPage.FILES }
                         if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), w) { onDismiss(); onLocation() }
                         if (onPoll != null) SheetButton("Poll", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_poll_tile), w) { onDismiss(); onPoll() }
                     }
@@ -329,7 +340,7 @@ private fun AlbumRow(a: RecentMedia.Album, onClick: () -> Unit) {
     val c = Fariin.colors
     val context = LocalContext.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, a.cover.uri) {
-        value = withContext(Dispatchers.IO) { thumb(context, a.cover.uri, a.cover.isVideo, 160) }
+        value = withContext(Dispatchers.IO) { attachThumb(context, a.cover.uri, a.cover.isVideo, 160) }
     }
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -344,10 +355,10 @@ private fun AlbumRow(a: RecentMedia.Album, onClick: () -> Unit) {
     }
 }
 
-private enum class SheetPage { PHOTOS, ALBUMS, GIFS }
+private enum class SheetPage { PHOTOS, ALBUMS, GIFS, FILES }
 
 /** A small picture of a phone photo or video, for the grid and the folder covers. */
-private fun thumb(context: android.content.Context, uri: Uri, isVideo: Boolean, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
+internal fun attachThumb(context: android.content.Context, uri: Uri, isVideo: Boolean, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
     runCatching {
         if (android.os.Build.VERSION.SDK_INT >= 29) context.contentResolver.loadThumbnail(uri, Size(px, px), null).asImageBitmap()
         else if (isVideo) android.media.MediaMetadataRetriever().run {
@@ -363,7 +374,7 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
     val context = LocalContext.current
     val uri = item.uri
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
-        value = withContext(Dispatchers.IO) { thumb(context, uri, item.isVideo, 256) }
+        value = withContext(Dispatchers.IO) { attachThumb(context, uri, item.isVideo, 256) }
     }
     val chosen = number > 0
     Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f)).clickable(onClick = onOpen)) {
