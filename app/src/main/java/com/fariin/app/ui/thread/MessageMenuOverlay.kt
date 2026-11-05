@@ -158,9 +158,10 @@ internal fun MessageMenuOverlay(
     // The blur, on the background's own clock as iOS's blur view alpha is.
     val content = (LocalView.current.rootView as? android.view.ViewGroup)?.getChildAt(0)
     val blurPx = with(density) { 20.dp.toPx() }
-    val ctxB = LocalContext.current
-    val skipBlur = remember { com.fariin.app.media.LowEnd.skipBlur(ctxB) }
-    if (Build.VERSION.SDK_INT >= 31 && content != null && !skipBlur) {
+    // The app's one blur rule (Settings > Power Saving): Android 12+, not a LOW-class phone, Blur
+    // effects on and Battery Saver not taking it away. Otherwise the tint alone.
+    val glass = com.fariin.app.perf.rememberPowerState().glass()
+    if (glass && content != null) {
         LaunchedEffect(content) {
             // Four steps, not a new blur every frame: measured on the Pixel 5 over six menus, the
             // per-frame blur took the 90th-percentile frame from 15 to 32 ms (GPU 5 -> 14); four
