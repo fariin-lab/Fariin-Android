@@ -28,7 +28,7 @@ import com.fariin.app.ui.theme.Fariin
 import com.google.firebase.auth.FirebaseAuth
 
 /**
- * The chat header's call buttons, as iOS: video and voice for a 1:1. In a group: Join while the
+ * The chat header's call buttons in Fariin's own drawings (ic_call_video / ic_call_voice), as iOS: video and voice for a 1:1. In a group: Join while the
  * group's call is going; otherwise video and voice that start one, for whoever the rules let start
  * a call (a member; only admins when the group says "Admins only"). Nothing in a debug demo chat
  * (no Firebase there).
@@ -44,10 +44,10 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         // One floating capsule, video then voice, outline icons (iOS ChatHeaderView call pill).
         Row(Modifier.floating(CircleShape).padding(horizontal = 4.dp)) {
             IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = true) }) {
-                Icon(Icons.Outlined.Videocam, contentDescription = "Video call", tint = tint)
+                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Video call", tint = tint)
             }
             IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = false) }) {
-                Icon(Icons.Outlined.Call, contentDescription = "Voice call", tint = tint)
+                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), contentDescription = "Voice call", tint = tint)
             }
         }
         return
@@ -62,17 +62,17 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
     }
     if (live) {
         IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }, modifier = Modifier.floating(CircleShape)) {
-            Icon(Icons.Outlined.Call, contentDescription = "Join call", tint = tint)
+            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), contentDescription = "Join call", tint = tint)
         }
         return
     }
     if (!mayStart) return
     Row(Modifier.floating(CircleShape).padding(horizontal = 4.dp)) {
         IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }) {
-            Icon(Icons.Outlined.Videocam, contentDescription = "Group video call", tint = tint)
+            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Group video call", tint = tint)
         }
         IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false, start = true) }) {
-            Icon(Icons.Outlined.Call, contentDescription = "Group voice call", tint = tint)
+            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), contentDescription = "Group voice call", tint = tint)
         }
     }
 }

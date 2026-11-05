@@ -55,11 +55,12 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: 
         .padding(horizontal = 18.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(if (canEdit) Modifier.clip(CircleShape).clickable { onStep("edit") } else Modifier) {
-                Avatar(photo, 92.dp)
-                if (canEdit && photo.isNullOrEmpty()) Box(Modifier.align(Alignment.BottomEnd).size(32.dp).floating(CircleShape),
+            // The tap is on the round photo only; the badge sits over its edge unclipped (it was cut off).
+            Box {
+                Avatar(photo, 92.dp, if (canEdit) Modifier.clip(CircleShape).clickable { onStep("edit") } else Modifier)
+                if (canEdit && photo.isNullOrEmpty()) Box(Modifier.align(Alignment.BottomEnd).size(32.dp).floating(CircleShape).clickable { onStep("edit") },
                     contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), contentDescription = null, tint = c.label, modifier = Modifier.size(16.dp))
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_group_camera), contentDescription = null, tint = c.label, modifier = Modifier.size(16.dp))
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
