@@ -786,3 +786,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Chat open timing (screenrecord + touch dots, Pixel 5): tap to chat on screen Fariin ~0.33 s, reference ~0.31 s (both hold the pressed row ~0.2 s). On par.
 - Settings pages sweep (12 pages) clean. Long-press blur now obeys Power Saving > Blur effects / Battery Saver / LOW class.
 - Low-end emulator (1 GB, Android 8.1, 320 dp): starts in ~1.6-2.2 s (emulator), list scroll 8% janky, thread 0.7%. Fixed cut tab names and chat header name on narrow screens.
+- Low-end emulator stays "Connecting": its 2018 Play Services cannot set up TLS for Firestore (ProviderInstaller module missing), SDK resets the channel every 15 s. Emulator limitation, not the app; layout checks used cached data.
