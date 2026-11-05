@@ -285,7 +285,14 @@ private fun ViewerBody(
     val heroSpec = tween<Float>(250, easing = FastOutSlowInEasing)
     if (zooms) {
         // The hole in the chat follows the page on screen, so the landing fills the bubble it left.
-        LaunchedEffect(page.key) { if (!closing) MediaOrigins.hiddenKey = page.key }
+        // Only once the flying copy is on screen (one frame after `opened`): hiding it at the tap
+        // left the bubble empty, its blue fill showing, for the two frames the viewer took to
+        // measure itself (owner's video, 2026-11-05).
+        LaunchedEffect(page.key, opened) {
+            if (closing || !opened) return@LaunchedEffect
+            androidx.compose.runtime.withFrameNanos { }
+            MediaOrigins.hiddenKey = page.key
+        }
         DisposableEffect(Unit) { onDispose { MediaOrigins.hiddenKey = null } }
         LaunchedEffect(box != Size.Zero) {
             if (opened || box == Size.Zero) return@LaunchedEffect
@@ -314,6 +321,12 @@ private fun ViewerBody(
             flight = from to to
             flightT.snapTo(0f)
             flightT.animateTo(1f, if (to.alpha == 0f) tween(200, easing = LinearEasing) else heroSpec)
+            // Landed: the bubble shows its picture again BEFORE the viewer goes, two frames, so the
+            // chat has drawn it under the copy. Clearing it on dispose left one frame of the empty
+            // blue bubble between the viewer leaving and the chat redrawing (owner's video).
+            MediaOrigins.hiddenKey = null
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
             onClose()
         }
     }
