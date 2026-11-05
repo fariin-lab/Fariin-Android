@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.Flag
@@ -1336,6 +1337,14 @@ private fun ReplyBar(
     var focused by remember(story.id) { mutableStateOf(false) }
     LaunchedEffect(story.id, showLike) { if (showLike) liked = !service.myReaction(story.id).isNullOrEmpty() }
     val focus = LocalFocusManager.current
+    // The keyboard closed by Back or its own button: the field gives up focus too, or the react
+    // bar stayed over a paused story with no keyboard (Pixel 2026-11-05).
+    val imeShown = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+    var imeSeen by remember(story.id) { mutableStateOf(false) }
+    LaunchedEffect(imeShown, focused) {
+        if (imeShown) imeSeen = true
+        else if (focused && imeSeen) { imeSeen = false; focus.clearFocus() }
+    }
     Column(Modifier.fillMaxWidth()) {
         if (canReply && focused && text.isEmpty()) {
             Column(
