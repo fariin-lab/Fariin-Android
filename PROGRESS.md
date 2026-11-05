@@ -785,3 +785,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Cleaned 37 of my old test recordings/screens off the Pixel (they showed in the gallery).
 - Chat open timing (screenrecord + touch dots, Pixel 5): tap to chat on screen Fariin ~0.33 s, reference ~0.31 s (both hold the pressed row ~0.2 s). On par.
 - Settings pages sweep (12 pages) clean. Long-press blur now obeys Power Saving > Blur effects / Battery Saver / LOW class.
+- Low-end emulator (1 GB, Android 8.1, 320 dp): starts in ~1.6-2.2 s (emulator), list scroll 8% janky, thread 0.7%. Fixed cut tab names and chat header name on narrow screens.
