@@ -379,7 +379,9 @@ fun StoryViewer(
     val cardRadius = 14f * density
     // The hole follows whoever is on screen, so the landing fills the slot it came out of.
     val shownKey = currentKey()
-    LaunchedEffect(shownKey) { if (!hero.closed) StoryOrigins.hiddenKey = shownKey }
+    // The card in the list hides only once the viewer has drawn its copy (one frame), as the photo
+    // and menu zooms: hiding it in the same frame left an empty card for a frame.
+    LaunchedEffect(shownKey) { if (!hero.closed) { withFrameMillis { }; if (!hero.closed) StoryOrigins.hiddenKey = shownKey } }
     DisposableEffect(Unit) { onDispose { StoryOrigins.hiddenKey = null } }
 
     fun anchorFor(key: String?): Rect? {
@@ -464,7 +466,7 @@ fun StoryViewer(
         hero.closed = true
         // The card is home: put the row's own card back, and lift the viewer off it a frame later.
         StoryOrigins.hiddenKey = null
-        scope.launch { withFrameMillis { }; onClose() }
+        scope.launch { withFrameMillis { }; withFrameMillis { }; onClose() }
     }
 
     /** Every way out: the swipe, the X, back, the last story ending. Same landing for all of them. */
