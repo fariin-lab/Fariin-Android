@@ -204,6 +204,8 @@ fun ChatListScreen(
     }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmDelete by remember { mutableStateOf(false) }
+    // A chat whose Delete was swiped (not the selection): the same question, about this one chat.
+    var swipeDelete by remember { mutableStateOf<Conversation?>(null) }
     val selecting = selected.isNotEmpty()
     val online = rememberOnline()
     val link by com.fariin.app.data.ConnectionStatus.state.collectAsState()
@@ -522,6 +524,37 @@ fun ChatListScreen(
                     }
                     val row: @Composable (Conversation) -> Unit = { conv ->
                         val ring = com.fariin.app.data.StoryRings.forChat(conv, me, stories, storyHidden)
+                        // iOS chat list swipes (ChatListTable): right for Read/Unread and Pin, left for
+                        // Mute, Delete and Archive. Off while selecting or searching.
+                        val nowMs = System.currentTimeMillis().toDouble()
+                        val markedUnread = conv.hasUnreadMark(me)
+                        val pinned = conv.isPinned(me)
+                        val mutedNow = conv.isMuted(me, nowMs)
+                        SwipeActionsRow(conv.id, enabled = !selecting && !searching,
+                            leading = listOf(
+                                SwipeAction(if (markedUnread) "Read" else "Unread",
+                                    androidx.compose.ui.res.painterResource(if (markedUnread) R.drawable.ic_swipe_read else R.drawable.ic_swipe_unread),
+                                    SwipeColors.blue) { scope.launch { ChatListActions.setUnread(me, conv, !markedUnread) } },
+                                SwipeAction(if (pinned) "Unpin" else "Pin", androidx.compose.ui.res.painterResource(R.drawable.ic_pin_menu), SwipeColors.orange) {
+                                    if (pinned || !ChatListActions.pinsFull(me, state.chats, 1)) scope.launch { ChatListActions.setPinned(me, conv, !pinned) }
+                                },
+                            ),
+                            trailing = listOf(
+                                SwipeAction(if (mutedNow) "Unmute" else "Mute",
+                                    androidx.compose.ui.res.painterResource(if (mutedNow) R.drawable.ic_bell else R.drawable.ic_bell_off),
+                                    SwipeColors.indigo) { scope.launch { ChatListActions.setMuted(me, conv, !mutedNow) } },
+                                SwipeAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(androidx.compose.material.icons.Icons.Outlined.Delete),
+                                    SwipeColors.red) { swipeDelete = conv },
+                                SwipeAction(if (showArchive) "Unarchive" else "Archive", androidx.compose.ui.res.painterResource(R.drawable.ic_archive_fill), SwipeColors.gray) {
+                                    val on = !showArchive
+                                    scope.launch {
+                                        ChatListActions.setArchived(me, conv, on)
+                                        Snack.show(if (on) "Chat archived" else "Chat unarchived", action = "Undo") {
+                                            scope.launch { ChatListActions.setArchived(me, conv, !on) }
+                                        }
+                                    }
+                                },
+                            )) {
                         ChatRow(conv, me, decryptor,
                             selected = conv.id in selected,
                             ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
@@ -537,6 +570,7 @@ fun ChatListScreen(
                                 }
                             },
                             onLongPress = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggle(conv) })
+                        }
                     }
                     val officialItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
                         item(key = com.fariin.app.data.OfficialChannel.CID, contentType = "chat") {
@@ -660,11 +694,12 @@ fun ChatListScreen(
         }
     }
 
-    if (confirmDelete) {
-        val n = selected.size
-        val groups = selectedConvs.count { it.isGroup }
+    if (confirmDelete || swipeDelete != null) {
+        val targets = swipeDelete?.let { listOf(it) } ?: selectedConvs
+        val n = targets.size
+        val groups = targets.count { it.isGroup }
         AlertDialog(
-            onDismissRequest = { confirmDelete = false },
+            onDismissRequest = { confirmDelete = false; swipeDelete = null },
             title = { Text(if (n == 1) "Delete this chat?" else "Delete $n chats?") },
             text = {
                 Text(if (groups > 0) "Groups stay in your list: leave a group from its info page. The other chats are removed from this phone's list."
@@ -673,15 +708,16 @@ fun ChatListScreen(
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    val list = selectedConvs.filter { !it.isGroup }
-                    selected = emptySet()
+                    val list = targets.filter { !it.isGroup }
+                    if (swipeDelete == null) selected = emptySet()
+                    swipeDelete = null
                     scope.launch {
                         val ok = list.map { ChatListActions.deleteForMe(me, it) }.all { it }
                         Snack.show(if (ok) (if (list.size == 1) "Chat deleted" else "${list.size} chats deleted") else "Couldn't delete. Try again.")
                     }
                 }) { Text("Delete", color = c.red) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false; swipeDelete = null }) { Text("Cancel") } },
         )
     }
 }
