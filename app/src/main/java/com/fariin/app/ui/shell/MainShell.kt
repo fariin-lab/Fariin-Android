@@ -1,5 +1,6 @@
 package com.fariin.app.ui.shell
 
+import androidx.compose.ui.layout.layout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -215,13 +216,28 @@ fun MainShell(
     Box(Modifier.fillMaxSize().background(c.bg)) {
         Box(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)) {
             CompositionLocalProvider(LocalBottomBarInset provides inset, LocalTabReselect provides reselect) {
+                // The chat list stays alive once shown: coming back to Chats rebuilt it every time
+                // (one 65 ms frame per switch on the Pixel 5). Behind another tab it is neither
+                // measured nor drawn nor touchable, and its Back handlers are off.
+                var chatsBorn by remember { mutableStateOf(tab == TAB_CHATS) }
+                if (tab == TAB_CHATS) chatsBorn = true
+                if (chatsBorn) {
+                    val shown = tab == TAB_CHATS
+                    Box(Modifier.fillMaxSize().layout { m, cs ->
+                        if (!shown) layout(cs.maxWidth, cs.maxHeight) {}
+                        else { val p = m.measure(cs); layout(p.width, p.height) { p.place(0, 0) } }
+                    }) {
+                        ChatListScreen(chats, me, decryptor, stories = stories,
+                            onSettings = { select(TAB_SETTINGS) },
+                            onNewStory = { storyRequest++; select(TAB_STORIES) },
+                            active = shown)
+                    }
+                }
                 when (tab) {
                     TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest, shared = if (demo) null else stories)
                     // The calls list scrolls under the bar and lifts its New Call button by the inset.
                     TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls)
-                    TAB_CHATS -> ChatListScreen(chats, me, decryptor, stories = stories,
-                        onSettings = { select(TAB_SETTINGS) },
-                        onNewStory = { storyRequest++; select(TAB_STORIES) })
+                    TAB_CHATS -> {}
                     // My Profile (Settings) reads the same feed for its Posted stories card.
                     else -> com.fariin.app.ui.glow.ProvideMyStories(stories, chats.chats) {
                         SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut)

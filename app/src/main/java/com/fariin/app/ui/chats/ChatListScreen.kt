@@ -163,6 +163,8 @@ fun ChatListScreen(
     onSettings: () -> Unit = {},
     onNewStory: () -> Unit = {},
     stories: com.fariin.app.data.StoriesState = com.fariin.app.data.StoriesState(),
+    /** False while another tab shows: the list stays alive behind it, its Back handlers off. */
+    active: Boolean = true,
 ) {
     val c = Fariin.colors
     // Rings on the photos (iOS storyRing): a tap on a ringed photo opens that story, not the chat.
@@ -206,9 +208,9 @@ fun ChatListScreen(
     val linkLabel = com.fariin.app.data.ConnectionStatus.label(link)
 
     // System back peels one layer at a time: selection, then search, then the archive page.
-    BackHandler(enabled = selecting) { selected = emptySet() }
-    BackHandler(enabled = !selecting && searching) { searching = false; query = "" }
-    BackHandler(enabled = !selecting && !searching && showArchive) { showArchive = false }
+    BackHandler(enabled = active && selecting) { selected = emptySet() }
+    BackHandler(enabled = active && !selecting && searching) { searching = false; query = "" }
+    BackHandler(enabled = active && !selecting && !searching && showArchive) { showArchive = false }
 
     val source = if (showArchive) state.archived else state.chats
     val shown = source.asSequence()
