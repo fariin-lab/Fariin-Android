@@ -781,3 +781,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Dark mode pass (list, chat, sheet, profile, settings, stories): clean. Phone back to light.
 - Attach sheet geometry: full stops under status bar, bar same place at half/full, goes down with the sheet on close; caption above keyboard (Pixel recordings).
 - Rotation: a draft survives portrait->landscape->portrait.
+- Offline title on Stories + Settings tabs (iOS parity).
+- Cleaned 37 of my old test recordings/screens off the Pixel (they showed in the gallery).
