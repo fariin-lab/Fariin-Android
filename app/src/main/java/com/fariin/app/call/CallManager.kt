@@ -180,6 +180,7 @@ object CallManager {
         if (uid.isEmpty() || me.isEmpty() || uid == me) return
         if (status.live) return
         resetCallVars()
+        step("dial")
         peer = uid
         _ui.value = CallUi(peerUid = uid, peerName = name, peerPhoto = photo, cameraOn = video, speaker = video)
         move(CallEvent.Dial(video))
@@ -323,6 +324,7 @@ object CallManager {
                 "taken" -> { standDown(); return@launch }
                 "cancelled", "ended" -> { finish(EndReason.MISSED, updateRemote = false, byUser = false); return@launch }
             }
+            step("accept: claimed")
             var sdp = offerSdp
             var tries = 0
             while (sdp == null && tries < 4 && callId == id) {
@@ -333,8 +335,10 @@ object CallManager {
                 tries++
             }
             if (callId != id || !status.live) return@launch
+            step("accept: offer ${if (sdp == null) "MISSING after $tries tries" else "open after $tries tries"}")
             if (sdp == null) { finish(EndReason.FAILED, true, byUser = false); return@launch }
             val servers = awaitIceServers()
+            step("accept: ${servers.size} ice servers")
             if (CallWire.strangerWithoutRelay(contact, alwaysRelay(), servers)) { finish(EndReason.FAILED, true, byUser = false); return@launch }
             val e = newEngine(servers, isCaller = false, camera = _ui.value.cameraOn) ?: run { finish(EndReason.FAILED, true, false); return@launch }
             try {
@@ -344,6 +348,7 @@ object CallManager {
                 e.setLocal(SessionDescription.Type.ANSWER, answer)
                 val enc = sealWithRetry(answer) ?: run { finish(EndReason.FAILED, true, false); return@launch }
                 signaling.update(id, CallWire.answerFields(me, enc, _ui.value.cameraOn))
+                step("accept: answer written")
             } catch (x: Exception) {
                 Log.w(TAG, "answer failed", x); finish(EndReason.FAILED, true, false); return@launch
             }
@@ -397,6 +402,7 @@ object CallManager {
                     try {
                         engine?.setRemote(SessionDescription.Type.ANSWER, sdp)
                         flushPendingRemote()
+                        step("answer applied")
                     } catch (x: Exception) { Log.w(TAG, "answer apply failed", x); finish(EndReason.FAILED, true, false) }
                 }
                 // An answer sent during the ring (early1) is not a pick-up: applied so the path comes
@@ -533,6 +539,7 @@ object CallManager {
     private fun remoteAccepted() {
         if (!status.isCaller || status.phase != CallPhase.OUTGOING) return
         move(CallEvent.RemoteAccepted)
+        step("callee accepted (path already up: $mediaReady)")
         acceptedTimeout()
         // The path already came up during the ring: start the call now, not on a media event that
         // has already been and gone (iOS beginConnectedCallIfAccepted).
@@ -541,6 +548,7 @@ object CallManager {
 
     private fun onIce(state: PeerConnection.IceConnectionState) {
         val id = callId ?: return
+        step("ice $state (${if (status.isCaller) "caller" else "callee"})")
         when (state) {
             PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> {
                 mediaReady = true
@@ -1007,5 +1015,14 @@ object CallManager {
                 calleeRinging = true, connectedAtMs = if (phase == CallPhase.ACTIVE) System.currentTimeMillis() - 83_000 else null),
             peerUid = "demo", peerName = "Amina Yusuf", cameraOn = video, remoteCameraOn = video || theirScreen, remoteMuted = phase == CallPhase.ACTIVE && !video,
         )
+    }
+
+    /** One line per call milestone in the phone's log, the time from the call's start; no ids, no keys
+     *  (a call that answered but never connected left nothing to read, owner's Pixel 2026-11-05). */
+    private var stepOrigin = 0L
+    private fun step(what: String) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (stepOrigin == 0L || what.startsWith("accept: claimed") || what.startsWith("dial")) stepOrigin = now
+        Log.w(TAG, "+${now - stepOrigin} ms $what")
     }
 }
