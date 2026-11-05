@@ -749,3 +749,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   and plain controls left as system glyphs. Verified tick blue again + shown in chat list/search
   (Conversation.verified). Story caption solid black, tap-to-dismiss keyboard, hours menu no longer
   opens the keyboard. All seen on the Pixel.
+- Attach sheet File/Poll -> iOS ic_file / ic_poll_tile; all five sources now one filled family.
+  Group info + attach icons checked on the Pixel. Left: call screen on/off pairs (no iOS "off" art).
