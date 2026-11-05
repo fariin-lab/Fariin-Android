@@ -1189,7 +1189,9 @@ private fun MediaRow(
     // A rough caption width, only so a short picture does not squeeze a caption (iOS minW).
     val captionW = caption?.let { it.length.coerceAtMost(40) * 8.5f } ?: 0f
     val busy = m.sendState == Message.SendState.SENDING
-    Column(Modifier.widthIn(max = maxW).clip(shape).background(if (isMe) myFill() else receivedFill())) {
+    // While its picture is up in the viewer, a bare photo bubble leaves no coloured block behind.
+    val lifted = caption == null && !header && MediaOrigins.hiddenKey == MediaOrigins.keyOf(m)
+    Column(Modifier.widthIn(max = maxW).clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())) {
         if (header) {
             Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
                 if (showSender && g.first) {
