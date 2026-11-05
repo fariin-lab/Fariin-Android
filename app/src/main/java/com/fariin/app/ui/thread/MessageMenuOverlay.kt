@@ -394,7 +394,9 @@ private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: 
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 strip.forEachIndexed { i, e ->
                     val v = remember { Animatable(if (i < 6) 0f else 1f) }
-                    if (i < 6) LaunchedEffect(Unit) { v.animateTo(1f, tween(200, delayMillis = delayMs + i * 10, easing = EaseIn)) }
+                    // Ease-OUT, no travel hold: with ease-in after a 0.1 s hold the emojis stayed near invisible
+                    // for ~10 frames and the bar read as an empty white capsule (owner's video, 2026-11-05).
+                    if (i < 6) LaunchedEffect(Unit) { v.animateTo(1f, tween(180, delayMillis = i * 15, easing = androidx.compose.animation.core.LinearOutSlowInEasing)) }
                     Box(
                         Modifier.size(side).graphicsLayer { alpha = v.value; translationY = rise * (1 - v.value) }
                             .clip(CircleShape)
@@ -406,7 +408,7 @@ private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: 
             }
         }
         val v = remember { Animatable(0f) }
-        LaunchedEffect(Unit) { v.animateTo(1f, tween(200, delayMillis = delayMs + 60, easing = EaseIn)) }
+        LaunchedEffect(Unit) { v.animateTo(1f, tween(180, delayMillis = 90, easing = androidx.compose.animation.core.LinearOutSlowInEasing)) }
         Box(Modifier.size(side).graphicsLayer { alpha = v.value; translationY = rise * (1 - v.value) }.clickable(onClick = onMore),
             contentAlignment = Alignment.Center) {
             Box(Modifier.size(side * 0.84f).clip(CircleShape).background(c.label.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
