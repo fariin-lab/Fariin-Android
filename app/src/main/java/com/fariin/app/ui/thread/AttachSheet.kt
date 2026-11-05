@@ -201,7 +201,7 @@ internal fun AttachSheet(
         containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         // Lists other than the photos open the sheet fully, as iOS does.
         androidx.compose.runtime.LaunchedEffect(page, folder) { if (page != SheetPage.PHOTOS || folder != null) runCatching { sheet.expand() } }
-        Box(Modifier.fillMaxWidth().fillMaxHeight(0.92f).onSizeChanged { boxH = it.height }.navigationBarsPadding().imePadding()) {
+        Box(Modifier.fillMaxWidth().fillMaxHeight().onSizeChanged { boxH = it.height }.navigationBarsPadding().imePadding()) {
             // The part of the sheet below the screen while it sits at half: the bars move up by it,
             // so the source bar and the caption stay on the screen's bottom edge.
             val lift = Modifier.offset {

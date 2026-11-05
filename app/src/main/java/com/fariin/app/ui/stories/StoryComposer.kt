@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.statusBars
@@ -260,7 +261,14 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { box = it }) {
         val navDp = with(density) { navBottom.toDp() }
         Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = EDIT_BAR + navDp).clip(RoundedCornerShape(28.dp))) {
-            bmp?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+            // The photo itself is rounded (a gallery photo is a different shape from the frame, so
+            // rounding only the frame left its corners square inside black bands).
+            bmp?.let {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Image(it, contentDescription = null, contentScale = ContentScale.Fit,
+                        modifier = Modifier.aspectRatio(it.width.toFloat() / it.height.coerceAtLeast(1)).clip(RoundedCornerShape(28.dp)))
+                }
+            }
             // A video plays here, looping, as on iOS (it only said "Video · 5 s" over its first frame).
             media.video?.let { v -> StoryEditVideo(v.file) }
         }
