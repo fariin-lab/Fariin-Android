@@ -73,8 +73,15 @@ class ChatMedia(
         val ref = try { FirebaseStorage.getInstance().getReferenceFromUrl(url) } catch (_: Exception) { null }
         val cipher = try {
             ref?.getBytes(MediaRules.MAX_DOWNLOAD)?.await() ?: fetchByUrl(url)
-        } catch (_: Exception) { return null } ?: return null
-        val plain = open(cipher, enc) ?: return null
+        } catch (e: Exception) {
+            // Why a picture stays on its retry button (the kind of failure only, never the address).
+            android.util.Log.w("ChatMedia", "download failed: ${e.javaClass.simpleName} ${(e as? com.google.firebase.storage.StorageException)?.errorCode ?: ""}")
+            return null
+        } ?: return null
+        val plain = open(cipher, enc) ?: run {
+            android.util.Log.w("ChatMedia", "downloaded ${cipher.size} bytes but could not open them (enc=${enc != null})")
+            return null
+        }
         val f = key(url)
         atomicWrite(f, plain)
         return f
