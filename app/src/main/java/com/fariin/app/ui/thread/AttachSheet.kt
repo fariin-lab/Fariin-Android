@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
@@ -109,6 +111,7 @@ internal fun AttachSheet(
     val c = Fariin.colors
     val context = LocalContext.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val sheetScope = androidx.compose.runtime.rememberCoroutineScope()
     // iOS detents: opens at half, the grid's upward scroll or a drag grows it to full, pulling the
     // grid down from its top returns it to half, then closes it, following the finger.
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
@@ -289,7 +292,10 @@ internal fun AttachSheet(
                     ) {
                         if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
                         BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                            cursorBrush = SolidColor(c.accent), maxLines = 5, modifier = Modifier.fillMaxWidth())
+                            cursorBrush = SolidColor(c.accent), maxLines = 5,
+                            // Typing opens the sheet fully: at half height the caption sat under the
+                            // keyboard (Pixel 2026-11-05).
+                            modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); if (sheet.currentValue != androidx.compose.material3.SheetValue.Expanded) runCatching { sheet.expand() } } } })
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
