@@ -751,3 +751,14 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   opens the keyboard. All seen on the Pixel.
 - Attach sheet File/Poll -> iOS ic_file / ic_poll_tile; all five sources now one filled family.
   Group info + attach icons checked on the Pixel. Left: call screen on/off pairs (no iOS "off" art).
+- 2026-11-04 night: hero (zoom) transitions, iOS StoryDoor rule (avatar radius = circle landing):
+  chat-list ring -> story, story reply/reaction/mention cards -> story, chat photos/videos and album
+  tiles -> viewer (MediaOrigins). Recorded on the Pixel: story card open+close, album open+close.
+  Bug found + fixed: the viewer's opening flight was cancelled a frame in, leaving an invisible
+  viewer over the chat (9df6aa9).
+- Blurry stories from iPhone: the viewer reused Coil's 220x392 list-card copy. Now full size under
+  its own cache key (c99f7c7); kream's QR story checked sharp at full res.
+- Followers no longer see channel story view counts (owner). Profile page opens in one piece
+  (whole page waits on first visit; Calls list prefetches profiles).
+- Other session (same tree) committed: album mosaic, Settings icons, attach sheet grid/folders/GIF/
+  Files, FAB lift, plain bar icons; it is now doing the attach sheet half/full detents.
