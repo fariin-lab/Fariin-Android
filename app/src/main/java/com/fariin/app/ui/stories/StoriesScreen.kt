@@ -231,7 +231,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         // Title at the start, the overflow at the end. No camera here: iOS took add-story off the
         // header (owner 2026-10-11, "I don't need it"); the camera on My Story's row posts.
-        com.fariin.app.ui.components.FloatingTopBar("Stories", actions = {
+        com.fariin.app.ui.components.FloatingTopBar(com.fariin.app.ui.chats.rememberConnectionTitle("Stories"), actions = {
             // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
             Box {
                 com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { moreOpen = true })

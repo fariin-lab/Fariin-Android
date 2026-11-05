@@ -184,7 +184,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     val ctx = LocalContext.current
     val c = Fariin.colors
     Column(Modifier.fillMaxSize()) {
-        PageBar("Settings", onBack = null, action = {
+        PageBar(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), onBack = null, action = {
             // In its own floating circle, as the other tabs' bar buttons.
             com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search, "Search settings",
                 onClick = { openSettingsSearch(push) }, modifier = Modifier.padding(end = 8.dp))

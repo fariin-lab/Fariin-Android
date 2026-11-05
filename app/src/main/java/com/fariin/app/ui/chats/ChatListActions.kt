@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import androidx.compose.runtime.collectAsState
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -71,6 +72,15 @@ object ChatListActions {
         Snack.show("You can pin up to $PINNED_MAX chats. Unpin one to pin this chat.")
         return true
     }
+}
+
+/** A tab's title, or the connection's words while it is down (iOS connectionTitle on the Chats,
+ *  Stories and Settings bars): "Waiting for network" / "Connecting". */
+@Composable
+fun rememberConnectionTitle(title: String): String {
+    val link by com.fariin.app.data.ConnectionStatus.state.collectAsState()
+    val online = rememberOnline()
+    return com.fariin.app.data.ConnectionStatus.label(link) ?: if (!online) "Waiting for network" else title
 }
 
 /** False while the phone has no working network (the top bar then says "Waiting for network…"). */
