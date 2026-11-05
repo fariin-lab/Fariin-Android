@@ -745,3 +745,7 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   - Story camera + editor in a rounded frame, no grey status band, editor bar as iOS (Aa / stickers
     / pen | NEXT, caption capsule with 24). Videos now PLAY in the editor (looping; player released
     on close). Text added lands inside the frame. Video stories still have no Aa/pen (as before).
+- Icons: ~90 stock icons -> iOS drawings (scratchpad tools port_svg.py, swap_icons.py); call screen
+  and plain controls left as system glyphs. Verified tick blue again + shown in chat list/search
+  (Conversation.verified). Story caption solid black, tap-to-dismiss keyboard, hours menu no longer
+  opens the keyboard. All seen on the Pixel.
