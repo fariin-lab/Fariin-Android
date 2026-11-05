@@ -56,6 +56,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -120,24 +125,76 @@ private const val SELECTED_KEY = "storyAudienceSelected"
 @Composable
 private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     val c = Fariin.colors
-    val shown = remember { androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true } }
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))
-        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClose)) {
-        androidx.compose.animation.AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter),
-            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 500f)) { it }) {
-            Column(Modifier.fillMaxWidth().fillMaxHeight(0.72f).padding(horizontal = 8.dp).padding(bottom = 8.dp)
-                .clip(RoundedCornerShape(34.dp)).background(c.bgSecondary)
-                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
-                .navigationBarsPadding()) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // The sheet's height in px and how far it is pulled down: it rises from below on open and follows
+    // the finger 1:1 on a pull-down (owner 2026-11-04: "swipe down smooth like Apple").
+    var sheetH by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val drop = remember { androidx.compose.animation.core.Animatable(10_000f) }
+    var leaving by remember { mutableStateOf(false) }
+    val sheetSpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 1f, stiffness = 420f)
+    fun dismiss(velocity: Float = 0f) {
+        if (leaving) return
+        leaving = true
+        scope.launch { drop.animateTo(sheetH.coerceAtLeast(1f), sheetSpring, velocity); onClose() }
+    }
+    fun settle(velocity: Float) {
+        // iOS sheets: past a quarter of the height, or a flick down, closes; otherwise springs home.
+        if (drop.value > sheetH * 0.25f || velocity > 1400f) dismiss(velocity)
+        else scope.launch { drop.animateTo(0f, sheetSpring, velocity) }
+    }
+    androidx.compose.runtime.LaunchedEffect(sheetH > 0f) {
+        if (sheetH > 0f) { drop.snapTo(sheetH); drop.animateTo(0f, sheetSpring) }
+    }
+    // The list hands its pull to the sheet when it is at its top, and takes back an upward scroll.
+    val pull = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y < 0f && drop.value > 0f) {
+                    val used = maxOf(available.y, -drop.value)
+                    scope.launch { drop.snapTo(drop.value + used) }
+                    return androidx.compose.ui.geometry.Offset(0f, used)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y > 0f && source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) {
+                    scope.launch { drop.snapTo(drop.value + available.y) }
+                    return androidx.compose.ui.geometry.Offset(0f, available.y)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                if (drop.value > 0f) { settle(available.y); return available }
+                return androidx.compose.ui.unit.Velocity.Zero
+            }
+        }
+    }
+    val dragState = androidx.compose.foundation.gestures.rememberDraggableState { d ->
+        scope.launch { drop.snapTo((drop.value + d).coerceAtLeast(0f)) }
+    }
+    androidx.activity.compose.BackHandler { dismiss() }
+    val shade = if (sheetH > 0f) (1f - drop.value / sheetH).coerceIn(0f, 1f) else 0f
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f * shade))
+        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { dismiss() }) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.72f).padding(horizontal = 8.dp).padding(bottom = 8.dp)
+            .onSizeChanged { sheetH = it.height.toFloat() + 40f }
+            .graphicsLayer { translationY = if (sheetH > 0f) drop.value.coerceAtMost(sheetH) else 10_000f }
+            .clip(RoundedCornerShape(34.dp)).background(c.bgSecondary)
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+            .nestedScroll(pull)
+            .navigationBarsPadding()) {
+            // The handle and the title bar drag the sheet itself.
+            Column(Modifier.fillMaxWidth().draggable(dragState, androidx.compose.foundation.gestures.Orientation.Vertical,
+                onDragStopped = { v -> settle(v) })) {
                 Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).size(40.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.35f)))
                 Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp)) {
-                    androidx.compose.material3.IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart)) {
+                    androidx.compose.material3.IconButton(onClick = { dismiss() }, modifier = Modifier.align(Alignment.CenterStart)) {
                         Icon(androidx.compose.material.icons.Icons.Filled.Close, "Close", tint = c.label)
                     }
                     Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                 }
-                content()
             }
+            content()
         }
     }
 }
