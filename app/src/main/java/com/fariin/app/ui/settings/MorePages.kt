@@ -23,6 +23,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -222,17 +229,38 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
         }
         SettingsSection(header = "Other devices", footer = if (hoursLeft > 0 && others.isNotEmpty()) "You can sign out other devices in about $hoursLeft h."
             else "Sign out any device you don't recognise.") {
-            if (rows != null && others.isEmpty()) Column(Modifier.padding(16.dp)) {
-                Text("No other devices", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label)
-                Text("Only this device is signed in to your account.", fontSize = 15.sp, color = Fariin.colors.secondary)
+            if (rows != null && others.isEmpty()) Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.VerifiedUser, null,
+                    tint = Fariin.colors.blue, modifier = Modifier.size(30.dp))
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text("No other devices", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label)
+                    Text("Only this device is signed in to your account.", fontSize = 15.sp, color = Fariin.colors.secondary)
+                }
             }
             for ((i, d) in others.withIndex()) Box(Modifier.clickable { pending = d }) { DeviceLine(d, false, now, i == others.lastIndex) }
         }
         if (others.size > 1) SettingsSection { SettingsRow("Sign out all other devices", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { all = true } }
         SettingsSection(header = "Automatic sign-out", footer = "A device not opened for this long signs itself out. The one you are using stays signed in.") {
-            for (d in SettingsRules.autoSignOut) CheckRow(SettingsRules.autoSignOutLabel(d), auto == d, last = d == 365) {
-                auto = d
-                scope.launch { runCatching { db.collection("users").document(me!!).set(mapOf("deviceAutoSignOutDays" to d), SetOptions.merge()).await() } }
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                Row(Modifier.fillMaxWidth().clickable { menu = true }.heightIn(min = 56.dp).padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sign out after", fontSize = 17.sp, color = Fariin.colors.label, modifier = Modifier.weight(1f))
+                    Text(auto?.let { SettingsRules.autoSignOutLabel(it) } ?: "", fontSize = 17.sp, color = Fariin.colors.label)
+                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.UnfoldMore, null,
+                        tint = Fariin.colors.label, modifier = Modifier.padding(start = 4.dp).size(20.dp))
+                }
+                androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card,
+                    modifier = Modifier.align(Alignment.TopEnd)) {
+                    for (d in SettingsRules.autoSignOut) androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(SettingsRules.autoSignOutLabel(d), color = Fariin.colors.label) },
+                        trailingIcon = { if (auto == d) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Check, null, tint = Fariin.colors.accent) },
+                        onClick = {
+                            menu = false; auto = d
+                            scope.launch { runCatching { db.collection("users").document(me!!).set(mapOf("deviceAutoSignOutDays" to d), SetOptions.merge()).await() } }
+                        })
+                }
             }
         }
     }
@@ -248,11 +276,19 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
 private fun DeviceLine(d: DeviceRow, thisDevice: Boolean, now: Long, last: Boolean) {
     val c = Fariin.colors
     Column {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        // iOS: the device in a blue circle.
+        Box(Modifier.size(46.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.PhoneAndroid, null,
+                tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
             Text(d.model, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
             Text(listOf(d.os, d.app.takeIf { it.isNotEmpty() }?.let { "Fariin $it" }).filterNotNull().filter { it.isNotEmpty() }.joinToString(" · "),
                 fontSize = 15.sp, color = c.secondary)
             Text(SettingsRules.deviceLine(thisDevice, d.lastSeen, now, d.location), fontSize = 15.sp, color = c.secondary)
+        }
         }
         if (!last) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
     }

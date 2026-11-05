@@ -104,6 +104,8 @@ internal fun SettingsRow(
     trailing: Trailing = Trailing.CHEVRON,
     titleColor: Color? = null,
     last: Boolean = false,
+    /** Drawn on the right before the chevron (iOS: Chat Color's dot). */
+    accessory: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val c = Fariin.colors
@@ -134,6 +136,7 @@ internal fun SettingsRow(
         if (side) Text(value!!, style = MaterialTheme.typography.bodyLarge, color = c.secondary, maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 12.dp).widthIn(max = 200.dp))
+        if (accessory != null) Box(Modifier.padding(start = 12.dp)) { accessory() }
         if (trailing == Trailing.CHEVRON && onClick != null) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
                 modifier = Modifier.padding(start = 4.dp).size(24.dp))

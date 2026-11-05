@@ -695,23 +695,26 @@ internal fun ChatThemeBlock() {
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (current as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
     Column(Modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(170.dp).drawBehind { drawWallpaper(current, c.dark, c.bg, pattern, photo) }
-            .padding(horizontal = 14.dp, vertical = 16.dp)) {
+        Column(Modifier.fillMaxWidth().drawBehind { drawWallpaper(current, c.dark, c.bg, pattern, photo) }
+            .padding(horizontal = 14.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Today", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                modifier = Modifier.align(Alignment.CenterHorizontally).clip(CircleShape).background(c.fieldFill.copy(alpha = 0.3f))
+                    .padding(horizontal = 12.dp, vertical = 4.dp))
             // With no wallpaper the incoming bubble is the chat's grey, as in a chat with none.
-            if (current == ChatWallpaper.None) PreviewBubble("Good morning! 👋", mine = false, mineFill = null, modifier = Modifier.align(Alignment.TopStart))
-            else MockBubble("Good morning! 👋", mine = false, mineFill = null, modifier = Modifier.align(Alignment.TopStart))
-            MockBubble("Morning! How are you?", mine = true, mineFill = mine?.brush(), modifier = Modifier.align(Alignment.BottomEnd))
+            if (current == ChatWallpaper.None) PreviewBubble("Here's a preview of the chat color.", mine = false, mineFill = null, modifier = Modifier.align(Alignment.Start))
+            else MockBubble("Here's a preview of the chat color.", mine = false, mineFill = null, modifier = Modifier.align(Alignment.Start))
+            MockBubble("The color is visible to only you.", mine = true, mineFill = mine?.brush(), modifier = Modifier.align(Alignment.End))
         }
         androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(ChatWallpapers.all.size) { i ->
                 val g = ChatWallpapers.all[i]
                 val w = ChatWallpaper.Gradient(g.id)
                 val selected = current == w && chosen == null
-                Column(Modifier.size(92.dp, 150.dp).clip(RoundedCornerShape(16.dp))
+                Column(Modifier.size(104.dp, 172.dp).clip(RoundedCornerShape(18.dp))
                     .drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, null) }
-                    .then(if (selected) Modifier.border(2.5.dp, c.blue, RoundedCornerShape(16.dp)) else Modifier)
+                    .then(if (selected) Modifier.border(2.5.dp, c.blue, RoundedCornerShape(18.dp)) else Modifier)
                     .clickable { ChatLookStore.resetAllWallpapers(ctx, w); ChatLookStore.resetAllColors(ctx) }
-                    .padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    .padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
                     Box(Modifier.size(44.dp, 12.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.9f)))
                     Box(Modifier.align(Alignment.End).size(44.dp, 12.dp).clip(CircleShape).background(g.autoColor.brush()))
                 }

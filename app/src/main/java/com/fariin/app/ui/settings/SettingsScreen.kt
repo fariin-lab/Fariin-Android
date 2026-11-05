@@ -50,6 +50,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.fariin.app.ui.components.floating
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.size
+import com.fariin.app.ui.components.brush
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -348,9 +350,16 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
             SettingsSection(header = "Chat Theme") { ChatThemeBlock() }
             SettingsSection {
                 SettingsRow("Chat Wallpaper") { push(PAGE_WALLPAPER) }
-                SettingsRow("Chat Color") { push(PAGE_CHAT_COLOR) }
+                val lookV = com.fariin.app.data.ChatLookStore.version.intValue
+                val myColor = remember(lookV) { com.fariin.app.data.ChatLookStore.globalColor(ctx) }
+                val blue = com.fariin.app.ui.theme.Fariin.colors.blue
+                SettingsRow("Chat Color", accessory = {
+                    Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(myColor?.brush() ?: androidx.compose.ui.graphics.SolidColor(blue)))
+                }) { push(PAGE_CHAT_COLOR) }
                 SettingsRow("App Icon") { push(PAGE_APP_ICON) }
-                SettingsRow("Quick Reaction", last = true) { push(PAGE_QUICK) }
+                val quick = remember { ctx.getSharedPreferences(CHAT_PREFS, android.content.Context.MODE_PRIVATE).getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️" }
+                SettingsRow("Quick Reaction", value = quick, last = true) { push(PAGE_QUICK) }
             }
             SettingsSection {
                 SettingsRow("Night Mode", value = AppearancePrefs.current(ctx).label, last = true) { push(PAGE_NIGHT) }
