@@ -790,3 +790,8 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Security pass (Android client): backups off; only needed components exported; share intake fixed (above); deep/call links need a tap to join; debug intent extras gated to debuggable; no secrets in logcat; App Lock covers every activity incl. share; notification PendingIntents immutable except bubble + inline reply (required, explicit, receiver not exported); link previews built by the sender only. Open for owner: App Check API disabled on the project (unenforced, same as iOS).
 - More flows on the Pixel (kream): voice note send + play, reaction, pin + unpin, chat search, in-chat search (1 of 4, highlight), Back closes only the menu. All work. Unit tests 609/609 after the night changes.
 - Story reply: react bar stuck after closing keyboard, fixed. (A real story-reply send was blocked by the safety check; not retried.)
+
+### Morning summary (night 2026-11-05)
+Fixed: crash on refused server call (app keeps running); long-press menu on long messages; blur cost + Power Saving rule; small screens / big text (tab names, story subtitle, chat header); share sheet could leak private files; caption under keyboard; + sheet height and closing; Chats tab rebuilt on every switch; offline title on Stories/Settings; channel Edit button; story reply strip stuck.
+Checked OK: send/offline/reply/edit/delete/photo/voice/reaction/pin/search, dark mode, rotation, scroll speed, memory, startup 0.5 s, chat open speed vs reference, groups, channels, all Settings pages, 609 unit tests.
+For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by design); App Check API is off on the Firebase project; story photo picker is the system one (same as iOS).
