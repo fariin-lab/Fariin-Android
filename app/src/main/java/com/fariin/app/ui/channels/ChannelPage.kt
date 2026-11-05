@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.res.vectorResource
 import android.content.Intent
 import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedVisibility
@@ -231,7 +232,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         if (shownRole == Role.VISITOR) notice = "Follow this channel to change its notifications."
                         else tap(if (muted) Action.UNMUTE else Action.MUTE, false)
                     }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (muted) Icons.Outlined.NotificationsOff else Icons.Outlined.Notifications, null, tint = c.label, modifier = Modifier.size(22.dp))
+                        Icon(androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell), null, tint = c.label, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(14.dp))
                         Text("Sounds & Notifications", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                         Text(if (muted && shownRole != Role.VISITOR) "Off" else "On", fontSize = 17.sp, color = c.secondary)
@@ -246,11 +247,11 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 }
                 Spacer(Modifier.height(20.dp))
                 Card {
-                    if (role != Role.ADMIN) FootRow(if (reported) "Reported" else "Report Channel", Icons.Outlined.Report,
+                    if (role != Role.ADMIN) FootRow(if (reported) "Reported" else "Report Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report),
                         if (reported) c.secondary else c.red) { if (!reported) confirmReport = true }
                     if (role == Role.FOLLOWER) {
                         HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
-                        FootRow("Leave Channel", Icons.AutoMirrored.Outlined.ExitToApp, c.red) { confirmLeave = true }
+                        FootRow("Leave Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
                     }
                     if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(16.dp))
@@ -290,7 +291,11 @@ private fun ActionCircle(icon: ImageVector, label: String, dimmed: Boolean, onCl
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
             // The owner's bells for Mute / Unmute, as iOS (ic_bell_off mutes, ic_bell unmutes).
-            val own = when (label) { "Mute" -> com.fariin.app.R.drawable.ic_bell_off; "Unmute" -> com.fariin.app.R.drawable.ic_bell; else -> null }
+            val own = when (label) {
+                "Mute" -> com.fariin.app.R.drawable.ic_bell_off; "Unmute" -> com.fariin.app.R.drawable.ic_bell
+                "Leave" -> com.fariin.app.R.drawable.ic_channel_leave; "Share" -> com.fariin.app.R.drawable.ic_link_share
+                else -> null
+            }
             if (own != null) Icon(androidx.compose.ui.res.painterResource(own), null, tint = c.label, modifier = Modifier.size(24.dp))
             else Icon(icon, null, tint = c.label, modifier = Modifier.size(24.dp))
         }

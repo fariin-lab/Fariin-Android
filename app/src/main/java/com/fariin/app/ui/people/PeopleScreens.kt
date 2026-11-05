@@ -574,7 +574,7 @@ internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.
             val own = when (text) {
                 "Message" -> com.fariin.app.R.drawable.ic_chat
                 "Voice" -> com.fariin.app.R.drawable.ic_tab_calls
-                "Video" -> com.fariin.app.R.drawable.ic_call_video
+                "Video" -> com.fariin.app.R.drawable.ic_video_fill
                 "Mute" -> com.fariin.app.R.drawable.ic_bell_off
                 "Unmute" -> com.fariin.app.R.drawable.ic_bell
                 else -> null

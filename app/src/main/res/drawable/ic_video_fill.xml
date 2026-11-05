@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A filled video camera beside the filled bubble and phone on the profile circles (iOS uses a filled mark there). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FF000000"
+        android:pathData="M4.5,5.5h9a2.5,2.5 0 0 1 2.5,2.5v8a2.5,2.5 0 0 1 -2.5,2.5h-9a2.5,2.5 0 0 1 -2.5,-2.5v-8a2.5,2.5 0 0 1 2.5,-2.5z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M17,10.1l3.6,-2.4c0.6,-0.4 1.4,0 1.4,0.8v7c0,0.8 -0.8,1.2 -1.4,0.8l-3.6,-2.4z" />
+</vector>
