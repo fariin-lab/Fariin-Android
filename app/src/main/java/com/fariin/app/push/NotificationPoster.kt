@@ -56,11 +56,17 @@ object NotificationPoster {
         val nm = c.getSystemService(NotificationManager::class.java) ?: return
         val msgs = NotificationChannel(NotifChannel.MESSAGES.id, NotifChannel.MESSAGES.title, NotificationManager.IMPORTANCE_HIGH)
             .apply { description = "New messages in your chats" }
+        // A short notification sound, never the ringtone: the ring is CallManager's, and a channel
+        // ringtone played the whole song over an answered call (owner's Pixel 2026-11-05). A channel's
+        // sound cannot be changed once made, so an old one that rings is made again.
+        nm.getNotificationChannel(NotifChannel.CALLS.id)?.let { old ->
+            if (old.sound == RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)) nm.deleteNotificationChannel(old.id)
+        }
         val calls = NotificationChannel(NotifChannel.CALLS.id, NotifChannel.CALLS.title, NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Calls you get"
             setSound(
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
-                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(),
             )
         }

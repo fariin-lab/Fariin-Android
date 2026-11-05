@@ -147,7 +147,11 @@ object NotifBuilder {
         if (p.ackUid != null && p.ackUid != me) return NotifDecision.Skip("for another account")
         if (p.cid != null && p.cid == activeChat) return NotifDecision.Skip("chat is open")
 
-        val channel = if (p.kind == "call" || p.body in CALL_BODIES) NotifChannel.CALLS else NotifChannel.MESSAGES
+        // "Incoming call" is the call screen's job (CallManager rings, with its own ringtone that
+        // stops on answer). Shown as well, its channel played the whole ringtone song on top, past
+        // the answer and into the next call (owner's Pixel, 14:07, 2026-11-05).
+        if (p.body in CALL_BODIES) return NotifDecision.Skip("call ring is on the call screen")
+        val channel = if (p.kind == "call") NotifChannel.CALLS else NotifChannel.MESSAGES
         val isStory = p.kind == "story"
         val key = p.cid ?: if (isStory && p.aid != null) "story-${p.aid}" else null
         val sender = p.aid

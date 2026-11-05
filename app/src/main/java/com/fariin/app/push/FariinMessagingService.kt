@@ -39,6 +39,12 @@ class FariinMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         // A ring for a call (data-only `kind: "call"`, see PROGRESS "Server changes needed"): start the
         // ring watcher, which reads the call document and shows the incoming screen.
+        // The server's "Incoming call" alert (not data-only) also means a ring: wake the watcher; the
+        // alert itself is not shown (NotifPayload skips it).
+        val alertBody = message.notification?.body ?: message.data["body"]
+        if (message.data["kind"] != "call" && (alertBody == "Incoming call" || alertBody == "Incoming video call")) {
+            FirebaseAuth.getInstance().currentUser?.uid?.let { com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, it) }
+        }
         if (message.data["kind"] == "call") {
             val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
             com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, me)

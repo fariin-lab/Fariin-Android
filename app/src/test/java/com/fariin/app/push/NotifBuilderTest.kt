@@ -173,9 +173,12 @@ class NotifBuilderTest {
         assertTrue(NotifBuilder.decide(p, "bob", noChats, open, activeChat = "other") is NotifDecision.Show)
     }
 
-    @Test fun callFallbackGoesToTheCallsChannel() {
-        val p = PushData.parse(mapOf("cid" to "alice_bob", "aid" to "alice"), "Alice", "Incoming video call")
-        assertEquals(NotifChannel.CALLS, show(NotifBuilder.decide(p, "bob", noChats, { _, _, _ -> null })).channel)
+    @Test fun incomingCallAlertIsNotDrawnTheCallScreenRings() {
+        // Drawn as well, it played the ringtone over an answered call (owner's Pixel 2026-11-05).
+        for (body in listOf("Incoming call", "Incoming video call")) {
+            val p = PushData.parse(mapOf("cid" to "alice_bob", "aid" to "alice"), "Alice", body)
+            assertTrue(NotifBuilder.decide(p, "bob", noChats, { _, _, _ -> null }) is NotifDecision.Skip)
+        }
     }
 
     @Test fun storyHasNoChat() {
