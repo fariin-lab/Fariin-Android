@@ -1,5 +1,8 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import kotlinx.coroutines.launch
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.statusBars
@@ -204,12 +207,29 @@ internal fun AttachSheet(
         containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         // Lists other than the photos open the sheet fully, as iOS does.
         androidx.compose.runtime.LaunchedEffect(page, folder) { if (page != SheetPage.PHOTOS || folder != null) runCatching { sheet.expand() } }
-        Box(Modifier.fillMaxWidth().fillMaxHeight().onSizeChanged { boxH = it.height }.navigationBarsPadding().imePadding()) {
+        // Full height stops under the status bar (the clock stays clear; at 92% the chat showed in
+        // a dark band above). Where offset 0 sits on the screen is measured, not assumed.
+        // The sheet itself already keeps the gesture bar's strip free under its content (its
+        // window insets), so the box is the screen minus the status bar minus that strip, and
+        // the bars' "bottom" is the top of that strip (measured on the Pixel: 136 and 66 px).
+        val navBottom = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+        val usableBottom = windowH - navBottom
+        val sheetH = with(androidx.compose.ui.platform.LocalDensity.current) { (usableBottom - statusTop).coerceAtLeast(1).toDp() }
+        val zeroAt = remember { floatArrayOf(0f) }   // window y of the sheet's offset 0
+        Box(Modifier.fillMaxWidth().height(sheetH).onGloballyPositioned { lc ->
+            boxH = lc.size.height
+            runCatching { sheet.requireOffset() }.getOrNull()?.let { zeroAt[0] = lc.positionInWindow().y - it }
+        }.imePadding()) {
             // The part of the sheet below the screen while it sits at half: the bars move up by it,
             // so the source bar and the caption stay on the screen's bottom edge.
             val lift = Modifier.offset {
                 val top = runCatching { sheet.requireOffset() }.getOrDefault(0f)
-                IntOffset(0, -(top + statusTop + boxH - windowH).toInt().coerceAtLeast(0))
+                // Pinned only between full and half: below half (closing) the bars go down with the
+                // sheet instead of hanging on the screen's edge over nothing (Pixel 2026-11-05).
+                val z = zeroAt[0]
+                val half = (windowH - z) / 2f                  // the half detent's offset (half the container)
+                val atHalf = half + z + boxH - usableBottom
+                IntOffset(0, -(top + z + boxH - usableBottom).coerceIn(0f, atHalf.coerceAtLeast(0f)).toInt())
             }
             val none = access == RecentMedia.Access.NONE
             if (mediaOff != null) {
