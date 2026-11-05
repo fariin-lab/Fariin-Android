@@ -39,12 +39,17 @@ internal fun StoryPhoto(url: String?, modifier: Modifier = Modifier, onLoaded: (
         canvas?.let { (top, bottom) ->
             if (!fills) Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(top, bottom))))
         }
-        AsyncImage(url, contentDescription = null,
+        // Full size, under its own cache key: the plain url's cached copy is the small list / chat
+        // card (220x392 seen on the Pixel), which the viewer reused and stretched: the blur.
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val request = remember(url) {
+            coil3.request.ImageRequest.Builder(ctx).data(url).size(coil3.size.Size.ORIGINAL)
+                .memoryCacheKey(url?.let { "$it#full" }).build()
+        }
+        AsyncImage(request, contentDescription = null,
             contentScale = if (fills) ContentScale.Crop else ContentScale.Fit,
             modifier = Modifier.fillMaxSize(),
-            onError = { e -> android.util.Log.w("StoryPhoto", "load failed ${url?.take(140)}: ${e.result.throwable}") },
             onSuccess = { s ->
-                android.util.Log.i("StoryPhoto", "loaded ${s.result.image.width}x${s.result.image.height} ${url?.take(90)}")
                 val img = s.result.image
                 if (img.width > 0) aspect = img.height.toFloat() / img.width
                 if (canvas == null && url != null) scope.launch {

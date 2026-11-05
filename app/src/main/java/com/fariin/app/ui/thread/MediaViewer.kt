@@ -508,7 +508,7 @@ private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: ()
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp).padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        FloatingBack(onBack, contentDescription = "Close")
+        FloatingBack(onBack, contentDescription = "Close", circle = true)
         Spacer(Modifier.weight(1f))
         if (title.isNotEmpty() || date.isNotEmpty()) Column(
             Modifier.padding(horizontal = 8.dp).floating(CircleShape).heightIn(min = if (video) 44.dp else 0.dp)
@@ -523,7 +523,7 @@ private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: ()
         Spacer(Modifier.weight(1f))
         var open by remember { mutableStateOf(false) }
         Box {
-            FloatingIcon(Icons.Filled.MoreVert, "More", onClick = { open = true })
+            FloatingIcon(Icons.Filled.MoreVert, "More", onClick = { open = true }, circle = true)
             DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
                 containerColor = FariinMenu.container) { menu { open = false } }
         }

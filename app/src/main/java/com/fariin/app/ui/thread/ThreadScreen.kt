@@ -884,7 +884,7 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             // Back in its own floating circle, the chevron as iOS (ChatHeaderView).
-            IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp).floating()) {
+            IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Back", tint = c.label,
                     modifier = Modifier.padding(start = 6.dp).size(20.dp))
             }
@@ -930,7 +930,7 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(start = 6.dp, end = 4.dp)) {
-        IconButton(onClick = { open = true }, modifier = Modifier.size(44.dp).floating()) {
+        IconButton(onClick = { open = true }, modifier = Modifier.size(44.dp)) {
             Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {

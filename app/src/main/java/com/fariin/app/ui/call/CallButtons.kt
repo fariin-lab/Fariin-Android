@@ -42,7 +42,7 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         val peer = Wire.otherUid(cid, me)
         if (peer.isEmpty() || peer == me) return
         // One floating capsule, video then voice, outline icons (iOS ChatHeaderView call pill).
-        Row(Modifier.floating(CircleShape).padding(horizontal = 4.dp)) {
+        Row(Modifier.padding(horizontal = 4.dp)) {
             IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = true) }) {
                 Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Video call", tint = tint)
             }
@@ -61,13 +61,13 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         onDispose { reg.remove(); conv.remove() }
     }
     if (live) {
-        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }, modifier = Modifier.floating(CircleShape)) {
+        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }, modifier = Modifier) {
             Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), contentDescription = "Join call", tint = tint)
         }
         return
     }
     if (!mayStart) return
-    Row(Modifier.floating(CircleShape).padding(horizontal = 4.dp)) {
+    Row(Modifier.padding(horizontal = 4.dp)) {
         IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }) {
             Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Group video call", tint = tint)
         }
