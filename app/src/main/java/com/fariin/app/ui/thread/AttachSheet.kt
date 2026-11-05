@@ -69,6 +69,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.media.MediaRules
+import com.fariin.app.media.RecentMedia
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -96,6 +99,8 @@ internal fun AttachSheet(
     /** The Location page and the contact picker (CardSheets); the sheet goes down before either opens. */
     onLocation: (() -> Unit)? = null,
     onContact: (() -> Unit)? = null,
+    /** The GIF tile (iOS attach bar): a GIPHY pick, sent like the sticker panel's. Null hides it. */
+    onGif: ((com.fariin.app.data.StickerGifRules.Gif) -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -111,22 +116,38 @@ internal fun AttachSheet(
     var pagerAt by remember { mutableStateOf<Int?>(null) }
     // OUR OWN GRID OF THE PHONE'S PHOTOS, never the Google picker (owner 2026-11-04, showing the
     // reference app's sheet). Access is asked the first time the sheet opens; "some photos" works too.
-    var access by remember { mutableStateOf(com.fariin.app.media.RecentMedia.access(context)) }
+    var access by remember { mutableStateOf(RecentMedia.access(context)) }
     var asked by remember { mutableStateOf(false) }
     val askPhotos = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        access = com.fariin.app.media.RecentMedia.access(context)
+        access = RecentMedia.access(context)
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        if (access == com.fariin.app.media.RecentMedia.Access.NONE && mediaOff == null && !asked) {
+        if (access == RecentMedia.Access.NONE && mediaOff == null && !asked) {
             asked = true
-            askPhotos.launch(com.fariin.app.media.RecentMedia.permissions())
+            askPhotos.launch(RecentMedia.permissions())
         }
     }
-    val recents by produceState(emptyList<com.fariin.app.media.RecentMedia.Item>(), access) {
-        value = if (access == com.fariin.app.media.RecentMedia.Access.NONE) emptyList()
-            else withContext(Dispatchers.IO) { com.fariin.app.media.RecentMedia.load(context) }
+    // iOS sheet pages: the photos, the folder list (album button), and GIFs (GIF tile).
+    var page by remember { mutableStateOf(SheetPage.PHOTOS) }
+    var folder by remember { mutableStateOf<RecentMedia.Album?>(null) }
+    val recents by produceState(emptyList<RecentMedia.Item>(), access, folder) {
+        value = if (access == RecentMedia.Access.NONE) emptyList()
+            else withContext(Dispatchers.IO) { RecentMedia.load(context, bucket = folder?.id) }
     }
-    val toggle = { it: com.fariin.app.media.RecentMedia.Item ->
+    val albums by produceState(emptyList<RecentMedia.Album>(), access, page == SheetPage.ALBUMS) {
+        if (page == SheetPage.ALBUMS && access != RecentMedia.Access.NONE) value = withContext(Dispatchers.IO) { RecentMedia.albums(context) }
+    }
+    // The round button: photos -> folders; folders -> photos; inside a folder or GIFs -> back one step.
+    val albumButton = {
+        when {
+            page == SheetPage.GIFS -> page = SheetPage.PHOTOS
+            page == SheetPage.ALBUMS -> page = SheetPage.PHOTOS
+            folder != null -> { folder = null; page = SheetPage.ALBUMS }
+            else -> page = SheetPage.ALBUMS
+        }
+    }
+    val backShown = page != SheetPage.PHOTOS || folder != null
+    val toggle = { it: RecentMedia.Item ->
         if (it.uri in picked) { picked.remove(it.uri); videos.remove(it.uri) }
         else if (picked.size < MediaRules.MEDIA_PER_PICK) { picked += it.uri; if (it.isVideo) videos += it.uri }
     }
@@ -168,21 +189,30 @@ internal fun AttachSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, dragHandle = null,
         containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         Box(Modifier.fillMaxWidth().fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
-            val none = access == com.fariin.app.media.RecentMedia.Access.NONE
+            val none = access == RecentMedia.Access.NONE
             if (mediaOff != null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(mediaOff, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(24.dp))
+                }
+            } else if (page == SheetPage.GIFS && onGif != null) {
+                Box(Modifier.fillMaxSize().padding(bottom = 84.dp)) { GifTab { g -> onGif(g); onDismiss() } }
+            } else if (page == SheetPage.ALBUMS) {
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().padding(top = 10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)) {
+                    items(albums.size) { i ->
+                        val a = albums[i]
+                        AlbumRow(a) { folder = a; page = SheetPage.PHOTOS }
+                    }
                 }
             } else {
                 LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize().padding(top = 10.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    item(key = "camera") { CameraTile(openCamera) }
-                    if (none) item(key = "allow", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
-                        AllowTile { askPhotos.launch(com.fariin.app.media.RecentMedia.permissions()) }
+                    if (none) item(key = "allow", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
+                        AllowTile { askPhotos.launch(RecentMedia.permissions()) }
                     }
-                    if (access == com.fariin.app.media.RecentMedia.Access.PARTIAL) item(key = "more") {
-                        AllowTile(short = true) { askPhotos.launch(com.fariin.app.media.RecentMedia.permissions()) }
+                    if (access == RecentMedia.Access.PARTIAL) item(key = "more") {
+                        AllowTile(short = true) { askPhotos.launch(RecentMedia.permissions()) }
                     }
                     items(recents, key = { it.uri.toString() }) { r ->
                         val n = picked.indexOf(r.uri)
@@ -195,12 +225,24 @@ internal fun AttachSheet(
                 }
             }
             if (picked.isEmpty()) {
-                Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp)
-                    .floating(RoundedCornerShape(32.dp)).padding(4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    SheetButton("Gallery", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), selected = true) {}
-                    SheetButton("File", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file)) { files.launch(arrayOf("*/*")) }
-                    if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location)) { onDismiss(); onLocation() }
-                    if (onPoll != null) SheetButton("Poll", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_poll_tile)) { onDismiss(); onPoll() }
+                // iOS sourceBar: the round album button LEFT (a back arrow once a list is open), the
+                // sources in one capsule RIGHT: GIF, Files, Location, Poll (groups only).
+                Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(60.dp).floating().clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
+                        if (backShown) Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.label, modifier = Modifier.size(26.dp))
+                        else Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Albums", tint = c.label, modifier = Modifier.size(29.dp))
+                    }
+                    Spacer(Modifier.weight(1f).widthIn(min = 12.dp))
+                    Row(Modifier.height(60.dp).floating(RoundedCornerShape(30.dp)).padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        val w = if (onPoll != null) 58.dp else 72.dp
+                        if (onGif != null) SheetButton("GIF", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gif_tile), w,
+                            selected = page == SheetPage.GIFS) { page = SheetPage.GIFS }
+                        SheetButton("Files", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), w) { files.launch(arrayOf("*/*")) }
+                        if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), w) { onDismiss(); onLocation() }
+                        if (onPoll != null) SheetButton("Poll", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_poll_tile), w) { onDismiss(); onPoll() }
+                    }
                 }
             } else {
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -253,14 +295,6 @@ internal fun AttachSheet(
     }
 }
 
-/** First tile: the camera (reference app's first cell). */
-@Composable
-private fun CameraTile(onClick: () -> Unit) {
-    Box(Modifier.aspectRatio(1f).background(Color(0xFF2B2B2E)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), "Camera", tint = Color.White, modifier = Modifier.size(34.dp))
-    }
-}
-
 /** No access yet (or only some photos): one tap asks again. */
 @Composable
 private fun AllowTile(short: Boolean = false, onClick: () -> Unit) {
@@ -276,37 +310,60 @@ private fun AllowTile(short: Boolean = false, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SheetButton(label: String, icon: ImageVector, selected: Boolean = false, onClick: () -> Unit) {
+private fun SheetButton(label: String, icon: ImageVector, width: androidx.compose.ui.unit.Dp, selected: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
-    // A tab of the floating bar; the open one (Gallery) sits on a soft accent pill, as the reference.
-    Column(Modifier.clip(RoundedCornerShape(26.dp)).then(if (selected) Modifier.background(c.accent.copy(alpha = 0.12f)) else Modifier)
-        .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = if (selected) c.accent else c.label, modifier = Modifier.size(26.dp))
-        }
+    // iOS attachTile: a 28 glyph over its 12 name, one fixed width per tile (58 in groups, else 72).
+    Column(Modifier.width(width).height(54.dp).clip(RoundedCornerShape(22.dp))
+        .then(if (selected) Modifier.background(c.label.copy(alpha = 0.08f)) else Modifier)
+        .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Icon(icon, null, tint = c.label, modifier = Modifier.size(28.dp))
         Spacer(Modifier.height(2.dp))
-        Text(label, fontSize = 12.sp, color = if (selected) c.accent else c.label,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        Text(label, fontSize = 12.sp, lineHeight = 14.sp, color = c.label, maxLines = 1)
     }
 }
 
+/** A folder in the album list (iOS): cover, name, how many. */
+@Composable
+private fun AlbumRow(a: RecentMedia.Album, onClick: () -> Unit) {
+    val c = Fariin.colors
+    val context = LocalContext.current
+    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, a.cover.uri) {
+        value = withContext(Dispatchers.IO) { thumb(context, a.cover.uri, a.cover.isVideo, 160) }
+    }
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(c.secondary.copy(alpha = 0.12f))) {
+            bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text(a.name, fontSize = 17.sp, color = c.label, maxLines = 1)
+            Text("${a.count}", fontSize = 14.sp, color = c.secondary)
+        }
+    }
+}
+
+private enum class SheetPage { PHOTOS, ALBUMS, GIFS }
+
+/** A small picture of a phone photo or video, for the grid and the folder covers. */
+private fun thumb(context: android.content.Context, uri: Uri, isVideo: Boolean, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
+    runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= 29) context.contentResolver.loadThumbnail(uri, Size(px, px), null).asImageBitmap()
+        else if (isVideo) android.media.MediaMetadataRetriever().run {
+            try { setDataSource(context, uri); getScaledFrameAtTimeCompat(this) } finally { release() }
+        }?.asImageBitmap()
+        else com.fariin.app.media.BitmapDecode.fromUri(context, uri, px)?.asImageBitmap()
+    }.getOrNull()
+
 /** One of the phone's photos or videos: square, a select circle top right (its number once chosen). */
 @Composable
-private fun RecentTile(item: com.fariin.app.media.RecentMedia.Item, number: Int, onToggle: () -> Unit, onOpen: () -> Unit) {
+private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit, onOpen: () -> Unit) {
     val c = Fariin.colors
     val context = LocalContext.current
     val uri = item.uri
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                if (android.os.Build.VERSION.SDK_INT >= 29) context.contentResolver.loadThumbnail(uri, Size(256, 256), null).asImageBitmap()
-                else if (item.isVideo) android.media.MediaMetadataRetriever().run {
-                    try { setDataSource(context, uri); getScaledFrameAtTimeCompat(this) } finally { release() }
-                }?.asImageBitmap()
-                else com.fariin.app.media.BitmapDecode.fromUri(context, uri, 256)?.asImageBitmap()
-            }.getOrNull()
-        }
+        value = withContext(Dispatchers.IO) { thumb(context, uri, item.isVideo, 256) }
     }
     val chosen = number > 0
     Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f)).clickable(onClick = onOpen)) {

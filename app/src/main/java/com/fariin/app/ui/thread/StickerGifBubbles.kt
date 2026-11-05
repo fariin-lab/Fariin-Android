@@ -324,7 +324,7 @@ private fun isTgs(ctx: android.content.Context, s: StickerRef): Boolean =
     StickerCatalog.assetPath(ctx, s.packId, s.stickerId)?.endsWith(".tgs") == true
 
 @Composable
-private fun GifTab(onGif: (StickerGifRules.Gif) -> Unit) {
+internal fun GifTab(onGif: (StickerGifRules.Gif) -> Unit) {
     val ctx = LocalContext.current
     val list by produceState<List<StickerGifRules.Gif>?>(null) { value = Giphy.search(ctx, "") }
     GifGrid(list, PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 8.dp), onGif = onGif)
