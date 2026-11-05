@@ -323,10 +323,17 @@ object CallManager {
             offerSdp = sealer.open(cid, d.offerEnc)
             // The caller's build takes an answer during the ring (early1): build the connection now,
             // so Accept has nothing left to do (iOS preNegotiate; owner 2026-11-05).
-            if (d.caps[d.caller]?.contains(CallWire.EARLY_CAP) == true && callId == d.id && status.phase == CallPhase.INCOMING)
+            // ⛔ OFF (owner's Pixel 17:31, 2026-11-05): with the connection built during the ring,
+            // WebRTC's audio module STARTED THE MICROPHONE when the path came up (audio-record-voip,
+            // 23 s, on a call never answered), although the sender held no track; its playout also
+            // pulled the ringtone onto the earpiece. Nothing was sent, but the mic must not open
+            // before Accept. Back on only once recording is held at the audio module itself.
+            if (PRE_NEGOTIATE && d.caps[d.caller]?.contains(CallWire.EARLY_CAP) == true && callId == d.id && status.phase == CallPhase.INCOMING)
                 preJob = main.launch { preNegotiate(d.id) }
         }
     }
+
+    private const val PRE_NEGOTIATE = false
 
     private suspend fun preNegotiate(id: String) {
         val sdp = offerSdp ?: return
