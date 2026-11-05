@@ -164,26 +164,33 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = 
     val team = Team.from(conv)
     if (!team.isStaff(me)) return
     val isPublic = conv["isPublic"] == true && !(conv["username"] as? String).isNullOrEmpty()
-    if (team.isOwner(me) && team.may(me, Right.CHANGE_INFO)) {
+    val showType = team.isOwner(me) && team.may(me, Right.CHANGE_INFO)
+    if (showType || team.may(me, Right.INVITE_USERS)) com.fariin.app.ui.settings.SettingsSection {
+    if (showType) {
         SettingsRow("Group Type", icon = painterResource(R.drawable.ic_gs_group_type), value = if (isPublic) "Public" else "Private") { open(GroupPage.Type) }
     }
     if (team.may(me, Right.INVITE_USERS)) {
-        SettingsRow("Invite Links", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
+        SettingsRow("Invite Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
             value = if ((conv["inviteCode"] as? String).isNullOrEmpty()) "Off" else "On") { open(GroupPage.Links) }
         // iOS GroupSettingsView joining section: the people waiting through a link with Approve New Members.
         val reqs = rememberJoinRequests(cid, allowed = cid.isNotEmpty() && !team.closed)
         if (cid.isNotEmpty()) SettingsRow("Join Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
-            value = com.fariin.app.data.JoinRequests.rowValue(reqs.size)) { open(GroupPage.JoinRequests) }
+            value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true) { open(GroupPage.JoinRequests) }
+    }
     }
     // iOS GroupSettingsView people section: Members, Administrators, Banned Users (Remove members right).
+    com.fariin.app.ui.settings.SettingsSection {
     SettingsRow("Members", icon = painterResource(R.drawable.ic_gs_members), value = "${team.users.size}") { open(GroupPage.Members) }
     SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sortedAdmins().size}") { open(GroupPage.Admins) }
     if (team.may(me, Right.BAN_USERS)) {
         val banned = (conv["bannedUids"] as? List<*>)?.size ?: 0
-        SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "$banned") { open(GroupPage.Banned) }
+        SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "$banned", last = true) { open(GroupPage.Banned) }
+    }
     }
     val (on, of) = GroupAdmins.permissionCount(conv)
+    com.fariin.app.ui.settings.SettingsSection {
     SettingsRow("Permissions", icon = painterResource(R.drawable.ic_gs_permissions), value = "$on/$of", last = true) { open(GroupPage.Permissions) }
+    }
 }
 
 /**
@@ -199,11 +206,11 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
         PageBar("Group Settings", onBack)
         if (doc.isEmpty()) { Loading(); return@Column }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+            GroupManageRows(doc, me, cid, open)
             SettingsSection {
                 DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false, onClick = onTimer)
                 SettingsRow("Recent Actions", icon = rememberVectorPainter(Icons.Filled.History), last = true) { open(GroupPage.RecentActions) }
             }
-            SettingsSection { GroupManageRows(doc, me, cid, open) }
             Spacer(Modifier.height(24.dp))
         }
     }
