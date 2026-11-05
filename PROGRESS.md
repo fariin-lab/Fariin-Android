@@ -766,3 +766,6 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   drag-down follows the finger and lands back in the bubble, no coloured block left (996a732).
 - Installed b31d790 (Settings: Stories, Quick Reaction, Night Mode pages) on the Pixel after an idle check; app opens fine.
 - + sheet: half / full detents as iOS, bar pinned to the bottom edge (tested on the Pixel).
+
+## Night run 2026-11-05 (owner asleep, full autonomy)
+- Crash safety: uncaught server refusals in coroutines logged as non-fatal, app keeps running (tested with a forced PERMISSION_DENIED).
