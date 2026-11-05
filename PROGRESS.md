@@ -779,3 +779,5 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - All Media grey tiles (adnan, Oct 23): photos download but cannot be decrypted, same as the locked texts around them. Old key, not recoverable; for the owner.
 - Group Info / Group Settings / channel info (owner + follower) checked on the Pixel; Edit capsule + row line fixed.
 - Dark mode pass (list, chat, sheet, profile, settings, stories): clean. Phone back to light.
+- Attach sheet geometry: full stops under status bar, bar same place at half/full, goes down with the sheet on close; caption above keyboard (Pixel recordings).
+- Rotation: a draft survives portrait->landscape->portrait.
