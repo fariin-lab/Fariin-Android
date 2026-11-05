@@ -1,5 +1,7 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -114,7 +116,9 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth(),
+                cursorBrush = SolidColor(c.accent),
+                // Screen readers: the prompt is drawn as a separate Text, so the field names itself.
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = prompt },
                 keyboardOptions = if (onSearch != null) androidx.compose.foundation.text.KeyboardOptions(
                     imeAction = androidx.compose.ui.text.input.ImeAction.Search) else androidx.compose.foundation.text.KeyboardOptions.Default,
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))

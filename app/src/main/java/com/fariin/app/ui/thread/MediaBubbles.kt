@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -243,7 +245,9 @@ internal fun PictureBox(
         Modifier.size(wDp.dp, hDp.dp)
             .heroSource(originKey, originRadius, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == originKey }
             .clip(shape).background(Fariin.colors.secondary.copy(alpha = 0.18f))
-            .clickable(enabled = bmp != null || waits, onClick = { if (bmp != null) onOpen() else got.start() }),
+            .clickable(enabled = bmp != null || waits, onClickLabel = if (bmp != null) "Open" else "Download",
+                onClick = { if (bmp != null) onOpen() else got.start() })
+            .semantics { contentDescription = "Photo" },
     ) {
         if (bmp != null) {
             Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

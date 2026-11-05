@@ -1,5 +1,7 @@
 package com.fariin.app.ui.chats
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -939,7 +941,7 @@ fun ChatRow(
             if (storyKey != null) androidx.compose.runtime.DisposableEffect(storyKey) {
                 onDispose { com.fariin.app.ui.stories.StoryOrigins.rects.remove(storyKey); com.fariin.app.ui.stories.StoryOrigins.radii.remove(storyKey) }
             }
-            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClick = onStoryTap) else Modifier)
+            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClickLabel = "View story", onClick = onStoryTap).semantics { contentDescription = "Story" } else Modifier)
                 .then(if (storyKey == null) Modifier else Modifier.onGloballyPositioned { lc ->
                     val loc = IntArray(2); view.getLocationOnScreen(loc)
                     val p = lc.positionInWindow()

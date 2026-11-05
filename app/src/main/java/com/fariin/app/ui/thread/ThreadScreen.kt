@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -1523,7 +1525,9 @@ private fun Composer(
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label),
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
-                        modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false },
+                        modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false }
+                            // Screen readers: the placeholder is a separate Text, so the field names itself.
+                            .semantics { contentDescription = "Message" },
                     )
                 }
                 IconButton(onClick = {
