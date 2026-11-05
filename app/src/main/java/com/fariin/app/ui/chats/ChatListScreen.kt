@@ -95,6 +95,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -319,6 +320,13 @@ fun ChatListScreen(
     }
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
+    // The new-account card's height (owner 2026-11-04: the camera and pencil sat on top of it). The
+    // FABs rise to sit above the card while it shows and slide back down when it goes.
+    var gsHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val fabLift by androidx.compose.animation.core.animateDpAsState(
+        // Card top = banner height less its 40 dp fade; the FAB already sits 16 dp up; keep 12 dp of air.
+        with(density) { (gsHeightPx.toDp() - 44.dp).coerceAtLeast(0.dp) }, label = "fabLift")
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection).nestedScroll(fabScroll),
@@ -457,7 +465,7 @@ fun ChatListScreen(
         floatingActionButton = {
             AnimatedVisibility(fabShown && !selecting && !searching && !showArchive,
                 enter = com.fariin.app.ui.components.Motion.fabIn(), exit = com.fariin.app.ui.components.Motion.fabOut()) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.padding(bottom = fabLift), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     // Two floating circles (iOS glass buttons): the camera on the card fill, New Chat in blue.
                     IconButton(onClick = onNewStory, modifier = Modifier.size(48.dp).floating()) {
                         Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story", tint = c.label)
@@ -627,7 +635,8 @@ fun ChatListScreen(
         val gsShown = !state.loading && state.error == null && !searching && !selecting && !showArchive && filter == FILTER_ALL &&
             GetStartedStore.accountIsNew() && state.chats.count { !it.isChannel } < GetStartedStore.CHAT_LIMIT
         val gsCards = remember(gsVersion, gsShown, myPhoto) { if (gsShown) GetStartedStore.cards(appCtx, me, hasPhoto = !myPhoto.isNullOrEmpty()) else emptyList() }
-        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())
+            .then(androidx.compose.ui.Modifier.onSizeChanged { gsHeightPx = if (gsCards.isNotEmpty()) it.height else 0 })) {
             if (gsCards.isNotEmpty()) GetStartedBanner(gsCards,
                 onTap = { card ->
                     when (card) {
