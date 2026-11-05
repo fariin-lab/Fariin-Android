@@ -804,3 +804,4 @@ For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by des
 - Long-press menu: empty row on close + empty emoji capsule (owner video) fixed in code; on-phone recording pending (phone was in a call).
 - MY MISTAKE 13:36: installed while the owner was in a video call (idle script said touched, my command went on anyway).
 - 13:47: a Fariin voice call to adnan started (13:47:12) during my test window and was ended by a tap at 13:47:40; history shows it stuck as "Ongoing". Cause not yet proven; I stopped using the phone and told the owner.
+- 13:47 call follow-up: Android never sent early1, so iPhone callee answered only after pick-up (4.7 s Connecting). Early answer built (caller side); needs a real call Android->iPhone to confirm.
