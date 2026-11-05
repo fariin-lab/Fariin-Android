@@ -47,13 +47,16 @@ object CallWire {
     const val STREAM_ID = "stream0"
 
     fun convId(a: String, b: String): String = listOf(a, b).sorted().joinToString("_")
+    /** iOS CallService.earlyCap: this caller applies an answer sent during the ring without reading it as a pick-up. */
+    const val EARLY_CAP = "early1"
+
     fun candidatesOf(isCaller: Boolean) = if (isCaller) CALLER_CANDIDATES else CALLEE_CANDIDATES
     fun remoteCandidatesOf(isCaller: Boolean) = if (isCaller) CALLEE_CANDIDATES else CALLER_CANDIDATES
 
     /**
      * The caller's create (iOS beginOutgoingMedia). `serverTime` is FieldValue.serverTimestamp()
-     * in the app. No `caps`: this build has neither the screen-share track nor the early answer,
-     * so an iPhone callee takes the plain path for both.
+     * in the app. `caps`: "early1" only (the callee may answer during the ring; iOS earlyCap).
+     * No "screen2": the iPhone's second screen track is not offered by this build.
      */
     fun createFields(
         me: String, callee: String, myName: String?, myPhoto: String?, video: Boolean,
@@ -70,6 +73,7 @@ object CallWire {
             "createdAt" to serverTime,
             "offerEnc" to offerEnc,
             "sig" to SIG_SEALED,
+            "caps" to mapOf(me to listOf(EARLY_CAP)),
         )
         if (muted) m["muted"] = mapOf(me to true)
         return m

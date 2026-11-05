@@ -82,7 +82,13 @@ enum class SharePhase { OFF, PICKING, STARTING, LIVE }
  * Screen sharing rides on the camera's own track (iOS fallback mode, `screenMode` "camera"); the
  * iPhone's second screen track is not offered, so an iPhone shares to this phone the same way.
  *
- * Left out for now (iOS has them): the early answer before Accept, moving a call
+ * The early answer (iOS `earlyCap`, 2026-11-05): the create says `caps.<me>` = ["early1"], so an
+ * iPhone callee sends its answer DURING THE RING; it is applied at once and the path comes up while
+ * it rings, but the call stays "Ringing…" until the real accept, which then connects straight away.
+ * Without it every Android-to-iPhone call sat on "Connecting…" for the answer's trip and the checks
+ * after the pick-up (owner's 13:47 call to Africa: 4.7 s).
+ *
+ * Left out for now (iOS has them): moving a call
  * into a group room (`moveTo`), glare between two crossing dials, the data saver,
  * network-change restarts on a timer, Opus DTX/RED munging and telemetry.
  */
@@ -108,6 +114,8 @@ object CallManager {
     private var recordWritten = false
     private var ringRowWritten = false
     private var answerApplied = false
+    /** The media path came up (it can, during the ring, with the early answer). */
+    private var mediaReady = false
     private val finished = LinkedHashSet<String>()
     private val pendingRemote = ArrayList<Candidate>()
     private val localBuffer = ArrayList<Candidate>()
@@ -379,10 +387,7 @@ object CallManager {
             return
         }
         if (s.isCaller && d.ringing) move(CallEvent.RemoteRinging)
-        if (s.isCaller && d.accepted && !s.accepted) {
-            move(CallEvent.RemoteAccepted)
-            acceptedTimeout()
-        }
+        if (s.isCaller && d.accepted && !s.accepted) remoteAccepted()
         if (s.isCaller && !answerApplied && d.answerEnc != null) {
             val sdp = sealer.open(cid, d.answerEnc)
             if (sdp == null) main.launch { withTimeoutOrNull(3000) { crypto.preloadKey(peer) } }
@@ -394,7 +399,11 @@ object CallManager {
                         flushPendingRemote()
                     } catch (x: Exception) { Log.w(TAG, "answer apply failed", x); finish(EndReason.FAILED, true, false) }
                 }
-                if (status.phase == CallPhase.OUTGOING) { move(CallEvent.RemoteAccepted); acceptedTimeout() }
+                // An answer sent during the ring (early1) is not a pick-up: applied so the path comes
+                // up while it rings; "Ringing…", the ringback and the no-answer timer stay until the
+                // accept (iOS promoteEarlyAnsweredCall).
+                val early = !d.accepted && d.status != "active"
+                if (!early) remoteAccepted()
             }
         }
         // ICE restarts (iOS restartOffer / restartAnswer / restartRequest).
@@ -512,7 +521,7 @@ object CallManager {
             override fun onLocalCandidate(c: Candidate) { main.launch { this@CallManager.onLocalCandidate(c) } }
             override fun onIceState(state: PeerConnection.IceConnectionState) { main.launch { onIce(state) } }
             override fun onRemoteVideo(track: VideoTrack) { main.launch { edit { it.copy(remoteVideo = track) } } }
-            override fun onAcceptMessage() { main.launch { if (status.isCaller && status.phase == CallPhase.OUTGOING) { move(CallEvent.RemoteAccepted); acceptedTimeout() } } }
+            override fun onAcceptMessage() { main.launch { remoteAccepted() } }
         })
         if (!e.open(servers.ifEmpty { CallWire.FALLBACK_STUN }, relayOnly, isCaller, micOn = !_ui.value.muted, cameraOn = camera)) return null
         engine = e
@@ -520,10 +529,24 @@ object CallManager {
         return e
     }
 
+    /** The caller learns the callee picked up (acceptedAt, the answer, or "accepted" on the channel). */
+    private fun remoteAccepted() {
+        if (!status.isCaller || status.phase != CallPhase.OUTGOING) return
+        move(CallEvent.RemoteAccepted)
+        acceptedTimeout()
+        // The path already came up during the ring: start the call now, not on a media event that
+        // has already been and gone (iOS beginConnectedCallIfAccepted).
+        if (mediaReady) onIce(PeerConnection.IceConnectionState.CONNECTED)
+    }
+
     private fun onIce(state: PeerConnection.IceConnectionState) {
         val id = callId ?: return
         when (state) {
             PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> {
+                mediaReady = true
+                // Up during the ring (early answer): nothing to start until the person accepts;
+                // remoteAccepted() comes back here then.
+                if (status.isCaller && !status.accepted) return
                 val first = status.connectedAtMs == null
                 val back = status.phase == CallPhase.RECONNECTING
                 move(if (back) CallEvent.MediaBack else CallEvent.MediaUp(System.currentTimeMillis()))
@@ -890,7 +913,7 @@ object CallManager {
     }
 
     private fun resetCallVars() {
-        recordWritten = false; ringRowWritten = false; answerApplied = false
+        recordWritten = false; ringRowWritten = false; answerApplied = false; mediaReady = false
         pendingRemote.clear(); localBuffer.clear(); offerSdp = null
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
         lastPeerBeat = 0.0

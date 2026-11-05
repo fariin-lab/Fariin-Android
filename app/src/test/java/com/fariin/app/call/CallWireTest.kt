@@ -25,7 +25,9 @@ class CallWireTest {
 
     @Test fun createHasTheIosFieldsAndNoPlaintextOffer() {
         val f = CallWire.createFields("alice", "bob", "Alice", "https://p/a.jpg", video = true, offerEnc = "enc1:n:b", muted = false, serverTime = TS)
-        assertEquals(setOf("caller", "callee", "callerName", "callerPhoto", "type", "status", "cams", "createdAt", "offerEnc", "sig"), f.keys)
+        assertEquals(setOf("caller", "callee", "callerName", "callerPhoto", "type", "status", "cams", "createdAt", "offerEnc", "sig", "caps"), f.keys)
+        // The early answer (iOS earlyCap): an iPhone callee may answer during the ring.
+        assertEquals(mapOf("alice" to listOf("early1")), f["caps"])
         assertEquals("alice", f["caller"]); assertEquals("bob", f["callee"]); assertEquals("video", f["type"])
         assertEquals("ringing", f["status"]); assertEquals(mapOf("alice" to true), f["cams"]); assertEquals(2, f["sig"])
         assertEquals(TS, f["createdAt"]); assertEquals("enc1:n:b", f["offerEnc"])
