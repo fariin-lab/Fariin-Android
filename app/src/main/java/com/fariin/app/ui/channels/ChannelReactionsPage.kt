@@ -146,7 +146,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                                 Box(Modifier.size(44.dp).align(Alignment.Center).clip(CircleShape)
                                     .then(if (picking && replacing == i) Modifier.border(2.dp, c.blue, CircleShape) else Modifier)
                                     .clickable { replacing = i; picking = true }, contentAlignment = Alignment.Center) {
-                                    Text(e, fontSize = 28.sp)
+                                    com.fariin.app.ui.thread.Emoji3D(e, 28.sp, 34.dp)
                                 }
                                 if (list.size > 1) Box(Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp).size(20.dp).clip(CircleShape)
                                     .background(c.secondary).clickable { list = ChannelReactions.remove(list, i); replacing = null; save() },

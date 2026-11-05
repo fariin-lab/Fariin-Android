@@ -436,7 +436,7 @@ private fun QuickReactionPage(pop: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(c.card)
                     .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 16.dp))
             Box(Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 14.dp).size(36.dp).clip(CircleShape).background(c.card),
-                contentAlignment = Alignment.Center) { Text(v, fontSize = 20.sp) }
+                contentAlignment = Alignment.Center) { com.fariin.app.ui.thread.Emoji3D(v, 20.sp, 24.dp) }
         }
         Text("Choose your quick reaction", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
             modifier = Modifier.padding(start = 28.dp, top = 8.dp, bottom = 10.dp))
@@ -449,7 +449,7 @@ private fun QuickReactionPage(pop: () -> Unit) {
                         .then(if (on) Modifier.border(2.5.dp, c.label, CircleShape) else Modifier)
                         .clickable { v = e; p.edit().putString(SettingsRules.QUICK_KEY, e).apply() },
                     contentAlignment = Alignment.Center,
-                ) { Text(e, fontSize = 30.sp) }
+                ) { com.fariin.app.ui.thread.Emoji3D(e, 30.sp, 36.dp) }
             }
         }
         Text("Double tap any message to send this reaction.", fontSize = 14.sp, color = c.secondary,

@@ -204,7 +204,7 @@ fun ChannelPostMenu(
                                         .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
                                         .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
                                     contentAlignment = Alignment.Center,
-                                ) { Text(e, fontSize = 26.sp) }
+                                ) { com.fariin.app.ui.thread.Emoji3D(e, 26.sp, 32.dp) }
                             }
                         }
                     } else Row(
@@ -217,7 +217,7 @@ fun ChannelPostMenu(
                                     .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
                                     .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
                                 contentAlignment = Alignment.Center,
-                            ) { Text(e, fontSize = 26.sp) }
+                            ) { com.fariin.app.ui.thread.Emoji3D(e, 26.sp, 32.dp) }
                         }
                         if (ch.pickable.size > ch.offered.size) {
                             Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },

@@ -391,7 +391,7 @@ private fun ReactionPickerSheet(mine: String?, onDismiss: () -> Unit, onPick: (S
             items(all) { e ->
                 Box(Modifier.size(52.dp).clip(CircleShape)
                     .background(if (e == mine) c.label.copy(alpha = 0.08f) else Color.Transparent)
-                    .clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 30.sp) }
+                    .clickable { onPick(e) }, contentAlignment = Alignment.Center) { Emoji3D(e, 30.sp, 36.dp) }
             }
         }
     }
