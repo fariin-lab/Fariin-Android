@@ -36,7 +36,6 @@ class BubbleActivity : ComponentActivity() {
         enableEdgeToEdge()
         val crypto = CryptoHub.get(applicationContext)
         setContent {
-            setSingletonImageLoaderFactory { ctx -> ImageLoader.Builder(ctx).components { add(FariinPhotoFetcher.Factory()) }.build() }
             FariinTheme {
                 ThreadRoute(chat, me, crypto, onBack = { moveTaskToBack(true) })
             }

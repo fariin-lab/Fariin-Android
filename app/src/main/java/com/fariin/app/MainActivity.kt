@@ -113,27 +113,6 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.ui.call.CallActivity.startDemo(this, intent.getStringExtra("callScreen") ?: "voice")
         }
         setContent {
-            setSingletonImageLoaderFactory { ctx ->
-                val lowRam = com.fariin.app.media.LowEnd.isLowRam(ctx)
-                ImageLoader.Builder(ctx)
-                    .components { add(FariinPhotoFetcher.Factory()) }
-                    // Decoded pictures kept in memory: a smaller share of the app's memory on a
-                    // low-RAM phone (Android Go, 1 GB), and 2 bytes a pixel there instead of 4.
-                    .memoryCache {
-                        coil3.memory.MemoryCache.Builder()
-                            .maxSizePercent(ctx, com.fariin.app.media.LowEnd.memoryCachePercent(lowRam))
-                            .build()
-                    }
-                    .let { if (lowRam) it.allowRgb565(true) else it }
-                    // Faces and photos on disk, capped like iOS DiskImageCache (250 MB), wiped at sign-out.
-                    .diskCache {
-                        coil3.disk.DiskCache.Builder()
-                            .directory(java.io.File(ctx.cacheDir, "image_cache").toOkioPath())
-                            .maxSizeBytes(250L * 1024 * 1024)
-                            .build()
-                    }
-                    .build()
-            }
             FariinTheme {
               androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                 // Debug builds only: `--es authPage <name>` draws one sign-in page with made-up state (ui/auth/AuthDemo.kt).

@@ -1,5 +1,9 @@
 package com.fariin.app
 
+import okio.Path.Companion.toOkioPath
+import coil3.ImageLoader
+import coil3.request.allowRgb565
+import com.fariin.app.ui.photo.FariinPhotoFetcher
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.util.Log
@@ -27,6 +31,31 @@ import java.io.File
 class FariinApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // The picture loader, set ONCE before any screen draws. It was set by MainActivity's content,
+        // so a call that woke the app straight into CallActivity made the loader first, and opening
+        // the app then crashed ("singleton image loader has already been created") and dropped the
+        // call (owner's Pixel 15:03, 2026-11-05).
+        coil3.SingletonImageLoader.setSafe { ctx ->
+                val lowRam = com.fariin.app.media.LowEnd.isLowRam(ctx)
+                ImageLoader.Builder(ctx)
+                    .components { add(FariinPhotoFetcher.Factory()) }
+                    // Decoded pictures kept in memory: a smaller share of the app's memory on a
+                    // low-RAM phone (Android Go, 1 GB), and 2 bytes a pixel there instead of 4.
+                    .memoryCache {
+                        coil3.memory.MemoryCache.Builder()
+                            .maxSizePercent(ctx, com.fariin.app.media.LowEnd.memoryCachePercent(lowRam))
+                            .build()
+                    }
+                    .let { if (lowRam) it.allowRgb565(true) else it }
+                    // Faces and photos on disk, capped like iOS DiskImageCache (250 MB), wiped at sign-out.
+                    .diskCache {
+                        coil3.disk.DiskCache.Builder()
+                            .directory(java.io.File(ctx.cacheDir, "image_cache").toOkioPath())
+                            .maxSizeBytes(250L * 1024 * 1024)
+                            .build()
+                    }
+                    .build()
+        }
         CoroutineSafety.install()   // an uncaught server refusal in a coroutine no longer closes the app
         com.fariin.app.ui.thread.Emoji3DArt.preload(this)   // reaction art ready before the first long press
         com.fariin.app.media.ChatSounds.init(this)
@@ -66,6 +95,8 @@ class FariinApp : Application() {
             usingLocalBackend = true
             Log.i("FariinApp", "Using the LOCAL test backend at $HOST")
         }
+        // A call this phone was in when the app last died is ended for the other phone (CallManager).
+        if (FirebaseAuth.getInstance().currentUser != null) com.fariin.app.call.CallManager.endAfterCrash(this)
         // Slow networks: a photo download gives up after 2 minutes (default 10) so the bubble shows
         // its "Try again" disc instead of a ring that never ends; uploads keep the 10 minute window.
         runCatching { FirebaseStorage.getInstance().maxDownloadRetryTimeMillis = 120_000 }
