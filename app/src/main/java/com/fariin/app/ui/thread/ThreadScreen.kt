@@ -881,18 +881,21 @@ private fun noticeText(m: Message): String = when {
 @Composable
 private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}, onToggleMute: () -> Unit = {}) {
     val c = Fariin.colors
+    // A narrow phone (under 360 dp): tighter spacing and a smaller photo, or the name got about
+    // 60 dp beside the call buttons ("Fam…" on a 320 dp Android 8.1 phone, 2026-11-05).
+    val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 360
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             // Back in its own floating circle, the chevron as iOS (ChatHeaderView).
-            IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp)) {
+            IconButton(onClick = onBack, modifier = Modifier.padding(start = if (narrow) 0.dp else 4.dp, end = if (narrow) 2.dp else 8.dp).size(44.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Back", tint = c.label,
                     modifier = Modifier.padding(start = 6.dp).size(20.dp))
             }
             // Photo and name beside it; the whole block opens the profile.
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Avatar(ui.photoUrl, 40.dp, squircle = ui.channel != null)
-                Spacer(Modifier.width(12.dp))
+                Avatar(ui.photoUrl, if (narrow) 34.dp else 40.dp, squircle = ui.channel != null)
+                Spacer(Modifier.width(if (narrow) 8.dp else 12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(ui.title, style = MaterialTheme.typography.titleMedium, color = c.label,

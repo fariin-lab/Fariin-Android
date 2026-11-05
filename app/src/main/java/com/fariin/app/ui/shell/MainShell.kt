@@ -363,7 +363,9 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
                         topLeft = Offset((size.width - w) / 2, (size.height - h) / 2),
                         size = Size(w, h), cornerRadius = CornerRadius(h / 2))
                 }
-                .padding(horizontal = 10.dp),
+                // The grey pill spans the whole cell anyway; the side padding only squeezed the label
+                // ("Storie", "Settin" on a 320 dp phone, Android 8.1 emulator, 2026-11-05).
+                .padding(horizontal = 2.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {

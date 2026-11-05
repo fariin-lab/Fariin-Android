@@ -38,11 +38,13 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
     if (cid.isEmpty() || FirebaseAuth.getInstance().currentUser == null) return
     val ctx = LocalContext.current
     val tint = Fariin.colors.accent
+    // No side padding on a narrow phone: the chat's name needs the room (see ThreadScreen Header).
+    val side = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 360) 0.dp else 4.dp
     if (!isGroup) {
         val peer = Wire.otherUid(cid, me)
         if (peer.isEmpty() || peer == me) return
         // One floating capsule, video then voice, outline icons (iOS ChatHeaderView call pill).
-        Row(Modifier.padding(horizontal = 4.dp)) {
+        Row(Modifier.padding(horizontal = side)) {
             IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = true) }) {
                 Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Video call", tint = tint)
             }
@@ -67,7 +69,7 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         return
     }
     if (!mayStart) return
-    Row(Modifier.padding(horizontal = 4.dp)) {
+    Row(Modifier.padding(horizontal = side)) {
         IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }) {
             Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Group video call", tint = tint)
         }
