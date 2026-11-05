@@ -801,3 +801,5 @@ For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by des
 - Chat row swipe actions built as iOS (Read/Unread, Pin | Mute, Delete, Archive), tested on the Pixel.
 - Fixed: swiping across a row during selection selected it (slow drag = long press).
 - Photo zoom blue blink (owner video): fixed on open and close, verified frame by frame.
+- Long-press menu: empty row on close + empty emoji capsule (owner video) fixed in code; on-phone recording pending (phone was in a call).
+- MY MISTAKE 13:36: installed while the owner was in a video call (idle script said touched, my command went on anyway).
