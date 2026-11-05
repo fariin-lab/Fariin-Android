@@ -184,10 +184,15 @@ fun StoryViewerDialog(
     conversations: List<Conversation>,
     onClose: () -> Unit,
 ) {
+    // Back reaches this window's own dispatcher too (owner 2026-11-04: the back swipe did nothing in a
+    // story). Since 919d7a6 the app is off the predictive-back system, so the viewer's
+    // PredictiveBackHandler alone was not always reached; the dialog's back now asks the viewer to
+    // close, with the same shrink into the card as the swipe down.
+    var backTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     Dialog(
-        onDismissRequest = onClose,
-        // Back is the viewer's own: it runs the same shrink into the card as the swipe down.
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnBackPress = false),
+        onDismissRequest = { backTick++ },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
+            dismissOnBackPress = true, dismissOnClickOutside = false),
     ) {
         // Block screenshots (iOS captureProtected): while such a story is on screen this window is
         // FLAG_SECURE, so a screenshot or a screen recording of it comes out black.
@@ -240,7 +245,7 @@ fun StoryViewerDialog(
         }
         androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.people.LocalPeopleNav provides routed) {
             StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected },
-                onLeaving = { leaving = true })
+                onLeaving = { leaving = true }, backTick = backTick)
         }
     }
 }
@@ -254,6 +259,8 @@ fun StoryViewer(
     onClose: () -> Unit,
     onShown: (Story) -> Unit = {},
     onLeaving: () -> Unit = {},
+    /** Bumped by the window's own back: close as the back gesture would. */
+    backTick: Int = 0,
 ) {
     val service = remember(me) { StoryService(me) }
     val context = LocalContext.current
@@ -554,6 +561,16 @@ fun StoryViewer(
         } catch (c: kotlin.coroutines.cancellation.CancellationException) {
             if (began) springBack(0f)
             throw c
+        }
+    }
+
+    // The window's back (see StoryViewerDialog): a sheet or profile over the story closes first.
+    androidx.compose.runtime.LaunchedEffect(backTick) {
+        if (backTick == 0) return@LaunchedEffect
+        when {
+            profileUid != null -> profileUid = null
+            sheetFor != null -> sheet.close()
+            else -> close()
         }
     }
 
