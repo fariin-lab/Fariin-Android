@@ -184,8 +184,8 @@ internal fun AttachSheet(
                     .floating(RoundedCornerShape(32.dp)).padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     SheetButton("Gallery", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), openGallery)
                     SheetButton("Camera", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), openCamera)
-                    SheetButton("File", Icons.AutoMirrored.Outlined.InsertDriveFile) { files.launch(arrayOf("*/*")) }
-                    if (onPoll != null) SheetButton("Poll", Icons.Outlined.Poll) { onDismiss(); onPoll() }
+                    SheetButton("File", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file)) { files.launch(arrayOf("*/*")) }
+                    if (onPoll != null) SheetButton("Poll", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_poll_tile)) { onDismiss(); onPoll() }
                     if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location)) { onDismiss(); onLocation() }
                     if (onContact != null) SheetButton("Contact", Icons.Outlined.Person) { onDismiss(); onContact() }
                 }
