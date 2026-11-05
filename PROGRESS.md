@@ -799,3 +799,4 @@ For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by des
 - Process death: Android killed Fariin in the background; reopening lands back in the same chat, Back goes to the list, no crash.
 - Deep sleep (forced doze 60 s): reconnects at once on return. Battery Saver (unplugged): long-press menu drops the blur. Phone settings restored.
 - Chat row swipe actions built as iOS (Read/Unread, Pin | Mute, Delete, Archive), tested on the Pixel.
+- Fixed: swiping across a row during selection selected it (slow drag = long press).
