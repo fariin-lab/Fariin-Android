@@ -56,6 +56,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -110,6 +111,36 @@ fun storyPeople(me: String, convs: List<Conversation>): List<StoryPerson> {
 fun storyConvs(convs: List<Conversation>): List<Conversation> = (convs + com.fariin.app.data.CryptoHub.listedAll()).distinctBy { it.id }
 
 private const val SELECTED_KEY = "storyAudienceSelected"
+
+/**
+ * Share Story as a sheet over the story (owner 2026-11-04 with the iOS sheet: "it's showing a full
+ * sheet, it's not supposed to be like that"): the story stays in view above, dimmed; the sheet
+ * slides up with rounded corners, a grab handle, X and the title; a tap above it closes it.
+ */
+@Composable
+private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val c = Fariin.colors
+    val shown = remember { androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true } }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))
+        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClose)) {
+        androidx.compose.animation.AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 500f)) { it }) {
+            Column(Modifier.fillMaxWidth().fillMaxHeight(0.72f).padding(horizontal = 8.dp).padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(34.dp)).background(c.bgSecondary)
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                .navigationBarsPadding()) {
+                Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).size(40.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.35f)))
+                Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp)) {
+                    androidx.compose.material3.IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart)) {
+                        Icon(androidx.compose.material.icons.Icons.Filled.Close, "Close", tint = c.label)
+                    }
+                    Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
+                }
+                content()
+            }
+        }
+    }
+}
 
 /** The page's own background, so an overlay covers what is under it. */
 @Composable
@@ -178,7 +209,7 @@ private fun EmojiSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
 private fun Tick(on: Boolean) {
     val c = Fariin.colors
     Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, contentDescription = if (on) "Selected" else null,
-        tint = if (on) c.blue else c.secondary)
+        tint = if (on) c.label else c.secondary)  // iOS: the chosen tick is black (white in dark mode)
 }
 
 /**
@@ -579,10 +610,9 @@ fun ShareStoryAudiencePage(
         else -> true
     } && !busy
 
-    Page {
-        Column(Modifier.fillMaxSize()) {
-            PageBar("Share Story", onBack = onBack)
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+    StorySheet(if (editing == null) "Share Story" else "Edit Viewers", onClose = onBack) {
+        run {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 val footer = when {
                     oneTimeActive -> StoryAudienceChoice.ONE_TIME.footer
                     choice == StoryAudienceChoice.CUSTOM && chosenLists.size > 1 -> "Only the people in these lists can watch it."
@@ -639,10 +669,10 @@ fun ShareStoryAudiencePage(
                 }
             }
             Text(
-                if (editing == null) "Post Story" else "Update", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                if (editing == null) "Post Story" else "Update", color = c.bg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(if (ready) c.accent else c.accent.copy(alpha = 0.4f))
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
+                    .background(if (ready) c.label else c.label.copy(alpha = 0.35f))
                     .clickable(enabled = ready) {
                         // Remembered between posts, as iOS storyAudienceSelected.
                         if (editing == null) runCatching {
@@ -656,7 +686,7 @@ fun ShareStoryAudiencePage(
                         onPost(choice, if (choice == StoryAudienceChoice.ONE_TIME) oneTime else emptySet(), chosenLists,
                             StoryPrivacyRules.captureProtected(choice, blockShots))
                     }
-                    .padding(vertical = 14.dp),
+                    .padding(vertical = 17.dp),
             )
         }
     }
