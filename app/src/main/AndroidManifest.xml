@@ -12,6 +12,11 @@
     <!-- Calls (call/, ui/call/): camera for video, audio routing, the ongoing-call service, the
          ring over the lock screen. Camera and mic are asked when a call needs them. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The attach sheet's own photo grid (owner 2026-11-04: no Google picker). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
