@@ -20,6 +20,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Palette
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.first
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 
@@ -72,8 +74,29 @@ object GetStartedStore {
     }
     fun cards(c: Context, uid: String, hasPhoto: Boolean): List<GetStartedCard> {
         if (isFinished(c, uid)) return emptyList()
+        // A photo counts as done the moment the profile has one (no redraw bump: we are mid-draw).
+        if (hasPhoto) addTo(c, "$uid.done", GetStartedCard.ADD_PHOTO)
         val removed = p(c).getStringSet("$uid.removed", emptySet()).orEmpty()
-        return GetStartedCard.entries.filter { it.name !in removed && !(it == GetStartedCard.ADD_PHOTO && hasPhoto) }
+        val seen = p(c).getStringSet("$uid.seen", emptySet()).orEmpty()
+        return GetStartedCard.entries.filter { it.name !in removed && it.name !in seen }
+    }
+
+    // DONE STEPS (owner 2026-11-04: "when a task finishes it needs to show the user"): a done step
+    // shows a green tick on its circle for a moment, then leaves the card ("seen"). When every step
+    // is done or hidden the card has nothing left and goes away.
+    private fun addTo(c: Context, key: String, card: GetStartedCard): Boolean {
+        val set = p(c).getStringSet(key, emptySet()).orEmpty()
+        if (card.name in set) return false
+        p(c).edit().putStringSet(key, set + card.name).apply()
+        return true
+    }
+    fun isDone(c: Context, uid: String, card: GetStartedCard) =
+        card.name in p(c).getStringSet("$uid.done", emptySet()).orEmpty()
+    fun markSeen(c: Context, uid: String, card: GetStartedCard) { if (addTo(c, "$uid.seen", card)) version.intValue++ }
+    /** From anywhere in the app: the signed-in account just did [card] (created a group, picked a colour...). */
+    fun markDone(c: Context, card: GetStartedCard) {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (addTo(c, "$uid.done", card)) version.intValue++
     }
 
     /** iOS accountIsNew: joined in the last 7 days, by the sign-in record's creation time. */
@@ -94,6 +117,12 @@ object GetStartedStore {
 @Composable
 fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Unit, onRemove: (GetStartedCard) -> Unit, onHideAll: () -> Unit) {
     val c = Fariin.colors
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    // Read on every redraw (the list redraws on each store bump).
+    // Reading the store version makes this card redraw on every change, even when the list is equal.
+    val storeVersion = GetStartedStore.version.intValue
+    val doneNow = remember(storeVersion, cards) { cards.filter { GetStartedStore.isDone(ctx, uid, it) }.toSet() }
     Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(c.bg.copy(alpha = 0f), c.bg), endY = 120f))
         .padding(top = 40.dp, bottom = 20.dp)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp).floating(RoundedCornerShape(30.dp))
@@ -108,12 +137,31 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
             Row(Modifier.fillMaxWidth()) {
                 cards.forEach { card ->
                     var menu by remember { mutableStateOf(false) }
+                    val done = card in doneNow
+                    val life = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+                    if (done) androidx.compose.runtime.LaunchedEffect(card) {
+                        // The tick plays where the user can see it: not behind the share sheet or a settings page.
+                        life.currentStateFlow.first { it.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+                        kotlinx.coroutines.delay(300)
+                        kotlinx.coroutines.delay(1_600)
+                        GetStartedStore.markSeen(ctx, uid, card)
+                    }
                     Box(Modifier.weight(1f)) {
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                            .combinedClickable(onLongClick = { menu = true }, onClick = { onTap(card) }).padding(vertical = 4.dp),
+                            .combinedClickable(onLongClick = { menu = true }, onClick = {
+                                // Opening the share sheet is the invite; the other steps are marked where they happen.
+                                if (card == GetStartedCard.INVITE) GetStartedStore.markDone(ctx, card)
+                                onTap(card)
+                            }).padding(vertical = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(54.dp).floating(CircleShape), contentAlignment = Alignment.Center) {
                                 Icon(if (card == GetStartedCard.NEW_GROUP) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members) else card.icon, null, tint = c.label, modifier = Modifier.size(26.dp))
+                                androidx.compose.animation.AnimatedVisibility(done, Modifier.align(Alignment.BottomEnd),
+                                    enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn()) {
+                                    Box(Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF34C759)), contentAlignment = Alignment.Center) {
+                                        Icon(androidx.compose.material.icons.Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(14.dp))
+                                    }
+                                }
                             }
                             Spacer(Modifier.height(6.dp))
                             Text(card.title, fontSize = 13.sp, color = c.label, maxLines = 1)

@@ -416,6 +416,7 @@ private fun PickPeople(people: List<Person>, picked: Set<String>, onToggle: (Str
  */
 @Composable
 fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit, onCreated: (String) -> Unit) {
+    val gsCtx = androidx.compose.ui.platform.LocalContext.current
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val people = remember(chats) { contactsFrom(chats, api.me) }
@@ -453,6 +454,8 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                             val cid = api.createGroup(title, picked.toList(), photo)
                             // After "created the group", as iOS: the timer and its notice for everyone.
                             if (timer > 0) api.setDisappear(cid, timer)
+                            // "New group" on the new-account card is done.
+                            com.fariin.app.ui.chats.GetStartedStore.markDone(gsCtx, com.fariin.app.ui.chats.GetStartedCard.NEW_GROUP)
                             onCreated(cid)
                         } catch (_: Exception) { error = "Could not create the group. Try again." }
                         busy = false

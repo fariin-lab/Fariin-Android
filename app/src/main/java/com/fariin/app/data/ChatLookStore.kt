@@ -140,6 +140,8 @@ object ChatLookStore {
         val e = prefs(c).edit()
         if (spec != null) e.putString(ChatLookRules.COLOR_DEFAULT, spec.stored) else e.remove(ChatLookRules.COLOR_DEFAULT)
         e.apply(); bump()
+        // "Chat color" on the new-account card is done once a colour is picked.
+        if (spec != null) com.fariin.app.ui.chats.GetStartedStore.markDone(c, com.fariin.app.ui.chats.GetStartedCard.CHAT_COLOR)
     }
 
     /** iOS ChatColorStore.applyToAllChats(nil): every chat back to Auto, and the Settings colour too. */
