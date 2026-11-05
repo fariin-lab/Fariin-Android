@@ -201,21 +201,21 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             }
             SettingsSection {
                 SettingsRow("Notifications", painterResource(R.drawable.ic_notifications)) { push(PAGE_NOTIFS) }
-                SettingsRow("Appearance", vec(Icons.Outlined.Brush)) { push(PAGE_APPEARANCE) }
+                SettingsRow("Appearance", painterResource(R.drawable.ic_set_appearance)) { push(PAGE_APPEARANCE) }
                 SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats)) { push(PAGE_CHATS) }
                 SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack)) { push(PAGE_STORIES) }
                 SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy)) { push(PAGE_PRIVACY) }
-                SettingsRow("Storage and Data", vec(Icons.Outlined.Dns)) { push(PAGE_STORAGE) }
-                SettingsRow("Power Saving", vec(Icons.Outlined.BatterySaver), last = true) { push(PAGE_POWER) }
+                SettingsRow("Storage and Data", painterResource(R.drawable.ic_set_storage)) { push(PAGE_STORAGE) }
+                SettingsRow("Power Saving", painterResource(R.drawable.ic_set_power), last = true) { push(PAGE_POWER) }
             }
             SettingsSection {
                 SettingsRow("Invite Friends", painterResource(R.drawable.ic_invite_friends), trailing = Trailing.NONE) {
                     shareInvite(ctx, profile?.handle)
                 }
-                SettingsRow("Safety", vec(Icons.Outlined.VerifiedUser), trailing = Trailing.NONE) {
+                SettingsRow("Safety", painterResource(R.drawable.ic_set_safety), trailing = Trailing.NONE) {
                     openWeb(ctx, "https://fariin.com/safety")
                 }
-                SettingsRow("Help & About", vec(Icons.Outlined.HelpOutline), last = true) { push(PAGE_ABOUT) }
+                SettingsRow("Help & About", painterResource(R.drawable.ic_set_help), last = true) { push(PAGE_ABOUT) }
             }
             Spacer(Modifier.height(12.dp))
         }

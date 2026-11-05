@@ -116,7 +116,8 @@ internal fun SettingsRow(
     ) {
         if (icon != null) {
             Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterStart) {
-                Icon(icon, contentDescription = null, tint = titleColor ?: c.secondary, modifier = Modifier.size(24.dp))
+                // iOS SettingsRowLabel: the icon is the text's colour, not grey (owner 2026-11-04: grey looked dead).
+                Icon(icon, contentDescription = null, tint = titleColor ?: c.label, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.width(16.dp))
         }

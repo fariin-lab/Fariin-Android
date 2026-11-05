@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -204,44 +205,43 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
     /** "cid/messageId" when Save to Photos may copy this received album's photos (each once). */
     autoSaveId: String? = null) {
     val saveCtx = androidx.compose.ui.platform.LocalContext.current
-    val side = minOf(maxW.value, 320f)
+    // iOS albumPlan: album width min(bubble, 300); tiles keep their real shape (AlbumMosaicLayout).
+    val side = minOf(maxW.value, 300f)
     val items = m.album.take(MediaRules.ALBUM_MAX_ITEMS)
-    val rows = MediaRules.albumRows(items.size)
+    val plan = androidx.compose.runtime.remember(items, side) {
+        com.fariin.app.media.AlbumMosaicLayout.plan(items.map { a ->
+            val w = a.width; val h = a.height
+            if (w != null && h != null && w > 0 && h > 0) (w / h).toFloat() else 1f
+        }, side)
+    }
     val busy = m.sendState == Message.SendState.SENDING
-    Box(Modifier.width(side.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            var start = 0
-            rows.forEachIndexed { r, count ->
-                val row = items.subList(start, start + count)
-                start += count
-                // One wide tile on top of three; the other rows square-ish.
-                val h = when { count == 1 && items.size == 1 -> side; count == 1 -> side * 0.6f; count == 2 -> side / 2f; else -> side / 3f }
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    val rowStart = start - count
-                    row.forEachIndexed { ri, item ->
-                        val w = (side - 2f * (count - 1)) / count
+    Box(Modifier.size(plan.width.dp, plan.height.dp)) {
+        plan.tiles.forEach { tile ->
+                        val item = items[tile.index]
+                        val w = tile.w
+                        val h = tile.h
                         // A tile's picture follows auto-download (a video tile's poster always comes down).
                         val got = rememberGatedFile(item.imageUrl, item.enc, if (item.isVideo) null else AutoDownload.Kind.PHOTOS)
                         val bmp = rememberBitmap(got.file, 400)
                         if (!item.isVideo) androidx.compose.runtime.LaunchedEffect(got.file, autoSaveId) {
                             val f = got.file ?: return@LaunchedEffect
-                            autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/${rowStart + ri}", f, isVideo = false) }
+                            autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/${tile.index}", f, isVideo = false) }
                         }
                         val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
                         Box(
-                            Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
+                            Modifier.offset(tile.x.dp, tile.y.dp).size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))
                                 .clickable(enabled = (bmp != null || waits) && !busy) {
                                     val v = item.videoUrl
                                     if (bmp == null) got.start()
                                     else {
-                                        val at = items.indexOfFirst { it === item }.takeIf { it >= 0 }
+                                        val at = tile.index
                                         if (v != null) onView(Viewing.Video(v, item.videoEnc, msg = m, albumIndex = at))
                                         else onView(Viewing.Photo(item.imageUrl, item.enc, msg = m, albumIndex = at))
                                     }
                                 },
                         ) {
                             if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                            else if (r == 0 && item === items.first()) rememberPlaceholder(m.thumb, m.blurhash)?.let {
+                            else if (tile.index == 0) rememberPlaceholder(m.thumb, m.blurhash)?.let {
                                 Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             }
                             if (waits && !busy) FetchDisc(got.state, Modifier.align(Alignment.Center))
@@ -257,9 +257,6 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                                 }
                             }
                         }
-                    }
-                }
-            }
         }
         if (busy) UploadRing(m.clientId, Modifier.align(Alignment.Center), onCancel = uploadCancelFor(m))
         Box(Modifier.matchParentSize()) { capsule() }
