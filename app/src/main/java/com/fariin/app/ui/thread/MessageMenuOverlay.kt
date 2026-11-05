@@ -158,7 +158,9 @@ internal fun MessageMenuOverlay(
     // The blur, on the background's own clock as iOS's blur view alpha is.
     val content = (LocalView.current.rootView as? android.view.ViewGroup)?.getChildAt(0)
     val blurPx = with(density) { 20.dp.toPx() }
-    if (Build.VERSION.SDK_INT >= 31 && content != null && !weakPhone(LocalContext.current)) {
+    val ctxB = LocalContext.current
+    val skipBlur = remember { com.fariin.app.media.LowEnd.skipBlur(ctxB) }
+    if (Build.VERSION.SDK_INT >= 31 && content != null && !skipBlur) {
         LaunchedEffect(content) {
             // Four steps, not a new blur every frame: measured on the Pixel 5 over six menus, the
             // per-frame blur took the 90th-percentile frame from 15 to 32 ms (GPU 5 -> 14); four
@@ -420,10 +422,3 @@ private fun ReactionPickerSheet(mine: String?, onDismiss: () -> Unit, onPick: (S
     }
 }
 
-/** Under 4 GB, or the system's low-RAM flag: the menu gets the tint alone, no blur (lag on cheap phones). */
-private fun weakPhone(ctx: android.content.Context): Boolean {
-    val am = ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return true
-    if (am.isLowRamDevice) return true
-    val info = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-    return info.totalMem < 3_500L * 1024 * 1024   // phones sold as "4 GB" report about 3.6-3.8 GB
-}
