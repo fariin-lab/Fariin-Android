@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.foundation.layout.wrapContentSize
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
@@ -212,7 +213,15 @@ internal fun MessageMenuOverlay(
             val cardW = with(density) { 250.dp.toPx() }
             val hasBar = reactable
 
-            val src = source.rect.translate(-o.x, -o.y)
+            // A message taller than about half the screen is shown in part, at full size: the slice
+            // that was on screen where it was pressed (shrinking the whole of it made it unreadable).
+            val full = source.rect.translate(-o.x, -o.y)
+            val maxH = (bottom - top) * 0.45f
+            val src = if (full.height <= maxH) full else {
+                val t = max(full.top, top).coerceAtMost(full.bottom - maxH)
+                Rect(full.left, t, full.right, t + maxH)
+            }
+            val shift = full.top - src.top
             val f = remember(src, top, bottom) {
                 Frames.compute(src, source.alignRight, hasBar, barW, barH, cardW,
                     rows.size * rowH + inset * 2, gap, Rect(left, top, right, bottom))
@@ -224,13 +233,23 @@ internal fun MessageMenuOverlay(
             val scale = startScale + (f.scale - startScale) * p
             Box(
                 Modifier.offset { IntOffset(src.left.roundToInt(), (src.top + travel * p).roundToInt()) }
+                    // A message taller than the screen: requiredSize alone centres the oversize copy
+                    // on the screen-sized slot, which pushed its top far above the screen and the
+                    // shrunk copy never showed (Pixel 2026-11-05). Pinned to the top-left instead.
+                    .wrapContentSize(Alignment.TopStart, unbounded = true)
                     .requiredSize(with(density) { src.width.toDp() }, with(density) { src.height.toDp() })
                     .graphicsLayer {
                         scaleX = scale; scaleY = scale
                         transformOrigin = TransformOrigin(if (source.alignRight) 1f else 0f, 0f)
+                        clip = shift != 0f
                     }
                     .pointerInput(Unit) { detectTapGestures { close() } },
-            ) { preview() }
+            ) {
+                if (shift == 0f) preview()
+                else Box(Modifier.wrapContentSize(Alignment.TopStart, unbounded = true)
+                    .offset { IntOffset(0, shift.roundToInt()) }
+                    .requiredSize(with(density) { full.width.toDp() }, with(density) { full.height.toDp() })) { preview() }
+            }
 
             if (hasBar) {
                 val b = f.bar!!
