@@ -777,3 +777,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - Lag pass (Pixel 5): list scroll 1.1% janky, thread 0.2%, story 1.3%. Chats tab kept alive: return to Chats 65ms -> ~34ms frame.
 - Memory: 20 chat opens, no leak (1 activity, Java heap ~10MB); picture cache bounded, trims under pressure, LowEnd already shrinks it on cheap phones.
 - All Media grey tiles (adnan, Oct 23): photos download but cannot be decrypted, same as the locked texts around them. Old key, not recoverable; for the owner.
+- Group Info / Group Settings / channel info (owner + follower) checked on the Pixel; Edit capsule + row line fixed.
