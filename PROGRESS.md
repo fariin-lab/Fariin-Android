@@ -797,3 +797,4 @@ Checked OK: send/offline/reply/edit/delete/photo/voice/reaction/pin/search, dark
 For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by design); App Check API is off on the Firebase project; story photo picker is the system one (same as iOS).
 - Accessibility scan (10 screens): 30 unlabeled controls named; now 0.
 - Process death: Android killed Fariin in the background; reopening lands back in the same chat, Back goes to the list, no crash.
+- Deep sleep (forced doze 60 s): reconnects at once on return. Battery Saver (unplugged): long-press menu drops the blur. Phone settings restored.
