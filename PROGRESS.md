@@ -737,3 +737,11 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
   words) + Protect Content; duplicate card removed (197c22c). Pixel: Private -> Public on kk, typed
   kkzz123 -> "available", app alive, NOT saved. The new Channel Settings page finally seen on device.
 - Rule for me: check the screen is mine before every install (owner may be on the phone).
+- Owner screenshots 17:50-18:16, all fixed and seen on the Pixel (benchmark build):
+  - Channel Settings in iOS cards (0b7124f), Protect Content on the Channel Type page.
+  - Verify Encryption = iOS Encryption page: faces + lock, QR (fariinverify:v1:), 4-column number,
+    Scan their code (ccc36ac). Scanner opens; a real match test needs a second phone.
+  - Icons: profile circles (f804b03) and channel page use the iOS drawings; filled video mark.
+  - Story camera + editor in a rounded frame, no grey status band, editor bar as iOS (Aa / stickers
+    / pen | NEXT, caption capsule with 24). Videos now PLAY in the editor (looping; player released
+    on close). Text added lands inside the frame. Video stories still have no Aa/pen (as before).
