@@ -1,5 +1,9 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import android.net.Uri
@@ -104,7 +108,13 @@ internal fun AttachSheet(
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    // iOS detents: opens at half, the grid's upward scroll or a drag grows it to full, pulling the
+    // grid down from its top returns it to half, then closes it, following the finger.
+    val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
+    var boxH by remember { mutableStateOf(0) }
+    // The sheet reports its offset below the status bar; the window height counts from the very top.
+    val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(androidx.compose.ui.platform.LocalDensity.current)
     val picked = remember { mutableStateListOf<Uri>() }
     val videos = remember { mutableStateListOf<Uri>() }
     var caption by remember { mutableStateOf("") }
@@ -189,7 +199,15 @@ internal fun AttachSheet(
     // that bar becomes the caption and Send.
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, dragHandle = null,
         containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
-        Box(Modifier.fillMaxWidth().fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
+        // Lists other than the photos open the sheet fully, as iOS does.
+        androidx.compose.runtime.LaunchedEffect(page, folder) { if (page != SheetPage.PHOTOS || folder != null) runCatching { sheet.expand() } }
+        Box(Modifier.fillMaxWidth().fillMaxHeight(0.92f).onSizeChanged { boxH = it.height }.navigationBarsPadding().imePadding()) {
+            // The part of the sheet below the screen while it sits at half: the bars move up by it,
+            // so the source bar and the caption stay on the screen's bottom edge.
+            val lift = Modifier.offset {
+                val top = runCatching { sheet.requireOffset() }.getOrDefault(0f)
+                IntOffset(0, -(top + statusTop + boxH - windowH).toInt().coerceAtLeast(0))
+            }
             val none = access == RecentMedia.Access.NONE
             if (mediaOff != null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -238,7 +256,7 @@ internal fun AttachSheet(
             } else if (picked.isEmpty()) {
                 // iOS sourceBar: the round album button LEFT (a back arrow once a list is open), the
                 // sources in one capsule RIGHT: GIF, Files, Location, Poll (groups only).
-                Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                Row(Modifier.align(Alignment.BottomCenter).then(lift).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(60.dp).floating().clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
                         if (backShown) Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.label, modifier = Modifier.size(26.dp))
@@ -256,7 +274,7 @@ internal fun AttachSheet(
                     }
                 }
             } else {
-                Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.align(Alignment.BottomCenter).then(lift).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onePhoto && allowViewOnce) {
                         Box(
                             Modifier.size(44.dp).floating(fill = if (viewOnce) c.accent else null)
