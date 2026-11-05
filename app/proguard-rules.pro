@@ -50,3 +50,6 @@
 -keepclasseswithmembers class ** { kotlinx.serialization.KSerializer serializer(...); }
 -if @kotlinx.serialization.Serializable class **
 -keepclassmembers class <1> { static <1>$Companion Companion; }
+
+# ---- CoroutineSafety: found by kotlinx.coroutines through META-INF/services ----
+-keep class com.fariin.app.CoroutineSafety { <init>(); *; }
