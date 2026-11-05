@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -420,7 +422,8 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
         value = withContext(Dispatchers.IO) { attachThumb(context, uri, item.isVideo, 256) }
     }
     val chosen = number > 0
-    Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f)).clickable(onClick = onOpen)) {
+    Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f)).clickable(onClickLabel = "Edit", onClick = onOpen)
+        .semantics { contentDescription = if (item.isVideo) "Video" else "Photo" }) {
         bmp?.let {
             Image(it, null, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().then(if (chosen) Modifier.padding(6.dp).clip(RoundedCornerShape(8.dp)) else Modifier))
@@ -433,7 +436,8 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
                 Text(MediaRules.durationLabel(item.durationMs / 1000.0), color = Color.White, fontSize = 11.sp)
             }
         }
-        Box(Modifier.align(Alignment.TopEnd).size(44.dp).clickable(onClick = onToggle), contentAlignment = Alignment.TopEnd) {
+        Box(Modifier.align(Alignment.TopEnd).size(44.dp).clickable(onClick = onToggle)
+            .semantics { contentDescription = if (chosen) "Selected, number $number" else "Select" }, contentAlignment = Alignment.TopEnd) {
             Box(
                 Modifier.padding(7.dp).size(24.dp).clip(CircleShape)
                     .background(if (chosen) c.blue else Color.Black.copy(alpha = 0.12f))

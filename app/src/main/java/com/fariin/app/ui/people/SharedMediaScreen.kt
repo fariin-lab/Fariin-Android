@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.vectorResource
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -181,7 +182,8 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, onOpen: () -> 
     val file = rememberPlainFile(item.pictureUrl, item.pictureEnc)
     val bmp = rememberBitmap(file, px)
     val placeholder = rememberPlaceholder(item.thumb, item.blurhash)
-    Box(modifier.background(c.secondary.copy(alpha = 0.18f)).clickable(onClick = onOpen)) {
+    Box(modifier.background(c.secondary.copy(alpha = 0.18f)).clickable(onClick = onOpen)
+        .semantics { contentDescription = if (item.isVideo) "Video" else "Photo" }) {
         (bmp ?: placeholder)?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         if (item.isVideo) {
             Box(Modifier.align(Alignment.Center).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
