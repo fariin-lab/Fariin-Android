@@ -1,5 +1,6 @@
 package com.fariin.app.ui.call
 
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -700,11 +701,11 @@ private fun ControlBar(ui: CallUi, chrome: Chrome, onEnd: () -> Unit, onMute: ()
         // Dimmed while a share of mine runs or is being started (iOS shareBlocksCamera).
         val camOk = ui.cameraOn || !sharingOn
         Box(Modifier.alpha(if (camOk) 1f else 0.4f)) {
-            Circle(if (ui.cameraOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, active = !ui.cameraOn,
+            Circle(if (ui.cameraOn) ImageVector.vectorResource(R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_call_video_off), active = !ui.cameraOn,
                 label = if (ui.cameraOn) "Turn camera off" else "Turn camera on", size = size) { chrome.touch(); if (camOk) onCamera() }
         }
         SpeakerButton(ui, size) { chrome.touch(); onRoute(it) }
-        Circle(if (ui.muted) Icons.Filled.MicOff else Icons.Filled.Mic, active = ui.muted,
+        Circle(if (ui.muted) ImageVector.vectorResource(R.drawable.ic_mic_off) else ImageVector.vectorResource(R.drawable.ic_mic), active = ui.muted,
             label = if (ui.muted) "Unmute" else "Mute", size = size) { chrome.touch(); onMute() }
         EndCircle("End call", size, onEnd)
     }
@@ -743,7 +744,8 @@ private fun SpeakerButton(ui: CallUi, size: Dp, onRoute: (AudioRoute) -> Unit) {
     val icon = when (r.current) {
         AudioRoute.BLUETOOTH -> Icons.Filled.BluetoothAudio
         AudioRoute.HEADSET -> Icons.Filled.Headphones
-        else -> Icons.AutoMirrored.Filled.VolumeUp
+        AudioRoute.SPEAKER -> ImageVector.vectorResource(R.drawable.ic_speaker_on)
+        else -> ImageVector.vectorResource(R.drawable.ic_speaker_off)
     }
     val label = if (CallRouting.speakerTap(r) is CallRouting.Tap.Picker) "Audio: " + CallRouting.label(r.current, r.bluetoothName) else "Speaker"
     Box {
@@ -794,12 +796,17 @@ fun PipScreen(ui: CallUi) {
             demoThem -> DemoVideo(Modifier.fillMaxSize(), ThemA, ThemB)
             local != null -> VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize())
             else -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
-                Avatar(ui.peerPhoto, 56.dp, Modifier.semantics { contentDescription = ui.peerName })
+                Box {
+                    Avatar(ui.peerPhoto, 56.dp, Modifier.semantics { contentDescription = ui.peerName })
+                    if (theirMute) PipMicOff("${ui.peerName.substringBefore(' ')} is muted", Modifier.align(Alignment.BottomEnd).offset(4.dp, 2.dp))
+                }
                 Spacer(Modifier.height(6.dp))
                 Text(ui.peerName.substringBefore(' '), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(status, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
-                if (ui.muted) PipMicOff("You are muted", Modifier.padding(top = 4.dp))
+                // Mine in words (owner 2026-11-05: two identical icons, whose was whose?).
+                if (ui.muted) Text("You're muted", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 1,
+                    modifier = Modifier.padding(top = 3.dp).background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp))
             }
         }
         val video = remote != null || demoThem || local != null
@@ -814,7 +821,7 @@ fun PipScreen(ui: CallUi) {
             }
             if (ui.muted) PipMicOff("You are muted", Modifier.align(Alignment.BottomEnd).padding(8.dp))
         }
-        if (theirMute) PipMicOff("${ui.peerName.substringBefore(' ')} is muted", Modifier.align(Alignment.TopStart).padding(8.dp))
+        if (theirMute && video) PipMicOff("${ui.peerName.substringBefore(' ')} is muted", Modifier.align(Alignment.TopStart).padding(8.dp))
     }
 }
 
@@ -823,7 +830,7 @@ fun PipScreen(ui: CallUi) {
 private fun PipMicOff(label: String, modifier: Modifier = Modifier) {
     Box(modifier.size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).semantics { contentDescription = label },
         contentAlignment = Alignment.Center) {
-        Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(14.dp))
+        Icon(ImageVector.vectorResource(R.drawable.ic_mic_off), null, tint = Color.White, modifier = Modifier.size(12.dp))
     }
 }
 
@@ -973,9 +980,9 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 ShareCircle(lit = g.sharing, on = shareOn, enabled = shareOn || (g.joined && presenter == null), size = 56.dp) {
                     chrome.touch(); onShare()
                 }
-                Circle(if (g.cameraOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, !g.cameraOn,
+                Circle(if (g.cameraOn) ImageVector.vectorResource(R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_call_video_off), !g.cameraOn,
                     if (g.cameraOn) "Turn camera off" else "Turn camera on", 56.dp) { chrome.touch(); onCamera() }
-                Circle(if (g.micOn) Icons.Filled.Mic else Icons.Filled.MicOff, !g.micOn, if (g.micOn) "Mute" else "Unmute", 56.dp) {
+                Circle(if (g.micOn) ImageVector.vectorResource(R.drawable.ic_mic) else ImageVector.vectorResource(R.drawable.ic_mic_off), !g.micOn, if (g.micOn) "Mute" else "Unmute", 56.dp) {
                     chrome.touch(); onMic()
                 }
                 // iOS GroupCallMoreMenu: Raise Hand / Lower Hand and the reaction row.

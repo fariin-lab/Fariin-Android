@@ -1,5 +1,7 @@
 package com.fariin.app.ui.call
 
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -126,7 +128,7 @@ fun IncomingGroupCallScreen(invite: GroupInvite, onIgnore: () -> Unit, onJoin: (
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (invite.video) Icons.Outlined.Videocam else Icons.Filled.Call, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                    Icon(if (invite.video) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(if (invite.video) "Group video call" else "Group call", color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
                 }
@@ -138,7 +140,7 @@ fun IncomingGroupCallScreen(invite: GroupInvite, onIgnore: () -> Unit, onJoin: (
                 .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape).clickable { muted = !muted }
                 .semantics { contentDescription = if (muted) "Mute, on" else "Mute, off" }
                 .padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (muted) Icons.Filled.MicOff else Icons.Outlined.MicOff, null, tint = if (muted) Color.Black else Color.White, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = if (muted) Color.Black else Color.White, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Mute", color = if (muted) Color.Black else Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -292,13 +294,13 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
                 Spacer(Modifier.height(16.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LobbyRound(if (showsCamera) Icons.Filled.Videocam else Icons.Filled.VideocamOff, showsCamera,
+                LobbyRound(if (showsCamera) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video_off), showsCamera,
                     if (voiceOnly) "Camera unavailable on a voice call" else if (showsCamera) "Turn camera off" else "Turn camera on",
                     enabled = !voiceOnly && !locked, dim = voiceOnly) {
                     if (cameraDenied) ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
                     else cameraOn = !cameraOn
                 }
-                LobbyRound(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, micOn, if (micOn) "Mute" else "Unmute", enabled = !locked) {
+                LobbyRound(if (micOn) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), micOn, if (micOn) "Mute" else "Unmute", enabled = !locked) {
                     if (micOn) micOn = false
                     else if (granted(ctx, Manifest.permission.RECORD_AUDIO)) micOn = true
                     else askMic.launch(Manifest.permission.RECORD_AUDIO)
