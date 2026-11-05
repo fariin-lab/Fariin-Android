@@ -363,7 +363,10 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
                         modifier = if (selected) Modifier.border(1.5.dp, c.label, androidx.compose.foundation.shape.CircleShape) else Modifier)
                 }
             }
-            Text(t.label, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            // The phone's text size grows the label up to 115% only (iOS tab bars cap it too): at
+            // 130% "Settings" was cut to "Setting" on a small screen.
+            val fs = androidx.compose.ui.platform.LocalDensity.current.fontScale
+            Text(t.label, fontSize = (12f * kotlin.math.min(fs, 1.15f) / fs).sp, lineHeight = (14f * kotlin.math.min(fs, 1.15f) / fs).sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 color = tint, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
         }
     }

@@ -562,7 +562,7 @@ private fun StoryRow(
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
-            Text(subtitle, fontSize = 15.sp, color = c.secondary, maxLines = 1)
+            Text(subtitle, fontSize = 15.sp, color = c.secondary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         }
         if (camera) {
             Spacer(Modifier.width(8.dp))
