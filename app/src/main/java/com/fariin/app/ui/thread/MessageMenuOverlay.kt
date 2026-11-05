@@ -220,11 +220,14 @@ internal fun MessageMenuOverlay(
             val cardW = with(density) { 250.dp.toPx() }
             val hasBar = reactable
 
-            // A message taller than about half the screen is shown in part, at full size: the slice
-            // that was on screen where it was pressed (shrinking the whole of it made it unreadable).
+            // A long message: shrunk to fit as iOS does while that keeps it readable (60% or more);
+            // longer than that, the slice that was on screen where it was pressed, at full size and
+            // as tall as the room between the emoji bar and the menu (shrinking the whole of it to
+            // 15% made it unreadable, Pixel 2026-11-05).
             val full = source.rect.translate(-o.x, -o.y)
-            val maxH = (bottom - top) * 0.45f
-            val src = if (full.height <= maxH) full else {
+            val room = (bottom - top) - (if (hasBar) barH + gap else 0f) - gap * 2 - (rows.size * rowH + inset * 2)
+            val maxH = room.coerceAtLeast((bottom - top) * 0.25f)
+            val src = if (full.height * 0.6f <= maxH) full else {
                 val t = max(full.top, top).coerceAtMost(full.bottom - maxH)
                 Rect(full.left, t, full.right, t + maxH)
             }

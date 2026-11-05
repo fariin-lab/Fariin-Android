@@ -8,7 +8,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import android.net.Uri
@@ -119,7 +118,7 @@ internal fun AttachSheet(
     // grid down from its top returns it to half, then closes it, following the finger.
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
     var boxH by remember { mutableStateOf(0) }
-    // The sheet reports its offset below the status bar; the window height counts from the very top.
+    // The status bar's height: full height stops under it (see the box below).
     val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(androidx.compose.ui.platform.LocalDensity.current)
     val picked = remember { mutableStateListOf<Uri>() }
     val videos = remember { mutableStateListOf<Uri>() }
