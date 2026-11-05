@@ -89,6 +89,10 @@ class CallService : Service() {
 /** The incoming-call full-screen notification and the ongoing-call notification. */
 object CallNotifications {
     private const val ONGOING_CHANNEL = "call_ongoing"
+    /** The ring's own channel: high importance (heads-up, full screen) and NO sound. Not "silent":
+     *  Android never opens the full-screen call screen for a silent notification, so a locked phone
+     *  rang with nothing to answer (owner's Pixel 2026-11-05). The ringtone is CallManager's. */
+    private const val RING_CHANNEL = "call_ring"
     private const val INCOMING_ID = 7300
     const val ACTION_ACCEPT = "com.fariin.app.call.ACCEPT"
     const val ACTION_DECLINE = "com.fariin.app.call.DECLINE"
@@ -112,16 +116,28 @@ object CallNotifications {
      * that opens the incoming screen over the lock screen. Silent itself: CallManager plays the
      * looping ringtone (the channel's sound would play only once).
      */
+    private fun ensureRingChannel(c: Context) {
+        val nm = c.getSystemService(NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(RING_CHANNEL) != null) return
+        nm.createNotificationChannel(NotificationChannel(RING_CHANNEL, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "The screen that rings for a call"
+            setSound(null, null)
+            enableVibration(false)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        })
+    }
+
     fun showIncoming(c: Context, callId: String, name: String, video: Boolean) {
         val person = Person.Builder().setName(name).setImportant(true).build()
-        val n = NotificationCompat.Builder(c, NotifChannel.CALLS.id)
+        ensureRingChannel(c)
+        val n = NotificationCompat.Builder(c, RING_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_fariin)
             .setContentTitle(name)
             .setContentText(if (video) "Incoming video call" else "Incoming call")
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
-            .setSilent(true)
+            .setOnlyAlertOnce(true)
             .setFullScreenIntent(activity(c, null, 1), true)
             .setContentIntent(activity(c, null, 1))
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, activity(c, ACTION_DECLINE, 2), activity(c, ACTION_ACCEPT, 3)))

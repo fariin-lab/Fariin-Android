@@ -242,6 +242,18 @@ class MainActivity : ComponentActivity() {
         val ctx = LocalContext.current
         var explain by remember { mutableStateOf(Push.needsExplainer(ctx)) }
         if (explain) { LaunchedEffect(Unit) { keepSplash = false }; NotificationsExplainer { explain = false }; return }
+        // Android 14+: a call can only take over the screen (lock screen, app closed) when the person
+        // has allowed "full screen notifications" for Fariin; outside the Play Store it starts off,
+        // and a call then rang with nothing to answer (owner's Pixel 2026-11-05). Asked once, the way
+        // calling apps do; "Not now" is remembered.
+        var askFullScreen by remember { mutableStateOf(com.fariin.app.call.CallScreenAccess.shouldAsk(ctx)) }
+        if (askFullScreen) androidx.compose.material3.AlertDialog(
+            onDismissRequest = { com.fariin.app.call.CallScreenAccess.later(ctx); askFullScreen = false },
+            title = { androidx.compose.material3.Text("Show calls on your screen") },
+            text = { androidx.compose.material3.Text("Allow Fariin to show incoming calls full screen, so you can answer when your phone is locked or Fariin is closed.") },
+            confirmButton = { androidx.compose.material3.TextButton({ askFullScreen = false; com.fariin.app.call.CallScreenAccess.openSettings(ctx) }) { androidx.compose.material3.Text("Allow") } },
+            dismissButton = { androidx.compose.material3.TextButton({ com.fariin.app.call.CallScreenAccess.later(ctx); askFullScreen = false }) { androidx.compose.material3.Text("Not Now") } },
+        )
         val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
         val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
         val chats by vm.state.collectAsState()
