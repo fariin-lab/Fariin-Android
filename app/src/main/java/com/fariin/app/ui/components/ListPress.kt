@@ -52,7 +52,10 @@ fun Modifier.listPress(enabled: Boolean = true, onLongClick: (() -> Unit)? = nul
                 if (!change.pressed) break
             }
         }
-    }.combinedClickable(interactionSource = press, indication = ripple(), enabled = enabled, onLongClick = onLongClick,
+    }.combinedClickable(interactionSource = press, indication = ripple(), enabled = enabled,
+        // A slow sideways drag inside the row outlasts the long-press timeout (the detector only
+        // gives up when the finger leaves the row), so it selected a chat. Moved = not a press.
+        onLongClick = onLongClick?.let { lc -> { if (!moved) lc() } },
         onClick = {
             if (moved) return@combinedClickable
             scope.launch {
