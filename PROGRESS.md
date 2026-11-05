@@ -776,3 +776,4 @@ what makes Fariin easier to use, never a feature just because WhatsApp has it.
 - User-flow pass with kream: text, offline send + reconnect (Waiting for network shown), swipe reply, edit, delete for everyone, photo + caption: all work. Fixed: caption hidden under keyboard at half sheet.
 - Lag pass (Pixel 5): list scroll 1.1% janky, thread 0.2%, story 1.3%. Chats tab kept alive: return to Chats 65ms -> ~34ms frame.
 - Memory: 20 chat opens, no leak (1 activity, Java heap ~10MB); picture cache bounded, trims under pressure, LowEnd already shrinks it on cheap phones.
+- All Media grey tiles (adnan, Oct 23): photos download but cannot be decrypted, same as the locked texts around them. Old key, not recoverable; for the owner.
