@@ -50,6 +50,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.tasks.await
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -133,6 +137,30 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     var undo by remember { mutableStateOf(false) }
     var confirmReport by remember { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
+    // iOS channel info rows that open a page here: Storage Used and Statistics.
+    var sub by remember(info.cid) { mutableStateOf<String?>(null) }
+    var askDelete by remember { mutableStateOf(false) }
+    when (sub) {
+        "storage" -> { com.fariin.app.ui.people.ChatStoragePage(info.cid, me, info.title, pop = { sub = null }); return }
+        "stats" -> { com.fariin.app.ui.people.GroupStatsPage(info.cid, info.title, onBack = { sub = null }); return }
+    }
+    if (askDelete) androidx.compose.material3.AlertDialog(onDismissRequest = { askDelete = false },
+        title = { Text("Delete Channel?") },
+        text = { Text("This deletes the channel and all its posts for every follower.") },
+        confirmButton = { androidx.compose.material3.TextButton({
+            askDelete = false
+            // As Delete Group: gone at once, Undo for a few seconds, then the server deletes it.
+            com.fariin.app.data.LeaveUndo.start(info.cid, info.title.ifEmpty { "the channel" }) {
+                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable("deleteGroup").call(mapOf("cid" to info.cid)).await()
+            }
+            com.fariin.app.ui.components.Snack.show("Channel deleted.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
+                com.fariin.app.data.LeaveUndo.undo()
+            }
+            onLeft()
+        }) { Text("Delete Channel", color = c.red) } },
+        dismissButton = { androidx.compose.material3.TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } },
+        containerColor = c.card)
     var reported by remember { mutableStateOf(false) }
     LaunchedEffect(role) { if (role != Role.VISITOR) following = false }
     LaunchedEffect(undo) { if (undo) { delay(5000); undo = false } }
@@ -188,7 +216,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         Column(Modifier.fillMaxSize()) {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             PageBar("", onBack, action = if (canEdit) ({
-                TextButton({ manage.edit(info.cid) }) { Text("Edit", color = c.accent, fontSize = 17.sp) }
+                TextButton({ manage.edit(info.cid) }) { Text("Edit", color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
             }) else null)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally) {
@@ -215,35 +243,45 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Spacer(Modifier.height(20.dp))
                 // About: the description and the public link.
                 if (info.description.isNotEmpty() || info.username.isNotEmpty()) Card {
-                    if (info.description.isNotEmpty()) {
-                        Text(info.description, fontSize = 16.sp, color = c.label, modifier = Modifier.padding(16.dp))
+                    if (info.description.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.AutoMirrored.Filled.Notes, null, tint = c.label, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(14.dp))
+                            Text("Description", fontSize = 17.sp, color = c.label)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(info.description, fontSize = 17.sp, color = c.label)
                     }
                     if (info.username.isNotEmpty()) {
                         if (info.description.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
-                        Column(Modifier.fillMaxWidth().clickable { share() }.padding(16.dp)) {
-                            Text("fariin.com/${info.username}", fontSize = 16.sp, color = c.accent)
-                            Text("Link", fontSize = 13.sp, color = c.secondary)
+                        Row(Modifier.fillMaxWidth().clickable { share() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.label, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("fariin.com/${info.username}", fontSize = 17.sp, color = c.label)
+                                Text("Link", fontSize = 14.sp, color = c.secondary)
+                            }
+                            Icon(Icons.Filled.QrCode2, "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
                         }
                     }
                 }
                 Spacer(Modifier.height(20.dp))
                 Card {
-                    Row(Modifier.fillMaxWidth().clickable {
+                    val admin = role == Role.ADMIN && team != null
+                    com.fariin.app.ui.settings.SettingsRow("Sounds & Notifications",
+                        icon = androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell),
+                        value = if (muted && shownRole != Role.VISITOR) "Off" else "On") {
                         if (shownRole == Role.VISITOR) notice = "Follow this channel to change its notifications."
                         else tap(if (muted) Action.UNMUTE else Action.MUTE, false)
-                    }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell), null, tint = c.label, modifier = Modifier.size(22.dp))
-                        Spacer(Modifier.width(14.dp))
-                        Text("Sounds & Notifications", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                        Text(if (muted && shownRole != Role.VISITOR) "Off" else "On", fontSize = 17.sp, color = c.secondary)
                     }
-                }
-                if (role == Role.ADMIN) {
-                    if (team != null) {
-                        Spacer(Modifier.height(12.dp))
-                        ChannelManageSection(info, team, me, shownCount, manage)
+                    com.fariin.app.ui.settings.SettingsRow("Storage Used", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_set_storage),
+                        last = !admin) { sub = "storage" }
+                    if (admin) {
+                        ChannelManageRows(info, team!!, me, shownCount, manage, last = false)
+                        com.fariin.app.ui.settings.SettingsRow("Statistics", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_statistics),
+                            last = true) { sub = "stats" }
                     }
-                    // Channel Type and Protect Content live on Channel Settings now (as iOS).
+                    // Channel Type and Protect Content live on Channel Settings (as iOS).
                 }
                 Spacer(Modifier.height(20.dp))
                 Card {
@@ -253,7 +291,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
                         FootRow("Leave Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
                     }
-                    if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
+                    if (role == Role.ADMIN && team?.isOwner(me) == true) FootRow("Delete Channel", Icons.Outlined.Delete, c.red) { askDelete = true }
+                    else if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(16.dp))
                 }
                 if (info.createdAtMillis > 0) {

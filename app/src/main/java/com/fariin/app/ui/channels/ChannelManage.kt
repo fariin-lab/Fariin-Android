@@ -97,13 +97,19 @@ private fun toast(ctx: android.content.Context, text: String) = Toast.makeText(c
 internal fun ChannelManageSection(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav) {
     // iOS channel info (owner 2026-10-18/20): Followers and one Channel Settings row; the rest of the
     // management is on that page. Follow Requests shows here too while someone is waiting.
-    val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = team.can(me, Right.INVITE_USERS))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Fariin.colors.card)) {
-        SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
-        SettingsRow("Channel Settings", icon = painterResource(R.drawable.ic_group_settings), last = reqs.isEmpty()) { nav.settings(info.cid) }
-        if (reqs.isNotEmpty()) SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
-            value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true) { nav.requests(info.cid) }
+        ChannelManageRows(info, team, me, shownCount, nav, last = true)
     }
+}
+
+/** Followers, Channel Settings and (while someone waits) Follow Requests, as bare rows. */
+@Composable
+internal fun ChannelManageRows(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav, last: Boolean) {
+    val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = team.can(me, Right.INVITE_USERS))
+    SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
+    SettingsRow("Channel Settings", icon = painterResource(R.drawable.ic_group_settings), last = last && reqs.isEmpty()) { nav.settings(info.cid) }
+    if (reqs.isNotEmpty()) SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
+        value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = last) { nav.requests(info.cid) }
 }
 
 /** Channel Settings (iOS GroupSettingsView for a channel): the whole management list on its own page. */
