@@ -57,6 +57,7 @@ class RtcEngine(
     companion object {
         private const val TAG = "RtcEngine"
         @Volatile private var factory: PeerConnectionFactory? = null
+        @Volatile private var audioModule: JavaAudioDeviceModule? = null
         val egl: EglBase by lazy { EglBase.create() }
 
         fun factory(context: Context): PeerConnectionFactory = factory ?: synchronized(this) {
@@ -67,6 +68,7 @@ class RtcEngine(
                     .setUseHardwareAcousticEchoCanceler(true)
                     .setUseHardwareNoiseSuppressor(true)
                     .createAudioDeviceModule()
+                audioModule = adm
                 PeerConnectionFactory.builder()
                     .setAudioDeviceModule(adm)
                     .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, true))
@@ -97,6 +99,8 @@ class RtcEngine(
     private val f = factory(context)
     var pc: PeerConnection? = null; private set
     private var audioTrack: AudioTrack? = null
+    private var audioSender: livekit.org.webrtc.RtpSender? = null
+    private var held = false
     var localVideo: VideoTrack? = null; private set
     private var videoSource: VideoSource? = null
     private var capturer: CameraVideoCapturer? = null
@@ -113,7 +117,7 @@ class RtcEngine(
         val src = f.createAudioSource(MediaConstraints())
         audioTrack = f.createAudioTrack("audio0", src).also {
             it.setEnabled(micOn)
-            conn.addTrack(it, listOf(CallWire.STREAM_ID))
+            audioSender = conn.addTrack(it, listOf(CallWire.STREAM_ID))
         }
         val vs = f.createVideoSource(false)
         videoSource = vs
@@ -164,6 +168,26 @@ class RtcEngine(
     // ------------------------------------------------------------------ media controls
 
     fun setMic(on: Boolean) { audioTrack?.setEnabled(on) }
+
+    /**
+     * Built during the ring (iOS preNegotiate): THE MICROPHONE AND THE SPEAKER STAY OFF UNTIL A
+     * PERSON ACCEPTS. Two locks: the audio sender carries NO track (WebRTC only starts recording for
+     * a send stream that has a source, so nothing is captured), and the audio module's playout is
+     * muted (the caller is not heard while it rings). [release] undoes both on Accept; the answer
+     * already said sendrecv, so no renegotiation is needed.
+     */
+    fun hold() {
+        held = true
+        try { audioSender?.setTrack(null, false) } catch (_: Exception) {}
+        audioModule?.setSpeakerMute(true)
+    }
+
+    fun release() {
+        if (!held) return
+        held = false
+        try { audioSender?.setTrack(audioTrack, false) } catch (_: Exception) {}
+        audioModule?.setSpeakerMute(false)
+    }
 
     fun setCamera(on: Boolean) {
         localVideo?.setEnabled(on)
@@ -298,6 +322,7 @@ class RtcEngine(
     private var remoteVideoSeen = 0
 
     fun close() {
+        if (held) { held = false; audioModule?.setSpeakerMute(false) }
         stopScreen()
         stopCamera()
         try { capturer?.dispose() } catch (_: Exception) {}

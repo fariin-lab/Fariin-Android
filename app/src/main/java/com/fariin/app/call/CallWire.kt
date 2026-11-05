@@ -80,6 +80,13 @@ object CallWire {
     }
 
     /** The callee's answer write (iOS buildAnswer), sent together with the accept. */
+    /** The answer sent DURING THE RING (iOS publishEarlyAnswerIfAllowed): no status, never "active";
+     *  the caller applies it without taking it for a pick-up. */
+    fun earlyAnswerFields(me: String, answerEnc: String): Map<String, Any> = mapOf(
+        "answerEnc" to answerEnc,
+        "cams.$me" to false,
+    )
+
     fun answerFields(me: String, answerEnc: String, cameraOn: Boolean): Map<String, Any> = mapOf(
         "answerEnc" to answerEnc,
         "cams.$me" to cameraOn,
@@ -299,7 +306,15 @@ object CallWire {
         restartOffer = versioned(d["restartOffer"]),
         restartAnswer = versioned(d["restartAnswer"]),
         restartRequest = (d["restartRequest"] as? Number)?.toInt(),
+        caps = capsOf(d["caps"]),
     )
+
+    private fun capsOf(v: Any?): Map<String, List<String>> {
+        val m = v as? Map<*, *> ?: return emptyMap()
+        val out = HashMap<String, List<String>>()
+        for ((k, x) in m) { val key = k as? String ?: continue; out[key] = (x as? List<*>)?.filterIsInstance<String>() ?: emptyList() }
+        return out
+    }
 
     private fun boolMap(v: Any?): Map<String, Boolean> =
         (v as? Map<*, *>)?.mapNotNull { (k, b) -> (k as? String)?.let { kk -> (b as? Boolean)?.let { kk to it } } }?.toMap() ?: emptyMap()
@@ -353,6 +368,8 @@ data class CallDoc(
     val restartOffer: Versioned?,
     val restartAnswer: Versioned?,
     val restartRequest: Int?,
+    /** caps.<uid>: what each side's build can do ("early1", "screen2"). */
+    val caps: Map<String, List<String>> = emptyMap(),
 ) {
     val ended get() = status == "ended"
     fun other(me: String) = if (caller == me) callee else caller

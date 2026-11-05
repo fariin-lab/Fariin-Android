@@ -126,6 +126,12 @@ object CallManager {
     private var contact = false
     private var ringtone: Ringtone? = null
     private var offerSdp: String? = null
+    /** The ring built the connection already (iOS preNegotiate); its sealed answer, held for Accept. */
+    private var preNegotiated = false
+    private var heldAnswer: String? = null
+    private var preJob: kotlinx.coroutines.Job? = null
+    /** This side's candidates may go out before Accept (the early answer was sent). */
+    private var earlyOut = false
     private var negotiationVersion = 0
     private var appliedRestart = 0
     private var restartRequestsSeen = 0
@@ -136,6 +142,17 @@ object CallManager {
     fun init(context: Context) {
         if (::app.isInitialized) return
         app = context.applicationContext
+        // The call that is live, written down so a process that dies mid-call is closed on the next
+        // start (endAfterCrash). Cleared when the call ends.
+        main.launch {
+            ui.collect { u ->
+                val live = u.status.phase == CallPhase.ACTIVE || u.status.phase == CallPhase.RECONNECTING
+                val id = callId
+                val p = app.getSharedPreferences(LIVE_PREFS, Context.MODE_PRIVATE)
+                if (live && id != null) { if (p.getString(LIVE_KEY, null) != id) p.edit().putString(LIVE_KEY, id).apply() }
+                else if (!u.status.live && p.contains(LIVE_KEY)) p.edit().remove(LIVE_KEY).apply()
+            }
+        }
         // The screen goes dark at the ear during a voice call on the earpiece.
         main.launch {
             ui.collect { u -> CallProximity.set(app, CallRouting.proximityWanted(u.status.phase, u.cameraOn || u.sharing || u.remoteScreen, u.route.current)) }
@@ -304,8 +321,55 @@ object CallManager {
             contact = withTimeoutOrNull(1500) { signaling.isEstablishedContact(cid) } ?: false
             withTimeoutOrNull(3000) { crypto.preloadKey(d.caller) }
             offerSdp = sealer.open(cid, d.offerEnc)
+            // The caller's build takes an answer during the ring (early1): build the connection now,
+            // so Accept has nothing left to do (iOS preNegotiate; owner 2026-11-05).
+            if (d.caps[d.caller]?.contains(CallWire.EARLY_CAP) == true && callId == d.id && status.phase == CallPhase.INCOMING)
+                preJob = main.launch { preNegotiate(d.id) }
         }
     }
+
+    private suspend fun preNegotiate(id: String) {
+        val sdp = offerSdp ?: return
+        if (callId != id || status.phase != CallPhase.INCOMING || engine != null) return
+        step("ring: pre-negotiate")
+        val servers = awaitIceServers()
+        if (CallWire.strangerWithoutRelay(contact, alwaysRelay(), servers)) return
+        val e = newEngine(servers, isCaller = false, camera = false) ?: return
+        e.hold()
+        try {
+            e.setRemote(SessionDescription.Type.OFFER, sdp)
+            flushPendingRemote()
+            val answer = e.createAnswer()
+            e.setLocal(SessionDescription.Type.ANSWER, answer)
+            heldAnswer = sealWithRetry(answer)
+        } catch (x: Exception) {
+            Log.w(TAG, "pre-negotiate failed", x)
+            if (engine === e) { e.close(); engine = null }
+            return
+        }
+        if (callId != id || heldAnswer == null) return
+        preNegotiated = true
+        listeners += signaling.listenCandidates(id, CallWire.CALLER_CANDIDATES) { onRemoteCandidateDoc(it) }
+        // iOS fix-all #230: the answer goes out during the ring only when this account rings on this
+        // phone alone; with two phones ringing the caller would apply the wrong phone's answer.
+        if (status.phase == CallPhase.INCOMING && ringsOnThisPhoneOnly()) {
+            earlyOut = true
+            signaling.update(id, CallWire.earlyAnswerFields(me, heldAnswer!!))
+            flushLocalCandidates()
+            step("ring: early answer sent")
+        }
+    }
+
+    /** This account's ring reaches this phone only: no iPhone (VoIP token) and one Android token. */
+    private suspend fun ringsOnThisPhoneOnly(): Boolean = withTimeoutOrNull(1500) {
+        try {
+            val d = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+                .collection("push").document("tokens").get().await().data ?: emptyMap()
+            val voip = (d["voipTokens"] as? List<*>).orEmpty()
+            val android = (d[com.fariin.app.push.Push.ANDROID_FIELD] as? List<*>).orEmpty()
+            voip.isEmpty() && android.size <= 1
+        } catch (_: Exception) { false }
+    } ?: false
 
     /** Accept on this phone (the incoming screen or the notification). */
     fun accept() {
@@ -325,6 +389,20 @@ object CallManager {
                 "cancelled", "ended" -> { finish(EndReason.MISSED, updateRemote = false, byUser = false); return@launch }
             }
             step("accept: claimed")
+            // Built during the ring: switch the mic and the sound on, write the held answer with
+            // "active", and start the call now if the path is already up.
+            preJob?.let { j -> if (j.isActive) withTimeoutOrNull(4000) { j.join() } }
+            val pre = engine
+            if (preNegotiated && pre != null && heldAnswer != null && callId == id) {
+                pre.release()
+                pre.setMic(!_ui.value.muted)
+                if (_ui.value.cameraOn) pre.setCamera(true)
+                signaling.update(id, CallWire.answerFields(me, heldAnswer!!, _ui.value.cameraOn))
+                step("accept: pre-negotiated, path up: $mediaReady")
+                flushLocalCandidates()
+                if (mediaReady) onIce(PeerConnection.IceConnectionState.CONNECTED)
+                return@launch
+            }
             var sdp = offerSdp
             var tries = 0
             while (sdp == null && tries < 4 && callId == id) {
@@ -501,7 +579,7 @@ object CallManager {
 
     private fun onLocalCandidate(c: Candidate) {
         val id = callId ?: return
-        val docReady = if (status.isCaller) status.callDocCreated else status.accepted
+        val docReady = if (status.isCaller) status.callDocCreated else (status.accepted || earlyOut)
         if (!docReady) { localBuffer += c; return }
         writeCandidate(id, c)
     }
@@ -550,11 +628,16 @@ object CallManager {
         val id = callId ?: return
         step("ice $state (${if (status.isCaller) "caller" else "callee"})")
         when (state) {
+            PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> mediaReady = true
+            PeerConnection.IceConnectionState.DISCONNECTED, PeerConnection.IceConnectionState.FAILED,
+            PeerConnection.IceConnectionState.CLOSED -> mediaReady = false
+            else -> {}
+        }
+        // Up (or lost) during the ring, early answer on either side: nothing starts and nothing is
+        // restarted until a person accepts; the accept comes back here when the path is up.
+        if (!status.accepted) return
+        when (state) {
             PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> {
-                mediaReady = true
-                // Up during the ring (early answer): nothing to start until the person accepts;
-                // remoteAccepted() comes back here then.
-                if (status.isCaller && !status.accepted) return
                 val first = status.connectedAtMs == null
                 val back = status.phase == CallPhase.RECONNECTING
                 move(if (back) CallEvent.MediaBack else CallEvent.MediaUp(System.currentTimeMillis()))
@@ -914,6 +997,26 @@ object CallManager {
         }
     }
 
+    private const val LIVE_PREFS = "fariin_call_live"
+    private const val LIVE_KEY = "callId"
+
+    /**
+     * The app died during a call (a crash, the system killing it): the other phone was never told and
+     * stayed "in a call" until its own timeout, so the next caller heard "busy" (owner 2026-11-05,
+     * 15:03). On the next start, a call still written down here is ended on the call doc, unless the
+     * doc already says ended or this process is in that very call.
+     */
+    fun endAfterCrash(context: Context) {
+        val p = context.applicationContext.getSharedPreferences(LIVE_PREFS, Context.MODE_PRIVATE)
+        val id = p.getString(LIVE_KEY, null) ?: return
+        p.edit().remove(LIVE_KEY).apply()
+        if (id == callId) return
+        val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("calls").document(id)
+        ref.get().addOnSuccessListener { d ->
+            if (d.exists() && d.getString("status") != "ended" && id != callId) ref.update(CallWire.endFields(EndReason.FAILED))
+        }
+    }
+
     private fun reset() {
         _ui.value = CallUi()
         callId = null
@@ -923,6 +1026,7 @@ object CallManager {
     private fun resetCallVars() {
         recordWritten = false; ringRowWritten = false; answerApplied = false; mediaReady = false
         pendingRemote.clear(); localBuffer.clear(); offerSdp = null
+        preNegotiated = false; heldAnswer = null; preJob?.cancel(); preJob = null; earlyOut = false
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
         lastPeerBeat = 0.0
     }
