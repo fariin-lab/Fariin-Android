@@ -108,6 +108,7 @@ internal fun MediaPagerEditor(
         onDismissRequest = { back() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
         EditorWindow()
         // iOS: the editor is always dark, whatever the phone is set to.
         FariinTheme(dark = true) {

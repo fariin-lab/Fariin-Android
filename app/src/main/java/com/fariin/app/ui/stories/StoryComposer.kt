@@ -1,5 +1,9 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.filled.Sell
 import android.graphics.BitmapFactory
@@ -151,6 +155,7 @@ fun StoryComposerDialog(
     textStory: Boolean = false,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
         StoryComposer(me, media, conversations, onClose, onPosted, textStory)
     }
 }
@@ -196,15 +201,20 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     var posted by remember { mutableStateOf(media) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     var captionArmed by remember { mutableStateOf(true) }
-    val img = remember(box, bmp) {
+    val navBottom = WindowInsets.navigationBars.getBottom(density)
+    // The picture's rounded frame (iOS story editor, owner screenshots 2026-11-04): under the status
+    // bar, ending above the bar of tools; the picture is fitted inside it, edits keep its rectangle.
+    val statusTop = WindowInsets.statusBars.getTop(density)
+    val barPx = with(density) { EDIT_BAR.toPx() }
+    val img = remember(box, bmp, statusTop, navBottom) {
         val b = bmp
         if (b == null || box.width == 0) Rect.Zero else {
-            val k = minOf(box.width / b.width.toFloat(), box.height / b.height.toFloat())
+            val fh = box.height - statusTop - navBottom - barPx
+            val k = minOf(box.width / b.width.toFloat(), fh / b.height.toFloat())
             val w = b.width * k; val h = b.height * k
-            Rect(Offset((box.width - w) / 2, (box.height - h) / 2), androidx.compose.ui.geometry.Size(w, h))
+            Rect(Offset((box.width - w) / 2, statusTop + (fh - h) / 2), androidx.compose.ui.geometry.Size(w, h))
         }
     }
-    val navBottom = WindowInsets.navigationBars.getBottom(density)
     val bin = with(density) { Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx()) }
     val binSlop = with(density) { 12.dp.toPx() }
     val binSize = with(density) { 52.dp.toPx() }
@@ -247,7 +257,12 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     BackHandler(enabled = !drawing && editingId < 0 && !audience && !edits.isEmpty) { askDiscard = true }
 
     Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { box = it }) {
-        bmp?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+        val navDp = with(density) { navBottom.toDp() }
+        Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = EDIT_BAR + navDp).clip(RoundedCornerShape(28.dp))) {
+            bmp?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+            // A video plays here, looping, as on iOS (it only said "Video · 5 s" over its first frame).
+            media.video?.let { v -> StoryEditVideo(v.file) }
+        }
         if (canEdit) StoryEditCanvas(
             edits, img, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = { stroking = it },
@@ -262,53 +277,11 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 dragging = false; trashHot = false
             },
         )
-        if (media.video != null) {
-            Text("Video · ${media.video.info.durationSec.toInt()} s", color = Color.White, fontSize = 13.sp,
-                modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.5f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp))
-        }
         val chrome = !drawing && !dragging && editingId < 0
-        if (chrome) Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { close() }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
-            }
-            Spacer(Modifier.weight(1f))
-            if (canEdit) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { addText() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.TextFields, contentDescription = "Add text", tint = Color.White)
-                }
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { openPen() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White)
-                }
-                if (media.video == null) {
-                    Spacer(Modifier.width(8.dp))
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Sell, contentDescription = "Stickers", tint = Color.White)
-                    }
-                }
-            }
-            Box {
-                Box(
-                    Modifier.padding(start = 8.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { hoursMenu = true },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(Modifier.size(24.dp).border(1.3.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
-                        Text("$hours", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                DropdownMenu(hoursMenu, onDismissRequest = { hoursMenu = false }) {
-                    Text("Choose how long the story will be visible.", fontSize = 13.sp, color = Fariin.colors.secondary,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).width(220.dp))
-                    StoryRules.HOURS.forEach { h ->
-                        DropdownMenuItem(
-                            text = { Text("$h Hours") },
-                            trailingIcon = { if (h == hours) Icon(Icons.Filled.Check, contentDescription = null) },
-                            onClick = { hours = h; hoursMenu = false },
-                        )
-                    }
-                }
-            }
+        // Close inside the frame's top corner (iOS).
+        if (chrome) Box(Modifier.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
+            .clickable { close() }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
         }
         if (drawing && !stroking && editingId < 0) {
             StoryPenTopBar(edits, onClearAll = { askClearAll = true }, modifier = Modifier.align(Alignment.TopCenter))
@@ -320,26 +293,66 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         if (dragging) StoryTrash(trashHot, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 36.dp))
         // Gone while the audience page shows: a caption field left behind kept the keyboard up
         // over Post Story.
-        if (chrome && !audience) Row(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.4f))
-                .navigationBarsPadding().imePadding().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier.weight(1f).padding(vertical = 8.dp).pointerInput(Unit) {
-                    awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); captionArmed = true }
-                },
-                contentAlignment = Alignment.CenterStart,
+        if (chrome && !audience) {
+            // The caption: a dark capsule on the picture's lower edge with the story's lifetime at its
+            // end (iOS); it rises with the keyboard.
+            val imeDp = with(density) { WindowInsets.ime.getBottom(density).toDp() }
+            val lift = maxOf(imeDp + 8.dp, EDIT_BAR + navDp + 12.dp)
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = lift).padding(horizontal = 12.dp).fillMaxWidth()
+                    .clip(RoundedCornerShape(26.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (caption.isEmpty()) Text("Add a caption…", color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp)
-                BasicTextField(caption, { caption = it.take(1000) }, textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                    cursorBrush = SolidColor(Color.White), maxLines = 4,
-                    modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed })
+                Box(
+                    Modifier.weight(1f).padding(vertical = 10.dp).pointerInput(Unit) {
+                        awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); captionArmed = true }
+                    },
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (caption.isEmpty()) Text("Add a caption…", color = Color.White.copy(alpha = 0.65f), fontSize = 17.sp)
+                    BasicTextField(caption, { caption = it.take(1000) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
+                        cursorBrush = SolidColor(Color.White), maxLines = 4,
+                        modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed })
+                }
+                Box {
+                    Box(Modifier.size(44.dp).clip(CircleShape).clickable { hoursMenu = true }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(26.dp).border(1.3.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                            Text("$hours", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    DropdownMenu(hoursMenu, onDismissRequest = { hoursMenu = false }) {
+                        Text("Choose how long the story will be visible.", fontSize = 13.sp, color = Fariin.colors.secondary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).width(220.dp))
+                        StoryRules.HOURS.forEach { h ->
+                            DropdownMenuItem(
+                                text = { Text("$h Hours") },
+                                trailingIcon = { if (h == hours) Icon(Icons.Filled.Check, contentDescription = null) },
+                                onClick = { hours = h; hoursMenu = false },
+                            )
+                        }
+                    }
+                }
             }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Next", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).clickable(enabled = !baking) {
+            // The bar on black under the frame: Aa, stickers and the pen in one capsule, NEXT on the right.
+            Row(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().height(EDIT_BAR).fillMaxWidth().padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (canEdit) Row(Modifier.height(52.dp).clip(RoundedCornerShape(26.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Add text") { addText() }, contentAlignment = Alignment.Center) {
+                        Text("Aa", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (media.video == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
+                        Icon(androidx.compose.material.icons.Icons.Outlined.EmojiEmotions, contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                    Box(Modifier.size(48.dp).clip(CircleShape).clickable { openPen() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Row(
+                    Modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(Color.White).clickable(enabled = !baking) {
                     focus.clearFocus(); keyboard?.hide()
                     if (!canEdit || !StoryEditRules.needsBake(edits.texts.size, edits.strokes.size)) {
                         posted = media; audience = true; return@clickable
@@ -355,8 +368,13 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                         baking = false
                         if (baked != null) { posted = baked; audience = true }
                     }
-                }.padding(horizontal = 18.dp, vertical = 9.dp),
-            )
+                }.padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("NEXT", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+                }
+            }
         }
         if (editingId >= 0) edits.texts.firstOrNull { it.id == editingId }?.let { StoryTextEditor(it, img, onDone = { finishText() }) }
         if (stickerTray) StickerTray(onClose = { stickerTray = false },
@@ -443,4 +461,35 @@ private fun ChipPrompt(title: String, hint: String, onDone: (String) -> Unit, on
         },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { onDone(text) }, enabled = text.isNotBlank()) { Text("Done") } },
         dismissButton = { androidx.compose.material3.TextButton(onClick = onCancel) { Text("Cancel") } })
+}
+
+/** The tools bar under the story editor's frame (Aa, stickers, pen | NEXT), as iOS. */
+private val EDIT_BAR = 80.dp
+
+/** The picked or recorded video, playing on a loop in the editor's frame (the first frame shows until it starts). */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun StoryEditVideo(uri: Uri) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val player = remember(uri) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(uri))
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+            playWhenReady = true
+            prepare()
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(player) { onDispose { player.release() } }
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            (android.view.LayoutInflater.from(ctx).inflate(com.fariin.app.R.layout.story_player, null) as androidx.media3.ui.PlayerView).apply {
+                useController = false
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+            }
+        },
+        update = { it.player = player },
+        modifier = Modifier.fillMaxSize(),
+    )
 }

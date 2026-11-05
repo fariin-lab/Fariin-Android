@@ -130,6 +130,7 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
     }
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
         BackHandler { onClose() }
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
             // iOS stageRect: a square between the top bar (60) and the bottom chrome (176), at most

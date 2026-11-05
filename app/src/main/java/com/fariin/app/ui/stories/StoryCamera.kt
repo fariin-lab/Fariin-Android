@@ -166,6 +166,7 @@ fun StoryCameraDialog(
     onTextStory: (com.fariin.app.data.StoryMedia.Prepared) -> Unit = {},
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()   // no grey band over the status bar
         StoryCamera(active, error, onCaptured, onLibrary, onClose, onTextStory)
     }
 }
@@ -536,7 +537,10 @@ private fun StoryCamera(
         if (hasCamera) {
             AndroidView(
                 factory = { previewView },
-                modifier = Modifier.fillMaxSize()
+                // A rounded frame under the status bar that stops above the bar, as iOS's camera
+                // (owner screenshots 2026-11-04): black around it, the bar's controls on black.
+                modifier = Modifier.fillMaxSize().statusBarsPadding().padding(bottom = BAR_HEIGHT + navBottom)
+                    .clip(RoundedCornerShape(28.dp))
                     .pointerInput(camera) {
                         detectTransformGestures { _, _, zoom, _ ->
                             val c = camera ?: return@detectTransformGestures
