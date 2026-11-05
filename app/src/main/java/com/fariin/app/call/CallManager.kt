@@ -746,8 +746,17 @@ object CallManager {
         ringShown = id
         startRingtone()
         CallNotifications.showIncoming(app, id, _ui.value.peerName, status.video)
-        // In front: open the ring screen at once (a full-screen intent only shows a banner then).
-        if (appInFront()) try { com.fariin.app.ui.call.CallActivity.startRing(app) } catch (_: Exception) {}
+        // The caller's face on the banner (it showed a letter): loaded, then the same notification is
+        // posted again (setOnlyAlertOnce, so no second alert).
+        val url = _ui.value.peerPhoto
+        if (!url.isNullOrEmpty()) main.launch {
+            val bmp = withTimeoutOrNull(3000) { roundPhoto(url) } ?: return@launch
+            if (callId == id && status.phase == CallPhase.INCOMING) CallNotifications.showIncoming(app, id, _ui.value.peerName, status.video, bmp)
+        }
+        // In use, the ring is the system's banner with Answer and Decline and the person stays where
+        // they are; locked or asleep, the full-screen intent takes the screen (owner 2026-11-05,
+        // the reference app side by side: Fariin opened the whole call screen over whatever he was
+        // doing). Tapping the banner itself opens the ring screen.
     }
 
     /** Answer from a headset, the car or a watch: the call screen asks for the mic when it must. */
@@ -762,6 +771,22 @@ object CallManager {
             app.startActivity(i)
         } catch (_: Exception) {}
     }
+
+    private suspend fun roundPhoto(url: String): android.graphics.Bitmap? = try {
+        val r = coil3.SingletonImageLoader.get(app).execute(
+            coil3.request.ImageRequest.Builder(app).data(url).size(192).build())
+        val src = ((r as? coil3.request.SuccessResult)?.image as? coil3.BitmapImage)?.bitmap
+        src?.let { b ->
+            val side = minOf(b.width, b.height)
+            val out = android.graphics.Bitmap.createBitmap(side, side, android.graphics.Bitmap.Config.ARGB_8888)
+            val cv = android.graphics.Canvas(out)
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            cv.drawCircle(side / 2f, side / 2f, side / 2f, paint)
+            paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+            cv.drawBitmap(b, (side - b.width) / 2f, (side - b.height) / 2f, paint)
+            out
+        }
+    } catch (_: Exception) { null }
 
     private fun granted(p: String) = ContextCompat.checkSelfPermission(app, p) == PackageManager.PERMISSION_GRANTED
 

@@ -127,8 +127,10 @@ object CallNotifications {
         })
     }
 
-    fun showIncoming(c: Context, callId: String, name: String, video: Boolean) {
-        val person = Person.Builder().setName(name).setImportant(true).build()
+    fun showIncoming(c: Context, callId: String, name: String, video: Boolean, photo: android.graphics.Bitmap? = null) {
+        val person = Person.Builder().setName(name).setImportant(true)
+            .apply { if (photo != null) setIcon(androidx.core.graphics.drawable.IconCompat.createWithBitmap(photo)) }
+            .build()
         ensureRingChannel(c)
         val n = NotificationCompat.Builder(c, RING_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_fariin)
