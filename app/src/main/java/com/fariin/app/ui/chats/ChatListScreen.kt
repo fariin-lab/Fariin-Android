@@ -104,6 +104,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -314,6 +315,13 @@ fun ChatListScreen(
     // away with the list and a search button takes its place in the bar.
     val haze = remember { dev.chrisbanes.haze.HazeState() }
     val glass = com.fariin.app.perf.rememberPowerState().glass()
+    // The glass's lower edge: full strength under the title, then an eased fade to nothing.
+    val barFade = remember {
+        androidx.compose.ui.graphics.Brush.verticalGradient(
+            0f to Color.Black, 0.55f to Color.Black, 0.66f to Color.Black.copy(alpha = 0.85f),
+            0.77f to Color.Black.copy(alpha = 0.55f), 0.87f to Color.Black.copy(alpha = 0.25f),
+            0.94f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
+    }
     val scrolled by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
     val searchGone by remember { androidx.compose.runtime.derivedStateOf {
         listState.firstVisibleItemIndex > 1 || (listState.firstVisibleItemIndex == 1 && listState.firstVisibleItemScrollOffset > 24)
@@ -351,14 +359,22 @@ fun ChatListScreen(
         topBar = {
             Column(
                 Modifier.then(when {
-                    // Select mode too: one soft frosted colour from the status bar down (owner 2026-11-03:
-                    // the grey bar under a white strip read as two colours).
-                    (scrolled || selecting) && glass -> Modifier.hazeEffect(haze) {
+                    // Owner 2026-11-05 ("make it high end like Settings"): the glass is always on, so
+                    // nothing switches at the first scroll, and it reaches a long tail below the bar
+                    // where blur and tint fade out together, so its end can not be seen. The tail is
+                    // drawn but not measured: the list's top padding stays the bar's own height.
+                    glass -> Modifier.layout { m, k ->
+                        val tail = 36.dp.roundToPx()
+                        val p = m.measure(k.copy(maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+                        val h = (p.height - tail).coerceAtLeast(0)
+                        layout(p.width, h) { p.place(0, 0) }
+                    }.hazeEffect(haze) {
                         backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
-                        tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.72f)))
+                        tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.7f)))
                         // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
                         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-                    }
+                        mask = barFade
+                    }.padding(bottom = 36.dp)
                     scrolled || selecting -> Modifier.background(c.bg.copy(alpha = 0.97f))
                     else -> Modifier.background(c.bg)
                 }).statusBarsPadding(),
