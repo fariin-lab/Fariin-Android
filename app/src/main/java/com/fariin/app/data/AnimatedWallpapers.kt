@@ -77,12 +77,11 @@ object AnimatedWallpapers {
     private const val TWO_PI = (2 * Math.PI).toFloat()
 
     /**
-     * Whether a wallpaper moves: the Animated Wallpapers setting is on, Power Saving "Animations" is
-     * allowed (that already counts Battery Saver), and the phone's own animations are not removed.
-     * Being on screen and resumed is the caller's part (the frame loop only runs then).
+     * Whether a wallpaper moves: only the phone's own "Remove animations" stills it (iOS: Reduce Motion).
+     * No app switch, and Battery Saver does not stop it (owner 2026-11-06). Being on screen and resumed
+     * is the caller's part (the frame loop only runs then).
      */
-    fun moves(setting: Boolean, powerAnimations: Boolean, systemAnimations: Boolean): Boolean =
-        setting && powerAnimations && systemAnimations
+    fun moves(systemAnimations: Boolean): Boolean = systemAnimations
 
     /** The phase after [seconds] more of a [period]-second loop, kept in 0..2 pi. */
     fun advance(phase: Float, seconds: Float, period: Float): Float {
@@ -142,8 +141,10 @@ object AnimatedWallpapers {
         if (loaded) return
         loaded = true
         val p = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        enabled.value = p.getBoolean(ENABLED_KEY, true)
-        intensity.intValue = p.getInt(INTENSITY_KEY, 1).coerceIn(0, 2)
+        // No switch and no amount any more (owner 2026-11-06): always on, particles at Medium. An old
+        // saved "off" or "Low/High" is ignored.
+        enabled.value = true
+        intensity.intValue = 1
     }
 
     fun setEnabled(c: Context, on: Boolean) {

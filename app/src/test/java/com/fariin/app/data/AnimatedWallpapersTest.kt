@@ -116,10 +116,9 @@ class AnimatedWallpapersTest {
     }
 
     @Test fun movesOnlyWhenEverythingAllows() {
-        assertTrue(AnimatedWallpapers.moves(setting = true, powerAnimations = true, systemAnimations = true))
-        assertFalse(AnimatedWallpapers.moves(setting = false, powerAnimations = true, systemAnimations = true))
-        assertFalse(AnimatedWallpapers.moves(setting = true, powerAnimations = false, systemAnimations = true))
-        assertFalse(AnimatedWallpapers.moves(setting = true, powerAnimations = true, systemAnimations = false))
+        // Only the phone's "Remove animations" stills a moving wallpaper (no app switch, not Battery Saver).
+        assertTrue(AnimatedWallpapers.moves(systemAnimations = true))
+        assertFalse(AnimatedWallpapers.moves(systemAnimations = false))
     }
 
     @Test fun phaseGoesRoundOncePerLoop() {

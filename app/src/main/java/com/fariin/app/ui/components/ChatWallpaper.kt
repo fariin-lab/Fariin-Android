@@ -254,8 +254,8 @@ object ChatWallpaperClock {
 
 /**
  * The motion for [w]. With [drive] the loop advances while ALL of these hold: [w] is animated, the
- * Animated Wallpapers setting is on, Power Saving allows animations (Battery Saver included), the
- * phone has not removed animations, this is on screen (composed), the screen is resumed and
+ * phone has not removed animations (no app switch, and Battery Saver does not stop it: owner
+ * 2026-11-06), this is on screen (composed), the screen is resumed and
  * [animates] (a picker tile that is not the chosen one shows a still frame, to save battery). At most
  * 30 frames a second in a chat, 20 in a picker tile ([preview]) and for Doodles, never above the
  * display's own rate.
@@ -271,8 +271,7 @@ fun rememberWallpaperMotion(
     val scale = a.scale(preview)
     // Doodles draws at full size with no shader, so it needs no layer of its own.
     val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && scale > 1f) rememberGraphicsLayer() else null
-    val moving = animates && AnimatedWallpapers.moves(AnimatedWallpapers.enabled.value, rememberPowerState().animations,
-        com.fariin.app.ui.thread.systemAnimationsOn())
+    val moving = animates && AnimatedWallpapers.moves(com.fariin.app.ui.thread.systemAnimationsOn())
     val fps = a.fps(preview)
     @Suppress("DEPRECATION") val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     if (drive) LaunchedEffect(a.id, moving, fps, owner) {

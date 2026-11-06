@@ -445,38 +445,8 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
             SettingsSection {
                 SettingsRow("Night Mode", value = AppearancePrefs.current(ctx).label, last = true) { push(PAGE_NIGHT) }
             }
-            // Moving wallpapers can be stilled here, on top of the phone's own animation and Battery Saver settings.
-            com.fariin.app.data.AnimatedWallpapers.load(ctx)
-            SettingsSection(footer = "When off, animated wallpapers show a still picture. They also stop moving when animations " +
-                "are turned off in Power Saving or on the phone, or Battery Saver is on.") {
-                val animOn = com.fariin.app.data.AnimatedWallpapers.enabled.value
-                SwitchRow("Animated Wallpapers", animOn) {
-                    com.fariin.app.data.AnimatedWallpapers.setEnabled(ctx, it)
-                }
-                // Snow, rain and glowing dots: how much of it (iOS Picker "Particles": Low, Medium, High).
-                var particleMenu by remember { mutableStateOf(false) }
-                val level = com.fariin.app.data.AnimatedWallpapers.intensity.intValue
-                Box {
-                    SettingsRow("Particles", value = com.fariin.app.data.AnimatedWallpapers.INTENSITY_NAMES[level],
-                        trailing = Trailing.NONE, titleColor = if (animOn) null else com.fariin.app.ui.theme.Fariin.colors.secondary,
-                        last = true, onClick = if (animOn) ({ particleMenu = true }) else null)
-                    // The menu opens under the value it changes, on the right, not over the row above.
-                    Box(Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 16.dp)) {
-                    DropdownMenu(expanded = particleMenu && animOn, onDismissRequest = { particleMenu = false },
-                        shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
-                        containerColor = com.fariin.app.ui.components.FariinMenu.container) {
-                        com.fariin.app.data.AnimatedWallpapers.INTENSITY_NAMES.forEachIndexed { i, name ->
-                            DropdownMenuItem(text = { Text(name) }, onClick = {
-                                particleMenu = false
-                                com.fariin.app.data.AnimatedWallpapers.setIntensity(ctx, i)
-                            }, trailingIcon = if (i == level) ({
-                                Icon(Icons.Filled.Check, contentDescription = "Selected")
-                            }) else null)
-                        }
-                    }
-                    }
-                }
-            }
+            // Moving wallpapers have no switch and no amount setting (owner 2026-11-06: the big apps have
+            // none): a moving one always moves; to stop it, pick another. Only the phone's "Remove animations" stills it.
         }
     }
 }
