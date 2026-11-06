@@ -932,3 +932,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   profile, a channel for nameless clickables: only that one). e1b554c (agent) Statistics Recent Posts with quote
   counts (iOS uses the same stats page for channels, so no separate page needed). Background: 0.4% CPU, no wake
   locks after 30 s. Manage storage Keep Media order matches iOS (left).
+- 10:50 SECURITY 1762f77: a message like "x@a.a.a.a..." crashed the chat (email regex recursion, StackOverflow;
+  older than today) and "a.a.a..." stalled ~180 ms per draw; every link/email repeat bounded, starts only at word
+  starts, email/@name passes only with an "@". Speed test added; checked on the Pixel (no crash, post deleted).
+  c0cd464 (agent) "Did you mean" under No Results. Agent running: who quoted a post (quoteCount bar + sheet).
