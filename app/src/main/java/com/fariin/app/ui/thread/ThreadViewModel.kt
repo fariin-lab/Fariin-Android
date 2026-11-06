@@ -232,6 +232,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             var handled: String? = null
             combine(vm.repo.state, atBottom) { st, bottom -> st to bottom }.collect { (st, bottom) ->
                 if (!st.loaded || !bottom || st.former) return@collect
+                // A group's doc is written only by its members: a visitor reading a public channel
+                // from outside (or a member before the doc has come) sends no read mark.
+                if (com.fariin.app.crypto.Wire.isGroupCid(cid) && me !in ((st.conv["users"] as? List<*>) ?: emptyList<Any>())) return@collect
                 val newest = st.messages.lastOrNull { it.authorId != me }?.rowId ?: ""
                 if (newest != handled) { handled = newest; vm.repo.markRead() }
             }

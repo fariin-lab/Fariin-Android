@@ -1449,6 +1449,8 @@ class ThreadRepository(
     fun setTyping(on: Boolean) {
         // Privacy > Messages > Typing Indicators off: I send none (an "off" still goes out).
         if (on && !PrivacySettings.typingIndicators()) return
+        // Only a group's members may write its doc (a channel visitor never does).
+        if (Wire.isGroupCid(cid) && me !in ((_state.value.conv["users"] as? List<*>) ?: emptyList<Any>())) return
         scope.launch {
             try {
                 val v = MessageRules.typingValue(on, System.currentTimeMillis())

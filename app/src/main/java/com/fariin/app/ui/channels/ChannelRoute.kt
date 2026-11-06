@@ -143,11 +143,19 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
     val scope = rememberCoroutineScope()
     val docInfo = if (doc["channel"] == true) ChannelInfo.from(cid, doc) else null
     // A visitor cannot read the document: the header comes from publicGroupPreview, once the
-    // first page of posts says this chat can be read from outside.
-    val maybeGuest = docInfo == null && com.fariin.app.crypto.Wire.isGroupCid(cid) && doc.isEmpty()
+    // first page of posts says this chat can be read from outside. Not only an empty doc: a
+    // pending local write could leave a doc without `users` in the phone's cache.
+    val maybeGuest = docInfo == null && com.fariin.app.crypto.Wire.isGroupCid(cid) &&
+        me !in ((doc["users"] as? List<*>) ?: emptyList<Any>())
     LaunchedEffect(cid, maybeGuest) {
         if (!maybeGuest || preview != null) return@LaunchedEffect
-        val r = ChannelService.preview(cid)
+        var r = ChannelService.preview(cid)
+        // A dropped connection is asked again a few times, not taken for "not a channel".
+        var tries = 1
+        while (r is ChannelService.PreviewResult.Failed && tries < 4) {
+            kotlinx.coroutines.delay(2_000L * tries); tries++
+            r = ChannelService.preview(cid)
+        }
         if (r is ChannelService.PreviewResult.Found && r.preview.isChannel) {
             preview = r.preview
             CryptoHub.notePlainGroup(cid)   // read from outside = public and not end-to-end encrypted
