@@ -165,7 +165,10 @@ internal fun MessageMenu(
             if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) onCopy(m.text) })
             if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit) { onStartEdit(m) })
-            if (m.edited) add(MenuItem("Edit History", Icons.Outlined.History) { onEditHistory(m) })
+            // In a channel only its owner and admins see a post's earlier versions (iOS 0ed7fa04);
+            // groups and 1:1 chats unchanged.
+            val historyAllowed = ui.channel?.let { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN } ?: true
+            if (m.edited && historyAllowed) add(MenuItem("Edit History", Icons.Outlined.History) { onEditHistory(m) })
         }
         // iOS: a photo, video, album or GIF still going up can be stopped from its menu, not only its ring.
         if (m.sendState == Message.SendState.SENDING && (m.mediaKind != null || m.isGif)) uploadCancelFor(m)?.let { cancel ->
