@@ -55,4 +55,13 @@ class UploadedEmojiTest {
         assertFalse(UploadedEmoji.looksValid(ByteArray(100)))
         assertFalse(UploadedEmoji.looksValid(ByteArray(64 * 1024 + 1).also { it[0] = 0x1f; it[1] = 0x8b.toByte() }))
     }
+
+    @Test fun hiddenBuiltInLeaveThePicker() {
+        assertEquals(setOf("ce_2", "ce_10"), UploadedEmoji.parseHidden(listOf("ce_2", "ce_10", "cu_abc", "ce_x", 5, null)))
+        assertEquals(emptySet<String>(), UploadedEmoji.parseHidden(null))
+        assertEquals(emptySet<String>(), UploadedEmoji.parseHidden("ce_1"))
+        val built = listOf("ce_1", "ce_2", "ce_3")
+        assertEquals(listOf("ce_1", "ce_3"), UploadedEmoji.offered(built, setOf("ce_2")))
+        assertEquals(built, UploadedEmoji.offered(built, emptySet()))
+    }
 }

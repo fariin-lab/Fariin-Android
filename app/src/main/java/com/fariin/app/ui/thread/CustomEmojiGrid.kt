@@ -53,7 +53,8 @@ fun CustomEmojiGrid(onPick: (String) -> Unit, modifier: Modifier = Modifier,
     val c = Fariin.colors
     val ctx = LocalContext.current
     val uploaded by UploadedEmoji.items.collectAsState()
-    val keys = remember(uploaded) { CustomReaction.all() }
+    val hidden by UploadedEmoji.hidden.collectAsState()
+    val keys = remember(uploaded, hidden) { CustomReaction.all() }
     val canAdd = remember { canChooseCustom() }
     val busy by CustomEmojiUpload.busy.collectAsState()
     // The upload runs outside this sheet, so closing it does not stop the files halfway.

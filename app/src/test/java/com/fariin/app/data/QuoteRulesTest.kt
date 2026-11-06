@@ -88,4 +88,32 @@ class QuoteRulesTest {
         assertFalse(QuoteRules.isStale(stamp, now + 14_000))
         assertTrue(QuoteRules.isStale(stamp, now + 16_000))
     }
+
+    @Test fun pictureSource() {
+        assertEquals("img", QuoteRules.pictureUrl("img", null, null, null))
+        // A video gives its poster, never the clip.
+        assertEquals("poster", QuoteRules.pictureUrl(null, "clip", "poster", null))
+        assertNull(QuoteRules.pictureUrl(null, "clip", null, null))
+        // An album: its first tile.
+        assertEquals("tile0", QuoteRules.pictureUrl(null, null, null, "tile0"))
+        assertNull(QuoteRules.pictureUrl(null, null, null, null))
+        assertNull(QuoteRules.pictureUrl("", null, null, null))
+    }
+
+    @Test fun pictureSizeCapsLongSide() {
+        assertEquals(900 to 675, QuoteRules.pictureSize(4000, 3000))
+        assertEquals(506 to 900, QuoteRules.pictureSize(1080, 1920))
+        assertEquals(640 to 480, QuoteRules.pictureSize(640, 480))
+        assertEquals(0 to 0, QuoteRules.pictureSize(0, 100))
+        assertEquals(listOf(72, 60, 48, 36, 24), QuoteRules.PICTURE_QUALITIES)
+    }
+
+    @Test fun tapInTheOpenChatJumps() {
+        val c = QuoteCard(QuoteCard.State.OK, cid = "ch1", mid = "m1")
+        assertTrue(QuoteRules.jumpsInPlace(c, "ch1"))
+        assertFalse(QuoteRules.jumpsInPlace(c, "other"))
+        assertFalse(QuoteRules.jumpsInPlace(c.copy(state = QuoteCard.State.DELETED), "ch1"))
+        assertFalse(QuoteRules.jumpsInPlace(c.copy(mid = ""), "ch1"))
+        assertFalse(QuoteRules.jumpsInPlace(null, "ch1"))
+    }
 }

@@ -31,8 +31,10 @@ import java.util.zip.GZIPInputStream
 object CustomReaction {
     private const val COUNT = 181
     val builtIn: List<String> = (1..COUNT).map { "ce_$it" }
-    /** The built-in ones, then the uploaded ones, newest last (iOS CustomReaction.all). */
-    fun all(): List<String> = builtIn + com.fariin.app.data.UploadedEmoji.items.value.map { "cu_" + it.id }
+    /** The built-in ones, then the uploaded ones, newest last (iOS CustomReaction.all). Built-in ones
+     *  the admin panel hid are left out; a channel that already uses one keeps showing it. */
+    fun all(): List<String> = com.fariin.app.data.UploadedEmoji.offered(builtIn, com.fariin.app.data.UploadedEmoji.hidden.value) +
+        com.fariin.app.data.UploadedEmoji.items.value.map { "cu_" + it.id }
     fun isCustom(key: String?): Boolean = com.fariin.app.data.UploadedEmoji.isKey(key) ||
         (key != null && key.startsWith("ce_") && key.drop(3).toIntOrNull()?.let { it in 1..COUNT } == true)
     /** A key that looks like a custom one ("ce_" or "cu_") but is not known: never drawn as raw text. */

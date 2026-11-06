@@ -93,4 +93,40 @@ object QuoteRules {
 
     /** After a failed call: the time to record so the id is asked again about 15 s later, not in a loop. */
     fun retryStamp(now: Long): Long = now - FRESH_MS + 15_000L
+
+    // ---- The post's picture, sent by the quoting phone (owner 2026-11-06) ----
+    // Channel media is sealed, so the server cannot make a picture of the post itself: the phone
+    // that quotes sends a small JPEG of it as it already has it open.
+
+    /** Longest side of the picture sent with createQuote, in pixels. */
+    const val PICTURE_SIDE = 900
+
+    /** Most bytes the JPEG may have (the server's cap is a little above). */
+    const val PICTURE_BYTES = 380_000
+
+    /** JPEG qualities tried in turn until the picture fits [PICTURE_BYTES] (iOS: 0.72 down by 0.12). */
+    val PICTURE_QUALITIES = listOf(72, 60, 48, 36, 24)
+
+    /**
+     * Which file of the post makes its picture: a photo's own image, a video's poster frame, an
+     * album's first tile (a clip's tile is its poster). Null for a post with no picture.
+     */
+    fun pictureUrl(imageUrl: String?, videoUrl: String?, thumbUrl: String?, albumFirst: String?): String? = when {
+        albumFirst != null -> albumFirst.ifEmpty { null }
+        videoUrl != null -> thumbUrl?.ifEmpty { null }
+        else -> imageUrl?.ifEmpty { null }
+    }
+
+    /** The picture's size scaled down so its long side is at most [PICTURE_SIDE] (never up). */
+    fun pictureSize(w: Int, h: Int): Pair<Int, Int> {
+        val long = maxOf(w, h)
+        if (w <= 0 || h <= 0) return 0 to 0
+        if (long <= PICTURE_SIDE) return w to h
+        val s = PICTURE_SIDE.toDouble() / long
+        return maxOf(1, Math.round(w * s).toInt()) to maxOf(1, Math.round(h * s).toInt())
+    }
+
+    /** Whether a quote of [c] tapped in the chat [openCid] stays in it (scroll to the post) rather than opening it again. */
+    fun jumpsInPlace(c: QuoteCard?, openCid: String?): Boolean =
+        c?.state == QuoteCard.State.OK && c.cid.isNotEmpty() && c.mid.isNotEmpty() && c.cid == openCid
 }

@@ -72,6 +72,31 @@ object UploadedEmoji {
         }
     }
 
+    // ---- Built-in custom emoji hidden in the admin panel (owner 2026-11-06) ----
+    // `config/features.customEmojiHidden` = ["ce_N", ...]: left out of the Custom picker. A channel
+    // that already uses one keeps showing it; only offering it again stops.
+
+    private const val HIDDEN_KEY = "hidden.v1"
+    private val _hidden = MutableStateFlow<Set<String>>(emptySet())
+    val hidden: StateFlow<Set<String>> = _hidden
+
+    /** The panel's hidden list, keeping only "ce_" + a number. */
+    fun parseHidden(raw: Any?): Set<String> = (raw as? List<*>).orEmpty()
+        .mapNotNull { (it as? String)?.takeIf { s -> s.startsWith("ce_") && s.drop(3).toIntOrNull() != null } }
+        .toSet()
+
+    /** The built-in keys the picker offers: all but the hidden ones, in their order. */
+    fun offered(builtIn: List<String>, hidden: Set<String>): List<String> =
+        if (hidden.isEmpty()) builtIn else builtIn.filter { it !in hidden }
+
+    /** From the config/features listener. */
+    fun updateHidden(raw: Any?) {
+        val set = parseHidden(raw)
+        if (set == _hidden.value) return
+        _hidden.value = set
+        prefs?.edit()?.putStringSet(HIDDEN_KEY, set)?.apply()
+    }
+
     /** True for a gzip file of the allowed size. */
     fun looksValid(bytes: ByteArray): Boolean =
         bytes.size in 21..MAX_BYTES && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()
@@ -81,6 +106,7 @@ object UploadedEmoji {
         prefs = p
         dir = File(c.applicationContext.cacheDir, "custom_emoji")
         _known.value = p.contains(KEY)
+        _hidden.value = p.getStringSet(HIDDEN_KEY, null)?.toSet() ?: emptySet()
         _items.value = runCatching {
             val a = JSONArray(p.getString(KEY, "[]"))
             (0 until a.length()).map { a.getJSONObject(it) }.map { mapOf("id" to it.optString("id"), "url" to it.optString("url")) }

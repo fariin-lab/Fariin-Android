@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Mic
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -504,8 +505,9 @@ private fun ThreadContent(
             if (flashId == row) flashId = null
         }
     }
-    // A quote card's tap opened this channel: once its messages are in, scroll to the post and light it.
-    LaunchedEffect(ui.cid, ui.loaded) {
+    // A quote card's tap opened this channel (or was tapped in it): once its messages are in, scroll to the post and light it.
+    val quoteJump by com.fariin.app.data.QuoteStore.pendingJump.collectAsState()
+    LaunchedEffect(ui.cid, ui.loaded, quoteJump) {
         val j = com.fariin.app.data.QuoteStore.pendingJump.value?.takeIf { it.cid == ui.cid } ?: return@LaunchedEffect
         if (!ui.loaded) return@LaunchedEffect
         com.fariin.app.data.QuoteStore.pendingJump.value = null
@@ -927,7 +929,7 @@ private fun ThreadContent(
                 if (editing == null) quoting?.let { q ->
                     ComposerBar("Quote from ${com.fariin.app.data.QuoteRules.heading(q.card)}",
                         com.fariin.app.data.QuoteRules.body(q.card),
-                        thumb = if (com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card) }) else null) { quoting = null }
+                        thumb = if (com.fariin.app.data.QuoteStore.picture(q.qid) != null || com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card, q.qid) }) else null) { quoting = null }
                 }
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
@@ -1034,6 +1036,7 @@ private fun ThreadContent(
                     },
                     // A quote may go with no words (owner 2026-11-06, iOS sendsWithoutText).
                     sendsWithoutText = quoting != null && editing == null,
+                    focusKey = quoting?.qid,
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
                     onSticker = { s ->
@@ -1360,18 +1363,19 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // The sender's link card over the words (iOS: quote, card, then the text).
             // No sealed card (an older message, or previews off): one of our group or channel links
             // in the words still gets the live card.
-            // A quoted channel post takes the card's place (iOS quoteBody, QuoteBubble.kt).
-            if (!m.deleted) m.quoteId?.let { QuoteCardBubble(it, chromeMe) }
-                ?: m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, chromeMe) else LiveGroupLinkCard(body, chromeMe) }
+            // A quoted channel post goes UNDER the words instead, the time on its own line below it (QuoteBubble.kt).
+            val quoteId = m.quoteId?.takeIf { !m.deleted }
+            if (!m.deleted && quoteId == null)
+                m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, chromeMe) else LiveGroupLinkCard(body, chromeMe) }
             // A channel post's reactions sit inside its bubble, the time line with them (iOS).
             val ch = ui.channel
             val chips = if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
-            // A quote sent with no words: no empty text line, only the time at the card's right edge.
-            Box(if (body.isEmpty() && m.quoteId != null) Modifier.align(Alignment.End) else Modifier) {
+            // A quote sent with no words: no empty text line, only the card.
+            if (body.isNotEmpty() || quoteId == null) Box {
             TextWithMeta(
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
-                meta = { if (chips.isEmpty()) Meta(m, tick, isMe, is24h) else Spacer(Modifier) },
+                meta = { if (chips.isEmpty() && quoteId == null) Meta(m, tick, isMe, is24h) else Spacer(Modifier) },
                 // iOS BubbleText: a group's @mentions in semibold.
                 bold = remember(body, m.mentions, ui.names, m.deleted) {
                     if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
@@ -1379,6 +1383,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 // iOS BubbleText: links, @usernames, emails and numbers tappable (BubbleLinks.kt).
                 linkInk = if (m.deleted) null else styled?.ink ?: if (isMe) Color.White else c.blue,
             )
+            }
+            quoteId?.let { q ->
+                if (body.isNotEmpty()) Spacer(Modifier.height(6.dp))
+                QuoteCardBubble(q, chromeMe, ui.cid, meta = if (chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null)
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
         }
@@ -1706,6 +1714,8 @@ private fun Composer(
     onToggleSilent: () -> Unit = {},
     /** Something waits to go with no words needed (a quoted channel post): Send shows on an empty field. */
     sendsWithoutText: Boolean = false,
+    /** Changes when the field should take the keyboard (a quote just placed above it). */
+    focusKey: Any? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1802,6 +1812,14 @@ private fun Composer(
     // words, then Send. No bar behind them: the chat's bottom edge strip (ThreadEdgeGlass) is that.
     var emojiOpen by rememberSaveable { mutableStateOf(false) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // The keyboard after the push lands, not during it (owner 2026-11-06): a quote opens this chat
+    // with a slide; focusing at once raised the keyboard inside the sliding screen.
+    val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(focusKey) {
+        if (focusKey == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(550)
+        runCatching { fieldFocus.requestFocus(); keyboard?.show() }
+    }
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     // Where the row rests (iOS positionBottomBar): 8 above the keys; at rest, sunk 5 into the gesture
     // strip (8 + strip - 13), above a 3-button bar by 8. Measured in layout, never recomposed.
@@ -1872,7 +1890,7 @@ private fun Composer(
                         textStyle = fieldText.copy(color = c.label),
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
-                        modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false }
+                        modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged { if (it.isFocused) emojiOpen = false }
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },
                     )

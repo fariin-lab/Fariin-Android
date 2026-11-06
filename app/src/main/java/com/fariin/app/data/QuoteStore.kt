@@ -86,20 +86,38 @@ object QuoteStore {
         data class Refused(val text: String) : Made
     }
 
-    /** Quote a channel post: the server checks I may see it and keeps a snapshot; my card is seeded. */
-    suspend fun create(cid: String, mid: String): Made = try {
-        val d = fn.getHttpsCallable("createQuote").withTimeout(15, TimeUnit.SECONDS)
-            .call(mapOf("cid" to cid, "mid" to mid)).await().getData() as? Map<*, *>
+    /**
+     * Quote a channel post: the server checks I may see it and keeps a snapshot; my card is seeded.
+     * [picture] is the post's picture as this phone has it open (a small JPEG, see QuotePicture):
+     * channel media is sealed, so the server cannot make one itself.
+     */
+    suspend fun create(cid: String, mid: String, picture: ByteArray? = null): Made = try {
+        val args = HashMap<String, Any>()
+        args["cid"] = cid
+        args["mid"] = mid
+        if (picture != null) args["image"] = android.util.Base64.encodeToString(picture, android.util.Base64.NO_WRAP)
+        val d = fn.getHttpsCallable("createQuote").withTimeout(20, TimeUnit.SECONDS)
+            .call(args).await().getData() as? Map<*, *>
         val qid = d?.get("qid") as? String
         val card = QuoteRules.parse(d, forceOk = true)?.copy(cid = cid, mid = mid)
         if (!QuoteRules.isQid(qid) || card == null) Made.Refused("Couldn't quote this post. Try again.")
-        else { seed(qid!!, card); Made.Ok(qid, card) }
+        else {
+            if (picture != null) synchronized(pictures) { pictures[qid!!] = picture }
+            seed(qid!!, card); Made.Ok(qid, card)
+        }
     } catch (e: FirebaseFunctionsException) {
         Made.Refused(if (e.code == FirebaseFunctionsException.Code.PERMISSION_DENIED || e.code == FirebaseFunctionsException.Code.NOT_FOUND)
             "You can't quote this post." else "Couldn't quote this post. Try again.")
     } catch (_: Exception) {
         Made.Refused("Couldn't quote this post. Try again.")
     }
+
+    /**
+     * The JPEG this phone made for each quote it created, kept in memory for this run: the composer
+     * bar's thumbnail and my own sent bubble show it at once, before the server's copy loads.
+     */
+    private val pictures = HashMap<String, ByteArray>()
+    fun picture(qid: String): ByteArray? = synchronized(pictures) { pictures[qid] }
 
     /** A quote waiting for the chat it was sent to, shown above that chat's composer once it opens. */
     data class Draft(val cid: String, val qid: String, val card: QuoteCard)

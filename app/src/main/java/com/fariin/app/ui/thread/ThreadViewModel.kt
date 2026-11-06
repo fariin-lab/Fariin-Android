@@ -184,7 +184,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // then the chat picked opens with the quote above its composer; this chat keeps it here.
         onQuoteTo = { m, dest ->
             vm.viewModelScope.launch {
-                when (val r = com.fariin.app.data.QuoteStore.create(cid, m.id)) {
+                // The post's picture as this phone has it (channel media is sealed; QuotePicture.kt).
+                val picture = com.fariin.app.media.QuotePicture.make(vm.repo.media, m)
+                when (val r = com.fariin.app.data.QuoteStore.create(cid, m.id, picture)) {
                     is com.fariin.app.data.QuoteStore.Made.Refused -> notice = r.text
                     is com.fariin.app.data.QuoteStore.Made.Ok -> {
                         com.fariin.app.data.QuoteStore.pendingDraft.value = com.fariin.app.data.QuoteStore.Draft(dest, r.qid, r.card)

@@ -50,6 +50,8 @@ object AppFeatures {
                 if (!snap.exists()) return@addSnapshotListener
                 // Custom emoji from the admin panel are live too, as iOS.
                 UploadedEmoji.update(snap.get("customEmoji"))
+                // Built-in ones the panel hid leave the picker, live (owner 2026-11-06).
+                UploadedEmoji.updateHidden(snap.get("customEmojiHidden"))
                 val e = prefs?.edit() ?: return@addSnapshotListener
                 e.clear()
                 snap.data.orEmpty().forEach { (k, v) -> if (v is Boolean) e.putBoolean(k, v) }
