@@ -924,3 +924,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   channel Reactions uses radio rows like the rest; f2b7a8c Statistics says channel for a channel, Retry only on a
   failed load. All checked on the Pixel. Agent running: quote card round 2 (outlined card, picture, Quote tag,
   stats quote counts, keyboard on tap, hidden built-in emoji).
+- 10:26 2c94452 (agent) quote card round 2: checked on the Pixel (words, outlined card with channel photo + blue
+  name + Quote tag, time below; keyboard rises after picking the chat; test post deleted). Not done: quote counts
+  in Statistics (Android's stats page has no Recent Posts section yet - gap). be50528 profile opened from a call
+  shows the call's card (Nov 6 · Outgoing voice call · 4:00 AM), checked.
