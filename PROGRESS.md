@@ -888,3 +888,12 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Settings left alone: its bar has no glass circle, so a second layer would cost for nothing. ee25647 reverts the
   blue Copy Link / Send (owner did not want it; iOS 7bc1d8c5). Owner order tonight: test everything on the Pixel
   myself (UI, bugs, animations, glass, security, loading) and keep going until he says stop.
+- 2026-11-06 07:00-08:00 overnight walk (owner asleep, order: test everything on the Pixel until he says stop):
+  6fda75a channel card full width on the posts' surface; 9e8762e Chats round buttons are liquid glass (tops keep the
+  edge blur; Settings unchanged, no glass circle there); ee25647 revert blue Copy Link/Send; 17922c3 Stories/Calls
+  titles bold like Chats + channel header megaphone; 0bc76f8 (agent) Groups in Common, checked on adnan's/far's page;
+  e4a1cd8/ea1b7c3 (agent) + 39b9037 Quote a channel post: checked end to end (VE3 post quoted into kk with words,
+  card, tap opens VE3, Back returns; test post deleted after); f280852 (agent) Custom emoji tab + upload (not
+  device-tested: chooser account only); da6d97a (agent) multi-select Selected Emoji, checked on kk (restored to Any).
+  Walked and fine: cold start, Chats/Stories/Calls/Settings, Notifications, Appearance, Privacy, Storage, Power
+  Saving, + sheet, long-press menus, channel owner card. Tool: scratchpad/tt.sh taps a node by its text.
