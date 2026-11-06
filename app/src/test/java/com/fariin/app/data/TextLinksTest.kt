@@ -64,4 +64,16 @@ class TextLinksTest {
         assertEquals(1, r.size)
         assertEquals(Kind.WEB, r[0].second)
     }
+
+    @Test fun bareDomains() {
+        fun webs(t: String) = TextLinks.find(t).filter { it.kind == TextLinks.Kind.WEB }.map { it.target }
+        assertEquals(listOf("https://fariin.com"), webs("go to fariin.com."))
+        assertEquals(listOf("https://x.so/abc"), webs("see x.so/abc"))
+        assertEquals(listOf("http://a.com"), webs("http://a.com"))           // a typed http stays http
+        assertEquals(emptyList<String>(), webs("photo.jpg and v1.2, e.g. this"))
+        assertEquals(emptyList<String>(), webs("mail abc@def.com"))          // an email, not a link
+        assertEquals(listOf(TextLinks.Kind.EMAIL), TextLinks.find("mail abc@def.com").map { it.kind })
+        assertEquals("https://fariin.com/vee", LinkPreviews.firstUrl("look fariin.com/vee"))
+        assertEquals(null, LinkPreviews.firstUrl("http://plain.com"))         // previews stay https only
+    }
 }

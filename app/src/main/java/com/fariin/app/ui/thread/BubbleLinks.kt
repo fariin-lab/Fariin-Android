@@ -44,8 +44,8 @@ internal fun linkMarked(
     s: AnnotatedString, bold: List<IntRange>, color: Color, tap: (TextLinks.Span) -> Unit,
 ): AnnotatedString {
     val text = s.text
-    if (!text.contains("http", true) && !text.contains("www.", true) && !text.contains("fariin.com", true) &&
-        !text.contains('@') && text.count { it.isDigit() } < 7) return s
+    // A quick skip only for text that cannot hold a link: a bare domain ("x.so") needs a dot.
+    if (!text.contains('.') && !text.contains('@') && text.count { it.isDigit() } < 7) return s
     val spans = TextLinks.find(text).filter { sp ->
         sp.kind != TextLinks.Kind.HANDLE || bold.none { it.first < sp.end && sp.start <= it.last }
     }

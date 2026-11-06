@@ -6,7 +6,8 @@ package com.fariin.app.data
  *
  * iOS finds links and emails with the system data detector and usernames with
  * `@([A-Za-z0-9_]{3,24})`. Here the same runs are found by hand: a link starts with http(s)://,
- * www. or our own fariin.com/; sentence punctuation after it is not part of it. Nothing starts
+ * www. or our own fariin.com/, or is a bare domain with a real ending ("x.so/abc", opened as
+ * https://); sentence punctuation after it is not part of it. Nothing starts
  * inside a word, so "abc@def.com" is an email and not the username "@def".
  */
 object TextLinks {
@@ -17,6 +18,19 @@ object TextLinks {
     data class Span(val start: Int, val end: Int, val kind: Kind, val target: String)
 
     private val WEB = Regex("""(?i)(?:https?://|www\.|fariin\.com/)[^\s<>"]+""")
+    /**
+     * A domain typed without a scheme ("fariin.com", "x.so/abc"), as the system link detector finds it
+     * (iOS 9332362b). Only real endings count, so "photo.jpg", "v1.2" and "e.g." stay words.
+     */
+    private val BARE = Regex("""(?i)\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+([a-z]{2,24})\b(?:[/?#][^\s<>"]*)?""")
+    private val TLDS = setOf(
+        "com", "net", "org", "io", "so", "co", "app", "dev", "me", "info", "biz", "ai", "gg", "ly", "tv", "fm",
+        "xyz", "site", "online", "store", "shop", "news", "blog", "link", "live", "tech", "cloud", "page", "edu",
+        "gov", "mil", "int", "us", "uk", "ca", "au", "nz", "de", "fr", "es", "it", "nl", "be", "se", "no", "dk",
+        "fi", "ch", "at", "ie", "pt", "pl", "ru", "ua", "tr", "in", "pk", "bd", "jp", "kr", "cn", "hk", "tw", "sg",
+        "my", "id", "ph", "th", "vn", "ae", "sa", "qa", "kw", "om", "eg", "ma", "ng", "ke", "et", "dj", "za", "br",
+        "mx", "ar", "cl", "eu", "to", "ws", "cc",
+    )
     private val EMAIL = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}""")
     private val HANDLE = Regex("""@([A-Za-z0-9_]{3,24})""")
     /** Off: iOS links no phone numbers. */
@@ -36,6 +50,18 @@ object TextLinks {
             if (raw.isEmpty() || !hasHost(raw)) continue
             val url = if (raw.startsWith("http", ignoreCase = true)) raw else "https://$raw"
             out += Span(s, s + raw.length, Kind.WEB, url)
+        }
+        // Emails before bare domains, so "abc@def.com" stays one email.
+        val emails = EMAIL.findAll(text).map { it.range }.toList()
+        for (m in BARE.findAll(text)) {
+            val s = m.range.first
+            if (s > 0 && (wordy(text[s - 1]) || text[s - 1] in "./-:")) continue
+            if (m.groupValues[1].lowercase() !in TLDS) continue
+            val raw = trimTail(m.value)
+            if (raw.isEmpty() || !hasHost(raw)) continue
+            val e = s + raw.length
+            if (emails.any { s <= it.last && it.first < e }) continue
+            if (free(s, e)) out += Span(s, e, Kind.WEB, "https://$raw")
         }
         for (m in EMAIL.findAll(text)) {
             val s = m.range.first

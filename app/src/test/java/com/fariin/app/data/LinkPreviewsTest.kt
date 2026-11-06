@@ -57,7 +57,8 @@ class LinkPreviewsTest {
         assertEquals("https://example.com/a?b=1", LinkPreviews.firstUrl("look at https://example.com/a?b=1."))
         assertEquals("https://en.wikipedia.org/wiki/Foo_(bar)", LinkPreviews.firstUrl("(see https://en.wikipedia.org/wiki/Foo_(bar))"))
         assertNull(LinkPreviews.firstUrl("http://example.com plain http"))
-        assertNull(LinkPreviews.firstUrl("www.example.com no scheme"))
+        // Typed without a scheme it previews as https (iOS 9332362b).
+        assertEquals("https://www.example.com", LinkPreviews.firstUrl("www.example.com no scheme"))
         assertNull(LinkPreviews.firstUrl("no link here"))
         assertEquals("https://b.com", LinkPreviews.firstUrl("http://a.com then https://b.com"))
     }
