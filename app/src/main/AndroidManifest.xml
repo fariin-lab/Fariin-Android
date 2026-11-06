@@ -58,6 +58,8 @@
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="false"
         android:theme="@style/Theme.Fariin">
+        <!-- The map's key, filled in at build time from google-services.json (app/build.gradle.kts). -->
+        <meta-data android:name="com.google.android.geo.API_KEY" android:value="${mapsApiKey}" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

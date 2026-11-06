@@ -23,6 +23,18 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // The map's key: the app's own key from google-services.json (already in the repo), so no
+        // second key is committed. Empty when the file is missing; the map then shows no tiles.
+        manifestPlaceholders["mapsApiKey"] = run {
+            val f = file("google-services.json")
+            if (!f.exists()) return@run ""
+            @Suppress("UNCHECKED_CAST")
+            val clients = (groovy.json.JsonSlurper().parse(f) as Map<String, Any?>)["client"] as? List<Map<String, Any?>> ?: emptyList()
+            val mine = clients.firstOrNull {
+                ((it["client_info"] as? Map<*, *>)?.get("android_client_info") as? Map<*, *>)?.get("package_name") == "com.fariin.app"
+            } ?: clients.firstOrNull()
+            ((mine?.get("api_key") as? List<*>)?.firstOrNull() as? Map<*, *>)?.get("current_key") as? String ?: ""
+        }
     }
     // On-device tests run against the debug build. `-PtestRelease` runs them against the minified
     // release build instead, to prove R8 kept what libsodium/JNA and WebRTC need:
@@ -175,9 +187,9 @@ dependencies {
     implementation("com.mikepenz:aboutlibraries-core:12.2.4")
     // Home screen widget (system/FariinWidget.kt).
     implementation("androidx.glance:glance-appwidget:1.1.1")
-    // Maps for Share Location and the location card (ui/thread/LocationMaps.kt): MapLibre Native
-    // (BSD-2), drawing the free OpenFreeMap tiles of OpenStreetMap. No key, no Google account.
-    implementation("org.maplibre.gl:android-sdk:13.7.1")
+    // Maps for Share Location and the location card (ui/thread/LocationMaps.kt): the phone's own map
+    // engine in Play Services, as iOS uses the system map. Only a thin client ships in the APK.
+    implementation("com.google.android.gms:play-services-maps:20.1.0")
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     // The real org.json for the local-cache codec tests (Android ships it; plain JVM tests do not).

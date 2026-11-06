@@ -22,14 +22,6 @@ object LocationShare {
     const val APPROX_LABEL = "Approximate location"
     private const val NEAR = "Near "
 
-    /** The free map styles (OpenFreeMap, OpenStreetMap data). No key, no account. */
-    const val STYLE_LIGHT = "https://tiles.openfreemap.org/styles/liberty"
-    const val STYLE_DARK = "https://tiles.openfreemap.org/styles/dark"
-    fun styleUrl(dark: Boolean) = if (dark) STYLE_DARK else STYLE_LIGHT
-
-    /** Shown on every map we draw, as the map data's licence asks. */
-    const val ATTRIBUTION = "© OpenStreetMap contributors"
-
     /** Where the pin came from: my own fix, a spot I dragged the map to, or a place I picked from a list. */
     enum class Source { MY_FIX, MAP, PLACE }
 
@@ -104,11 +96,10 @@ object LocationShare {
     private fun onGrid(v: Double) = abs(v * 100.0 - (v * 100.0).roundToLong()) < 1e-6
 
     /** The zoom of the card's small map: street level, or town level for an approximate share. */
-    fun cardZoom(approximate: Boolean): Double = if (approximate) 12.0 else 15.0
+    fun cardZoom(approximate: Boolean): Double = if (approximate) 13.0 else 16.0
 
-    /** The disk/memory key of one rendered card map. Five decimals is about a metre. */
-    fun cardKey(lat: Double, lon: Double, zoom: Double, dark: Boolean, wPx: Int, hPx: Int): String =
-        String.format(Locale.US, "%.5f_%.5f_z%.1f_%s_%dx%d", lat, lon, zoom, if (dark) "d" else "l", wPx, hPx)
+    /** The ground an approximate share covers, drawn as a circle around its spot. */
+    const val APPROX_RADIUS_M = 500.0
 
     /**
      * A new fix replaces the one on screen when it is at least as sure, or when the old one is over

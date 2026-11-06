@@ -92,13 +92,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.location.LocationComponentActivationOptions
-import org.maplibre.android.location.modes.CameraMode
-import org.maplibre.android.location.modes.RenderMode
-import org.maplibre.android.maps.MapLibreMap
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.Circle
+import com.google.android.gms.maps.model.CircleOptions
+import com.google.android.gms.maps.model.LatLng
 import java.net.UnknownHostException
 import kotlin.coroutines.resume
 
@@ -128,7 +127,7 @@ private sealed interface Ask {
     data class Nearby(val lat: Double, val lon: Double, val n: Int) : Ask
 }
 
-@SuppressLint("MissingPermission")   // the location component is fed by hand, only once access is held
+@SuppressLint("MissingPermission")   // the map's blue dot is switched on only once access is held
 @Composable
 private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double, label: String?) -> Unit) {
     val c = Fariin.colors
@@ -143,8 +142,11 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
     var picked by remember { mutableStateOf<PhotonPlaces.Place?>(null) }
     var center by remember { mutableStateOf<LatLng?>(null) }
     var dragging by remember { mutableStateOf(false) }
-    var map by remember { mutableStateOf<MapLibreMap?>(null) }
-    var styleReady by remember { mutableIntStateOf(0) }
+    var map by remember { mutableStateOf<GoogleMap?>(null) }
+    val fixSource = remember { FixSource() }
+    val area1km = remember { arrayOfNulls<Circle>(1) }
+    // No Play Services (or too old): no map, but sharing where I am still works.
+    val mapsOk = remember { MapsAvailable.ok(ctx) }
     var exact by remember { mutableStateOf(true) }
     // What the spot under the pin is called.
     var name by remember { mutableStateOf<String?>(null) }
@@ -219,32 +221,38 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
     LaunchedEffect(fix, source, map) {
         val m = map ?: return@LaunchedEffect
         val f = fix ?: return@LaunchedEffect
-        if (styleReady > 0) runCatching { m.locationComponent.forceLocationUpdate(f) }
+        fixSource.push(f)
         if (source != Source.MY_FIX) return@LaunchedEffect
         val target = LatLng(f.latitude, f.longitude)
         val cur = m.cameraPosition.target
-        val zoom = if (coarseOnly) 13.0 else 16.0
+        val zoom = if (coarseOnly) 14f else 17f
         when {
-            cur == null || m.cameraPosition.zoom < 5 -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(target, zoom))
+            m.cameraPosition.zoom < 5 -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(target, zoom))
             LocationShare.distanceM(cur.latitude, cur.longitude, target.latitude, target.longitude) > 5 ->
-                m.animateCamera(CameraUpdateFactory.newLatLng(target), 350)
+                m.animateCamera(CameraUpdateFactory.newLatLng(target), 350, null)
         }
     }
 
-    // The blue dot and its accuracy ring, fed with our own fixes (no second location engine).
-    LaunchedEffect(styleReady, access) {
+    // The blue dot and its accuracy ring, drawn by the map from our own fixes (no second reader).
+    LaunchedEffect(map, access) {
         val m = map ?: return@LaunchedEffect
-        val s = m.style ?: return@LaunchedEffect
         if (access == LocAccess.NONE) return@LaunchedEffect
         runCatching {
-            val lc = m.locationComponent
-            if (!lc.isLocationComponentActivated) lc.activateLocationComponent(
-                LocationComponentActivationOptions.builder(ctx, s).useDefaultLocationEngine(false).build())
-            lc.isLocationComponentEnabled = true
-            lc.cameraMode = CameraMode.NONE
-            lc.renderMode = RenderMode.NORMAL
-            fix?.let { lc.forceLocationUpdate(it) }
+            m.setLocationSource(fixSource)
+            m.isMyLocationEnabled = true
         }
+    }
+
+    // Approximate: the 1 km square that will travel, as a soft circle around the rounded spot.
+    val areaKey = if (sendExact) null else spot?.let { LocationShare.roundApprox(it.latitude) to LocationShare.roundApprox(it.longitude) }
+    LaunchedEffect(map, areaKey) {
+        area1km[0]?.remove(); area1km[0] = null
+        val m = map ?: return@LaunchedEffect
+        val (lat, lon) = areaKey ?: return@LaunchedEffect
+        area1km[0] = runCatching {
+            m.addCircle(CircleOptions().center(LatLng(lat, lon)).radius(LocationShare.APPROX_RADIUS_M)
+                .fillColor(0x332F7CF6).strokeColor(0xAA2F7CF6.toInt()).strokeWidth(1.5f * ctx.resources.displayMetrics.density))
+        }.getOrNull()
     }
 
     // What is at the spot: once the map has settled (450 ms, as iOS), three tries with a growing
@@ -321,7 +329,7 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
         searching = false; query = ""
         closeList()
         focus.clearFocus()
-        map?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(p.lat, p.lon), 16.0), 450)
+        map?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(p.lat, p.lon), 17f), 450, null)
     }
     fun locateMe() {
         when {
@@ -332,38 +340,39 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
             else -> {
                 source = Source.MY_FIX; picked = null
                 fix?.let { f -> map?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(f.latitude, f.longitude),
-                    if (coarseOnly) 13.0 else 16.0), 400) }
+                    if (coarseOnly) 14f else 17f), 400, null) }
                 tries++
             }
         }
     }
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        if (!mapsOk) Box(Modifier.weight(1f).fillMaxWidth()) {
+            // No map on this phone: my own fix only, sent from the panel below.
+            FloatingIcon(Icons.Filled.Close, "Close", onDismiss,
+                Modifier.statusBarsPadding().padding(start = 16.dp, top = 8.dp), circle = true)
+            MapsMissingNote(Modifier.align(Alignment.Center))
+        } else Box(Modifier.weight(1f).fillMaxWidth()) {
             val start = remember {
                 val last = LocFix.lastKnownAny(ctx)
-                CameraPosition.Builder().target(last ?: LatLng(20.0, 20.0)).zoom(if (last != null) 15.0 else 1.5).build()
+                CameraPosition.fromLatLngZoom(last ?: LatLng(20.0, 20.0), if (last != null) 16f else 1.5f)
             }
-            FariinMap(
-                Modifier.fillMaxSize(), c.dark, start,
-                onMap = { m ->
-                    map = m
-                    m.addOnCameraMoveStartedListener { reason ->
-                        if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
-                            dragging = true
-                            source = Source.MAP
-                            picked = null
-                            // The spot is wherever the map comes to rest, not where it was.
-                            center = null
-                        }
+            FariinMap(Modifier.fillMaxSize(), c.dark, start) { m ->
+                map = m
+                m.setOnCameraMoveStartedListener { reason ->
+                    if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+                        dragging = true
+                        source = Source.MAP
+                        picked = null
+                        // The spot is wherever the map comes to rest, not where it was.
+                        center = null
                     }
-                    m.addOnCameraIdleListener {
-                        dragging = false
-                        center = m.cameraPosition.target
-                    }
-                },
-                onStyle = { _, _ -> styleReady++ },
-            )
+                }
+                m.setOnCameraIdleListener {
+                    dragging = false
+                    center = m.cameraPosition.target
+                }
+            }
             CentrePin(dragging)
             Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -405,6 +414,7 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
             access = access, asked = asked, servicesOff = servicesOff, coarseOnly = coarseOnly, locked = locked,
             source = source, fix = fix, spot = spot, name = name, address = address, area = area,
             resolving = resolving, sendExact = sendExact,
+            sendWord = if (mapsOk) "Send Location" else "Send My Location",
             onExact = { exact = it },
             onPrecise = { requestAccess() },
             onSettings = {
@@ -474,7 +484,7 @@ private fun ResultsList(loading: Boolean, results: List<PhotonPlaces.Place>, not
 private fun BottomPanel(
     access: LocAccess, asked: Boolean, servicesOff: Boolean, coarseOnly: Boolean, locked: Boolean,
     source: Source, fix: Location?, spot: LatLng?, name: String?, address: String?, area: String?,
-    resolving: Boolean, sendExact: Boolean,
+    resolving: Boolean, sendExact: Boolean, sendWord: String,
     onExact: (Boolean) -> Unit, onPrecise: () -> Unit, onSettings: () -> Unit, onSend: () -> Unit,
 ) {
     val c = Fariin.colors
@@ -523,7 +533,7 @@ private fun BottomPanel(
                 .clickable(enabled = enabled, onClick = onSend).padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         ) {
-            Text("Send Location", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
+            Text(sendWord, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
             val sub = when {
                 spot == null -> "Finding place…"
                 !sendExact -> LocationShare.areaLabel(area)

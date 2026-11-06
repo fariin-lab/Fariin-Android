@@ -68,12 +68,9 @@ class LocationShareTest {
         assertFalse(LocationShare.looksApproximate(CardRules.Location(9.56, 44.0712, null)))
     }
 
-    @Test fun cardKeyAndZoom() {
-        assertEquals("52.36760_4.90410_z15.0_d_600x320", LocationShare.cardKey(52.3676, 4.9041, 15.0, true, 600, 320))
-        assertEquals(15.0, LocationShare.cardZoom(false), 0.0)
-        assertEquals(12.0, LocationShare.cardZoom(true), 0.0)
-        assertEquals("https://tiles.openfreemap.org/styles/dark", LocationShare.styleUrl(true))
-        assertEquals("https://tiles.openfreemap.org/styles/liberty", LocationShare.styleUrl(false))
+    @Test fun cardZoom() {
+        assertEquals(16.0, LocationShare.cardZoom(false), 0.0)
+        assertEquals(13.0, LocationShare.cardZoom(true), 0.0)
     }
 
     @Test fun aBetterOrNewerFixWins() {
