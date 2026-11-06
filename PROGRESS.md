@@ -956,3 +956,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 11:53 large text (system 130%, restored): Chats/Settings/Calls/chat/channel fine except the chat header's second
   line was cut off -> b2fb317 header text capped at 115%. Tool: scratchpad/wtbuild.sh <patch> resets the scratch
   worktree (cleans its untracked leftovers) and builds; two old-APK installs today came from a dirty worktree.
+- 12:18 adf878d animated wallpapers: no switch / Particles row, Battery Saver no longer stills them (owner); cdde0d9
+  15 fps chat / Rain 24 / tiles 12, soft looks 1/4 resolution (aurora checked: ~16 fps, scroll 1.5% jank);
+  0004e9e channels had no Select at all (menu + rows) -> added; multi-delete runs 4 at a time so picked messages go
+  together (3 posts gone in 0.5 s). Test posts deleted, adnan's chat wallpaper reset.
