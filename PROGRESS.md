@@ -882,3 +882,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-06 06:40 channel card as iOS (owner: "not same as apple"): full width 24 dp in from each side, the
   incoming posts' see-through wash + rim instead of a white tile, photo 96, name 24 bold, @name/description 17,
   Created 15. Checked on the Pixel in VE3. Groups in Common (gap list 10) next.
+- 2026-11-06 07:10 owner asked whether the Chats / Settings tops use the backdrop library: they did not. The tops
+  stay the soft edge blur (that is iOS's scroll edge); the Chats round buttons (camera, New Chat, select capsule)
+  now sample the list as real liquid glass (rows bend at the camera's rim, checked on the Pixel, no crash).
+  Settings left alone: its bar has no glass circle, so a second layer would cost for nothing. ee25647 reverts the
+  blue Copy Link / Send (owner did not want it; iOS 7bc1d8c5). Owner order tonight: test everything on the Pixel
+  myself (UI, bugs, animations, glass, security, loading) and keep going until he says stop.

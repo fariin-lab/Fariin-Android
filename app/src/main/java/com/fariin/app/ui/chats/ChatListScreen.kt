@@ -112,6 +112,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.LocationOn
+import com.kyant.backdrop.backdrops.layerBackdrop
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.platform.LocalContext
@@ -318,6 +319,12 @@ fun ChatListScreen(
     // away with the list and a search button takes its place in the bar.
     val haze = remember { dev.chrisbanes.haze.HazeState() }
     val glass = com.fariin.app.perf.rememberPowerState().glass()
+    // Android 13+: the top bar's and the round buttons' glass is real liquid glass sampled from the list
+    // (as the tab bar and the chat's buttons). Only the bar and the buttons get it: a row inside the
+    // list drawing glass from the list itself is the render crash of 2026-11-06.
+    val liquid = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    val listBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val glassLayer: com.kyant.backdrop.backdrops.LayerBackdrop? = if (liquid) listBackdrop else null
     // The glass's lower edge: full strength under the title, then an eased fade to nothing.
     val barFade = remember {
         androidx.compose.ui.graphics.Brush.verticalGradient(
@@ -366,7 +373,7 @@ fun ChatListScreen(
         containerColor = c.bg,
         // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
         contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
-        topBar = {
+        topBar = { androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalLiquidBackdrop provides glassLayer) {
             Column(
                 Modifier.then(when {
                     // Owner 2026-11-05 ("make it high end like Settings"): the glass is always on, so
@@ -502,8 +509,8 @@ fun ChatListScreen(
                     }
                 }
             }
-        },
-        floatingActionButton = {
+        } },
+        floatingActionButton = { androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalLiquidBackdrop provides glassLayer) {
             AnimatedVisibility(fabShown && !selecting && !searching && !showArchive,
                 enter = com.fariin.app.ui.components.Motion.fabIn(), exit = com.fariin.app.ui.components.Motion.fabOut()) {
                 Column(Modifier.padding(bottom = fabLift), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -516,7 +523,7 @@ fun ChatListScreen(
                     }
                 }
             }
-        },
+        } },
     ) { pad ->
         // The list runs under the title bar (padded by it), everything else sits below it.
         Box(Modifier.fillMaxSize()) {
@@ -547,7 +554,8 @@ fun ChatListScreen(
                     filter == FILTER_ALL && !showArchive -> "Start a Chat" to people.newChat
                     else -> null
                 }) }
-                else -> LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier), state = listState,
+                else -> LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
+                    .then(if (glassLayer != null) Modifier.layerBackdrop(glassLayer) else Modifier), state = listState,
                     contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                     // An invisible first row. At the top the list keeps this row in place, so anything new
                     // above the old first chat (a new group, a chat moved up by a message, the Pinned
