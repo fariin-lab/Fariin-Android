@@ -1,5 +1,6 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
@@ -211,7 +212,8 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                     "No Calls Yet", "Your call history will appear here.", Modifier.padding(bottom = 60.dp),
                     action = "Make a Call") { nav.newCall() }
             }
-            rows.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
+            // Worded as the chat and Settings searches.
+            rows.isEmpty() && q.isNotEmpty() -> Empty("No Results", "There were no results for \"${search.trim()}\".\nTry a new search.", search = true)
             rows.isEmpty() && live.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
             else -> LazyColumn(Modifier.fillMaxSize(), state = listState,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
@@ -258,13 +260,18 @@ internal fun SearchField(value: String, onChange: (String) -> Unit, prompt: Stri
 }
 
 @Composable
-private fun Empty(title: String, text: String, action: Pair<String, () -> Unit>? = null) {
+private fun Empty(title: String, text: String, action: Pair<String, () -> Unit>? = null, search: Boolean = false) {
     val c = Fariin.colors
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 60.dp)) {
-            Icon(Icons.Outlined.Phone, contentDescription = null, tint = c.secondary, modifier = Modifier.size(44.dp))
-            Spacer(Modifier.height(12.dp))
-            Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
+    // Centred in what the keyboard leaves: with a search typed, the words sat behind the keyboard and
+    // only the phone mark showed, cut off.
+    Box(Modifier.fillMaxSize().imePadding().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = if (search) 0.dp else 60.dp)) {
+            if (!search) {
+                Icon(Icons.Outlined.Phone, contentDescription = null, tint = c.secondary, modifier = Modifier.size(44.dp))
+                Spacer(Modifier.height(12.dp))
+            }
+            Text(title, fontSize = if (search) 17.sp else 22.sp, fontWeight = if (search) FontWeight.SemiBold else FontWeight.Bold,
+                color = c.label, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             Text(text, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
             // One next step: the same New Call page as the floating button.
