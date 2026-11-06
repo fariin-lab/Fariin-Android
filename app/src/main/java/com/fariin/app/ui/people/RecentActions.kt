@@ -282,7 +282,7 @@ private fun DetailBlock(d: AdminLog.Detail, groupPhoto: String?) {
         }
         d.photoUrl?.let { url ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Avatar(url.ifEmpty { groupPhoto }, 44.dp)
+                Avatar(url.ifEmpty { groupPhoto }, 44.dp, kind = com.fariin.app.ui.components.AvatarKind.GROUP)
                 Text("Current group photo", fontSize = 12.sp, color = c.secondary)
             }
         }
