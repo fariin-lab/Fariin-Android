@@ -1008,5 +1008,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Notifications pages fine. fd9c9f4 chat list: the New Chat button hid under "Chat archived / Undo" (a late Undo
   tap opened New Chat) -> buttons lift above any bottom bar (checked: archive kk, Undo, back to normal).
 - 15:46 6c505d0 Calls search empty: words were behind the keyboard (only a cut-off phone showed) -> centred above
-  it; 80c749d New Call empty search matches the others. Every search screen now checked: chat list, Calls, New Call,
-  Settings, in-chat (bar above the keyboard), Glow, official chat, sticker/GIF, chat picker.
+  it; 80c749d New Call empty search matches the others. Searches tested on the Pixel: chat list, Calls, New Call,
+  Settings; by code only (keyboard handled): in-chat, Glow, official chat, sticker/GIF, chat picker.
