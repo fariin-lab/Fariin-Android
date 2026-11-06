@@ -439,7 +439,7 @@ private fun FriendRow(g: StoryGroup, now: Long, menu: List<RowAction>, onClick: 
     val newest = g.stories.lastOrNull()
     StoryRow(
         thumbUrl = newest?.listThumb ?: "", title = g.name.ifEmpty { "Fariin user" },
-        subtitle = newest?.let { StoryList.ago(it.createdAtMs, now) } ?: "",
+        subtitle = StoryList.subtitle(g, now),
         authorPhoto = g.photoUrl, seen = !g.hasUnseen, seenFlags = com.fariin.app.data.StoryRings.seenFlags(g),
         squircle = false, originKey = g.key, onClick = onClick, menu = menu,
     )

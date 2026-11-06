@@ -89,4 +89,12 @@ class StoryListsTest {
         assertEquals(Triple("You will receive a notification whenever ", "Alice", " posts a story."), StoryNotifyRules.barParts(true, "Alice"))
         assertEquals(Triple("You will no longer receive a notification when ", "Alice", " posts a story."), StoryNotifyRules.barParts(false, "Alice"))
     }
+
+    @Test fun fariinsRowSaysOfficialInsteadOfATime() {
+        fun s(author: String) = Story("s", author, createdAtMs = 0L, expiresAtMs = 1L, mediaUrl = "m")
+        val now = 2L * 3_600_000L
+        assertEquals("Official", StoryList.subtitle(StoryGroup(OfficialChannel.CID, "Fariin", null, listOf(s(OfficialChannel.CID))), now))
+        assertEquals("2h ago", StoryList.subtitle(StoryGroup("u1", "Alice", null, listOf(s("u1"))), now))
+        assertEquals("", StoryList.subtitle(StoryGroup("u1", "Alice", null, emptyList()), now))
+    }
 }

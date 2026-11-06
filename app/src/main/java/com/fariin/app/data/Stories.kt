@@ -160,6 +160,13 @@ object StoryList {
         return StoriesState(loaded = true, mine = mine, others = others)
     }
 
+    /** The small line under a list row's name (iOS StoryListRow.subtitle): Fariin's own stories say
+     *  "Official" instead of a time (owner 2026-11-06), everyone else's how long ago. */
+    fun subtitle(g: StoryGroup, nowMs: Long = System.currentTimeMillis()): String {
+        if (g.key == OfficialChannel.CID || g.stories.lastOrNull()?.authorUid == OfficialChannel.CID) return "Official"
+        return g.stories.lastOrNull()?.let { ago(it.createdAtMs, nowMs) } ?: ""
+    }
+
     /** "Just now", "5m ago", "3h ago", "1d ago", as iOS StoryListRow.ago. */
     fun ago(createdAtMs: Long, nowMs: Long = System.currentTimeMillis()): String {
         val s = maxOf(0L, (nowMs - createdAtMs) / 1000)
