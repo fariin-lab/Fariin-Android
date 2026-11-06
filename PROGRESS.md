@@ -953,3 +953,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   channel post on its way showed "1 view" + share as if posted -> clock, no share; the queued post survives an app
   restart and sends on reconnect; c637d08 it keeps its send time after the restart (showed the restart time).
   1301011 owner's quote icon (ic_quote) in menus, card tag, Quotes page. Test posts deleted.
+- 11:53 large text (system 130%, restored): Chats/Settings/Calls/chat/channel fine except the chat header's second
+  line was cut off -> b2fb317 header text capped at 115%. Tool: scratchpad/wtbuild.sh <patch> resets the scratch
+  worktree (cleans its untracked leftovers) and builds; two old-APK installs today came from a dirty worktree.
