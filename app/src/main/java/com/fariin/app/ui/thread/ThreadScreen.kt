@@ -16,6 +16,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionOnScreen
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
@@ -438,6 +439,10 @@ private fun ThreadContent(
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(220, delayMillis = 40) else null }
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
+    // My own send rises out of the composer (iOS send flight, SendMotion.kt); off with Power
+    // Saving > Animations or the system's Remove animations.
+    val sendMotion = remember(ui.cid) { SendMotion() }
+    val sendAnim = anim && systemAnimationsOn()
     // A jump to a pinned message (iOS pinned bar tap): page back until it is loaded, scroll it into
     // view and light it; then the bar moves on to the next pin.
     fun jumpTo(id: String, advance: Boolean) {
@@ -570,8 +575,12 @@ private fun ThreadContent(
                     val m = ui.messages[i]
                     val g = geometry[i]
                     // A message that arrives fades in and the rows above glide up to make room;
-                    // with Power Saving > Animations off it just appears.
-                    Column(Modifier.animateItem(fadeInSpec = rowFade, placementSpec = rowPlace, fadeOutSpec = null)
+                    // with Power Saving > Animations off it just appears. The one I just sent
+                    // rises from the composer instead of fading (SendMotion.kt).
+                    val flight = rememberSendFlight(sendMotion, m, ui.me, isNewest = i == ui.messages.lastIndex,
+                        atBottom = { listState.firstVisibleItemIndex <= 1 })
+                    Column(Modifier.animateItem(fadeInSpec = if (flight != null) null else rowFade, placementSpec = rowPlace, fadeOutSpec = null)
+                        .sendFlight(flight)
                         .fillMaxWidth().padding(top = g.gapDp.dp)) {
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
                         if (m.rowId == dividerId) UnreadDivider()
@@ -777,6 +786,7 @@ private fun ThreadContent(
                     val r = replyTo
                     val e = editing
                     val tagged = actions.onSendMentioned.takeIf { ids.isNotEmpty() }
+                    if (e == null) sendMotion.arm(SendMotion.Kind.TEXT, ui.messages, sendAnim)
                     when {
                         e != null -> { editing = null; if (t.trim() != e.text.trim()) actions.onEdit(e, t) }
                         tagged != null -> { replyTo = null; tagged(t, r, ids) }
@@ -839,8 +849,12 @@ private fun ThreadContent(
                     allowed = held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) == null)
                 Composer(gatedSend, { attachOpen = true }, { r ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
-                        if (stop != null) actions.onNotice(stop) else onSendVoice(r)
+                        if (stop != null) actions.onNotice(stop) else {
+                            sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
+                            onSendVoice(r)
+                        }
                     }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
+                    onRowPlaced = { sendMotion.composerRow = it },
                     initialDraft = actions.draft, onDraft = { actions.onDraft(it); linkText = it },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
@@ -1435,6 +1449,8 @@ private fun Composer(
     me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
     onGif: (com.fariin.app.data.StickerGifRules.Gif) -> Unit = {},
     mentions: MentionSource? = null,
+    /** The field / record bar row's place on screen, where a send flies from (SendMotion.kt). */
+    onRowPlaced: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1537,7 +1553,9 @@ private fun Composer(
             picks = com.fariin.app.data.MentionRules.addPick(picks, name, uid)
             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth()
+            .onGloballyPositioned { onRowPlaced(if (it.isAttached) it.boundsInRoot() else null) }
+            .padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
             if (locked) {
                 LockedVoiceBar(
                     Modifier.weight(1f), elapsed = elapsed, levels = recorder.level, reviewing = reviewing,
