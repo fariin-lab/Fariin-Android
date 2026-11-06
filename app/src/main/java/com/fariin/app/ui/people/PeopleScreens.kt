@@ -36,6 +36,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
@@ -452,6 +455,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val shared = rememberSharedMedia(cid, me)
     var allMedia by remember { mutableStateOf(false) }
     if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
+    // iOS sharedGroups: groups we are both in, from the live chat list (not on my own page).
+    val commonGroups = if (uid != me) com.fariin.app.data.GroupsInCommon.shared(com.fariin.app.data.ChatsNow.list, me, uid) else emptyList()
+    var allGroups by remember { mutableStateOf(false) }
+    if (allGroups) { GroupsInCommonPage(commonGroups, me, onBack = { allGroups = false }, onOpenChat = onOpenChat); return }
     var restrictOpen by remember { mutableStateOf(false) }
     if (restrictOpen) {
         val myName = remember { mutableStateOf("") }
@@ -602,10 +609,70 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }
             // iOS: after the settings card, and only when the chat has photos or videos.
             SharedMediaCard(cid, shared) { allMedia = true }
+            if (uid != me) GroupsInCommonSection(commonGroups, me, onAdd = { addingToGroup = true },
+                onSeeAll = { allGroups = true }, onOpenChat = onOpenChat)
             SettingsSection {
                 SettingsRow(if (blocked) "Unblock $name" else "Block $name", titleColor = c.red, trailing = Trailing.NONE) { ask = "block" }
                 SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "report" }
             }
+            Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+/**
+ * iOS groupsHeader + groupsInCommonCard, drawn like the group page's members header and card: a
+ * grey "N Groups in Common >" line that opens the whole list (no arrow and no tap with none),
+ * then "Add to a Group" and the groups, six at most; past six, the first five and See All.
+ */
+@Composable
+private fun GroupsInCommonSection(groups: List<Conversation>, me: String, onAdd: () -> Unit, onSeeAll: () -> Unit,
+                                  onOpenChat: (String) -> Unit) {
+    val c = Fariin.colors
+    val any = groups.isNotEmpty()
+    val (shownGroups, more) = com.fariin.app.data.GroupsInCommon.shown(groups)
+    val header = com.fariin.app.data.GroupsInCommon.header(groups.size)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
+        .let { if (any) it.clickable(onClickLabel = "See All") { onSeeAll() } else it }.padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(header, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
+        if (any) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.secondary, modifier = Modifier.size(26.dp))
+        Spacer(Modifier.weight(1f))
+    }
+    SettingsSection {
+        Row(Modifier.fillMaxWidth().clickable { onAdd() }.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Add, null, tint = c.label, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Text("Add to a Group", fontSize = 17.sp, color = c.label)
+        }
+        shownGroups.forEach { g -> GroupInCommonRow(g, me, onOpenChat) }
+        if (more) SettingsRow("See All", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.KeyboardArrowDown),
+            trailing = Trailing.NONE, last = true) { onSeeAll() }
+    }
+}
+
+/** One group: its photo, its name, and the member count on the right (iOS memberCountLabel). */
+@Composable
+private fun GroupInCommonRow(g: Conversation, me: String, onOpenChat: (String) -> Unit) {
+    val c = Fariin.colors
+    PersonRow(g.displayPhoto(me), g.displayName(me), "", onClick = { onOpenChat(g.id) }) {
+        Text(com.fariin.app.data.GroupsInCommon.memberLabel(g), fontSize = 14.sp, color = c.secondary)
+    }
+}
+
+/** iOS GroupsInCommonSheet: every group we share in one card, A to Z; a tap opens the group. */
+@Composable
+private fun GroupsInCommonPage(groups: List<Conversation>, me: String, onBack: () -> Unit, onOpenChat: (String) -> Unit) {
+    val c = Fariin.colors
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        PageBar("Groups in Common", onBack = onBack)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Spacer(Modifier.height(12.dp))
+            SettingsSection { groups.forEach { g -> GroupInCommonRow(g, me, onOpenChat) } }
             Spacer(Modifier.height(30.dp))
         }
     }
