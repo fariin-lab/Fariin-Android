@@ -879,3 +879,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   (@vee, Be free, Created) matches the owner's iOS photo, menu is Copy/Share/Report. Owner view not yet seen on a
   device (no owned channel found on this Pixel yet). iOS TestFlight 42213804528 (0f86a861) green; the iOS session ships
   the next one from 80c6f908.
+- 2026-11-06 06:40 channel card as iOS (owner: "not same as apple"): full width 24 dp in from each side, the
+  incoming posts' see-through wash + rim instead of a white tile, photo 96, name 24 bold, @name/description 17,
+  Created 15. Checked on the Pixel in VE3. Groups in Common (gap list 10) next.

@@ -1110,7 +1110,7 @@ private fun NoticePill(text: String, vertical: Dp = 4.dp, icon: Boolean = false)
 
 /** Theme.received: F2F2F2 light, 26262B dark. */
 @Composable
-private fun receivedFill(): Color {
+internal fun receivedFill(): Color {
     val dark = Fariin.colors.dark
     // On a wallpaper the other person's bubble lets it through, frosted (iOS: incoming bubbles on a
     // wallpaper wear a see-through surface with a hairline rim; owner 2026-11-05 asked for iOS's
@@ -1121,7 +1121,7 @@ private fun receivedFill(): Color {
 
 /** The hairline an incoming bubble wears on a wallpaper (iOS bubbleRim). */
 @Composable
-private fun receivedRim(isMe: Boolean, shape: androidx.compose.ui.graphics.Shape): Modifier =
+internal fun receivedRim(isMe: Boolean, shape: androidx.compose.ui.graphics.Shape): Modifier =
     if (isMe || !LocalOnWallpaper.current) Modifier
     else Modifier.border(0.5.dp, if (Fariin.colors.dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.10f), shape)
 

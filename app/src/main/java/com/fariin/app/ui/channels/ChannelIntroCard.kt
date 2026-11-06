@@ -1,11 +1,13 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,20 +43,24 @@ import kotlinx.coroutines.launch
 
 /**
  * The channel's card at the start of its posts (iOS ChannelFollowerCard / ChannelAdminCard): a
- * rounded card 340 wide at most, corners of 36, 18 x 24 inside, 20 from the screen's sides.
+ * rounded card across the screen (24 from each side), corners of 36, 20 x 28 inside, on the posts' surface.
  * Its owner and admins get their own version: the photo, the name, "You created this channel ·
  * N followers", and Share and Edit circles. Everyone else gets who the channel is: photo, name
  * with its tick, @name, the description and the day it began; nothing to tap.
- * It is a list row, so `floating` draws its plain fill here (the list provides no backdrop).
+ * A list row, so no live glass: the incoming bubbles' see-through wash and rim (receivedFill).
  */
 @Composable
 fun ChannelIntroCard(ch: ChannelThreadUi, modifier: Modifier = Modifier) {
     val admin = ch.role == ChannelRules.Role.ADMIN
+    // iOS: the card spans the screen (24 in from each side), the posts' own see-through surface
+    // and rim, not a white tile. Owner 2026-11-06: the narrow white card "is not same as apple".
+    val shape = RoundedCornerShape(36.dp)
     Column(
-        modifier.padding(horizontal = 20.dp).widthIn(max = 340.dp).floating(RoundedCornerShape(36.dp))
-            .padding(horizontal = 18.dp, vertical = 24.dp),
+        modifier.padding(horizontal = 24.dp).widthIn(max = 420.dp).fillMaxWidth().clip(shape)
+            .background(com.fariin.app.ui.thread.receivedFill()).then(com.fariin.app.ui.thread.receivedRim(false, shape))
+            .padding(horizontal = 20.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(if (admin) 14.dp else 10.dp),
+        verticalArrangement = Arrangement.spacedBy(if (admin) 14.dp else 12.dp),
     ) {
         if (admin) AdminPart(ch) else FollowerPart(ch)
     }
@@ -64,27 +70,27 @@ fun ChannelIntroCard(ch: ChannelThreadUi, modifier: Modifier = Modifier) {
 private fun FollowerPart(ch: ChannelThreadUi) {
     val c = Fariin.colors
     val info = ch.info
-    Avatar(info.avatarUrl, 92.dp, squircle = true, kind = AvatarKind.CHANNEL)
+    Avatar(info.avatarUrl, 96.dp, squircle = true, kind = AvatarKind.CHANNEL)
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(info.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 2,
+            Text(info.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 2,
                 overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
             if (info.verified) {
                 Spacer(Modifier.width(5.dp))
-                Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
             }
         }
-        if (info.isPublic && info.username.isNotEmpty()) Text("@" + info.username, fontSize = 15.sp, color = c.secondary, maxLines = 1)
+        if (info.isPublic && info.username.isNotEmpty()) Text("@" + info.username, fontSize = 17.sp, color = c.secondary, maxLines = 1)
     }
     if (info.description.isNotEmpty()) {
-        Text(info.description, fontSize = 15.sp, color = c.label, textAlign = TextAlign.Center, maxLines = 4,
+        Text(info.description, fontSize = 17.sp, color = c.label, textAlign = TextAlign.Center, maxLines = 4,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
     }
     val created = remember(info.createdAtMillis) {
         if (info.createdAtMillis <= 0) null
         else "Created " + java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(info.createdAtMillis.toLong()))
     }
-    if (created != null) Text(created, fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(top = 2.dp))
+    if (created != null) Text(created, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 2.dp))
 }
 
 @Composable
@@ -95,10 +101,10 @@ private fun AdminPart(ch: ChannelThreadUi) {
     val scope = rememberCoroutineScope()
     val nav = LocalChannelNav.current
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Avatar(info.avatarUrl, 92.dp, if (ch.canEdit) Modifier.clip(RoundedCornerShape(26.dp)).clickable { nav.edit(info.cid) } else Modifier,
+        Avatar(info.avatarUrl, 96.dp, if (ch.canEdit) Modifier.clip(RoundedCornerShape(26.dp)).clickable { nav.edit(info.cid) } else Modifier,
             squircle = true, kind = AvatarKind.CHANNEL)
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(info.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 2,
+            Text(info.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 2,
                 overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             Text(ChannelRules.adminCardLine(ch.createdByMe, info.shownCount), fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
         }
