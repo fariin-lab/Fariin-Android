@@ -1004,3 +1004,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   opens then flat (169.5 MB at 30): no leak.
 - 15:35 adnan's real iOS link story (fariin.com/vee card with Join): Visit link closes the story and opens VE3
   inside the app with Follow; Back returns to Stories. Group Info / Edit Group / Stories tab walked: fine.
+- 15:40 story menu pauses the story (bar still at 4 s); Storage and Data, Sent Media Quality, Use Less Data,
+  Notifications pages fine. 3a? chat list: the New Chat button hid under "Chat archived / Undo" (a late Undo
+  tap opened New Chat) -> buttons lift above any bottom bar (checked: archive kk, Undo, back to normal).
