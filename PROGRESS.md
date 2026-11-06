@@ -964,3 +964,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Pixel. Header over animated wallpapers already a tint-free blur of the live wallpaper (no change).
 - 12:25 long-press of an incoming bubble over an animated wallpaper: the lifted copy is already solid (checked,
   no change); adnan's chat wallpaper reset.
+- 12:40 138282e (agent) wallpapers retune (owner: "low quality, 80-90% empty"): checked all previews on the Pixel,
+  Liquid Metal fills the screen, auroras span the width, stars brighter; half resolution. 509ac4d quote card
+  filled soft blue (owner). Agent running: quote opens the chat at once (local draft until createQuote lands).
