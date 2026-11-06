@@ -962,3 +962,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   together (3 posts gone in 0.5 s). Test posts deleted, adnan's chat wallpaper reset.
 - 12:24 fbca468 Liquid Edge retune (owner: "99% black"): glowing shape fully in view, light + dark checked on the
   Pixel. Header over animated wallpapers already a tint-free blur of the live wallpaper (no change).
+- 12:25 long-press of an incoming bubble over an animated wallpaper: the lifted copy is already solid (checked,
+  no change); adnan's chat wallpaper reset.
