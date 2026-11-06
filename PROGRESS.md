@@ -858,3 +858,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Read WhatsApp's own third-party notice (res/kna.txt in its APK, 268 components): same libsodium / WebRTC / Opus /
   ExoPlayer as us; ideas: mozjpeg (smaller photos), StringPacks (languages), android-vcard (share contact),
   OFL fonts for text stories, ggml (on-device transcripts, owner's call).
+- 2026-11-06 morning: 417f634 (helper) chat-row previews decrypt off composition; 3cb383d five review fixes
+  (glass only in the chat's window, uploading clock via Message.uploading, short decrypt-cache key, archive note
+  at once, sign-out race); 7ead14f voice note uploads before the message; 19c8e3e followed-channel archive/pin on
+  users/{me}/channels (was PERMISSION_DENIED). iOS (work): b94585d5 cache key, b461c0aa archive refusal alert,
+  2ac145e8 voice upload-first; iOS Build green, TestFlight run 42201295191.
+  Owner: TestFlight is my call now (batch fixes). Next ideas: RNNoise call noise filter, Android Auto check,
+  share contact, video streaming.
