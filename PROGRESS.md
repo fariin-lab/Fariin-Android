@@ -822,3 +822,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 786163e Settings header as iOS (large centred photo, bold name, verified mark, @username). Checked on the Pixel.
 - 301df38 loading states: one iOS ring everywhere (buttons, rows, bars, log-out cover). Not yet checked screen by screen.
 - "app made crash" at 20:38 was my install killing the open app, not a crash. idle.sh now refuses while Fariin is on screen.
+- ca17648 battery/cheap-phone fixes (7 of 13 audit items). Still open from the audit:
+  1. Firestore listeners stay live in the background (consider disableNetwork after 60 s, but the send queue and call watcher must keep working).
+  2. Up to 300 per-channel listeners (ChannelFollows MAX_LIVE).
+  5. ChatHistoryPreloader can warm every chat (limit to top 10, skip on LOW / Power Saving).
+  8. Chat list parses all chats on the main thread (flowOn Default).
+  9. Chat rows decrypt previews during composition (now cached by the decrypt LRU, so cheaper).
+  10. Skeleton recomposes every frame while loading.
