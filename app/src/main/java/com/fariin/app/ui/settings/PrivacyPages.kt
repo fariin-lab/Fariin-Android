@@ -434,8 +434,10 @@ private fun BlockedUsersPage(pop: () -> Unit) {
     }
     val rows = snap.entries.entries.sortedByDescending { it.value }.map { it.key }
     ScrollPage("Blocked Users", pop) {
-        SettingsSection(footer = "Blocked people can't call you or send you messages, and you won't see their stories.") {
-            if (rows.isEmpty()) Text("No blocked users", color = Fariin.colors.secondary, modifier = Modifier.padding(16.dp))
+        if (rows.isEmpty()) com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Blocked,
+            "No blocked users", "People you block can't message or call you. You can block someone from their profile.",
+            Modifier.padding(top = 40.dp))
+        else SettingsSection(footer = "Blocked people can't call you or send you messages, and you won't see their stories.") {
             for ((i, u) in rows.withIndex()) {
                 val p = people[u]
                 val name = p?.first?.ifEmpty { null } ?: p?.second?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "An account you blocked"
@@ -463,6 +465,26 @@ private fun AppLockPage(pop: () -> Unit) {
     var on by remember { mutableStateOf(AppLock.enabled(ctx)) }
     var delay by remember { mutableStateOf(AppLock.delaySeconds(ctx)) }
     var screen by remember { mutableStateOf(AppLock.screenSecurity(ctx)) }
+    // Opened with App Lock off: a short intro first. Set Up turns it on, or sends the person to set
+    // a phone screen lock first when there is none.
+    var intro by remember { mutableStateOf(!on) }
+    if (intro) com.fariin.app.ui.components.IllustratedSheet(
+        art = com.fariin.app.ui.components.LineArt.Lock,
+        title = "App Lock",
+        body = "Keep your chats private. Fariin asks for your fingerprint, face or phone PIN when you open it.",
+        primary = "Set Up",
+        onPrimary = {
+            intro = false
+            if (AppLock.deviceSecure(ctx)) { on = true; AppLock.setEnabled(ctx, true) }
+            else {
+                toast(ctx, "Set a screen lock on your phone first, then come back.")
+                runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+        },
+        onDismiss = { intro = false },
+        secondary = "Not now",
+    )
     ScrollPage("App Lock", pop) {
         SettingsSection(footer = "Require your fingerprint, face or phone PIN to unlock Fariin.") {
             SwitchRow("Require Screen Lock", on, last = !on) { v ->

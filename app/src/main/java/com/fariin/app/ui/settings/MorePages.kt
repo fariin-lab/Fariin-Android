@@ -309,6 +309,8 @@ private fun NotificationsPage(pop: () -> Unit) {
     var inVibrate by remember { mutableStateOf(get("notif.inAppVibrate")) }
     var inPreview by remember { mutableStateOf(get("notif.inAppPreview")) }
     var sent by remember { mutableStateOf(get("chat.sentSound")) }
+    var askOn by remember { mutableStateOf(false) }
+    if (askOn) com.fariin.app.push.NotificationsSheet { askOn = false }
     var reset by remember { mutableStateOf(false) }
     val me = FirebaseAuth.getInstance().currentUser?.uid
     fun account(field: String, v: Boolean) {
@@ -321,8 +323,8 @@ private fun NotificationsPage(pop: () -> Unit) {
         runCatching { ctx.startActivity(i.putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
     ScrollPage("Notifications", pop) {
-        if (!Push.permitted(ctx)) SettingsSection(header = "Notifications are off", footer = "Allow notifications in Settings to be told about new messages.") {
-            SettingsRow("Open Settings", trailing = Trailing.OUT_LINK, last = true) { openSystem() }
+        if (!Push.permitted(ctx)) SettingsSection(header = "Notifications are off", footer = "Turn them on to be told about new messages and calls.") {
+            SettingsRow("Turn On Notifications", last = true) { if (android.os.Build.VERSION.SDK_INT >= 33) askOn = true else openSystem() }
         }
         SettingsSection(footer = "Everything below depends on this. With it off, Fariin does not notify you at all, on the lock screen or inside the app.") {
             SwitchRow("Show Notifications", push, last = true) { on ->

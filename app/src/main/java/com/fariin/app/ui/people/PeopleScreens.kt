@@ -228,8 +228,9 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                         item { card { frequent.forEachIndexed { i, conv -> personRow(conv, i < frequent.lastIndex) } } }
                     }
                     if (people.isEmpty()) item {
-                        Spacer(Modifier.height(14.dp))
-                        card { Text("No chats yet", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(16.dp)) }
+                        com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.People,
+                            "No chats yet", "Invite a friend to Fariin and start your first chat.",
+                            Modifier.padding(top = 24.dp), action = "Invite Friends") { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }
                     }
                     sections.forEach { (letter, list) ->
                         item(key = "h$letter") { sectionTitle(letter) }

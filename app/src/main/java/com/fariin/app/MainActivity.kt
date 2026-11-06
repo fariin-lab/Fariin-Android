@@ -68,7 +68,7 @@ import com.fariin.app.device.DeviceRegistry
 import com.fariin.app.device.SessionEnd
 import com.fariin.app.device.SignedOutNotice
 import com.fariin.app.push.NotificationPoster
-import com.fariin.app.push.NotificationsExplainer
+import com.fariin.app.push.NotificationsSheet
 import com.fariin.app.push.NotifStore
 import com.fariin.app.push.Push
 import com.fariin.app.push.PushRouter
@@ -207,16 +207,15 @@ class MainActivity : ComponentActivity() {
             // Presence "online" and the texts still owed from before (send queue).
             AppLifecycle.signedIn()
         }
-        // The first-run notifications page, right after sign-in, as iOS asks.
+        // The first-run notifications ask, a sheet over the chat list once it is up (below).
         val ctx = LocalContext.current
         var explain by remember { mutableStateOf(Push.needsExplainer(ctx)) }
-        if (explain) { LaunchedEffect(Unit) { keepSplash = false }; NotificationsExplainer { explain = false }; return }
         // Android 14+: a call can only take over the screen (lock screen, app closed) when the person
         // has allowed "full screen notifications" for Fariin; outside the Play Store it starts off,
         // and a call then rang with nothing to answer (owner's Pixel 2026-11-05). Asked once, the way
         // calling apps do; "Not now" is remembered.
         var askFullScreen by remember { mutableStateOf(com.fariin.app.call.CallScreenAccess.shouldAsk(ctx)) }
-        if (askFullScreen) androidx.compose.material3.AlertDialog(
+        if (askFullScreen && !explain) androidx.compose.material3.AlertDialog(
             onDismissRequest = { com.fariin.app.call.CallScreenAccess.later(ctx); askFullScreen = false },
             title = { androidx.compose.material3.Text("Show calls on your screen") },
             text = { androidx.compose.material3.Text("Allow Fariin to show incoming calls full screen, so you can answer when your phone is locked or Fariin is closed.") },
@@ -234,6 +233,7 @@ class MainActivity : ComponentActivity() {
                 activity?.reportFullyDrawn()
             }
         }
+        if (explain && !chats.loading) NotificationsSheet { explain = false }
         val nav = rememberNavController()
         // Notifications: the chat list's names and photos for the push service, the open chat
         // (no notification for it), and a tapped notification opening its chat.

@@ -35,6 +35,7 @@ object Push {
     /** Settings > Notifications > Show Notifications (iOS `notif.push`, absent = on). */
     const val PUSH_ON = "notif.push"
     private const val EXPLAINER_SEEN = "firstRun.notificationsExplainerSeen"
+    private const val ASKED = "notif.systemAsked"
     const val ANDROID_FIELD = "androidFcmTokens"
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -55,6 +56,17 @@ object Push {
 
     /** The page was answered (Continue or Not now). The system question itself is asked by the page. */
     fun markExplainerSeen(c: Context) { prefs(c).edit().putBoolean(EXPLAINER_SEEN, true).apply() }
+
+    /** Android's notifications question was shown once on this install. */
+    fun markAsked(c: Context) { prefs(c).edit().putBoolean(ASKED, true).apply() }
+
+    /**
+     * Android will not ask again: asked before, still off, and no reason to show its dialog (the
+     * person said no for good). Then the only way on is Fariin's notification settings.
+     */
+    fun askBlocked(c: Context): Boolean =
+        Build.VERSION.SDK_INT >= 33 && !permitted(c) && prefs(c).getBoolean(ASKED, false) &&
+            com.fariin.app.ui.components.PermissionDenied.isBlocked(c, Manifest.permission.POST_NOTIFICATIONS)
 
     /**
      * After every signed-in launch and sign-in: save the token we hold for whoever is signed in now.
