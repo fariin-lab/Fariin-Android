@@ -103,6 +103,13 @@ data class ChannelThreadUi(
     val problem: String? = null,
     /** Follow tapped, the server's answer on its way: drawn as followed already. */
     val joining: Boolean = false,
+    /** A short line over the chat (a toast). */
+    val notice: (String) -> Unit = {},
+    /** The admin card: I started this channel; I may change its name, photo and description. */
+    val createdByMe: Boolean = false,
+    val canEdit: Boolean = false,
+    /** The link Share on the admin card sends (public link, else the invite link); null = none. */
+    val shareLink: suspend () -> String? = { null },
 )
 
 /** A post's eye count for the meta line (null = not a channel post). */
@@ -162,6 +169,77 @@ fun ChannelChips(ch: ChannelThreadUi, m: Message) {
                 Spacer(Modifier.width(4.dp))
                 Text(ChannelRules.compactCount(chip.count), fontSize = 13.sp, color = if (chip.mine) c.blue else c.label)
             }
+        }
+    }
+}
+
+/** A post's chips as shown (counts only, most first); empty = none, or reactions off. */
+@Composable
+fun rememberPostChips(ch: ChannelThreadUi, m: Message): List<ChannelRules.Chip> {
+    if (ch.info.reactMode == "off" || m.isSystem || m.deleted) return emptyList()
+    val retired = com.fariin.app.ui.thread.rememberRetired()
+    return ChannelRules.chips(ch.counts(m), ch.mine(m.id), ch.held(m.id)).filterNot { retired(it.emoji) }
+}
+
+/**
+ * A post's reactions INSIDE its bubble, under the words (iOS MessageRowLayout, reactions inside):
+ * pills 30 high, 11 in on each side, the emoji in a 20 box, the count in 12 semibold, 6 apart and
+ * 6 between rows, wrapping to the bubble's width. The time line joins the last row at its right
+ * end when it fits there, else it takes a row of its own under the pills, on the right.
+ * Mine is the solid text colour with the count in the page colour; the rest a faint wash.
+ */
+@Composable
+fun ChannelChipsInBubble(ch: ChannelThreadUi, m: Message, chips: List<ChannelRules.Chip>, meta: @Composable () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.ui.layout.Layout(content = {
+        chips.forEach { chip ->
+            Row(
+                Modifier.height(30.dp).clip(CircleShape)
+                    .background(if (chip.mine) c.label else c.label.copy(alpha = 0.08f))
+                    .clickable(enabled = ch.canReact) { ch.onReact(m, ChannelRules.nextPick(ch.mine(m.id), chip.emoji)) }
+                    .padding(horizontal = 11.dp)
+                    .semantics { contentDescription = "${com.fariin.app.ui.thread.CustomReaction.spoken(chip.emoji)}, ${chip.count}" },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                com.fariin.app.ui.thread.ReactionGlyph(chip.emoji, 17.sp, 20.dp)
+                Text(" " + ChannelRules.compactCount(chip.count), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (chip.mine) c.bg else c.secondary, maxLines = 1)
+            }
+        }
+        meta()
+    }, modifier = Modifier.padding(top = 6.dp)) { measurables, constraints ->
+        val maxW = constraints.maxWidth
+        val gap = 6.dp.roundToPx()
+        val metaGap = 8.dp.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val pills = measurables.dropLast(1).map { it.measure(loose) }
+        val mt = measurables.last().measure(loose)
+        // Rows of pills, each as wide as fits.
+        val rows = mutableListOf(mutableListOf<Int>())
+        var rowW = 0
+        val rowWs = mutableListOf(0)
+        pills.forEachIndexed { i, p ->
+            if (rows.last().isNotEmpty() && rowW + gap + p.width > maxW) {
+                rows.add(mutableListOf()); rowWs.add(0); rowW = 0
+            }
+            rowW = if (rows.last().isEmpty()) p.width else rowW + gap + p.width
+            rows.last().add(i); rowWs[rowWs.lastIndex] = rowW
+        }
+        val pillH = pills.maxOfOrNull { it.height } ?: 0
+        val lastW = rowWs.last()
+        val joins = lastW + metaGap + mt.width <= maxW
+        val widest = rowWs.maxOrNull() ?: 0
+        val w = (if (joins) maxOf(widest, lastW + metaGap + mt.width) else maxOf(widest, mt.width)).coerceAtMost(maxW)
+        val rowsH = rows.size * pillH + (rows.size - 1) * gap
+        val h = if (joins) rowsH else rowsH + 2.dp.roundToPx() + mt.height
+        layout(w, h) {
+            rows.forEachIndexed { r, idx ->
+                var x = 0
+                val y = r * (pillH + gap)
+                idx.forEach { i -> pills[i].place(x, y + (pillH - pills[i].height) / 2); x += pills[i].width + gap }
+            }
+            if (joins) mt.place(w - mt.width, rowsH - pillH + (pillH - mt.height) / 2)
+            else mt.place(w - mt.width, rowsH + 2.dp.roundToPx())
         }
     }
 }

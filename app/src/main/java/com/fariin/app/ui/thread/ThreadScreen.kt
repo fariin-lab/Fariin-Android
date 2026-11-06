@@ -241,10 +241,16 @@ fun ThreadScreen(
             androidx.compose.runtime.CompositionLocalProvider(LocalThreadCid provides ui.cid) {
                 // A channel shows its posts only (owner 2026-11-06, a visitor saw a wall of "This message
                 // was deleted" and wallpaper notices left from when it was a group): a deleted post leaves
-                // no row, and the group's wallpaper notices are not channel news.
+                // no row. Of the system lines only the channel's own events stay (iOS channelNotice:
+                // created, renamed, photo removed), said without the admin's name; wallpaper, "now
+                // verified" and the rest of the admins' work are hidden. Pins and timer lines stay.
                 val shownUi = if (ui.channel == null) ui else remember(ui) {
-                    ui.copy(messages = ui.messages.filter { m ->
-                        !m.deleted && !(m.isSystem && m.text.contains("wallpaper", ignoreCase = true))
+                    ui.copy(messages = ui.messages.mapNotNull { m ->
+                        when {
+                            m.deleted -> null
+                            !m.isSystem || m.disappearSeconds != null || com.fariin.app.data.PinRules.notice(m.text) != null -> m
+                            else -> com.fariin.app.channel.ChannelRules.channelNotice(m.text)?.let { m.copy(text = it) }
+                        }
                     })
                 }
                 ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
@@ -613,6 +619,9 @@ private fun ThreadContent(
             } else if (ui.messages.isEmpty() && ui.isGroup && ui.channel == null && !ui.notAMember && ui.groupDoc.isNotEmpty()) {
                 // iOS encryptionNotice: an empty group shows its welcome card (GroupWelcomeCard.kt).
                 GroupWelcomeCard(ui, onStep = { peopleNav.groupStep(ui.cid, it) }, modifier = Modifier.align(Alignment.Center))
+            } else if (ui.messages.isEmpty() && ch != null) {
+                // An empty channel shows its own card (iOS: the channel card from the first frame).
+                com.fariin.app.ui.channels.ChannelIntroCard(ch, Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty()) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("No messages here yet", fontSize = 15.sp, color = c.secondary)
@@ -707,7 +716,8 @@ private fun ThreadContent(
                             ) {
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
-                                    com.fariin.app.ui.channels.ChannelChips(ch, m)
+                                    // A text post carries its reactions inside the bubble; the rest under it.
+                                    if (!channelChipsInside(m)) com.fariin.app.ui.channels.ChannelChips(ch, m)
                                 }
                             }
                             selecting -> Row(
@@ -767,6 +777,14 @@ private fun ThreadContent(
                         CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                     }
                 }
+                // iOS groupHistoryCard for a channel: its card above the first post once the whole
+                // history is here (or the channel is too small to have more), never between pages.
+                if (ch != null && ui.loaded && ui.messages.isNotEmpty() && (!ui.canLoadOlder || (ui.messages.size < 20 && ch.info.postCount < 20)))
+                    item(key = "channelIntro") {
+                        Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                            com.fariin.app.ui.channels.ChannelIntroCard(ch)
+                        }
+                    }
                 // iOS groupHistoryCard: once the whole history is here, the group's card stays above its
                 // oldest message (never between pages); scrolling up to the start shows it.
                 if (ui.loaded && ui.isGroup && ui.channel == null && !ui.notAMember && !ui.canLoadOlder &&
@@ -932,6 +950,17 @@ private fun ThreadContent(
                         if (stop != null) actions.onNotice(stop) else { attachCamera = true; attachOpen = true }
                     },
                     initialDraft = actions.draft, onDraft = { actions.onDraft(it); linkText = it },
+                    // A channel's admin writes a "Broadcast", with the post-without-sound bell (iOS).
+                    placeholder = if (ch != null) "Broadcast" else "Message",
+                    channelSilent = if (ch != null && ch.role == com.fariin.app.channel.ChannelRules.Role.ADMIN) {
+                        LaunchedEffect(ui.cid) { com.fariin.app.channel.ChannelPosting.load(ui.cid) }
+                        com.fariin.app.channel.ChannelPosting.isSilent(ui.cid)
+                    } else null,
+                    onToggleSilent = {
+                        val on = !com.fariin.app.channel.ChannelPosting.isSilent(ui.cid)
+                        com.fariin.app.channel.ChannelPosting.setSilent(ui.cid, on) { actions.onNotice("Couldn't change that. Try again.") }
+                        actions.onNotice(if (on) "Followers will get your posts without sound." else "Followers will get your posts with sound.")
+                    },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
                     onSticker = { s ->
@@ -1014,6 +1043,19 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                 }
             }
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
+            // A channel I follow: its bell in a glass circle on the right (iOS "chbell"); a tap mutes
+            // or unmutes for good, as the bar's tap does.
+            ui.channel?.takeIf { it.role == com.fariin.app.channel.ChannelRules.Role.FOLLOWER }?.let { ch ->
+                com.fariin.app.ui.components.FloatingIcon(
+                    androidx.compose.ui.res.painterResource(if (ch.muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
+                    contentDescription = if (ch.muted) "Unmute channel" else "Mute channel",
+                    onClick = {
+                        ch.onMute(if (ch.muted) null else 0.0)
+                        ch.notice(if (ch.muted) "Notifications on for this channel" else "Channel muted")
+                    },
+                    circle = true,
+                )
+            }
             HeaderMenu(ui, onToggleMute)
         }
     }
@@ -1110,6 +1152,11 @@ private fun SenderLine(ui: ThreadUi, uid: String) {
         }
     }
 }
+
+/** A channel post drawn as a text bubble: its reactions go inside the bubble (iOS), not under it. */
+private fun channelChipsInside(m: Message): Boolean =
+    !m.deleted && m.mediaKind == null && m.poll == null && !m.isSticker && !m.isGif && m.storyMention == null &&
+        com.fariin.app.data.CardRules.location(m.text) == null && com.fariin.app.data.CardRules.contact(m.text) == null
 
 /** BubblePalette.senderColor: the sum of the uid's characters into a fixed palette. */
 private fun senderColor(uid: String): Color = senderPalette[uid.sumOf { it.code } % senderPalette.size]
@@ -1233,10 +1280,13 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // No sealed card (an older message, or previews off): one of our group or channel links
             // in the words still gets the live card.
             if (!m.deleted) m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, isMe) else LiveGroupLinkCard(body, isMe) }
+            // A channel post's reactions sit inside its bubble, the time line with them (iOS).
+            val ch = ui.channel
+            val chips = if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
             TextWithMeta(
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
-                meta = { Meta(m, tick, isMe, is24h) },
+                meta = { if (chips.isEmpty()) Meta(m, tick, isMe, is24h) else Spacer(Modifier) },
                 // iOS BubbleText: a group's @mentions in semibold.
                 bold = remember(body, m.mentions, ui.names, m.deleted) {
                     if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
@@ -1244,6 +1294,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 // iOS BubbleText: links, @usernames, emails and numbers tappable (BubbleLinks.kt).
                 linkInk = if (m.deleted) null else if (isMe) Color.White else c.blue,
             )
+            if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
         }
         }
         ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
@@ -1558,6 +1609,11 @@ private fun Composer(
     onRowPlaced: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
     /** The camera in the field (iOS, 2026-10-15); null hides it. */
     onCamera: (() -> Unit)? = null,
+    /** The empty field's grey words ("Broadcast" for a channel's admin). */
+    placeholder: String = "Message",
+    /** A channel admin's post-without-sound bell in the field: null hides it, true = silent. */
+    channelSilent: Boolean? = null,
+    onToggleSilent: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1713,7 +1769,7 @@ private fun Composer(
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     val fieldText = TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
-                    if (draft.isEmpty()) Text("Message", style = fieldText, color = c.tertiary, maxLines = 1)
+                    if (draft.isEmpty()) Text(placeholder, style = fieldText, color = c.tertiary, maxLines = 1)
                     BasicTextField(
                         value = boxValue, onValueChange = {
                             val now = System.currentTimeMillis()
@@ -1726,12 +1782,16 @@ private fun Composer(
                         maxLines = 6,
                         modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false }
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
-                            .semantics { contentDescription = "Message" },
+                            .semantics { contentDescription = placeholder },
                     )
                 }
                 // The field's icons, 24 each, 32 apart, the last one centred 24 in from the pill's end
                 // (iOS fieldIconPitch / micTrailing); dimmer than the mic (label at 55%). The camera
                 // shows only on an empty field and steps aside while the sticker panel is up.
+                // A channel admin's bell, before the camera (iOS bellButton); gone while the panel is up.
+                if (channelSilent != null && !emojiOpen) FieldIcon(
+                    if (channelSilent) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications,
+                    if (channelSilent) "Posting without sound" else "Posting with sound", onToggleSilent)
                 if (onCamera != null && draft.isEmpty() && !emojiOpen) FieldIcon(com.fariin.app.R.drawable.ic_camera_field, "Camera") {
                     keyboard?.hide(); onCamera()
                 }

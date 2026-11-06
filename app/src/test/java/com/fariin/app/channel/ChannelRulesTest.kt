@@ -142,6 +142,21 @@ class ChannelRulesTest {
         assertNull(ChannelRules.shareText("Private", ""))
     }
 
+    @Test fun channelNoticesKeepOnlyTheChannelsOwnNews() {
+        assertEquals("Channel created", ChannelRules.channelNotice("Adnan created the group"))
+        assertEquals("Channel created", ChannelRules.channelNotice("Channel created"))
+        assertEquals("Channel name changed to VE3", ChannelRules.channelNotice("Adnan renamed the group to VE3"))
+        assertEquals("Channel photo removed", ChannelRules.channelNotice("Adnan removed the group photo"))
+        assertNull(ChannelRules.channelNotice("This group is now verified by Fariin"))
+        assertNull(ChannelRules.channelNotice("Adnan changed the group wallpaper"))
+        assertNull(ChannelRules.channelNotice("Adnan added Sam"))
+    }
+
+    @Test fun adminCardLine() {
+        assertEquals("You created this channel · 9 followers", ChannelRules.adminCardLine(true, 9))
+        assertEquals("You're an admin of this channel · 1 follower", ChannelRules.adminCardLine(false, 1))
+    }
+
     @Test fun noEmDashesInWords() {
         val all = listOf(ChannelRules.REQUEST_SENT, ChannelRules.FOLLOWING_NOTICE, ChannelRules.typeFooter(true),
             ChannelRules.typeFooter(false), ChannelRules.protectFooter(true), ChannelRules.protectFooter(false))

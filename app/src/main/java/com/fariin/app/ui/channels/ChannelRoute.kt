@@ -31,6 +31,8 @@ data class ChannelNav(
     val open: (String) -> Unit = {},
     /** The official Fariin chat. */
     val official: () -> Unit = {},
+    /** Edit Channel (name, photo, description), from the admin card in the chat. */
+    val edit: (String) -> Unit = {},
 )
 
 val LocalChannelNav = staticCompositionLocalOf { ChannelNav() }
@@ -43,6 +45,7 @@ fun channelNav(nav: NavHostController) = ChannelNav(
     // replaced the chat with it, so Back went to the chat list instead of the chat (owner 2026-11-06).
     open = { cid -> if (nav.currentBackStackEntry?.arguments?.getString("cid") != cid) nav.navigate("thread/$cid") },
     official = { nav.navigate("official") { launchSingleTop = true } },
+    edit = { nav.navigate("channeledit/$it") { launchSingleTop = true } },
 )
 
 /** The channel pages' routes, added to the signed-in NavHost. */
@@ -217,5 +220,10 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         onReport = { m -> scope.launch { if (ChannelService.report(cid, m.id)) notice("Thanks. Fariin's moderators will review this post.") else notice("Couldn't send the report. Try again.") } },
         problem = problem,
         joining = joining,
+        notice = notice,
+        createdByMe = (doc["createdBy"] as? String) == me,
+        canEdit = role == ChannelRules.Role.ADMIN && doc.isNotEmpty() &&
+            com.fariin.app.channel.ChannelAdmins.Team.from(doc).can(me, com.fariin.app.channel.ChannelAdmins.Right.CHANGE_INFO),
+        shareLink = { com.fariin.app.data.ChannelAddFollowers.link(cid, doc) },
     )
 }

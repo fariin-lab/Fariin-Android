@@ -190,6 +190,27 @@ object ChannelRules {
         "Groups" to "Channels", "groups" to "channels", "Group" to "Channel", "group" to "channel",
     )
 
+    /**
+     * A system line in a channel (iOS ThreadRepository.channelNotice): only the channel's own events
+     * stay, said without the admin's name. Everything an admin did (wallpaper, verification, who may
+     * post, adds, restrictions) is not news for followers; null = no row. Pins and timer lines are
+     * kept by the caller before this is asked.
+     */
+    fun channelNotice(text: String): String? {
+        val renamed = " renamed the group to "
+        return when {
+            text == "Channel created" || text.endsWith(" created the group") || text.endsWith(" created the channel") -> "Channel created"
+            text.contains(renamed) -> "Channel name changed to " + text.substringAfter(renamed)
+            text.endsWith(" removed the group photo") -> "Channel photo removed"
+            else -> null
+        }
+    }
+
+    /** The admin card's line (iOS ChannelAdminCard): "You created this channel · 9 followers". */
+    fun adminCardLine(createdByMe: Boolean, shownCount: Int): String =
+        (if (createdByMe) "You created this channel" else "You're an admin of this channel") + " · " +
+            (if (shownCount == 1) "1 follower" else "$shownCount followers")
+
     /** Whole words only, so "remember" never turns into "refollower". */
     fun words(s: String): String = swaps.fold(s) { t, (from, to) ->
         t.replace(Regex("\\b" + Regex.escape(from) + "\\b"), to)
