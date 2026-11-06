@@ -605,7 +605,12 @@ private fun ThreadContent(
                 remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
             val linkTap = rememberBubbleLinkTap(ui, actions.onNotice)
             androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
-                LocalBubbleLinkTap provides linkTap) {
+                LocalBubbleLinkTap provides linkTap,
+                // Nothing INSIDE the list may draw glass from the list itself: the group's welcome card
+                // (a list row) did, and the backdrop recorded a layer that contained its own reader, an
+                // endless render tree that crashed the app (RenderThread SIGSEGV, 2026-11-06).
+                com.fariin.app.ui.components.LocalLiquidBackdrop provides null,
+                com.fariin.app.ui.components.LocalGlassHaze provides null) {
             LazyColumn(
                 Modifier.fillMaxSize().then(if (edgeHaze != null) Modifier.hazeSource(edgeHaze)
                     .then(if (liquid) Modifier.layerBackdrop(liquidBackdrop) else Modifier)
