@@ -853,3 +853,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 63572c6 tab bar liquid glass: io.github.kyant0:backdrop:1.0.0 (Apache-2.0; 2.x needs Compose 1.12 + Kotlin 2.4).
   Android 13+ lens + vibrancy, no blur pass (blur cost +5 ms/frame), 55 % frosted surface. Owner loved it.
   Next candidates: same glass for the chat's floating buttons; credit the library on the licenses page.
+- 2026-11-06 late: 7ab8020/2845983/14ceb4c chat buttons in liquid glass (visible on white, one clean rim);
+  e1bc807/e933495 licences via AboutLibraries, tucked into Help & About > App info (as WhatsApp: App info > Licenses).
+  Read WhatsApp's own third-party notice (res/kna.txt in its APK, 268 components): same libsodium / WebRTC / Opus /
+  ExoPlayer as us; ideas: mozjpeg (smaller photos), StringPacks (languages), android-vcard (share contact),
+  OFL fonts for text stories, ggml (on-device transcripts, owner's call).
