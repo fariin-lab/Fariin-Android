@@ -32,12 +32,20 @@ object ChatHistoryPreloader {
     private val warming = HashSet<String>()
     private val warmedAt = HashMap<String, Double>()
 
+    private const val TOP_CHATS = 12
+
     @Synchronized
     fun refresh(conversations: List<Conversation>, me: String, openChat: String?) {
         if (me.isEmpty() || openChat != null) return
         if (SystemClock.elapsedRealtime() - launchedAt < LAUNCH_HOLD_MS) return
+        // Battery audit 2026-11-05: on a cheap phone or in Battery Saver nothing is warmed ahead, and
+        // elsewhere only the chats near the top (the ones about to be opened), not up to 300 of them.
+        val power = com.fariin.app.perf.PowerSaving.state.value
+        if (power.deviceClass == com.fariin.app.perf.PerfClass.LOW || power.batterySaverOn) return
         val now = System.currentTimeMillis().toDouble()
+        val top = conversations.sortedByDescending { it.displayUpdatedAt(me) }.take(TOP_CHATS).map { it.id }.toSet()
         val ranked = conversations.asSequence()
+            .filter { it.id in top }
             .filter { !it.localPending && it.id !in warming && it.displayUpdatedAt(me) > (warmedAt[it.id] ?: 0.0) }
             .sortedWith(compareBy<Conversation> { it.isMuted(me, now) }
                 .thenBy { !it.hasUnreadMark(me) }

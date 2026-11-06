@@ -46,17 +46,19 @@ import com.fariin.app.ui.theme.Fariin
 
 /** One sweep position for the whole screen, so every block shines in step. */
 @Composable
-private fun shimmerPhase(): Float {
-    if (!animationsOn()) return -2f
+private fun shimmerPhase(): androidx.compose.runtime.State<Float> {
+    // A State read only while drawing (battery/lag audit 2026-11-05): the band moves every frame,
+    // but the rows are no longer rebuilt every frame, only redrawn.
+    if (!animationsOn()) return androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(-2f) }
     val t = rememberInfiniteTransition(label = "skeleton")
-    val p by t.animateFloat(-1f, 1f, infiniteRepeatable(tween(1250, easing = LinearEasing), RepeatMode.Restart), label = "sweep")
-    return p
+    return t.animateFloat(-1f, 1f, infiniteRepeatable(tween(1250, easing = LinearEasing), RepeatMode.Restart), label = "sweep")
 }
 
-private fun Modifier.skeleton(shape: Shape, phase: Float, base: Color, highlight: Color): Modifier =
+private fun Modifier.skeleton(shape: Shape, phaseState: androidx.compose.runtime.State<Float>, base: Color, highlight: Color): Modifier =
     clip(shape).background(base).drawWithCache {
         val band = size.width * 0.55f
         onDrawBehind {
+            val phase = phaseState.value
             if (phase > -2f) {
                 val x = phase * size.width * 1.7f
                 drawRect(Brush.horizontalGradient(listOf(Color.Transparent, highlight, Color.Transparent),
@@ -74,13 +76,13 @@ private fun colors(): Pair<Color, Color> {
 }
 
 @Composable
-fun SkeletonBlock(width: Dp, height: Dp = 12.dp, radius: Dp = 6.dp, phase: Float = shimmerPhase(), modifier: Modifier = Modifier) {
+fun SkeletonBlock(width: Dp, height: Dp = 12.dp, radius: Dp = 6.dp, phase: androidx.compose.runtime.State<Float> = shimmerPhase(), modifier: Modifier = Modifier) {
     val (base, hi) = colors()
     Box(modifier.size(width, height).skeleton(RoundedCornerShape(radius), phase, base, hi))
 }
 
 @Composable
-fun SkeletonCircle(size: Dp, phase: Float = shimmerPhase()) {
+fun SkeletonCircle(size: Dp, phase: androidx.compose.runtime.State<Float> = shimmerPhase()) {
     val (base, hi) = colors()
     Box(Modifier.size(size).skeleton(CircleShape, phase, base, hi))
 }

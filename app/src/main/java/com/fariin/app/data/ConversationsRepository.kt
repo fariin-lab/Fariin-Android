@@ -44,7 +44,9 @@ class ConversationsRepository(
             .limit(limit)
             // Metadata changes too: the server's ack of an offline send flips hasPendingWrites
             // without touching the data, and the row's clock must turn into a tick then.
-            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, error ->
+            // Parsed on one background thread, in order (battery/lag audit 2026-11-05): up to 300
+            // chats were read on the main thread for every change, ack and tick.
+            .addSnapshotListener(parseThread, com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, error ->
                 if (error != null) {
                     // Firestore ends a refused listener for good; the caller attaches a new one
                     // (ChatsViewModel, iOS SessionRecovery). Until then the list keeps what it has.
@@ -54,21 +56,18 @@ class ConversationsRepository(
                 if (snap == null) return@addSnapshotListener
                 // An empty answer from Firestore's own offline store never blanks the saved list.
                 if (snap.metadata.isFromCache && snap.isEmpty && saved.isNotEmpty()) return@addSnapshotListener
-                val convs = snap.documents.map { parse(it) }
+                // Each document's data read once, for the row and for the saved copy.
+                val datas = snap.documents.map { it.id to (it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()) }
+                val convs = snap.documents.mapIndexed { i, d -> parse(d, datas[i].second) }
                 trySend(State.Loaded(convs, snap.metadata.isFromCache))
-                if (useDiskCache && !snap.metadata.isFromCache) {
-                    LocalCache.saveChats(uid, snap.documents.map {
-                        it.id to (it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap())
-                    })
-                }
+                if (useDiskCache && !snap.metadata.isFromCache) LocalCache.saveChats(uid, datas)
             }
         awaitClose { reg.remove() }
     }
 
-    private fun parse(doc: DocumentSnapshot): Conversation {
-        // ESTIMATE, as iOS reads `data(with: .estimate)`: a pending server time shows as now
-        // instead of dropping the chat to the bottom.
-        val data = doc.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()
+    // ESTIMATE, as iOS reads `data(with: .estimate)`: a pending server time shows as now
+    // instead of dropping the chat to the bottom.
+    private fun parse(doc: DocumentSnapshot, data: Map<String, Any?>): Conversation {
         ThreadSeed.noteConv(doc.id, data)   // a chat opened from here draws its ticks from the first frame
         val conv = Conversation.fromFirestore(doc.id, data)
         return if (doc.metadata.hasPendingWrites()) conv.copy(localPending = true) else conv
@@ -76,5 +75,7 @@ class ConversationsRepository(
 
     companion object {
         const val PAGE_SIZE = 300L
+        private val parseThread: java.util.concurrent.Executor =
+            java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "chat-list").apply { isDaemon = true } }
     }
 }
