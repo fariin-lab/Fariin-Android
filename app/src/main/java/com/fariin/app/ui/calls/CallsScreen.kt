@@ -231,7 +231,11 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                             CallRow(run, me, now, onInfo = {
                                 val g = run.latest.groupCid
                                 if (g != null) nav.chat(g)
-                                else if (run.latest.otherUid.isNotEmpty()) nav.contact(run.latest.otherUid)
+                                else if (run.latest.otherUid.isNotEmpty()) {
+                                    // The profile shows this call's card (iOS source .calls).
+                                    com.fariin.app.data.CallInfoLink.set(run.latest.otherUid, run.latest)
+                                    nav.contact(run.latest.otherUid)
+                                }
                                 else info = run
                             }, onLongClick = { picked = setOf(tag) })
                         }

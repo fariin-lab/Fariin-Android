@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.material.icons.filled.CallReceived
+import androidx.compose.material.icons.filled.CallMissed
+import androidx.compose.material.icons.filled.CallMade
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.Campaign
@@ -442,6 +445,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // iOS: Search only on the page opened from this person's chat; it goes back there and opens it.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     var nickname by remember { mutableStateOf(false) }
+    // Opened from a call on the Calls page: that call's card under the circles (iOS callLogCard).
+    val lastCall = remember(uid) { com.fariin.app.data.CallInfoLink.take(uid) }
     // Glow (iOS ContactInfoView): the Glow circle and "Glow Story" in the overflow, never on my own
     // page or a blocked person's; hidden with the feature.
     val glowOn = com.fariin.app.data.AppFeatures.glow && uid != me && !blocked
@@ -592,6 +597,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 }
             }
             Spacer(Modifier.height(20.dp))
+            lastCall?.let { call -> CallLogCard(call, me) }
             person?.about?.takeIf { it.isNotEmpty() }?.let { bio ->
                 SettingsSection { Text(bio, fontSize = 17.sp, color = c.label, modifier = Modifier.fillMaxWidth().padding(16.dp)) }
             }
@@ -674,6 +680,31 @@ private fun GroupsInCommonPage(groups: List<Conversation>, me: String, onBack: (
             Spacer(Modifier.height(12.dp))
             SettingsSection { groups.forEach { g -> GroupInCommonRow(g, me, onOpenChat) } }
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+/** iOS callLogCard: the call's day, then its direction and kind with the time on the right; red for one I missed. */
+@Composable
+private fun CallLogCard(call: com.fariin.app.data.CallEntry, me: String) {
+    val c = Fariin.colors
+    val missed = call.missedIncoming(me)
+    val date = remember(call.dateMs) { java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(call.dateMs)) }
+    val time = remember(call.dateMs) { java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(call.dateMs)) }
+    SettingsSection {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(date, fontSize = 15.sp, color = c.secondary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(when {
+                    missed -> androidx.compose.material.icons.Icons.Filled.CallMissed
+                    call.mine(me) -> androidx.compose.material.icons.Icons.Filled.CallMade
+                    else -> androidx.compose.material.icons.Icons.Filled.CallReceived
+                }, contentDescription = null, tint = if (missed) c.red else c.secondary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(com.fariin.app.data.CallInfoLink.line(call, me), fontSize = 15.sp, color = if (missed) c.red else c.label,
+                    modifier = Modifier.weight(1f))
+                Text(time, fontSize = 15.sp, color = c.secondary)
+            }
         }
     }
 }

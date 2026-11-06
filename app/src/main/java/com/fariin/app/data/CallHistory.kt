@@ -45,6 +45,26 @@ data class CallRun(val entries: List<CallEntry>) {
     val id: String get() = latest.id
 }
 
+/**
+ * The call a person's profile was opened from on the Calls page (iOS ContactInfoView source .calls:
+ * the profile then shows that call's card). Set just before the push, taken once by the profile.
+ */
+object CallInfoLink {
+    @Volatile private var pending: Pair<String, CallEntry>? = null
+    fun set(uid: String, call: CallEntry) { pending = uid to call }
+    fun take(uid: String): CallEntry? = pending?.takeIf { it.first == uid }?.second.also { pending = null }
+
+    /** iOS callLogCard: "Missed video call" for one I missed, else Outgoing / Incoming and the kind. */
+    fun line(call: CallEntry, me: String, nowMs: Long = System.currentTimeMillis()): String {
+        val kind = if (call.video) "video call" else "voice call"
+        return when {
+            call.missedIncoming(me, nowMs) -> "Missed $kind"
+            call.mine(me) -> "Outgoing $kind"
+            else -> "Incoming $kind"
+        }
+    }
+}
+
 object CallHistory {
     /** The All / Missed switch: Missed keeps only calls I missed from someone else. */
     fun filter(calls: List<CallEntry>, me: String, missedOnly: Boolean, nowMs: Long = System.currentTimeMillis()) =
