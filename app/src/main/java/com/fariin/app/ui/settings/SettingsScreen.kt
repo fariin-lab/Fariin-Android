@@ -6,6 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -191,7 +193,6 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     // no solid bar: the page scrolls under a soft fade instead of being cut by a hard edge.
     val haze = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
     val glass = com.fariin.app.perf.rememberPowerState().glass()
-    val scrolled = scroll.value > 0
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         val barH = 56.dp
         Column(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
@@ -232,16 +233,25 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
         // The bar (owner 2026-11-05 "high end, smooth"): frosted glass over the rows, the same blur as
         // the Chats bar, strongest at the top and melting away at its lower edge, so there is no line.
         // Power Saving without glass: the page colour fading to clear instead.
-        Box(Modifier.fillMaxWidth().then(when {
-            scrolled && glass -> Modifier.hazeEffect(haze) {
+        // Owner 2026-11-05 (his screenshot): the blur's lower end showed as a line, and the glass
+        // switching on at the first scroll made a hitch. Now the glass is always on (nothing switches
+        // while scrolling), and the whole effect, blur and tint together, fades out over a long eased
+        // tail under the title, so the eye can not find where it ends.
+        val fade = androidx.compose.ui.graphics.Brush.verticalGradient(
+            0f to Color.Black, 0.50f to Color.Black, 0.62f to Color.Black.copy(alpha = 0.85f),
+            0.74f to Color.Black.copy(alpha = 0.55f), 0.85f to Color.Black.copy(alpha = 0.25f),
+            0.93f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
+        Box(Modifier.fillMaxWidth().then(
+            if (glass) Modifier.hazeEffect(haze) {
                 backgroundColor = c.bgSecondary; blurRadius = 24.dp; noiseFactor = 0f
                 tints = listOf(dev.chrisbanes.haze.HazeTint(c.bgSecondary.copy(alpha = 0.7f)))
                 inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-                progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f, preferPerformance = true)
+                mask = fade
             }
-            else -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
-                0f to c.bgSecondary, 0.7f to c.bgSecondary, 1f to c.bgSecondary.copy(alpha = 0f)))
-        }).statusBarsPadding().height(barH + 16.dp)) {
+            else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                0f to c.bgSecondary, 0.5f to c.bgSecondary, 0.75f to c.bgSecondary.copy(alpha = 0.6f),
+                0.9f to c.bgSecondary.copy(alpha = 0.2f), 1f to c.bgSecondary.copy(alpha = 0f)))
+        ).statusBarsPadding().height(barH + 44.dp)) {
             Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)) {
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
@@ -418,8 +428,14 @@ private fun NightModePage(pop: () -> Unit) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 for (mode in AppAppearance.entries) {
                     val sel = mode == current
+                    // No grey ripple square on tap (owner 2026-11-05 photo); the tile dips a little
+                    // under the finger instead, as iOS.
+                    val press = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    val down by press.collectIsPressedAsState()
+                    val k by androidx.compose.animation.core.animateFloatAsState(if (down) 0.95f else 1f, label = "modePress")
                     Column(
-                        Modifier.weight(1f).clickable { AppearancePrefs.set(ctx, mode) },
+                        Modifier.weight(1f).graphicsLayer { scaleX = k; scaleY = k }
+                            .clickable(interactionSource = press, indication = null) { AppearancePrefs.set(ctx, mode) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         val shape = RoundedCornerShape(16.dp)
