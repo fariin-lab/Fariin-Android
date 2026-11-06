@@ -34,6 +34,7 @@ internal class StyledBubble(val fill: Brush, val ink: Color, val glass: Boolean)
  */
 @Composable
 internal fun styledBubble(m: Message): StyledBubble? {
+    if (!BubbleStyles.SHOWN) return null
     val style = BubbleStyles.find(m.bubbleStyle) ?: return null
     if (m.deleted || m.mediaKind != null || m.poll != null) return null
     if (CardRules.location(m.text) != null || CardRules.contact(m.text) != null) return null

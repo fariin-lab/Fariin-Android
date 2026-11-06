@@ -9,6 +9,10 @@ package com.fariin.app.data
  * Soft Glass is the system blur on iOS; here it is its colour, partly see-through (see [Look.glass]).
  */
 object BubbleStyles {
+    /** Owner 2026-11-06: hidden until next year ("completely hide it"), as iOS BubbleStyles.shown.
+     *  Off: every message, mine or others', draws as a normal bubble. The code stays for later. */
+    const val SHOWN = false
+
     data class Look(
         /** 0xRRGGBB, one = solid, two = gradient from top to bottom. */
         val fill: List<Long>,
