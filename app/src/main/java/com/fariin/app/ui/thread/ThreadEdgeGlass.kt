@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -82,9 +83,19 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         // behind it, and on a chat's very first frame the bubbles showed sharp under the name
         // (recording 2026-11-05). Once the glass draws it covers this completely.
         val under0 = remember(solidFrac, c.bg) { edgeBrush(c.bg, solidFrac) }
-        Box(modifier.fillMaxWidth().height(heightDp).drawBehind { if (alpha > 0f) drawRect(under0, alpha = alpha) }.hazeEffect(haze) {
+        // Over the glass, a page-colour wash strongest at the top (iOS frosts what is under the bar
+        // almost white; a blue bubble showed as a blue cloud, owner's photo 2026-11-05).
+        val wash = remember(solidFrac, c.bg) {
+            Brush.verticalGradient(0f to c.bg.copy(alpha = 0.6f), solidFrac to c.bg.copy(alpha = 0.45f),
+                (solidFrac + (1f - solidFrac) * 0.5f) to c.bg.copy(alpha = 0.15f), 1f to c.bg.copy(alpha = 0f))
+        }
+        Box(modifier.fillMaxWidth().height(heightDp).drawWithContent {
+            if (alpha > 0f) drawRect(under0, alpha = alpha)
+            drawContent()
+            if (alpha > 0f) drawRect(wash, alpha = alpha)
+        }.hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 20.dp; noiseFactor = 0f
-            tints = listOf(HazeTint(c.bg.copy(alpha = 0.72f)))
+            tints = listOf(HazeTint(c.bg.copy(alpha = 0.85f)))
             inputScale = HazeInputScale.Fixed(1f / 3)
             progressive = com.fariin.app.ui.components.edgeStages(solidFrac)
             this.alpha = alpha

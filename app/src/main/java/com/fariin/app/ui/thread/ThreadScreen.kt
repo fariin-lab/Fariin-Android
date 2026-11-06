@@ -509,9 +509,11 @@ private fun ThreadContent(
     // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
     // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
     var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    // True for the chat's first 400 ms: the header covers the top until the glass has drawn once.
+    // True for the chat's first two frames only: the header covers the top until the glass has
+    // drawn once. (400 ms hid a glass that was already up, and lifting it read as the blur arriving
+    // late on a cold start, owner 2026-11-05.)
     var openCover by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(400); openCover = false }
+    LaunchedEffect(Unit) { androidx.compose.runtime.withFrameNanos { }; androidx.compose.runtime.withFrameNanos { }; openCover = false }
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val walled = com.fariin.app.ui.components.hasChatWallpaper(ui.cid)
