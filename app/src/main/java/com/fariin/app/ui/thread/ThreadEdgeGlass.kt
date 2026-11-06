@@ -104,7 +104,7 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
             tints = emptyList()
-            inputScale = HazeInputScale.Fixed(0.5f)
+            inputScale = HazeInputScale.Fixed(1f / 3)
             progressive = com.fariin.app.ui.components.edgeStages(solid)
             this.alpha = alpha
         })
