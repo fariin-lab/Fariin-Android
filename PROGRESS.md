@@ -1023,3 +1023,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Live location left for later (needs server, iOS has none).
 - 16:02 Account page walked (email row empty as on iOS). e881c98 Your Account Data shared the account summary as text
   (a chat pick would send it as a message) -> a .txt file as iOS (checked, not sent).
+- 16:13 7305a1f "Not verified" on Password shows a closed padlock (it showed open); Password asks fingerprint/PIN
+  first and blocks screenshots (good). f4f04e8 Passkeys page drawn at once after the first visit (was a 2.4 s
+  spinner every time; cleared on sign-out). Agents running: location rebuild, Export Chat.
