@@ -73,24 +73,30 @@ float2 awCircle(float ph, float r) { return float2(cos(ph), sin(ph)) * r; }
 // Every shader reads `palette` once so the uniform is never dropped by the compiler.
 private const val LIQUID_METAL = PRELUDE + """
 half4 main(float2 position) {
-    float2 uv = position / max(size.y, 1.0) * 1.7;
+    // Fills a phone screen (owner 2026-11-06: "80-90% empty"). The warped noise sits around 0.31 on
+    // average and the body used to begin at 0.52, so most of the screen was bare ground. The
+    // thresholds now sit on the noise's real spread (iOS b20f7cdb).
+    float2 uv = position / max(size.y, 1.0) * 2.0;
+    float y = position.y / max(size.y, 1.0);
     float2 m1 = awCircle(phase, 0.55);
     float2 m2 = awCircle(phase + 2.1, 0.45);
     float2 q = float2(awFbm(uv + m1), awFbm(uv + float2(5.2, 1.3) - m2));
     float2 r = float2(awFbm(uv + 2.0 * q + float2(1.7, 9.2) + m2 * 0.6),
                       awFbm(uv + 2.0 * q + float2(8.3, 2.8) - m1 * 0.6));
     float f = awFbm(uv + 2.2 * r) + palette * 0.0;
-    float body = smoothstep(0.52, 0.78, f);
-    float glow = smoothstep(0.40, 0.80, f) * 0.35;
-    float e = (f - 0.53) / 0.016;
+    float body = smoothstep(0.33, 0.46, f);
+    float glow = smoothstep(0.23, 0.52, f) * 0.5;
+    float e = (f - 0.34) / 0.03;
     float edge = exp(-e * e);
+    float shade = (1.0 - y) * 0.3 + 0.7;   // light from above
     float3 rgb = float3(0.0);
     if (dark > 0.5) {
-        rgb = float3(0.012, 0.020, 0.040) + float3(0.78, 0.83, 0.90) * (body * 0.80 + glow * 0.30)
-            + float3(0.30, 0.78, 1.00) * edge * 0.85;
+        float3 ground = mix(float3(0.02, 0.03, 0.06), float3(0.04, 0.06, 0.11), y);
+        rgb = ground + float3(0.78, 0.83, 0.90) * (body * 0.70 + glow * 0.35) * shade
+            + float3(0.30, 0.78, 1.00) * edge * 0.90;
     } else {
-        rgb = mix(float3(0.90, 0.92, 0.95), float3(0.40, 0.48, 0.60), body * 0.55 + glow * 0.20);
-        rgb = mix(rgb, float3(0.05, 0.55, 0.85), edge * 0.70);
+        rgb = mix(float3(0.90, 0.92, 0.95), float3(0.42, 0.50, 0.62), body * 0.60 + glow * 0.25);
+        rgb = mix(rgb, float3(0.05, 0.55, 0.85), edge * 0.75);
     }
     return half4(half3(saturate(rgb)), 1.0);
 }
@@ -124,9 +130,12 @@ half4 main(float2 position) {
 
 private const val AURORA = PRELUDE + """
 half4 main(float2 position) {
-    float2 uv = position / max(size.y, 1.0);
-    float y = position.y / max(size.y, 1.0);
-    float2 s = float2(uv.x * 0.94 + uv.y * 0.34, uv.y * 0.94 - uv.x * 0.34);
+    // Across the whole screen (owner 2026-11-06: the aurora sat in one corner). x used to be measured
+    // in screen heights, so on a tall phone only the edge of one curtain fell inside. Now x runs 0 to
+    // 1 across the width, the curtains are wider, and a faint glow of their colour lifts the lower sky.
+    float2 uv = float2(position.x / max(size.x, 1.0), position.y / max(size.y, 1.0));
+    float y = uv.y;
+    float2 s = float2(uv.x + uv.y * 0.25, uv.y - uv.x * 0.15);
     float2 m = awCircle(phase, 0.7);
     float3 a = float3(0.0); float3 b = float3(0.0);
     if (palette < 0.5)      { a = float3(0.10, 0.95, 0.75); b = float3(0.15, 0.35, 1.00); }
@@ -138,17 +147,19 @@ half4 main(float2 position) {
     float3 light = float3(0.0);
     for (int i = 0; i < 3; i++) {
         float fi = float(i);
-        float wob = awFbm(float2(s.y * 1.2 + fi * 3.1, m.x * 0.8 + fi)) * 1.6;
-        float x = s.x * 2.4 + wob + m.y * 0.35 + fi * 1.9;
-        float curtain = pow(0.5 + 0.5 * sin(x * 3.14159), 7.0);
-        float base = 0.55 + 0.18 * sin(s.x * 2.0 + phase + fi) + 0.08 * fi;
-        float rise = smoothstep(base - 0.75, base - 0.05, s.y) * (1.0 - smoothstep(base, base + 0.06, s.y));
+        float wob = awFbm(float2(s.y * 1.5 + fi * 3.1, m.x * 0.8 + fi)) * 1.2;
+        float x = s.x * 1.6 + wob + m.y * 0.3 + fi * 0.7;
+        float c = 0.5 + 0.5 * sin(x * 3.14159);
+        float curtain = c * c * c;
+        float base = 0.62 + 0.10 * sin(s.x * 3.0 + phase + fi) + 0.06 * fi;
+        float rise = smoothstep(base - 0.62, base - 0.04, s.y) * (1.0 - smoothstep(base, base + 0.08, s.y));
         // The rays read their noise on a circle, so the last frame of a loop is the first (no seam).
-        float rays = 0.55 + 0.45 * awNoise(float2(s.x * 38.0 + fi * 7.0 + cos(phase) * 2.0, fi * 5.0 + sin(phase) * 2.0));
+        float rays = 0.6 + 0.4 * awNoise(float2(s.x * 30.0 + fi * 7.0 + cos(phase) * 2.0, fi * 5.0 + sin(phase) * 2.0));
         float glow = curtain * rise * rays;
-        light += mix(a, b, smoothstep(base - 0.6, base, s.y)) * glow * (0.85 - fi * 0.2);
+        light += mix(a, b, smoothstep(base - 0.5, base, s.y)) * glow * (0.9 - fi * 0.2);
     }
-    return half4(half3(saturate(sky + light * 0.9)), 1.0);
+    float3 haze = mix(a, b, 0.5) * smoothstep(0.3, 1.0, y) * 0.10;
+    return half4(half3(saturate(sky + light + haze)), 1.0);
 }
 """
 
@@ -229,8 +240,9 @@ half4 main(float2 position) {
                             : mix(float3(0.075, 0.085, 0.190), float3(0.150, 0.110, 0.260), y);
     float2 m = awCircle(phase, 0.25);
     float neb = awFbm(uv * 1.6 + m);
-    float3 rgb = sky + float3(0.20, 0.10, 0.35) * smoothstep(0.45, 0.85, neb) * 0.45
-                     + float3(0.05, 0.15, 0.30) * smoothstep(0.55, 0.90, awFbm(uv * 2.3 - m + 7.0)) * 0.35;
+    // Brighter (owner 2026-11-06: faint on a phone): the nebula half again as strong, stars larger.
+    float3 rgb = sky + float3(0.20, 0.10, 0.35) * smoothstep(0.40, 0.85, neb) * 0.65
+                     + float3(0.05, 0.15, 0.30) * smoothstep(0.50, 0.90, awFbm(uv * 2.3 - m + 7.0)) * 0.50;
     for (int layer = 0; layer < 2; layer++) {
         float fl = float(layer);
         float scale = layer == 0 ? 22.0 : 40.0;
@@ -240,7 +252,7 @@ half4 main(float2 position) {
         float h = awHash(cell + fl * 31.0);
         float2 spot = float2(awHash(cell + 3.1), awHash(cell + 7.7)) * 0.8 + 0.1;
         float d = length(f - spot);
-        float radius = (layer == 0 ? 0.06 : 0.04) * (0.5 + h);
+        float radius = (layer == 0 ? 0.10 : 0.065) * (0.5 + h);
         float star = 1.0 - smoothstep(0.0, radius, d);
         float rate = floor(1.0 + h * 4.0);
         float tw = 0.55 + 0.45 * sin(phase * rate + h * 6.2831);
@@ -296,9 +308,9 @@ half4 main(float2 position) {
             rgb = mix(rgb, c, flake * (0.85 - fl * 0.2));
         } else if (kind < 1.5) {
             float2 q = f - spot;
-            float streak = (1.0 - smoothstep(0.0, 0.018, abs(q.x))) * (1.0 - smoothstep(0.0, 0.22, abs(q.y)));
+            float streak = (1.0 - smoothstep(0.0, 0.026, abs(q.x))) * (1.0 - smoothstep(0.0, 0.24, abs(q.y)));
             float3 c = dark > 0.5 ? float3(0.65, 0.75, 0.90) : float3(0.95, 0.97, 1.0);
-            rgb = mix(rgb, c, streak * (0.55 - fl * 0.12));
+            rgb = mix(rgb, c, streak * (0.75 - fl * 0.15));
         } else {
             float2 drift = float2(cos(phase * floor(1.0 + h * 2.0) * 8.0 + h * 9.0), sin(phase * 8.0 + h * 5.0)) * 0.08;
             float d = length(f - spot - drift);
@@ -410,21 +422,23 @@ internal object AnimatedStill {
         // Doodles never asks for a still (it draws its theme and sheet); its theme's flat colour if it did.
         AnimatedLook.DOODLES -> (a.doodleTheme?.flat(dark) ?: 0L).toInt() or (0xFF shl 24)
         AnimatedLook.LIQUID_METAL -> {
-            val ux = px / h * 1.7f; val uy = py / h * 1.7f
+            val ux = px / h * 2.0f; val uy = py / h * 2.0f
+            val y = py / max(h, 1f)
             val m1x = 0.55f; val m1y = 0f
             val m2x = cos(2.1f) * 0.45f; val m2y = sin(2.1f) * 0.45f
             val qx = fbm(ux + m1x, uy + m1y); val qy = fbm(ux + 5.2f - m2x, uy + 1.3f - m2y)
             val rx = fbm(ux + 2 * qx + 1.7f + m2x * 0.6f, uy + 2 * qy + 9.2f + m2y * 0.6f)
             val ry = fbm(ux + 2 * qx + 8.3f - m1x * 0.6f, uy + 2 * qy + 2.8f - m1y * 0.6f)
             val f = fbm(ux + 2.2f * rx, uy + 2.2f * ry)
-            val body = smooth(0.52f, 0.78f, f); val glow = smooth(0.40f, 0.80f, f) * 0.35f
-            val e = (f - 0.53f) / 0.016f; val edge = exp(-e * e)
+            val body = smooth(0.33f, 0.46f, f); val glow = smooth(0.23f, 0.52f, f) * 0.5f
+            val e = (f - 0.34f) / 0.03f; val edge = exp(-e * e)
+            val shade = (1f - y) * 0.3f + 0.7f
             if (dark) {
-                val k = body * 0.80f + glow * 0.30f
-                pack(0.012f + 0.78f * k + 0.30f * edge * 0.85f, 0.020f + 0.83f * k + 0.78f * edge * 0.85f, 0.040f + 0.90f * k + 1.00f * edge * 0.85f)
+                val k = (body * 0.70f + glow * 0.35f) * shade; val c = edge * 0.90f
+                pack(mixf(0.02f, 0.04f, y) + 0.78f * k + 0.30f * c, mixf(0.03f, 0.06f, y) + 0.83f * k + 0.78f * c, mixf(0.06f, 0.11f, y) + 0.90f * k + 1.00f * c)
             } else {
-                val k = body * 0.55f + glow * 0.20f; val t = edge * 0.70f
-                pack(mixf(mixf(0.90f, 0.40f, k), 0.05f, t), mixf(mixf(0.92f, 0.48f, k), 0.55f, t), mixf(mixf(0.95f, 0.60f, k), 0.85f, t))
+                val k = body * 0.60f + glow * 0.25f; val t = edge * 0.75f
+                pack(mixf(mixf(0.90f, 0.42f, k), 0.05f, t), mixf(mixf(0.92f, 0.50f, k), 0.55f, t), mixf(mixf(0.95f, 0.62f, k), 0.85f, t))
             }
         }
         AnimatedLook.WATER -> {
@@ -447,9 +461,9 @@ internal object AnimatedStill {
             }
         }
         AnimatedLook.AURORA -> {
-            val y = py / h
-            val ux = px / h; val uy = py / h
-            val sx = ux * 0.94f + uy * 0.34f; val sy = uy * 0.94f - ux * 0.34f
+            val ux = px / max(w, 1f); val uy = py / max(h, 1f)
+            val y = uy
+            val sx = ux + uy * 0.25f; val sy = uy - ux * 0.15f
             val mx = 0.7f; val my = 0f
             val (ca, cb) = when (a.variant) {
                 0 -> floatArrayOf(0.10f, 0.95f, 0.75f) to floatArrayOf(0.15f, 0.35f, 1.00f)
@@ -461,17 +475,20 @@ internal object AnimatedStill {
             val light = FloatArray(3)
             for (i in 0 until 3) {
                 val fi = i.toFloat()
-                val wob = fbm(sy * 1.2f + fi * 3.1f, mx * 0.8f + fi) * 1.6f
-                val x = sx * 2.4f + wob + my * 0.35f + fi * 1.9f
-                val curtain = (0.5f + 0.5f * sin(x * 3.14159f)).pow(7)
-                val base = 0.55f + 0.18f * sin(sx * 2f + fi) + 0.08f * fi
-                val rise = smooth(base - 0.75f, base - 0.05f, sy) * (1 - smooth(base, base + 0.06f, sy))
-                val rays = 0.55f + 0.45f * noise(sx * 38f + fi * 7f + 2f, fi * 5f)   // cos(0) * 2, sin(0) * 2
-                val glow = curtain * rise * rays * (0.85f - fi * 0.2f)
-                val t = smooth(base - 0.6f, base, sy)
+                val wob = fbm(sy * 1.5f + fi * 3.1f, mx * 0.8f + fi) * 1.2f
+                val x = sx * 1.6f + wob + my * 0.3f + fi * 0.7f
+                val c = 0.5f + 0.5f * sin(x * 3.14159f)
+                val curtain = c * c * c
+                val base = 0.62f + 0.10f * sin(sx * 3f + fi) + 0.06f * fi
+                val rise = smooth(base - 0.62f, base - 0.04f, sy) * (1 - smooth(base, base + 0.08f, sy))
+                val rays = 0.6f + 0.4f * noise(sx * 30f + fi * 7f + 2f, fi * 5f)   // cos(0) * 2, sin(0) * 2
+                val glow = curtain * rise * rays * (0.9f - fi * 0.2f)
+                val t = smooth(base - 0.5f, base, sy)
                 for (k in 0 until 3) light[k] += mixf(ca[k], cb[k], t) * glow
             }
-            pack(sky[0] + light[0] * 0.9f, sky[1] + light[1] * 0.9f, sky[2] + light[2] * 0.9f)
+            val hz = smooth(0.3f, 1f, y) * 0.10f
+            pack(sky[0] + light[0] + mixf(ca[0], cb[0], 0.5f) * hz, sky[1] + light[1] + mixf(ca[1], cb[1], 0.5f) * hz,
+                sky[2] + light[2] + mixf(ca[2], cb[2], 0.5f) * hz)
         }
         AnimatedLook.LIQUID_GLOW -> {
             val ux = px / w; val uy = py / h
@@ -537,8 +554,8 @@ internal object AnimatedStill {
         val rgb = if (dark) floatArrayOf(mixf(0.010f, 0.030f, y), mixf(0.012f, 0.020f, y), mixf(0.040f, 0.075f, y))
             else floatArrayOf(mixf(0.075f, 0.150f, y), mixf(0.085f, 0.110f, y), mixf(0.190f, 0.260f, y))
         val mx = 0.25f; val my = 0f
-        val n1 = smooth(0.45f, 0.85f, fbm(ux * 1.6f + mx, uy * 1.6f + my)) * 0.45f
-        val n2 = smooth(0.55f, 0.90f, fbm(ux * 2.3f - mx + 7f, uy * 2.3f - my + 7f)) * 0.35f
+        val n1 = smooth(0.40f, 0.85f, fbm(ux * 1.6f + mx, uy * 1.6f + my)) * 0.65f
+        val n2 = smooth(0.50f, 0.90f, fbm(ux * 2.3f - mx + 7f, uy * 2.3f - my + 7f)) * 0.50f
         rgb[0] += 0.20f * n1 + 0.05f * n2; rgb[1] += 0.10f * n1 + 0.15f * n2; rgb[2] += 0.35f * n1 + 0.30f * n2
         for (layer in 0 until 2) {
             val scale = if (layer == 0) 22f else 40f
@@ -549,7 +566,7 @@ internal object AnimatedStill {
             val sx = hash(cx + 3.1f, cy + 3.1f) * 0.8f + 0.1f; val sy = hash(cx + 7.7f, cy + 7.7f) * 0.8f + 0.1f
             val dx = gx - cx - sx; val dy = gy - cy - sy
             val d = kotlin.math.sqrt(dx * dx + dy * dy)
-            val radius = (if (layer == 0) 0.06f else 0.04f) * (0.5f + hv)
+            val radius = (if (layer == 0) 0.10f else 0.065f) * (0.5f + hv)
             val star = 1f - smooth(0f, radius, d)
             val tw = 0.55f + 0.45f * sin(hv * 6.2831f)
             val k = star * tw * (if (layer == 0) 1f else 0.6f)
@@ -590,8 +607,8 @@ internal object AnimatedStill {
                     if (dark) mixTo(0.92f, 0.95f, 1f, flake * (0.85f - fl * 0.2f)) else mixTo(1f, 1f, 1f, flake * (0.85f - fl * 0.2f))
                 }
                 1 -> {
-                    val streak = (1f - smooth(0f, 0.018f, abs(fx - sx))) * (1f - smooth(0f, 0.22f, abs(fy - sy)))
-                    if (dark) mixTo(0.65f, 0.75f, 0.90f, streak * (0.55f - fl * 0.12f)) else mixTo(0.95f, 0.97f, 1f, streak * (0.55f - fl * 0.12f))
+                    val streak = (1f - smooth(0f, 0.026f, abs(fx - sx))) * (1f - smooth(0f, 0.24f, abs(fy - sy)))
+                    if (dark) mixTo(0.65f, 0.75f, 0.90f, streak * (0.75f - fl * 0.15f)) else mixTo(0.95f, 0.97f, 1f, streak * (0.75f - fl * 0.15f))
                 }
                 else -> {
                     val dx = fx - sx - cos(hv * 9f) * 0.08f; val dy = fy - sy - sin(hv * 5f) * 0.08f

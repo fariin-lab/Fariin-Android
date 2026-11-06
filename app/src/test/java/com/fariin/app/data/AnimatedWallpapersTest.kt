@@ -86,16 +86,16 @@ class AnimatedWallpapersTest {
         val stars = AnimatedWallpapers.find("stars")!!
         val water = AnimatedWallpapers.find("water")!!
         val doodles = AnimatedWallpapers.find("doodles-1")!!
-        assertEquals(1.5f, stars.scale(false), 0f)
+        assertEquals(1f, stars.scale(false), 0f)
         assertEquals(2f, stars.scale(true), 0f)
-        assertEquals(4f, water.scale(false), 0f)   // soft looks at a quarter
+        assertEquals(2f, water.scale(false), 0f)   // soft looks at half
         assertEquals(1f, doodles.scale(false), 0f)
         assertEquals(15, water.fps(false))
         assertEquals(12, water.fps(true))
         assertEquals(12, doodles.fps(false))
         assertEquals(24, AnimatedWallpapers.find("rain")!!.fps(false))
         assertEquals(15, AnimatedWallpapers.find("snow")!!.fps(false))
-        assertEquals(3f, AnimatedWallpapers.find("snow")!!.scale(false), 0f)
+        assertEquals(2f, AnimatedWallpapers.find("snow")!!.scale(false), 0f)
     }
 
     @Test fun clockCountsOnlyWhileMoving() {

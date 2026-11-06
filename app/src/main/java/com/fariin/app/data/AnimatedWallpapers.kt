@@ -32,16 +32,16 @@ data class AnimatedWallpaper(val id: String, val name: String, val look: Animate
         if (look != AnimatedLook.DOODLES) null else ChatWallpapers.all.filter { it.pattern }.getOrNull(variant)
 
     /**
-     * How much smaller than the screen the shader is drawn, then scaled up (iOS): a third for the soft
-     * looks, half in a picker tile, Stars at 1/1.5 so its smallest stars do not fall between pixels.
+     * How much smaller than the screen the shader is drawn, then scaled up (iOS b20f7cdb): half for the
+     * soft looks and the particles, Stars at full size so its small points stay sharp, half in a
+     * picker tile. Owner 2026-11-06 "low quality": a quarter showed as soft steps on the light grounds.
      * Doodles is no shader, drawn at full size (1).
      */
     fun scale(preview: Boolean): Float = when {
         look == AnimatedLook.DOODLES -> 1f
         preview -> 2f
-        look == AnimatedLook.STARS -> 1.5f
-        look == AnimatedLook.PARTICLES -> 3f
-        else -> 4f   // the soft liquid and aurora looks: a quarter of the screen, scaled up (iOS, battery)
+        look == AnimatedLook.STARS -> 1f
+        else -> 2f   // the soft liquid, aurora and particle looks: half the screen, scaled up
     }
 
     /** Frames a second (iOS, owner 2026-11-06 "the big messengers never eat battery"): 15 in a chat,
