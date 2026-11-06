@@ -189,23 +189,31 @@ half4 main(float2 position) {
 
 private const val LIQUID_EDGE = PRELUDE + """
 half4 main(float2 position) {
+    // A floating glowing liquid shape fully in view (owner 2026-11-06: the first one was 99% black on a
+    // phone): a smaller body, a wider rim, a soft halo around it and a lit ground (iOS 67c895f9).
     float2 uv = position / max(size.y, 1.0);
     float aspect = size.x / max(size.y, 1.0);
     float2 m = float2(cos(phase), sin(phase));
-    float2 b0 = float2(aspect * 0.55, 0.30) + m * float2(0.06, 0.05);
-    float2 b1 = float2(aspect * 0.45, 0.60) + float2(m.y, -m.x) * float2(0.07, 0.06);
-    float2 b2 = float2(aspect * 0.60, 0.88) + float2(-m.x, m.y) * float2(0.05, 0.05);
-    float f = 0.055 / max(dot(uv - b0, uv - b0), 1e-5) + 0.075 / max(dot(uv - b1, uv - b1), 1e-5)
-            + 0.05 / max(dot(uv - b2, uv - b2), 1e-5);
+    float2 b0 = float2(aspect * 0.55, 0.32) + m * float2(0.10, 0.08);
+    float2 b1 = float2(aspect * 0.45, 0.52) + float2(m.y, -m.x) * float2(0.10, 0.08);
+    float2 b2 = float2(aspect * 0.58, 0.70) + float2(-m.x, m.y) * float2(0.09, 0.08);
+    float f = 0.020 / max(dot(uv - b0, uv - b0), 1e-5) + 0.028 / max(dot(uv - b1, uv - b1), 1e-5)
+            + 0.018 / max(dot(uv - b2, uv - b2), 1e-5);
     f += (awFbm(uv * 3.0 + m * 0.4) - 0.5) * 0.35 + palette * 0.0;
-    float inside = smoothstep(0.95, 1.10, f);
-    float e = (f - 1.0) / 0.06;
+    float inside = smoothstep(0.90, 1.15, f);
+    float e = (f - 1.0) / 0.24;
     float edge = exp(-e * e);
+    float halo = exp(-max(0.0, 1.0 - f) * 2.5) * (1.0 - inside);
+    float y = position.y / max(size.y, 1.0);
     float3 rgb = float3(0.0);
     if (dark > 0.5) {
-        rgb = mix(float3(0.020, 0.022, 0.026), float3(0.075, 0.080, 0.090), inside) + float3(0.42, 0.52, 0.68) * edge * 0.75;
+        float3 ground = mix(float3(0.035, 0.045, 0.095), float3(0.060, 0.045, 0.120), y);
+        float3 body = mix(float3(0.16, 0.20, 0.30), float3(0.10, 0.12, 0.20), y);
+        rgb = mix(ground, body, inside) + float3(0.35, 0.60, 0.95) * (edge * 0.85 + halo * 0.22);
     } else {
-        rgb = mix(mix(float3(0.93, 0.94, 0.96), float3(0.86, 0.88, 0.92), inside), float3(0.30, 0.45, 0.75), edge * 0.55);
+        float3 ground = mix(float3(0.93, 0.94, 0.97), float3(0.88, 0.90, 0.96), y);
+        float3 body = mix(float3(0.80, 0.85, 0.94), float3(0.74, 0.79, 0.90), y);
+        rgb = mix(mix(ground, body, inside), float3(0.25, 0.45, 0.85), saturate(edge * 0.6 + halo * 0.15));
     }
     return half4(half3(saturate(rgb)), 1.0);
 }
@@ -496,20 +504,30 @@ internal object AnimatedStill {
             pack(sum[0] / wsum, sum[1] / wsum, sum[2] / wsum)
         }
         AnimatedLook.LIQUID_EDGE -> {
+            // The same shape as the shader at phase 0 (owner 2026-11-06 retune, iOS 67c895f9).
             val ux = px / h; val uy = py / h
             val aspect = w / max(h, 1f)
             val mx = 1f; val my = 0f
             fun inv(k: Float, bx: Float, by: Float): Float { val dx = ux - bx; val dy = uy - by; return k / max(dx * dx + dy * dy, 1e-5f) }
-            var f = inv(0.055f, aspect * 0.55f + mx * 0.06f, 0.30f + my * 0.05f) +
-                inv(0.075f, aspect * 0.45f + my * 0.07f, 0.60f - mx * 0.06f) +
-                inv(0.05f, aspect * 0.60f - mx * 0.05f, 0.88f + my * 0.05f)
+            var f = inv(0.020f, aspect * 0.55f + mx * 0.10f, 0.32f + my * 0.08f) +
+                inv(0.028f, aspect * 0.45f + my * 0.10f, 0.52f - mx * 0.08f) +
+                inv(0.018f, aspect * 0.58f - mx * 0.09f, 0.70f + my * 0.08f)
             f += (fbm(ux * 3f + mx * 0.4f, uy * 3f + my * 0.4f) - 0.5f) * 0.35f
-            val inside = smooth(0.95f, 1.10f, f)
-            val e = (f - 1f) / 0.06f; val edge = exp(-e * e)
-            if (dark) pack(mixf(0.020f, 0.075f, inside) + 0.42f * edge * 0.75f, mixf(0.022f, 0.080f, inside) + 0.52f * edge * 0.75f,
-                mixf(0.026f, 0.090f, inside) + 0.68f * edge * 0.75f)
-            else { val t = edge * 0.55f
-                pack(mixf(mixf(0.93f, 0.86f, inside), 0.30f, t), mixf(mixf(0.94f, 0.88f, inside), 0.45f, t), mixf(mixf(0.96f, 0.92f, inside), 0.75f, t)) }
+            val inside = smooth(0.90f, 1.15f, f)
+            val e = (f - 1f) / 0.24f; val edge = exp(-e * e)
+            val halo = exp(-max(0f, 1f - f) * 2.5f) * (1f - inside)
+            val y = py / max(h, 1f)
+            if (dark) {
+                val g = floatArrayOf(mixf(0.035f, 0.060f, y), mixf(0.045f, 0.045f, y), mixf(0.095f, 0.120f, y))
+                val b = floatArrayOf(mixf(0.16f, 0.10f, y), mixf(0.20f, 0.12f, y), mixf(0.30f, 0.20f, y))
+                val r = edge * 0.85f + halo * 0.22f
+                pack(mixf(g[0], b[0], inside) + 0.35f * r, mixf(g[1], b[1], inside) + 0.60f * r, mixf(g[2], b[2], inside) + 0.95f * r)
+            } else {
+                val g = floatArrayOf(mixf(0.93f, 0.88f, y), mixf(0.94f, 0.90f, y), mixf(0.97f, 0.96f, y))
+                val b = floatArrayOf(mixf(0.80f, 0.74f, y), mixf(0.85f, 0.79f, y), mixf(0.94f, 0.90f, y))
+                val t = (edge * 0.6f + halo * 0.15f).coerceIn(0f, 1f)
+                pack(mixf(mixf(g[0], b[0], inside), 0.25f, t), mixf(mixf(g[1], b[1], inside), 0.45f, t), mixf(mixf(g[2], b[2], inside), 0.85f, t))
+            }
         }
     }
 
