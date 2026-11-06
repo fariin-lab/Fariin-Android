@@ -6,6 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -187,9 +189,13 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     val c = Fariin.colors
     // iOS SettingsView (owner 2026-11-05): the title centred, the search in its floating circle, and
     // no solid bar: the page scrolls under a soft fade instead of being cut by a hard edge.
+    val haze = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+    val glass = com.fariin.app.perf.rememberPowerState().glass()
+    val scrolled = scroll.value > 0
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         val barH = 56.dp
-        Column(Modifier.fillMaxSize().verticalScroll(scroll).statusBarsPadding().padding(top = barH)
+        Column(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
+            .verticalScroll(scroll).statusBarsPadding().padding(top = barH)
             .padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
             ProfileHeader(profile, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
@@ -223,10 +229,19 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             }
             Spacer(Modifier.height(12.dp))
         }
-        // The bar: page colour fading to clear under the title, so rows slide under softly.
-        Box(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(
-            0f to c.bgSecondary, 0.7f to c.bgSecondary, 1f to c.bgSecondary.copy(alpha = 0f)))
-            .statusBarsPadding().height(barH + 16.dp)) {
+        // The bar (owner 2026-11-05 "high end, smooth"): frosted glass over the rows, the same blur as
+        // the Chats bar, strongest at the top and melting away at its lower edge, so there is no line.
+        // Power Saving without glass: the page colour fading to clear instead.
+        Box(Modifier.fillMaxWidth().then(when {
+            scrolled && glass -> Modifier.hazeEffect(haze) {
+                backgroundColor = c.bgSecondary; blurRadius = 24.dp; noiseFactor = 0f
+                tints = listOf(dev.chrisbanes.haze.HazeTint(c.bgSecondary.copy(alpha = 0.7f)))
+                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
+                progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f, preferPerformance = true)
+            }
+            else -> Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                0f to c.bgSecondary, 0.7f to c.bgSecondary, 1f to c.bgSecondary.copy(alpha = 0f)))
+        }).statusBarsPadding().height(barH + 16.dp)) {
             Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)) {
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
