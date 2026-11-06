@@ -980,3 +980,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 13:45 PAUSE Replies + Quotes on Android (iOS session, owner's 5-agent audit): server API v3 coming (paged
   replies with short keys, per-thread answers, clientId on addReply, rh/head listener instead of polling, count
   buffer; Quotes paged + signed picture URLs). Wait for the final spec before touching PostReplies / PostQuotes.
+- 13:50 RESUME Replies/Quotes: v3 server live (functions-groups index.js QUOTES/REPLIES, lib/replies.js,
+  lib/quotes.js; iOS 4ed49888/e424e41d/17da962d). Agent porting: paged replies + answers, clientId on addReply,
+  rh/head listener (no polling), rights-gated menus, single-use quote ids, paged quotes, reply-alert push.
