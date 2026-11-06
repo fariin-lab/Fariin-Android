@@ -841,3 +841,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   - 326715f (helper) 1:1 chat header/composer as iOS; 09b4fb1 no bottom blur; 9294883 top glass fixed (it never turned on).
   - Install guard: scratchpad/safe_install.sh (telecom states, audio mode, CallActivity, live Firestore call). An install killed the owner's dialling call at 22:28.
   Next: verify the helper's composer pieces on the Pixel myself (camera in the field, mic hold/tap/lock/cancel, send animation from the new composer, group header, self chat menu).
+- Late 2026-11-05: 9cdf211/3fce318 staged edge blur, present from the first frame (cold start checked);
+  fa41b52 wallpaper strip fade; 39e5b13 real glass controls (LocalGlassHaze in floating()), colour kept
+  under the chat header, wallpaper inside the blur source. Reference app's public blur code studied
+  (glass = hard blur under 76 % page colour + hairline; top band washed in four steps over 48 dp).
+  Next: verify mic hold / slide-cancel / lock and the send rise with the new glass composer.
