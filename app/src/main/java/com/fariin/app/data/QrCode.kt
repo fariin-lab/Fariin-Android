@@ -45,6 +45,29 @@ object QrRules {
         return value.takeIf { safeSegment(it) }
     }
 
+    /** fariin.com's own pages: a bare fariin.com/<word> that is one of these is the website, not a name. */
+    private val SITE_PAGES = setOf("help", "privacy", "terms", "safety", "about", "contact", "download", "app", "blog",
+        "press", "careers", "legal", "support", "faq", "security", "cookies", "status", "admin", "login", "signup",
+        "call", "video", "voice", "s", "u", "join", "invite", "g", "c", "well-known", ".well-known", "index.html")
+
+    /**
+     * A bare fariin.com/<name> (one path part, not a site page): a public group's, channel's or person's
+     * @name, as iOS GroupDirectory.resolve reads it (owner 2026-11-06: a channel link fariin.com/vee
+     * opened the website's "page not found").
+     */
+    fun bareNameFrom(link: String): String? {
+        val uri = runCatching { java.net.URI(link.trim()) }.getOrNull() ?: return null
+        if (uri.scheme?.lowercase() !in setOf("https", "http")) return null
+        val host = uri.host?.lowercase()
+        if (host != "fariin.com" && host != "www.fariin.com") return null
+        if (!uri.rawQuery.isNullOrEmpty() || !uri.rawFragment.isNullOrEmpty()) return null
+        val parts = (uri.rawPath ?: "").split('/').filter { it.isNotEmpty() }
+        if (parts.size != 1) return null
+        val name = runCatching { java.net.URLDecoder.decode(parts[0], "UTF-8") }.getOrNull() ?: return null
+        if (name.lowercase() in SITE_PAGES || name.contains('.')) return null
+        return name.takeIf { safeSegment(it) }
+    }
+
     /** The code's modules, error correction H, no quiet zone (iOS qrCodeGenerator "H"). true = dark. */
     fun matrix(text: String): Array<BooleanArray> {
         val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0,

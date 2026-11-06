@@ -523,7 +523,7 @@ fun ChatListScreen(
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
                 state.loading && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { com.fariin.app.ui.components.ChatListSkeleton() }
                 state.error != null && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(state.error) }
-                shown.isEmpty() && !officialShown && newPeople.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
+                shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
                     query.isNotBlank() -> "No results"
                     showArchive -> "No archived chats"
                     filter == FILTER_UNREAD -> "No unread chats"

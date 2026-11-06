@@ -131,6 +131,7 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                 TextLinks.Kind.WEB -> {
                     val call = com.fariin.app.call.CallLinkKey.fromLink(sp.target)
                     val h = com.fariin.app.data.QrRules.handleFrom(sp.target)
+                        ?: com.fariin.app.data.QrRules.bareNameFrom(sp.target)
                     val adminCode = com.fariin.app.ui.channels.AdminInviteLink.code(sp.target)
                     val groupCode = com.fariin.app.ui.people.GroupInviteLink.code(sp.target)
                     val storyLink = StoryLinks.parse(sp.target)
@@ -174,7 +175,7 @@ private fun openWeb(ctx: Context, url: String, onFail: () -> Unit) {
         }
     }
     if (host == "play.google.com" || host == "maps.google.com" || host == "maps.app.goo.gl") { start(ctx, view, onFail); return }
-    try { CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(ctx, uri) }
+    try { com.fariin.app.ui.browser.BrowserActivity.open(ctx, uri.toString()) }
     catch (_: Exception) { start(ctx, view, onFail) }
 }
 

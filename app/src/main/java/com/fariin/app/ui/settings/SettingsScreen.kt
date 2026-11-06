@@ -178,11 +178,9 @@ internal const val PAGE_PASSKEYS = "auth:passkeys"
 private const val SOON = "soon:"
 private fun soon(title: String) = SOON + title
 
-/** Opens a web page in the phone's browser. */
+/** Opens a web page in Fariin's own browser (as iOS: links stay in the app). */
 internal fun openWeb(context: Context, url: String) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
+    runCatching { com.fariin.app.ui.browser.BrowserActivity.open(context, url) }
 }
 
 @Composable

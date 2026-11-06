@@ -45,9 +45,14 @@ internal fun LinkPreviewCard(lp: Message.LinkPreview, isMe: Boolean) {
     val uri = LocalUriHandler.current
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val linkTap = LocalBubbleLinkTap.current
     Column(
         Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp).clip(RoundedCornerShape(12.dp))
             .background(tint.copy(alpha = 0.10f)).clickable {
+                // The card opens exactly as its link does in the text (owner 2026-11-06: a channel's card
+                // fariin.com/vee went to the website's "page not found" in the phone's browser): names,
+                // groups, channels, stories and invites inside the app, the rest in Fariin's browser.
+                if (linkTap != null) { linkTap(com.fariin.app.data.TextLinks.Span(0, lp.url.length, com.fariin.app.data.TextLinks.Kind.WEB, lp.url)); return@clickable }
                 // My own username link opens My Profile (iOS openProfileHandle); any other link as before.
                 val h = com.fariin.app.data.QrRules.handleFrom(lp.url)
                 if (h == null) { runCatching { uri.openUri(lp.url) }; return@clickable }
