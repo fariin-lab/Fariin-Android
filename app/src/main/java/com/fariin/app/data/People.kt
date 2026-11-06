@@ -31,6 +31,8 @@ data class Person(
     val hasKey: Boolean = true,
     /** iOS UserProfile.links: up to two, shown under the bio (behind the profileLinks switch). */
     val links: List<ProfileLink> = emptyList(),
+    /** iOS Verification.showsBadge: users/{uid}.verification with status active (or isVerified). */
+    val verified: Boolean = false,
 ) {
     val shownName: String get() = name.ifEmpty { handle.ifEmpty { "Fariin user" } }
 
@@ -44,6 +46,9 @@ data class Person(
             privacy = (d["privacy"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to (v as? String ?: "") } }?.toMap() ?: emptyMap(),
             hasKey = !(d["publicKey"] as? String).isNullOrEmpty(),
             links = ProfileLink.list(d["links"]),
+            verified = (d["verification"] as? Map<*, *>)?.let { v ->
+                (v["status"] as? String ?: if (v["isVerified"] == true) "active" else "revoked") == "active"
+            } ?: false,
         )
 
         /** Awaiting deletion or banned: never findable (iOS findByHandle filters). */

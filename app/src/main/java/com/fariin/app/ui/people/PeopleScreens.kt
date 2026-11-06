@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.outlined.Videocam
@@ -123,6 +126,9 @@ internal fun SearchField(value: String, placeholder: String, onChange: (String) 
  */
 @Composable
 fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit, onOpenChat: (String) -> Unit, onNewGroup: () -> Unit) {
+    // iOS NewChatView (owner 2026-11-05, his iPhone beside the Pixel): grey page, white rounded
+    // cards, plain outline icons, each person with @username under the name and the verified
+    // mark, an A-Z index on the right, the search field at the bottom ("Search by username").
     val c = Fariin.colors
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var q by remember { mutableStateOf("") }
@@ -133,6 +139,17 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
         chats.filter { !it.isGroup && !it.isChannel && !it.isCleared(me) && !(it.startedBy.isNotEmpty() && it.startedBy != me && !it.accepted) }
             .filter { it.displayName(me).isNotBlank() }
     }
+    // @handle and verified for each person: the cached profile first, then one read each (iOS reads
+    // the on-disk cache only; a missing handle simply has no second line).
+    val profiles = remember { androidx.compose.runtime.mutableStateMapOf<String, Person>() }
+    LaunchedEffect(people) {
+        for (conv in people) {
+            val uid = com.fariin.app.crypto.Wire.otherUid(conv.id, me)
+            if (uid.isEmpty() || profiles.containsKey(uid)) continue
+            (ProfileMemo.get(uid) ?: api.profile(uid)?.also { ProfileMemo.put(uid, it) })?.let { profiles[uid] = it }
+        }
+    }
+    fun uidOf(conv: Conversation) = com.fariin.app.crypto.Wire.otherUid(conv.id, me)
     val frequent = remember(people) { if (people.size >= 6) people.sortedByDescending { it.updatedAtMillis }.take(3) else emptyList() }
     val sections = remember(people, me) {
         people.groupBy { conv -> conv.displayName(me).trim().firstOrNull()?.takeIf { it.isLetter() }?.uppercaseChar()?.toString() ?: "#" }
@@ -140,56 +157,112 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
             .mapValues { (_, list) -> list.sortedBy { it.displayName(me).lowercase() } }
     }
     val needle = q.trim().removePrefix("@")
-    val matches = if (needle.isEmpty()) emptyList() else people.filter { it.displayName(me).contains(needle, ignoreCase = true) }
-        .sortedBy { it.displayName(me).lowercase() }
-    @Composable
-    fun person(conv: Conversation) = PersonRow(conv.displayPhoto(me), conv.displayName(me), "", onClick = { onOpenChat(conv.id) })
+    val matches = if (needle.isEmpty()) emptyList() else people.filter {
+        it.displayName(me).contains(needle, ignoreCase = true) || profiles[uidOf(it)]?.handle?.contains(needle, ignoreCase = true) == true
+    }.sortedBy { it.displayName(me).lowercase() }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        com.fariin.app.ui.components.FloatingTopBar("New Chat", onBack = onBack)
-        SearchField(q, "Search your chats") { q = it }
-        LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
-            if (needle.isEmpty()) {
-                item {
-                    val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
-                    val actions = listOf(
-                        Triple("New Group", onNewGroup, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)),
-                        Triple("New Channel", channelNav.create, Icons.Filled.Campaign),
-                        Triple("Invite Friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, Icons.Filled.Share),
-                    )
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
-                        .floating(RoundedCornerShape(20.dp))) {
-                        actions.forEachIndexed { i, (label, open, icon) ->
-                            if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 64.dp))
-                            Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(40.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                                    Icon(icon, null, tint = c.accent)
+    @Composable
+    fun personRow(conv: Conversation, divider: Boolean) {
+        val p = profiles[uidOf(conv)]
+        Column {
+            Row(Modifier.fillMaxWidth().clickable { onOpenChat(conv.id) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Avatar(conv.displayPhoto(me), 40.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(conv.displayName(me), fontSize = 17.sp, color = c.label, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (p?.verified == true) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Filled.Verified, "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                        }
+                    }
+                    if (!p?.handle.isNullOrEmpty()) Text("@" + p!!.handle, fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                }
+            }
+            if (divider) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 68.dp))
+        }
+    }
+    @Composable
+    fun card(content: @Composable () -> Unit) = Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        .clip(RoundedCornerShape(24.dp)).background(c.card)) { content() }
+    @Composable
+    fun sectionTitle(t: String) = Text(t, fontSize = 15.sp, color = c.secondary,
+        modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 18.dp, bottom = 6.dp))
+
+    Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            // The close circle and the centred title (iOS sheet header).
+            Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp)) {
+                Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { onBack() },
+                    contentAlignment = Alignment.Center) { Icon(Icons.Filled.Close, null, tint = c.label) }
+                Text("New chat", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
+            }
+            LazyColumn(Modifier.fillMaxSize(), state = listState,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 120.dp)) {
+                if (needle.isEmpty()) {
+                    item {
+                        val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+                        val actions = listOf(
+                            Triple("New group", onNewGroup, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)),
+                            Triple("New channel", channelNav.create, Icons.Outlined.Campaign),
+                            Triple("Invite friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_share)),
+                        )
+                        card {
+                            actions.forEachIndexed { i, (label, open, icon) ->
+                                if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 60.dp))
+                                Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(icon, null, tint = c.label, modifier = Modifier.size(24.dp))
+                                    Spacer(Modifier.width(20.dp))
+                                    Text(label, fontSize = 17.sp, color = c.label)
                                 }
-                                Spacer(Modifier.width(12.dp))
-                                Text(label, fontSize = 17.sp, color = c.accent)
                             }
                         }
                     }
-                }
-                if (frequent.isNotEmpty()) {
-                    item { Header("Frequently contacted") }
-                    items(frequent, key = { "f" + it.id }) { person(it) }
-                }
-                if (people.isEmpty()) item {
-                    Text("No chats yet", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp))
-                }
-                sections.forEach { (letter, list) ->
-                    item(key = "h$letter") { Header(letter) }
-                    items(list, key = { "p" + it.id }) { person(it) }
-                }
-            } else {
-                item { Header("Results") }
-                items(matches, key = { "m" + it.id }) { person(it) }
-                if (matches.isEmpty()) item {
-                    Text("No chats match “$needle”", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
+                    if (frequent.isNotEmpty()) {
+                        item { sectionTitle("Frequently contacted") }
+                        item { card { frequent.forEachIndexed { i, conv -> personRow(conv, i < frequent.lastIndex) } } }
+                    }
+                    if (people.isEmpty()) item {
+                        Spacer(Modifier.height(14.dp))
+                        card { Text("No chats yet", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(16.dp)) }
+                    }
+                    sections.forEach { (letter, list) ->
+                        item(key = "h$letter") { sectionTitle(letter) }
+                        item(key = "c$letter") { card { list.forEachIndexed { i, conv -> personRow(conv, i < list.lastIndex) } } }
+                    }
+                } else {
+                    item { sectionTitle("Results") }
+                    item {
+                        card {
+                            if (matches.isEmpty()) Text("No chats match \u201c$needle\u201d", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
+                            matches.forEachIndexed { i, conv -> personRow(conv, i < matches.lastIndex) }
+                        }
+                    }
                 }
             }
+        }
+        // A-Z index on the right: a tap jumps to that letter (iOS overlay).
+        if (needle.isEmpty() && sections.size > 1) Column(Modifier.align(Alignment.CenterEnd).padding(end = 2.dp)) {
+            val letters = sections.keys.toList()
+            letters.forEach { l ->
+                Text(l, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+                    modifier = Modifier.width(16.dp).clickable {
+                        // Item index of that letter's title: actions(1) + frequent block(2 or 0) + 2 per earlier letter.
+                        var idx = 1 + (if (frequent.isNotEmpty()) 2 else 0) + (if (people.isEmpty()) 1 else 0)
+                        for (k in letters) { if (k == l) break; idx += 2 }
+                        scope.launch { listState.animateScrollToItem(idx) }
+                    }.padding(vertical = 1.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+        }
+        // The search field at the bottom, over the list (iOS toolbar search).
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding().padding(bottom = 8.dp)) {
+            com.fariin.app.ui.components.FloatingSearchField(q, { q = it }, "Search by username",
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp))
         }
     }
 }
