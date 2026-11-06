@@ -281,6 +281,11 @@ internal fun MessageMenu(
 @Composable
 internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
                           title: String = "Delete this message?", onDismiss: () -> Unit) {
+    // iOS: a group admin deleting another member's message gets the admin sheet, not this question.
+    if (ui.isGroup && AdminDelete.opens(ui.groupDoc, ui.me, listOf(m))) {
+        AdminDeleteSheet(listOf(m), ui, actions, onDismiss)
+        return
+    }
     val c = Fariin.colors
     val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete)
     AlertDialog(

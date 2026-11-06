@@ -127,6 +127,61 @@ object GroupManage {
         b.commit().await()
     }
 
+    // ---- Member restrictions (iOS ChatService.restrictMember / muteMember / unmuteMember) --------
+
+    /**
+     * restrictMember: `restrictedFlags.<uid>` and `restrictedUntil.<uid>` (epoch ms), or both
+     * deleted when [flags] is empty or [until] is not ahead. The rules: the Remove members right,
+     * and never for the owner or an admin. The chat line is best effort, as iOS's `try?`.
+     */
+    suspend fun restrictMember(cid: String, uid: String, name: String, flags: List<String>, until: Double) {
+        val lift = flags.isEmpty() || until <= System.currentTimeMillis()
+        conv(cid).update(if (lift) mapOf(
+            "restrictedFlags.$uid" to FieldValue.delete(),
+            "restrictedUntil.$uid" to FieldValue.delete(),
+            "updatedAt" to FieldValue.serverTimestamp(),
+        ) else mapOf(
+            "restrictedFlags.$uid" to flags,
+            "restrictedUntil.$uid" to until,
+            "updatedAt" to FieldValue.serverTimestamp(),
+        )).await()
+        runCatching { systemLine(cid, if (lift) "${myName(cid)} lifted the restrictions on $name" else "${myName(cid)} restricted $name") }
+    }
+
+    /** muteMember: may send nothing for [seconds] (0 = until lifted, about 50 years). */
+    suspend fun muteMember(cid: String, uid: String, name: String, seconds: Double) =
+        restrictMember(cid, uid, name, MemberRestrict.MUTE_ALL, MemberRestrict.muteEnd(seconds, System.currentTimeMillis().toDouble()))
+
+    /** unmuteMember: every restriction lifted. */
+    suspend fun unmuteMember(cid: String, uid: String, name: String) = restrictMember(cid, uid, name, emptyList(), 0.0)
+
+    /**
+     * ChatService.reportSpam (the admin delete sheet): the long-press Report's `reports` doc with
+     * reason "spam" and the ids of the sender's messages in this delete (100 at most), then the
+     * day's report counter. Best effort, as iOS.
+     */
+    suspend fun reportSpam(reportedUid: String, cid: String, messageIds: List<String>) {
+        val data = hashMapOf<String, Any>("reporterUid" to me, "reportedUid" to reportedUid, "cid" to cid, "reason" to "spam",
+            "createdAt" to System.currentTimeMillis().toDouble(), "handled" to false)
+        if (messageIds.isNotEmpty()) { data["messageIds"] = messageIds.take(100); data["messageId"] = messageIds.first() }
+        val ok = runCatching { db.collection("reports").add(data).await() }.isSuccess
+        if (ok) countDaily("reports")
+    }
+
+    /** MessageRequests.countDaily: `users/{me}/limits/{name}`, a 24 h window. Best effort. */
+    private suspend fun countDaily(name: String) {
+        val ref = db.collection("users").document(me).collection("limits").document(name)
+        try {
+            val snap = ref.get().await()
+            val start = snap.getTimestamp("windowStart")?.toDate()?.time
+            if (snap.exists() && start != null && System.currentTimeMillis() - start < 24 * 3600_000L) {
+                ref.update("count", FieldValue.increment(1)).await()
+            } else {
+                ref.set(mapOf("windowStart" to FieldValue.serverTimestamp(), "count" to 1)).await()
+            }
+        } catch (_: Exception) {}
+    }
+
     /**
      * unbanGroupMember (iOS Banned Users): off `bannedUids`, so a link or a request works for them
      * again. It does not add them back. The rules: the Remove members right (or Add members, shrink only).

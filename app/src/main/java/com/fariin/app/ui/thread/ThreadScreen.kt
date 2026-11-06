@@ -762,6 +762,8 @@ private fun ThreadContent(
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                 Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
                     modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
+            } else if (ui.isGroup && rememberMutedInGroup(ui.groupDoc, ui.me)) {
+                MutedInGroupBar()
             } else {
                 replyTo?.let { r ->
                     ComposerBar(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",

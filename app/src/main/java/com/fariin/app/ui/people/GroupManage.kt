@@ -534,6 +534,14 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                         add(Triple(if (com.fariin.app.data.GroupRole.all(conv)[uid] == null) "Set Tag" else "Edit Tag",
                             rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker))) { tagging = true })
                     if (uid != me) add(Triple("Open Profile", rememberVectorPainter(Icons.Filled.Person)) { onClose(); onProfile(uid) })
+                    // iOS member card: only the lift for a restricted member (owner 2026-10-30); the owner's
+                    // 2026-10-19 "no Mute row" still holds, so a restriction starts from the admin delete sheet.
+                    if (!team.closed && uid != me && team.can(me, Right.BAN_USERS) &&
+                        com.fariin.app.data.MemberRestrict.hasRestriction(conv, uid, System.currentTimeMillis().toDouble()))
+                        add(Triple(com.fariin.app.data.MemberRestrict.LIFT_ROW,
+                            painterResource(R.drawable.ic_speaker_on)) {
+                            run { GroupManage.unmuteMember(cid, uid, name); Snack.show("Restrictions lifted for $name") }
+                        })
                 }
                 val red = buildList<Triple<String, Painter, () -> Unit>> {
                     if (manage && team.isAdmin(uid)) add(Triple("Dismiss Admin", rememberVectorPainter(Icons.Filled.PersonRemove)) { confirmDismiss = true })
