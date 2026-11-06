@@ -1021,3 +1021,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Location" + search, no map (iOS has map, pin, places). Agent rebuilding: MapLibre + OpenFreeMap (free, no key),
   drag-to-pin, honest accuracy, Exact/Approximate privacy choice, places + search (Photon), map card + full map.
   Live location left for later (needs server, iOS has none).
+- 16:02 Account page walked (email row empty as on iOS). e881c98 Your Account Data shared the account summary as text
+  (a chat pick would send it as a message) -> a .txt file as iOS (checked, not sent).
