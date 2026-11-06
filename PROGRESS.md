@@ -1040,3 +1040,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   long-press showed the raw "fariin-location:47.93|..." text and offered Copy, Share sent the marker, and a
   follower's list line would show it. Now "Location", no Copy, Share = place + coordinates. home.sh no longer
   leaves chat search open after a cold start (script bug, not the app).
+- 16:50 Picker search finds places (Pizza Ranch picked, card says "Place chosen from the list"). Search mode
+  had three X buttons (page, search, clear); the search one is now a "Cancel" pill.

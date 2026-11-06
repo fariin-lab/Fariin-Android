@@ -371,11 +371,14 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
                     Text("Location", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                         style = TextStyle(shadow = Shadow(c.bg, blurRadius = 8f)),
                         modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    FloatingIcon(if (searching) Icons.Filled.Close else Icons.Outlined.Search,
-                        if (searching) "Close search" else "Search", {
-                            searching = !searching
-                            if (!searching) { query = ""; closeList(); focus.clearFocus() }
-                        }, circle = true)
+                    // Searching: "Cancel" in words. A second X beside the page's X and the field's clear X
+                    // left three crosses on screen (Pixel, 2026-11-06).
+                    if (searching) Box(Modifier.height(42.dp).floating(CircleShape)
+                        .clickable { searching = false; query = ""; closeList(); focus.clearFocus() }
+                        .padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                        Text("Cancel", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                    }
+                    else FloatingIcon(Icons.Outlined.Search, "Search", { searching = true }, circle = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 if (searching) {
