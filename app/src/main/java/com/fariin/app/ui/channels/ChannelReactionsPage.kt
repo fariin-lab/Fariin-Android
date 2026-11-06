@@ -78,6 +78,8 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
     var picking by remember { mutableStateOf(false) }
     var replacing by remember { mutableStateOf<Int?>(null) }
     var saveJob by remember { mutableStateOf<Job?>(null) }
+    val showsCustom = remember { com.fariin.app.ui.thread.canChooseCustom() }
+    var customTab by remember { mutableStateOf(false) }
     // The channel's real setting, once; no write before it is known (iOS).
     LaunchedEffect(doc.isNotEmpty()) {
         if (loaded || doc.isEmpty()) return@LaunchedEffect
@@ -112,7 +114,16 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
         ModalBottomSheet(onDismissRequest = { picking = false; replacing = null }, sheetState = sheet, containerColor = c.bgSecondary) {
             Text("Choose Emoji", fontSize = 17.sp, color = c.label, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
-            LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 12.dp)) {
+            // Normal / Custom (iOS EmojiMorePicker showsCustom): the custom set only for the chooser account.
+            if (showsCustom) {
+                com.fariin.app.ui.components.FloatingSegments(listOf("Normal", "Custom"), if (customTab) 1 else 0, { customTab = it == 1 },
+                    Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
+            }
+            if (showsCustom && customTab) com.fariin.app.ui.thread.CustomEmojiGrid(onPick = { e ->
+                picking = false
+                ChannelReactions.place(list, replacing, e)?.let { list = it; save() }
+                replacing = null
+            }) else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 12.dp)) {
                 items(ChannelRules.channelReactions) { e ->
                     Box(Modifier.size(52.dp).clip(CircleShape).clickable {
                         picking = false
