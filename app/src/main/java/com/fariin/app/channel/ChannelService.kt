@@ -246,6 +246,24 @@ object ChannelService {
         } catch (_: Exception) { false }
     }
 
+    /**
+     * Pinned / archived on MY follow entry, as iOS ChannelService.setFlag: a follower may not write
+     * the channel's own document (the archive swipe on a followed channel was refused, 2026-11-06).
+     * Shown at once; put back if the server refuses.
+     */
+    suspend fun setFlag(cid: String, key: String, on: Boolean): Boolean {
+        val uid = me
+        if (uid.isEmpty() || (key != "pinned" && key != "archived")) return false
+        ChannelFollows.noteLocal(cid, pinned = if (key == "pinned") on else null, archived = if (key == "archived") on else null)
+        return try {
+            db.collection("users").document(uid).collection("channels").document(cid).update(key, on).await()
+            true
+        } catch (_: Exception) {
+            ChannelFollows.noteLocal(cid, pinned = if (key == "pinned") !on else null, archived = if (key == "archived") !on else null)
+            false
+        }
+    }
+
     /** ChatService.report: reason "channel" for the whole channel, "message" for one post. */
     suspend fun report(cid: String, messageId: String? = null): Boolean = try {
         val data = hashMapOf<String, Any>("reporterUid" to me, "reportedUid" to "", "cid" to cid,

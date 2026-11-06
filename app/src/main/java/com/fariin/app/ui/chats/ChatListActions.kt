@@ -39,11 +39,13 @@ object ChatListActions {
 
     /** A new pin goes to the top: its rank is now, above every older pin (iOS pinOrder). */
     suspend fun setPinned(me: String, c: Conversation, on: Boolean): Boolean =
-        if (on) merge(me, c.id, mapOf("pinnedBy" to mapOf(me to true), "pinOrder" to mapOf(me to System.currentTimeMillis().toDouble())))
+        if (c.isFollower(me)) (me == DemoChats.ME || com.fariin.app.channel.ChannelService.setFlag(c.id, "pinned", on))
+        else if (on) merge(me, c.id, mapOf("pinnedBy" to mapOf(me to true), "pinOrder" to mapOf(me to System.currentTimeMillis().toDouble())))
         else merge(me, c.id, mapOf("pinnedBy" to mapOf(me to false)))
 
     suspend fun setArchived(me: String, c: Conversation, on: Boolean): Boolean =
-        merge(me, c.id, mapOf("archivedBy" to mapOf(me to on)))
+        if (c.isFollower(me)) (me == DemoChats.ME || com.fariin.app.channel.ChannelService.setFlag(c.id, "archived", on))
+        else merge(me, c.id, mapOf("archivedBy" to mapOf(me to on)))
 
     suspend fun setMuted(me: String, c: Conversation, on: Boolean): Boolean =
         setMute(me, c, if (on) com.fariin.app.data.GroupInfoCircles.FOREVER else 0.0)

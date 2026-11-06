@@ -128,7 +128,13 @@ object ChannelFollows {
     /** Each followed channel as a conversation for the chat list. */
     fun conversations(): List<Conversation> = _docs.value.mapNotNull { (cid, d) ->
         val e = _entries.value[cid] ?: return@mapNotNull null
-        Conversation.fromFirestore(cid, d).copy(followerRead = e.read, followerMuted = e.isMuted())
+        val conv = Conversation.fromFirestore(cid, d)
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+        // My pin and archive on a channel I follow live on MY follow entry (a follower may not write
+        // the channel's document); the list reads them as it does a chat's own (2026-11-06).
+        conv.copy(followerRead = e.read, followerMuted = e.isMuted(),
+            pinnedBy = if (uid.isEmpty()) conv.pinnedBy else conv.pinnedBy + (uid to e.pinned),
+            archivedBy = if (uid.isEmpty()) conv.archivedBy else conv.archivedBy + (uid to e.archived))
     }
 
     // ---- Reactions ----------------------------------------------------------------------------
@@ -177,10 +183,12 @@ object ChannelFollows {
     /** A stored follower count with my own change on it. */
     fun adjusted(cid: String, stored: Int): Int = maxOf(0, stored + (_bias.value[cid] ?: 0))
 
-    fun noteLocal(cid: String, read: Int? = null, muted: Boolean? = null, mutedUntil: Double? = null) {
+    fun noteLocal(cid: String, read: Int? = null, muted: Boolean? = null, mutedUntil: Double? = null,
+                  pinned: Boolean? = null, archived: Boolean? = null) {
         _entries.update { all ->
             val e = all[cid] ?: return@update all
-            all + (cid to e.copy(read = read ?: e.read, muted = muted ?: e.muted, mutedUntil = mutedUntil ?: e.mutedUntil))
+            all + (cid to e.copy(read = read ?: e.read, muted = muted ?: e.muted, mutedUntil = mutedUntil ?: e.mutedUntil,
+                pinned = pinned ?: e.pinned, archived = archived ?: e.archived))
         }
     }
 }
