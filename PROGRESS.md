@@ -850,3 +850,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   kept with their tinted glass (untinted looked worse to him); 7124984 cheaper glass (measured: idle 0 frames,
   CPU 0 %, ~290 MB, chat scroll ~2 % janky with or without glass); next commit: incoming bubbles on a wallpaper
   frosted with a rim.
+- 63572c6 tab bar liquid glass: io.github.kyant0:backdrop:1.0.0 (Apache-2.0; 2.x needs Compose 1.12 + Kotlin 2.4).
+  Android 13+ lens + vibrancy, no blur pass (blur cost +5 ms/frame), 55 % frosted surface. Owner loved it.
+  Next candidates: same glass for the chat's floating buttons; credit the library on the licenses page.
