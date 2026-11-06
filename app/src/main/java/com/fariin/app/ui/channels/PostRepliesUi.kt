@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -404,7 +406,10 @@ internal fun RepliesQuotesTabs(tab: Int, onPick: (Int) -> Unit) {
         .clip(RoundedCornerShape(9.dp)).background(c.label.copy(alpha = 0.08f)).padding(2.dp)) {
         listOf("Replies", "Quotes").forEachIndexed { i, label ->
             Box(Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(7.dp))
-                .background(if (i == tab) c.card else Color.Transparent)
+                // The picked half raised: white in light mode, iOS's lifted grey in dark (the card colour
+                // there matched the track, so the pick could not be seen).
+                .background(if (i == tab) (if (c.dark) Color(0xFF636366) else c.card) else Color.Transparent)
+                .semantics { selected = i == tab }
                 .clickable { onPick(i) }, contentAlignment = Alignment.Center) {
                 Text(label, color = c.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
