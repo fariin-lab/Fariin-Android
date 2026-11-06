@@ -519,13 +519,16 @@ private fun ThreadContent(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val walled = com.fariin.app.ui.components.hasChatWallpaper(ui.cid)
     // Glass at the edges only where PowerState allows it (see ThreadEdgeGlass.kt).
-    val glass = com.fariin.app.perf.rememberPowerState().glass() && !walled
+    // Over a wallpaper too: the list draws the wallpaper inside the blur's source, so the glass
+    // shows it (iOS: the buttons turn yellow over the owner's yellow wallpaper).
+    val glass = com.fariin.app.perf.rememberPowerState().glass()
     val hazeState = remember { dev.chrisbanes.haze.HazeState() }
     val edgeHaze = if (glass) hazeState else null
     // Messages under the header: the list can go further back (it is reversed). Under the composer:
     // it can come further forward. Read through derivedStateOf, so a scroll recomposes only on a flip.
     val olderUnder by remember { derivedStateOf { listState.canScrollForward } }
     val searchList = search.active && search.asList && search.matches.isNotEmpty()
+    androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassHaze provides edgeHaze) {
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
@@ -544,8 +547,8 @@ private fun ThreadContent(
             // The scroll edges (ThreadEdgeGlass.kt): under the header and over the composer, blurred
             // glass only while messages sit under them. Over a wallpaper the page colour read as a
             // pale band, so there the header keeps the wallpaper strip and the bottom has nothing.
-            if (!walled) {
-                ThreadEdgeGlass(edgeHaze, top = true, barPx = topBarPx, under = olderUnder && !searchList,
+            if (!walled || edgeHaze != null) {
+                ThreadEdgeGlass(edgeHaze, top = true, barPx = topBarPx, under = olderUnder && !searchList, walled = walled,
                     modifier = Modifier.align(Alignment.TopCenter).zIndex(0.5f))
                 // No bottom strip: iOS took its bottom blur off on the owner's order (2026-08-25, "remove
                 // chat bottom blur, don't touch top header"); messages pass behind the floating composer.
@@ -619,7 +622,8 @@ private fun ThreadContent(
             androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap) {
             LazyColumn(
-                Modifier.fillMaxSize().then(if (edgeHaze != null) Modifier.hazeSource(edgeHaze) else Modifier), state = listState, reverseLayout = true,
+                Modifier.fillMaxSize().then(if (edgeHaze != null) Modifier.hazeSource(edgeHaze)
+                    .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier) else Modifier), state = listState, reverseLayout = true,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
             ) {
                 itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId }) { _, i ->
@@ -929,6 +933,7 @@ private fun ThreadContent(
                     mentions = if (ui.isGroup) MentionSource(ui.members, ui.me, ui.names, ui.photos) else null)
             }
         }
+    }
     }
 }
 

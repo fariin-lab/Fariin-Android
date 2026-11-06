@@ -65,37 +65,35 @@ private fun edgeBrush(color: Color, solidFrac: Float): Brush {
  * [under] is true while messages sit under them. Place it under the controls and over the list.
  */
 @Composable
-internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: Boolean, modifier: Modifier = Modifier) {
+internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: Boolean, walled: Boolean = false, modifier: Modifier = Modifier) {
     if (!top) return   // no bottom strip (iOS: the owner had the composer's blur removed)
     val c = Fariin.colors
     val density = LocalDensity.current
     val barDp = with(density) { barPx.toDp() }
-    // The strip covers the header and a long tail under it, where the blur and the page colour
-    // melt away together, so there is no line where it ends.
-    val heightDp = barDp + 72.dp
-    val solidFrac = (barDp / heightDp).coerceIn(0f, 0.9f) * 0.75f
+    // The owner's iPhone photos 2026-11-05: under the header the bubbles are blurred but keep their
+    // colour, the blur ends about one bubble below the controls, and only the status bar band is
+    // washed with the page colour.
+    val heightDp = barDp + 48.dp
+    val solidFrac = (barDp / heightDp).coerceIn(0f, 0.9f) * 0.8f
     if (haze != null) {
-        // Read here, in composition: read inside the effect's block it was taken once (0) and
-        // never again, so the glass never came on (owner's photo 2026-11-05).
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = top)
-        val mask = remember(solidFrac) { edgeBrush(Color.Black, solidFrac) }
-        // Under the glass, the plain page-colour fade: the glass needs one frame to capture the list
-        // behind it, and on a chat's very first frame the bubbles showed sharp under the name
-        // (recording 2026-11-05). Once the glass draws it covers this completely.
-        val under0 = remember(solidFrac, c.bg) { edgeBrush(c.bg, solidFrac) }
-        // Over the glass, a page-colour wash strongest at the top (iOS frosts what is under the bar
-        // almost white; a blue bubble showed as a blue cloud, owner's photo 2026-11-05).
-        val wash = remember(solidFrac, c.bg) {
-            Brush.verticalGradient(0f to c.bg.copy(alpha = 0.6f), solidFrac to c.bg.copy(alpha = 0.45f),
-                (solidFrac + (1f - solidFrac) * 0.5f) to c.bg.copy(alpha = 0.15f), 1f to c.bg.copy(alpha = 0f))
+        // The status bar band: the page colour from almost solid at the screen's edge to clear 48 dp
+        // down, in four steps (the curve the reference app draws over its list). Not over a wallpaper,
+        // which is itself in the blur.
+        val bandPx = with(density) { 48.dp.toPx() }
+        val wash = remember(c.bg, bandPx) {
+            Brush.verticalGradient(0f to c.bg.copy(alpha = 0.91f), 0.33f to c.bg.copy(alpha = 0.69f),
+                0.66f to c.bg.copy(alpha = 0.38f), 1f to c.bg.copy(alpha = 0f), startY = 0f, endY = bandPx)
         }
+        val under0 = remember(solidFrac, c.bg) { edgeBrush(c.bg, solidFrac) }
         Box(modifier.fillMaxWidth().height(heightDp).drawWithContent {
-            if (alpha > 0f) drawRect(under0, alpha = alpha)
+            // Under the glass for its first frame only (it needs one frame to capture the list).
+            if (alpha > 0f && !walled) drawRect(under0, alpha = alpha)
             drawContent()
-            if (alpha > 0f) drawRect(wash, alpha = alpha)
+            if (alpha > 0f && !walled) drawRect(wash, alpha = alpha)
         }.hazeEffect(haze) {
-            backgroundColor = c.bg; blurRadius = 20.dp; noiseFactor = 0f
-            tints = listOf(HazeTint(c.bg.copy(alpha = 0.85f)))
+            backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
+            tints = listOf(HazeTint(c.bg.copy(alpha = if (walled) 0.12f else 0.22f)))
             inputScale = HazeInputScale.Fixed(1f / 3)
             progressive = com.fariin.app.ui.components.edgeStages(solidFrac)
             this.alpha = alpha
