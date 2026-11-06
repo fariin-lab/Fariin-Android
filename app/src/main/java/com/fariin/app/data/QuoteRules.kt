@@ -149,10 +149,29 @@ object QuoteRules {
         else -> "text"
     }
 
-    /** The card shown before the server answers, drawn from the post and its channel on screen. */
-    fun localCard(cid: String, mid: String, title: String, photoUrl: String?, text: String?, type: String?, isAlbum: Boolean): QuoteCard =
+    /**
+     * The card shown before the server answers, drawn from the post and its channel on screen.
+     * [image] = the post's own picture link for a plain post (the one the server will point at).
+     */
+    fun localCard(cid: String, mid: String, title: String, photoUrl: String?, text: String?, type: String?, isAlbum: Boolean,
+                  image: String? = null): QuoteCard =
         QuoteCard(QuoteCard.State.OK, cid = cid, mid = mid, title = title.ifEmpty { "Channel" },
-            photoUrl = photoUrl.orEmpty(), text = text?.trim().orEmpty(), kind = kindOf(type, isAlbum))
+            photoUrl = photoUrl.orEmpty(), text = text?.trim().orEmpty(), kind = kindOf(type, isAlbum),
+            image = image?.takeIf { it.startsWith("https://") }.orEmpty())
+
+    /**
+     * An older SEALED post: one of its media envelopes is there and not `v: 0` (server isSealed).
+     * Channel media has been plain since 2026-10-19; for a plain post the server points every quote
+     * at the post's own file, so no picture is sent.
+     */
+    fun isSealedPost(envelopeVersions: List<Int?>): Boolean = envelopeVersions.any { it != null && it != 0 }
+
+    /**
+     * Whether this phone sends its picture of the post with createQuote: only for a sealed post, and
+     * only as its author or one of the channel's admins (the server keeps one shared copy per post
+     * and takes it from no one else, so anyone else's upload would be thrown away).
+     */
+    fun sendsPicture(sealed: Boolean, mine: Boolean, admin: Boolean): Boolean = sealed && (mine || admin)
 
     /** The id a send may carry, or null while the quote is still on its way. */
     fun sendableQid(d: QuoteStore.Draft?): String? = d?.qid?.takeIf { isQid(it) }

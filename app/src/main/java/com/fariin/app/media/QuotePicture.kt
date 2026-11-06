@@ -9,9 +9,9 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 /**
- * The post's picture for a quote (iOS quotePicture, owner 2026-11-06). Channel media is sealed, so
- * the server cannot read it: the quoting phone sends a small JPEG of the post as it already has it
- * open. The full picture from this chat's cache when it has been seen, else the post's small inline
+ * The post's picture for a quote (iOS quotePicture, owner 2026-11-06). Only an older sealed post
+ * needs it (the server cannot read that one): its author's or an admin's phone sends a small JPEG of
+ * the post as it already has it open, kept once per post. The Quotes sheet also draws it. The full picture from this chat's cache when it has been seen, else the post's small inline
  * thumbnail; a video gives its poster. At most 900 px on the long side and about 380 KB.
  * Nothing is downloaded for it, and all the work is off the main thread.
  */

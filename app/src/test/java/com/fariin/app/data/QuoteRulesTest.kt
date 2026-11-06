@@ -143,6 +143,21 @@ class QuoteRulesTest {
         assertEquals("", bare.photoUrl)
         assertEquals("album", QuoteRules.kindOf("image", true))
         assertEquals("text", QuoteRules.kindOf(null, false))
+        // A plain post's own picture shows at once (the one the server will point at); only https.
+        val plain = QuoteRules.localCard("ch1", "m1", "News", null, "Hi", "image", false, image = "https://x/post.jpg")
+        assertEquals("https://x/post.jpg", QuoteRules.image(plain))
+        assertNull(QuoteRules.image(QuoteRules.localCard("ch1", "m1", "News", null, "Hi", "image", false, image = "file:///x")))
+    }
+
+    @Test fun pictureOnlyForSealedPostsFromTheirPeople() {
+        assertFalse(QuoteRules.isSealedPost(listOf(null, null)))
+        assertFalse(QuoteRules.isSealedPost(listOf(0, null, 0)))
+        assertTrue(QuoteRules.isSealedPost(listOf(0, 1)))
+        assertTrue(QuoteRules.isSealedPost(listOf(null, null, 1)))
+        assertFalse(QuoteRules.sendsPicture(sealed = false, mine = true, admin = true))
+        assertFalse(QuoteRules.sendsPicture(sealed = true, mine = false, admin = false))
+        assertTrue(QuoteRules.sendsPicture(sealed = true, mine = true, admin = false))
+        assertTrue(QuoteRules.sendsPicture(sealed = true, mine = false, admin = true))
     }
 
     @Test fun draftWaitsUntilItsQidLands() {

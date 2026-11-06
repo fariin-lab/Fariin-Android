@@ -90,9 +90,10 @@ object QuoteStore {
     }
 
     /**
-     * Quote a channel post: the server checks I may see it and keeps a snapshot; my card is seeded.
-     * [picture] is the post's picture as this phone has it open (a small JPEG, see QuotePicture):
-     * channel media is sealed, so the server cannot make one itself.
+     * Quote a channel post: the server checks I may see it and gives a single-use quote id (spent
+     * by the send, gone after 24 hours if never sent); my card is seeded. [picture] goes only for an
+     * older sealed post (QuoteRules.sendsPicture): the server keeps one shared copy per post, and a
+     * plain post's quote points at the post's own file.
      */
     suspend fun create(cid: String, mid: String, picture: ByteArray? = null): Made = try {
         val args = HashMap<String, Any>()

@@ -190,10 +190,15 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // ThreadScreen puts its answer into the draft. This chat keeps the quote here.
         onQuoteTo = { m, dest ->
             val media = vm.repo.media
-            // The post's picture as this phone has it (channel media is sealed; QuotePicture.kt).
-            val token = com.fariin.app.data.QuoteStore.start(cid, m.id) { com.fariin.app.media.QuotePicture.make(media, m) }
+            // Only an older SEALED post needs this phone's picture (one shared copy per post on the
+            // server, taken from its author or an admin); a plain post is pointed at as it is.
+            val sealed = com.fariin.app.data.QuoteRules.isSealedPost(listOf(m.enc?.v, m.thumbEnc?.v) + m.album.map { it.enc?.v })
+            val sends = com.fariin.app.data.QuoteRules.sendsPicture(sealed, mine = m.authorId == me,
+                admin = me == s.conv["createdBy"] || me in admins)
+            val token = com.fariin.app.data.QuoteStore.start(cid, m.id) { if (sends) com.fariin.app.media.QuotePicture.make(media, m) else null }
             val card = com.fariin.app.data.QuoteRules.localCard(cid, m.id, ui.title, ui.photoUrl,
-                if (m.mediaKind == null) m.bodyText else m.text, m.type, m.album.isNotEmpty())
+                if (m.mediaKind == null) m.bodyText else m.text, m.type, m.album.isNotEmpty(),
+                image = if (sealed) null else com.fariin.app.data.QuoteRules.pictureUrl(m.imageUrl, m.videoUrl, m.thumbUrl, m.album.firstOrNull()?.imageUrl))
             com.fariin.app.data.QuoteStore.pendingDraft.value = com.fariin.app.data.QuoteStore.Draft(dest, "", card, token)
             if (dest != cid) nav.chat(dest)
         },
