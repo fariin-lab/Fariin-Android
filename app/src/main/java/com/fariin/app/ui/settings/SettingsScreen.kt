@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.fariin.app.data.NewBadges
 import androidx.compose.animation.togetherWith
 import android.content.Context
@@ -293,7 +295,9 @@ private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable(onClickLabel = "Edit profile", onClick = onEdit)) {
+            // Named for screen readers (it was a nameless button): the photo, and what a tap does.
+            Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable(onClickLabel = "Edit profile", onClick = onEdit)
+                .semantics { contentDescription = "Your profile photo" }) {
                 Avatar(profile?.photoUrl, 120.dp)
             }
             Spacer(Modifier.height(12.dp))
