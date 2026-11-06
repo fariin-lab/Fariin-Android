@@ -76,13 +76,17 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
     if (haze != null) {
         // Read here, in composition: read inside the effect's block it was taken once (0) and
         // never again, so the glass never came on (owner's photo 2026-11-05).
-        val alpha by animateFloatAsState(if (under) 1f else 0f, tween(220), label = "edgeGlass")
+        val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = top)
         val mask = remember(solidFrac) { edgeBrush(Color.Black, solidFrac) }
-        Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
+        // Under the glass, the plain page-colour fade: the glass needs one frame to capture the list
+        // behind it, and on a chat's very first frame the bubbles showed sharp under the name
+        // (recording 2026-11-05). Once the glass draws it covers this completely.
+        val under0 = remember(solidFrac, c.bg) { edgeBrush(c.bg, solidFrac) }
+        Box(modifier.fillMaxWidth().height(heightDp).drawBehind { if (alpha > 0f) drawRect(under0, alpha = alpha) }.hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 20.dp; noiseFactor = 0f
             tints = listOf(HazeTint(c.bg.copy(alpha = 0.72f)))
             inputScale = HazeInputScale.Fixed(1f / 3)
-            this.mask = mask
+            progressive = com.fariin.app.ui.components.edgeStages(solidFrac)
             this.alpha = alpha
         })
     } else {

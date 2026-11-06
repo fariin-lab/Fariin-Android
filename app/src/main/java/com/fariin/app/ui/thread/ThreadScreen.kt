@@ -509,6 +509,9 @@ private fun ThreadContent(
     // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
     // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
     var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // True for the chat's first 400 ms: the header covers the top until the glass has drawn once.
+    var openCover by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(400); openCover = false }
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val walled = com.fariin.app.ui.components.hasChatWallpaper(ui.cid)
@@ -547,6 +550,19 @@ private fun ThreadContent(
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
                 .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier)
+                // The chat's first moment (owner 2026-11-05: "when you open a chat it must be there"):
+                // the glass strip needs a frame to capture the list, and one frame showed the bubbles
+                // sharp under the name. The header, drawn from frame one, lays the page-colour fade
+                // behind itself (reaching 72 dp below) until the glass is up.
+                .then(if (walled) Modifier else Modifier.drawBehind {
+                    if (openCover) {
+                        val tail = 72.dp.toPx()
+                        val h = size.height + tail
+                        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to c.bg, size.height / h to c.bg, (size.height + tail * 0.5f) / h to c.bg.copy(alpha = 0.6f), 1f to c.bg.copy(alpha = 0f),
+                            startY = 0f, endY = h), size = androidx.compose.ui.geometry.Size(size.width, h))
+                    }
+                })
                 .onSizeChanged { topBarPx = it.height }) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
                     // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).

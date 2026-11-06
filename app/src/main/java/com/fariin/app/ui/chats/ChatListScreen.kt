@@ -326,8 +326,7 @@ fun ChatListScreen(
     val scrolled by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
     // Owner 2026-11-05: the glass only when something is under the bar, as iOS's scroll edge. It
     // fades in and out (the effect stays attached, so nothing is rebuilt and there is no hitch).
-    val glassAlpha by androidx.compose.animation.core.animateFloatAsState(
-        if (scrolled || selecting) 1f else 0f, androidx.compose.animation.core.tween(220), label = "barGlass")
+    val glassAlpha by com.fariin.app.ui.components.rememberEdgeAlpha(scrolled || selecting)
     // The bar's search button only once the field in the list has shrunk away (it showed while the
     // field was still two-thirds there: two search buttons at once).
     val searchGone by remember { androidx.compose.runtime.derivedStateOf {
@@ -382,7 +381,7 @@ fun ChatListScreen(
                         tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.7f)))
                         // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
                         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-                        mask = barFade
+                        progressive = com.fariin.app.ui.components.edgeStages(0.45f)
                         alpha = glassAlpha
                     }.padding(bottom = 36.dp)
                     scrolled || selecting -> Modifier.background(c.bg.copy(alpha = 0.97f))

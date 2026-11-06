@@ -195,8 +195,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     // The glass only once the page is under the bar (iOS scroll edge), faded in and out.
     // derivedStateOf: the page is not recomposed for every pixel scrolled, only when this flips.
     val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { scroll.value > 0 } }
-    val glassAlpha by androidx.compose.animation.core.animateFloatAsState(
-        if (underBar) 1f else 0f, androidx.compose.animation.core.tween(220), label = "barGlass")
+    val glassAlpha by com.fariin.app.ui.components.rememberEdgeAlpha(underBar)
     val glass = com.fariin.app.perf.rememberPowerState().glass()
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         val barH = 56.dp
@@ -251,7 +250,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                 backgroundColor = c.bgSecondary; blurRadius = 24.dp; noiseFactor = 0f
                 tints = listOf(dev.chrisbanes.haze.HazeTint(c.bgSecondary.copy(alpha = 0.7f)))
                 inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-                mask = fade
+                progressive = com.fariin.app.ui.components.edgeStages(0.45f)
                 alpha = glassAlpha
             }
             else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
