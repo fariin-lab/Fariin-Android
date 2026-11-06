@@ -27,6 +27,16 @@ class GroupLinkCardsTest {
     @Test fun countLineAndDeadMark() {
         assertEquals("1 member", GroupLinkCards.countLine(1, false))
         assertEquals("3 followers", GroupLinkCards.countLine(3, true))
+        assertEquals("Channel invite · 3 followers", GroupLinkCards.countLine(3, true, byName = true))
+        assertEquals("3 members", GroupLinkCards.countLine(3, false, byName = true))
+        assertTrue(GroupLinkCards.cardTarget("https://fariin.com/vee", "Channel invite · 3 followers") != null)
+    }
+
+    @Test fun actionWordsOnlyOnANameCard() {
+        assertNull(GroupLinkCards.actionLine(byName = false, channel = true, member = true))
+        assertEquals("Open Channel", GroupLinkCards.actionLine(byName = true, channel = true, member = true))
+        assertEquals("View Channel", GroupLinkCards.actionLine(byName = true, channel = true, member = false))
+        assertEquals("Open Group", GroupLinkCards.actionLine(byName = true, channel = false, member = true))
         assertTrue(GroupLinkCards.snapshotSaysGone("Unavailable", ""))
         assertFalse(GroupLinkCards.snapshotSaysGone("Unavailable", "4 members"))
     }

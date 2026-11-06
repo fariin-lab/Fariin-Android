@@ -31,8 +31,12 @@ object GroupLinkCards {
 
     /** What the server says about a link now. */
     sealed interface Live {
-        data class Found(val title: String, val photoUrl: String?, val count: Int, val isChannel: Boolean) : Live {
-            val countLine: String get() = countLine(count, isChannel)
+        /** [byName]: found through a public @name (not an invite); [isMember]: I am in it / follow it. */
+        data class Found(val title: String, val photoUrl: String?, val count: Int, val isChannel: Boolean,
+                         val byName: Boolean = false, val isMember: Boolean = false) : Live {
+            val countLine: String get() = countLine(count, isChannel, byName)
+            /** The card's action words, a public @name only: an invite card is as it was. */
+            val action: String? get() = actionLine(byName, isChannel, isMember)
         }
         /** Revoked, expired, deleted or no longer public. */
         data object Gone : Live
@@ -50,7 +54,7 @@ object GroupLinkCards {
         return QrRules.bareNameFrom(url)?.let { Target.Name(it) }
     }
 
-    private val SIZE_LINE = Regex("^[0-9.,]+[KkMB]? (members?|followers?)$", RegexOption.IGNORE_CASE)
+    private val SIZE_LINE = Regex("^(Channel invite · )?[0-9.,]+[KkMB]? (members?|followers?)$", RegexOption.IGNORE_CASE)
 
     /**
      * Which sealed card the bubble draws as a group card. An invite always; a bare name only when
@@ -66,8 +70,20 @@ object GroupLinkCards {
     /** The snapshot's own mark for a dead invite (the sender's phone was told so). */
     fun snapshotSaysGone(title: String, desc: String): Boolean = title == "Unavailable" && desc.isEmpty()
 
-    fun countLine(n: Int, channel: Boolean): String =
-        if (channel) "$n ${if (n == 1) "follower" else "followers"}" else "$n ${if (n == 1) "member" else "members"}"
+    /** "N members"; a channel "N followers", and a public channel's @name card "Channel invite · N followers". */
+    fun countLine(n: Int, channel: Boolean, byName: Boolean = false): String = when {
+        channel && byName -> "Channel invite · $n ${if (n == 1) "follower" else "followers"}"
+        channel -> "$n ${if (n == 1) "follower" else "followers"}"
+        else -> "$n ${if (n == 1) "member" else "members"}"
+    }
+
+    /** A public @name card's action: Open Channel / View Channel, Open Group when I am in the group. */
+    fun actionLine(byName: Boolean, channel: Boolean, member: Boolean): String? = when {
+        !byName -> null
+        channel -> if (member) "Open Channel" else "View Channel"
+        member -> "Open Group"
+        else -> null
+    }
 
     // ------------------------------------------------------------------ the lookup (memory only)
 
@@ -118,7 +134,8 @@ object GroupLinkCards {
         }
         is Target.Name -> when (val r = ChannelService.preview(null, t.name)) {
             is ChannelService.PreviewResult.Found -> r.preview.let { p ->
-                Live.Found(p.title, p.photoUrl, if (p.isChannel) p.shownCount else p.memberCount, p.isChannel)
+                Live.Found(p.title, p.photoUrl, if (p.isChannel) p.shownCount else p.memberCount, p.isChannel,
+                    byName = true, isMember = p.isMember)
             }
             is ChannelService.PreviewResult.Refused -> Live.Gone
             is ChannelService.PreviewResult.Failed -> Live.Unknown
