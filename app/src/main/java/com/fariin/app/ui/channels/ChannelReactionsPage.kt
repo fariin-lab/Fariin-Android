@@ -1,7 +1,6 @@
 package com.fariin.app.ui.channels
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,7 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,6 +45,10 @@ import androidx.compose.ui.unit.sp
 import com.fariin.app.channel.ChannelInfo
 import com.fariin.app.channel.ChannelRules
 import com.fariin.app.data.ChannelReactions
+import com.fariin.app.data.ReactionPicks
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsSection
 import com.fariin.app.ui.theme.Fariin
@@ -76,7 +77,8 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
     var lastPicks by remember { mutableStateOf<List<String>>(emptyList()) }
     var problem by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
-    var replacing by remember { mutableStateOf<Int?>(null) }
+    /** A refused tap in the sheet ("Keep at least one", "Up to 12"), said inside it. */
+    var note by remember { mutableStateOf<String?>(null) }
     var saveJob by remember { mutableStateOf<Job?>(null) }
     val showsCustom = remember { com.fariin.app.ui.thread.canChooseCustom() }
     var customTab by remember { mutableStateOf(false) }
@@ -109,27 +111,43 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
             }
         }
     }
+    // Many at once, saved once (iOS 148c67ef, owner 2026-11-06): the sheet stays open while emoji are
+    // turned on and off in `list` (the bar above follows live); closing it saves once if anything changed.
+    fun closePicker() {
+        picking = false; note = null
+        if (ReactionPicks.changed(mode, list, savedMode, savedList)) save()
+    }
+    fun tapped(e: String) {
+        val t = ReactionPicks.toggle(list, e)
+        list = t.list; note = t.note
+    }
     if (picking) {
         val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-        ModalBottomSheet(onDismissRequest = { picking = false; replacing = null }, sheetState = sheet, containerColor = c.bgSecondary) {
-            Text("Choose Emoji", fontSize = 17.sp, color = c.label, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+        ModalBottomSheet(onDismissRequest = { closePicker() }, sheetState = sheet, containerColor = c.bgSecondary) {
+            Box(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Text(ReactionPicks.title(list.size), fontSize = 17.sp, color = c.label, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().align(Alignment.Center))
+                Text("Done", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).clip(RoundedCornerShape(8.dp))
+                        .clickable { scope.launch { sheet.hide() }.invokeOnCompletion { closePicker() } }.padding(horizontal = 6.dp, vertical = 2.dp))
+            }
             // Normal / Custom (iOS EmojiMorePicker showsCustom): the custom set only for the chooser account.
             if (showsCustom) {
                 com.fariin.app.ui.components.FloatingSegments(listOf("Normal", "Custom"), if (customTab) 1 else 0, { customTab = it == 1 },
                     Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
             }
-            if (showsCustom && customTab) com.fariin.app.ui.thread.CustomEmojiGrid(onPick = { e ->
-                picking = false
-                ChannelReactions.place(list, replacing, e)?.let { list = it; save() }
-                replacing = null
-            }) else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 12.dp)) {
+            note?.let {
+                Text(it, fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp))
+            }
+            if (showsCustom && customTab) com.fariin.app.ui.thread.CustomEmojiGrid(onPick = { tapped(it) },
+                picked = { ReactionPicks.isPicked(list, it) }, onNote = { note = it })
+            else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 12.dp)) {
                 items(ChannelRules.channelReactions) { e ->
-                    Box(Modifier.size(52.dp).clip(CircleShape).clickable {
-                        picking = false
-                        ChannelReactions.place(list, replacing, e)?.let { list = it; save() }
-                        replacing = null
-                    }, contentAlignment = Alignment.Center) { Text(e, fontSize = 30.sp) }
+                    Box(Modifier.size(52.dp).clip(CircleShape).clickable { tapped(e) }, contentAlignment = Alignment.Center) {
+                        Text(e, fontSize = 30.sp)
+                        com.fariin.app.ui.thread.PickMark(ReactionPicks.isPicked(list, e))
+                    }
                 }
             }
         }
@@ -162,22 +180,19 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEach { i ->
                          if (i < 0) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { replacing = null; picking = true },
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { picking = true },
                                 contentAlignment = Alignment.Center) {
                                 Icon(Icons.Filled.Add, "Add an emoji", tint = c.secondary)
                             }
                          } else {
+                            // No x on the bar (owner 2026-11-06: tapped by mistake). Any emoji opens the
+                            // sheet, where a tap turns an emoji on or off.
                             val e = list[i]
-                            Box(Modifier.size(48.dp)) {
-                                Box(Modifier.size(44.dp).align(Alignment.Center).clip(CircleShape)
-                                    .then(if (picking && replacing == i) Modifier.border(2.dp, c.blue, CircleShape) else Modifier)
-                                    .clickable { replacing = i; picking = true }, contentAlignment = Alignment.Center) {
-                                    com.fariin.app.ui.thread.ReactionGlyph(e, 28.sp, 34.dp)
-                                }
-                                if (list.size > 1) Box(Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp).size(20.dp).clip(CircleShape)
-                                    .background(c.secondary).clickable { list = ChannelReactions.remove(list, i); replacing = null; save() },
+                            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(44.dp).clip(CircleShape).clickable { picking = true }
+                                    .semantics { contentDescription = "${com.fariin.app.ui.thread.CustomReaction.spoken(e)}. Change reactions" },
                                     contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.Close, "Remove ${com.fariin.app.ui.thread.CustomReaction.spoken(e)}", tint = c.bgSecondary, modifier = Modifier.size(12.dp))
+                                    com.fariin.app.ui.thread.ReactionGlyph(e, 28.sp, 34.dp)
                                 }
                             }
                          }
@@ -186,7 +201,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                       }
                     }
                 }
-                Text(ChannelReactions.pickFooter(list), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
+                Text(ReactionPicks.footer(list), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
             }
             problem?.let { Text(it, fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)) }

@@ -3,7 +3,10 @@ package com.fariin.app.ui.thread
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -45,7 +48,8 @@ fun canChooseCustom(): Boolean = CustomEmojiUpload.canUpload(FirebaseAuth.getIns
  * server; they show up here by themselves once the live list has them.
  */
 @Composable
-fun CustomEmojiGrid(onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+fun CustomEmojiGrid(onPick: (String) -> Unit, modifier: Modifier = Modifier,
+                    picked: (String) -> Boolean = { false }, onNote: ((String) -> Unit)? = null) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val uploaded by UploadedEmoji.items.collectAsState()
@@ -54,7 +58,8 @@ fun CustomEmojiGrid(onPick: (String) -> Unit, modifier: Modifier = Modifier) {
     val busy by CustomEmojiUpload.busy.collectAsState()
     // The upload runs outside this sheet, so closing it does not stop the files halfway.
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        CustomEmojiUpload.start(ctx, uris) { Snack.show(it) }
+        // Said inside the sheet when it is still open (a snackbar sits behind it), and as a snackbar for after.
+        CustomEmojiUpload.start(ctx, uris) { line -> onNote?.invoke(line); Snack.show(line) }
     }
     LazyVerticalGrid(GridCells.Adaptive(52.dp), modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 12.dp)) {
         if (canAdd) item(key = "add") {
@@ -71,7 +76,21 @@ fun CustomEmojiGrid(onPick: (String) -> Unit, modifier: Modifier = Modifier) {
         items(keys, key = { it }) { key ->
             Box(Modifier.size(52.dp).clip(CircleShape).clickable { onPick(key) }, contentAlignment = Alignment.Center) {
                 ReactionGlyph(key, 30.sp, 40.dp)
+                PickMark(picked(key))
             }
+        }
+    }
+}
+
+/** An emoji that is in the list while picking many at once (iOS pickMark): an accent ring and a small tick. */
+@Composable
+fun PickMark(on: Boolean) {
+    if (!on) return
+    val c = Fariin.colors
+    Box(Modifier.size(48.dp)) {
+        Box(Modifier.matchParentSize().clip(CircleShape).background(c.accent.copy(alpha = 0.18f)).border(2.dp, c.accent, CircleShape))
+        Box(Modifier.align(Alignment.BottomEnd).size(16.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Check, contentDescription = "Chosen", tint = Color.White, modifier = Modifier.size(11.dp))
         }
     }
 }
