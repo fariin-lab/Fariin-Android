@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -271,11 +273,9 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                         TextButton(onClick = { attempt++ }) { Text("Retry", color = c.blue) }
                     }
                 }
-                else -> item {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(Modifier.size(28.dp), color = c.secondary, strokeWidth = 2.5.dp)
-                    }
-                }
+                // Loading: three skeleton quotes in the page's own layout (owner 2026-11-06 "use skeleton
+                // loading", iOS), soft grey, the whole block pulsing, top-aligned under the summary.
+                else -> item { QuotesSkeleton() }
             }
         }
     }
@@ -292,6 +292,42 @@ private data class SourceCard(
 )
 
 /** One quote: who quoted, what they wrote, then my post as an outlined card. */
+@Composable
+private fun QuotesSkeleton() {
+    val c = Fariin.colors
+    val grey = c.secondary.copy(alpha = 0.16f)
+    val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "quotesSkeleton").animateFloat(
+        1f, 0.45f, androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulse")
+    @Composable fun bar(w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp = 10.dp) =
+        Box(Modifier.width(w).height(h).clip(RoundedCornerShape(h / 2)).background(grey))
+    Column(Modifier.fillMaxWidth().graphicsLayer { alpha = pulse }.padding(horizontal = 16.dp)) {
+        repeat(3) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(grey))
+                    Spacer(Modifier.width(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { bar(120.dp); bar(70.dp, 8.dp) }
+                }
+                bar(220.dp)
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, grey, RoundedCornerShape(14.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(grey))
+                        Spacer(Modifier.width(8.dp)); bar(90.dp); Spacer(Modifier.weight(1f)); bar(36.dp, 8.dp)
+                    }
+                    Row {
+                        Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(grey))
+                        Spacer(Modifier.width(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { bar(160.dp); bar(110.dp) }
+                    }
+                }
+                bar(40.dp, 8.dp)
+            }
+        }
+    }
+}
+
 @Composable
 private fun QuoteRow(q: QuotedIn, card: SourceCard, onTap: () -> Unit) {
     val c = Fariin.colors
