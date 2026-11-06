@@ -102,6 +102,16 @@ fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
     } }
 }
 
+/** The colour scheme the chat header's words take over this chat's wallpaper (iOS headerBackdrop):
+ *  dark over an animated wallpaper whose top is dark, else null (the app's own). */
+@Composable
+fun chatHeaderDark(cid: String): Boolean? {
+    val ctx = LocalContext.current
+    ChatLookStore.version.intValue
+    val a = (ChatLookStore.wallpaper(ctx, cid) as? com.fariin.app.data.ChatWallpaper.Animated)?.wallpaper ?: return null
+    return a.topIsDark(com.fariin.app.ui.theme.Fariin.colors.dark)
+}
+
 /** Whether this chat draws a wallpaper (the thread's top and bottom fades step aside for it). */
 @Composable
 fun hasChatWallpaper(cid: String): Boolean {

@@ -615,7 +615,23 @@ private fun ThreadContent(
                     keyboard?.hide()
                     if (search.matches.isNotEmpty()) { search.index = minOf(search.index + 1, search.matches.size - 1); goToMatch() }
                 })
-                else if (selecting) SelectTopBar(picked.size) { selected.clear() } else Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
+                else if (selecting) SelectTopBar(picked.size) { selected.clear() } else {
+                    // Over a dark-topped animated wallpaper the header's words are light (iOS headerBackdrop).
+                    val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
+                    val flipped = headerDark != null && headerDark != Fariin.colors.dark
+                    // The status bar's icons follow the header while this chat is open, and go back after.
+                    val barView = androidx.compose.ui.platform.LocalView.current
+                    val appDark = Fariin.colors.dark
+                    androidx.compose.runtime.DisposableEffect(flipped, appDark) {
+                        val w = (barView.context as? android.app.Activity)?.window
+                        val ctl = w?.let { androidx.core.view.WindowCompat.getInsetsController(it, barView) }
+                        if (flipped) ctl?.isAppearanceLightStatusBars = !headerDark!!
+                        onDispose { if (flipped) ctl?.isAppearanceLightStatusBars = !appDark }
+                    }
+                    if (flipped) com.fariin.app.ui.theme.FariinTheme(dark = headerDark!!, bars = false) {
+                        Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
+                    } else Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
+                }
                 // Another chat's voice message still playing: its bar under the header (iOS VoiceNoteBar).
                 val openChat = LocalOpenChat.current
                 if (!search.active && !selecting) VoiceNoteBar(ui.cid, ui.me) { cid -> com.fariin.app.data.ChatsNow.find(cid)?.let(openChat) }

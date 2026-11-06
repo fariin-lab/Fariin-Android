@@ -92,7 +92,9 @@ object Fariin {
 }
 
 @Composable
-fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable () -> Unit) {
+/** [bars]: also set the window's status and navigation bar icons. Off for a theme nested inside a
+ *  screen (a header over a dark wallpaper): its setting would outlive the screen. */
+fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), bars: Boolean = true, content: @Composable () -> Unit) {
     val c = if (dark) Dark else Light
     val scheme = if (dark) {
         darkColorScheme(
@@ -136,7 +138,7 @@ fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), content: @Composable (
     // Night Mode can differ from the phone's setting, so the status and navigation bar icons
     // follow the app's choice rather than the system's.
     val view = LocalView.current
-    if (!view.isInEditMode) {
+    if (bars && !view.isInEditMode) {
         SideEffect {
             (view.context as? Activity)?.window?.let { w ->
                 WindowCompat.getInsetsController(w, view).apply {

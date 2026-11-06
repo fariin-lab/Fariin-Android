@@ -421,7 +421,11 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 14.dp)) {
                         com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Close", onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onClose() } },
                             modifier = Modifier.align(Alignment.CenterStart), circle = true)
-                        Text("Preview", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
+                        // The title over a dark-topped animated wallpaper is light (iOS topIsDark), else unreadable.
+                        val shown = if (pages) siblings.getOrNull(pager.currentPage) else first
+                        val lightTitle = (shown as? ChatWallpaper.Animated)?.wallpaper?.topIsDark(dark) == true && !dark
+                        Text("Preview", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (lightTitle) Color.White else c.label,
+                            modifier = Modifier.align(Alignment.Center))
                         com.fariin.app.ui.components.FloatingIcon(if (dark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
                             if (dark) "Show in light mode" else "Show in dark mode", onClick = { previewDark = !dark },
                             modifier = Modifier.align(Alignment.CenterEnd), circle = true)
@@ -449,7 +453,11 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                         Text(if (cid != null) "Apply Wallpaper" else "Apply For All Chats", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     }
                     // iOS: from a chat, the smaller all-chats button rides under Apply Wallpaper.
-                    if (cid != null && !shared) Text("Apply For All Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                    // On a dark animated ground it is light too, as the title is.
+                    val onDark = ((if (pages) siblings.getOrNull(pager.currentPage) else first) as? ChatWallpaper.Animated)
+                        ?.wallpaper?.topIsDark(dark) == true && !dark
+                    if (cid != null && !shared) Text("Apply For All Chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                        color = if (onDark) Color.White else c.label,
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 12.dp).navigationBarsPadding()
                             .clip(CircleShape).clickable { apply(allChats = true) }.padding(horizontal = 16.dp, vertical = 10.dp))
                 }

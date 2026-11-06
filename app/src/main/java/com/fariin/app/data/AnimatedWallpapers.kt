@@ -15,7 +15,11 @@ import androidx.compose.runtime.mutableStateOf
 enum class AnimatedLook { LIQUID_METAL, WATER, LIQUID_GLOW, LIQUID_EDGE, AURORA }
 
 /** One animated wallpaper. [period] is seconds for one full loop; [palette] is Aurora's colours (0 green, 1 purple, 2 pink). */
-data class AnimatedWallpaper(val id: String, val name: String, val look: AnimatedLook, val period: Float, val palette: Int = 0)
+data class AnimatedWallpaper(val id: String, val name: String, val look: AnimatedLook, val period: Float, val palette: Int = 0) {
+    /** iOS topIsDark: is the top of the screen dark in this mode? A moving ground has no still picture
+     *  to measure, so it says so itself; the chat header's words turn light over a dark top. */
+    fun topIsDark(dark: Boolean): Boolean = look == AnimatedLook.AURORA || dark
+}
 
 object AnimatedWallpapers {
     /** iOS AnimatedWallpapers.all, same ids, names, order and loop lengths. */
