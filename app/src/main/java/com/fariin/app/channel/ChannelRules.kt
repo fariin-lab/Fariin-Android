@@ -97,10 +97,10 @@ object ChannelRules {
         "🍓 🍾 💋 🖕 😈 😴 😭 🤓 👻 👨‍💻 👀 🎃 🙈 😇 😨 🤝 ✍️ 🤗 🫡 🎅 🎄 ☃️ 💅 🤪 🗿 🆒 💘 🙉 🦄 😘 💊 🙊 😎 👾 " +
         "🤷‍♂️ 🤷 🤷‍♀️ 😡").split(" ").filter { it.isNotEmpty() }
 
-    /** The long-press bar's first six for a channel: its own list ("some"), else the catalog's head. */
+    /** The long-press bar for a channel: its whole own list ("some", up to 12), else the catalog's first six. */
     fun offered(mode: String, list: List<String>): List<String> = when (mode) {
         "off" -> emptyList()
-        "some" -> list.take(6)
+        "some" -> list.take(com.fariin.app.data.ChannelReactions.MAX)
         else -> channelReactions.take(6)
     }
 

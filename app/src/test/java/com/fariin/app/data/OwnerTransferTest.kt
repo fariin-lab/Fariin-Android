@@ -56,7 +56,7 @@ class OwnerTransferTest {
     @Test fun reactionsRules() {
         assertEquals("off" to emptyList<String>(), ChannelReactions.normalize("some", emptyList()))
         assertEquals("all" to emptyList<String>(), ChannelReactions.normalize("weird", listOf("👍")))
-        assertEquals(6, ChannelReactions.normalize("some", ChannelReactions.palette).second.size)
+        assertEquals(12, ChannelReactions.normalize("some", ChannelReactions.palette).second.size)
         assertEquals(listOf("👍", "🔥"), ChannelReactions.normalize("some", listOf("👍", "👍", "🔥")).second)
         assertEquals(ChannelReactions.palette.take(6), ChannelReactions.startList(emptyList(), emptyList()))
         assertEquals(listOf("🔥"), ChannelReactions.startList(emptyList(), listOf("🔥")))
@@ -65,7 +65,8 @@ class OwnerTransferTest {
         assertEquals(listOf("🔥", "👍"), ChannelReactions.place(listOf("👍", "🔥"), 0, "🔥"))
         assertEquals(listOf("👍", "😂"), ChannelReactions.place(listOf("👍"), null, "😂"))
         assertNull(ChannelReactions.place(listOf("👍"), null, "👍"))
-        assertNull(ChannelReactions.place(ChannelReactions.palette.take(6), null, "🌭"))
+        assertEquals(ChannelReactions.palette.take(6) + "🌭", ChannelReactions.place(ChannelReactions.palette.take(6), null, "🌭"))
+        assertNull(ChannelReactions.place(ChannelReactions.palette.take(12), null, "🌭"))
         assertEquals(listOf("👍"), ChannelReactions.remove(listOf("👍"), 0))   // the last one stays
         assertEquals(listOf("🔥"), ChannelReactions.remove(listOf("👍", "🔥"), 0))
         assertEquals("Off", ChannelReactions.value("off"))

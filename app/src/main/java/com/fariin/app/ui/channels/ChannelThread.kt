@@ -286,22 +286,28 @@ fun ChannelPostMenu(
                                 ) { com.fariin.app.ui.thread.ReactionGlyph(e, 26.sp, 32.dp) }
                             }
                         }
-                    } else Row(
-                        Modifier.shadow(8.dp, CircleShape).clip(CircleShape).background(c.card).padding(horizontal = 6.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        for (e in ch.offered) {
-                            Box(
-                                Modifier.size(44.dp).clip(CircleShape)
-                                    .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
-                                    .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
-                                contentAlignment = Alignment.Center,
-                            ) { com.fariin.app.ui.thread.ReactionGlyph(e, 26.sp, 32.dp) }
-                        }
-                        if (ch.pickable.size > ch.offered.size) {
-                            Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },
-                                contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "More reactions", tint = c.secondary)
+                    } else {
+                        // Up to six in one pill; a channel's own list past six wraps into a second row of six.
+                        val rows = ch.offered.chunked(com.fariin.app.data.ChannelReactions.PER_ROW).ifEmpty { listOf(emptyList()) }
+                        val shape = if (rows.size > 1) RoundedCornerShape(26.dp) else CircleShape
+                        Column(Modifier.shadow(8.dp, shape).clip(shape).background(c.card).padding(horizontal = 6.dp, vertical = 4.dp)) {
+                            rows.forEachIndexed { r, row ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    for (e in row) {
+                                        Box(
+                                            Modifier.size(44.dp).clip(CircleShape)
+                                                .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
+                                                .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
+                                            contentAlignment = Alignment.Center,
+                                        ) { com.fariin.app.ui.thread.ReactionGlyph(e, 26.sp, 32.dp) }
+                                    }
+                                    if (r == rows.lastIndex && ch.pickable.size > ch.offered.size) {
+                                        Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },
+                                            contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "More reactions", tint = c.secondary)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

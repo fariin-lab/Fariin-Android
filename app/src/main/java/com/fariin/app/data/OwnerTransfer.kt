@@ -175,10 +175,15 @@ object JoinRequests {
 /**
  * Channel Settings > Reactions (iOS ChannelReactionsSettingsView, ChannelService.setReactions,
  * functions-groups setChannelReactions + channels.normReactSet): any emoji, only the ones picked (up
- * to 6), or none. The server keeps `reactSet {mode, list}` on the channel.
+ * to 12), or none. The server keeps `reactSet {mode, list}` on the channel.
  */
 object ChannelReactions {
-    const val MAX = 6
+    /** Server REACT_LIST_MAX. */
+    const val MAX = 12
+    /** A fresh Selected list starts with this many from the palette. */
+    const val START = 6
+    /** The editor's bar holds this many per row. */
+    const val PER_ROW = 6
     /** iOS palette: where Selected Emoji starts the first time. */
     val palette = listOf("👍", "❤️", "🔥", "😂", "😮", "😢", "🙏", "👏", "🎉", "💯", "🤔", "😍",
         "👎", "😡", "🤝", "💪", "✅", "⭐️", "🌙", "☀️", "⚽️", "📌", "💡", "🙌")
@@ -194,7 +199,7 @@ object ChannelReactions {
         else -> "Tap to replace an emoji"
     }
 
-    /** normReactSet: a known mode, the list only for "some", at most six, no repeats; "some" with none = off. */
+    /** normReactSet: a known mode, the list only for "some", at most twelve, no repeats; "some" with none = off. */
     fun normalize(mode: String, list: List<String>): Pair<String, List<String>> {
         val m = if (mode == "some" || mode == "off") mode else "all"
         val l = list.filter { it.isNotEmpty() }.distinct().take(MAX)
@@ -204,7 +209,7 @@ object ChannelReactions {
 
     /** Choosing Selected again brings back the last picks, else the palette's first six. */
     fun startList(current: List<String>, lastPicks: List<String>): List<String> =
-        current.ifEmpty { lastPicks.ifEmpty { palette.take(MAX) } }
+        current.ifEmpty { lastPicks.ifEmpty { palette.take(START) } }
 
     /** The emoji sheet's pick: replaces the tapped place (one already in the bar swaps), or joins the end. Null = no change. */
     fun place(list: List<String>, replacing: Int?, e: String): List<String>? {

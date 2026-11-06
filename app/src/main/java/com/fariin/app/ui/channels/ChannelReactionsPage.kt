@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -57,7 +58,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Channel Settings > Reactions (iOS ChannelReactionsSettingsView): Any Emoji, Selected Emoji (up to
- * six, in one rounded bar: tap one to replace it, its x removes it, + adds), No Reactions. Saves
+ * twelve, six per row in one rounded bar: tap one to replace it, its x removes it, + adds), No Reactions. Saves
  * run in the background after a short pause, so six taps are one write; a refusal puts back what
  * the server last kept.
  */
@@ -139,10 +140,23 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                 }
             }
             if (mode == "some") {
+                // Six per row; the + slot follows the last one while there are fewer than 12.
+                val slots: List<Int> = list.indices.toList() + (if (list.size < ChannelReactions.MAX) listOf(-1) else emptyList())
+                val rows = slots.chunked(ChannelReactions.PER_ROW)
+                val shape = if (rows.size > 1) RoundedCornerShape(32.dp) else CircleShape
                 Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.Center) {
-                    Row(Modifier.floating(CircleShape)
-                        .padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        list.forEachIndexed { i, e ->
+                    Column(Modifier.floating(shape)
+                        .padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                      rows.forEach { row ->
+                       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { i ->
+                         if (i < 0) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { replacing = null; picking = true },
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.Add, "Add an emoji", tint = c.secondary)
+                            }
+                         } else {
+                            val e = list[i]
                             Box(Modifier.size(48.dp)) {
                                 Box(Modifier.size(44.dp).align(Alignment.Center).clip(CircleShape)
                                     .then(if (picking && replacing == i) Modifier.border(2.dp, c.blue, CircleShape) else Modifier)
@@ -155,13 +169,10 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                                     Icon(Icons.Filled.Close, "Remove ${com.fariin.app.ui.thread.CustomReaction.spoken(e)}", tint = c.bgSecondary, modifier = Modifier.size(12.dp))
                                 }
                             }
+                         }
                         }
-                        if (list.size < ChannelReactions.MAX) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { replacing = null; picking = true },
-                                contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Add, "Add an emoji", tint = c.secondary)
-                            }
-                        }
+                       }
+                      }
                     }
                 }
                 Text(ChannelReactions.pickFooter(list), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,

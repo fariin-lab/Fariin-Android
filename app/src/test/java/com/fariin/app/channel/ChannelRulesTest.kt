@@ -66,6 +66,10 @@ class ChannelRulesTest {
         assertEquals("😡", ChannelRules.channelReactions.last())
         assertEquals(listOf("❤️", "👍", "👎", "🔥", "🥰", "👏"), ChannelRules.offered("all", emptyList()))
         assertEquals(listOf("🔥", "🙏"), ChannelRules.offered("some", listOf("🔥", "🙏")))
+        // A channel's own list is offered whole, up to 12.
+        val twelve = ChannelRules.channelReactions.take(12)
+        assertEquals(twelve, ChannelRules.offered("some", twelve))
+        assertEquals(twelve, ChannelRules.offered("some", ChannelRules.channelReactions.take(14)))
         assertTrue(ChannelRules.offered("off", listOf("🔥")).isEmpty())
         assertEquals(73, ChannelRules.pickable("all", emptyList()).size)
     }
