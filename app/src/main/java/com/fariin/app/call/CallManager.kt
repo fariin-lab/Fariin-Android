@@ -745,6 +745,9 @@ object CallManager {
 
     /** A route from the speaker button or its list: through Telecom when the system call is up. */
     fun setRoute(to: AudioRoute) {
+        // The button answers the tap at once (owner 2026-11-05: "that tap has delay"); the system's
+        // route callback then confirms it, or puts back the real route if the switch did not happen.
+        edit { it.copy(route = it.route.copy(current = to), speaker = to == AudioRoute.SPEAKER) }
         if (CallTelecom.setRoute(to)) {
             if (::app.isInitialized) CallAudio.setRoute(app, to)
             return

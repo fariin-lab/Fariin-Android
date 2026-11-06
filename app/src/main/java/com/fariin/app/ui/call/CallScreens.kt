@@ -748,8 +748,9 @@ private fun SpeakerButton(ui: CallUi, size: Dp, onRoute: (AudioRoute) -> Unit) {
     val icon = when (r.current) {
         AudioRoute.BLUETOOTH -> Icons.Filled.BluetoothAudio
         AudioRoute.HEADSET -> Icons.Filled.Headphones
-        AudioRoute.SPEAKER -> ImageVector.vectorResource(R.drawable.ic_speaker_on)
-        else -> ImageVector.vectorResource(R.drawable.ic_speaker_off)
+        // One speaker picture, lit (white circle) when on, as iOS; the struck-through "off" speaker
+        // read as broken (owner 2026-11-05: "looks super cheap").
+        else -> ImageVector.vectorResource(R.drawable.ic_speaker_on)
     }
     val label = if (CallRouting.speakerTap(r) is CallRouting.Tap.Picker) "Audio: " + CallRouting.label(r.current, r.bluetoothName) else "Speaker"
     Box {
