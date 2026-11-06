@@ -977,3 +977,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   sheet header + tabs + empty state, send, like (red heart 1), answer threaded under its reply ("Replying to",
   Hide replies), field above the keyboard, no crash. Test post deleted. Not tried: admin off toggles, 6 s refresh
   from another phone, Delete of a reply.
+- 13:45 PAUSE Replies + Quotes on Android (iOS session, owner's 5-agent audit): server API v3 coming (paged
+  replies with short keys, per-thread answers, clientId on addReply, rh/head listener instead of polling, count
+  buffer; Quotes paged + signed picture URLs). Wait for the final spec before touching PostReplies / PostQuotes.
