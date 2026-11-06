@@ -239,19 +239,11 @@ fun ThreadScreen(
     Box(Modifier.fillMaxSize()) {
         androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
             androidx.compose.runtime.CompositionLocalProvider(LocalThreadCid provides ui.cid) {
-                // A channel shows its posts only (owner 2026-11-06, a visitor saw a wall of "This message
-                // was deleted" and wallpaper notices left from when it was a group): a deleted post leaves
-                // no row. Of the system lines only the channel's own events stay (iOS channelNotice:
-                // created, renamed, photo removed), said without the admin's name; wallpaper, "now
-                // verified" and the rest of the admins' work are hidden. Pins and timer lines stay.
+                // A channel shows its posts only (owner 2026-11-06): no deleted rows, and followers and
+                // visitors see no system lines or pin notices at all (ChannelRules.shownMessages).
                 val shownUi = if (ui.channel == null) ui else remember(ui) {
-                    ui.copy(messages = ui.messages.mapNotNull { m ->
-                        when {
-                            m.deleted -> null
-                            !m.isSystem || m.disappearSeconds != null || com.fariin.app.data.PinRules.notice(m.text) != null -> m
-                            else -> com.fariin.app.channel.ChannelRules.channelNotice(m.text)?.let { m.copy(text = it) }
-                        }
-                    })
+                    val admin = ui.channel.role == com.fariin.app.channel.ChannelRules.Role.ADMIN
+                    ui.copy(messages = com.fariin.app.channel.ChannelRules.shownMessages(ui.messages, admin))
                 }
                 ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
             }
@@ -1004,6 +996,8 @@ private fun ThreadContent(
                         com.fariin.app.channel.ChannelPosting.setSilent(ui.cid, on) { actions.onNotice("Couldn't change that. Try again.") }
                         actions.onNotice(if (on) "Followers will get your posts without sound." else "Followers will get your posts with sound.")
                     },
+                    // A quote may go with no words (owner 2026-11-06, iOS sendsWithoutText).
+                    sendsWithoutText = quoting != null && editing == null,
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
                     onSticker = { s ->
@@ -1329,6 +1323,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // A channel post's reactions sit inside its bubble, the time line with them (iOS).
             val ch = ui.channel
             val chips = if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
+            // A quote sent with no words: no empty text line, only the time at the card's right edge.
+            Box(if (body.isEmpty() && m.quoteId != null) Modifier.align(Alignment.End) else Modifier) {
             TextWithMeta(
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),
@@ -1340,6 +1336,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 // iOS BubbleText: links, @usernames, emails and numbers tappable (BubbleLinks.kt).
                 linkInk = if (m.deleted) null else if (isMe) Color.White else c.blue,
             )
+            }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
         }
         }
@@ -1660,6 +1657,8 @@ private fun Composer(
     /** A channel admin's post-without-sound bell in the field: null hides it, true = silent. */
     channelSilent: Boolean? = null,
     onToggleSilent: () -> Unit = {},
+    /** Something waits to go with no words needed (a quoted channel post): Send shows on an empty field. */
+    sendsWithoutText: Boolean = false,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1859,7 +1858,7 @@ private fun Composer(
                 ) {
                     Icon(Icons.Filled.ArrowUpward, contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
-            } else if (draft.isNotBlank() && !recording) {
+            } else if ((draft.isNotBlank() || sendsWithoutText) && !recording) {
                 Box(
                     Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).clickable {
                         val t = draft

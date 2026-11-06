@@ -206,6 +206,23 @@ object ChannelRules {
         }
     }
 
+    /**
+     * The rows a channel's list shows (iOS ThreadRepository, owner 2026-11-06). A deleted post leaves
+     * no row for anyone. A follower or visitor sees posts only: every system line and every pin
+     * notice is left out. The owner and admins (`admin`) keep the pins, timer lines and the channel's
+     * own events, said without the admin's name ([channelNotice]).
+     */
+    fun shownMessages(messages: List<com.fariin.app.data.Message>, admin: Boolean): List<com.fariin.app.data.Message> =
+        messages.mapNotNull { m ->
+            val pin = com.fariin.app.data.PinRules.notice(m.text) != null
+            when {
+                m.deleted -> null
+                !admin && (m.isSystem || pin) -> null
+                !m.isSystem || m.disappearSeconds != null || pin -> m
+                else -> channelNotice(m.text)?.let { m.copy(text = it) }
+            }
+        }
+
     /** The admin card's line (iOS ChannelAdminCard): "You created this channel · 9 followers". */
     fun adminCardLine(createdByMe: Boolean, shownCount: Int): String =
         (if (createdByMe) "You created this channel" else "You're an admin of this channel") + " · " +

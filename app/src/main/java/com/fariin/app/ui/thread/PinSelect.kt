@@ -75,9 +75,15 @@ import com.fariin.app.ui.theme.Fariin
 internal fun EditHistorySheet(m: Message, actions: ThreadActions, onDismiss: () -> Unit) {
     val c = Fariin.colors
     var versions by remember(m.id) { mutableStateOf<List<Pair<String, Double>>?>(null) }
-    var failed by remember(m.id) { mutableStateOf(false) }
+    var failed by remember(m.id) { mutableStateOf<String?>(null) }
     LaunchedEffect(m.id) {
-        try { versions = actions.onEditHistory(m) } catch (_: Exception) { failed = true }
+        try { versions = actions.onEditHistory(m) } catch (e: Exception) {
+            // A channel's history is for its owner and admins; the server refuses anyone else.
+            val refused = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code ==
+                com.google.firebase.functions.FirebaseFunctionsException.Code.PERMISSION_DENIED
+            failed = if (refused) "Only the channel's owner and admins can see its edit history."
+                else "Couldn't load the edit history. Check your connection and try again."
+        }
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(),
@@ -97,7 +103,7 @@ internal fun EditHistorySheet(m: Message, actions: ThreadActions, onDismiss: () 
                     val readable = !(text.isEmpty() || text == Wire.NOT_READY || text == Wire.LOCKED)
                     HistoryRow(if (readable) text else "Unavailable", historyTime(at), dim = !readable, last = i == v.lastIndex)
                 }
-                failed -> Text("Couldn't load the edit history. Check your connection and try again.", fontSize = 15.sp,
+                failed != null -> Text(failed ?: "", fontSize = 15.sp,
                     color = c.secondary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
                 else -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                     com.fariin.app.ui.components.FariinSpinner(size = 22.dp)

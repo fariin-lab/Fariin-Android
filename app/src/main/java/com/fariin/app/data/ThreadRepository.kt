@@ -1230,6 +1230,13 @@ class ThreadRepository(
 
     private fun msgRef(id: String) = convRef.collection("messages").document(id)
 
+    /** This chat is a channel: the group doc says so (read once from the server when not loaded yet). */
+    private suspend fun isChannel(): Boolean {
+        if (!Wire.isGroupCid(cid)) return false
+        (_state.value.conv["channel"] as? Boolean)?.let { return it }
+        return try { convRef.get().await().getBoolean("channel") == true } catch (_: Exception) { false }
+    }
+
     /** ChatService.editMessage: re-sealed, the replaced text appended to `edits` (at most 10). */
     suspend fun editMessage(m: Message, newText: String): Boolean {
         val t = newText.trim()
@@ -1248,7 +1255,9 @@ class ThreadRepository(
             fun size() = edits.sumOf { ((it["t"] as? String)?.length ?: 0) } + cipher.length
             while (edits.size > 10 || (edits.size > 1 && size() > 700_000)) edits.removeAt(0)
             val update = hashMapOf<String, Any>("text" to cipher, "edited" to true, "editedAt" to FieldValue.serverTimestamp())
-            if (size() <= 700_000) update["edits"] = edits
+            // Not in a channel post (owner 2026-11-06): every follower reads the post, so the old
+            // versions stay off it; the server keeps them for the owner and admins.
+            if (size() <= 700_000 && !isChannel()) update["edits"] = edits
             ref.update(update).await()
             // The list still shows the old words when this was the newest message.
             val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING).limit(1).get().await()
@@ -1432,6 +1441,17 @@ class ThreadRepository(
         val data = msgRef(m.id).get().await().data ?: emptyMap()
         if (data["deleted"] == true) return emptyList()
         val author = data["authorId"] as? String ?: m.authorId
+        // A channel's history is on the server, for its owner and admins only (owner 2026-11-06):
+        // getChannelEdits {cid, mid} -> {versions:[{t, at ms}]}; anyone else is refused.
+        if (isChannel()) {
+            val r = com.google.firebase.functions.FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
+                .getHttpsCallable("getChannelEdits").call(mapOf("cid" to cid, "mid" to m.id)).await().getData() as? Map<*, *>
+            return ((r?.get("versions") as? List<*>) ?: emptyList<Any>()).mapNotNull { it as? Map<*, *> }.map { v ->
+                val raw = v["t"] as? String ?: ""
+                val clear = if (raw.isEmpty()) "" else try { crypto.decrypt(raw, cid, author) } catch (_: Exception) { "" }
+                clear to ((v["at"] as? Number)?.toDouble() ?: 0.0)
+            }
+        }
         return ((data["edits"] as? List<*>) ?: emptyList<Any>()).mapNotNull { it as? Map<*, *> }.map { e ->
             val raw = e["t"] as? String ?: ""
             val clear = if (raw.isEmpty()) "" else try { crypto.decrypt(raw, cid, author) } catch (_: Exception) { "" }

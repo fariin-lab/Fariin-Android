@@ -156,6 +156,25 @@ class ChannelRulesTest {
         assertNull(ChannelRules.channelNotice("Adnan added Sam"))
     }
 
+    @Test fun followersSeePostsOnlyAdminsKeepNotices() {
+        fun msg(id: String, text: String, type: String? = null, deleted: Boolean = false, timer: Int? = null) =
+            com.fariin.app.data.Message(id = id, authorId = "a", text = text, type = type, createdAtMillis = 1.0,
+                deleted = deleted, disappearSeconds = timer)
+        val pin = com.fariin.app.data.PinRules.MARKER + "p1|Hello"
+        val list = listOf(
+            msg("post", "Hi all"),
+            msg("gone", "", deleted = true),
+            msg("made", "Adnan created the group", type = "system"),
+            msg("wall", "Adnan changed the group wallpaper", type = "system"),
+            msg("timer", "Timer set", type = "system", timer = 60),
+            msg("pin", pin, type = "system"),
+        )
+        assertEquals(listOf("post"), ChannelRules.shownMessages(list, admin = false).map { it.id })
+        val admin = ChannelRules.shownMessages(list, admin = true)
+        assertEquals(listOf("post", "made", "timer", "pin"), admin.map { it.id })
+        assertEquals("Channel created", admin[1].text)
+    }
+
     @Test fun adminCardLine() {
         assertEquals("You created this channel · 9 followers", ChannelRules.adminCardLine(true, 9))
         assertEquals("You're an admin of this channel · 1 follower", ChannelRules.adminCardLine(false, 1))
