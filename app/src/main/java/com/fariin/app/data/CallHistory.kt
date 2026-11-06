@@ -127,6 +127,14 @@ class CallsRepository(
 ) {
     private val cache = mutableMapOf<String, Pair<Double, List<CallEntry>>>()
 
+    companion object {
+        /** Chats whose calls changed without the chat moving (a group call's start and end write the call
+         *  row, not the chat's updatedAt), and a counter the Calls list reloads on. */
+        private val dirty = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        val version = androidx.compose.runtime.mutableIntStateOf(0)
+        fun touch(cid: String) { dirty.add(cid); version.intValue++ }
+    }
+
     /** After [load]: the plain reason a chat's calls could not be read (nothing held for it), or null. */
     @Volatile var failed: String? = null
         private set
@@ -135,7 +143,7 @@ class CallsRepository(
         var miss: Throwable? = null
         convs.filter { it.id.isNotEmpty() && !it.id.contains('/') && !it.isChannel }.map { c ->
             async {
-                cache[c.id]?.takeIf { it.first == c.updatedAtMillis }?.second ?: run {
+                cache[c.id]?.takeIf { it.first == c.updatedAtMillis && !dirty.remove(c.id) }?.second ?: run {
                     val read = runCatching {
                         db.collection("conversations").document(c.id).collection("messages")
                             .whereEqualTo("type", "call").get().await()
@@ -164,7 +172,9 @@ class CallsRepository(
             outcome = d.getString("callOutcome") ?: "answered",
             video = d.getBoolean("callVideo") ?: false,
             durationSec = (d.get("callDuration") as? Number)?.toInt() ?: 0,
-            dateMs = (d.get("createdAt") as? Timestamp)?.toDate()?.time ?: 0L,
+            // A row just written has no server time yet: the phone's estimate, not 0 (which sorted a call made
+            // a moment ago to the very bottom of the list).
+            dateMs = d.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time ?: 0L,
             groupCid = if (group) cid else null,
         )
 }

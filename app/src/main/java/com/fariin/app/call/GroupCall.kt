@@ -391,6 +391,7 @@ object GroupCall {
             conv.collection("messages").document(id).set(GroupCallWire.recordFields(me, video, FieldValue.serverTimestamp())).await()
             conv.set(GroupCallWire.convMarker(me, video, FieldValue.serverTimestamp()), SetOptions.merge()).await()
         } catch (e: Exception) { Log.w(TAG, "record not written", e) }
+        com.fariin.app.data.CallsRepository.touch(cid)
         // Nobody came in the ring window: the call ends (iOS endIfNobodyAnswered).
         scope.launch {
             delay(GroupCallWire.RING_WINDOW_MS)
@@ -424,6 +425,8 @@ object GroupCall {
             val viaServer = try {
                 functions.getHttpsCallable("groupCallClose").call(GroupCallWire.closeBody(cid, answered, rid)).await(); true
             } catch (_: Exception) { false }
+            // The call row now says how it ended: the Calls list reads it again (the chat itself did not move).
+            if (viaServer) com.fariin.app.data.CallsRepository.touch(cid)
             if (viaServer || rid == null) return@launch
             val ref = db.collection("groupCalls").document(cid)
             val ended = try {
@@ -436,6 +439,7 @@ object GroupCall {
             GroupCallWire.recordClose(answered, started, System.currentTimeMillis())?.let { f ->
                 try { db.collection("conversations").document(cid).collection("messages").document(rid).update(f).await() } catch (_: Exception) {}
             }
+            com.fariin.app.data.CallsRepository.touch(cid)
         }
     }
 

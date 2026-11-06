@@ -156,7 +156,7 @@ fun MainShell(
     var callsRetry by remember { mutableIntStateOf(0) }
     if (me != DemoChats.ME) {
         val callKey = chats.chats.joinToString(",") { it.id + ":" + it.updatedAtMillis }
-        LaunchedEffect(me, callKey, callsRetry) {
+        LaunchedEffect(me, callKey, callsRetry, com.fariin.app.data.CallsRepository.version.intValue) {
             if (!chats.loading) { calls = callsRepo.load(me, chats.chats); callsError = callsRepo.failed }
         }
     }
