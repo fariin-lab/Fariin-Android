@@ -52,6 +52,26 @@ class PostQuoteRulesTest {
         assertEquals(listOf("quote", "channel", "view"), one.map { it.label })
     }
 
+    @Test fun summaryAndCard() {
+        val a = PostQuotesAnswer(3, 1, listOf(QuotedIn("c1", "m1", views = 1200), QuotedIn("c1", "m2", views = 100), QuotedIn("c2", "m3")))
+        assertEquals("3 quotes · 2 channels · 1.3K views", PostQuoteRules.summaryLine(a))
+        val one = PostQuotesAnswer(1, 0, listOf(QuotedIn("c", "m", views = 1)))
+        assertEquals("1 quote · 1 channel · 1 view", PostQuoteRules.summaryLine(one))
+        assertEquals("2K quotes · 0 channels · 0 views", PostQuoteRules.summaryLine(PostQuotesAnswer(2000, 2000, emptyList())))
+        assertEquals("1 follower", PostQuoteRules.followersLine(1))
+        assertEquals("0 followers", PostQuoteRules.followersLine(0))
+        assertEquals("1.2K followers", PostQuoteRules.followersLine(1_250))
+        assertEquals("12K followers", PostQuoteRules.followersLine(12_500))
+        assertEquals(true, PostQuoteRules.isEmpty(PostQuotesAnswer(0, 0, emptyList())))
+        assertEquals(false, PostQuoteRules.isEmpty(PostQuotesAnswer(2, 2, emptyList())))
+        assertEquals(false, PostQuoteRules.isEmpty(one))
+        assertEquals("Hello", PostQuoteRules.cardText("  Hello ", "text", false))
+        assertEquals("Photo", PostQuoteRules.cardText(" ", "image", false))
+        assertEquals("Album", PostQuoteRules.cardText(null, "album", true))
+        assertEquals("Video", PostQuoteRules.cardText("", "video", false))
+        assertEquals("Post", PostQuoteRules.cardText(null, null, false))
+    }
+
     @Test fun lines() {
         assertEquals("1 view", PostQuoteRules.viewsLine(1))
         assertEquals("2.5M views", PostQuoteRules.viewsLine(2_500_000))

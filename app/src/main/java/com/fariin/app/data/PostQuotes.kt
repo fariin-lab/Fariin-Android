@@ -63,6 +63,19 @@ object PostQuoteRules {
             .let { Stat(compact(it), if (it == 1) "view" else "views") },
     )
 
+    /** The small line at the top of the sheet: "3 quotes · 2 channels · 1.3K views". */
+    fun summaryLine(a: PostQuotesAnswer): String = stats(a).joinToString(" · ") { it.value + " " + it.label }
+
+    /** Under a quoting channel's name: "1 follower", "1.2K followers", "12K followers". */
+    fun followersLine(n: Int): String = compact(n) + if (n == 1) " follower" else " followers"
+
+    /** No quote to name and none hidden: the sheet says "No quotes yet". */
+    fun isEmpty(a: PostQuotesAnswer): Boolean = a.items.isEmpty() && a.hidden <= 0
+
+    /** The words on the post's card: its text, else what kind of post it is. */
+    fun cardText(text: String?, type: String?, isAlbum: Boolean): String =
+        text?.trim().orEmpty().ifEmpty { kindName(type, isAlbum) }
+
     /** A row's eye count: "1 view", "1.2K views". */
     fun viewsLine(n: Int): String = compact(n) + if (n == 1) " view" else " views"
 

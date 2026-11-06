@@ -1,6 +1,9 @@
 package com.fariin.app.ui.channels
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,14 +22,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -45,6 +49,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
@@ -55,9 +61,11 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.channel.ChannelFollows
@@ -68,12 +76,16 @@ import com.fariin.app.data.PostQuotes
 import com.fariin.app.data.PostQuotesAnswer
 import com.fariin.app.data.QuoteStore
 import com.fariin.app.data.QuotedIn
+import com.fariin.app.media.QuotePicture
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.components.AvatarKind
 import com.fariin.app.ui.components.SheetShape
 import com.fariin.app.ui.components.sheetFill
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.ui.thread.LocalChatMedia
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.roundToInt
@@ -154,71 +166,101 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true) {
 }
 
 /**
- * The Quotes sheet (iOS QuotesPage), drawn once per chat: the post on top, its numbers, each quote in
- * a public channel with its views (most seen first), then how many more are in private places, never
- * which. A row opens that quote: in this chat it scrolls there; in a channel I have it opens there; in
- * a public channel I don't follow it opens that channel from outside, the way its fariin.com link does.
+ * The Quotes sheet (iOS QuotesPage, after the owner's reference), drawn once per chat. Plain inside:
+ * a small count line on top, then each quote in a public channel (most seen first) as the quoting
+ * channel's photo, name and followers, its words, and under them an outlined card of MY post (my
+ * channel, when it was quoted, the post's picture and text, the quote's views). Quotes in private
+ * places are only a number at the bottom, never named. A row opens that quote: in this chat it
+ * scrolls there; in a channel I have it opens there; in a public channel I don't follow it opens that
+ * channel from outside, the way its fariin.com link does.
+ * [title], [photoUrl] and [verified] are the open channel (mine), as its card shows it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PostQuotesHost(openCid: String) {
+fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: Boolean) {
     val post by PostQuotesSheet.open.collectAsState()
     val m = post ?: return
     val channelNav = LocalChannelNav.current
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
+    val media = LocalChatMedia.current
     val close = { PostQuotesSheet.open.value = null }
     var answer by remember(m.id) { mutableStateOf<PostQuotesAnswer?>(null) }
     var failed by remember(m.id) { mutableStateOf(false) }
     var attempt by remember(m.id) { mutableIntStateOf(0) }
+    var thumb by remember(m.id) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(m.id, attempt) {
         failed = false
         val a = PostQuotes.load(openCid, m.id)
         if (a == null) failed = true else answer = a
     }
+    // The post's picture: the same small JPEG this phone makes when quoting it (from this chat's cache,
+    // else the post's inline thumbnail). Nothing is downloaded for it.
+    LaunchedEffect(m.id) {
+        thumb = withContext(Dispatchers.IO) {
+            QuotePicture.make(media, m)?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() }
+        }
+    }
     val c = Fariin.colors
+    val album = m.type == "album" && m.album.isNotEmpty()
+    val card = SourceCard(
+        title = title.ifEmpty { "Channel" }, photoUrl = photoUrl, verified = verified,
+        // A text post's words as its bubble shows them; a picture's or video's caption.
+        text = PostQuoteRules.cardText(if (m.mediaKind == null) m.bodyText else m.text, m.type, album),
+        kindIcon = when {
+            album -> Icons.Filled.PhotoLibrary
+            m.type == "image" -> Icons.Filled.Photo
+            m.type == "video" -> Icons.Filled.Videocam
+            else -> null
+        },
+        thumb = thumb,
+    )
     ModalBottomSheet(onDismissRequest = close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
         containerColor = sheetFill, shape = SheetShape) {
         LazyColumn(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             item {
                 Text("Quotes", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), textAlign = TextAlign.Center)
             }
-            item { PostHeader(m) }
             val a = answer
             when {
+                a != null && PostQuoteRules.isEmpty(a) -> item {
+                    Column(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Filled.FormatQuote, null, tint = c.secondary, modifier = Modifier.size(36.dp))
+                        Text("No quotes yet", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                            modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
                 a != null -> {
-                    item { Numbers(a) }
-                    if (a.items.isNotEmpty()) {
-                        item {
-                            Text("PUBLIC CHANNELS", fontSize = 13.sp, color = c.secondary,
-                                modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp))
-                        }
-                        items(a.items, key = { it.cid + "/" + it.mid }) { q ->
-                            QuoteRow(q) {
-                                close()
-                                QuoteStore.pendingJump.value = QuoteStore.Jump(q.cid, q.mid)
-                                val known = ChatsNow.find(q.cid) != null || ChannelFollows.follows(q.cid)
-                                when (PostQuoteRules.route(q, openCid, known)) {
-                                    // This chat: ThreadScreen scrolls to the quote and lights it.
-                                    PostQuoteRules.Route.SAME_CHAT -> Unit
-                                    // Another channel, as a follower or, for a public one, from outside
-                                    // (a fariin.com/<name> link of a channel lands on the same page).
-                                    PostQuoteRules.Route.MY_CHANNEL, PostQuoteRules.Route.PUBLIC_PAGE -> {
-                                        keyboard?.hide()
-                                        focus.clearFocus()
-                                        channelNav.open(q.cid)
-                                    }
+                    item {
+                        Text(PostQuoteRules.summaryLine(a), fontSize = 13.sp, color = c.secondary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                    }
+                    items(a.items, key = { it.cid + "/" + it.mid }) { q ->
+                        QuoteRow(q, card) {
+                            close()
+                            QuoteStore.pendingJump.value = QuoteStore.Jump(q.cid, q.mid)
+                            val known = ChatsNow.find(q.cid) != null || ChannelFollows.follows(q.cid)
+                            when (PostQuoteRules.route(q, openCid, known)) {
+                                // This chat: ThreadScreen scrolls to the quote and lights it.
+                                PostQuoteRules.Route.SAME_CHAT -> Unit
+                                // Another channel, as a follower or, for a public one, from outside
+                                // (a fariin.com/<name> link of a channel lands on the same page).
+                                PostQuoteRules.Route.MY_CHANNEL, PostQuoteRules.Route.PUBLIC_PAGE -> {
+                                    keyboard?.hide()
+                                    focus.clearFocus()
+                                    channelNav.open(q.cid)
                                 }
                             }
                         }
+                        HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 0.5.dp, color = c.separator)
                     }
                     PostQuoteRules.hiddenLine(a.hidden)?.let { line ->
                         item {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.Lock, null, tint = c.secondary, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(line, fontSize = 14.sp, color = c.secondary)
+                            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Lock, null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(line, fontSize = 13.sp, color = c.secondary)
                             }
                         }
                     }
@@ -240,74 +282,83 @@ fun PostQuotesHost(openCid: String) {
     }
 }
 
-@Composable
-private fun PostHeader(m: Message) {
-    val c = Fariin.colors
-    val album = m.type == "album" && m.album.isNotEmpty()
-    val icon: ImageVector = when {
-        album -> Icons.Filled.PhotoLibrary
-        m.type == "image" -> Icons.Filled.Photo
-        m.type == "video" -> Icons.Filled.Videocam
-        else -> Icons.Filled.Notes
-    }
-    // A text post's words as its bubble shows them; a picture's or video's caption; else its kind.
-    val shown = (if (m.mediaKind == null) m.bodyText else m.text).trim()
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(c.secondary.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = c.secondary, modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(shown.ifEmpty { PostQuoteRules.kindName(m.type, album) }, fontSize = 15.sp, color = c.label,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("Posted " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(m.createdAtMillis.toLong())),
-                fontSize = 12.sp, color = c.secondary)
-        }
-    }
-}
+/** What every quote's card shows of my post (the same for each row). [kindIcon] null = a text post, no picture box. */
+private data class SourceCard(
+    val title: String,
+    val photoUrl: String?,
+    val verified: Boolean,
+    val text: String,
+    val kindIcon: ImageVector?,
+    val thumb: ImageBitmap?,
+)
 
+/** One quote: who quoted, what they wrote, then my post as an outlined card. */
 @Composable
-private fun Numbers(a: PostQuotesAnswer) {
+private fun QuoteRow(q: QuotedIn, card: SourceCard, onTap: () -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 16.dp)) {
-        PostQuoteRules.stats(a).forEach { s ->
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(s.value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-                Text(s.label, fontSize = 12.sp, color = c.secondary)
+    Column(Modifier.fillMaxWidth().clickable(onClick = onTap).padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(q.photoUrl.ifEmpty { null }, 40.dp, squircle = true, kind = AvatarKind.of(true, true))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                NameAndSeal(q.title, q.verified, 16.sp, 15.dp)
+                Text(PostQuoteRules.followersLine(q.followers), fontSize = 12.sp, color = c.secondary, maxLines = 1)
             }
         }
-    }
-}
-
-@Composable
-private fun QuoteRow(q: QuotedIn, onTap: () -> Unit) {
-    val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().clickable(onClick = onTap).padding(horizontal = 20.dp, vertical = 8.dp).heightIn(min = 44.dp)) {
-        Avatar(q.photoUrl.ifEmpty { null }, 36.dp, squircle = true, kind = AvatarKind.of(true, true))
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
+        if (q.text.isNotEmpty()) {
+            Text(q.text, fontSize = 15.sp, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp))
+        }
+        Column(
+            Modifier.padding(top = 8.dp).fillMaxWidth()
+                .border(1.dp, c.secondary.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                .padding(12.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Text(q.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (q.verified) {
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(14.dp))
-                    }
-                }
+                Avatar(card.photoUrl, 20.dp, squircle = true, kind = AvatarKind.of(true, true))
                 Spacer(Modifier.width(6.dp))
-                if (q.at > 0) Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(q.at)), fontSize = 12.sp, color = c.secondary, maxLines = 1)
+                Box(Modifier.weight(1f)) { NameAndSeal(card.title, card.verified, 14.sp, 13.dp) }
+                if (q.at > 0) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(q.at)), fontSize = 12.sp,
+                        color = c.secondary, maxLines = 1)
+                }
             }
-            if (q.text.isEmpty()) {
-                Text("Quote with no text", fontSize = 14.sp, fontStyle = FontStyle.Italic, color = c.secondary)
-            } else {
-                Text(q.text, fontSize = 14.sp, color = c.label, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Top) {
+                val shape = RoundedCornerShape(8.dp)
+                val pic = card.thumb
+                val icon = card.kindIcon
+                if (pic != null) {
+                    Image(pic, null, contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp).clip(shape))
+                    Spacer(Modifier.width(10.dp))
+                } else if (icon != null) {
+                    Box(Modifier.size(56.dp).clip(shape).background(c.secondary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = c.secondary, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(card.text, fontSize = 14.sp, color = c.label, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f))
             }
-            Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(12.dp))
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(PostQuoteRules.viewsLine(q.views), fontSize = 12.sp, color = c.secondary)
             }
+        }
+    }
+}
+
+/** A bold name that gives way (ellipsis) before the blue seal does. */
+@Composable
+private fun NameAndSeal(name: String, verified: Boolean, size: TextUnit, seal: Dp) {
+    val c = Fariin.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(name, fontSize = size, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (verified) {
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(seal))
         }
     }
 }
