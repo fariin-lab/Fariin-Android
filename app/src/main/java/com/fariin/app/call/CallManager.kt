@@ -333,7 +333,7 @@ object CallManager {
         }
     }
 
-    private const val PRE_NEGOTIATE = false
+    private const val PRE_NEGOTIATE = true   // with RtcEngine.hold() setAudioRecording/Playout(false)
 
     private suspend fun preNegotiate(id: String) {
         val sdp = offerSdp ?: return

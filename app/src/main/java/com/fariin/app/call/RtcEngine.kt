@@ -178,6 +178,12 @@ class RtcEngine(
      */
     fun hold() {
         held = true
+        // The real locks (owner's Pixel 17:31: a sender with no track still let the audio module start
+        // the microphone when ICE connected): WebRTC's own switches keep the module from recording
+        // and from playing at all until release(), so the mic never opens and the ringtone keeps the
+        // speaker. The two below stay as a second lock.
+        pc?.setAudioRecording(false)
+        pc?.setAudioPlayout(false)
         try { audioSender?.setTrack(null, false) } catch (_: Exception) {}
         audioModule?.setSpeakerMute(true)
     }
@@ -187,6 +193,8 @@ class RtcEngine(
         held = false
         try { audioSender?.setTrack(audioTrack, false) } catch (_: Exception) {}
         audioModule?.setSpeakerMute(false)
+        pc?.setAudioPlayout(true)
+        pc?.setAudioRecording(true)
     }
 
     fun setCamera(on: Boolean) {
@@ -322,7 +330,7 @@ class RtcEngine(
     private var remoteVideoSeen = 0
 
     fun close() {
-        if (held) { held = false; audioModule?.setSpeakerMute(false) }
+        if (held) { held = false; audioModule?.setSpeakerMute(false); pc?.setAudioPlayout(true); pc?.setAudioRecording(true) }
         stopScreen()
         stopCamera()
         try { capturer?.dispose() } catch (_: Exception) {}
