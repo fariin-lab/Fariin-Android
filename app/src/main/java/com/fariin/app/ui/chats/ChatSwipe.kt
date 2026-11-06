@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
@@ -181,23 +183,62 @@ internal fun SwipeToActRow(
     val drag = androidx.compose.foundation.gestures.rememberDraggableState { d ->
         x = (x + d).coerceIn(-widthPx, 0f)
     }
+    val c = com.fariin.app.ui.theme.Fariin.colors
+    val density = LocalDensity.current
+    val gapPx = with(density) { 8.dp.toPx() }
+    val maxRadiusPx = with(density) { 20.dp.toPx() }
+    val liftPx = with(density) { 3.dp.toPx() }
+    // Our design (studied two Android lists, copied neither): the pulled row becomes a rounded card
+    // that lifts a little, and the action is its own capsule growing out of the right edge, 8 dp from
+    // the row. Short of the mark it is tonal (pale blue, blue mark: "this will spring back"); past it,
+    // solid blue with a white mark that pops, and the phone ticks ("let go and it is archived").
+    val tone by androidx.compose.animation.core.animateFloatAsState(if (armed) 1f else 0f,
+        spring(dampingRatio = 0.8f, stiffness = 700f), label = "swipeTone")
+    val pop by androidx.compose.animation.core.animateFloatAsState(if (armed) 1.12f else 1f,
+        spring(dampingRatio = 0.45f, stiffness = 600f), label = "swipePop")
     Box(Modifier.fillMaxWidth().onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }.clipToBounds()) {
-        // The action under the row, always there and drawn only while the row is pulled.
-        Box(Modifier.matchParentSize().graphicsLayer { alpha = if (x < 0f) 1f else 0f }.background(fill),
-            contentAlignment = Alignment.CenterEnd) {
-            Column(Modifier.padding(end = 24.dp).graphicsLayer { val k = if (armed) 1.15f else 1f; scaleX = k; scaleY = k },
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.height(4.dp))
-                Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        // The capsule: as wide as the uncovered space less the gap, laid out and drawn from x only.
+        Box(Modifier.matchParentSize().padding(vertical = 8.dp, horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+            Box(
+                Modifier.fillMaxHeight()
+                    .layout { m, k ->
+                        val w = (-x - gapPx * 2).coerceAtLeast(0f).roundToInt()
+                        val p = m.measure(k.copy(minWidth = w, maxWidth = w))
+                        layout(w, p.height) { p.place(0, 0) }
+                    }
+                    .graphicsLayer {
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50); clip = true
+                        alpha = if (x < -gapPx * 2) 1f else 0f
+                    }
+                    .drawBehind {
+                        drawRect(androidx.compose.ui.graphics.lerp(c.blue.copy(alpha = 0.16f), c.blue, tone))
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(Modifier.graphicsLayer {
+                    scaleX = pop; scaleY = pop
+                    // The mark fades in once there is room for it.
+                    alpha = ((-x - with(density) { 56.dp.toPx() }) / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
+                }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    val ink = androidx.compose.ui.graphics.lerp(c.blue, Color.White, tone)
+                    Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.height(3.dp))
+                    Text(label, color = ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
             }
         }
         Box(
             Modifier.fillMaxWidth()
                 .offset { IntOffset(x.roundToInt(), 0) }
-                // Opaque, so only the part the finger uncovers shows the action (the row itself is
-                // see-through, and the whole of it turned blue the moment a drag began).
-                .background(com.fariin.app.ui.theme.Fariin.colors.bg)
+                // The row as a card while it is pulled: corners round and it lifts with the drag.
+                .graphicsLayer {
+                    val t = (-x / (maxRadiusPx * 4f)).coerceIn(0f, 1f)
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(maxRadiusPx * t)
+                    clip = x < 0f
+                    shadowElevation = liftPx * t
+                }
+                // Opaque, so only the part the finger uncovers shows the action.
+                .background(c.bg)
                 .then(if (!enabled) Modifier else Modifier.draggable(
                     state = drag,
                     orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
