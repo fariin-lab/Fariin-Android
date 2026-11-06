@@ -81,14 +81,18 @@ fun FloatingBack(onBack: () -> Unit, modifier: Modifier = Modifier, contentDescr
  */
 @Composable
 fun FloatingTopBar(title: String, onBack: (() -> Unit)? = null, subtitle: String? = null,
-                   container: Color = Fariin.colors.bg, actions: @Composable RowScope.() -> Unit = {}) {
+                   container: Color = Fariin.colors.bg, tabRoot: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().background(container).height(64.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) { FloatingBack(onBack); Spacer(Modifier.width(12.dp)) } else Spacer(Modifier.width(4.dp))
         Box(Modifier.weight(1f)) {
             androidx.compose.foundation.layout.Column {
-                Text(title, style = MaterialTheme.typography.titleLarge, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // A tab's own title (Stories, Calls) wears the Chats tab's bold "Fariin" so the three
+                // tabs read as one set; pushed pages keep the plain title.
+                if (tabRoot) Text(title, fontSize = 26.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    letterSpacing = (-0.3).sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                else Text(title, style = MaterialTheme.typography.titleLarge, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
             }
         }

@@ -1019,7 +1019,8 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
             // Photo and name beside it; the whole block opens the profile.
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Avatar(ui.photoUrl, if (narrow) 34.dp else 40.dp, squircle = ui.channel != null)
+                Avatar(ui.photoUrl, if (narrow) 34.dp else 40.dp, squircle = ui.channel != null,
+                    kind = com.fariin.app.ui.components.AvatarKind.of(ui.isGroup, ui.channel != null))
                 Spacer(Modifier.width(if (narrow) 8.dp else 12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

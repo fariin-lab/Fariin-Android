@@ -194,7 +194,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         if (selecting) com.fariin.app.ui.components.FloatingTopBar("${picked.size} Selected", onBack = { picked = emptySet() }) {
             com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.Delete, contentDescription = "Delete", onClick = { askDelete = true }, tint = c.red)
-        } else com.fariin.app.ui.components.FloatingTopBar("Calls")
+        } else com.fariin.app.ui.components.FloatingTopBar("Calls", tabRoot = true)
         SearchField(search, { search = it }, "Search calls")
         com.fariin.app.ui.components.FloatingSegments(listOf("All", "Missed"), if (missedOnly) 1 else 0,
             onSelect = { missedOnly = it == 1 }, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
