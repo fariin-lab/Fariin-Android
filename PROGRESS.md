@@ -949,3 +949,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   4c561ba (agent) Quotes page redesign; HEAD builds again.
 - 11:30 Quotes page redesign checked (summary line + private-chats row); dark mode check of VE3 quote cards and the
   Quotes page: fine (Night Mode restored to System). VE3 scroll with quote cards: 0.3% janky frames.
+- 11:47 offline walk (airplane mode on the Pixel, restored after): list title "Waiting for network" ok; f6631a4 a
+  channel post on its way showed "1 view" + share as if posted -> clock, no share; the queued post survives an app
+  restart and sends on reconnect; c637d08 it keeps its send time after the restart (showed the restart time).
+  1301011 owner's quote icon (ic_quote) in menus, card tag, Quotes page. Test posts deleted.
