@@ -1,6 +1,8 @@
 package com.fariin.app.ui.thread
 
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,20 +53,25 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: 
     val canLink = GroupWelcome.canLink(ui.me, doc)
     val photo = (doc["avatarUrl"] as? String)?.ifEmpty { null } ?: ui.photoUrl
     val title = doc["title"] as? String ?: ui.title
-    Column(modifier.padding(horizontal = 20.dp).widthIn(max = 340.dp).floating(RoundedCornerShape(36.dp))
-        .padding(horizontal = 18.dp, vertical = 24.dp),
+    // The same frame as the channel's card (owner 2026-11-06, "not same as apple"): across the screen,
+    // 24 in from each side, on the posts' see-through surface and rim, not a narrow white tile.
+    val shape = RoundedCornerShape(36.dp)
+    Column(modifier.padding(horizontal = 24.dp).widthIn(max = 420.dp).fillMaxWidth().clip(shape)
+        .background(receivedFill()).then(receivedRim(false, shape))
+        .padding(horizontal = 20.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // The tap is on the round photo only; the badge sits over its edge unclipped (it was cut off).
             Box {
-                Avatar(photo, 92.dp, if (canEdit) Modifier.clip(CircleShape).clickable { onStep("edit") } else Modifier)
+                Avatar(photo, 96.dp, if (canEdit) Modifier.clip(CircleShape).clickable { onStep("edit") } else Modifier,
+                    kind = com.fariin.app.ui.components.AvatarKind.GROUP)
                 if (canEdit && photo.isNullOrEmpty()) Box(Modifier.align(Alignment.BottomEnd).size(32.dp).floating(CircleShape).clickable { onStep("edit") },
                     contentAlignment = Alignment.Center) {
                     Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_group_camera), contentDescription = null, tint = c.label, modifier = Modifier.size(16.dp))
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 2, textAlign = TextAlign.Center)
+                Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 2, textAlign = TextAlign.Center)
                 Text("${GroupWelcome.startedLine(ui.me, doc)} · ${GroupWelcome.sizeLine(doc)}", fontSize = 15.sp,
                     color = c.secondary, textAlign = TextAlign.Center)
             }
