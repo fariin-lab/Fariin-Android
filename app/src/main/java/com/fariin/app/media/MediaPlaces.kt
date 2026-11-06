@@ -200,4 +200,12 @@ object OnceBurn {
                 .getHttpsCallable("consumeOnceImage").call(mapOf("cid" to cid, "messageId" to messageId))
         }
     }
+
+    /** The same for a one-time voice note (iOS OneTimeVoicePage.load -> `consumeOnceVoice`). */
+    fun burnVoice(cid: String, messageId: String) {
+        runCatching {
+            com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                .getHttpsCallable("consumeOnceVoice").call(mapOf("cid" to cid, "messageId" to messageId))
+        }
+    }
 }

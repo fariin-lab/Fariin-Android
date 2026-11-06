@@ -962,7 +962,8 @@ class ThreadRepository(
         pending[clientId] = Message(
             id = clientId, authorId = me, text = "", type = "audio", createdAtMillis = tap, hasServerTime = false,
             clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
-            duration = r.duration, waveform = r.waveform, localPath = r.file.absolutePath,
+            duration = r.duration, waveform = if (r.viewOnce) emptyList() else r.waveform, localPath = r.file.absolutePath,
+            viewOnce = r.viewOnce,
         )
         rebuild()
         scope.launch(Dispatchers.IO) {
@@ -985,8 +986,9 @@ class ThreadRepository(
         // One fixed address (iOS textMessageRef): a retried note is never a second note.
         val msgRef = convRef.collection("messages").document(clientId)
         val batch = db.batch()
-        batch.set(msgRef, MediaMessages.audio(me, meta, r.duration, r.waveform, clientTs, clientId, FieldValue.serverTimestamp()))
-        batch.update(convRef, MediaMessages.convUpdate(me, MediaRules.voicePreview(r.duration), members ?: listOf(other),
+        batch.set(msgRef, MediaMessages.audio(me, meta, r.duration, r.waveform, clientTs, clientId, FieldValue.serverTimestamp(),
+            viewOnce = r.viewOnce))
+        batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.media.VoiceRecordRules.preview(r.duration, r.viewOnce), members ?: listOf(other),
             FieldValue.serverTimestamp(), FieldValue.increment(1)))
         batch.commit().await()
         com.fariin.app.media.ChatSounds.sent()
@@ -999,8 +1001,10 @@ class ThreadRepository(
                 delay(minOf(60_000L, 2_000L shl attempt))
             }
         }
-        media?.store(url, data)
+        // A one-time note keeps no plain copy here (iOS: the sender cannot replay it either).
+        if (!r.viewOnce) media?.store(url, data)
         msgRef.update(MediaMessages.attachAudio(url, FieldValue.delete())).await()
+        if (r.viewOnce) r.file.delete()
     }
 
     private suspend fun sealBytes(data: ByteArray, members: List<String>?): Pair<ByteArray, EncMeta> =

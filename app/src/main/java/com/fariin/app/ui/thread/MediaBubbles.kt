@@ -290,6 +290,8 @@ internal fun VideoOverlay(m: Message, ready: Boolean) {
  */
 @Composable
 internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: @Composable () -> Unit) {
+    // A one-time note is a pill that opens its own page, never the inline player (OneTimeVoice.kt).
+    if (m.viewOnce) { OneTimeVoicePill(m, cid, isMe, meta); return }
     val c = Fariin.colors
     val ctx = LocalContext.current
     val tint = if (isMe) Color.White else c.blue
@@ -370,7 +372,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
 }
 
 @Composable
-private fun Waveform(bars: List<Int>, progress: Float, tint: Color, modifier: Modifier, onSeek: (Float) -> Unit) {
+internal fun Waveform(bars: List<Int>, progress: Float, tint: Color, modifier: Modifier, onSeek: (Float) -> Unit) {
     val list = bars.ifEmpty { List(40) { 12 } }
     var w by remember { mutableStateOf(1f) }
     Canvas(modifier.pointerInput(Unit) {

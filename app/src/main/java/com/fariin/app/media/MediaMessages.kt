@@ -147,12 +147,15 @@ object MediaMessages {
     /** sendAudio's message, written BEFORE the upload with `uploading: true` and no `audioUrl`. */
     fun audio(
         me: String, meta: EncMeta, duration: Double, waveform: List<Int>, clientTs: Double, clientId: String?,
-        serverTime: Any, forwarded: Boolean = false,
+        serverTime: Any, forwarded: Boolean = false, viewOnce: Boolean = false,
     ): Map<String, Any> = buildMap {
         if (forwarded) put("forwarded", true)
         put("type", "audio")
         put("duration", duration)
-        put("waveform", waveform)
+        // iOS sendAudio: a one-time note carries NO waveform (no shape kept of a single listen)
+        // and `viewOnce: true`, the same field the photo uses.
+        put("waveform", if (viewOnce) emptyList() else waveform)
+        if (viewOnce) put("viewOnce", true)
         put("enc", meta.asMap())
         put("text", "")
         put("authorId", me)

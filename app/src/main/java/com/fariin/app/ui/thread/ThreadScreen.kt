@@ -1423,7 +1423,9 @@ private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = 
 /**
  * The composer, in the iOS order: attach on the left, the field, and on the right the send arrow
  * when there are words, else the mic. Hold the mic to record, slide left to cancel, let go to
- * send (iOS hold-to-record). The microphone permission is asked on the first hold.
+ * send (iOS hold-to-record). Slide up to lock, or just tap the mic: the recording goes on with
+ * the finger off, on the locked bar (VoiceRecordBar.kt) with delete, pause and listen back, the
+ * "1" for a one-time listen, and Send. The microphone permission is asked on the first touch.
  */
 @Composable
 private fun Composer(
@@ -1467,12 +1469,58 @@ private fun Composer(
     }
     DisposableEffect(Unit) { onDispose { onTyping(false) } }
     val recorder = remember { VoiceRecorder(context.applicationContext) }
-    DisposableEffect(Unit) { onDispose { recorder.cancel() } }
+    // The locked recording's listen-back (a private player, not the shared VoicePlayer).
+    val preview = remember { com.fariin.app.media.VoicePreview() }
+    DisposableEffect(Unit) { onDispose { preview.release(); recorder.cancel() } }
+    // recording: the mic is live (held or locked). locked: it goes on with the finger off (iOS
+    // recordLocked). reviewing: a locked recording paused to listen back (iOS reviewingNote).
     var recording by remember { mutableStateOf(false) }
+    var locked by remember { mutableStateOf(false) }
+    var reviewing by remember { mutableStateOf(false) }
+    var review by remember { mutableStateOf<VoiceRecorder.Review?>(null) }
+    // The "1": this note goes as a one-time listen. It arms ONE note (iOS resetRecordingState).
+    var voiceOnce by remember { mutableStateOf(false) }
     var slide by remember { mutableStateOf(0f) }
+    var lift by remember { mutableStateOf(0f) }
     val elapsed by recorder.elapsed.collectAsState()
+    val previewState by preview.state.collectAsState()
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    val cancelAt = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val cancelAt = with(density) { com.fariin.app.media.VoiceRecordRules.CANCEL_DP.dp.toPx() }
+    val lockAt = with(density) { com.fariin.app.media.VoiceRecordRules.LOCK_DP.dp.toPx() }
+    val tapSlop = with(density) { com.fariin.app.media.VoiceRecordRules.SLOP_DP.dp.toPx() }
+    val holdHint = { com.fariin.app.ui.components.Snack.show("Hold to record, release to send") }
+    fun resetVoice() {
+        preview.release()
+        recording = false; locked = false; reviewing = false; review = null
+        voiceOnce = false; slide = 0f; lift = 0f
+    }
+    fun cancelVoice() { recorder.cancel(); resetVoice() }
+    // Send from the hold or the locked bar. Under a second there is no note: binned with the hint,
+    // so tapping the mic and then Send at once does not look like it sent (iOS sendRecording).
+    // The gesture below is set up once, so it reads the send callback through this.
+    val sendOut by androidx.compose.runtime.rememberUpdatedState(onSendVoice)
+    fun sendVoice() {
+        val once = voiceOnce
+        if (!com.fariin.app.media.VoiceRecordRules.canSendLocked(elapsed)) { cancelVoice(); holdHint(); return }
+        resetVoice()
+        recorder.finish { r -> if (r != null) sendOut(r.once(once)) else holdHint() }
+    }
+    fun pauseOrResume() {
+        if (reviewing) {
+            // The red mic: carry on recording, a new stretch joined on at send.
+            preview.release(); review = null; reviewing = false
+            recorder.resume()
+        } else {
+            recorder.pause { got ->
+                if (got == null) { if (locked) cancelVoice(); return@pause }
+                if (!locked) return@pause
+                review = got; reviewing = true
+                // Loaded now, so play starts at once (iOS warmPreviewPlayback); no autoplay.
+                preview.load(got.file)
+            }
+        }
+    }
 
     // As iOS ChatComposerView: a floating "+" (the attach sheet), the floating message pill with the
     // emoji button inside, and a floating round button that is the mic until there are words, then Send.
@@ -1490,7 +1538,21 @@ private fun Composer(
             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
-            if (recording) {
+            if (locked) {
+                LockedVoiceBar(
+                    Modifier.weight(1f), elapsed = elapsed, levels = recorder.level, reviewing = reviewing,
+                    preview = previewState, bars = review?.waveform ?: emptyList(), total = review?.duration ?: 0.0,
+                    once = voiceOnce,
+                    onCancel = { cancelVoice() },
+                    onPauseOrResume = { pauseOrResume() },
+                    onTogglePlay = { preview.toggle() },
+                    onSeek = { preview.seek(it) },
+                    onToggleOnce = {
+                        voiceOnce = !voiceOnce
+                        if (voiceOnce) com.fariin.app.ui.components.Snack.show("Set to one-time listen")
+                    },
+                )
+            } else if (recording) {
                 Row(Modifier.weight(1f).height(48.dp).floating(RoundedCornerShape(24.dp)).padding(start = 16.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(c.red))
@@ -1545,7 +1607,15 @@ private fun Composer(
                 }
             }
             Spacer(Modifier.width(8.dp))
-            if (draft.isNotBlank() && !recording) {
+            if (locked) {
+                // The locked recording's Send (iOS stripSend): the note, stitched if it was paused.
+                Box(
+                    Modifier.size(48.dp).floating(fill = myFill()).clickable { sendVoice() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+            } else if (draft.isNotBlank() && !recording) {
                 Box(
                     Modifier.size(48.dp).floating(fill = myFill()).clickable {
                         val t = draft
@@ -1558,7 +1628,14 @@ private fun Composer(
                 ) {
                     Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(24.dp))
                 }
-            } else {
+            } else Box(Modifier.size(48.dp)) {
+                // The lock target floats over the mic while the hold runs and comes down to meet
+                // the finger (iOS lockTarget); hidden once the cancel slide is under way.
+                if (recording && slide > -cancelAt / 2) {
+                    val p = com.fariin.app.media.VoiceRecordRules.lockProgress(lift, lockAt)
+                    LockTarget(p, Modifier.align(Alignment.TopCenter)
+                        .graphicsLayer { translationY = -(lockAt + 8.dp.toPx()) + 20.dp.toPx() * p })
+                }
                 Box(
                     Modifier.size(48.dp).floating(fill = if (recording) myFill() else null)
                         .pointerInput(Unit) {
@@ -1575,28 +1652,43 @@ private fun Composer(
                                 VoicePlayer.stop()
                                 if (!recorder.start()) return@awaitEachGesture
                                 haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                recording = true; slide = 0f
-                                var cancelled = false
+                                recording = true; slide = 0f; lift = 0f
+                                var crossed: com.fariin.app.media.VoiceRecordRules.Release? = null
+                                var moved = 0f
                                 while (true) {
                                     val e = awaitPointerEvent()
                                     val ch = e.changes.firstOrNull { it.id == down.id } ?: break
-                                    slide = ch.position.x - down.position.x
+                                    val d = ch.position - down.position
+                                    slide = d.x; lift = d.y
+                                    moved = maxOf(moved, d.getDistance())
                                     upAt = ch.uptimeMillis
                                     ch.consume()
-                                    if (slide < -cancelAt) { cancelled = true; break }
+                                    if (com.fariin.app.media.VoiceRecordRules.cancels(d.x, cancelAt)) {
+                                        crossed = com.fariin.app.media.VoiceRecordRules.Release.CANCEL; break
+                                    }
+                                    if (com.fariin.app.media.VoiceRecordRules.locks(d.y, lockAt)) {
+                                        crossed = com.fariin.app.media.VoiceRecordRules.Release.LOCK; break
+                                    }
                                     if (!ch.pressed) break
                                 }
-                                recording = false; slide = 0f
-                                // A tap, not a hold: nothing is sent and the iOS hint says how (ChatComposerView
-                                // holdHintPill, "Hold to record, release to send").
-                                val tapped = upAt - downAt < 300
-                                if (cancelled || tapped) recorder.cancel() else recorder.finish { it?.let(onSendVoice) }
-                                if (tapped && !cancelled) com.fariin.app.ui.components.Snack.show("Hold to record, release to send")
+                                slide = 0f; lift = 0f
+                                // Up past the lock, or a quick still tap (hands-free, the owner's ask): the
+                                // recording goes on with the finger off. A hold under a second cannot make a
+                                // note: binned with the iOS hint. Otherwise the release sends.
+                                when (crossed ?: com.fariin.app.media.VoiceRecordRules.onRelease(upAt - downAt, moved, tapSlop, elapsed)) {
+                                    com.fariin.app.media.VoiceRecordRules.Release.LOCK -> {
+                                        locked = true
+                                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    }
+                                    com.fariin.app.media.VoiceRecordRules.Release.CANCEL -> cancelVoice()
+                                    com.fariin.app.media.VoiceRecordRules.Release.TOO_SHORT -> { cancelVoice(); holdHint() }
+                                    com.fariin.app.media.VoiceRecordRules.Release.SEND -> sendVoice()
+                                }
                             }
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Outlined.Mic, contentDescription = "Hold to record a voice message",
+                    Icon(Icons.Outlined.Mic, contentDescription = "Record a voice message. Tap for hands-free, hold to record",
                         tint = if (recording) Color.White else c.label, modifier = Modifier.size(26.dp))
                 }
             }
