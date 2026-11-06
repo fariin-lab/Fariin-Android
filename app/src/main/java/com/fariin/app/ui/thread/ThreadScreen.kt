@@ -685,8 +685,13 @@ private fun ThreadContent(
                             if (m.rowId == flashId || (selecting && m.rowId in selected)) c.blue.copy(alpha = 0.14f) else Color.Transparent,
                             label = "flash")
                         when {
-                            pinNote != null && !m.deleted -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) { jumpTo(pinNote.messageId, advance = false) }) {
-                                NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${pinNote.label}")
+                            pinNote != null && !m.deleted -> {
+                                // The notice keeps the words from the moment of the pin; once that message is
+                                // deleted its words must not stay readable here, and there is nothing to jump to.
+                                val gone = ui.messages.firstOrNull { it.id == pinNote.messageId }?.deleted == true
+                                Box(Modifier.fillMaxWidth().clickable(enabled = !selecting && !gone) { jumpTo(pinNote.messageId, advance = false) }) {
+                                    NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${if (gone) "a message" else pinNote.label}")
+                                }
                             }
                             m.isSystem && m.disappearSeconds != null -> NoticePill(
                                 com.fariin.app.data.Disappearing.noticeLine(

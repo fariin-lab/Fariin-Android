@@ -173,6 +173,11 @@ class ChannelRulesTest {
         val admin = ChannelRules.shownMessages(list, admin = true)
         assertEquals(listOf("post", "made", "timer", "pin"), admin.map { it.id })
         assertEquals("Channel created", admin[1].text)
+        // The pin notice of a post that was deleted since no longer quotes its words.
+        val gonePin = listOf(msg("p1", "", deleted = true), msg("pin", pin, type = "system"))
+        val shown = ChannelRules.shownMessages(gonePin, admin = true)
+        assertEquals(listOf("pin"), shown.map { it.id })
+        assertEquals("a message", com.fariin.app.data.PinRules.notice(shown[0].text)?.label)
     }
 
     @Test fun adminCardLine() {

@@ -212,16 +212,22 @@ object ChannelRules {
      * notice is left out. The owner and admins (`admin`) keep the pins, timer lines and the channel's
      * own events, said without the admin's name ([channelNotice]).
      */
-    fun shownMessages(messages: List<com.fariin.app.data.Message>, admin: Boolean): List<com.fariin.app.data.Message> =
-        messages.mapNotNull { m ->
-            val pin = com.fariin.app.data.PinRules.notice(m.text) != null
+    fun shownMessages(messages: List<com.fariin.app.data.Message>, admin: Boolean): List<com.fariin.app.data.Message> {
+        // A pin notice keeps the post's words from the moment of the pin; once that post is deleted
+        // the notice says "a message" instead, so deleted words never stay readable.
+        val deletedIds = messages.filter { it.deleted }.mapTo(HashSet()) { it.id }
+        return messages.mapNotNull { m ->
+            val note = com.fariin.app.data.PinRules.notice(m.text)
+            val pin = note != null
             when {
                 m.deleted -> null
                 !admin && (m.isSystem || pin) -> null
+                note != null && note.messageId in deletedIds -> m.copy(text = com.fariin.app.data.PinRules.markerText(note.messageId, "a message"))
                 !m.isSystem || m.disappearSeconds != null || pin -> m
                 else -> channelNotice(m.text)?.let { m.copy(text = it) }
             }
         }
+    }
 
     /** The admin card's line (iOS ChannelAdminCard): "You created this channel · 9 followers". */
     fun adminCardLine(createdByMe: Boolean, shownCount: Int): String =
