@@ -376,17 +376,19 @@ private fun ChatKeyPage(pop: () -> Unit) {
         ErrorNote(error)
         if (set == true) {
             SettingsSection(header = "Your Chat Key", footer = "Share it only with people you want to hear from. Anyone who knows it can message and call you directly.") {
-                Text(pin?.chunked(1)?.joinToString(" ") ?: "Hidden on this phone", fontSize = if (pin != null) 32.sp else 17.sp,
+                // Set from another phone: the server keeps only a scrambled copy, so this phone can only say so
+                // (iOS ChatPinPage); making a new key here puts it on screen.
+                Text(pin?.chunked(1)?.joinToString(" ") ?: "Your Chat Key was set on another device.", fontSize = if (pin != null) 32.sp else 15.sp,
                     color = if (pin != null) c.label else c.secondary, modifier = Modifier.padding(20.dp))
             }
             SettingsSection {
                 if (pin != null) SettingsRow("Share Chat Key", trailing = Trailing.NONE) {
                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(android.content.Intent.EXTRA_TEXT, "My Fariin Chat Key is $pin")
+                        .putExtra(android.content.Intent.EXTRA_TEXT, "My Chat Key on Fariin is $pin. Enter it to message me directly.")
                     ctx.startActivity(android.content.Intent.createChooser(send, null))
                 }
-                SettingsRow("Make a New Key", trailing = Trailing.NONE) { confirmReset = true }
-                SettingsRow("Turn Off Chat Key", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirmRemove = true }
+                SettingsRow("Reset Chat Key", trailing = Trailing.NONE) { confirmReset = true }
+                SettingsRow("Remove Chat Key", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirmRemove = true }
             }
         } else {
             SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
@@ -397,9 +399,9 @@ private fun ChatKeyPage(pop: () -> Unit) {
             }
         }
     }
-    if (confirmReset) YesNo("Make a new Chat Key?", "Your old key stops working. People who had it will need the new one.", "Make New Key",
+    if (confirmReset) YesNo("Reset your Chat Key?", "You'll get a new key and the old one will stop working.", "Reset",
         onYes = { confirmReset = false; run { pin = ChatKey.generate(); set = true } }, onNo = { confirmReset = false })
-    if (confirmRemove) YesNo("Turn off your Chat Key?", "Nobody will be able to use your old key to message you.", "Turn Off",
+    if (confirmRemove) YesNo("Remove your Chat Key?", "Nobody will be able to use it to message you. People who already did stay in your chats.", "Remove",
         onYes = { confirmRemove = false; run { ChatKey.remove(); set = false; pin = null } }, onNo = { confirmRemove = false })
 }
 
