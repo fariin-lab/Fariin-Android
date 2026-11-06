@@ -788,6 +788,37 @@ class ThreadRepository(
         }
     }
 
+    /**
+     * My words with a quoted channel post (iOS ThreadView.sendQuote): the bubble shows at once with
+     * the card (seeded when the quote was made), then the message goes out carrying only the quote's
+     * id. Sent straight away, not through the offline queue: a send that fails takes the bubble back
+     * and [onFailed] puts the quote and the words back in the composer, rather than leaving a Resend
+     * that would go without its quote.
+     */
+    fun sendQuote(text: String, qid: String, mentions: List<String>, onFailed: () -> Unit) {
+        if (!QuoteRules.isQid(qid)) return
+        val t = text.trim()
+        val clientId = UUID.randomUUID().toString().uppercase()
+        val ts = System.currentTimeMillis().toDouble()
+        pending[clientId] = Message(
+            id = clientId, authorId = me, text = t, createdAtMillis = ts, hasServerTime = false,
+            clientTs = ts, clientId = clientId, sendState = Message.SendState.SENDING, mentions = mentions, quoteId = qid,
+        )
+        rebuild()
+        sendScope.launch {
+            try {
+                turn.withLock {
+                    if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, mentions = mentions, quote = qid)
+                    else sendDirect(t, clientId, ts, quote = qid)
+                }
+            } catch (_: Exception) {
+                pending.remove(clientId)
+                rebuild()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onFailed() }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ stickers and GIFs
 
     /**
@@ -1059,7 +1090,8 @@ class ThreadRepository(
 
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                    forwarded: Boolean = false, countsAsUnread: Boolean = true,
-                                   storyMention: Message.StoryMentionRef? = null, fwdChannelJson: String? = null) {
+                                   storyMention: Message.StoryMentionRef? = null, fwdChannelJson: String? = null,
+                                   quote: String? = null) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         val local = CryptoHub.listedConversation(cid)
@@ -1095,6 +1127,8 @@ class ThreadRepository(
         // The channel a forwarded post came from, sealed like the text (iOS sealedFwdChannel).
         fwdChannelJson?.let { j -> runCatching { crypto.encryptForConversation(cid, j) }.getOrNull()?.let { msg["fwdChannel"] = it } }
         if (storyMention != null) msg["storyMention"] = mapOf("id" to storyMention.id, "thumb" to storyMention.thumbUrl)
+        // A quoted channel post: only the server snapshot's id, in the clear (iOS ChatService).
+        if (quote != null) msg["quote"] = mapOf("qid" to quote)
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
@@ -1156,7 +1190,8 @@ class ThreadRepository(
 
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                   forwarded: Boolean = false, countsAsUnread: Boolean = true,
-                                  mentions: List<String> = emptyList(), fwdChannelJson: String? = null) {
+                                  mentions: List<String> = emptyList(), fwdChannelJson: String? = null,
+                                  quote: String? = null) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
@@ -1174,6 +1209,7 @@ class ThreadRepository(
         if (mentions.isNotEmpty()) msg["mentions"] = mentions
         if (forwarded) msg["forwarded"] = true
         fwdChannelJson?.let { j -> runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwdChannel"] = it } }
+        if (quote != null) msg["quote"] = mapOf("qid" to quote)   // a quoted channel post (iOS sendGroupText)
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
@@ -1526,6 +1562,6 @@ class ThreadRepository(
         val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
             "fileName", "fileSize", "waveform", "duration", "blurhash", "linkPreview", "poll", "locationCard",
             "contactCard", "replyTo", "reactions", "videoEnc", "thumbEnc", "viewOnce", "mentions", "forwarded",
-            "fwdChannel", "thumb", "edits", "editedAt")
+            "fwdChannel", "thumb", "edits", "editedAt", "quote")
     }
 }

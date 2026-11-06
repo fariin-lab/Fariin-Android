@@ -100,6 +100,9 @@ data class Message(
     val linkPreview: LinkPreview? = null,
     /** iOS Message.storyMention: this message says "X mentioned you in a story" (1:1 only). */
     val storyMention: StoryMentionRef? = null,
+    /** A quoted channel post: only the id of the server's snapshot travels, `quote: { qid }`, in
+     *  the clear beside the sealed text (iOS Message.quoteId). The card asks the server (QuoteStore). */
+    val quoteId: String? = null,
     /** iOS Message.fwdChannel: the channel a forwarded post came from (sealed JSON on the wire). */
     val fwdChannel: FwdChannel? = null,
     /** iOS isRestrictRequest: the "asked to turn off Restricted chat" line, answerable from the chat. */
@@ -273,6 +276,7 @@ data class Message(
                         o.optString("c").takeIf { it.isNotEmpty() }?.let { FwdChannel(it, o.optString("t"), o.optString("p"), o.optString("u")) }
                     }
                 },
+                quoteId = ((data["quote"] as? Map<*, *>)?.get("qid") as? String)?.takeIf { QuoteRules.isQid(it) },
                 storyMention = (data["storyMention"] as? Map<*, *>)?.let { sm ->
                     (sm["id"] as? String)?.takeIf { it.isNotEmpty() }?.let { StoryMentionRef(it, sm["thumb"] as? String ?: "") }
                 },
