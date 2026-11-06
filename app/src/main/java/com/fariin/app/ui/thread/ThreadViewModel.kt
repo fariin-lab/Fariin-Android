@@ -1,5 +1,8 @@
 package com.fariin.app.ui.thread
 
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -222,8 +225,12 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onDeleteMany = { plan ->
             for (m in plan.forMe) vm.repo.hideForMe(app, m)
             if (plan.forEveryone.isNotEmpty()) vm.viewModelScope.launch {
-                var refused = 0
-                for (m in plan.forEveryone) if (!vm.repo.deleteForEveryone(m)) refused++
+                // All at once, 4 on the wire at a time (iOS): each one turns into its placeholder as it
+                // starts, so the picked messages go together instead of one by one.
+                val gate = kotlinx.coroutines.sync.Semaphore(4)
+                val refused = plan.forEveryone.map { m ->
+                    async { gate.withPermit { vm.repo.deleteForEveryone(m) } }
+                }.awaitAll().count { !it }
                 if (refused > 0) notice = if (refused == 1) "The server refused one delete. That message is still there."
                     else "The server refused $refused deletes. Those messages are still there."
             }

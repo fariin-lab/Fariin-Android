@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.Close
 import android.content.Intent
@@ -261,6 +262,7 @@ fun ChannelPostMenu(
     ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit,
     onCopy: (String) -> Unit, onDelete: (Message) -> Unit,
     onQuote: ((Message) -> Unit)? = null,
+    onSelect: ((Message) -> Unit)? = null,
     onEdit: ((Message) -> Unit)? = null,
     onEditHistory: ((Message) -> Unit)? = null,
     /** null: no Pin row; else whether the post is pinned now. */
@@ -280,6 +282,8 @@ fun ChannelPostMenu(
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m))
                 add(PostItem("Quote", quoteIcon) { onDismiss(); onQuote(m) })
+            // Tick several posts to forward, copy or (owner and admins) delete them together.
+            if (onSelect != null) add(PostItem("Select", Icons.Outlined.CheckCircle) { onDismiss(); onSelect(m) })
             if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true) { ch.onReport(m) })
         }
         // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).

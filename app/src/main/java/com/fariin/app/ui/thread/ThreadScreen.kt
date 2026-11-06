@@ -402,6 +402,7 @@ private fun ThreadContent(
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
+            onSelect = if (com.fariin.app.data.SelectRules.selectable(m)) ({ selected.clear(); selected.add(it.rowId) }) else null,
             onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble()) && !com.fariin.app.data.CardRules.isCard(m.text))
                 ({ editing = it; replyTo = null }) else null,
             onEditHistory = { historyFor = it },
@@ -765,7 +766,8 @@ private fun ThreadContent(
                                 else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()
                             }) { NoticePill(noticeText(m)) }
                             m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else noticeText(m))
-                            ch != null -> androidx.compose.runtime.CompositionLocalProvider(
+                            // Ticking posts uses the select rows below, as in any chat (iOS: Select in a channel too).
+                            ch != null && !selecting -> androidx.compose.runtime.CompositionLocalProvider(
                                 com.fariin.app.ui.channels.LocalPostViews provides
                                     if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
                             ) {
