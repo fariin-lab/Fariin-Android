@@ -33,6 +33,8 @@ object LocalCache {
     @Volatile private var root: File? = null
     private val lock = Any()
     @Volatile private var generation = 0
+    /** Bumped by a sign-out wipe: work begun before it must not write after it. */
+    val currentGeneration: Int get() = generation
     /** Memory copies of what was read, so reopening a chat in the same run skips the disk. */
     // The last 12 chats opened, not every chat of the session (battery/lag audit 2026-11-05).
     private val threadMemo: MutableMap<String, List<Message>> = java.util.Collections.synchronizedMap(

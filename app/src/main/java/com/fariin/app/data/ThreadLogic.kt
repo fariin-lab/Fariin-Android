@@ -54,6 +54,10 @@ object ThreadLogic {
             Message.SendState.SENDING -> Tick.SENDING
             Message.SendState.FAILED -> Tick.FAILED
             null -> when {
+                // My photo, video, voice note or file whose file is still going up: the clock, not a
+                // tick (the other phone can not open it yet). Kept apart from sendState so the message,
+                // already on the server, can still be deleted for everyone.
+                m.uploading -> Tick.SENDING
                 m.held -> Tick.SENT
                 !r.iBlocked && r.otherLastReadMillis >= m.createdAtMillis -> Tick.READ
                 !r.iBlocked && r.otherDeliveredMillis >= m.createdAtMillis -> Tick.DELIVERED

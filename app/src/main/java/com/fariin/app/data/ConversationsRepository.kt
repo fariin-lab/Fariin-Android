@@ -38,6 +38,9 @@ class ConversationsRepository(
         val saved = if (useDiskCache) withContext(Dispatchers.IO) { LocalCache.loadChats(uid) } else emptyList()
         if (saved.isEmpty()) trySend(State.Loading)
         else trySend(State.Loaded(saved.map { (id, d) -> Conversation.fromFirestore(id, d) }, fromCache = true))
+        // The cache generation at attach: a snapshot parsed on the background thread while a sign-out
+        // wipes the cache must not write that account's chats (or seeds) back (review 2026-11-06).
+        val gen = LocalCache.currentGeneration
         val reg = db.collection("conversations")
             .whereArrayContains("users", uid)
             .orderBy("updatedAt", Query.Direction.DESCENDING)
@@ -54,13 +57,14 @@ class ConversationsRepository(
                     return@addSnapshotListener
                 }
                 if (snap == null) return@addSnapshotListener
+                if (LocalCache.currentGeneration != gen) return@addSnapshotListener
                 // An empty answer from Firestore's own offline store never blanks the saved list.
                 if (snap.metadata.isFromCache && snap.isEmpty && saved.isNotEmpty()) return@addSnapshotListener
                 // Each document's data read once, for the row and for the saved copy.
                 val datas = snap.documents.map { it.id to (it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()) }
                 val convs = snap.documents.mapIndexed { i, d -> parse(d, datas[i].second) }
                 trySend(State.Loaded(convs, snap.metadata.isFromCache))
-                if (useDiskCache && !snap.metadata.isFromCache) LocalCache.saveChats(uid, datas)
+                if (useDiskCache && !snap.metadata.isFromCache && LocalCache.currentGeneration == gen) LocalCache.saveChats(uid, datas)
             }
         awaitClose { reg.remove() }
     }

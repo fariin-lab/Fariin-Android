@@ -35,11 +35,19 @@ val LocalGlassHaze = androidx.compose.runtime.staticCompositionLocalOf<dev.chris
  */
 val LocalLiquidBackdrop = androidx.compose.runtime.staticCompositionLocalOf<com.kyant.backdrop.backdrops.LayerBackdrop?> { null }
 
+/**
+ * The window the glass sources live in (the chat's own view). Sheets, menus and dialogs open in
+ * windows of their own; a glass button there would sample a layer from another window (bubbles
+ * showing through a solid sheet, and a render fault risk), so there it draws solid. Review 2026-11-06.
+ */
+val LocalGlassWindow = androidx.compose.runtime.staticCompositionLocalOf<android.view.View?> { null }
+
 @Composable
 fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier {
     val c = Fariin.colors
-    val haze = LocalGlassHaze.current
-    val liquid = LocalLiquidBackdrop.current
+    val sameWindow = LocalGlassWindow.current?.let { it.rootView === androidx.compose.ui.platform.LocalView.current.rootView } ?: true
+    val haze = LocalGlassHaze.current?.takeIf { sameWindow }
+    val liquid = LocalLiquidBackdrop.current?.takeIf { sameWindow }
     if (fill == null && liquid != null) {
         // Bends what passes under at the rim and lifts its colours, under a frosted surface; no blur
         // pass (it cost 5 ms a frame on the tab bar). The library draws the shine on the edge.

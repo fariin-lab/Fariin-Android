@@ -533,7 +533,8 @@ private fun ThreadContent(
     val olderUnder by remember { derivedStateOf { listState.canScrollForward } }
     val searchList = search.active && search.asList && search.matches.isNotEmpty()
     androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassHaze provides edgeHaze, LocalOnWallpaper provides walled,
-        com.fariin.app.ui.components.LocalLiquidBackdrop provides (if (liquid) liquidBackdrop else null)) {
+        com.fariin.app.ui.components.LocalLiquidBackdrop provides (if (liquid) liquidBackdrop else null),
+        com.fariin.app.ui.components.LocalGlassWindow provides androidx.compose.ui.platform.LocalView.current) {
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.

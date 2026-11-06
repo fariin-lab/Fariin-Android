@@ -572,11 +572,13 @@ fun ChatListScreen(
                             fill = c.blue,
                             onAction = {
                                 val on = !showArchive
+                                // The note at once (offline the write waits for the server, and the note
+                                // with its Undo waited with it); a refused write says so (review 2026-11-06).
+                                Snack.show(if (on) "Chat archived" else "Chat unarchived", action = "Undo") {
+                                    scope.launch { ChatListActions.setArchived(me, conv, !on) }
+                                }
                                 scope.launch {
-                                    ChatListActions.setArchived(me, conv, on)
-                                    Snack.show(if (on) "Chat archived" else "Chat unarchived", action = "Undo") {
-                                        scope.launch { ChatListActions.setArchived(me, conv, !on) }
-                                    }
+                                    if (!ChatListActions.setArchived(me, conv, on)) Snack.show(if (on) "Couldn't archive the chat" else "Couldn't unarchive the chat")
                                 }
                             }) {
                         ChatRow(conv, me, decryptor,

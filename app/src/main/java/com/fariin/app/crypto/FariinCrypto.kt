@@ -378,7 +378,7 @@ class FariinCrypto(
         // opened each box again on the main thread. A sealed text never changes (an edit is a new
         // one), so a message that opened is remembered. Only real opens: "not ready" and the lock
         // can change once keys arrive, so they are never kept.
-        val key = "$cid|$authorId|$raw"
+        val key = openedKey(raw, cid, authorId)
         opened[key]?.let { return it }
         val out = if (raw.startsWith(Wire.ENCG1)) decryptGroup(raw, authorId, cid) else decrypt(raw, cid)
         if (out != Wire.NOT_READY && out != Wire.LOCKED && out != Wire.OLD_MESSAGE) opened[key] = out
@@ -389,8 +389,15 @@ class FariinCrypto(
      *  and old lines need no box, so they answer as [decrypt] does. */
     fun cachedDecrypt(raw: String, cid: String, authorId: String): String? {
         if (!raw.startsWith(Wire.ENCG1) && !raw.startsWith(Wire.ENC1)) return decrypt(raw, cid)
-        return opened["$cid|$authorId|$raw"]
+        return opened[openedKey(raw, cid, authorId)]
     }
+
+    /**
+     * A short key for a sealed text: its length and last 96 characters (the sealed body and its tag,
+     * random per message) instead of the whole text. A group message carries a key wrap per member,
+     * ~17 KB at 100 members; keyed whole, 1500 entries could hold 25 MB (review 2026-11-06).
+     */
+    private fun openedKey(raw: String, cid: String, authorId: String) = "$cid|$authorId|${raw.length}|${raw.takeLast(96)}"
 
     private val opened: MutableMap<String, String> = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, String>(256, 0.75f, true) {

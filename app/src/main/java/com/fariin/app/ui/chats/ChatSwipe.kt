@@ -174,7 +174,7 @@ internal fun SwipeToActRow(
     var settleJob by remember(id) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     LaunchedEffect(armed) { if (armed) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
     LaunchedEffect(enabled) { if (!enabled) { settleJob?.cancel(); x = 0f } }
-    fun settle(to: Float, velocity: Float, then: (() -> Unit)? = null) {
+    fun settle(to: Float, velocity: Float, then: (suspend () -> Unit)? = null) {
         settleJob?.cancel()
         settleJob = scope.launch {
             androidx.compose.animation.core.animate(x, to, velocity,
@@ -257,7 +257,14 @@ internal fun SwipeToActRow(
                             if (!ch.pressed) {
                                 if (dragging) {
                                     val v = tracker.calculateVelocity().x
-                                    if (armed || v < -2500f) settle(-widthPx, v) { onAction(); x = 0f } else settle(0f, v)
+                                    // Gone: the row stays off-screen until the list drops it; if it is still here
+                                    // a moment later (the change did not happen), it comes back.
+                                    if (armed || v < -2500f) settle(-widthPx, v) {
+                                        onAction()
+                                        kotlinx.coroutines.delay(1500)
+                                        androidx.compose.animation.core.animate(x, 0f, 0f,
+                                            spring(dampingRatio = 0.85f, stiffness = 500f)) { v, _ -> x = v }
+                                    } else settle(0f, v)
                                 }
                                 break
                             }
