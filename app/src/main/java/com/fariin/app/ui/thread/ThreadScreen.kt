@@ -379,7 +379,13 @@ private fun ThreadContent(
     postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
-            onDelete = { deleteFor = it }, onQuote = { quoteFor = it })
+            onDelete = { deleteFor = it }, onQuote = { quoteFor = it },
+            // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
+            onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble()) && !com.fariin.app.data.CardRules.isCard(m.text))
+                ({ editing = it; replyTo = null }) else null,
+            onEditHistory = { historyFor = it },
+            pinned = if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) (m.id in ui.pinnedIds) else null,
+            onPin = { if (it.id in ui.pinnedIds) actions.onUnpin(it.id) else actions.onPin(it) })
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
     infoFor?.let { m -> MessageInfoSheet(m, ui, is24h) { infoFor = null } }
@@ -2062,8 +2068,13 @@ private fun Modifier.doubleTapToReact(enabled: Boolean, key: Any, onDouble: () -
 /** Long press only (a tap still reaches the photo and voice bubbles inside). Watched in the
  *  Initial pass, so a photo or video that takes taps itself still opens the menu on a long press
  *  (iOS), and the press is then eaten so its release does not also open the viewer. */
-private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier =
-    this.pointerInput(Unit) {
+@Composable
+private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier {
+    // The gesture loop starts once; it must call the newest action, which holds the newest copy of
+    // the message. With the first one captured, a post edited since its row was first drawn opened
+    // its menu with the old words (and Edit started from them, and Edit History was missing).
+    val latest = androidx.compose.runtime.rememberUpdatedState(onLong)
+    return this.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             val slop = viewConfiguration.touchSlop
@@ -2076,7 +2087,7 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier =
                 @Suppress("UNREACHABLE_CODE") false
             }
             if (long != null) return@awaitEachGesture
-            onLong()
+            latest.value()
             while (true) {
                 val e = awaitPointerEvent(PointerEventPass.Initial)
                 e.changes.forEach { it.consume() }
@@ -2084,6 +2095,7 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier =
             }
         }
     }
+}
 
 /** Shows [content] while [open] is on. The flag is read here, so flipping it redraws only this. */
 @Composable

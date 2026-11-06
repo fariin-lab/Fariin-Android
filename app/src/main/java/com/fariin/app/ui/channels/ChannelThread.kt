@@ -40,6 +40,9 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.FormatQuote
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -257,6 +260,11 @@ fun ChannelPostMenu(
     ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit,
     onCopy: (String) -> Unit, onDelete: (Message) -> Unit,
     onQuote: ((Message) -> Unit)? = null,
+    onEdit: ((Message) -> Unit)? = null,
+    onEditHistory: ((Message) -> Unit)? = null,
+    /** null: no Pin row; else whether the post is pinned now. */
+    pinned: Boolean? = null,
+    onPin: ((Message) -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val ctx = LocalContext.current
@@ -270,6 +278,13 @@ fun ChannelPostMenu(
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m))
                 add(PostItem("Quote", Icons.Outlined.FormatQuote) { onDismiss(); onQuote(m) })
             if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true) { ch.onReport(m) })
+        }
+        // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).
+        if (ch.role == Role.ADMIN && !m.deleted) {
+            // onEdit is only passed when this post may be edited (my own, in the edit window).
+            if (onEdit != null) add(PostItem("Edit", Icons.Outlined.Edit) { onDismiss(); onEdit(m) })
+            if (onEditHistory != null && m.edited) add(PostItem("Edit History", Icons.Outlined.History) { onDismiss(); onEditHistory(m) })
+            if (pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", Icons.Outlined.PushPin) { onDismiss(); onPin(m) })
         }
         if (ch.role == Role.ADMIN) add(PostItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
     }

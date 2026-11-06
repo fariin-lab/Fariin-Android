@@ -392,7 +392,10 @@ internal fun Modifier.swipeToReply(enabled: Boolean, onReply: () -> Unit, offset
 internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit, content: @Composable () -> Unit) {
     var dx by remember { mutableFloatStateOf(0f) }
     val trigger = with(LocalDensity.current) { 60.dp.toPx() }
-    Box(Modifier.fillMaxWidth().swipeToReply(enabled, onReply) { dx = it }) {
+    // The drag loop starts once; it calls the newest reply action (the newest copy of the message),
+    // so replying to a message edited since its row was drawn quotes its current words.
+    val latest = androidx.compose.runtime.rememberUpdatedState(onReply)
+    Box(Modifier.fillMaxWidth().swipeToReply(enabled, { latest.value() }) { dx = it }) {
         if (dx > 4f) Icon(Icons.AutoMirrored.Filled.Reply, null, tint = Fariin.colors.secondary,
             modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp).size(22.dp)
                 .graphicsLayer { alpha = (dx / trigger).coerceIn(0f, 1f) })
