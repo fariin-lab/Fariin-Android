@@ -91,6 +91,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material.icons.outlined.Download
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsRow
 import com.fariin.app.ui.settings.SettingsSection
@@ -431,6 +432,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var addingToGroup by remember { mutableStateOf(false) }
     var askClearMine by remember { mutableStateOf(false) }
     var sharingProfile by remember { mutableStateOf(false) }
+    var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
     var blocked by remember { mutableStateOf(false) }
     var muted by remember(conv) { mutableStateOf(conv?.isMuted(me, System.currentTimeMillis().toDouble()) == true) }
@@ -523,16 +525,22 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
             val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ askClearMine = true }) else null
             val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
+            // iOS Export Chat: only where a real 1:1 chat exists, never on my own page.
+            val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
+            val exportChat: (() -> Unit)? = if (uid != me && chat != null && !chat.isGroup)
+                ({ if (exportJob == null) exportJob = ChatExportRun.Job(chat.id, name.ifEmpty { chat.displayName(me) }, uid) }) else null
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
                 if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
                 if (shareProfile != null) ShareProfileItem { close(); shareProfile() }
                 if (addToGroup != null) AddToGroupItem { close(); addToGroup() }
                 if (fromChat) ChangeWallpaperItem { close(); wallpaper() }
+                if (exportChat != null) ExportChatItem { close(); exportChat() }
                 if (clearMine != null) ClearMineItem { close(); clearMine() }
             }
             else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup,
-                onClearMine = clearMine, onShare = shareProfile)
+                onClearMine = clearMine, onShare = shareProfile, onExport = exportChat)
         }
+        exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
         if (askClearMine) androidx.compose.material3.AlertDialog(onDismissRequest = { askClearMine = false },
             title = { Text("Clear your messages?") },
             text = { Text("This deletes the messages you sent in this chat. It can't be undone.") },
@@ -712,7 +720,7 @@ private fun CallLogCard(call: com.fariin.app.data.CallEntry, me: String) {
 /** The contact page's three-dot menu (iOS ContactInfoView moreMenu): Change Wallpaper for this chat. */
 @Composable
 private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Unit)? = null, onClearMine: (() -> Unit)? = null,
-                            onShare: (() -> Unit)? = null) {
+                            onShare: (() -> Unit)? = null, onExport: (() -> Unit)? = null) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
@@ -723,6 +731,7 @@ private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Uni
             if (onShare != null) ShareProfileItem { open = false; onShare() }
             if (onAddToGroup != null) AddToGroupItem { open = false; onAddToGroup() }
             if (onWallpaper != null) ChangeWallpaperItem { open = false; onWallpaper() }
+            if (onExport != null) ExportChatItem { open = false; onExport() }
             if (onClearMine != null) ClearMineItem { open = false; onClearMine() }
         }
     }
@@ -743,6 +752,14 @@ private fun ClearMineItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Clear My Messages", color = c.red) },
         leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Delete, null, tint = c.red) }, onClick = onClick)
+}
+
+/** iOS ContactInfoView menu: "Export Chat" (ChatExportRun), above Clear My Messages as iOS orders it. */
+@Composable
+internal fun ExportChatItem(onClick: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.material3.DropdownMenuItem(text = { Text("Export Chat", color = c.label) },
+        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Download, null, tint = c.label) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Add to a Group" (AddToGroup.kt). */

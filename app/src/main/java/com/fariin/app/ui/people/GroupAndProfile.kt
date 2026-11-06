@@ -688,6 +688,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val inviteLink = if (iAmMember) com.fariin.app.data.GroupShareLink.of(me, conv, serverCode) else null
     var showQr by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
+    // iOS GroupInfoView exportChat: this group's messages as a text file (ChatExportRun). Not for a channel.
+    var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
+    exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
     if (showQr && inviteLink != null) com.fariin.app.ui.settings.GroupQrSheet(conv["title"] as? String ?: "Group", inviteLink,
         (conv["avatarUrl"] as? String)?.ifEmpty { null }, users.size, onClose = { showQr = false })
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
@@ -703,7 +706,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
                         .putExtra(android.content.Intent.EXTRA_TEXT, inviteLink)
                     ctx.startActivity(android.content.Intent.createChooser(send, null))
-                }) else null, onQr = { showQr = true }, saveCid = cid)
+                }) else null, onQr = { showQr = true }, saveCid = cid,
+                    onExport = if (conv["channel"] == true) null else ({
+                        if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group")
+                    }))
             }
         }))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -895,8 +901,9 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
 
 /** The group page's three-dot menu (iOS GroupInfoView moreMenuItems, menuGroupItems). */
 @Composable
-private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit, saveCid: String? = null) {
-    if (onWallpaper == null && onShare == null && saveCid == null) return
+private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit, saveCid: String? = null,
+                          onExport: (() -> Unit)? = null) {
+    if (onWallpaper == null && onShare == null && saveCid == null && onExport == null) return
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
@@ -922,6 +929,7 @@ private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, on
                 text = { Text("Save to Photos: ${if (saveOn) "On" else "Off"}", color = c.label) },
                 leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Download, null, tint = c.label) },
                 onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); open = false })
+            if (onExport != null) ExportChatItem { open = false; onExport() }
         }
     }
 }
