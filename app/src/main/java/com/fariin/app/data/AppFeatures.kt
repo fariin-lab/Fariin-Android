@@ -11,7 +11,8 @@ import com.google.firebase.firestore.ListenerRegistration
  *
  * Applies on the NEXT open, as iOS: the listener saves what the server says, the switches read a
  * snapshot taken once per launch, so a door never disappears under a screen already drawn.
- * The same listener also feeds the live Settings "New" pills ([NewBadges]).
+ * The same listener also feeds the live Settings "New" pills ([NewBadges]) and the admin panel's
+ * custom emoji ([UploadedEmoji]).
  */
 object AppFeatures {
     private const val FILE = "remote_features"
@@ -34,6 +35,7 @@ object AppFeatures {
         val p = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         prefs = p
         snapshot = p.all.mapNotNull { (k, v) -> (v as? Boolean)?.let { k to it } }.toMap()
+        UploadedEmoji.init(c)
     }
 
     /** Saves the server's switches for the next open. A missing document or an error leaves the
@@ -46,6 +48,8 @@ object AppFeatures {
                 // The Settings "New" pills are live, not next-open (a deleted doc clears them).
                 NewBadges.update(if (snap.exists()) snap.get("newBadges") else null)
                 if (!snap.exists()) return@addSnapshotListener
+                // Custom emoji from the admin panel are live too, as iOS.
+                UploadedEmoji.update(snap.get("customEmoji"))
                 val e = prefs?.edit() ?: return@addSnapshotListener
                 e.clear()
                 snap.data.orEmpty().forEach { (k, v) -> if (v is Boolean) e.putBoolean(k, v) }

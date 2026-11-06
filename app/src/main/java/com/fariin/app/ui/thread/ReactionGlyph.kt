@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -25,27 +26,41 @@ import java.util.zip.GZIPInputStream
 /**
  * iOS CustomReaction: "ce_1" to "ce_181" are animated reactions shipped as .tgs (gzipped Lottie),
  * offered only by channels that @v set them on; everyone else's reaction is a plain emoji.
+ * "cu_" + 10 characters are the ones uploaded in the admin panel ([UploadedEmoji]), played the same way.
  */
 object CustomReaction {
     private const val COUNT = 181
-    fun isCustom(key: String?): Boolean =
-        key != null && key.startsWith("ce_") && key.drop(3).toIntOrNull()?.let { it in 1..COUNT } == true
+    val builtIn: List<String> = (1..COUNT).map { "ce_$it" }
+    /** The built-in ones, then the uploaded ones, newest last (iOS CustomReaction.all). */
+    fun all(): List<String> = builtIn + com.fariin.app.data.UploadedEmoji.items.value.map { "cu_" + it.id }
+    fun isCustom(key: String?): Boolean = com.fariin.app.data.UploadedEmoji.isKey(key) ||
+        (key != null && key.startsWith("ce_") && key.drop(3).toIntOrNull()?.let { it in 1..COUNT } == true)
+    /** A key that looks like a custom one ("ce_" or "cu_") but is not known: never drawn as raw text. */
+    fun looksCustom(key: String): Boolean = key.startsWith("ce_") || key.startsWith("cu_")
     /** What a screen reader says (iOS spoken). */
-    fun spoken(key: String) = if (isCustom(key)) "Custom emoji" else key
+    fun spoken(key: String) = if (isCustom(key) || looksCustom(key)) "Custom emoji" else key
 }
 
 /** A reaction as drawn on a chip or the reaction bar: the emoji, or a custom reaction playing. */
 @Composable
 fun ReactionGlyph(key: String, textSize: TextUnit, boxSize: Dp, modifier: Modifier = Modifier) {
-    if (!CustomReaction.isCustom(key)) { Emoji3D(key, textSize, boxSize, modifier); return }
+    if (!CustomReaction.isCustom(key)) {
+        // An unknown "ce_"/"cu_" key (a newer build's, or one taken off the list): an empty box, not the raw key.
+        if (CustomReaction.looksCustom(key)) Box(modifier.size(boxSize)) else Emoji3D(key, textSize, boxSize, modifier)
+        return
+    }
     val ctx = LocalContext.current
-    val asset = "custom_reactions/$key.tgs"
-    val json by produceState<String?>(null, asset) {
+    val uploaded = com.fariin.app.data.UploadedEmoji.isKey(key)
+    // An uploaded one may still be downloading: drawn when its file lands.
+    val landed by com.fariin.app.data.UploadedEmoji.landed.collectAsState()
+    val asset = if (uploaded) "uploaded/$key" else "custom_reactions/$key.tgs"
+    val json by produceState<String?>(null, asset, if (uploaded) landed else 0) {
         value = withContext(Dispatchers.IO) {
-            runCatching { GZIPInputStream(ctx.assets.open(asset)).bufferedReader().use { it.readText() } }.getOrNull()
+            if (uploaded) com.fariin.app.data.UploadedEmoji.json(key)
+            else runCatching { GZIPInputStream(ctx.assets.open(asset)).bufferedReader().use { it.readText() } }.getOrNull()
         }
     }
-    val j = json ?: return
+    val j = json ?: run { Box(modifier.size(boxSize)); return }
     val comp by rememberLottieComposition(LottieCompositionSpec.JsonString(j), cacheKey = asset)
     LottieAnimation(comp, iterations = LottieConstants.IterateForever,
         modifier = modifier.size(boxSize).semantics { contentDescription = "Custom emoji" })

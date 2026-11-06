@@ -154,10 +154,10 @@ fun ChannelChips(ch: ChannelThreadUi, m: Message) {
                     .then(if (chip.mine) Modifier.border(1.dp, c.blue.copy(alpha = 0.5f), CircleShape) else Modifier)
                     .clickable(enabled = ch.canReact) { ch.onReact(m, ChannelRules.nextPick(ch.mine(m.id), chip.emoji)) }
                     .padding(horizontal = 8.dp, vertical = 3.dp)
-                    .semantics { contentDescription = "${chip.emoji}, ${chip.count}" },
+                    .semantics { contentDescription = "${com.fariin.app.ui.thread.CustomReaction.spoken(chip.emoji)}, ${chip.count}" },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(chip.emoji, fontSize = 15.sp)
+                com.fariin.app.ui.thread.ReactionGlyph(chip.emoji, 15.sp, 20.dp)
                 Spacer(Modifier.width(4.dp))
                 Text(ChannelRules.compactCount(chip.count), fontSize = 13.sp, color = if (chip.mine) c.blue else c.label)
             }
@@ -204,7 +204,7 @@ fun ChannelPostMenu(
                                         .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
                                         .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
                                     contentAlignment = Alignment.Center,
-                                ) { com.fariin.app.ui.thread.Emoji3D(e, 26.sp, 32.dp) }
+                                ) { com.fariin.app.ui.thread.ReactionGlyph(e, 26.sp, 32.dp) }
                             }
                         }
                     } else Row(
@@ -217,7 +217,7 @@ fun ChannelPostMenu(
                                     .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
                                     .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
                                 contentAlignment = Alignment.Center,
-                            ) { com.fariin.app.ui.thread.Emoji3D(e, 26.sp, 32.dp) }
+                            ) { com.fariin.app.ui.thread.ReactionGlyph(e, 26.sp, 32.dp) }
                         }
                         if (ch.pickable.size > ch.offered.size) {
                             Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },
