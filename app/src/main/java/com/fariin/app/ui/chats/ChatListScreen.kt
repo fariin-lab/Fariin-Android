@@ -206,6 +206,15 @@ fun ChatListScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     // A chat whose Delete was swiped (not the selection): the same question, about this one chat.
     var swipeDelete by remember { mutableStateOf<Conversation?>(null) }
+    // A chat whose Mute was swiped: the 1 hour ... Always choices in a sheet.
+    var swipeMute by remember { mutableStateOf<Conversation?>(null) }
+    swipeMute?.let { conv ->
+        MuteForSheet(onDismiss = { swipeMute = null }) { label, until ->
+            scope.launch {
+                Snack.show(if (ChatListActions.setMute(me, conv, until)) MuteFor.doneWord(label) else "Couldn't save. Check your connection and try again.")
+            }
+        }
+    }
     val selecting = selected.isNotEmpty()
     val online = rememberOnline()
     val link by com.fariin.app.data.ConnectionStatus.state.collectAsState()
@@ -368,10 +377,9 @@ fun ChatListScreen(
                                 act(if (on) "Pinned" else "Unpinned") { ChatListActions.setPinned(me, it, on) }
                             }
                         },
-                        onMute = {
-                            val on = !selectedConvs.all { it.isMuted(me, System.currentTimeMillis().toDouble()) }
-                            act(if (on) "Muted" else "Unmuted") { ChatListActions.setMuted(me, it, on) }
-                        },
+                        // All muted: Unmute at once. Else the bar opens the 1 hour ... Always menu.
+                        onUnmute = { act("Unmuted") { ChatListActions.setMute(me, it, 0.0) } },
+                        onMuteFor = { label, until -> act(MuteFor.doneWord(label)) { ChatListActions.setMute(me, it, until) } },
                         onArchive = {
                             val on = !showArchive
                             val list = selectedConvs
@@ -542,7 +550,9 @@ fun ChatListScreen(
                             trailing = listOf(
                                 SwipeAction(if (mutedNow) "Unmute" else "Mute",
                                     androidx.compose.ui.res.painterResource(if (mutedNow) R.drawable.ic_bell else R.drawable.ic_bell_off),
-                                    SwipeColors.indigo) { scope.launch { ChatListActions.setMuted(me, conv, !mutedNow) } },
+                                    SwipeColors.indigo) {
+                                    if (mutedNow) scope.launch { ChatListActions.setMute(me, conv, 0.0) } else swipeMute = conv
+                                },
                                 SwipeAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(androidx.compose.material.icons.Icons.Outlined.Delete),
                                     SwipeColors.red) { swipeDelete = conv },
                                 SwipeAction(if (showArchive) "Unarchive" else "Archive", androidx.compose.ui.res.painterResource(R.drawable.ic_archive_fill), SwipeColors.gray) {
@@ -732,11 +742,13 @@ private class SingleChatActions(
 @Composable
 private fun SelectionBar(
     count: Int, allPinned: Boolean, allMuted: Boolean, allUnread: Boolean, archive: Boolean,
-    onClose: () -> Unit, onPin: () -> Unit, onMute: () -> Unit, onArchive: () -> Unit, onDelete: () -> Unit,
+    onClose: () -> Unit, onPin: () -> Unit, onUnmute: () -> Unit, onMuteFor: (String, Double) -> Unit,
+    onArchive: () -> Unit, onDelete: () -> Unit,
     onReadToggle: () -> Unit, onSelectAll: () -> Unit,
     single: SingleChatActions? = null,
 ) {
     var more by remember { mutableStateOf(false) }
+    var muteOpen by remember { mutableStateOf(false) }
     val c = Fariin.colors
     TopAppBar(
         title = { Text("$count", style = MaterialTheme.typography.titleLarge) },
@@ -747,8 +759,11 @@ private fun SelectionBar(
             if (!archive) IconButton(onClick = onPin) {
                 Icon(if (allPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, contentDescription = if (allPinned) "Unpin" else "Pin")
             }
-            IconButton(onClick = onMute) {
-                Icon(if (allMuted) fi(R.drawable.ic_menu_unmute) else fi(R.drawable.ic_menu_mute), contentDescription = if (allMuted) "Unmute" else "Mute")
+            Box {
+                IconButton(onClick = { if (allMuted) onUnmute() else muteOpen = true }) {
+                    Icon(if (allMuted) fi(R.drawable.ic_menu_unmute) else fi(R.drawable.ic_menu_mute), contentDescription = if (allMuted) "Unmute" else "Mute")
+                }
+                MuteForMenu(muteOpen, onDismiss = { muteOpen = false }, onPick = onMuteFor)
             }
             IconButton(onClick = onArchive) {
                 Icon(if (archive) Icons.Outlined.Unarchive else fi(R.drawable.ic_archive), contentDescription = if (archive) "Unarchive" else "Archive")

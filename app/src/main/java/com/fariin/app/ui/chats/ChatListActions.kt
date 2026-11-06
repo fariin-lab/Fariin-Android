@@ -46,8 +46,21 @@ object ChatListActions {
         merge(me, c.id, mapOf("archivedBy" to mapOf(me to on)))
 
     suspend fun setMuted(me: String, c: Conversation, on: Boolean): Boolean =
-        if (c.isFollower(me)) (me == DemoChats.ME) || com.fariin.app.channel.ChannelService.setMuted(c.id, on)
-        else merge(me, c.id, mapOf("mutedBy" to mapOf(me to if (on) 9_999_999_999_999.0 else 0.0)))
+        setMute(me, c, if (on) com.fariin.app.data.GroupInfoCircles.FOREVER else 0.0)
+
+    /**
+     * iOS ChatService.setMute: mute until [until] epoch ms (0 = unmute, far future = Always), the
+     * same `mutedBy.<me>` the info pages write. A channel I follow keeps its own entry, where Always
+     * is stored as 0 = no end ([MuteFor.channelEntry]).
+     */
+    suspend fun setMute(me: String, c: Conversation, until: Double): Boolean {
+        if (c.isFollower(me)) {
+            if (me == DemoChats.ME) return true
+            val (on, end) = MuteFor.channelEntry(until, System.currentTimeMillis().toDouble())
+            return com.fariin.app.channel.ChannelService.setMuted(c.id, on, end)
+        }
+        return merge(me, c.id, mapOf("mutedBy" to mapOf(me to until)))
+    }
 
     suspend fun setUnread(me: String, c: Conversation, on: Boolean): Boolean =
         if (on) merge(me, c.id, mapOf("markedUnread" to mapOf(me to true)))
