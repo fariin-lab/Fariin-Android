@@ -1094,6 +1094,8 @@ class ThreadRepository(
                                    quote: String? = null) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
+        // A quote sent with no words of mine: the list says "Quoted post" (sealed like any preview), not a blank line.
+        val lastCipher = if (t.isEmpty() && quote != null) crypto.encryptForConversation(cid, QUOTED_POST) else cipher
         val local = CryptoHub.listedConversation(cid)
         val answering = local != null && !local.isGroup && local.startedBy.isNotEmpty() && !local.accepted &&
             local.lastSender.isNotEmpty() && local.lastSender != me
@@ -1133,7 +1135,7 @@ class ThreadRepository(
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
-            "lastMessage" to cipher,
+            "lastMessage" to lastCipher,
             "lastSender" to me,
             "updatedAt" to FieldValue.serverTimestamp(),
         )
@@ -1195,6 +1197,7 @@ class ThreadRepository(
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
+        val lastCipher = if (t.isEmpty() && quote != null) crypto.sealForGroup(QUOTED_POST, members, cid) else cipher
         val batch = db.batch()
         val msg = hashMapOf<String, Any>(
             "text" to cipher,
@@ -1214,12 +1217,12 @@ class ThreadRepository(
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
         val conv = hashMapOf<String, Any>(
-            "lastMessage" to cipher,
+            "lastMessage" to lastCipher,
             "lastSender" to me,
             "updatedAt" to FieldValue.serverTimestamp(),
         )
         // Words in the clear say they are a member's (Conversation.lastPlainTag).
-        if (!cipher.startsWith("enc")) conv["lastPlainTag"] = Conversation.plainTag(cipher)
+        if (!lastCipher.startsWith("enc")) conv["lastPlainTag"] = Conversation.plainTag(lastCipher)
         if (countsAsUnread) for (m in members) if (m != me) conv["unreadCount.$m"] = FieldValue.increment(1)
         batch.update(convRef, conv)
         batch.commit().await()
@@ -1550,6 +1553,9 @@ class ThreadRepository(
     }
 
     companion object {
+        /** The list's line for a quote sent without words of mine. */
+        const val QUOTED_POST = "Quoted post"
+
         /** The repository of each chat on screen, so a queue drain sends through it (its bubble
          *  turns from failed back to sending) rather than through a second copy. */
         private val open = ConcurrentHashMap<String, ThreadRepository>()
