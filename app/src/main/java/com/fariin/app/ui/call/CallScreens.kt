@@ -66,6 +66,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -253,7 +255,10 @@ fun CallScreen(
         // Their photo is its own layer, centred on the whole screen (owner 2026-11-06: between the
         // header and the controls, the "Muted" line the header gains on their mute pushed it down).
         // Decoration only: it takes no taps, so the show/hide tap still reaches the layer under it.
-        if (showFace) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        // Composed before the header, but a screen reader still reads the header (name, status)
+        // first, then the photo, then the controls (index 0), as on iOS.
+        if (showFace) Box(Modifier.fillMaxSize().semantics { isTraversalGroup = true; traversalIndex = -1f },
+            contentAlignment = Alignment.Center) {
             Avatar(ui.peerPhoto, 180.dp, Modifier
                 .shadow(26.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
                 .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
@@ -267,7 +272,7 @@ fun CallScreen(
                 left = if (onMinimize != null && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED) {
                     { HeaderCircle(Icons.Filled.CloseFullscreen, "Minimize call", 48.dp) { chrome.touch(); onMinimize() } }
                 } else null,
-                modifier = Modifier.alpha(shown),
+                modifier = Modifier.alpha(shown).semantics { isTraversalGroup = true; traversalIndex = -2f },
                 // No shade over the flat colour and the photo (owner 2026-11-06: it read as a
                 // shadow); video under the header still gets it, for the white words.
                 scrim = !showFace,
