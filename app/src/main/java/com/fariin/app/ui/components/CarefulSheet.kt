@@ -159,11 +159,15 @@ fun CarefulSheet(onDismiss: () -> Unit, steps: List<CarefulStep>, step: Int = 0,
                 }
                 Spacer(Modifier.height(20.dp))
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for (b in s.buttons) {
+                    // Two red choices (Block / Block and Report, Delete for Me / for Everyone): only the
+                    // main one, the first, is solid; the others are tonal, red words on a light red.
+                    val mainRed = s.buttons.indexOfFirst { it.kind == CarefulKind.DESTRUCTIVE }
+                    s.buttons.forEachIndexed { n, b ->
                         val (fill, ink) = when (b.kind) {
                             CarefulKind.SOFT -> c.card to c.label
                             CarefulKind.MAIN -> c.blue to Color.White
-                            CarefulKind.DESTRUCTIVE -> c.red to Color.White
+                            CarefulKind.DESTRUCTIVE ->
+                                if (n == mainRed) c.red to Color.White else c.red.copy(alpha = 0.12f) to c.red
                         }
                         CarefulPill(b.label, fill, ink, b.enabled && !b.busy, b.busy) {
                             if (b.closes) close(b.onClick) else b.onClick()
