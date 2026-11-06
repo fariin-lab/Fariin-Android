@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.FormatQuote
 import com.fariin.app.ui.components.floating
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
@@ -94,6 +95,12 @@ data class ThreadActions(
     /** Opens the forward picker for a message (ThreadScreen sets it), then sends to the chats picked. */
     val onForward: (Message) -> Unit = {},
     val onForwardTo: (Message, List<String>) -> Unit = { _, _ -> },
+    /** Quote a channel post: opens the pick-one chat sheet (ThreadScreen sets it), then makes the
+     *  quote on the server and opens the chat picked with it above the composer. */
+    val onQuote: (Message) -> Unit = {},
+    val onQuoteTo: (Message, String) -> Unit = { _, _ -> },
+    /** My words with the quote waiting above the composer; the last callback runs when it failed. */
+    val onSendQuote: (String, com.fariin.app.data.QuoteStore.Draft, List<String>, () -> Unit) -> Unit = { _, _, _, _ -> },
     /** Save a photo or video to the phone's gallery. */
     val onSave: (Message) -> Unit = {},
     /** The words left in the box last time (iOS Drafts), and where new ones are kept. */
@@ -158,6 +165,10 @@ internal fun MessageMenu(
             }
             if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
+            // Quote a channel post into a chat of mine, with my own words (iOS, owner 2026-11-06):
+            // only where Forward is offered.
+            if (!restricted && MessageRules.canForward(m) && ui.channel != null) add(MenuItem("Quote", Icons.Outlined.FormatQuote) {
+                if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onQuote(m) })
             if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })
             // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).

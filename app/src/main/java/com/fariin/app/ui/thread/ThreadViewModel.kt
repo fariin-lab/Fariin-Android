@@ -178,6 +178,20 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 }
             }
         },
+        // Quote a channel post (iOS startQuote): the server snapshots it (and checks I may see it),
+        // then the chat picked opens with the quote above its composer; this chat keeps it here.
+        onQuoteTo = { m, dest ->
+            vm.viewModelScope.launch {
+                when (val r = com.fariin.app.data.QuoteStore.create(cid, m.id)) {
+                    is com.fariin.app.data.QuoteStore.Made.Refused -> notice = r.text
+                    is com.fariin.app.data.QuoteStore.Made.Ok -> {
+                        com.fariin.app.data.QuoteStore.pendingDraft.value = com.fariin.app.data.QuoteStore.Draft(dest, r.qid, r.card)
+                        if (dest != cid) nav.chat(dest)
+                    }
+                }
+            }
+        },
+        onSendQuote = { t, q, ids, failed -> vm.repo.sendQuote(t, q.qid, ids, failed) },
         onSave = { m -> vm.viewModelScope.launch { notice = com.fariin.app.media.GallerySaver.saveMessage(app, vm.repo.media, m) } },
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
         draft = remember(cid) { Drafts.text(cid) },

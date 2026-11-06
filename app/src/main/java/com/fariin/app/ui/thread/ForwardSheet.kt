@@ -56,7 +56,9 @@ import com.fariin.app.ui.components.floating
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Forward to", onSend: (List<String>) -> Unit) {
+internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Forward to",
+                          /** Pick one chat (Quote): a tap hands that chat back and closes; no ticks, no Send. */
+                          pickOne: Boolean = false, onSend: (List<String>) -> Unit) {
     val c = Fariin.colors
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
@@ -86,6 +88,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                     val on = conv.id in chosen
                     Row(
                         Modifier.fillMaxWidth().clickable {
+                            if (pickOne) { onSend(listOf(conv.id)); onDismiss(); return@clickable }
                             if (on) chosen.remove(conv.id) else if (chosen.size < MediaRules.FORWARD_CHATS_AT_ONCE) chosen += conv.id
                         }.padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -94,7 +97,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                         Spacer(Modifier.width(12.dp))
                         Text(conv.displayName(me), fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f))
-                        Box(
+                        if (!pickOne) Box(
                             Modifier.size(24.dp).clip(CircleShape).background(if (on) c.blue else Color.Transparent)
                                 .border(1.5.dp, if (on) c.blue else c.secondary.copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center,
@@ -102,7 +105,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                     }
                 }
             }
-            Box(
+            if (pickOne) Spacer(Modifier.height(16.dp)) else Box(
                 Modifier.fillMaxWidth().padding(16.dp).height(50.dp)
                     .floating(CircleShape, fill = if (chosen.isEmpty()) c.secondary.copy(alpha = 0.3f) else c.blue)
                     .clickable(enabled = chosen.isNotEmpty()) { onSend(chosen.toList()); onDismiss() },

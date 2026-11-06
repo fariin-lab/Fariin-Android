@@ -57,28 +57,24 @@ internal fun LinkPreviewCard(lp: Message.LinkPreview, isMe: Boolean) {
 @Composable
 private fun ArticleCard(lp: Message.LinkPreview, isMe: Boolean) {
     val c = Fariin.colors
-    val ink = if (isMe) Color.White else c.label
-    val tint = if (isMe) Color.White else c.blue
     val uri = LocalUriHandler.current
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val linkTap = LocalBubbleLinkTap.current
-    Column(
-        Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp).clip(RoundedCornerShape(12.dp))
-            .background(tint.copy(alpha = 0.10f)).clickable {
-                // The card opens exactly as its link does in the text (owner 2026-11-06: a channel's card
-                // fariin.com/vee went to the website's "page not found" in the phone's browser): names,
-                // groups, channels, stories and invites inside the app, the rest in Fariin's browser.
-                if (linkTap != null) { linkTap(com.fariin.app.data.TextLinks.Span(0, lp.url.length, com.fariin.app.data.TextLinks.Kind.WEB, lp.url)); return@clickable }
-                // My own username link opens My Profile (iOS openProfileHandle); any other link as before.
-                val h = com.fariin.app.data.QrRules.handleFrom(lp.url)
-                if (h == null) { runCatching { uri.openUri(lp.url) }; return@clickable }
-                scope.launch {
-                    if (usernameIsMine(h)) nav.myProfile() else runCatching { uri.openUri(lp.url) }
-                }
-            },
-    ) {
-        if (lp.imageUrl != null) {
+    ArticleShape(lp.title, lp.desc, StickerGifRules.cardHost(lp.url), isMe,
+        onClick = {
+            // The card opens exactly as its link does in the text (owner 2026-11-06: a channel's card
+            // fariin.com/vee went to the website's "page not found" in the phone's browser): names,
+            // groups, channels, stories and invites inside the app, the rest in Fariin's browser.
+            if (linkTap != null) { linkTap(com.fariin.app.data.TextLinks.Span(0, lp.url.length, com.fariin.app.data.TextLinks.Kind.WEB, lp.url)); return@ArticleShape }
+            // My own username link opens My Profile (iOS openProfileHandle); any other link as before.
+            val h = com.fariin.app.data.QrRules.handleFrom(lp.url)
+            if (h == null) { runCatching { uri.openUri(lp.url) }; return@ArticleShape }
+            scope.launch {
+                if (usernameIsMine(h)) nav.myProfile() else runCatching { uri.openUri(lp.url) }
+            }
+        },
+        image = if (lp.imageUrl == null) null else ({
             Box(Modifier.fillMaxWidth().height(170.dp).background(c.secondary.copy(alpha = 0.15f))) {
                 if (lp.imageEnc != null) {
                     val got = rememberGatedFile(lp.imageUrl, lp.imageEnc, AutoDownload.Kind.PHOTOS)
@@ -90,19 +86,38 @@ private fun ArticleCard(lp: Message.LinkPreview, isMe: Boolean) {
                     coil3.compose.AsyncImage(lp.imageUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             }
-        }
+        }),
+    )
+}
+
+/**
+ * The article card's look, shared with a quoted channel post's card (QuoteBubble.kt): full bubble
+ * width, corners 12, the bubble's tint at 10% behind it, [image] on top, then the title (13
+ * semibold, 2 lines), the description (12, 2 lines, 75%) and the small line (11, 55%), 10 in.
+ */
+@Composable
+internal fun ArticleShape(title: String, desc: String, host: String, isMe: Boolean, onClick: () -> Unit,
+                          image: (@Composable () -> Unit)? = null, quiet: Boolean = false) {
+    val c = Fariin.colors
+    val ink = if (isMe) Color.White else c.label
+    val tint = if (isMe) Color.White else c.blue
+    Column(
+        Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp).clip(RoundedCornerShape(12.dp))
+            .background(tint.copy(alpha = 0.10f)).clickable(onClick = onClick),
+    ) {
+        image?.invoke()
         Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-            if (lp.title.isNotEmpty()) {
-                Text(lp.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 2,
+            if (title.isNotEmpty()) {
+                Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = ink.copy(alpha = if (quiet) 0.6f else 1f), maxLines = 2,
                     overflow = TextOverflow.Ellipsis, lineHeight = 17.sp)
                 Spacer(Modifier.height(2.dp))
             }
-            if (lp.desc.isNotEmpty()) {
-                Text(lp.desc, fontSize = 12.sp, color = ink.copy(alpha = 0.75f), maxLines = 2,
+            if (desc.isNotEmpty()) {
+                Text(desc, fontSize = 12.sp, color = ink.copy(alpha = if (quiet) 0.5f else 0.75f), maxLines = 2,
                     overflow = TextOverflow.Ellipsis, lineHeight = 16.sp)
                 Spacer(Modifier.height(2.dp))
             }
-            Text(StickerGifRules.cardHost(lp.url), fontSize = 11.sp, color = ink.copy(alpha = 0.55f), maxLines = 1,
+            Text(host, fontSize = 11.sp, color = ink.copy(alpha = 0.55f), maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
     }

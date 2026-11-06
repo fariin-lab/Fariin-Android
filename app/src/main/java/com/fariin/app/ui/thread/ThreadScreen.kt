@@ -320,6 +320,10 @@ private fun ThreadContent(
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
     forwardFor?.let { m -> ForwardSheet(ui.me, onDismiss = { forwardFor = null }) { targets -> actions.onForwardTo(m, targets) } }
+    // Quote a channel post (iOS ForwardPicker pick-one mode): the same chats, one tap picks.
+    var quoteFor by remember { mutableStateOf<Message?>(null) }
+    quoteFor?.let { m -> ForwardSheet(ui.me, onDismiss = { quoteFor = null }, title = "Quote in", pickOne = true) { t ->
+        t.firstOrNull()?.let { actions.onQuoteTo(m, it) } } }
     bulkForward?.let { msgs ->
         ForwardSheet(ui.me, onDismiss = { bulkForward = null }) { targets -> actions.onForwardManyTo(msgs, targets); selected.clear() }
     }
@@ -327,7 +331,7 @@ private fun ThreadContent(
         // The live copy: the long press keeps the row's first lambda, so a stamp, edit or
         // reaction that landed since (an expiresAt, say) would be missing from a held copy.
         val m = ui.messages.firstOrNull { it.rowId == m0.rowId } ?: m0
-        MessageMenu(m, ui, onDismiss = { menuFor = null; menuLifted = null }, actions = actions.copy(onForward = { forwardFor = it }),
+        MessageMenu(m, ui, onDismiss = { menuFor = null; menuLifted = null }, actions = actions.copy(onForward = { forwardFor = it }, onQuote = { quoteFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it },
@@ -486,6 +490,21 @@ private fun ThreadContent(
             kotlinx.coroutines.delay(2000)
             if (flashId == row) flashId = null
         }
+    }
+    // A quote card's tap opened this channel: once its messages are in, scroll to the post and light it.
+    LaunchedEffect(ui.cid, ui.loaded) {
+        val j = com.fariin.app.data.QuoteStore.pendingJump.value?.takeIf { it.cid == ui.cid } ?: return@LaunchedEffect
+        if (!ui.loaded) return@LaunchedEffect
+        com.fariin.app.data.QuoteStore.pendingJump.value = null
+        val found = actions.onEnsureLoaded(j.mid)
+        val list = uiNow.value.messages
+        val i = list.indexOfFirst { it.id == j.mid }
+        if (!found || i < 0) { actions.onNotice("Couldn't reach this post."); return@LaunchedEffect }
+        listState.animateScrollToItem(list.size - 1 - i)
+        val row = list[i].rowId
+        flashId = row
+        kotlinx.coroutines.delay(2000)
+        if (flashId == row) flashId = null
     }
     // In-chat search (InChatSearch.kt, iOS uiMode .search): opened from the info pages' Search circle.
     val search = remember(ui.cid) { InChatSearchState() }
@@ -867,6 +886,21 @@ private fun ThreadContent(
                         thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp) }) else null) { replyTo = null }
                 }
                 editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
+                // A channel post quoted into this chat (iOS .quote banner): waits above the composer
+                // for my words; closing it cancels the quote.
+                var quoting by remember(ui.cid) { mutableStateOf<com.fariin.app.data.QuoteStore.Draft?>(null) }
+                val pendingQuote by com.fariin.app.data.QuoteStore.pendingDraft.collectAsState()
+                LaunchedEffect(pendingQuote, ui.cid) {
+                    val q = pendingQuote?.takeIf { it.cid == ui.cid } ?: return@LaunchedEffect
+                    com.fariin.app.data.QuoteStore.pendingDraft.value = null
+                    replyTo = null
+                    quoting = q
+                }
+                if (editing == null) quoting?.let { q ->
+                    ComposerBar("Quote from ${com.fariin.app.data.QuoteRules.heading(q.card)}",
+                        com.fariin.app.data.QuoteRules.body(q.card),
+                        thumb = if (com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card) }) else null) { quoting = null }
+                }
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
                 val send: (String, List<String>) -> Unit = { t, ids ->
@@ -874,8 +908,17 @@ private fun ThreadContent(
                     val e = editing
                     val tagged = actions.onSendMentioned.takeIf { ids.isNotEmpty() }
                     if (e == null) sendMotion.arm(SendMotion.Kind.TEXT, ui.messages, sendAnim)
+                    val q = quoting
                     when {
                         e != null -> { editing = null; if (t.trim() != e.text.trim()) actions.onEdit(e, t) }
+                        // My words with the quote: one message carrying only the quote's id (iOS sendQuote).
+                        q != null -> {
+                            quoting = null; replyTo = null
+                            actions.onSendQuote(t, q, ids) {
+                                quoting = q
+                                actions.onNotice("Couldn't send the quote. Try again.")
+                            }
+                        }
                         tagged != null -> { replyTo = null; tagged(t, r, ids) }
                         r != null -> { replyTo = null; actions.onSendReply(t, r) }
                         else -> onSend(t)
@@ -935,7 +978,7 @@ private fun ThreadContent(
                     onSend(com.fariin.app.data.CardRules.contactText(card.uid, card.name, card.photo))
                 }
                 // iOS: the link card rides the same slot as the reply bar, never while editing.
-                if (editing == null) LinkDraftBar(ui.cid, ui.me, linkText,
+                if (editing == null && quoting == null) LinkDraftBar(ui.cid, ui.me, linkText,
                     allowed = held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) == null)
                 Composer(gatedSend, { attachOpen = true }, { r ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
@@ -1280,7 +1323,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // The sender's link card over the words (iOS: quote, card, then the text).
             // No sealed card (an older message, or previews off): one of our group or channel links
             // in the words still gets the live card.
-            if (!m.deleted) m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, isMe) else LiveGroupLinkCard(body, isMe) }
+            // A quoted channel post takes the card's place (iOS quoteBody, QuoteBubble.kt).
+            if (!m.deleted) m.quoteId?.let { QuoteCardBubble(it, isMe) }
+                ?: m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, isMe) else LiveGroupLinkCard(body, isMe) }
             // A channel post's reactions sit inside its bubble, the time line with them (iOS).
             val ch = ui.channel
             val chips = if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
