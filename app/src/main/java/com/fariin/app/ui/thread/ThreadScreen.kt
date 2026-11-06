@@ -519,7 +519,6 @@ private fun ThreadContent(
     // Messages under the header: the list can go further back (it is reversed). Under the composer:
     // it can come further forward. Read through derivedStateOf, so a scroll recomposes only on a flip.
     val olderUnder by remember { derivedStateOf { listState.canScrollForward } }
-    val newerUnder by remember { derivedStateOf { listState.canScrollBackward } }
     val searchList = search.active && search.asList && search.matches.isNotEmpty()
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
@@ -542,8 +541,8 @@ private fun ThreadContent(
             if (!walled) {
                 ThreadEdgeGlass(edgeHaze, top = true, barPx = topBarPx, under = olderUnder && !searchList,
                     modifier = Modifier.align(Alignment.TopCenter).zIndex(0.5f))
-                ThreadEdgeGlass(edgeHaze, top = false, barPx = bottomBarPx, under = newerUnder && !searchList,
-                    modifier = Modifier.align(Alignment.BottomCenter).zIndex(0.5f))
+                // No bottom strip: iOS took its bottom blur off on the owner's order (2026-08-25, "remove
+                // chat bottom blur, don't touch top header"); messages pass behind the floating composer.
             }
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
