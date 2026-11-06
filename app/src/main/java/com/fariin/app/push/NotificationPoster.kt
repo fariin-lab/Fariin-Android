@@ -220,6 +220,37 @@ object NotificationPoster {
         nmc.notify(cid, ID, n)
     }
 
+    /** The extra a reply alert's tap carries beside [PushRouter.EXTRA_OPEN_CID]: the post whose Replies open. */
+    const val EXTRA_REPLIES_MID = "fariin.repliesMid"
+
+    /**
+     * A reply alert with the app open (server replyPushJob): one per post (tag), a tap opens the
+     * channel and that post's Replies. With the app closed Android draws it from the push itself, and
+     * the tap brings the same `cid`, `mid` and `kind` (MainActivity).
+     */
+    @SuppressLint("MissingPermission")
+    fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String) {
+        ensureChannels(c)
+        val nmc = NotificationManagerCompat.from(c)
+        if (!nmc.areNotificationsEnabled()) return
+        val open = Intent(c, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(PushRouter.EXTRA_OPEN_CID, cid)
+            putExtra(EXTRA_REPLIES_MID, mid)
+        }
+        val tap = PendingIntent.getActivity(c, ("r$cid/$mid").hashCode(), open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(c, NotifChannel.MESSAGES.id)
+            .setSmallIcon(R.drawable.ic_stat_fariin)
+            .setColor(Color.rgb(0x1E, 0x88, 0xE5))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build()
+        nmc.notify("replies-$cid/$mid", ID, n)
+    }
+
     /** "Posted a new story" with the app open: one per author (tag), a tap opens the Stories tab. */
     @SuppressLint("MissingPermission")
     fun postStory(c: Context, title: String, body: String, author: String) {

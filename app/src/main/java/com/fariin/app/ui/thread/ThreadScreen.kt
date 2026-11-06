@@ -529,6 +529,16 @@ private fun ThreadContent(
         kotlinx.coroutines.delay(2000)
         if (flashId == row) flashId = null
     }
+    // A reply alert tapped: once this channel's messages are in, that post's Replies open.
+    val repliesAsk by com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.collectAsState()
+    LaunchedEffect(ui.cid, ui.loaded, ui.channel != null, repliesAsk) {
+        val (c, mid) = repliesAsk?.takeIf { it.first == ui.cid && ui.channel != null && ui.loaded } ?: return@LaunchedEffect
+        com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = null
+        if (!actions.onEnsureLoaded(mid) || c != ui.cid) return@LaunchedEffect
+        val post = uiNow.value.messages.firstOrNull { it.id == mid } ?: return@LaunchedEffect
+        com.fariin.app.ui.channels.PostQuotesSheet.startTab = 0
+        com.fariin.app.ui.channels.PostQuotesSheet.open.value = post
+    }
     // The Quotes sheet a post's "N Quotes" bar opens (PostQuotesUi.kt).
     ui.channel?.let { ch -> com.fariin.app.ui.channels.PostQuotesHost(ui.cid, ui.title, ui.photoUrl, ch.info.verified) }
     // In-chat search (InChatSearch.kt, iOS uiMode .search): opened from the info pages' Search circle.

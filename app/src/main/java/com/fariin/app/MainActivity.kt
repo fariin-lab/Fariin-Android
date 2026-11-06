@@ -374,8 +374,20 @@ class MainActivity : ComponentActivity() {
 
     /** A notification tap (or its conversation shortcut) carries the chat to open. */
     private fun takeOpenCid(intent: Intent?) {
+        // A reply alert drawn by Android (app closed) brings the push's own `cid`, `mid` and `kind`.
+        com.fariin.app.data.PostReplyRules.alertTarget(intent?.getStringExtra("kind"), intent?.getStringExtra("cid"),
+            intent?.getStringExtra("mid"))?.let { (cid, mid) ->
+            intent?.removeExtra("kind")
+            com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
+            PushRouter.pendingOpen.value = cid
+            return
+        }
         val cid = intent?.getStringExtra(PushRouter.EXTRA_OPEN_CID)?.takeIf { it.isNotEmpty() } ?: return
         intent.removeExtra(PushRouter.EXTRA_OPEN_CID)
+        intent.getStringExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)?.takeIf { it.isNotEmpty() }?.let { mid ->
+            intent.removeExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)
+            com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
+        }
         PushRouter.pendingOpen.value = cid
     }
 
