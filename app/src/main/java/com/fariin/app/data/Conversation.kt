@@ -48,6 +48,10 @@ data class Conversation(
     val avatarUrl: String? = null,
     /** Firestore `channel`. */
     val isChannel: Boolean = false,
+    /** A channel's last real post for followers' list line (server `postPreview`: notices, calls and
+     *  pins never move it): its plain words and kind. null when the channel has no post yet. */
+    val postPreviewText: String? = null,
+    val postPreviewType: String? = null,
     /** Verified by Fariin (channels; a moderation label cancels it, as ChannelInfo). */
     val verified: Boolean = false,
     /** A group whose document says `e2ee == false`. */
@@ -238,6 +242,8 @@ data class Conversation(
                 avatarUrl = data["avatarUrl"] as? String,
                 groupWallpaper = if (type == "group") data["wallpaper"] as? String else null,
                 isChannel = data["channel"] as? Boolean ?: false,
+                postPreviewText = (data["postPreview"] as? Map<*, *>)?.let { (it["text"] as? String).orEmpty().take(300) },
+                postPreviewType = (data["postPreview"] as? Map<*, *>)?.let { it["type"] as? String },
                 verified = (data["verified"] as? Boolean ?: false) && (data["label"] as? String).isNullOrEmpty(),
                 e2eeOff = type == "group" && (data["e2ee"] as? Boolean) == false,
                 lastPlainTag = data["lastPlainTag"] as? String,

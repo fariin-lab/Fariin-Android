@@ -105,6 +105,9 @@ object ChatList {
     fun isCallMarker(raw: String): Boolean = callWords(raw, false) != null
 
     fun previewLine(c: Conversation, me: String, decryptor: MessageDecryptor, senderName: (String) -> String?): String {
+        // A channel I only follow or visit: its last real post (server postPreview), never a notice I
+        // cannot see inside. Its owner and admins (its members) keep the full last line.
+        if (c.isChannel && me !in c.users) return channelPostLine(c)
         reactionPreview(c, me, decryptor, senderName)?.let { return it }
         if (c.lastMessageCipher.isEmpty() && c.lastImageUrl.isNullOrEmpty()) return ""
         val text = when {
@@ -126,6 +129,23 @@ object ChatList {
             if (spoken && !who.isNullOrEmpty()) return "${who.split(" ").first()}: $text"
         }
         return text
+    }
+
+    /** A follower's line for a channel: the last post's words, else a word for its kind; "No posts yet". */
+    fun channelPostLine(c: Conversation): String {
+        if (c.postPreviewText == null && c.postPreviewType == null) return "No posts yet"
+        c.postPreviewText?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        return when (c.postPreviewType) {
+            "image" -> "Photo"
+            "video" -> "Video"
+            "album" -> "Album"
+            "audio" -> "Voice message"
+            "file" -> "File"
+            "gif" -> "GIF"
+            "sticker" -> "Sticker"
+            "poll" -> PollRules.PREVIEW
+            else -> "Post"
+        }
     }
 
     /** What a peek returns when the line has not been opened yet. */
