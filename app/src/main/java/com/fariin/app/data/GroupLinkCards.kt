@@ -67,6 +67,21 @@ object GroupLinkCards {
         null -> null
     }
 
+    /**
+     * The first of OUR group or channel links in a message's words, for a message with no sealed
+     * card (sent before cards existed, or with link previews off): the bubble asks the server and
+     * draws the card only when a group is behind it. Null for any other text (cheap: most text
+     * never names fariin.com).
+     */
+    fun firstLinkIn(text: String): Pair<String, Target>? {
+        if (!text.contains("fariin.com", ignoreCase = true)) return null
+        for (sp in TextLinks.find(text)) {
+            if (sp.kind != TextLinks.Kind.WEB) continue
+            target(sp.target)?.let { return sp.target to it }
+        }
+        return null
+    }
+
     /** The snapshot's own mark for a dead invite (the sender's phone was told so). */
     fun snapshotSaysGone(title: String, desc: String): Boolean = title == "Unavailable" && desc.isEmpty()
 

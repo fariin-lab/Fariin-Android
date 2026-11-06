@@ -262,7 +262,7 @@ fun ChatListScreen(
     var groupHits by remember { mutableStateOf<List<com.fariin.app.data.PublicGroupHit>>(emptyList()) }
     var publicGroupOpen by remember { mutableStateOf<String?>(null) }
     publicGroupOpen?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { publicGroupOpen = null },
-        onOpenChat = { cid -> searching = false; query = ""; people.chat(cid) }) }
+        onOpenChat = { cid -> searching = false; query = ""; people.chat(cid) }, onOpenChannel = { channels.open(it) }) }
     LaunchedEffect(q, searching) {
         if (!searching || q.trim('@').length < 3) { groupHits = emptyList(); return@LaunchedEffect }
         kotlinx.coroutines.delay(400)
@@ -690,7 +690,7 @@ fun ChatListScreen(
                     if (searching && newPeople.isEmpty() && newGroups.isNotEmpty()) item(key = "h-global") { SectionHeader("Global Search") }
                     if (searching) items(newGroups, key = { "g-" + it.cid }) { h ->
                         Row(Modifier.fillMaxWidth().clickable {
-                            if (h.isChannel) channels.page(h.cid) else publicGroupOpen = h.cid
+                            if (h.isChannel) channels.open(h.cid) else publicGroupOpen = h.cid
                         }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(h.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp), squircle = h.isChannel, kind = com.fariin.app.ui.components.AvatarKind.of(true, h.isChannel))
                             Spacer(Modifier.width(16.dp))

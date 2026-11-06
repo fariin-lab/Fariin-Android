@@ -176,6 +176,22 @@ private fun GroupLinkCard(lp: Message.LinkPreview, target: GroupLinkCards.Target
     }
 }
 
+/**
+ * A message with no sealed card whose words hold one of our group or channel links (sent before
+ * cards, or with link previews off): the same live card, drawn once the server says a group or
+ * channel is behind it (a bare name may be a person's username, so nothing is drawn until then);
+ * a dead invite says so. One cached lookup per link, as for sealed cards.
+ */
+@Composable
+internal fun LiveGroupLinkCard(text: String, isMe: Boolean) {
+    val hit = remember(text) { GroupLinkCards.firstLinkIn(text) } ?: return
+    val (url, target) = hit
+    val live by produceState(GroupLinkCards.peek(target), target) { value = GroupLinkCards.load(target) }
+    val show = live is GroupLinkCards.Live.Found ||
+        (live == GroupLinkCards.Live.Gone && target is GroupLinkCards.Target.Invite)
+    if (show) GroupLinkCard(Message.LinkPreview(url, "", ""), target, isMe)
+}
+
 /** Whether `usernames/{h}` is mine (a released name is nobody's). False when it cannot be read. */
 private suspend fun usernameIsMine(h: String): Boolean {
     val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return false

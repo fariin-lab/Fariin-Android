@@ -1222,7 +1222,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 else -> m.bodyText
             }
             // The sender's link card over the words (iOS: quote, card, then the text).
-            if (!m.deleted) m.linkPreview?.let { LinkPreviewCard(it, isMe) }
+            // No sealed card (an older message, or previews off): one of our group or channel links
+            // in the words still gets the live card.
+            if (!m.deleted) m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, isMe) else LiveGroupLinkCard(body, isMe) }
             TextWithMeta(
                 text = body,
                 style = LocalBubbleText.current.copy(color = if (m.deleted) ink.copy(alpha = 0.7f) else ink),

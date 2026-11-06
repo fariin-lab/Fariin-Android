@@ -53,7 +53,7 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
     var requested by remember { mutableStateOf(false) }
     LaunchedEffect(cid) {
         when (val r = ChannelService.preview(cid)) {
-            // A channel's @name goes to the channel's own page, not a join sheet.
+            // A channel's @name opens the channel itself (its posts), not a join sheet.
             is ChannelService.PreviewResult.Found -> if (r.preview.isChannel && onOpenChannel != null) { onClose(); onOpenChannel(cid) } else preview = r.preview
             is ChannelService.PreviewResult.Refused -> problem = r.text
             is ChannelService.PreviewResult.Failed -> problem = r.text

@@ -87,10 +87,11 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
     // A story link opens the story here when I may see it (iOS routes /s/ links to the viewer).
     var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
-    // A public group's or channel's @name (fariin.com/<name>): its join sheet or its page.
+    // A public group's or channel's @name (fariin.com/<name>): the group's join sheet, or the
+    // channel itself (its posts, a Follow bar when I do not follow; its name opens the page).
     var publicGroup by remember { mutableStateOf<String?>(null) }
     publicGroup?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { publicGroup = null },
-        onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.page(it) }) }
+        onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
     storyOpen?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(now.me, listOf(g), 0,
         com.fariin.app.data.ChatsNow.list, onClose = { storyOpen = null }) }
     if (notFound) AlertDialog(

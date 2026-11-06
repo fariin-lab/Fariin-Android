@@ -32,6 +32,15 @@ class GroupLinkCardsTest {
         assertTrue(GroupLinkCards.cardTarget("https://fariin.com/vee", "Channel invite · 3 followers") != null)
     }
 
+    @Test fun firstLinkInWords() {
+        assertNull(GroupLinkCards.firstLinkIn("hello there"))
+        assertNull(GroupLinkCards.firstLinkIn("see https://example.com/vee"))
+        assertEquals("https://fariin.com/vee" to GroupLinkCards.Target.Name("vee"),
+            GroupLinkCards.firstLinkIn("follow fariin.com/vee now"))
+        assertEquals(GroupLinkCards.Target.Name("fariin"),
+            GroupLinkCards.firstLinkIn("https://example.com then https://fariin.com/fariin")?.second)
+    }
+
     @Test fun actionWordsOnlyOnANameCard() {
         assertNull(GroupLinkCards.actionLine(byName = false, channel = true, member = true))
         assertEquals("Open Channel", GroupLinkCards.actionLine(byName = true, channel = true, member = true))
