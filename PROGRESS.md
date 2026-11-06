@@ -967,3 +967,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 12:40 138282e (agent) wallpapers retune (owner: "low quality, 80-90% empty"): checked all previews on the Pixel,
   Liquid Metal fills the screen, auroras span the width, stars brighter; half resolution. 509ac4d quote card
   filled soft blue (owner). Agent running: quote opens the chat at once (local draft until createQuote lands).
+- 12:53 0c85943 Quotes page skeleton loading (owner); 3e261ca (agent) Quote in opens the chat at once with a local
+  card (checked: kk open 0.4 s after the pick, bar filled). Channel post send animation already works on Android
+  (claims by author, recorded frame by frame). Agent running: Quotes rows option 1 (grey card, 32 avatar).
