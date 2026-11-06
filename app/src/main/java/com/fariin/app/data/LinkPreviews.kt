@@ -39,8 +39,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Off with Settings > Chats > Link Previews (`linkPreviewsEnabled`, default on): then nothing is
  * fetched at all, since building a card means this phone contacting the site.
  *
- * Not yet here (iOS builds these from the account, not the web page): our own profile, group,
- * story and public group links. They go without a card rather than with the site's banner.
+ * Our own group and channel links (invites and public @names) get their card from the server, not
+ * the web page ([groupDraft]). Not yet here: our own profile and story links. They go without a
+ * card rather than with the site's banner.
  */
 object LinkPreviews {
     const val PREFS = "fariin_chats"
@@ -261,7 +262,8 @@ object LinkPreviews {
 
     /** The card for [url], shared with any fetch already running. A miss is kept one minute. */
     suspend fun draft(url: String): Draft? {
-        if (isCallLink(url) || isOwnLink(url)) return null
+        if (isCallLink(url)) return null
+        if (isOwnLink(url) && GroupLinkCards.target(url) == null) return null
         cache[url]?.let { return it }
         missAt[url]?.let { if (System.currentTimeMillis() - it < 60_000) return null }
         // Lazy, so it is in the map before it can finish and take itself out.
@@ -280,10 +282,24 @@ object LinkPreviews {
     /** [draft], given up on after [millis] (Send tapped while the card was still loading). */
     suspend fun draftWithin(url: String, millis: Long): Draft? = withTimeoutOrNull(millis) { draft(url) }
 
-    private fun build(url: String): Draft? {
+    private suspend fun build(url: String): Draft? {
+        GroupLinkCards.target(url)?.let { return groupDraft(url, it) }
         youtubeId(url)?.let { id -> youtube(url, id)?.let { return it } }
         return fetchPage(url)
     }
+
+    /**
+     * A group or channel link's card from the server (iOS groupDraft / publicGroupDraft): the name,
+     * "N members" or "N followers", and the photo. A dead invite says so ("Unavailable" with no
+     * description, which the bubble draws as "This link is no longer valid"); a name that is not a
+     * group, or no answer, goes bare. Readers draw the group's current name and photo over it.
+     */
+    private suspend fun groupDraft(url: String, t: GroupLinkCards.Target): Draft? =
+        when (val live = GroupLinkCards.load(t)) {
+            is GroupLinkCards.Live.Found -> Draft(url, live.title, live.countLine, live.photoUrl?.let { fetchImage(it, url) })
+            GroupLinkCards.Live.Gone -> if (t is GroupLinkCards.Target.Invite) Draft(url, "Unavailable", "", null) else null
+            GroupLinkCards.Live.Unknown -> null
+        }
 
     /** A real phone browser's User-Agent, as iOS: an honest bot name got text-only cards (CDNs refused the image). */
     private const val UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
