@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.BatterySaver
 import androidx.compose.material.icons.outlined.Brush
@@ -444,8 +445,29 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
             com.fariin.app.data.AnimatedWallpapers.load(ctx)
             SettingsSection(footer = "When off, animated wallpapers show a still picture. They also stop moving when animations " +
                 "are turned off in Power Saving or on the phone, or Battery Saver is on.") {
-                SwitchRow("Animated Wallpapers", com.fariin.app.data.AnimatedWallpapers.enabled.value, last = true) {
+                val animOn = com.fariin.app.data.AnimatedWallpapers.enabled.value
+                SwitchRow("Animated Wallpapers", animOn) {
                     com.fariin.app.data.AnimatedWallpapers.setEnabled(ctx, it)
+                }
+                // Snow, rain and glowing dots: how much of it (iOS Picker "Particles": Low, Medium, High).
+                var particleMenu by remember { mutableStateOf(false) }
+                val level = com.fariin.app.data.AnimatedWallpapers.intensity.intValue
+                Box {
+                    SettingsRow("Particles", value = com.fariin.app.data.AnimatedWallpapers.INTENSITY_NAMES[level],
+                        trailing = Trailing.NONE, titleColor = if (animOn) null else com.fariin.app.ui.theme.Fariin.colors.secondary,
+                        last = true, onClick = if (animOn) ({ particleMenu = true }) else null)
+                    DropdownMenu(expanded = particleMenu && animOn, onDismissRequest = { particleMenu = false },
+                        shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
+                        containerColor = com.fariin.app.ui.components.FariinMenu.container) {
+                        com.fariin.app.data.AnimatedWallpapers.INTENSITY_NAMES.forEachIndexed { i, name ->
+                            DropdownMenuItem(text = { Text(name) }, onClick = {
+                                particleMenu = false
+                                com.fariin.app.data.AnimatedWallpapers.setIntensity(ctx, i)
+                            }, trailingIcon = if (i == level) ({
+                                Icon(Icons.Filled.Check, contentDescription = "Selected")
+                            }) else null)
+                        }
+                    }
                 }
             }
         }

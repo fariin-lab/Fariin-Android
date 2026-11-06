@@ -8,6 +8,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -71,8 +73,8 @@ fun Modifier.chatWallpaper(cid: String): Modifier = composed {
     val w = ChatLookStore.wallpaper(ctx, cid)
     SideEffect { ChatLookStore.openCid.value = cid }
     DisposableEffect(cid) { onDispose { if (ChatLookStore.openCid.value == cid) ChatLookStore.openCid.value = null } }
-    // The doodle sheet only for a theme that draws it: decoding it costs 10 ms on the opening frame.
-    val pattern = if (w.theme?.pattern == true) WallpaperArt.pattern(ctx) else null
+    // The doodle sheet only for a wallpaper that draws it: decoding it costs 10 ms on the opening frame.
+    val pattern = if (drawsPattern(w)) WallpaperArt.pattern(ctx) else null
     val photo = rememberWallpaperPhoto(ctx, (w as? ChatWallpaper.Photo)?.id)
     // This one runs the chat's clock; the header and list slices only read it, so they move together.
     val motion = rememberWallpaperMotion(w, preview = false, clock = ChatWallpaperClock.phase, drive = true)
@@ -89,7 +91,7 @@ fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
     val rootH = androidx.compose.ui.platform.LocalView.current.rootView.height.toFloat()
     ChatLookStore.version.intValue
     val w = ChatLookStore.wallpaper(ctx, cid)
-    val pattern = if (w.theme?.pattern == true) WallpaperArt.pattern(ctx) else null
+    val pattern = if (drawsPattern(w)) WallpaperArt.pattern(ctx) else null
     val photo = rememberWallpaperPhoto(ctx, (w as? ChatWallpaper.Photo)?.id)
     val motion = rememberWallpaperMotion(w, preview = false, clock = ChatWallpaperClock.phase, drive = false)
     motion.isolate { Modifier.drawBehind {
@@ -101,6 +103,10 @@ fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
         }
     } }
 }
+
+/** Whether [w] draws the doodle sheet: a patterned theme, or animated Doodles. */
+private fun drawsPattern(w: ChatWallpaper): Boolean =
+    w.theme?.pattern == true || (w as? ChatWallpaper.Animated)?.wallpaper?.look == com.fariin.app.data.AnimatedLook.DOODLES
 
 /** The colour scheme the chat header's words take over this chat's wallpaper (iOS headerBackdrop):
  *  dark over an animated wallpaper whose top is dark, else null (the app's own). */
@@ -140,7 +146,9 @@ fun DrawScope.drawWallpaper(
     when (w) {
         is ChatWallpaper.Animated -> {
             val a = w.wallpaper
-            if (a == null) drawRect(plain) else drawAnimated(a, dark, motion?.phase ?: 0f, motion?.layer, motion?.scale ?: 1)
+            if (a == null) drawRect(plain)
+            else if (a.look == com.fariin.app.data.AnimatedLook.DOODLES) drawDoodles(a, dark, pattern, motion?.phase ?: 0f, plain)
+            else drawAnimated(a, dark, motion?.phase ?: 0f, motion?.layer, motion?.scale ?: 1f)
         }
         ChatWallpaper.None -> drawRect(plain)
         is ChatWallpaper.Solid -> drawRect(Color(0xFF000000 or w.hex))
@@ -161,19 +169,21 @@ fun DrawScope.drawWallpaper(
  * up (the looks are soft, so the lower resolution does not show; iOS does the same), or straight at
  * full size without a layer. Older phones: the CPU-made first frame.
  */
-fun DrawScope.drawAnimated(a: AnimatedWallpaper, dark: Boolean, phase: Float, layer: GraphicsLayer?, scale: Int) {
+fun DrawScope.drawAnimated(a: AnimatedWallpaper, dark: Boolean, phase: Float, layer: GraphicsLayer?, scale: Float) {
     if (size.width < 1f || size.height < 1f) return
+    // Read in the draw phase, so a new intensity redraws at once.
+    val intensity = AnimatedWallpapers.intensity.intValue
     val full = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt())
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-        drawImage(AnimatedStill.bitmap(a, size.width / size.height, dark), dstSize = full, filterQuality = FilterQuality.Low)
+        drawImage(AnimatedStill.bitmap(a, size.width / size.height, dark, intensity), dstSize = full, filterQuality = FilterQuality.Low)
         return
     }
-    if (layer == null || scale <= 1) {
-        drawRect(ShaderBrush(AnimatedShaders.get(a, size.width, size.height, phase, dark)))
+    if (layer == null || scale <= 1f) {
+        drawRect(ShaderBrush(AnimatedShaders.get(a, size.width, size.height, phase, dark, intensity)))
         return
     }
     val small = IntSize(ceil(size.width / scale).toInt().coerceAtLeast(1), ceil(size.height / scale).toInt().coerceAtLeast(1))
-    val brush = ShaderBrush(AnimatedShaders.get(a, small.width.toFloat(), small.height.toFloat(), phase, dark))
+    val brush = ShaderBrush(AnimatedShaders.get(a, small.width.toFloat(), small.height.toFloat(), phase, dark, intensity))
     // Offscreen: the layer is rendered at its own small size, then the scale stretches that picture.
     layer.compositingStrategy = CompositingStrategy.Offscreen
     layer.pivotOffset = Offset.Zero
@@ -184,10 +194,48 @@ fun DrawScope.drawAnimated(a: AnimatedWallpaper, dark: Boolean, phase: Float, la
 }
 
 /**
+ * Doodles (iOS): the theme's ground, the doodle sheet a little larger than the screen (so no edge
+ * shows) drifting on a small circle, and a soft light band crossing once per loop. Only one bitmap
+ * moved about, no shader, so it moves on every Android version and is the cheapest look.
+ */
+fun DrawScope.drawDoodles(a: AnimatedWallpaper, dark: Boolean, pattern: ImageBitmap?, phase: Float, plain: Color) {
+    val g = a.doodleTheme
+    if (g == null || size.width < 1f || size.height < 1f) { drawRect(plain); return }
+    val w = size.width; val h = size.height
+    drawImage(WallpaperArt.mesh(g, dark), dstSize = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)),
+        filterQuality = FilterQuality.Low)
+    clipRect(0f, 0f, w, h) {
+        if (pattern != null) {
+            val iw = pattern.width.toFloat(); val ih = pattern.height.toFloat()
+            if (iw > 0 && ih > 0) {
+                // scaledToFill, then 1.12 larger, its centre on a circle 14 x 10 dp.
+                val s = max(w / iw, h / ih) * 1.12f
+                val dw = iw * s; val dh = ih * s
+                val cx = w / 2 + cos(phase) * 14.dp.toPx(); val cy = h / 2 + sin(phase) * 10.dp.toPx()
+                val ink = if (dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.16f)
+                drawImage(pattern, srcOffset = IntOffset.Zero, srcSize = IntSize(iw.toInt(), ih.toInt()),
+                    dstOffset = IntOffset((cx - dw / 2).toInt(), (cy - dh / 2).toInt()), dstSize = IntSize(dw.toInt(), dh.toInt()),
+                    colorFilter = ColorFilter.tint(ink, BlendMode.SrcIn), filterQuality = FilterQuality.Low)
+            }
+        }
+        // The light passing over: a band 0.8 wide and 1.6 tall, tilted 20 degrees, fully off screen at both ends.
+        val t = phase / (2 * Math.PI).toFloat()
+        val left = w * AnimatedWallpapers.doodleBandX(t); val top = -h * 0.3f
+        val bw = w * 0.8f; val bh = h * 1.6f
+        val glow = Color.White.copy(alpha = if (dark) 0.06f else 0.10f)
+        rotate(20f, pivot = Offset(left + bw / 2, top + bh / 2)) {
+            drawRect(Brush.linearGradient(listOf(Color.Transparent, glow, Color.Transparent),
+                start = Offset(left, top), end = Offset(left + bw, top + bh)),
+                topLeft = Offset(left, top), size = androidx.compose.ui.geometry.Size(bw, bh))
+        }
+    }
+}
+
+/**
  * Where an animated wallpaper is in its loop, and the layer it draws through. [phase] is read in the
  * draw phase only. For any other wallpaper it is a still nothing: phase 0, no layer, no clock.
  */
-class WallpaperMotion internal constructor(private val clock: FloatState?, val layer: GraphicsLayer?, val scale: Int) {
+class WallpaperMotion internal constructor(private val clock: FloatState?, val layer: GraphicsLayer?, val scale: Float) {
     val animated: Boolean get() = clock != null
     val phase: Float get() = clock?.floatValue ?: 0f
 
@@ -207,30 +255,38 @@ object ChatWallpaperClock {
 /**
  * The motion for [w]. With [drive] the loop advances while ALL of these hold: [w] is animated, the
  * Animated Wallpapers setting is on, Power Saving allows animations (Battery Saver included), the
- * phone has not removed animations, this is on screen (composed) and the screen is resumed. At most
- * 30 frames a second in a chat, 20 in a picker tile ([preview]), never above the display's own rate.
+ * phone has not removed animations, this is on screen (composed), the screen is resumed and
+ * [animates] (a picker tile that is not the chosen one shows a still frame, to save battery). At most
+ * 30 frames a second in a chat, 20 in a picker tile ([preview]) and for Doodles, never above the
+ * display's own rate.
  */
 @Composable
-fun rememberWallpaperMotion(w: ChatWallpaper, preview: Boolean = true, clock: MutableFloatState? = null, drive: Boolean = true): WallpaperMotion {
-    val a = (w as? ChatWallpaper.Animated)?.wallpaper ?: return remember { WallpaperMotion(null, null, 1) }
+fun rememberWallpaperMotion(
+    w: ChatWallpaper, preview: Boolean = true, clock: MutableFloatState? = null, drive: Boolean = true, animates: Boolean = true,
+): WallpaperMotion {
+    val a = (w as? ChatWallpaper.Animated)?.wallpaper ?: return remember { WallpaperMotion(null, null, 1f) }
     val ctx = LocalContext.current
     AnimatedWallpapers.load(ctx)
     val phase = clock ?: remember(a.id) { mutableFloatStateOf(0f) }
-    val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) rememberGraphicsLayer() else null
-    val moving = AnimatedWallpapers.moves(AnimatedWallpapers.enabled.value, rememberPowerState().animations,
+    val scale = a.scale(preview)
+    // Doodles draws at full size with no shader, so it needs no layer of its own.
+    val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && scale > 1f) rememberGraphicsLayer() else null
+    val moving = animates && AnimatedWallpapers.moves(AnimatedWallpapers.enabled.value, rememberPowerState().animations,
         com.fariin.app.ui.thread.systemAnimationsOn())
-    val fps = if (preview) AnimatedWallpapers.TILE_FPS else AnimatedWallpapers.CHAT_FPS
+    val fps = a.fps(preview)
     @Suppress("DEPRECATION") val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     if (drive) LaunchedEffect(a.id, moving, fps, owner) {
         if (!moving) return@LaunchedEffect
         owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            // Paused, it keeps the last frame shown and carries on from there (iOS).
+            // The clock counts only while moving: each start begins with no step, so after a pause
+            // (Power Saving, the background, a still frame) it carries on from the frame it stopped
+            // on, never jumping on by however long it was stopped. A late frame moves MAX_STEP at most.
             var last = 0L
             val wait = (1000L / fps - 12L).coerceAtLeast(0L)
             while (true) {
                 withFrameNanos { now ->
                     if (AnimatedWallpapers.frameDue(last, now, fps)) {
-                        if (last != 0L) phase.floatValue = AnimatedWallpapers.advance(phase.floatValue, (now - last) / 1e9f, a.period)
+                        phase.floatValue = AnimatedWallpapers.advance(phase.floatValue, AnimatedWallpapers.step(last, now), a.period)
                         last = now
                     }
                 }
@@ -239,7 +295,7 @@ fun rememberWallpaperMotion(w: ChatWallpaper, preview: Boolean = true, clock: Mu
             }
         }
     }
-    return remember(phase, layer, preview) { WallpaperMotion(phase, layer, if (preview) 2 else 3) }
+    return remember(phase, layer, scale) { WallpaperMotion(phase, layer, scale) }
 }
 
 /** One theme: the mesh ground, then the doodles as the ground darkened (light) or lightened (dark). */

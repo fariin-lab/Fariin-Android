@@ -1,24 +1,51 @@
 package com.fariin.app.data
 
 import android.content.Context
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 
 /*
  * ANIMATED CHAT WALLPAPERS (iOS AnimatedWallpapers.swift, owner 2026-11-06). Each look is drawn live by
- * a shader (ui/components/AnimatedWallpaperShaders.kt), no pictures or video. Stored as "a:<id>"
- * (ChatWallpaper.Animated). Local for a 1:1 chat; in a group an admin can set one for everyone.
+ * a shader (ui/components/AnimatedWallpaperShaders.kt), no pictures or video, except Doodles, which is
+ * the app's own doodle sheet moved about (transforms only). Stored as "a:<id>" (ChatWallpaper.Animated).
+ * Local for a 1:1 chat; in a group an admin can set one for everyone.
  *
  * The motion is a circle: the shader's phase goes 0..2 pi once per loop, so the last frame of a loop
  * is the first frame of the next and the clock never grows large.
  */
 
-enum class AnimatedLook { LIQUID_METAL, WATER, LIQUID_GLOW, LIQUID_EDGE, AURORA }
+enum class AnimatedLook { LIQUID_METAL, WATER, LIQUID_GLOW, LIQUID_EDGE, AURORA, STARS, PARTICLES, DOODLES }
 
-/** One animated wallpaper. [period] is seconds for one full loop; [palette] is Aurora's colours (0 green, 1 purple, 2 pink). */
-data class AnimatedWallpaper(val id: String, val name: String, val look: AnimatedLook, val period: Float, val palette: Int = 0) {
+/**
+ * One animated wallpaper. [period] is seconds for one full loop. [variant] picks within a look: Aurora's
+ * colours (0 green, 1 purple, 2 pink), the particle kind (0 snow, 1 rain, 2 glowing dots), or which
+ * patterned theme Doodles drifts over (0 the first patterned theme in ChatWallpapers.all).
+ */
+data class AnimatedWallpaper(val id: String, val name: String, val look: AnimatedLook, val period: Float, val variant: Int = 0) {
     /** iOS topIsDark: is the top of the screen dark in this mode? A moving ground has no still picture
-     *  to measure, so it says so itself; the chat header's words turn light over a dark top. */
-    fun topIsDark(dark: Boolean): Boolean = look == AnimatedLook.AURORA || dark
+     *  to measure, so it says so itself; the chat header's words turn light over a dark top. Aurora and
+     *  Stars are a night sky in both modes; the rest follow the mode. */
+    fun topIsDark(dark: Boolean): Boolean = look == AnimatedLook.AURORA || look == AnimatedLook.STARS || dark
+
+    /** The patterned theme Doodles draws its ground from, or null for any other look. */
+    val doodleTheme: WallpaperGradient? get() =
+        if (look != AnimatedLook.DOODLES) null else ChatWallpapers.all.filter { it.pattern }.getOrNull(variant)
+
+    /**
+     * How much smaller than the screen the shader is drawn, then scaled up (iOS): a third for the soft
+     * looks, half in a picker tile, Stars at 1/1.5 so its smallest stars do not fall between pixels.
+     * Doodles is no shader, drawn at full size (1).
+     */
+    fun scale(preview: Boolean): Float = when {
+        look == AnimatedLook.DOODLES -> 1f
+        preview -> 2f
+        look == AnimatedLook.STARS -> 1.5f
+        else -> 3f
+    }
+
+    /** Frames a second: the chat at most 30, a picker tile at most 20; Doodles 20 everywhere (iOS). */
+    fun fps(preview: Boolean): Int =
+        if (preview || look == AnimatedLook.DOODLES) AnimatedWallpapers.TILE_FPS else AnimatedWallpapers.CHAT_FPS
 }
 
 object AnimatedWallpapers {
@@ -31,11 +58,19 @@ object AnimatedWallpapers {
         AnimatedWallpaper("aurora-green", "Aurora Green", AnimatedLook.AURORA, 75f, 0),
         AnimatedWallpaper("aurora-purple", "Aurora Purple", AnimatedLook.AURORA, 75f, 1),
         AnimatedWallpaper("aurora-pink", "Aurora Pink", AnimatedLook.AURORA, 75f, 2),
+        // Stage two: space, particles, doodles. The particle loops are long because each layer falls
+        // whole repeats of its rows per loop (see particleRows), and long loops keep that slow.
+        AnimatedWallpaper("stars", "Stars", AnimatedLook.STARS, 60f),
+        AnimatedWallpaper("snow", "Snow", AnimatedLook.PARTICLES, 160f, 0),
+        AnimatedWallpaper("rain", "Rain", AnimatedLook.PARTICLES, 20f, 1),
+        AnimatedWallpaper("glow-dots", "Glowing Dots", AnimatedLook.PARTICLES, 480f, 2),
+        AnimatedWallpaper("doodles-1", "Doodles", AnimatedLook.DOODLES, 40f, 0),
+        AnimatedWallpaper("doodles-2", "Doodles 2", AnimatedLook.DOODLES, 40f, 1),
+        AnimatedWallpaper("doodles-3", "Doodles 3", AnimatedLook.DOODLES, 40f, 2),
     )
 
     fun find(id: String): AnimatedWallpaper? = all.firstOrNull { it.id == id }
 
-    /** Frames a second: the chat at most 30, a picker tile at most 20 (iOS). */
     const val CHAT_FPS = 30
     const val TILE_FPS = 20
 
@@ -56,26 +91,71 @@ object AnimatedWallpapers {
         return if (p < 0f) p + TWO_PI else p
     }
 
+    /** The longest step one frame may take. The clock only counts while the picture is moving, and a
+     *  frame that comes late (a stall) moves on by this at most, so the picture never jumps. */
+    const val MAX_STEP = 0.25f
+
+    /** Seconds the loop moves on between two drawn frames [last] and [now] (nanos); 0 for the first. */
+    fun step(last: Long, now: Long): Float =
+        if (last == 0L || now <= last) 0f else ((now - last) / 1e9f).coerceAtMost(MAX_STEP)
+
     /** Whether a new frame is due at [now] (nanos) after the last drawn at [last], for [fps]. A little slack so 60 Hz vsync lands on 30. */
     fun frameDue(last: Long, now: Long, fps: Int): Boolean = last == 0L || now - last >= 1_000_000_000L / fps - 4_000_000L
+
+    /**
+     * Particles: the rows a particle's randomness is read from repeat every this many cells, and a
+     * layer falls exactly rows x (1 + layer) cells per loop, so the last frame of a loop shows the same
+     * particles as the first. More than a screen of cells, so the repeat never shows. [kind] 0 snow,
+     * 1 rain, 2 glowing dots. The shader is built from these numbers.
+     */
+    fun particleRows(kind: Int): Int = when (kind) { 0 -> 24; 1 -> 48; else -> 16 }
+
+    /** Cells a particle layer falls in one loop: whole repeats of its rows. */
+    fun particleFall(kind: Int, layer: Int): Int = particleRows(kind) * (1 + layer)
+
+    /** A cell's row folded into 0 until rows (the shader's cell.y - rows * floor(cell.y / rows)). */
+    fun wrapRow(row: Float, rows: Int): Float = row - rows * kotlin.math.floor(row / rows)
+
+    /** Particle layers drawn for an intensity: Low 1, Medium 2, High 3. */
+    fun particleLayers(intensity: Int): Int = 1 + intensity.coerceIn(0, 2)
+
+    /**
+     * Doodles: the left edge of the soft light band, in widths of the screen, at [t] 0..1 through the
+     * loop. From -1.4 (fully off the left, the band and its tilt included) to +1.6 (fully off the
+     * right), so its jump back at the loop's end is never seen.
+     */
+    fun doodleBandX(t: Float): Float = t * 3f - 1.4f
 
     // Settings > Appearance > Animated Wallpapers. Off: every animated wallpaper is a still frame.
 
     private const val PREFS = "fariin_look"
     const val ENABLED_KEY = "animatedWallpapers"
+    /** Snow, rain and glowing dots: 0 Low, 1 Medium (default), 2 High (iOS key). */
+    const val INTENSITY_KEY = "animatedWallpapers.intensity"
+    val INTENSITY_NAMES = listOf("Low", "Medium", "High")
     /** Read by the drawing, so flipping the switch takes effect at once. */
     val enabled = mutableStateOf(true)
+    val intensity = mutableIntStateOf(1)
     @Volatile private var loaded = false
 
     fun load(c: Context) {
         if (loaded) return
         loaded = true
-        enabled.value = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(ENABLED_KEY, true)
+        val p = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        enabled.value = p.getBoolean(ENABLED_KEY, true)
+        intensity.intValue = p.getInt(INTENSITY_KEY, 1).coerceIn(0, 2)
     }
 
     fun setEnabled(c: Context, on: Boolean) {
-        loaded = true
+        load(c)
         enabled.value = on
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(ENABLED_KEY, on).apply()
+    }
+
+    fun setIntensity(c: Context, value: Int) {
+        load(c)
+        val v = value.coerceIn(0, 2)
+        intensity.intValue = v
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(INTENSITY_KEY, v).apply()
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.fariin.app.data.AnimatedLook
 import com.fariin.app.data.AnimatedWallpaper
+import com.fariin.app.data.AnimatedWallpapers
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
@@ -21,7 +22,11 @@ import kotlin.math.sin
  * (Android 13+). Same noise, same colours, same phase circle. Where AGSL differs:
  *  - no arrays with initialisers, so Liquid Glow's five blobs are written out one by one;
  *  - the thin edge lines (Liquid Metal, Liquid Edge) square the distance instead of pow(x, 2.0), which
- *    is undefined for a negative x in both shading languages.
+ *    is undefined for a negative x in both shading languages;
+ *  - every falling edge is written 1 - smoothstep(0, a, x): smoothstep with edge0 > edge1 is undefined
+ *    in AGSL, so it may draw nothing (or garbage) on some GPUs.
+ * `palette` is the look's variant (AnimatedWallpaper.variant): Aurora's colours, the particle kind.
+ * Doodles is not a shader (ChatWallpaper.kt drawDoodles).
  * Below Android 13 there are no runtime shaders: [AnimatedStill] runs the same maths once on the CPU
  * into a small bitmap, the first frame of the loop, scaled up.
  */
@@ -138,7 +143,8 @@ half4 main(float2 position) {
         float curtain = pow(0.5 + 0.5 * sin(x * 3.14159), 7.0);
         float base = 0.55 + 0.18 * sin(s.x * 2.0 + phase + fi) + 0.08 * fi;
         float rise = smoothstep(base - 0.75, base - 0.05, s.y) * (1.0 - smoothstep(base, base + 0.06, s.y));
-        float rays = 0.55 + 0.45 * awNoise(float2(s.x * 38.0 + fi * 7.0, phase * 0.6 + fi));
+        // The rays read their noise on a circle, so the last frame of a loop is the first (no seam).
+        float rays = 0.55 + 0.45 * awNoise(float2(s.x * 38.0 + fi * 7.0 + cos(phase) * 2.0, fi * 5.0 + sin(phase) * 2.0));
         float glow = curtain * rise * rays;
         light += mix(a, b, smoothstep(base - 0.6, base, s.y)) * glow * (0.85 - fi * 0.2);
     }
@@ -205,12 +211,110 @@ half4 main(float2 position) {
 }
 """
 
+// A deep sky: a faint nebula drifting on a slow loop, and stars on a grid of cells (one per cell at a
+// random spot and size), each twinkling a whole number of times per loop so the loop has no seam.
+private const val STARS = PRELUDE + """
+half4 main(float2 position) {
+    float2 uv = position / max(size.y, 1.0);
+    float y = uv.y + palette * 0.0;
+    float3 sky = dark > 0.5 ? mix(float3(0.010, 0.012, 0.040), float3(0.030, 0.020, 0.075), y)
+                            : mix(float3(0.075, 0.085, 0.190), float3(0.150, 0.110, 0.260), y);
+    float2 m = awCircle(phase, 0.25);
+    float neb = awFbm(uv * 1.6 + m);
+    float3 rgb = sky + float3(0.20, 0.10, 0.35) * smoothstep(0.45, 0.85, neb) * 0.45
+                     + float3(0.05, 0.15, 0.30) * smoothstep(0.55, 0.90, awFbm(uv * 2.3 - m + 7.0)) * 0.35;
+    for (int layer = 0; layer < 2; layer++) {
+        float fl = float(layer);
+        float scale = layer == 0 ? 22.0 : 40.0;
+        float2 g = uv * scale;
+        float2 cell = floor(g);
+        float2 f = fract(g);
+        float h = awHash(cell + fl * 31.0);
+        float2 spot = float2(awHash(cell + 3.1), awHash(cell + 7.7)) * 0.8 + 0.1;
+        float d = length(f - spot);
+        float radius = (layer == 0 ? 0.06 : 0.04) * (0.5 + h);
+        float star = 1.0 - smoothstep(0.0, radius, d);
+        float rate = floor(1.0 + h * 4.0);
+        float tw = 0.55 + 0.45 * sin(phase * rate + h * 6.2831);
+        float show = step(0.55, h);
+        rgb += float3(0.85, 0.90, 1.0) * star * tw * show * (layer == 0 ? 1.0 : 0.6);
+    }
+    return half4(half3(saturate(rgb)), 1.0);
+}
+"""
+
+// Snow, rain, glowing dots: one particle per cell, the cells falling a whole number of their repeating
+// rows per loop (AnimatedWallpapers.particleRows), so the last frame of a loop is the first. `palette`
+// is the kind (0 snow, 1 rain, 2 dots); `amount` 0..2 the intensity (how many layers are drawn).
+private val PARTICLES = PRELUDE + """
+uniform float amount;
+
+half4 main(float2 position) {
+    float kind = palette;
+    float2 uv = position / max(size.y, 1.0);
+    float y = uv.y;
+    float t = phase / 6.28318;
+    float3 ground = float3(0.0);
+    if (kind < 0.5)      ground = dark > 0.5 ? mix(float3(0.06, 0.08, 0.14), float3(0.10, 0.12, 0.20), y)
+                                             : mix(float3(0.70, 0.78, 0.88), float3(0.86, 0.90, 0.95), y);
+    else if (kind < 1.5) ground = dark > 0.5 ? mix(float3(0.05, 0.07, 0.10), float3(0.09, 0.11, 0.15), y)
+                                             : mix(float3(0.55, 0.62, 0.70), float3(0.72, 0.77, 0.82), y);
+    else                 ground = dark > 0.5 ? mix(float3(0.03, 0.03, 0.08), float3(0.06, 0.04, 0.12), y)
+                                             : mix(float3(0.92, 0.88, 0.96), float3(0.97, 0.93, 0.90), y);
+    float3 rgb = ground;
+    int layers = 1 + int(clamp(amount, 0.0, 2.0));
+    float rows = kind < 0.5 ? ${AnimatedWallpapers.particleRows(0)}.0 : (kind < 1.5 ? ${AnimatedWallpapers.particleRows(1)}.0 : ${AnimatedWallpapers.particleRows(2)}.0);
+    for (int layer = 0; layer < 3; layer++) {
+        if (layer >= layers) break;
+        float fl = float(layer);
+        float scale = kind < 1.5 ? (9.0 + fl * 5.0) : (6.0 + fl * 3.0);
+        float speed = rows * (1.0 + fl);
+        float2 g = uv * scale;
+        // Rain leans a little, set from the position before the fall so the lean never moves with time.
+        if (kind > 0.5 && kind < 1.5) g.x += g.y * 0.12;
+        g.y -= t * speed;
+        float2 cell = floor(g);
+        cell.y = cell.y - rows * floor(cell.y / rows);
+        float2 f = fract(g);
+        float h = awHash(cell + fl * 17.0);
+        if (h < (kind < 1.5 ? 0.35 : 0.55)) continue;
+        // Spots stay in the middle of their cell, so nothing is cut at a cell's edge.
+        float2 spot = float2(awHash(cell + 1.3), awHash(cell + 5.9)) * 0.4 + 0.3;
+        if (kind < 0.5) {
+            spot.x += 0.12 * sin(phase * floor(1.0 + h * 2.0) * 8.0 + h * 6.2831);
+            float d = length(f - spot);
+            float flake = 1.0 - smoothstep(0.0, 0.10 - fl * 0.02, d);
+            float3 c = dark > 0.5 ? float3(0.92, 0.95, 1.0) : float3(1.0, 1.0, 1.0);
+            rgb = mix(rgb, c, flake * (0.85 - fl * 0.2));
+        } else if (kind < 1.5) {
+            float2 q = f - spot;
+            float streak = (1.0 - smoothstep(0.0, 0.018, abs(q.x))) * (1.0 - smoothstep(0.0, 0.22, abs(q.y)));
+            float3 c = dark > 0.5 ? float3(0.65, 0.75, 0.90) : float3(0.95, 0.97, 1.0);
+            rgb = mix(rgb, c, streak * (0.55 - fl * 0.12));
+        } else {
+            float2 drift = float2(cos(phase * floor(1.0 + h * 2.0) * 8.0 + h * 9.0), sin(phase * 8.0 + h * 5.0)) * 0.08;
+            float d = length(f - spot - drift);
+            float pulse = 0.6 + 0.4 * sin(phase * floor(1.0 + h * 3.0) * 16.0 + h * 6.2831);
+            float core = 1.0 - smoothstep(0.0, 0.06, d);
+            float halo = (1.0 - smoothstep(0.0, 0.20, d)) * 0.45;
+            float3 c = dark > 0.5 ? mix(float3(1.0, 0.85, 0.45), float3(0.55, 0.85, 1.0), h)
+                                  : mix(float3(1.0, 0.65, 0.35), float3(0.55, 0.55, 1.0), h);
+            // On a light ground adding light would only whiten it, so the dot mixes toward its colour.
+            if (dark > 0.5) { rgb += c * (core + halo) * pulse * 0.9; }
+            else { rgb = mix(rgb, c, saturate((core + halo) * pulse * 0.75)); }
+        }
+    }
+    return half4(half3(saturate(rgb)), 1.0);
+}
+"""
+
 /** One compiled shader per look, made on first use and reused by every chat and tile (drawing is on the main thread). */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal object AnimatedShaders {
     private val shaders = HashMap<AnimatedLook, RuntimeShader>()
 
-    fun get(a: AnimatedWallpaper, width: Float, height: Float, phase: Float, dark: Boolean): RuntimeShader {
+    /** [intensity] is the particle setting (0..2), read by Snow, Rain and Glowing Dots only. Not for Doodles. */
+    fun get(a: AnimatedWallpaper, width: Float, height: Float, phase: Float, dark: Boolean, intensity: Int): RuntimeShader {
         val s = shaders.getOrPut(a.look) {
             RuntimeShader(when (a.look) {
                 AnimatedLook.LIQUID_METAL -> LIQUID_METAL
@@ -218,33 +322,40 @@ internal object AnimatedShaders {
                 AnimatedLook.LIQUID_GLOW -> LIQUID_GLOW
                 AnimatedLook.LIQUID_EDGE -> LIQUID_EDGE
                 AnimatedLook.AURORA -> AURORA
+                AnimatedLook.STARS -> STARS
+                AnimatedLook.PARTICLES -> PARTICLES
+                // Never asked for (drawn without a shader); a cheap look if it ever is.
+                AnimatedLook.DOODLES -> LIQUID_GLOW
             })
         }
         s.setFloatUniform("size", width, height)
         s.setFloatUniform("phase", phase)
         s.setFloatUniform("dark", if (dark) 1f else 0f)
-        s.setFloatUniform("palette", a.palette.toFloat())
+        s.setFloatUniform("palette", a.variant.toFloat())
+        if (a.look == AnimatedLook.PARTICLES) s.setFloatUniform("amount", intensity.coerceIn(0, 2).toFloat())
         return s
     }
 }
 
 /**
  * Below Android 13: the loop's first frame worked out on the CPU, the same maths as the shaders, into
- * a bitmap 96 pixels tall (the looks are soft, so scaled up it reads the same). One per look, mode and
- * shape, made once.
+ * a bitmap 96 pixels tall (the looks are soft, so scaled up it reads the same); Stars and the particles
+ * 240 tall, or their small dots would vanish. One per look, mode, shape and intensity, made once.
  */
 internal object AnimatedStill {
     private val cache = HashMap<String, ImageBitmap>()
 
-    fun bitmap(a: AnimatedWallpaper, aspect: Float, dark: Boolean): ImageBitmap {
-        val h = 96
-        val w = (h * aspect).toInt().coerceIn(8, 192)
+    fun bitmap(a: AnimatedWallpaper, aspect: Float, dark: Boolean, intensity: Int): ImageBitmap {
+        val sharp = a.look == AnimatedLook.STARS || a.look == AnimatedLook.PARTICLES
+        val h = if (sharp) 240 else 96
+        val w = (h * aspect).toInt().coerceIn(8, h * 2)
+        val amount = if (a.look == AnimatedLook.PARTICLES) intensity.coerceIn(0, 2) else 0
         return synchronized(cache) {
-            cache.getOrPut("${a.id}|$dark|$w") {
+            cache.getOrPut("${a.id}|$dark|$w|$amount") {
                 val px = IntArray(w * h)
                 val sw = w.toFloat(); val sh = h.toFloat()
                 for (y in 0 until h) for (x in 0 until w) {
-                    px[y * w + x] = color(a, x + 0.5f, y + 0.5f, sw, sh, dark)
+                    px[y * w + x] = color(a, x + 0.5f, y + 0.5f, sw, sh, dark, amount)
                 }
                 Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888).asImageBitmap()
             }
@@ -285,7 +396,11 @@ internal object AnimatedStill {
         (0xFF shl 24) or ((r.coerceIn(0f, 1f) * 255).toInt() shl 16) or ((g.coerceIn(0f, 1f) * 255).toInt() shl 8) or (b.coerceIn(0f, 1f) * 255).toInt()
 
     /** The colour at one pixel with the phase at 0, as the matching shader. */
-    private fun color(a: AnimatedWallpaper, px: Float, py: Float, w: Float, h: Float, dark: Boolean): Int = when (a.look) {
+    private fun color(a: AnimatedWallpaper, px: Float, py: Float, w: Float, h: Float, dark: Boolean, amount: Int): Int = when (a.look) {
+        AnimatedLook.STARS -> stars(px / h, py / h, dark)
+        AnimatedLook.PARTICLES -> particles(a.variant, px / h, py / h, dark, amount)
+        // Doodles never asks for a still (it draws its theme and sheet); its theme's flat colour if it did.
+        AnimatedLook.DOODLES -> (a.doodleTheme?.flat(dark) ?: 0L).toInt() or (0xFF shl 24)
         AnimatedLook.LIQUID_METAL -> {
             val ux = px / h * 1.7f; val uy = py / h * 1.7f
             val m1x = 0.55f; val m1y = 0f
@@ -328,7 +443,7 @@ internal object AnimatedStill {
             val ux = px / h; val uy = py / h
             val sx = ux * 0.94f + uy * 0.34f; val sy = uy * 0.94f - ux * 0.34f
             val mx = 0.7f; val my = 0f
-            val (ca, cb) = when (a.palette) {
+            val (ca, cb) = when (a.variant) {
                 0 -> floatArrayOf(0.10f, 0.95f, 0.75f) to floatArrayOf(0.15f, 0.35f, 1.00f)
                 1 -> floatArrayOf(0.80f, 0.30f, 1.00f) to floatArrayOf(0.35f, 0.22f, 0.95f)
                 else -> floatArrayOf(1.00f, 0.28f, 0.58f) to floatArrayOf(1.00f, 0.58f, 0.38f)
@@ -343,7 +458,7 @@ internal object AnimatedStill {
                 val curtain = (0.5f + 0.5f * sin(x * 3.14159f)).pow(7)
                 val base = 0.55f + 0.18f * sin(sx * 2f + fi) + 0.08f * fi
                 val rise = smooth(base - 0.75f, base - 0.05f, sy) * (1 - smooth(base, base + 0.06f, sy))
-                val rays = 0.55f + 0.45f * noise(sx * 38f + fi * 7f, fi)
+                val rays = 0.55f + 0.45f * noise(sx * 38f + fi * 7f + 2f, fi * 5f)   // cos(0) * 2, sin(0) * 2
                 val glow = curtain * rise * rays * (0.85f - fi * 0.2f)
                 val t = smooth(base - 0.6f, base, sy)
                 for (k in 0 until 3) light[k] += mixf(ca[k], cb[k], t) * glow
@@ -396,5 +511,82 @@ internal object AnimatedStill {
             else { val t = edge * 0.55f
                 pack(mixf(mixf(0.93f, 0.86f, inside), 0.30f, t), mixf(mixf(0.94f, 0.88f, inside), 0.45f, t), mixf(mixf(0.96f, 0.92f, inside), 0.75f, t)) }
         }
+    }
+
+    /** The STARS shader at phase 0 for one point (uv in heights). */
+    private fun stars(ux: Float, uy: Float, dark: Boolean): Int {
+        val y = uy
+        val rgb = if (dark) floatArrayOf(mixf(0.010f, 0.030f, y), mixf(0.012f, 0.020f, y), mixf(0.040f, 0.075f, y))
+            else floatArrayOf(mixf(0.075f, 0.150f, y), mixf(0.085f, 0.110f, y), mixf(0.190f, 0.260f, y))
+        val mx = 0.25f; val my = 0f
+        val n1 = smooth(0.45f, 0.85f, fbm(ux * 1.6f + mx, uy * 1.6f + my)) * 0.45f
+        val n2 = smooth(0.55f, 0.90f, fbm(ux * 2.3f - mx + 7f, uy * 2.3f - my + 7f)) * 0.35f
+        rgb[0] += 0.20f * n1 + 0.05f * n2; rgb[1] += 0.10f * n1 + 0.15f * n2; rgb[2] += 0.35f * n1 + 0.30f * n2
+        for (layer in 0 until 2) {
+            val scale = if (layer == 0) 22f else 40f
+            val gx = ux * scale; val gy = uy * scale
+            val cx = floor(gx); val cy = floor(gy)
+            val hv = hash(cx + layer * 31f, cy + layer * 31f)
+            if (hv < 0.55f) continue
+            val sx = hash(cx + 3.1f, cy + 3.1f) * 0.8f + 0.1f; val sy = hash(cx + 7.7f, cy + 7.7f) * 0.8f + 0.1f
+            val dx = gx - cx - sx; val dy = gy - cy - sy
+            val d = kotlin.math.sqrt(dx * dx + dy * dy)
+            val radius = (if (layer == 0) 0.06f else 0.04f) * (0.5f + hv)
+            val star = 1f - smooth(0f, radius, d)
+            val tw = 0.55f + 0.45f * sin(hv * 6.2831f)
+            val k = star * tw * (if (layer == 0) 1f else 0.6f)
+            rgb[0] += 0.85f * k; rgb[1] += 0.90f * k; rgb[2] += 1.0f * k
+        }
+        return pack(rgb[0], rgb[1], rgb[2])
+    }
+
+    /** The PARTICLES shader at phase 0 for one point: [kind] 0 snow, 1 rain, 2 dots; [amount] 0..2. */
+    private fun particles(kind: Int, ux: Float, uy: Float, dark: Boolean, amount: Int): Int {
+        val y = uy
+        fun grad(a: FloatArray, b: FloatArray) = floatArrayOf(mixf(a[0], b[0], y), mixf(a[1], b[1], y), mixf(a[2], b[2], y))
+        val rgb = when (kind) {
+            0 -> if (dark) grad(floatArrayOf(0.06f, 0.08f, 0.14f), floatArrayOf(0.10f, 0.12f, 0.20f))
+                else grad(floatArrayOf(0.70f, 0.78f, 0.88f), floatArrayOf(0.86f, 0.90f, 0.95f))
+            1 -> if (dark) grad(floatArrayOf(0.05f, 0.07f, 0.10f), floatArrayOf(0.09f, 0.11f, 0.15f))
+                else grad(floatArrayOf(0.55f, 0.62f, 0.70f), floatArrayOf(0.72f, 0.77f, 0.82f))
+            else -> if (dark) grad(floatArrayOf(0.03f, 0.03f, 0.08f), floatArrayOf(0.06f, 0.04f, 0.12f))
+                else grad(floatArrayOf(0.92f, 0.88f, 0.96f), floatArrayOf(0.97f, 0.93f, 0.90f))
+        }
+        fun mixTo(r: Float, g: Float, b: Float, t: Float) { rgb[0] = mixf(rgb[0], r, t); rgb[1] = mixf(rgb[1], g, t); rgb[2] = mixf(rgb[2], b, t) }
+        val rows = AnimatedWallpapers.particleRows(kind)
+        for (layer in 0 until AnimatedWallpapers.particleLayers(amount)) {
+            val fl = layer.toFloat()
+            val scale = if (kind <= 1) 9f + fl * 5f else 6f + fl * 3f
+            var gx = ux * scale; val gy = uy * scale
+            if (kind == 1) gx += gy * 0.12f
+            val cx = floor(gx); val cy = AnimatedWallpapers.wrapRow(floor(gy), rows)
+            val fx = gx - floor(gx); val fy = gy - floor(gy)
+            val hv = hash(cx + fl * 17f, cy + fl * 17f)
+            if (hv < (if (kind <= 1) 0.35f else 0.55f)) continue
+            var sx = hash(cx + 1.3f, cy + 1.3f) * 0.4f + 0.3f; val sy = hash(cx + 5.9f, cy + 5.9f) * 0.4f + 0.3f
+            when (kind) {
+                0 -> {
+                    sx += 0.12f * sin(hv * 6.2831f)
+                    val dx = fx - sx; val dy = fy - sy
+                    val flake = 1f - smooth(0f, 0.10f - fl * 0.02f, kotlin.math.sqrt(dx * dx + dy * dy))
+                    if (dark) mixTo(0.92f, 0.95f, 1f, flake * (0.85f - fl * 0.2f)) else mixTo(1f, 1f, 1f, flake * (0.85f - fl * 0.2f))
+                }
+                1 -> {
+                    val streak = (1f - smooth(0f, 0.018f, abs(fx - sx))) * (1f - smooth(0f, 0.22f, abs(fy - sy)))
+                    if (dark) mixTo(0.65f, 0.75f, 0.90f, streak * (0.55f - fl * 0.12f)) else mixTo(0.95f, 0.97f, 1f, streak * (0.55f - fl * 0.12f))
+                }
+                else -> {
+                    val dx = fx - sx - cos(hv * 9f) * 0.08f; val dy = fy - sy - sin(hv * 5f) * 0.08f
+                    val d = kotlin.math.sqrt(dx * dx + dy * dy)
+                    val pulse = 0.6f + 0.4f * sin(hv * 6.2831f)
+                    val glow = (1f - smooth(0f, 0.06f, d)) + (1f - smooth(0f, 0.20f, d)) * 0.45f
+                    val c = if (dark) floatArrayOf(mixf(1f, 0.55f, hv), mixf(0.85f, 0.85f, hv), mixf(0.45f, 1f, hv))
+                        else floatArrayOf(mixf(1f, 0.55f, hv), mixf(0.65f, 0.55f, hv), mixf(0.35f, 1f, hv))
+                    if (dark) { val k = glow * pulse * 0.9f; rgb[0] += c[0] * k; rgb[1] += c[1] * k; rgb[2] += c[2] * k }
+                    else mixTo(c[0], c[1], c[2], (glow * pulse * 0.75f).coerceIn(0f, 1f))
+                }
+            }
+        }
+        return pack(rgb[0], rgb[1], rgb[2])
     }
 }

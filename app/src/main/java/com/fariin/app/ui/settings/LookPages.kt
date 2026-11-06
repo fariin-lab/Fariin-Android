@@ -234,7 +234,9 @@ private fun WallTile(w: ChatWallpaper, current: ChatWallpaper, modifier: Modifie
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
     val solid = w as? ChatWallpaper.Solid
-    val motion = com.fariin.app.ui.components.rememberWallpaperMotion(w)
+    // Only the chosen tile moves; the others show a still frame of their look (a row of fourteen
+    // moving tiles nobody is watching was heavy on the battery).
+    val motion = com.fariin.app.ui.components.rememberWallpaperMotion(w, animates = current == w)
     Box(modifier.height(150.dp).clip(shape)
         .then(motion.isolate { Modifier.drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo, motion = motion) } })
         // The plain page ("no wallpaper") is the page colour too, so it gets the same rim a solid has.
