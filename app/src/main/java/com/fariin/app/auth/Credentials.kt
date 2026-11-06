@@ -128,13 +128,18 @@ object Passkeys {
 
     data class Row(val id: String, val name: String, val createdMs: Double?, val lastUsedMs: Double?)
 
-    suspend fun list(): List<Row> = (call("listPasskeys")["passkeys"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }.map {
+    /** The last list read this session (signing out ends the process's session with it). */
+    @Volatile var lastList: List<Row>? = null
+
+    suspend fun list(): List<Row> = listFresh().also { lastList = it }
+
+    private suspend fun listFresh(): List<Row> = (call("listPasskeys")["passkeys"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }.map {
         val provider = it["provider"] as? String ?: ""
         Row(it["id"] as? String ?: "", provider.ifEmpty { it["label"] as? String ?: "Passkey" },
             (it["createdAt"] as? Number)?.toDouble(), (it["lastUsedAt"] as? Number)?.toDouble())
     }
 
-    suspend fun delete(id: String) { call("deletePasskey", mapOf("id" to id)) }
+    suspend fun delete(id: String) { call("deletePasskey", mapOf("id" to id)); lastList = lastList?.filter { it.id != id } }
 
     private fun toJson(v: Any?): Any? = when (v) {
         is Map<*, *> -> JSONObject().apply { v.forEach { (k, x) -> put(k.toString(), toJson(x) ?: JSONObject.NULL) } }

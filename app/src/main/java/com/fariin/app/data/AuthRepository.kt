@@ -254,7 +254,10 @@ class AuthRepository(
         "${p.versionName} ($code)"
     } catch (_: Exception) { "1.0" }
 
-    fun signOut() = auth.signOut()
+    fun signOut() {
+        com.fariin.app.auth.Passkeys.lastList = null   // the next account never sees this one's passkeys
+        auth.signOut()
+    }
 
     companion object {
         const val FUNCTIONS_REGION = "me-central1"

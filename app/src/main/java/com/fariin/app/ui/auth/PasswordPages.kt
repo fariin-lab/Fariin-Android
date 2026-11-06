@@ -285,8 +285,10 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var rows by remember { mutableStateOf(demoRows ?: emptyList()) }
-    var loading by remember { mutableStateOf(demoRows == null) }
+    // The last answer this session, drawn at once; the server's list (about 2 s when it is cold)
+    // replaces it behind. Only the very first open waits.
+    var rows by remember { mutableStateOf(demoRows ?: Passkeys.lastList ?: emptyList()) }
+    var loading by remember { mutableStateOf(demoRows == null && Passkeys.lastList == null) }
     var error by remember { mutableStateOf<String?>(null) }
     var toDelete by remember { mutableStateOf<Passkeys.Row?>(null) }
     suspend fun load() { try { rows = Passkeys.list(); error = null } catch (e: Exception) { error = AuthRepository.codeMessageFor(e) }; loading = false }
