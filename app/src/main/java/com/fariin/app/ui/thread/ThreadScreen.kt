@@ -108,6 +108,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.graphics.Color
@@ -548,10 +549,29 @@ private fun ThreadContent(
                     modifier = Modifier.align(Alignment.TopCenter).zIndex(0.5f))
                 // No bottom strip: iOS took its bottom blur off on the owner's order (2026-08-25, "remove
                 // chat bottom blur, don't touch top header"); messages pass behind the floating composer.
+            } else {
+                // Over a wallpaper (owner 2026-11-05: "when you set a wallpaper it becomes a border"): the
+                // wallpaper behind the header used to stop at its lower edge in a hard line. It now runs
+                // 72 dp further and melts away along the same eased curve, so the bubbles fade in under
+                // the name instead of being cut.
+                val tailPx = with(density) { 72.dp.toPx() }
+                Box(Modifier.align(Alignment.TopCenter).zIndex(0.5f).fillMaxWidth()
+                    .height(with(density) { topBarPx.toDp() } + 72.dp)
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val solid = ((size.height - tailPx) / size.height).coerceIn(0f, 1f)
+                        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to Color.Black, solid to Color.Black,
+                            (solid + (1f - solid) * 0.35f) to Color.Black.copy(alpha = 0.7f),
+                            (solid + (1f - solid) * 0.7f) to Color.Black.copy(alpha = 0.25f),
+                            1f to Color.Transparent),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                    }
+                    .then(com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid)))
             }
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
-                .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier)
                 // The chat's first moment (owner 2026-11-05: "when you open a chat it must be there"):
                 // the glass strip needs a frame to capture the list, and one frame showed the bubbles
                 // sharp under the name. The header, drawn from frame one, lays the page-colour fade
