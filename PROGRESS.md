@@ -936,3 +936,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   older than today) and "a.a.a..." stalled ~180 ms per draw; every link/email repeat bounded, starts only at word
   starts, email/@name passes only with an "@". Speed test added; checked on the Pixel (no crash, post deleted).
   c0cd464 (agent) "Did you mean" under No Results. Agent running: who quoted a post (quoteCount bar + sheet).
+- 11:15 aa3377e CRASH FIX: the new Quotes bar crashed the app on a post quoted only privately (no faces -> layout read a
+  missing child); found on the Pixel opening VE3, fixed, checked. d8939fb same-class safety for the bubble time slot.
+  6153de1 search cursor to the end after "Did you mean". 17ca029 bubble styles hidden (owner: next year).
+  MY MISTAKE: d8939fb swept the Quotes-redesign helper's unfinished ThreadScreen line into my commit, so HEAD does not
+  build until its PostQuotesUi.kt lands (it has been told). Rule recorded: diff each file before staging.
