@@ -528,7 +528,7 @@ private fun ThreadContent(
     // it can come further forward. Read through derivedStateOf, so a scroll recomposes only on a flip.
     val olderUnder by remember { derivedStateOf { listState.canScrollForward } }
     val searchList = search.active && search.asList && search.matches.isNotEmpty()
-    androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassHaze provides edgeHaze) {
+    androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassHaze provides edgeHaze, LocalOnWallpaper provides walled) {
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
@@ -1035,7 +1035,23 @@ private fun NoticePill(text: String, vertical: Dp = 4.dp, icon: Boolean = false)
 
 /** Theme.received: F2F2F2 light, 26262B dark. */
 @Composable
-private fun receivedFill(): Color = if (Fariin.colors.dark) Color(0xFF26262B) else Color(0xFFF2F2F2)
+private fun receivedFill(): Color {
+    val dark = Fariin.colors.dark
+    // On a wallpaper the other person's bubble lets it through, frosted (iOS: incoming bubbles on a
+    // wallpaper wear a see-through surface with a hairline rim; owner 2026-11-05 asked for iOS's
+    // bubbles). A light wash, not a live blur: a blur inside the list would cost every scrolled frame.
+    if (LocalOnWallpaper.current) return if (dark) Color(0xFF26262B).copy(alpha = 0.80f) else Color.White.copy(alpha = 0.82f)
+    return if (dark) Color(0xFF26262B) else Color(0xFFF2F2F2)
+}
+
+/** The hairline an incoming bubble wears on a wallpaper (iOS bubbleRim). */
+@Composable
+private fun receivedRim(isMe: Boolean, shape: androidx.compose.ui.graphics.Shape): Modifier =
+    if (isMe || !LocalOnWallpaper.current) Modifier
+    else Modifier.border(0.5.dp, if (Fariin.colors.dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.10f), shape)
+
+/** The open chat has a wallpaper behind its list. */
+internal val LocalOnWallpaper = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 /** Theme.defaultBubble: system blue (the default chat colour). */
 @Composable
@@ -1134,7 +1150,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
         if (story != null) StoryReplyHeader(ui, m, story, isMe)
         Column(
-            Modifier.widthIn(max = maxW).clip(shape).background(if (isMe) myFill() else receivedFill())
+            Modifier.widthIn(max = maxW).clip(shape).background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape))
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp),
         ) {
             if (showSender && g.first) {
@@ -1258,7 +1274,8 @@ private fun MediaRow(
     val busy = m.sendState == Message.SendState.SENDING
     // While its picture is up in the viewer, a bare photo bubble leaves no coloured block behind.
     val lifted = caption == null && !header && MediaOrigins.hiddenKey == MediaOrigins.keyOf(m)
-    Column(Modifier.widthIn(max = maxW).clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())) {
+    Column(Modifier.widthIn(max = maxW).clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
+        .then(if (lifted) Modifier else receivedRim(isMe, shape))) {
         if (header) {
             Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
                 if (showSender && g.first) {
