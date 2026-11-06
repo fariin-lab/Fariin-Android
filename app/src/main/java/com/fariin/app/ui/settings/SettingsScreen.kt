@@ -248,9 +248,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
         Box(Modifier.fillMaxWidth().then(
             if (glass) Modifier.hazeEffect(haze) {
                 backgroundColor = c.bgSecondary; blurRadius = 24.dp; noiseFactor = 0f
-                // No tint (owner 2026-11-06: "make it not noticeable where it ends", as the chat): a colour over
-                // the blur leaves a band where it stops; the blur alone eases to nothing.
-                tints = emptyList()
+                tints = listOf(dev.chrisbanes.haze.HazeTint(c.bgSecondary.copy(alpha = 0.7f)))
                 inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
                 progressive = com.fariin.app.ui.components.edgeStages(0.45f)
                 alpha = glassAlpha
