@@ -914,3 +914,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   styles `bs` reading (77f27db, agent, not device-tested: needs an iPhone to send one); tombstone strips bs/bsd
   (c8002e2). Agents running: wallpapers round 2 (stars/particles/doodles + iOS shader fixes), bubble styles
   round 2 (decorations `bsd`, link colour, meta 0.8).
+- 09:55 0bdbf51 empty chat search centred above the keyboard ("No Results" as Settings); 457971c (agent) wallpapers
+  stage two (Stars, Snow, Rain, Dots, Doodles x3 + iOS shader fixes): all 7 checked compiling and playing on the
+  Pixel; c8466ac (agent) bubble decorations bsd + details (needs an iPhone sender to see); a54d247 followed
+  channels' list line from the server's postPreview (Fariin News shows its post, not the verified notice).
+  Noted, not changed: global search matches @names only (server), 3+ letters, same as iOS.
