@@ -102,6 +102,8 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var stats by remember(cid) { mutableStateOf<GroupStats.Data?>(null) }
     var failure by remember(cid) { mutableStateOf<String?>(null) }
+    var retry by remember(cid) { mutableStateOf(true) }
+    val isChannel = remember(cid) { com.fariin.app.data.ChatsNow.find(cid)?.isChannel == true }
     suspend fun load() {
         try {
             val r = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("groupStats")
@@ -109,7 +111,9 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
             stats = GroupStats.parse(r.getData() as? Map<*, *> ?: emptyMap<String, Any>())
             failure = null
         } catch (e: Exception) {
-            failure = GroupStats.failure((e as? FirebaseFunctionsException)?.code?.name)
+            val code = (e as? FirebaseFunctionsException)?.code?.name
+            failure = GroupStats.failure(code, isChannel)
+            retry = GroupStats.canRetry(code)
         }
     }
     LaunchedEffect(cid) { if (stats == null) load() }
@@ -125,7 +129,7 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
             f != null -> Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(f, fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center)
-                Text("Retry", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent,
+                if (retry) Text("Retry", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent,
                     modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.accent)
                         .clickable { failure = null; scope.launch { load() } }.padding(horizontal = 14.dp, vertical = 7.dp))
             }

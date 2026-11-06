@@ -210,12 +210,18 @@ object GroupStats {
         return "Last 30 days: " + parts.joinToString(" · ")
     }
 
-    /** The failure line (iOS GroupStatsView.message, group words). */
-    fun failure(code: String?): String = when (code) {
-        "PERMISSION_DENIED" -> "Only the group's owner and admins can see statistics."
-        "FAILED_PRECONDITION" -> "Statistics appear once the group is bigger."
-        else -> "Couldn't load statistics. Check your connection and try again."
+    /** The failure line (iOS GroupStatsView.message), in a channel's words for a channel. */
+    fun failure(code: String?, channel: Boolean = false): String {
+        val what = if (channel) "channel" else "group"
+        return when (code) {
+            "PERMISSION_DENIED" -> "Only the $what's owner and admins can see statistics."
+            "FAILED_PRECONDITION" -> "Statistics appear once the $what is bigger."
+            else -> "Couldn't load statistics. Check your connection and try again."
+        }
     }
+
+    /** Only a failed load is worth trying again; a rule (too small, not allowed) is not. */
+    fun canRetry(code: String?): Boolean = code != "PERMISSION_DENIED" && code != "FAILED_PRECONDITION"
 
     /** Each language's share, rounded to a whole percent. */
     fun percent(count: Int, langs: List<Language>): Int = (count * 100.0 / maxOf(1, langs.sumOf { it.count })).roundToInt()
