@@ -123,9 +123,16 @@ object AccountReport {
             user.providerData.map { it.providerId }.filter { it != "firebase" }, Presence.privacyOf(me), devices, blocked,
             CryptoHub.listedAll().count { !it.isCleared(uid) }, fmt = { df.format(Date(it)) },
         )
+        // A file, as iOS DataExport (Fariin-Account-Information.txt): shared as text, picking a chat in the
+        // sheet sent the whole account summary as a message. In the app's cache, shared read-only.
+        val dir = java.io.File(context.cacheDir, "open").also { it.mkdirs() }
+        val file = java.io.File(dir, "Fariin-Account-Information.txt").also { it.writeText(text) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-            .putExtra(Intent.EXTRA_SUBJECT, "Fariin-Account-Information.txt").putExtra(Intent.EXTRA_TEXT, text)
-        context.startActivity(Intent.createChooser(send, "Your Account Data").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "Fariin-Account-Information.txt")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(send, "Your Account Data")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
     }
 }
 
