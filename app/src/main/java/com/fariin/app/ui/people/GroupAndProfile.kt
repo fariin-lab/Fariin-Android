@@ -707,7 +707,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         .putExtra(android.content.Intent.EXTRA_TEXT, inviteLink)
                     ctx.startActivity(android.content.Intent.createChooser(send, null))
                 }) else null, onQr = { showQr = true }, saveCid = cid,
-                    onExport = if (conv["channel"] == true) null else ({
+                    onExport = if (!ChatExportRun.SHOWN || conv["channel"] == true) null else ({
                         if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group")
                     }))
             }

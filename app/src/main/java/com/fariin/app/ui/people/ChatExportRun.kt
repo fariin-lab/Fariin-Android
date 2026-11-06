@@ -42,6 +42,8 @@ import kotlin.coroutines.coroutineContext
  * Never as message text: picking a chat in the sheet would send the whole history as one message.
  */
 object ChatExportRun {
+    /** Hidden on both pages, as iOS: the owner took Export Chat off the profile (2026-09-30) and the group menu. */
+    const val SHOWN = false
     private const val UNREADABLE = "Could not load everything. Check your connection and try again."
 
     /** What to export: a 1:1 with [otherUid] named [title], or a group named [title]. */

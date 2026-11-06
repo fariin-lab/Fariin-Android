@@ -527,7 +527,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
             // iOS Export Chat: only where a real 1:1 chat exists, never on my own page.
             val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
-            val exportChat: (() -> Unit)? = if (uid != me && chat != null && !chat.isGroup)
+            val exportChat: (() -> Unit)? = if (ChatExportRun.SHOWN && uid != me && chat != null && !chat.isGroup)
                 ({ if (exportJob == null) exportJob = ChatExportRun.Job(chat.id, name.ifEmpty { chat.displayName(me) }, uid) }) else null
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
                 if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
