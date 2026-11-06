@@ -960,3 +960,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   15 fps chat / Rain 24 / tiles 12, soft looks 1/4 resolution (aurora checked: ~16 fps, scroll 1.5% jank);
   0004e9e channels had no Select at all (menu + rows) -> added; multi-delete runs 4 at a time so picked messages go
   together (3 posts gone in 0.5 s). Test posts deleted, adnan's chat wallpaper reset.
+- 12:24 fbca468 Liquid Edge retune (owner: "99% black"): glowing shape fully in view, light + dark checked on the
+  Pixel. Header over animated wallpapers already a tint-free blur of the live wallpaper (no change).
