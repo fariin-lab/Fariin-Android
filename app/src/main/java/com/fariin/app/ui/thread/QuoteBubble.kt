@@ -67,7 +67,10 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
     Column(Modifier.fillMaxWidth()) {
         Column(
             Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp).clip(RoundedCornerShape(12.dp))
-                .border(1.dp, tint.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+                // Filled soft blue with a faint blue edge (owner 2026-11-06: "quote looks like a line only,
+                // give it a colour"); on my own bubble the same in white.
+                .background(tint.copy(alpha = 0.10f))
+                .border(1.dp, tint.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
                 .clickable {
                     val q = card ?: return@clickable
                     val notice = QuoteRules.tapNotice(q)
