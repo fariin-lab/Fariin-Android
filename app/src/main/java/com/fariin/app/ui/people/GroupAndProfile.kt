@@ -707,7 +707,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
         }))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(conv["avatarUrl"] as? String, 100.dp,
+            Avatar(conv["avatarUrl"] as? String, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
                 modifier = if (canEdit) Modifier.clickable(onClickLabel = "Edit group") { editing = true }.semantics { contentDescription = "Group photo" } else Modifier)
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
@@ -993,8 +993,8 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                     val bmp = remember(p) { p?.let { com.fariin.app.media.BitmapDecode.fromBytes(it, 360)?.asImageBitmap() } }
                     when {
                         bmp != null -> androidx.compose.foundation.Image(bmp, w("Group photo"), contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        removePhoto -> Avatar(null, 120.dp, squircle = channel)
-                        else -> Avatar(photoUrl, 120.dp, squircle = channel)
+                        removePhoto -> Avatar(null, 120.dp, squircle = channel, kind = com.fariin.app.ui.components.AvatarKind.of(true, channel))
+                        else -> Avatar(photoUrl, 120.dp, squircle = channel, kind = com.fariin.app.ui.components.AvatarKind.of(true, channel))
                     }
                 }
                 if (hasPhoto) Box(

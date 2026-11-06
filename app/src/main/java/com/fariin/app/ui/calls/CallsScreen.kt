@@ -308,7 +308,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, onInfo: () -> Unit, onL
             Modifier.fillMaxWidth().listPress(onLongClick = onLongClick) { callBack(ctx, call, call.video) }.padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Avatar(call.photoUrl, 46.dp, squircle = false)
+            Avatar(call.photoUrl, 46.dp, squircle = false, kind = com.fariin.app.ui.components.AvatarKind.of(call.groupCid != null, false))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
