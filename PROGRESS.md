@@ -947,3 +947,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   shows cached reactions/views/quotes (checked Fariin News). Voice note hold: timer, slide to cancel, lock all
   show; release sends (test note deleted). Story link stickers/cards/captions all route our links in-app (code).
   4c561ba (agent) Quotes page redesign; HEAD builds again.
+- 11:30 Quotes page redesign checked (summary line + private-chats row); dark mode check of VE3 quote cards and the
+  Quotes page: fine (Night Mode restored to System). VE3 scroll with quote cards: 0.3% janky frames.
