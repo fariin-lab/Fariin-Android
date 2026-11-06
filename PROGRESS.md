@@ -829,3 +829,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   8. Chat list parses all chats on the main thread (flowOn Default).
   9. Chat rows decrypt previews during composition (now cached by the decrypt LRU, so cheaper).
   10. Skeleton recomposes every frame while loading.
+- 7240fd3 audit part 2: chat list parsed off the main thread, preloader top 12 only (none on LOW / Battery Saver), skeleton draw-phase shimmer.
+  Left on purpose: (1) turning Firestore off in the background: the incoming-call watcher reads Firestore when the push
+  wakes it, so this needs a careful enable-on-push path; Android 12+ already freezes cached apps, so the gain is small.
+  (2) 300 per-channel listeners: only matters for someone following many channels; revisit with whereIn batching.
