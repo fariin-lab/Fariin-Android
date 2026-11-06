@@ -39,7 +39,9 @@ fun channelNav(nav: NavHostController) = ChannelNav(
     find = { nav.navigate("findchannels") { launchSingleTop = true } },
     create = { nav.navigate("newchannel") { launchSingleTop = true } },
     page = { nav.navigate("channelpage/$it") { launchSingleTop = true } },
-    open = { nav.navigate("thread/$it") { launchSingleTop = true } },
+    // Not singleTop: a channel opened from a chat is another "thread/{cid}" page, and singleTop
+    // replaced the chat with it, so Back went to the chat list instead of the chat (owner 2026-11-06).
+    open = { cid -> if (nav.currentBackStackEntry?.arguments?.getString("cid") != cid) nav.navigate("thread/$cid") },
     official = { nav.navigate("official") { launchSingleTop = true } },
 )
 
