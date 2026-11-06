@@ -206,10 +206,20 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         title = { Text("Report this channel?") }, text = { Text("Fariin's moderators will review it.") },
         confirmButton = { TextButton({ confirmReport = false; scope.launch { reported = ChannelService.report(info.cid) } }) { Text("Report", color = c.red) } },
         dismissButton = { TextButton({ confirmReport = false }) { Text("Cancel", color = c.accent) } })
-    if (confirmLeave) AlertDialog(onDismissRequest = { confirmLeave = false }, containerColor = c.card,
-        title = { Text("Leave ${info.title}?") }, text = { Text("You will stop getting its posts.") },
-        confirmButton = { TextButton({ confirmLeave = false; leave(fromUndo = false) }) { Text("Leave Channel", color = c.red) } },
-        dismissButton = { TextButton({ confirmLeave = false }) { Text("Cancel", color = c.accent) } })
+    if (confirmLeave) com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmLeave = false }, steps = listOf(
+        com.fariin.app.ui.components.CarefulStep(
+            title = "Leave ${info.title.ifEmpty { "this channel" }}?",
+            body = if (muted) "You will stop getting its posts." else "You will stop getting its posts. To keep them without alerts, mute it instead.",
+            buttons = listOfNotNull(
+                if (!muted) com.fariin.app.ui.components.CarefulButton("Mute Instead", com.fariin.app.ui.components.CarefulKind.SOFT) {
+                    scope.launch {
+                        val ok = runCatching { ChannelService.setMuted(info.cid, true, 0.0) }.getOrDefault(false)
+                        com.fariin.app.ui.components.Snack.show(if (ok) "Muted. You still follow this channel." else com.fariin.app.data.GroupInfoCircles.MUTE_FAILED)
+                    }
+                } else null,
+                com.fariin.app.ui.components.CarefulButton("Leave Channel", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) { leave(fromUndo = false) },
+            ),
+        )))
 
     // The grey page with white cards and floating action circles (iOS ChannelInfo on grouped background).
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {

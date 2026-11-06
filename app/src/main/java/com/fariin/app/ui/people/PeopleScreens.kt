@@ -464,7 +464,25 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         VerifyEncryptionPage(cid, name, person?.photoUrl ?: conv?.photos?.get(uid), myPhotoUrl, safety, onClose = { showSafety = false })
         return
     }
-    ask?.let { what ->
+    // Block (not Unblock): the careful sheet, with Block and Report as the second choice (the same report call).
+    if (ask == "block" && !blocked) com.fariin.app.ui.components.CarefulSheet(onDismiss = { ask = null }, steps = listOf(
+        com.fariin.app.ui.components.CarefulStep(
+            title = "Block ${name.ifEmpty { "this person" }}?",
+            body = "Blocked people can't message or call you. You can unblock them later in Privacy & Security.",
+            buttons = listOf(
+                com.fariin.app.ui.components.CarefulButton("Block", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
+                    scope.launch { if (api.setBlocked(uid, true)) blocked = true else notice = "Check your connection and try again." }
+                },
+                com.fariin.app.ui.components.CarefulButton("Block and Report", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
+                    scope.launch {
+                        val done = api.setBlocked(uid, true)
+                        if (done) blocked = true
+                        val sent = api.report(uid, cid, "spam")
+                        notice = if (done && sent) "Blocked. Thanks, your report was sent." else "Check your connection and try again."
+                    }
+                },
+            ),
+        ))) else ask?.let { what ->
         val block = what == "block"
         AlertDialog(onDismissRequest = { ask = null },
             title = { Text(if (block) (if (blocked) "Unblock $name?" else "Block $name?") else "Report $name?") },

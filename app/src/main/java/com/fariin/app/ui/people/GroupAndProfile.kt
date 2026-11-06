@@ -614,28 +614,38 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     if (askLeave) {
         val plan = GroupRules.leavePlan(me, "", conv)
-        AlertDialog(onDismissRequest = { askLeave = false }, title = { Text("Leave Group?") },
-            text = { if (owner == me) Text(GroupRules.ownerLeaveLine(plan.heir?.let { names[it] ?: "a member" })) else Text("You won't get messages from this group any more.") },
-            confirmButton = {
-                // iOS: the owner may pick the next owner instead (Choose Another Owner), stacked as Android does three choices.
-                Column(horizontalAlignment = Alignment.End) {
-                    if (com.fariin.app.data.OwnerTransfer.offersChooseAnother(me, owner, users)) {
-                        TextButton({ askLeave = false; pages.add(GroupPage.ChooseOwner) }) {
-                            Text(com.fariin.app.data.OwnerTransfer.CHOOSE_ANOTHER, color = c.accent)
-                        }
+        val alreadyMuted = com.fariin.app.data.GroupInfoCircles.mutedUntil(conv, me) > System.currentTimeMillis()
+        com.fariin.app.ui.components.CarefulSheet(onDismiss = { askLeave = false }, steps = listOf(com.fariin.app.ui.components.CarefulStep(
+            title = "Leave this group?",
+            body = if (owner == me) GroupRules.ownerLeaveLine(plan.heir?.let { names[it] ?: "a member" })
+                else "You won't get messages from this group any more.",
+            buttons = listOfNotNull(
+                // The softer way: stay in the group, stop the alerts (Mute Always, the same mutedBy key the Mute circle writes).
+                if (!alreadyMuted) com.fariin.app.ui.components.CarefulButton("Mute Instead", com.fariin.app.ui.components.CarefulKind.SOFT) {
+                    exitScope.launch {
+                        val ok = runCatching {
+                            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations").document(cid)
+                                .set(mapOf("mutedBy" to mapOf(me to com.fariin.app.ui.chats.MuteFor.until(null))),
+                                    com.google.firebase.firestore.SetOptions.merge()).await()
+                        }.isSuccess
+                        com.fariin.app.ui.components.Snack.show(if (ok) "Muted. You stay in the group." else com.fariin.app.data.GroupInfoCircles.MUTE_FAILED)
                     }
-                    TextButton({
-                        askLeave = false
-                        // iOS LeaveGroupUndo: out of the list and the screen at once, Undo for 5 s, then the real leave.
-                        com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
-                        com.fariin.app.ui.components.Snack.show("You left the group.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
-                            com.fariin.app.data.LeaveUndo.undo()
-                        }
-                        onLeft()
-                    }) { Text("Leave", color = c.red) }
-                    TextButton({ askLeave = false }) { Text("Cancel", color = c.accent) }
-                }
-            }, containerColor = c.card)
+                } else null,
+                // iOS: the owner may pick the next owner instead (Choose Another Owner).
+                if (com.fariin.app.data.OwnerTransfer.offersChooseAnother(me, owner, users))
+                    com.fariin.app.ui.components.CarefulButton(com.fariin.app.data.OwnerTransfer.CHOOSE_ANOTHER, com.fariin.app.ui.components.CarefulKind.SOFT) {
+                        pages.add(GroupPage.ChooseOwner)
+                    } else null,
+                com.fariin.app.ui.components.CarefulButton("Leave", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
+                    // iOS LeaveGroupUndo: out of the list and the screen at once, Undo for 5 s, then the real leave.
+                    com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
+                    com.fariin.app.ui.components.Snack.show("You left the group.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
+                        com.fariin.app.data.LeaveUndo.undo()
+                    }
+                    onLeft()
+                },
+            ),
+        )))
     }
     if (adding) {
         val people = remember(chats) { contactsFrom(chats, me).filter { it.uid !in users } }

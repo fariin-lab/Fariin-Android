@@ -724,27 +724,41 @@ fun ChatListScreen(
         val targets = swipeDelete?.let { listOf(it) } ?: selectedConvs
         val n = targets.size
         val groups = targets.count { it.isGroup }
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false; swipeDelete = null },
-            title = { Text(if (n == 1) "Delete this chat?" else "Delete $n chats?") },
-            text = {
-                Text(if (groups > 0) "Groups stay in your list: leave a group from its info page. The other chats are removed from this phone's list."
-                else "The chat is removed from your list. The other person keeps their copy.")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    val list = targets.filter { !it.isGroup }
-                    if (swipeDelete == null) selected = emptySet()
-                    swipeDelete = null
-                    scope.launch {
-                        val ok = list.map { ChatListActions.deleteForMe(me, it) }.all { it }
-                        Snack.show(if (ok) (if (list.size == 1) "Chat deleted" else "${list.size} chats deleted") else "Couldn't delete. Try again.")
-                    }
-                }) { Text("Delete", color = c.red) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false; swipeDelete = null }) { Text("Cancel") } },
-        )
+        val list = targets.filter { !it.isGroup }
+        // One person-to-person chat may also take my own sent messages off the server (the same
+        // clearMyMessages as "Clear your messages" on the person's page).
+        val one = list.singleOrNull()?.takeIf { n == 1 && !it.isFollower(me) && me != com.fariin.app.ui.debug.DemoChats.ME }
+        fun done() {
+            confirmDelete = false
+            if (swipeDelete == null) selected = emptySet()
+            swipeDelete = null
+        }
+        com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmDelete = false; swipeDelete = null }, steps = listOf(
+            com.fariin.app.ui.components.CarefulStep(
+                title = if (n == 1) "Delete this chat?" else "Delete $n chats?",
+                body = when {
+                    groups > 0 -> "Groups stay in your list: leave a group from its info page. The other chats are removed from this phone's list."
+                    one != null -> "Delete for Me removes the chat from your list. The other person keeps their copy, unless you also delete your messages for everyone."
+                    else -> "The chat is removed from your list. The other person keeps their copy."
+                },
+                buttons = listOfNotNull(
+                    if (list.isNotEmpty()) com.fariin.app.ui.components.CarefulButton("Delete for Me", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
+                        done()
+                        scope.launch {
+                            val ok = list.map { ChatListActions.deleteForMe(me, it) }.all { it }
+                            Snack.show(if (ok) (if (list.size == 1) "Chat deleted" else "${list.size} chats deleted") else "Couldn't delete. Try again.")
+                        }
+                    } else null,
+                    if (one != null) com.fariin.app.ui.components.CarefulButton("Delete My Messages for Everyone", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
+                        done()
+                        scope.launch {
+                            val cleared = ChatListActions.clearMyMessages(me, one.id)
+                            val ok = cleared && ChatListActions.deleteForMe(me, one)
+                            Snack.show(if (ok) "Chat deleted. Your messages are gone for everyone." else "Couldn't delete. Try again.")
+                        }
+                    } else null,
+                ),
+            )))
     }
 }
 

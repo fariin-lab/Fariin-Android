@@ -139,9 +139,11 @@ val leaveReasons = listOf(
 )
 
 /**
- * iOS DeleteAccountView: what happens, Download My Data First, an optional reason, Continue, then
- * the password again for an email account, a last confirm, and the `scheduleAccountDeletion`
- * callable {reason} (30 days hidden, then deleted; signing in before then restores it). Done logs out.
+ * iOS DeleteAccountView: what happens and Download My Data First on the page; Continue opens the
+ * careful sheet: a softer way out first (Turn On App Lock, Log Out Instead), then the optional
+ * reason, then the last confirm with the password again for an email account, and the
+ * `scheduleAccountDeletion` callable {reason} (30 days hidden, then deleted; signing in before then
+ * restores it). Done logs out.
  */
 @Composable
 internal fun DeleteAccountPage(profile: MyProfile?, pop: () -> Unit, onSignOut: () -> Unit) {
@@ -149,27 +151,37 @@ internal fun DeleteAccountPage(profile: MyProfile?, pop: () -> Unit, onSignOut: 
     val scope = rememberCoroutineScope()
     val c = Fariin.colors
     var reason by remember { mutableStateOf("") }
-    var step by remember { mutableStateOf("confirm") }    // confirm, verify, done
+    var step by remember { mutableStateOf("confirm") }    // confirm, done
+    var sheet by remember { mutableStateOf(false) }
+    var sheetStep by remember { mutableStateOf(0) }       // 0 softer choice, 1 reason, 2 final
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var sheetError by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var final by remember { mutableStateOf(false) }
     var due by remember { mutableStateOf(System.currentTimeMillis() + 30L * 86_400_000) }
     val hasPassword = remember { FirebaseAuth.getInstance().currentUser?.providerData?.any { it.providerId == "password" } == true }
     val dueText = DateFormat.getDateInstance(DateFormat.LONG).format(Date(due))
     val handle = profile?.handle.orEmpty()
 
-    fun schedule() {
-        busy = true; error = null
+    // The last step: the password again for an email account ("Confirm it's you"), then the callable.
+    fun deleteNow() {
+        if (busy) return
+        if (hasPassword && password.isEmpty()) { sheetError = "Enter your password."; return }
+        busy = true; sheetError = null
         scope.launch {
             try {
+                if (hasPassword) {
+                    try { AuthRepository().reauthEmail(password) }
+                    catch (e: Exception) { sheetError = AuthRepository.messageFor(e, "That password is not right."); return@launch }
+                }
                 val fns = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
                 runCatching { fns.getHttpsCallable("notifyAccountDeleted").call(emptyMap<String, Any>()).await() }
                 val r = fns.getHttpsCallable("scheduleAccountDeletion").call(if (reason.isEmpty()) emptyMap() else mapOf("reason" to reason)).await().getData() as? Map<*, *>
                 (r?.get("due") as? Number)?.toLong()?.let { due = it }
+                sheet = false
                 step = "done"
             } catch (e: Exception) {
-                error = AuthRepository.messageFor(e)
+                sheetError = AuthRepository.messageFor(e)
             } finally { busy = false }
         }
     }
@@ -182,25 +194,6 @@ internal fun DeleteAccountPage(profile: MyProfile?, pop: () -> Unit, onSignOut: 
                     Text("Your account will be deleted on $dueText.", fontSize = 17.sp, color = c.label, modifier = Modifier.padding(16.dp))
                 }
                 SettingsSection { SettingsRow("Done", trailing = Trailing.NONE, titleColor = c.accent, last = true) { onSignOut() } }
-            }
-            "verify" -> {
-                SettingsSection(header = "Confirm it's you", footer = "Your account is hidden as soon as you confirm and deleted for good after 30 days. Sign in before then to restore it.") {
-                    OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth().padding(12.dp))
-                }
-                SettingsSection {
-                    SettingsRow(if (busy) "Checking…" else "Continue", trailing = Trailing.NONE, titleColor = c.red, last = true,
-                        accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp, color = c.red) }) else null) {
-                        if (busy || password.isEmpty()) return@SettingsRow
-                        busy = true; error = null
-                        scope.launch {
-                            try { AuthRepository().reauthEmail(password); final = true }
-                            catch (e: Exception) { error = AuthRepository.messageFor(e, "That password is not right.") }
-                            finally { busy = false }
-                        }
-                    }
-                }
             }
             else -> {
                 SettingsSection {
@@ -221,24 +214,58 @@ internal fun DeleteAccountPage(profile: MyProfile?, pop: () -> Unit, onSignOut: 
                         scope.launch { try { AccountReport.share(ctx) } catch (e: Exception) { error = e.message } }
                     }
                 }
-                SettingsSection(header = "Why are you leaving? (optional)", footer = "Only the reason is kept, not who gave it.") {
-                    for ((raw, label) in leaveReasons) CheckRow(label, raw == reason, last = raw == "other") { reason = raw }
-                }
                 if (handle.isNotEmpty()) SettingsSection(header = "Account to delete") {
                     PersonRow(profile?.name?.ifEmpty { null } ?: "You", profile?.photoUrl, sub = "@$handle", last = true, onClick = null)
                 }
                 SettingsSection {
-                    SettingsRow("Continue", trailing = Trailing.NONE, titleColor = c.red, last = true) {
-                        error = null
-                        if (hasPassword) step = "verify" else final = true
+                    SettingsRow("Continue", trailing = Trailing.NONE, titleColor = c.accent, last = true) {
+                        error = null; sheetError = null; sheetStep = 0; sheet = true
                     }
                 }
             }
         }
     }
-    if (final) YesNo(if (handle.isEmpty()) "Delete your account?" else "Delete @$handle?",
-        "You will be logged out and your account hidden. It is deleted for good on $dueText unless you log in before then.", "Delete Account",
-        onYes = { final = false; schedule() }, onNo = { final = false })
+    if (sheet) {
+        val lockOff = !com.fariin.app.security.AppLock.enabled(ctx)
+        com.fariin.app.ui.components.CarefulSheet(onDismiss = { if (!busy) sheet = false }, step = sheetStep, steps = listOf(
+            com.fariin.app.ui.components.CarefulStep(
+                title = "Need a break instead?",
+                body = if (lockOff) "You can log out and come back any time, or lock Fariin so nobody else on this phone can open it."
+                    else "You can log out and come back any time. Your chats wait for you.",
+                buttons = listOfNotNull(
+                    if (lockOff) com.fariin.app.ui.components.CarefulButton("Turn On App Lock", com.fariin.app.ui.components.CarefulKind.SOFT) {
+                        if (com.fariin.app.security.AppLock.deviceSecure(ctx)) {
+                            com.fariin.app.security.AppLock.setEnabled(ctx, true)
+                            com.fariin.app.ui.components.Snack.show("App Lock is on.")
+                        } else com.fariin.app.ui.components.Snack.show("Set a screen lock on your phone first.")
+                    } else null,
+                    com.fariin.app.ui.components.CarefulButton("Log Out Instead", com.fariin.app.ui.components.CarefulKind.SOFT) { onSignOut() },
+                    com.fariin.app.ui.components.CarefulButton("Continue", closes = false) { sheetStep = 1 },
+                ),
+            ),
+            com.fariin.app.ui.components.CarefulStep(
+                title = "Why are you leaving?",
+                body = "Optional. Only the reason is kept, not who gave it.",
+                options = leaveReasons, selected = reason, onSelect = { reason = it },
+                buttons = listOf(com.fariin.app.ui.components.CarefulButton("Continue", closes = false) { sheetStep = 2 }),
+            ),
+            com.fariin.app.ui.components.CarefulStep(
+                title = if (handle.isEmpty()) "Delete your account?" else "Delete @$handle?",
+                body = "You are logged out and your account is hidden right away. It is deleted for good on $dueText, 30 days from now. Log in before then to keep it.",
+                error = sheetError,
+                extra = if (hasPassword) ({
+                    Column(Modifier.fillMaxWidth()) {
+                        Text("Confirm it's you", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                        OutlinedTextField(password, { password = it; sheetError = null }, label = { Text("Password") }, singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth())
+                    }
+                }) else null,
+                buttons = listOf(com.fariin.app.ui.components.CarefulButton("Delete Account", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE,
+                    enabled = !hasPassword || password.isNotEmpty(), busy = busy, closes = false) { deleteNow() }),
+            ),
+        ))
+    }
 }
 
 @Composable
