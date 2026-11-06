@@ -250,6 +250,19 @@ fun ThreadScreen(
                 ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
             }
         }
+        // The status bar's icons follow the chat header over a dark-topped animated wallpaper while the
+        // chat itself is showing (not under the wallpaper picker), and go back after.
+        run {
+            val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
+            val appDark = Fariin.colors.dark
+            val flip = headerDark != null && headerDark != appDark && !wallpaperOpen
+            val barView = androidx.compose.ui.platform.LocalView.current
+            androidx.compose.runtime.DisposableEffect(flip, appDark) {
+                val ctl = (barView.context as? android.app.Activity)?.window?.let { androidx.core.view.WindowCompat.getInsetsController(it, barView) }
+                if (flip) ctl?.isAppearanceLightStatusBars = appDark   // the header's scheme is the opposite of the app's
+                onDispose { if (flip) ctl?.isAppearanceLightStatusBars = !appDark }
+            }
+        }
         if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid, shared = groupShared) { wallpaperOpen = false }
     }
 }
@@ -619,15 +632,6 @@ private fun ThreadContent(
                     // Over a dark-topped animated wallpaper the header's words are light (iOS headerBackdrop).
                     val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
                     val flipped = headerDark != null && headerDark != Fariin.colors.dark
-                    // The status bar's icons follow the header while this chat is open, and go back after.
-                    val barView = androidx.compose.ui.platform.LocalView.current
-                    val appDark = Fariin.colors.dark
-                    androidx.compose.runtime.DisposableEffect(flipped, appDark) {
-                        val w = (barView.context as? android.app.Activity)?.window
-                        val ctl = w?.let { androidx.core.view.WindowCompat.getInsetsController(it, barView) }
-                        if (flipped) ctl?.isAppearanceLightStatusBars = !headerDark!!
-                        onDispose { if (flipped) ctl?.isAppearanceLightStatusBars = !appDark }
-                    }
                     if (flipped) com.fariin.app.ui.theme.FariinTheme(dark = headerDark!!, bars = false) {
                         Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
                     } else Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
