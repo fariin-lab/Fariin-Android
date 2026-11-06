@@ -89,14 +89,32 @@ internal fun edgeAlphaBrush(color: Color, heightPx: Float, fadePx: Float): Brush
 
 @Composable
 internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: Boolean, walled: Boolean = false, modifier: Modifier = Modifier) {
-    if (!top || walled) return   // no bottom edge (iOS); a wallpaper chat draws its own (ThreadScreen)
+    if (!top) return   // no bottom edge (iOS)
     val c = Fariin.colors
     val density = LocalDensity.current
-    // Solid through the whole header (our name has no pill of its own, so a bubble behind
-    // "last seen" must stay faint), the four-step fade in the 48 dp under it.
-    val heightDp = with(density) { barPx.toDp() } + EDGE_FADE
-    val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
-    Box(modifier.fillMaxWidth().height(heightDp).drawBehind {
-        if (alpha > 0f) drawRect(edgeAlphaBrush(c.bg, size.height, EDGE_FADE.toPx()), alpha = alpha)
-    })
+    val barDp = with(density) { barPx.toDp() }
+    if (haze != null) {
+        // iOS (owner's iPhone beside the Pixel, 2026-11-05: "you can still see where it ends; Apple
+        // never"): a real blur whose radius eases down to nothing, with no colour laid over it, so
+        // there is no band to see. Full strength behind the top of the header, gone 32 dp under it.
+        // The wallpaper is inside the list's blur source (ThreadScreen), so it blurs along.
+        val heightDp = barDp + 32.dp
+        val solid = (barDp * 0.55f / heightDp).coerceIn(0f, 0.8f)
+        val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
+        Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
+            backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
+            tints = emptyList()
+            inputScale = HazeInputScale.Fixed(0.5f)
+            progressive = com.fariin.app.ui.components.edgeStages(solid)
+            this.alpha = alpha
+        })
+    } else if (!walled) {
+        // No blur on this phone (Android < 12, a LOW phone, Battery Saver): the page colour over the
+        // messages in four soft steps, the reference app's cheap edge.
+        val heightDp = barDp + EDGE_FADE
+        val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
+        Box(modifier.fillMaxWidth().height(heightDp).drawBehind {
+            if (alpha > 0f) drawRect(edgeAlphaBrush(c.bg, size.height, EDGE_FADE.toPx()), alpha = alpha)
+        })
+    }
 }

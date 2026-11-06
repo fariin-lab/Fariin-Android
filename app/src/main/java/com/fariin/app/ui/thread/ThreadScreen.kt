@@ -552,8 +552,8 @@ private fun ThreadContent(
                 // No bottom strip: iOS took its bottom blur off on the owner's order (2026-08-25, "remove
                 // chat bottom blur, don't touch top header"); messages pass behind the floating composer.
             }
-            if (walled) {
-                // A wallpaper chat: the wallpaper itself laid over the top at the same stops as the
+            if (walled && edgeHaze == null) {
+                // A wallpaper chat on a phone without blur: the wallpaper itself laid over the top at the same stops as the
                 // page colour (ThreadEdgeGlass.kt), so the messages show faintly through it and are
                 // sharp right under the header.
                 Box(Modifier.align(Alignment.TopCenter).zIndex(0.5f).fillMaxWidth()
