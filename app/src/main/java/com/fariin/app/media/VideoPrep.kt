@@ -77,6 +77,7 @@ class VideoPrep(
         private suspend fun transcode(context: Context, uri: Uri, out: File, cut: LongRange?, resize: Boolean = true, shortSide: Int = 540): Boolean = withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val t = Transformer.Builder(context)
+                    .setMuxerFactory(NoLocationMuxerFactory())   // never the place it was filmed
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
                     .setAudioMimeType(MimeTypes.AUDIO_AAC)
                     .addListener(object : Transformer.Listener {
@@ -109,8 +110,15 @@ class VideoPrep(
             val type = context.contentResolver.getType(uri) ?: ""
             if (type.isNotEmpty() && type != "video/mp4") return@withContext null
             runCatching {
-                context.contentResolver.openInputStream(uri)?.use { i -> out.outputStream().use { i.copyTo(it) } }
-                out.takeIf { it.length() > 0 }
+                val raw = File(out.parentFile, out.name + ".raw")
+                context.contentResolver.openInputStream(uri)?.use { i -> raw.outputStream().use { i.copyTo(it) } }
+                try {
+                    if (raw.length() == 0L) return@runCatching null
+                    // The original as it is only when it holds no place; otherwise its samples are
+                    // copied into a new file without the location, or it is not sent at all.
+                    if (!VideoLocation.hasLocation(raw)) { raw.copyTo(out, overwrite = true); out }
+                    else VideoLocation.stripped(raw, out)?.takeIf { !VideoLocation.hasLocation(it) }
+                } finally { raw.delete() }
             }.getOrNull()
         }
     }
