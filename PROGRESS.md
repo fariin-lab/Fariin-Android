@@ -877,5 +877,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   call TalkBack order; 121e8a9 channel intro card + reactions inside posts + follower bell + Broadcast composer;
   afa4294 Selected Emoji up to 12; e0460e1 Edit History owner/admin only. Pixel check of VE3 as visitor: card
   (@vee, Be free, Created) matches the owner's iOS photo, menu is Copy/Share/Report. Owner view not yet seen on a
-  device (this Pixel account owns no channel). iOS TestFlight 42213804528 (0f86a861) green; the iOS session ships
+  device (no owned channel found on this Pixel yet). iOS TestFlight 42213804528 (0f86a861) green; the iOS session ships
   the next one from 80c6f908.
