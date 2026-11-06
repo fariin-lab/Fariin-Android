@@ -522,7 +522,7 @@ private fun ThreadContent(
         if (flashId == row) flashId = null
     }
     // The Quotes sheet a post's "N Quotes" bar opens (PostQuotesUi.kt).
-    if (ui.channel != null) com.fariin.app.ui.channels.PostQuotesHost(ui.cid)
+    ui.channel?.let { ch -> com.fariin.app.ui.channels.PostQuotesHost(ui.cid, ui.title, ui.photoUrl, ch.info.verified) }
     // In-chat search (InChatSearch.kt, iOS uiMode .search): opened from the info pages' Search circle.
     val search = remember(ui.cid) { InChatSearchState() }
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -1658,7 +1658,8 @@ private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = 
             val marked = mentionMarked(searchMarked(text, term), bold)
             if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap)
         }, style = style, onTextLayout = { layoutRef[0] = it })
-        meta()
+        // Exactly one node whatever meta() draws: the measure reads [0] and [1] by position.
+        androidx.compose.foundation.layout.Box { meta() }
     }) { measurables, constraints ->
         val gap = 5.dp.roundToPx()
         val t = measurables[0].measure(constraints.copy(minWidth = 0))

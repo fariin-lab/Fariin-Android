@@ -211,7 +211,8 @@ fun ChannelChipsInBubble(ch: ChannelThreadUi, m: Message, chips: List<ChannelRul
                     color = if (chip.mine) c.bg else c.secondary, maxLines = 1)
             }
         }
-        meta()
+        // Exactly one node whatever meta() draws: the measure takes the last child as the time.
+        Box { meta() }
     }, modifier = Modifier.padding(top = 6.dp)) { measurables, constraints ->
         val maxW = constraints.maxWidth
         val gap = 6.dp.roundToPx()
