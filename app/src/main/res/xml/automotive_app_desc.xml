@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto: Fariin's message notifications (MessagingStyle with Reply and Mark as read, see
+     system/NotifActions.kt) can be read aloud and answered by voice in the car. -->
+<automotiveApp>
+    <uses name="notification" />
+</automotiveApp>
