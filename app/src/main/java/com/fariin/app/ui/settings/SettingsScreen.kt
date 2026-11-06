@@ -493,6 +493,8 @@ private fun ModeThumb(mode: AppAppearance) {
 @Composable
 private fun HelpAboutPage(pop: () -> Unit) {
     val ctx = LocalContext.current
+    var licences by remember { mutableStateOf(false) }
+    if (licences) { LicensesPage { licences = false }; return }
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "1.0"
     }
@@ -511,7 +513,8 @@ private fun HelpAboutPage(pop: () -> Unit) {
             ) {
                 SettingsRow("Version", value = version, trailing = Trailing.NONE)
                 SettingsRow("Privacy Policy", trailing = Trailing.OUT_LINK) { openWeb(ctx, "https://fariin.com/privacy") }
-                SettingsRow("Terms & Conditions", trailing = Trailing.OUT_LINK, last = true) { openWeb(ctx, "https://fariin.com/terms") }
+                SettingsRow("Terms & Conditions", trailing = Trailing.OUT_LINK) { openWeb(ctx, "https://fariin.com/terms") }
+                SettingsRow("Open-source licences", last = true) { licences = true }
             }
         }
     }

@@ -7,6 +7,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    // Collects every library in the app with its licence at build time, for Settings > Help &
+    // About > Open-source licences (Apache-2.0 and similar licences ask the app to carry them).
+    id("com.mikepenz.aboutlibraries.plugin") version "12.2.4"
 }
 
 android {
@@ -169,6 +172,7 @@ dependencies {
     // Liquid glass for the tab bar (Apache-2.0, kyant0/AndroidLiquidGlass). 1.0.0 is the line that
     // matches our Compose 1.9 / Kotlin 2.2; 2.x needs Compose 1.12 + Kotlin 2.4.
     implementation("io.github.kyant0:backdrop:1.0.0")
+    implementation("com.mikepenz:aboutlibraries-core:12.2.4")
     // Home screen widget (system/FariinWidget.kt).
     implementation("androidx.glance:glance-appwidget:1.1.1")
     debugImplementation(libs.androidx.ui.tooling)
