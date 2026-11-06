@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.data.NewBadges
 import androidx.compose.animation.togetherWith
 import android.content.Context
 import android.content.Intent
@@ -204,31 +205,45 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             ProfileHeader(profile, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
             if (myQrOpen.value) MyQrSheet(profile, onClose = { myQrOpen.value = false }, onScan = { push(PAGE_SCAN) })
             Spacer(Modifier.height(8.dp))
+            // The admin panel's "New" pills (config/features newBadges). No Subscriptions row on
+            // Android yet; its key is read but has nowhere to show.
+            val newBadges = rememberNewBadges()
             // My Profile, its own card under the header (iOS; hidden unless the switch is on).
             if (com.fariin.app.data.AppFeatures.myProfileCard) SettingsSection {
                 SettingsRow("My Profile", painterResource(R.drawable.ic_account), last = true) { push(PAGE_GLOW_PROFILE) }
             }
             SettingsSection {
-                SettingsRow("Account", painterResource(R.drawable.ic_account)) { push(PAGE_ACCOUNT) }
-                SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true) { push(PAGE_DEVICES) }
+                SettingsRow("Account", painterResource(R.drawable.ic_account),
+                    newBadge = NewBadges.ACCOUNT in newBadges) { push(PAGE_ACCOUNT) }
+                SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true,
+                    newBadge = NewBadges.DEVICES in newBadges) { push(PAGE_DEVICES) }
             }
             SettingsSection {
-                SettingsRow("Notifications", painterResource(R.drawable.ic_notifications)) { push(PAGE_NOTIFS) }
-                SettingsRow("Appearance", painterResource(R.drawable.ic_set_appearance)) { push(PAGE_APPEARANCE) }
-                SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats)) { push(PAGE_CHATS) }
-                SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack)) { push(PAGE_STORIES) }
-                SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy)) { push(PAGE_PRIVACY) }
-                SettingsRow("Storage and Data", painterResource(R.drawable.ic_set_storage)) { push(PAGE_STORAGE) }
+                SettingsRow("Notifications", painterResource(R.drawable.ic_notifications),
+                    newBadge = NewBadges.NOTIFICATIONS in newBadges) { push(PAGE_NOTIFS) }
+                SettingsRow("Appearance", painterResource(R.drawable.ic_set_appearance),
+                    newBadge = NewBadges.APPEARANCE in newBadges) { push(PAGE_APPEARANCE) }
+                SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats),
+                    newBadge = NewBadges.CHATS in newBadges) { push(PAGE_CHATS) }
+                SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack),
+                    newBadge = NewBadges.STORIES in newBadges) { push(PAGE_STORIES) }
+                SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy),
+                    newBadge = NewBadges.PRIVACY in newBadges) { push(PAGE_PRIVACY) }
+                SettingsRow("Storage and Data", painterResource(R.drawable.ic_set_storage),
+                    newBadge = NewBadges.STORAGE in newBadges) { push(PAGE_STORAGE) }
                 SettingsRow("Power Saving", painterResource(R.drawable.ic_set_power), last = true) { push(PAGE_POWER) }
             }
             SettingsSection {
-                SettingsRow("Invite Friends", painterResource(R.drawable.ic_invite_friends), trailing = Trailing.NONE) {
+                SettingsRow("Invite Friends", painterResource(R.drawable.ic_invite_friends), trailing = Trailing.NONE,
+                    newBadge = NewBadges.INVITE in newBadges) {
                     shareInvite(ctx, profile?.handle)
                 }
-                SettingsRow("Safety", painterResource(R.drawable.ic_set_safety), trailing = Trailing.NONE) {
+                SettingsRow("Safety", painterResource(R.drawable.ic_set_safety), trailing = Trailing.NONE,
+                    newBadge = NewBadges.SAFETY in newBadges) {
                     openWeb(ctx, "https://fariin.com/safety")
                 }
-                SettingsRow("Help & About", painterResource(R.drawable.ic_set_help), last = true) { push(PAGE_ABOUT) }
+                SettingsRow("Help & About", painterResource(R.drawable.ic_set_help), last = true,
+                    newBadge = NewBadges.HELP in newBadges) { push(PAGE_ABOUT) }
             }
             Spacer(Modifier.height(12.dp))
         }

@@ -11,6 +11,7 @@ import com.google.firebase.firestore.ListenerRegistration
  *
  * Applies on the NEXT open, as iOS: the listener saves what the server says, the switches read a
  * snapshot taken once per launch, so a door never disappears under a screen already drawn.
+ * The same listener also feeds the live Settings "New" pills ([NewBadges]).
  */
 object AppFeatures {
     private const val FILE = "remote_features"
@@ -41,7 +42,10 @@ object AppFeatures {
         reg?.remove()
         reg = FirebaseFirestore.getInstance().collection("config").document("features")
             .addSnapshotListener { snap, _ ->
-                if (snap == null || !snap.exists()) return@addSnapshotListener
+                if (snap == null) return@addSnapshotListener
+                // The Settings "New" pills are live, not next-open (a deleted doc clears them).
+                NewBadges.update(if (snap.exists()) snap.get("newBadges") else null)
+                if (!snap.exists()) return@addSnapshotListener
                 val e = prefs?.edit() ?: return@addSnapshotListener
                 e.clear()
                 snap.data.orEmpty().forEach { (k, v) -> if (v is Boolean) e.putBoolean(k, v) }
