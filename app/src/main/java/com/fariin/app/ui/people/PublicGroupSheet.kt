@@ -64,7 +64,7 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
             val p = preview
             when {
                 p != null -> {
-                    Avatar(p.photoUrl, 100.dp)
+                    Avatar(p.photoUrl, 100.dp, squircle = p.isChannel, kind = com.fariin.app.ui.components.AvatarKind.of(true, p.isChannel))
                     Spacer(Modifier.height(14.dp))
                     Text(p.title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center, maxLines = 2)
                     val n = p.memberCount

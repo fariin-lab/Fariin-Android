@@ -54,7 +54,7 @@ private class Face(val uid: String, val name: String, val photo: String?)
 
 private class LinkPreview(d: Map<*, *>) {
     val cid = (d["cid"] as? String).orEmpty()
-    val title = (d["title"] as? String)?.trim()?.ifEmpty { null } ?: "Group"
+    val title = (d["title"] as? String)?.trim()?.ifEmpty { null } ?: if (d["channel"] == true) "Channel" else "Group"
     val photo = (d["photoUrl"] as? String)?.ifEmpty { null }
     val count = (d["memberCount"] as? Number)?.toInt() ?: 0
     val isMember = d["isMember"] == true
@@ -130,7 +130,7 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
             val p = preview
             when {
                 p != null -> {
-                    Avatar(p.photo, 100.dp, squircle = p.isChannel)
+                    Avatar(p.photo, 100.dp, squircle = p.isChannel, kind = com.fariin.app.ui.components.AvatarKind.of(true, p.isChannel))
                     Spacer(Modifier.height(14.dp))
                     Text(p.title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center, maxLines = 2)
                     Text(p.membersLine, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp))

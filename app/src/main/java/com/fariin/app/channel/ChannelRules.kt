@@ -356,7 +356,7 @@ data class ChannelPreview(
             val label = (d["label"] as? String)?.takeIf { it == "scam" || it == "fake" } ?: ""
             return ChannelPreview(
                 cid = cid, username = d["username"] as? String ?: "",
-                title = (d["title"] as? String)?.trim()?.ifEmpty { null } ?: "Group",
+                title = (d["title"] as? String)?.trim()?.ifEmpty { null } ?: if (d["channel"] == true) "Channel" else "Group",
                 photoUrl = (d["photoUrl"] as? String)?.ifEmpty { null },
                 description = (d["description"] as? String ?: "").trim(),
                 memberCount = (d["memberCount"] as? Number)?.toInt() ?: 0,

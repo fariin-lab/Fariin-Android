@@ -692,7 +692,7 @@ fun ChatListScreen(
                         Row(Modifier.fillMaxWidth().clickable {
                             if (h.isChannel) channels.page(h.cid) else publicGroupOpen = h.cid
                         }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(h.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp), squircle = h.isChannel)
+                            Avatar(h.photoUrl, 54.dp, Modifier.padding(vertical = 9.dp), squircle = h.isChannel, kind = com.fariin.app.ui.components.AvatarKind.of(true, h.isChannel))
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(h.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
@@ -1069,7 +1069,8 @@ fun ChatRow(
                     com.fariin.app.ui.stories.StoryOrigins.radii[storyKey] = half
                 }.graphicsLayer { alpha = if (com.fariin.app.ui.stories.StoryOrigins.hiddenKey == storyKey) 0f else 1f }),
                 contentAlignment = Alignment.Center) {
-                Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel)
+                Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel,
+                    kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
                 if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp), squircle = conv.isChannel)
             }
             // Disappearing messages on: the timer badge on the photo's lower right, hanging 5 past

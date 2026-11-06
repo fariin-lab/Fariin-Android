@@ -133,7 +133,7 @@ fun LiveGroupCallRow(live: LiveCall, conv: Conversation?) {
     val title = conv?.title?.takeIf { it.isNotEmpty() } ?: "Group"
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Box {
-            Avatar(conv?.avatarUrl, 46.dp)
+            Avatar(conv?.avatarUrl, 46.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv?.isChannel == true))
             Box(Modifier.align(Alignment.BottomEnd).size(12.dp).clip(CircleShape).background(Color(0xFF34C759)).border(2.dp, c.bg, CircleShape))
         }
         Spacer(Modifier.width(12.dp))

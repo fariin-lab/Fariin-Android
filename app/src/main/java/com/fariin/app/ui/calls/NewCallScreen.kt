@@ -182,7 +182,7 @@ private fun TargetRow(t: CallTarget, onVoice: () -> Unit, onVideo: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().listPress(onClick = onVoice).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Avatar(t.photo, 46.dp, squircle = t.groupCid != null)
+        Avatar(t.photo, 46.dp, squircle = t.groupCid != null, kind = com.fariin.app.ui.components.AvatarKind.of(t.groupCid != null, false))
         Spacer(Modifier.width(14.dp))
         Text(t.name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconButton(onClick = onVoice) {

@@ -553,7 +553,7 @@ private fun StoryRow(
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Avatar(authorPhoto, 26.dp, squircle = squircle)
+                    Avatar(authorPhoto, 26.dp, squircle = squircle, kind = com.fariin.app.ui.components.AvatarKind.of(squircle, false))
                     if (seenFlags.isNotEmpty()) StoryRing(seenFlags, Modifier.fillMaxSize(), lineWidth = 1.2.dp)
                 }
             }

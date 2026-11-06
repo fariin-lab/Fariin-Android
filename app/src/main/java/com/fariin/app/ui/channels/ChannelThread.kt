@@ -347,7 +347,7 @@ private fun SimilarChannelsStrip(cid: String) {
             items(shown.size) { i ->
                 val ch = shown[i]
                 Column(Modifier.width(70.dp).clickable { nav.page(ch.cid) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    com.fariin.app.ui.components.Avatar(ch.photoUrl, 54.dp, squircle = true)
+                    com.fariin.app.ui.components.Avatar(ch.photoUrl, 54.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
                     Text(ch.title, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(com.fariin.app.channel.ChannelRules.followersLine(ch.followerCount), fontSize = 10.sp, color = c.secondary, maxLines = 1)

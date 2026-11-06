@@ -91,7 +91,7 @@ fun AdminInviteSheet(code: String, onClose: () -> Unit, onOpenChannel: (String) 
                 problem != null -> Text(problem!!, fontSize = 16.sp, color = c.secondary, textAlign = TextAlign.Center)
                 i == null -> com.fariin.app.ui.components.FariinSpinner(Modifier.padding(32.dp), size = 30.dp, stroke = 3.dp)
                 else -> {
-                    Avatar(i.photo, 96.dp, squircle = true)
+                    Avatar(i.photo, 96.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
                     Text(i.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
                     Text("Channel admin invite", fontSize = 16.sp, color = c.secondary)
                     val line = when (i.state) {

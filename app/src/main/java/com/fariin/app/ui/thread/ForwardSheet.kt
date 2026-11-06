@@ -90,7 +90,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                         }.padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(conv.displayPhoto(me), 44.dp, squircle = conv.isChannel)
+                        Avatar(conv.displayPhoto(me), 44.dp, squircle = conv.isChannel, kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
                         Spacer(Modifier.width(12.dp))
                         Text(conv.displayName(me), fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f))

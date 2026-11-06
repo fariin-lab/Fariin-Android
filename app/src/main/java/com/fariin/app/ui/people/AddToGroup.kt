@@ -92,7 +92,7 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
                         val off = already || blocked != null
                         Row(Modifier.fillMaxWidth().clickable(enabled = !off && working == null) { pending = g }
                             .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(g.displayPhoto(me), 44.dp)
+                            Avatar(g.displayPhoto(me), 44.dp, kind = com.fariin.app.ui.components.AvatarKind.GROUP)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(g.displayName(me), fontSize = 17.sp, color = if (off) c.secondary else c.label, maxLines = 1)

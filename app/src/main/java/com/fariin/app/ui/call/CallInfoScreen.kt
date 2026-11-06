@@ -93,7 +93,7 @@ fun CallInfoScreen(run: CallRun, me: String, onBack: () -> Unit, onCall: (video:
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(12.dp))
-            Avatar(call.photoUrl, 96.dp, squircle = call.groupCid != null)
+            Avatar(call.photoUrl, 96.dp, squircle = call.groupCid != null, kind = com.fariin.app.ui.components.AvatarKind.of(call.groupCid != null, false))
             Spacer(Modifier.height(12.dp))
             Text(call.name, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             if (call.groupCid != null) {

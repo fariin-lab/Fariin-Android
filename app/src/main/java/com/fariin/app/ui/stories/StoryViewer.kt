@@ -1102,7 +1102,8 @@ private fun StoryPage(
                 // my story keeps the age beside the name and the audience under both.
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(group.photoUrl, 38.dp, squircle = group.key.startsWith(StoryGroup.GROUP_PREFIX))
+                        Avatar(group.photoUrl, 38.dp, squircle = group.key.startsWith(StoryGroup.GROUP_PREFIX),
+                            kind = com.fariin.app.ui.components.AvatarKind.of(group.key.startsWith(StoryGroup.GROUP_PREFIX), false))
                         Spacer(Modifier.width(13.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             val name = if (mine) "My Story" else group.name.ifEmpty { "Fariin user" }

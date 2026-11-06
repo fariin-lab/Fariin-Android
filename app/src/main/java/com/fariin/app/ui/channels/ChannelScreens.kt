@@ -133,7 +133,7 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(r.photoUrl, 48.dp, squircle = true)
+            Avatar(r.photoUrl, 48.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
