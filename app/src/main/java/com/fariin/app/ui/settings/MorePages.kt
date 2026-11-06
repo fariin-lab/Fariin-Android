@@ -252,8 +252,9 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                     androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.UnfoldMore, null,
                         tint = Fariin.colors.label, modifier = Modifier.padding(start = 4.dp).size(20.dp))
                 }
-                androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card,
-                    modifier = Modifier.align(Alignment.TopEnd)) {
+                // Anchored at the right under the value (a modifier on the menu itself does not move it).
+                Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp)) {
+                androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card) {
                     for (d in SettingsRules.autoSignOut) androidx.compose.material3.DropdownMenuItem(
                         text = { Text(SettingsRules.autoSignOutLabel(d), color = Fariin.colors.label) },
                         trailingIcon = { if (auto == d) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Check, null, tint = Fariin.colors.accent) },
@@ -261,6 +262,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                             menu = false; auto = d
                             scope.launch { runCatching { db.collection("users").document(me!!).set(mapOf("deviceAutoSignOutDays" to d), SetOptions.merge()).await() } }
                         })
+                }
                 }
             }
         }

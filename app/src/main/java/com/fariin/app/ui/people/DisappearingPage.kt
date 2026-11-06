@@ -141,8 +141,9 @@ internal fun NewGroupTimerSection(seconds: Int, onChange: (Int) -> Unit) {
                 Text(Disappearing.newGroupLabel(seconds), style = MaterialTheme.typography.bodyLarge, color = c.secondary)
                 Icon(painterResource(R.drawable.ic_disappearing), null, tint = c.secondary, modifier = Modifier.padding(start = 8.dp).size(18.dp))
             }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card,
-                modifier = Modifier.align(Alignment.TopEnd)) {
+            // Anchored at the right under the value (a modifier on the menu itself does not move it).
+            Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp)) {
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                 val choices = Disappearing.newGroupChoices.toMutableList()
                 // The Settings default, when it is none of these.
                 if (choices.none { it.second == seconds }) choices.add(Disappearing.newGroupLabel(seconds) to seconds)
@@ -150,6 +151,7 @@ internal fun NewGroupTimerSection(seconds: Int, onChange: (Int) -> Unit) {
                     text = { Text(label, color = c.label) },
                     trailingIcon = { if (secs == seconds) Icon(Icons.Filled.Check, null, tint = c.accent) },
                     onClick = { open = false; onChange(secs) })
+            }
             }
         }
     }
