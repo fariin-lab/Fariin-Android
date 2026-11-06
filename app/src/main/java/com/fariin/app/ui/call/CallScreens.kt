@@ -250,6 +250,15 @@ fun CallScreen(
         if (shareFull) ShareStage(remoteVideo, Modifier.fillMaxSize(), zoomable = true) { chrome.tap(true) }
         // Above the video, under every control: a tap shows or hides the controls.
         else Box(Modifier.fillMaxSize().plainTap { chrome.tap(connected && anyVideo) })
+        // Their photo is its own layer, centred on the whole screen (owner 2026-11-06: between the
+        // header and the controls, the "Muted" line the header gains on their mute pushed it down).
+        // Decoration only: it takes no taps, so the show/hide tap still reaches the layer under it.
+        if (showFace) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Avatar(ui.peerPhoto, 180.dp, Modifier
+                .shadow(26.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                .semantics { contentDescription = ui.peerName })
+        }
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = if (ui.held && s.live) "On hold" else CallMachine.label(s, now)
             CallHeader(
@@ -259,15 +268,11 @@ fun CallScreen(
                     { HeaderCircle(Icons.Filled.CloseFullscreen, "Minimize call", 48.dp) { chrome.touch(); onMinimize() } }
                 } else null,
                 modifier = Modifier.alpha(shown),
+                // No shade over the flat colour and the photo (owner 2026-11-06: it read as a
+                // shadow); video under the header still gets it, for the white words.
+                scrim = !showFace,
             )
             Spacer(Modifier.weight(1f))
-            if (showFace) {
-                Avatar(ui.peerPhoto, 180.dp, Modifier
-                    .shadow(26.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                    .semantics { contentDescription = ui.peerName })
-                Spacer(Modifier.weight(1f))
-            }
             when (s.phase) {
                 CallPhase.INCOMING -> IncomingButtons(s.video, onAccept, onDecline)
                 CallPhase.ENDED -> if (ui.noAnswer) NoAnswerCard(s, onCallAgain, onVoiceMessage, onCloseNoAnswer)
@@ -580,17 +585,17 @@ private val BarHeight = 80.dp
 /**
  * The call header (iOS topBar): a circle at the start, the 22 sp bold name over the 15 sp line in
  * the middle, the same room kept free at the end (or [right]) so the name stays centred, over a
- * soft dark scrim that keeps white text legible on bright video.
+ * soft dark scrim that keeps white text legible on bright video ([scrim] off when no video is under it).
  */
 @Composable
 private fun CallHeader(
     name: String, status: String, muted: Boolean, mutedLabel: String,
     left: (@Composable () -> Unit)?, modifier: Modifier = Modifier,
-    right: (@Composable () -> Unit)? = null, side: Dp = 48.dp,
+    right: (@Composable () -> Unit)? = null, side: Dp = 48.dp, scrim: Boolean = true,
 ) {
     Row(
         modifier.fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)))
+            .then(if (scrim) Modifier.background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))) else Modifier)
             .statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
         // Top-aligned: the circle centres on the name and clock, and "Muted" grows the block
         // downward without moving it (iOS headerButtons guide).
