@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -184,13 +185,12 @@ internal fun openWeb(context: Context, url: String) {
 private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: androidx.compose.foundation.ScrollState) {
     val ctx = LocalContext.current
     val c = Fariin.colors
-    Column(Modifier.fillMaxSize()) {
-        PageBar(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), onBack = null, action = {
-            // In its own floating circle, as the other tabs' bar buttons.
-            com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search, "Search settings",
-                onClick = { openSettingsSearch(push) }, modifier = Modifier.padding(end = 8.dp))
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+    // iOS SettingsView (owner 2026-11-05): the title centred, the search in its floating circle, and
+    // no solid bar: the page scrolls under a soft fade instead of being cut by a hard edge.
+    Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        val barH = 56.dp
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).statusBarsPadding().padding(top = barH)
+            .padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
             ProfileHeader(profile, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
             if (myQrOpen.value) MyQrSheet(profile, onClose = { myQrOpen.value = false }, onScan = { push(PAGE_SCAN) })
@@ -222,6 +222,18 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                 SettingsRow("Help & About", painterResource(R.drawable.ic_set_help), last = true) { push(PAGE_ABOUT) }
             }
             Spacer(Modifier.height(12.dp))
+        }
+        // The bar: page colour fading to clear under the title, so rows slide under softly.
+        Box(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Brush.verticalGradient(
+            0f to c.bgSecondary, 0.7f to c.bgSecondary, 1f to c.bgSecondary.copy(alpha = 0f)))
+            .statusBarsPadding().height(barH + 16.dp)) {
+            Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)) {
+                Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
+                    modifier = Modifier.align(Alignment.Center))
+                com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search, "Search settings",
+                    onClick = { openSettingsSearch(push) }, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
+            }
         }
     }
 }
