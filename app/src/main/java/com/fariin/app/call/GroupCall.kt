@@ -15,6 +15,10 @@ import com.google.firebase.firestore.Source
 import java.util.UUID
 import kotlinx.coroutines.delay
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
+import com.fariin.app.data.Conversation
+import com.fariin.app.data.GroupAdmins
+import com.google.firebase.firestore.Query
 import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
@@ -123,6 +127,8 @@ data class GroupMember(
     val photo: String? = null, val role: CallRole = CallRole.PARTICIPANT, val poor: Boolean = false, val local: Boolean = false,
     /** Their shared screen (LiveKit's screen share track). Never mine: my own screen is not drawn back to me. */
     val screen: VideoTrack? = null,
+    /** An admin muted them (the server-set `micBlocked` attribute): only an admin's "Allow to Speak" lifts it. */
+    val micBlocked: Boolean = false,
 )
 
 /** Someone at a call link's door (callLinks/{roomId}/requests/{uid}, status pending). */
@@ -162,6 +168,23 @@ data class GroupCallUi(
     val myHand: Boolean = false,
     /** Reactions on screen now, newest last (at most 5, each 4 s). */
     val reactions: List<CallReaction> = emptyList(),
+    /** My role in this call (iOS myRole): the group as it is now, else the server's join pass. */
+    val myRole: CallRole = CallRole.PARTICIPANT,
+    /** An admin muted me: my mic stays off until an admin allows me to speak. */
+    val micLocked: Boolean = false,
+    /** A call link's address, for Copy Link / Share Link (null on a group chat's call). */
+    val linkUrl: String? = null,
+    /** A group chat's members (Add People's list), names and photos from the group. */
+    val groupPeople: List<CallPerson> = emptyList(),
+    /** People I removed from this call (never offered as "Left"). */
+    val removedHere: Set<String> = emptySet(),
+    /** When I last rang each person from Add People (the server's one-minute wait). */
+    val rangAt: Map<String, Long> = emptyMap(),
+    /** A host's mic tap waiting for the server: uid -> muted (the button answers at once). */
+    val pendingMute: Map<String, Boolean> = emptyMap(),
+    val mutingAll: Boolean = false,
+    /** A host action the server refused, for the people sheet's alert. */
+    val adminError: String? = null,
 )
 
 data class CallReaction(val id: Long, val uid: String, val name: String, val emoji: String)
@@ -175,8 +198,9 @@ data class CallReaction(val id: Long, val uid: String, val name: String, val emo
  * one out asks `groupCallClose` to end it (the old transaction when the server can not be reached).
  *
  * Screen share is LiveKit's own: the system's consent dialog, then a screen share track (the source
- * an iPhone's share arrives on too). Not on Android yet: admin actions (mute, remove), raised hands, and growing a
- * 1:1 into an `adhoc_` room.
+ * an iPhone's share arrives on too). Host controls (mute, mute all, allow to speak, remove, block,
+ * end for everyone) go through the server's `callAdmin` (GroupCallAdmin has the rules). Not on
+ * Android yet: growing a 1:1 into an `adhoc_` room.
  */
 object GroupCall {
     private const val TAG = "GroupCall"
@@ -205,7 +229,7 @@ object GroupCall {
      */
     fun join(context: Context, cid: String, title: String, video: Boolean, requireLive: Boolean = true, mic: Boolean = true) {
         if (_ui.value.cid != null || CallManager.ui.value.status.live) return
-        recordId = null; startedHere = false; someoneCame = false; startedAtMs = null; micWish = mic
+        recordId = null; startedHere = false; someoneCame = false; startedAtMs = null; micWish = mic; linkKey = null
         _ui.value = GroupCallUi(cid = cid, title = title, connecting = true, cameraOn = video, micOn = mic)
         loadGroupFaces(cid)
         val app = context.applicationContext
@@ -235,7 +259,7 @@ object GroupCall {
     fun joinLink(context: Context, key: CallLinkKey, video: Boolean, mic: Boolean = true) {
         if (_ui.value.cid != null || CallManager.ui.value.status.live) return
         recordId = null; startedHere = false; someoneCame = true; startedAtMs = null; micWish = mic
-        faces = emptyMap(); asked.clear()
+        faces = emptyMap(); asked.clear(); team = null; linkKey = key
         val roomId = key.roomId
         val tag = "link:$roomId"
         _ui.value = GroupCallUi(cid = tag, title = CallLinkDefaults.NAME, connecting = true, cameraOn = video, micOn = mic, linkRoom = roomId)
@@ -326,7 +350,11 @@ object GroupCall {
                 val micOn = micWish && !pass.micBlocked
                 r.localParticipant.setMicrophoneEnabled(micOn)
                 if (video && !pass.voiceOnly) r.localParticipant.setCameraEnabled(true)
-                _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = micOn, cameraOn = video && !pass.voiceOnly)
+                // Muted by an admin in this call before I left: I come back muted (iOS noteJoinPass).
+                sawMicBlocked = pass.micBlocked
+                _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = micOn, cameraOn = video && !pass.voiceOnly,
+                    micLocked = pass.micBlocked, linkUrl = linkKey?.url(video = !pass.voiceOnly))
+                passRole = CallRole.of(pass.role)
                 startSpeakerTicks(r)
                 refresh()
                 if (_ui.value.linkRoom != null) return@run
@@ -428,11 +456,27 @@ object GroupCall {
                 micOn = p.isMicrophoneEnabled,
                 video = (cam?.track as? VideoTrack)?.takeIf { cam?.muted != true },
                 photo = face?.second,
-                role = CallRole.of(p.attributes["role"]),
+                // iOS role(of:): a group chat's call reads roles from the group as it is now; the
+                // attribute was frozen at join.
+                role = GroupCallAdmin.groupRole(team, uid) ?: CallRole.of(p.attributes["role"]),
                 poor = p.connectionQuality == ConnectionQuality.POOR || p.connectionQuality == ConnectionQuality.LOST,
                 local = p === r.localParticipant,
                 screen = (scr?.track as? VideoTrack)?.takeIf { scr?.muted != true },
+                micBlocked = p.attributes["micBlocked"] == "1",
             )
+        }
+        val meUid = r.localParticipant.identity?.value ?: ""
+        val myRole = GroupCallAdmin.groupRole(team, meUid)
+            ?: r.localParticipant.attributes["role"]?.let { CallRole.of(it) } ?: passRole
+        if (myRole != _ui.value.myRole) _ui.value = _ui.value.copy(myRole = myRole)
+        // ⛔ An admin's mute holds (iOS attributesChanged): my own server-set `micBlocked` locks the
+        // mic; its lifting is "Allow to Speak", and the mic comes back on at once.
+        if (r.localParticipant.attributes["micBlocked"] == "1") {
+            sawMicBlocked = true
+            if (!_ui.value.micLocked) lockMic()
+        } else if (sawMicBlocked) {
+            sawMicBlocked = false
+            if (_ui.value.micLocked) allowedToSpeak()
         }
         val mine = r.localParticipant.getTrackPublication(Track.Source.SCREEN_SHARE)
         val sharing = mine?.track != null && mine.muted != true
@@ -450,17 +494,33 @@ object GroupCall {
     private val tracker = SpeakerTracker()
     private var ticks: Job? = null
 
+    /**
+     * The group's names and photos, and (iOS followGroupRoles) its owner and admins, followed while
+     * the call is up, so a handed-over owner or a demoted admin gets the right buttons at once.
+     */
     private fun loadGroupFaces(cid: String) {
-        faces = emptyMap(); asked.clear()
-        scope.launch {
-            val d = try { db.collection("conversations").document(cid).get().await().data } catch (_: Exception) { null } ?: return@launch
+        faces = emptyMap(); asked.clear(); team = null
+        groupReg?.remove()
+        groupReg = db.collection("conversations").document(cid).addSnapshotListener { s, _ ->
+            val d = s?.data ?: return@addSnapshotListener
+            if (_ui.value.cid != cid) return@addSnapshotListener
             val names = (d["names"] as? Map<*, *>).orEmpty()
             val photos = (d["photos"] as? Map<*, *>).orEmpty()
             faces = (names.keys + photos.keys).mapNotNull { it as? String }.associateWith { u -> names[u] as? String to photos[u] as? String }
-            if (_ui.value.cid == cid) _ui.value = _ui.value.copy(groupPhoto = d["avatarUrl"] as? String)
+            val t = GroupAdmins.Team.from(d)
+            team = t
+            val people = t.users.map { u -> CallPerson(u, (names[u] as? String)?.takeIf { it.isNotEmpty() } ?: "Member", (photos[u] as? String)?.takeIf { it.isNotEmpty() }) }
+            _ui.value = _ui.value.copy(groupPhoto = d["avatarUrl"] as? String, groupPeople = people)
             refresh()
         }
     }
+    private var groupReg: ListenerRegistration? = null
+    /** The group's owner and admins (null on a link call, or before it loads). */
+    private var team: GroupAdmins.Team? = null
+    private var linkKey: CallLinkKey? = null
+    private var passRole = CallRole.PARTICIPANT
+    /** My own `micBlocked` attribute has read "1" in this call. */
+    private var sawMicBlocked = false
 
     /** A person the group's lists do not know (a link call): their public profile, once. */
     private fun loadFace(uid: String) {
@@ -550,6 +610,7 @@ object GroupCall {
     fun clearToast() { if (_ui.value.toast != null) _ui.value = _ui.value.copy(toast = null) }
 
     fun toggleMic() {
+        if (_ui.value.micLocked && !_ui.value.micOn) { say("An admin muted you. Raise your hand to ask to speak."); return }
         val on = !_ui.value.micOn
         _ui.value = _ui.value.copy(micOn = on)
         scope.launch { room?.localParticipant?.setMicrophoneEnabled(on) }
@@ -607,6 +668,8 @@ object GroupCall {
         if (cid != null && r != null && _ui.value.joined && link == null) closeIfLast(cid, wasAlone = r.remoteParticipants.isEmpty())
         requestReg?.remove(); requestReg = null
         requestsReg?.remove(); requestsReg = null
+        groupReg?.remove(); groupReg = null
+        team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false
         ticks?.cancel(); ticks = null
         tracker.update(emptySet(), Long.MAX_VALUE / 2)
         if (link != null && _ui.value.waiting) {
@@ -679,7 +742,10 @@ object GroupCall {
     }
 
     private fun social(data: ByteArray, uid: String) {
-        if (data.size > 1024 || uid.isEmpty()) return
+        if (data.size > 1024) return
+        // The room names no sender: the server's own notes (callAdmin). The lock itself follows my
+        // `micBlocked` attribute, which nobody in the call can forge; a note only says who did it.
+        if (uid.isEmpty()) { serverNote(data); return }
         if (uid == room?.localParticipant?.identity?.value) return
         val m = runCatching { org.json.JSONObject(String(data)) }.getOrNull() ?: return
         val name = _ui.value.members.firstOrNull { it.id == uid }?.name ?: faces[uid]?.first ?: "Someone"
@@ -706,5 +772,250 @@ object GroupCall {
             kotlinx.coroutines.delay(4_000)
             _ui.value = _ui.value.copy(reactions = _ui.value.reactions.filter { it.id != r.id })
         }
+    }
+
+    // ---- An admin's mute (iOS micLockedByAdmin / allowedToSpeak, GroupCallSocial mutedBy) ----
+
+    private fun lockMic() {
+        _ui.value = _ui.value.copy(micLocked = true, micOn = false)
+        val r = room ?: return
+        scope.launch { runCatching { r.localParticipant.setMicrophoneEnabled(false) } }
+    }
+
+    /**
+     * ⛔ Allowed to speak = the mic comes on (owner 2026-10-28, iOS allowedToSpeak). The note can beat
+     * the restored publish permission, so a mic that is not live yet is asked again twice, half a
+     * second apart, then turned off and on once more about 1.5 s after the lift.
+     */
+    private fun allowedToSpeak(force: Boolean = false) {
+        if (!force && !_ui.value.micLocked && _ui.value.micOn) return
+        _ui.value = _ui.value.copy(micLocked = false, micOn = true)
+        val r = room ?: return
+        fun live() = room === r && !_ui.value.micLocked && _ui.value.micOn
+        scope.launch {
+            runCatching { r.localParticipant.setMicrophoneEnabled(true) }
+            for (i in 0 until 2) {
+                delay(500)
+                if (!live()) return@launch
+                if (r.localParticipant.isMicrophoneEnabled) break
+                runCatching { r.localParticipant.setMicrophoneEnabled(true) }
+            }
+            delay(500)
+            if (!live()) return@launch
+            runCatching { r.localParticipant.setMicrophoneEnabled(false) }
+            if (!live()) return@launch
+            runCatching { r.localParticipant.setMicrophoneEnabled(true) }
+        }
+    }
+
+    private fun serverNote(data: ByteArray) {
+        val m = runCatching { org.json.JSONObject(String(data)) }.getOrNull() ?: return
+        val r = room ?: return
+        val name = m.optString("name").trim().take(40)
+        when (m.optString("t")) {
+            "mutedBy" -> scope.launch {
+                // The note and the mute travel on different channels; either can come first. The
+                // note is believed only once my mic really is off (3 s window, as iOS).
+                for (i in 0 until 15) {
+                    if (room !== r) return@launch
+                    if (m.optBoolean("hard") && r.localParticipant.attributes["micBlocked"] == "1") {
+                        sawMicBlocked = true
+                        if (!_ui.value.micLocked) lockMic()
+                    }
+                    if (_ui.value.micLocked || !r.localParticipant.isMicrophoneEnabled) {
+                        if (name.isNotEmpty()) say("$name muted you")
+                        return@launch
+                    }
+                    delay(200)
+                }
+            }
+            "micAllowed" -> {
+                // ⛔ Only while an admin's lock is on, or the media server muted my track while my
+                // own button says on: from anyone else this note would open a self-muted mic.
+                val pub = r.localParticipant.getTrackPublication(Track.Source.MICROPHONE)
+                val serverMuted = pub?.muted == true && _ui.value.micOn
+                if (!_ui.value.micLocked && !serverMuted) return
+                allowedToSpeak(force = true)
+                say(if (name.isEmpty()) "You can speak now" else "$name allowed you to speak")
+            }
+        }
+    }
+
+    // ---- Host controls (iOS GroupCallService.admin, the server's callAdmin) ----
+
+    /** One request to `callAdmin`. Null when done, else the line to show. */
+    private suspend fun admin(action: CallAdminAction, target: String? = null): String? {
+        val g = _ui.value
+        val r = room
+        val where = GroupCallAdmin.room(g.cid, g.linkRoom)
+        if (r == null || where == null) return GroupCallAdmin.errorText("NOT_FOUND")
+        return try {
+            functions.getHttpsCallable("callAdmin").call(GroupCallAdmin.request(where, action, target)).await()
+            if (room === r) {
+                if (target != null && (action == CallAdminAction.REMOVE || action == CallAdminAction.BLOCK)) {
+                    _ui.value = _ui.value.copy(removedHere = _ui.value.removedHere + target)
+                }
+                // The server closed the room and the call's record; I leave quietly, like any hang-up.
+                if (action == CallAdminAction.END) leave()
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "callAdmin ${action.wire} refused", e)
+            GroupCallAdmin.errorText((e as? FirebaseFunctionsException)?.code?.name)
+        }
+    }
+
+    private fun failAdmin(text: String?, r: Room?) {
+        if (text != null && room === r && r != null) _ui.value = _ui.value.copy(adminError = text)
+    }
+
+    /** Remove from call, Remove and Block, End Call for Everyone (each after its confirmation). */
+    fun act(action: CallAdminAction, target: String? = null) {
+        val r = room ?: return
+        scope.launch { failAdmin(admin(action, target), r) }
+    }
+
+    /**
+     * The one-tap mic on a person's row (iOS tapMic): mute, or allow an admin-muted person to speak.
+     * The button shows the new state at once and holds it 4 s while the room catches up.
+     */
+    fun tapMic(uid: String, mute: Boolean) {
+        val r = room ?: return
+        _ui.value = _ui.value.copy(pendingMute = _ui.value.pendingMute + (uid to mute))
+        scope.launch {
+            val err = admin(if (mute) CallAdminAction.MUTE else CallAdminAction.UNMUTE, uid)
+            if (err == null) delay(4_000)
+            if (room !== r) return@launch
+            if (_ui.value.pendingMute[uid] == mute) _ui.value = _ui.value.copy(pendingMute = _ui.value.pendingMute - uid)
+            failAdmin(err, r)
+        }
+    }
+
+    /**
+     * "Mute all" (iOS muteAll): one `muteAll` request. A server from before it says "Bad action"
+     * (invalid argument); then one at a time, stopping at the first "too many".
+     */
+    fun muteAll() {
+        val r = room ?: return
+        val g = _ui.value
+        if (g.mutingAll) return
+        val me = r.localParticipant.identity?.value
+        val fallback = GroupCallAdmin.mutable(me, g.myRole, g.members).map { it.id }
+        _ui.value = g.copy(mutingAll = true)
+        scope.launch {
+            val where = GroupCallAdmin.room(g.cid, g.linkRoom)
+            var err: String? = null
+            try {
+                if (where == null) throw IllegalStateException("no room")
+                functions.getHttpsCallable("callAdmin").call(GroupCallAdmin.request(where, CallAdminAction.MUTE_ALL, null)).await()
+            } catch (e: Exception) {
+                val code = (e as? FirebaseFunctionsException)?.code
+                if (code == FirebaseFunctionsException.Code.INVALID_ARGUMENT) {
+                    for (uid in fallback) {
+                        val one = admin(CallAdminAction.MUTE, uid) ?: continue
+                        err = one
+                        if (one == GroupCallAdmin.TOO_MANY) break
+                    }
+                } else err = GroupCallAdmin.errorText(code?.name)
+            }
+            if (room !== r) return@launch
+            _ui.value = _ui.value.copy(mutingAll = false)
+            failAdmin(err, r)
+        }
+    }
+
+    fun clearAdminError() { if (_ui.value.adminError != null) _ui.value = _ui.value.copy(adminError = null) }
+
+    /** Who has been in this group chat's call (the server's `joined`), for Add People's "Left". */
+    fun watchJoined(onJoined: (Set<String>) -> Unit): ListenerRegistration? {
+        val g = _ui.value
+        val cid = g.cid?.takeIf { g.linkRoom == null } ?: return null
+        return db.collection("groupCalls").document(cid).addSnapshotListener { s, _ ->
+            onJoined(((s?.get("joined") as? List<*>)?.filterIsInstance<String>() ?: emptyList()).toSet())
+        }
+    }
+
+    /**
+     * Add People on a group chat's call (iOS ringPeople): `groupCallRingAgain` {cid, uids}, at most
+     * 16 per request, so a bigger pick goes in turns. One line for the lot.
+     */
+    fun ringPeople(people: List<CallPerson>) {
+        val g = _ui.value
+        val cid = g.cid?.takeIf { g.linkRoom == null } ?: return
+        val r = room ?: return
+        if (people.isEmpty()) return
+        val now = System.currentTimeMillis()
+        _ui.value = g.copy(rangAt = g.rangAt + people.associate { it.uid to now })
+        scope.launch {
+            var rung = 0
+            var lastRefusal: String? = null
+            val clear = mutableSetOf<String>()
+            for (part in people.chunked(GroupCallAdmin.RING_PART)) {
+                try {
+                    val d = functions.getHttpsCallable("groupCallRingAgain").call(mapOf("cid" to cid, "uids" to part.map { it.uid })).await().data as? Map<*, *>
+                    rung += (d?.get("rung") as? List<*>)?.size ?: 0
+                    for (s in (d?.get("skipped") as? List<*>).orEmpty()) {
+                        val sm = s as? Map<*, *> ?: continue
+                        val p = part.firstOrNull { it.uid == sm["uid"] } ?: continue
+                        val reason = sm["reason"] as? String
+                        if (!GroupCallAdmin.holdsWait(reason)) clear += p.uid
+                        lastRefusal = GroupCallAdmin.ringRefusal(reason, p.name)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "ring again refused", e)
+                    clear += part.map { it.uid }
+                    lastRefusal = "Couldn't ring. Try again."
+                }
+            }
+            if (room !== r) return@launch
+            _ui.value = _ui.value.copy(rangAt = _ui.value.rangAt - clear)
+            GroupCallAdmin.ringToast(people.map { it.name }, rung, lastRefusal)?.let { say(it) }
+        }
+    }
+
+    /** Add People on a call link (iOS invite): `linkCallInvite` {roomId, key, uids} rings each person. */
+    fun invitePeople(people: List<CallPerson>) {
+        val g = _ui.value
+        val roomId = g.linkRoom ?: return
+        val key = linkKey ?: return
+        val r = room ?: return
+        val me = r.localParticipant.identity?.value ?: ""
+        val picked = people.filter { it.uid.isNotEmpty() && it.uid != me }.take(30)
+        if (picked.isEmpty()) return
+        scope.launch {
+            val line = try {
+                val d = functions.getHttpsCallable("linkCallInvite")
+                    .call(mapOf("roomId" to roomId, "key" to key.text, "uids" to picked.map { it.uid })).await().data as? Map<*, *>
+                val rung = (d?.get("rung") as? List<*>)?.size ?: 0
+                val reasons = (d?.get("skipped") as? List<*>).orEmpty().mapNotNull { (it as? Map<*, *>)?.get("reason") as? String }
+                GroupCallAdmin.inviteToast(picked.size, rung, reasons) ?: if (rung > 0) {
+                    if (picked.size == 1) "Ringing ${picked[0].name}" else "Ringing $rung people"
+                } else null
+            } catch (e: Exception) {
+                Log.w(TAG, "link invite refused", e)
+                when ((e as? FirebaseFunctionsException)?.code) {
+                    FirebaseFunctionsException.Code.NOT_FOUND, FirebaseFunctionsException.Code.UNIMPLEMENTED -> "Adding people isn't available yet"
+                    FirebaseFunctionsException.Code.PERMISSION_DENIED -> "Couldn't add people. Try again."
+                    FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED -> "Too many calls. Wait a moment."
+                    else -> "Couldn't add people. Check your connection and try again."
+                }
+            }
+            if (room === r) line?.let { say(it) }
+        }
+    }
+
+    /** Add People's list on a call link: my 1:1 chats, newest first, none blocked either way. */
+    suspend fun linkCandidates(): List<CallPerson> {
+        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return emptyList()
+        val docs = try {
+            db.collection("conversations").whereArrayContains("users", me)
+                .orderBy("updatedAt", Query.Direction.DESCENDING).limit(200).get().await().documents
+        } catch (e: Exception) { Log.w(TAG, "chats for add people", e); return emptyList() }
+        return docs.mapNotNull { d ->
+            val c = Conversation.fromFirestore(d.id, d.data ?: return@mapNotNull null)
+            val other = c.otherUid(me)
+            if (c.isGroup || c.isChannel || c.users.size != 2 || other.isEmpty() || c.blockedBy.values.any { it }) null
+            else CallPerson(other, c.names[other]?.takeIf { it.isNotEmpty() } ?: "Member", c.photos[other]?.takeIf { it.isNotEmpty() })
+        }.distinctBy { it.uid }
     }
 }

@@ -120,6 +120,10 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SignalWifiStatusbarConnectedNoInternet4
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
+import com.fariin.app.call.GroupCallAdmin
 import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.asPaddingValues
@@ -931,6 +935,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     var focus by remember { mutableStateOf<String?>(null) }
     var more by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf(false) }
+    var tileConfirm by remember { mutableStateOf<HostConfirm?>(null) }
     val me = g.members.firstOrNull { it.local } ?: g.members.firstOrNull()
     val meId = me?.id
     val remotes = g.members.filter { it.id != meId }
@@ -963,12 +968,18 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 modifier = Modifier.alpha(shown),
             )
             Spacer(Modifier.height(2.dp))
+            // iOS callTileMenu: a long press on someone's tile offers Pin / Unpin and, to a host,
+            // Mute or Allow to Speak and Remove.
+            val tileMenu = TileMenu(g, focus, canPin = remotes.size >= 2, onPin = { id -> chrome.touch(); focus = if (focus == id) null else id },
+                onConfirm = { tileConfirm = it })
             Box(Modifier.weight(1f).fillMaxWidth().plainTap { chrome.tap(allowed) }) {
-                if (!waitingScreen) GroupStage(g.members, meId, g.activeSpeaker, focus ?: presenter, g.sharing, onTile = { id ->
-                    chrome.touch()
-                    // My own tile does nothing (iOS); a tap on the large one goes back.
-                    focus = if ((focus ?: presenter) == id || id == meId || (remotes.size < 2 && presenter == null)) null else id
-                })
+                if (!waitingScreen) androidx.compose.runtime.CompositionLocalProvider(LocalTileMenu provides tileMenu) {
+                    GroupStage(g.members, meId, g.activeSpeaker, focus ?: presenter, g.sharing, onTile = { id ->
+                        chrome.touch()
+                        // My own tile does nothing (iOS); a tap on the large one goes back.
+                        focus = if ((focus ?: presenter) == id || id == meId || (remotes.size < 2 && presenter == null)) null else id
+                    })
+                }
             }
             if (g.linkCreator && g.requests.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
@@ -1021,6 +1032,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
         }
         if (!chrome.visible) Box(Modifier.fillMaxSize().plainTap { chrome.touch() }.semantics { contentDescription = "Show call controls" })
         if (people) GroupCallParticipantsSheet(g, meId, onFocus = { id -> if (remotes.size >= 2) focus = id; people = false }) { people = false }
+        else HostDialogs(g, tileConfirm) { tileConfirm = null }
     }
 }
 
@@ -1153,12 +1165,20 @@ private fun MemberTile(
     val metrics = com.fariin.app.call.GroupCallMetrics
     val shape = RoundedCornerShape(if (alone) 0.dp else metrics.TILE_CORNER.dp)
     val glow by animateFloatAsState(if (activeSpeaker) 1f else 0f, tween(200), label = "glow")
+    val tileMenu = LocalTileMenu.current?.takeIf { !isMe && !pip && it.offers(m) }
+    var menuOpen by remember { mutableStateOf(false) }
     Box(modifier) {
         if (glow > 0f) Box(Modifier.matchParentSize().graphicsLayer { alpha = glow }
             .shadow(14.dp, shape, clip = false, ambientColor = Green.copy(alpha = 0.35f), spotColor = Green.copy(alpha = 0.75f)))
+        if (tileMenu != null) DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }, containerColor = Color(0xFF2C2C2E)) {
+            Text(m.name, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+            HostMenuItems(tileMenu.g, m, canBlock = false, onConfirm = tileMenu.onConfirm, close = { menuOpen = false },
+                pinned = if (tileMenu.canPin) tileMenu.pinnedId == m.id else null, onPin = { tileMenu.onPin(m.id) })
+        }
         BoxWithConstraints(Modifier.matchParentSize().clip(shape)
             .background(Brush.verticalGradient(listOf(Color(0xFF383838), Color(0xFF1F1F1F))))
-            .clickable(onClick = onClick)
+            .then(if (tileMenu != null) Modifier.combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }, onLongClickLabel = "Actions")
+                else Modifier.clickable(onClick = onClick))
             .semantics {
                 contentDescription = listOfNotNull(if (isMe) "You" else m.name, m.role.badge?.lowercase(), "speaking".takeIf { activeSpeaker },
                     "muted".takeIf { !m.micOn }, "camera off".takeIf { m.video == null }, "presenting".takeIf { m.screen != null },
@@ -1228,9 +1248,17 @@ private fun MemberTile(
 @Composable
 private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (String) -> Unit, onClose: () -> Unit) {
     var showRequests by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<HostConfirm?>(null) }
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) { if (copied) { kotlinx.coroutines.delay(1_500); copied = false } }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isLink = g.linkRoom != null
+    val canBlock = GroupCallAdmin.ownsLink(isLink, g.myRole, g.linkCreator)
+    val endBar = GroupCallAdmin.showEndForAll(g.myRole, g.joined)
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color.Black, contentColor = Color.White, scrimColor = Color.Black.copy(alpha = 0.4f)) {
-        Column(Modifier.fillMaxSize().padding(bottom = 24.dp)) {
+        Column(Modifier.fillMaxSize().padding(bottom = if (endBar) 8.dp else 24.dp)) {
             Box(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp)) {
                 Text(com.fariin.app.call.GroupCallWords.sheetTitle(g.members.size <= 1), color = Color.White, fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
@@ -1240,6 +1268,22 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                 }
             }
             Spacer(Modifier.height(12.dp))
+            // iOS groupAddSection / shareSection: Add People first (it rings), then the link's Copy
+            // Link and Share Link. Everyone in the call may hand the link on.
+            if (g.joined && (!isLink || g.linkUrl != null)) {
+                SheetSection {
+                    Column {
+                        SheetPlainRow(Icons.Filled.PersonAdd, "Add People") { showAdd = true }
+                        g.linkUrl?.let { url ->
+                            SheetPlainRow(if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy, if (copied) "Copied" else "Copy Link") {
+                                copyLink(context, url); copied = true
+                            }
+                            SheetPlainRow(Icons.Filled.Share, "Share Link") { shareLink(context, url) }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(20.dp))
+            }
             if (g.linkCreator && g.requests.isNotEmpty()) {
                 SheetSection {
                     Row(Modifier.fillMaxWidth().height(48.dp).clickable { showRequests = true }.padding(horizontal = 16.dp),
@@ -1253,11 +1297,19 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                 }
                 Spacer(Modifier.height(20.dp))
             }
-            Row(Modifier.padding(horizontal = 32.dp, vertical = 6.dp)) {
+            Row(Modifier.fillMaxWidth().padding(start = 32.dp, end = 24.dp).heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("In call", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(" · ${g.members.size}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                Text(" · ${g.members.size}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.weight(1f))
+                // iOS: "Mute all" beside the count for whoever may mute, once two people can be muted.
+                if (GroupCallAdmin.showMuteAll(meId, g.myRole, g.members)) {
+                    Text("Mute all", color = Color(0xFF0A84FF).copy(alpha = if (g.mutingAll) 0.4f else 1f), fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !g.mutingAll) { GroupCall.muteAll() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp))
+                }
             }
-            SheetSection {
+            // The list scrolls in the room left; the owner's End bar stays pinned under it.
+            Column(Modifier.weight(1f)) { SheetSection {
                 androidx.compose.foundation.lazy.LazyColumn {
                     items(g.members, key = { it.id }) { m ->
                         val mine = m.id == meId
@@ -1280,15 +1332,55 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (m.poor) Icon(Icons.Filled.SignalWifiStatusbarConnectedNoInternet4, "Poor connection", tint = Color(0xFFFF9F0A), modifier = Modifier.size(20.dp))
                                 if (m.video != null) Icon(Icons.Filled.Videocam, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
-                                if (!m.micOn) Icon(Icons.Filled.MicOff, "Muted", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                val host = GroupCallAdmin.mayModerate(meId, g.myRole, m)
+                                if (!m.micOn && !host) Icon(Icons.Filled.MicOff, "Muted", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                             }
+                            if (GroupCallAdmin.mayModerate(meId, g.myRole, m)) HostRowControls(g, m, canBlock) { confirm = it }
                         }
                     }
+                }
+            } }
+            if (endBar) {
+                // iOS endBar: the owner only, pinned under the list.
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
+                    .background(Color(0xFF1C1C1E)).clickable { confirm = HostConfirm.End }, contentAlignment = Alignment.Center) {
+                    Text("End Call for Everyone", color = Color(0xFFFF453A), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
     }
     if (showRequests) CallLinkBulkRequestsSheet(g.requests) { showRequests = false }
+    if (showAdd) GroupAddPeopleSheet(g) { showAdd = false }
+    HostDialogs(g, confirm) { confirm = null }
+}
+
+/**
+ * A row I may act on (iOS inCallRow with canModerate): the one-tap mic (mute, or red and struck
+ * through while an admin's mute holds: tap to allow them to speak; a self-muted person's plain
+ * muted mic mutes nothing more) and the "..." menu.
+ */
+@Composable
+private fun HostRowControls(g: GroupCallUi, m: GroupMember, canBlock: Boolean, onConfirm: (HostConfirm) -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val blocked = shownBlocked(g, m)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val label = when { blocked -> "Allow ${m.name} to speak"; m.micOn -> "Mute ${m.name}"; else -> "${m.name} is muted" }
+        Box(Modifier.size(44.dp).clip(CircleShape)
+            .clickable(enabled = blocked || m.micOn) { GroupCall.tapMic(m.id, mute = !blocked) }
+            .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+            Icon(if (blocked || !m.micOn) Icons.Filled.MicOff else Icons.Filled.Mic, null,
+                tint = if (blocked) Color(0xFFFF453A) else Color.White.copy(alpha = if (m.micOn) 0.9f else 0.6f), modifier = Modifier.size(22.dp))
+        }
+        Box {
+            Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }.semantics { contentDescription = "Actions for ${m.name}" },
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.MoreHoriz, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
+            }
+            DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Color(0xFF2C2C2E)) {
+                HostMenuItems(g, m, canBlock, onConfirm, close = { menu = false })
+            }
+        }
+    }
 }
 
 /** iOS inset grouped section on the dark sheet. */
