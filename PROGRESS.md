@@ -901,3 +901,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   recent actions; 59eeb5e (agent) server-only channel edit history, notices for admins only, quote without words;
   e233827 quote-only preview "Quoted post". Checked on the Pixel: quote with an empty field sends, list shows
   "Quoted post", after deleting it falls back to "Channel created". Call info -> profile, New Call: fine.
+- 08:50 060ceb6 BUG: long press / swipe-reply kept the row's first copy of a message (after an edit the menu showed
+  old words, Edit started from them and could undo the edit before, Edit History missing) - fixed for all chats;
+  channel admins get Edit / Edit History / Pin (checked: 3 versions load from the server). fe54be3 channel pin +
+  bar named after the channel; 3cb0ae9 pin notice of a deleted message says "a message"; 03c16a2 bare-domain links
+  (x.so/abc, fariin.com) link and preview as https. 2f530ce/d71e69e (agent) "no longer on Fariin" bar and Send in
+  Fariin for invite links (not device-tested: no deleted-account chat here). Dark mode walk: fine. Scroll jank
+  1.7% list / 1.6% chat (unchanged). Agents running: story link card (iOS 0724f430), bubble styles `bs` reading.
