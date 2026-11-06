@@ -941,3 +941,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   6153de1 search cursor to the end after "Did you mean". 17ca029 bubble styles hidden (owner: next year).
   MY MISTAKE: d8939fb swept the Quotes-redesign helper's unfinished ThreadScreen line into my commit, so HEAD does not
   build until its PostQuotesUi.kt lands (it has been told). Rule recorded: diff each file before staging.
+- 11:27 a80613e a channel opened as a VISITOR flashed as a plain group chat (admin notices, deleted rows, Loading
+  cards, Message field) until its preview answered: loading ring from the first frame, preview kept for the
+  session; groups I am in open as before (rapid screenshots on the Pixel). Followed channels' first frame already
+  shows cached reactions/views/quotes (checked Fariin News). Voice note hold: timer, slide to cancel, lock all
+  show; release sends (test note deleted). Story link stickers/cards/captions all route our links in-app (code).
+  4c561ba (agent) Quotes page redesign; HEAD builds again.
