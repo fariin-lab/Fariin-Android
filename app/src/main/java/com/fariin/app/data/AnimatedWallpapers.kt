@@ -40,12 +40,17 @@ data class AnimatedWallpaper(val id: String, val name: String, val look: Animate
         look == AnimatedLook.DOODLES -> 1f
         preview -> 2f
         look == AnimatedLook.STARS -> 1.5f
-        else -> 3f
+        look == AnimatedLook.PARTICLES -> 3f
+        else -> 4f   // the soft liquid and aurora looks: a quarter of the screen, scaled up (iOS, battery)
     }
 
-    /** Frames a second: the chat at most 30, a picker tile at most 20; Doodles 20 everywhere (iOS). */
-    fun fps(preview: Boolean): Int =
-        if (preview || look == AnimatedLook.DOODLES) AnimatedWallpapers.TILE_FPS else AnimatedWallpapers.CHAT_FPS
+    /** Frames a second (iOS, owner 2026-11-06 "the big messengers never eat battery"): 15 in a chat,
+     *  Rain 24 (its streaks need it), Doodles 12, a picker tile 12. */
+    fun fps(preview: Boolean): Int = when {
+        preview || look == AnimatedLook.DOODLES -> AnimatedWallpapers.TILE_FPS
+        look == AnimatedLook.PARTICLES && variant == 1 -> AnimatedWallpapers.RAIN_FPS
+        else -> AnimatedWallpapers.CHAT_FPS
+    }
 }
 
 object AnimatedWallpapers {
@@ -71,8 +76,9 @@ object AnimatedWallpapers {
 
     fun find(id: String): AnimatedWallpaper? = all.firstOrNull { it.id == id }
 
-    const val CHAT_FPS = 30
-    const val TILE_FPS = 20
+    const val CHAT_FPS = 15
+    const val RAIN_FPS = 24
+    const val TILE_FPS = 12
 
     private const val TWO_PI = (2 * Math.PI).toFloat()
 

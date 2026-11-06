@@ -257,7 +257,7 @@ object ChatWallpaperClock {
  * phone has not removed animations (no app switch, and Battery Saver does not stop it: owner
  * 2026-11-06), this is on screen (composed), the screen is resumed and
  * [animates] (a picker tile that is not the chosen one shows a still frame, to save battery). At most
- * 30 frames a second in a chat, 20 in a picker tile ([preview]) and for Doodles, never above the
+ * 15 frames a second in a chat (Rain 24), 12 in a picker tile ([preview]) and for Doodles, never above the
  * display's own rate.
  */
 @Composable
