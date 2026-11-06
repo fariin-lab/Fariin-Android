@@ -34,7 +34,10 @@ object ChannelStories {
         loop = scope.launch {
             launch { var last: Set<String>? = null
                 ChannelFollows.entries.collect { e -> val k = e.keys; if (last != null && k != last) refresh(me); last = k } }
-            while (true) { refresh(me); delay(5 * 60_000L) }
+            // Only while the app is on screen: in the background the 5-minute refresh woke the radio
+            // for nothing (battery audit 2026-11-05). A return to the front refreshes on the next tick.
+            refresh(me)
+            while (true) { delay(5 * 60_000L); if (com.fariin.app.AppLifecycle.inFront) refresh(me) }
         }
     }
 

@@ -53,7 +53,7 @@ fun Modifier.chatWallpaper(cid: String): Modifier = composed {
     DisposableEffect(cid) { onDispose { if (ChatLookStore.openCid.value == cid) ChatLookStore.openCid.value = null } }
     // The doodle sheet only for a theme that draws it: decoding it costs 10 ms on the opening frame.
     val pattern = if (w.theme?.pattern == true) WallpaperArt.pattern(ctx) else null
-    val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    val photo = rememberWallpaperPhoto(ctx, (w as? ChatWallpaper.Photo)?.id)
     drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true) }
 }
 
@@ -68,7 +68,7 @@ fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
     ChatLookStore.version.intValue
     val w = ChatLookStore.wallpaper(ctx, cid)
     val pattern = if (w.theme?.pattern == true) WallpaperArt.pattern(ctx) else null
-    val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    val photo = rememberWallpaperPhoto(ctx, (w as? ChatWallpaper.Photo)?.id)
     drawBehind {
         val own = size
         val full = androidx.compose.ui.geometry.Size(own.width, maxOf(rootH, own.height))
@@ -204,4 +204,17 @@ object WallpaperArt {
         fun ch(sh: Int) = ((((a shr sh) and 0xFF) * (1 - t)) + (((b shr sh) and 0xFF) * t)).toLong().coerceIn(0, 255)
         return (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
+}
+
+/**
+ * The wallpaper photo, read off the main thread (battery/lag audit 2026-11-05: a full-size decode in
+ * the opening frame stalled cheap phones). From memory at once when it was shown before.
+ */
+@androidx.compose.runtime.Composable
+private fun rememberWallpaperPhoto(ctx: android.content.Context, id: String?): androidx.compose.ui.graphics.ImageBitmap? {
+    if (id == null) return null
+    val app = ctx.applicationContext
+    return androidx.compose.runtime.produceState(ChatLookStore.cachedImage(id)?.asImageBitmap(), id, ChatLookStore.version.intValue) {
+        if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ChatLookStore.libraryImage(app, id) }?.asImageBitmap()
+    }.value
 }

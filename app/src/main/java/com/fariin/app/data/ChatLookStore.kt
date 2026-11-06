@@ -92,7 +92,10 @@ object ChatLookStore {
                     connectTimeout = 20_000; readTimeout = 60_000
                     try { inputStream.use { it.readBytes() } } finally { disconnect() }
                 }
-                if (bytes.size > 12 * 1024 * 1024 || BitmapFactory.decodeByteArray(bytes, 0, bytes.size) == null) false
+                // Size only (no pixels): a full decode of a 12 MB picture could run a cheap phone out of memory.
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    .also { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, it) }
+                if (bytes.size > 12 * 1024 * 1024 || bounds.outWidth <= 0 || bounds.outHeight <= 0) false
                 else { file.writeBytes(bytes); true }
             }.getOrDefault(false)
             synchronized(groupPending) { groupFetching.remove(link) }
@@ -184,10 +187,27 @@ object ChatLookStore {
     fun libraryIds(c: Context): List<String> =
         prefs(c).getString(LIBRARY, null).orEmpty().split("\n").filter { it.isNotEmpty() }
 
-    private val images = HashMap<String, Bitmap>()
+    // Battery/lag audit 2026-11-05: the pictures were kept at full size (up to 2560 px, ~14 MB each)
+    // in a map with no limit. Now decoded no bigger than the screen needs, and at most ~24 MB kept.
+    private val images = object : android.util.LruCache<String, Bitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
+    }
+
+    /** Only what is already in memory: safe to call while drawing. */
+    fun cachedImage(id: String): Bitmap? = synchronized(images) { images.get(id) }
 
     fun libraryImage(c: Context, id: String): Bitmap? = synchronized(images) {
-        images[id] ?: libraryFile(c, id).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }?.also { images[id] = it }
+        images.get(id) ?: libraryFile(c, id).takeIf { it.exists() }?.let { decodeForScreen(c, it) }?.also { images.put(id, it) }
+    }
+
+    private fun decodeForScreen(c: Context, f: File): Bitmap? {
+        val dm = c.resources.displayMetrics
+        val want = maxOf(dm.widthPixels, dm.heightPixels).coerceAtLeast(720)
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(f.path, o)
+        var sample = 1
+        while (maxOf(o.outWidth, o.outHeight) / (sample * 2) >= want) sample *= 2
+        return runCatching { BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample }) }.getOrNull()
     }
 
     /** Adds a picture (longest side 2560, JPEG 0.9) and returns its id; the same picture again returns the old id. */
@@ -203,7 +223,7 @@ object ChatLookStore {
         val id = java.util.UUID.randomUUID().toString()
         return try {
             libraryFile(c, id).writeBytes(bytes)
-            synchronized(images) { images[id] = scaled }
+            synchronized(images) { images.put(id, scaled) }
             p.edit().putString(LIBRARY, (listOf(id) + ids).joinToString("\n"))
                 .putString(HASHES, (hashes + (id to hash)).entries.joinToString("\n") { "${it.key}=${it.value}" }).apply()
             bump(); id
@@ -232,7 +252,7 @@ object ChatLookStore {
     fun wipe(c: Context) {
         prefs(c).edit().clear().apply()
         File(c.filesDir, "wallpapers").deleteRecursively()
-        synchronized(images) { images.clear() }
+        synchronized(images) { images.evictAll() }
         synchronized(groupPending) { groupPending.clear(); groupLastShown.clear() }
         bump()
     }

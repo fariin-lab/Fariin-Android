@@ -126,7 +126,7 @@ class FariinCrypto(
     /** Sign-out: forget in memory; the stored key is KEPT (keys are per uid). */
     fun wipeIdentity() {
         mySecretKey = null; myPublicKey = null
-        pubCache.clear(); didWarm = false
+        pubCache.clear(); didWarm = false; opened.clear()
     }
 
     /** Account deletion: the stored key goes too. */
@@ -372,8 +372,23 @@ class FariinCrypto(
     }
 
     /** Routing decrypt: group envelopes need the author; 1:1 uses the cid pair. */
-    fun decrypt(raw: String, cid: String, authorId: String): String =
-        if (raw.startsWith(Wire.ENCG1)) decryptGroup(raw, authorId, cid) else decrypt(raw, cid)
+    fun decrypt(raw: String, cid: String, authorId: String): String {
+        if (!raw.startsWith(Wire.ENCG1) && !raw.startsWith(Wire.ENC1)) return decrypt(raw, cid)
+        // Battery/lag audit 2026-11-05: every change in an open chat re-read all its messages and
+        // opened each box again on the main thread. A sealed text never changes (an edit is a new
+        // one), so a message that opened is remembered. Only real opens: "not ready" and the lock
+        // can change once keys arrive, so they are never kept.
+        val key = "$cid|$authorId|$raw"
+        opened[key]?.let { return it }
+        val out = if (raw.startsWith(Wire.ENCG1)) decryptGroup(raw, authorId, cid) else decrypt(raw, cid)
+        if (out != Wire.NOT_READY && out != Wire.LOCKED && out != Wire.OLD_MESSAGE) opened[key] = out
+        return out
+    }
+
+    private val opened: MutableMap<String, String> = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(256, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 1500
+        })
 
     /** A group that switched to plain (`e2ee == false`) sends text as is. Never for 1:1. */
     suspend fun sealForGroup(text: String, members: Collection<String>, cid: String): String =

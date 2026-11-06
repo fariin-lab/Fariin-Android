@@ -34,7 +34,11 @@ object LocalCache {
     private val lock = Any()
     @Volatile private var generation = 0
     /** Memory copies of what was read, so reopening a chat in the same run skips the disk. */
-    private val threadMemo = ConcurrentHashMap<String, List<Message>>()
+    // The last 12 chats opened, not every chat of the session (battery/lag audit 2026-11-05).
+    private val threadMemo: MutableMap<String, List<Message>> = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, List<Message>>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Message>>?) = size > 12
+        })
     @Volatile private var chatsMemo: Pair<String, List<Pair<String, Map<String, Any?>>>>? = null
 
     fun init(c: Context) {

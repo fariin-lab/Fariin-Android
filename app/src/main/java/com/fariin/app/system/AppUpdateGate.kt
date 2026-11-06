@@ -75,7 +75,9 @@ object AppUpdateGate {
         }
         decision = load(app)
         present(app)
-        scope.launch { while (true) { check(app); delay(600_000) } }
+        // Once at start; every return to the front checks again (onForeground). The old 10-minute
+        // loop called the server in the background too, waking the radio (battery audit 2026-11-05).
+        scope.launch { check(app) }
     }
 
     /** On a return to the front (FariinApp's lifecycle). */

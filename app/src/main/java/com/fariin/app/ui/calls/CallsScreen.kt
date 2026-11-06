@@ -142,6 +142,8 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     // iOS LiveGroupCalls: the calls going in my groups, above the history (not under Missed or a search).
     val groupKey = groups.filter { it.isGroup }.joinToString(",") { it.id }
     LaunchedEffect(groupKey) { com.fariin.app.ui.call.LiveGroupCalls.sync(groups) }
+    // Up to 40 group-call listeners, only while this tab is shown (battery audit 2026-11-05).
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { com.fariin.app.ui.call.LiveGroupCalls.stopAll() } }
     val liveAll by com.fariin.app.ui.call.LiveGroupCalls.calls.collectAsState()
     val live = if (missedOnly || q.isNotEmpty()) emptyList() else liveAll
     // Select mode: run ids (a run's newest call) and "link:<roomId>" for links, as iOS tags them.
