@@ -130,7 +130,8 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true) {
             // Always one node, even with no faces (QuoteFaces then draws nothing): the measure below
             // reads three children by position, and two crashed the app (a post quoted only privately).
             Box { QuoteFaces(m.quoteFaces) }
-            Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.blue, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The label colour, not blue (owner 2026-11-06: "don't use blue").
+            Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiary, modifier = Modifier.size(18.dp))
         },
         modifier = Modifier

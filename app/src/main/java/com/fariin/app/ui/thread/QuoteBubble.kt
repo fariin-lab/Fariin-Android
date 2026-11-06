@@ -60,17 +60,15 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val c = Fariin.colors
     val ink = if (isMe) Color.White else c.label
-    val tint = if (isMe) Color.White else c.blue
     val quiet = card == null
     // The picture this phone made when I quoted (shown at once), else the server's copy.
     val image: Any? = QuoteRules.image(card)?.let { url -> QuoteStore.picture(qid) ?: url }
     Column(Modifier.fillMaxWidth()) {
         Column(
             Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp).clip(RoundedCornerShape(12.dp))
-                // Filled soft blue with a faint blue edge (owner 2026-11-06: "quote looks like a line only,
-                // give it a colour"); on my own bubble the same in white.
-                .background(tint.copy(alpha = 0.10f))
-                .border(1.dp, tint.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
+                // A soft grey fill in the bubble's own text colour, no edge (owner 2026-11-06: "don't use
+                // blue"; earlier "give it a colour"), as iOS.
+                .background(ink.copy(alpha = 0.08f))
                 .clickable {
                     val q = card ?: return@clickable
                     val notice = QuoteRules.tapNotice(q)
@@ -92,7 +90,7 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 Spacer(Modifier.width(6.dp))
                 // Mine sits on my own coloured bubble, where blue would not read: white there.
                 Text(QuoteRules.heading(card), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    color = tint.copy(alpha = if (quiet) 0.6f else 1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = ink.copy(alpha = if (quiet) 0.6f else 1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f))
                 // A short "Quote" tag at the row's right end; the name shrinks to leave it room.
                 Spacer(Modifier.width(8.dp))
