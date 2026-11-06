@@ -857,7 +857,12 @@ fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier = Modifier,
             SurfaceViewRenderer(ctx).apply {
                 init(RtcEngine.egl.eglBaseContext, null)
                 setScalingType(if (fit) RendererCommon.ScalingType.SCALE_ASPECT_FIT else RendererCommon.ScalingType.SCALE_ASPECT_FILL)
-                setEnableHardwareScaler(true)
+                // No hardware scaler (owner's video 2026-11-05: my camera "flickered" zoomed in for two
+                // frames about a second into a video call). With it on, the surface's buffer is sized
+                // to each frame, so when the sender starts and lowers the resolution, a frame or two
+                // shows at the old buffer size, cropped and enlarged. Scaled by GL into a surface the
+                // size of the view, a size change is seamless.
+                setEnableHardwareScaler(false)
                 if (overlay) setZOrderMediaOverlay(true)
             }
         },
