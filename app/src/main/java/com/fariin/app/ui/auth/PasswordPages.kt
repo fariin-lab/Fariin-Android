@@ -119,6 +119,7 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
     var confirm by remember { mutableStateOf("") }
     var reveal by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var sendingCode by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var done by remember { mutableStateOf(false) }
     var saveAfterReauth by remember { mutableStateOf(false) }
@@ -186,14 +187,24 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
                 AuthField(confirm, { confirm = it }, "Confirm new password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal })
                 PasswordChecklist(rules)
                 Text("After changing, all other devices will need to sign in again.", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
-                if (!isFirst) Text("Forgot password?", fontSize = 17.sp, color = c.label, textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp).clickable(enabled = !busy) {
-                        busy = true; error = null
+                // The wait shows ON the link (spinner + "Sending code..."), not as a spinner in the
+                // bar's corner where Save sits (owner 2026-11-05: "looks cheap").
+                if (!isFirst) Row(
+                    Modifier.padding(horizontal = 4.dp, vertical = 8.dp).clickable(enabled = !busy && !sendingCode) {
+                        sendingCode = true; error = null
                         scope.launch {
                             try { onForgot(auth.startPasswordReset() ?: address) } catch (e: Exception) { error = AuthRepository.codeMessageFor(e) }
-                            busy = false
+                            sendingCode = false
                         }
-                    })
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (sendingCode) {
+                        androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = c.secondary, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Sending code…", fontSize = 17.sp, color = c.secondary)
+                    } else Text("Forgot password?", fontSize = 17.sp, color = c.label, textDecoration = TextDecoration.Underline)
+                }
                 ErrorLine(error)
             }
         }
