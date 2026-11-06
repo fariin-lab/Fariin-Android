@@ -846,3 +846,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   under the chat header, wallpaper inside the blur source. Reference app's public blur code studied
   (glass = hard blur under 76 % page colour + hairline; top band washed in four steps over 48 dp).
   Next: verify mic hold / slide-cancel / lock and the send rise with the new glass composer.
+- 2026-11-06: a3db8d3/890e616 chat top = real blur easing to nothing, no tint (owner OK); ea1588b Chats/Settings
+  kept with their tinted glass (untinted looked worse to him); 7124984 cheaper glass (measured: idle 0 frames,
+  CPU 0 %, ~290 MB, chat scroll ~2 % janky with or without glass); next commit: incoming bubbles on a wallpaper
+  frosted with a rim.
