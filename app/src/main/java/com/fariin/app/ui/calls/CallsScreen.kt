@@ -5,6 +5,7 @@ import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Delete
@@ -93,9 +94,10 @@ import java.util.Locale
  * TODO: the live row of a call in progress, ad-hoc group calls.
  */
 @Composable
-fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?, shared: List<CallEntry>? = null) {
+fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?, shared: List<CallEntry>? = null,
+             error: String? = null, onRetry: () -> Unit = {}) {
     // The shell already reads the history for the missed badge: shown as is, not read twice.
-    if (demoCalls == null && shared != null) { CallsScreen(me, shared, true, conversations); return }
+    if (demoCalls == null && shared != null) { CallsScreen(me, shared, true, conversations, error, onRetry); return }
     val repo = remember { CallsRepository() }
     var calls by remember { mutableStateOf(demoCalls ?: emptyList()) }
     var loaded by remember { mutableStateOf(demoCalls != null) }
@@ -111,7 +113,8 @@ fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<Call
 }
 
 @Composable
-private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, groups: List<Conversation> = emptyList()) {
+private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, groups: List<Conversation> = emptyList(),
+                        error: String? = null, onRetry: () -> Unit = {}) {
     val c = Fariin.colors
     var missedOnly by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -198,7 +201,12 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         when {
             // iOS CallListSkeleton while the history is read.
             !loaded -> com.fariin.app.ui.components.CallListSkeleton()
-            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.")
+            // A failed read is never drawn as an empty history.
+            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() && error != null ->
+                com.fariin.app.ui.components.CenteredNotice("Couldn't load calls", error, "Retry", onRetry,
+                    Modifier.fillMaxSize().padding(bottom = 60.dp))
+            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.",
+                "Make a Call" to { nav.newCall() })
             rows.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
             rows.isEmpty() && live.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
             else -> LazyColumn(Modifier.fillMaxSize(), state = listState,
@@ -242,7 +250,7 @@ internal fun SearchField(value: String, onChange: (String) -> Unit, prompt: Stri
 }
 
 @Composable
-private fun Empty(title: String, text: String) {
+private fun Empty(title: String, text: String, action: Pair<String, () -> Unit>? = null) {
     val c = Fariin.colors
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 60.dp)) {
@@ -251,6 +259,14 @@ private fun Empty(title: String, text: String) {
             Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             Text(text, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
+            // One next step: the same New Call page as the floating button.
+            if (action != null) {
+                Spacer(Modifier.height(20.dp))
+                Box(Modifier.height(44.dp).floating(androidx.compose.foundation.shape.CircleShape)
+                    .clickable(onClick = action.second).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
+                    Text(action.first, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.accent)
+                }
+            }
         }
     }
 }

@@ -107,14 +107,23 @@ class CallsRepository(
 ) {
     private val cache = mutableMapOf<String, Pair<Double, List<CallEntry>>>()
 
+    /** After [load]: the plain reason a chat's calls could not be read (nothing held for it), or null. */
+    @Volatile var failed: String? = null
+        private set
+
     suspend fun load(me: String, convs: List<Conversation>): List<CallEntry> = coroutineScope {
+        var miss: Throwable? = null
         convs.filter { it.id.isNotEmpty() && !it.id.contains('/') && !it.isChannel }.map { c ->
             async {
                 cache[c.id]?.takeIf { it.first == c.updatedAtMillis }?.second ?: run {
-                    val snap = runCatching {
+                    val read = runCatching {
                         db.collection("conversations").document(c.id).collection("messages")
                             .whereEqualTo("type", "call").get().await()
-                    }.getOrNull() ?: return@async cache[c.id]?.second ?: emptyList()
+                    }
+                    val snap = read.getOrNull() ?: run {
+                        if (cache[c.id] == null) miss = read.exceptionOrNull()
+                        return@async cache[c.id]?.second ?: emptyList()
+                    }
                     val group = c.isGroup
                     val name = if (group) c.title.ifEmpty { "Group" } else c.name(me)
                     val photo = if (group) c.avatarUrl else c.photoUrl(me)
@@ -125,6 +134,7 @@ class CallsRepository(
                 }
             }
         }.awaitAll().flatten().sortedByDescending { it.dateMs }
+            .also { failed = miss?.let { e -> LoadFailure.of(e) } }
     }
 
     private fun entry(d: DocumentSnapshot, cid: String, name: String, photo: String?, other: String, group: Boolean) =

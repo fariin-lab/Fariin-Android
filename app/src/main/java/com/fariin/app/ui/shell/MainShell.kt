@@ -137,6 +137,8 @@ fun MainShell(
     chats: ChatsUiState,
     decryptor: MessageDecryptor,
     onSignOut: () -> Unit,
+    /** Retry on the chat list's error page. */
+    onRetryChats: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -149,9 +151,14 @@ fun MainShell(
     // MainShell callsRepo). Each chat's calls are re-read only when that chat moves.
     val callsRepo = remember { com.fariin.app.data.CallsRepository() }
     var calls by remember { mutableStateOf<List<com.fariin.app.data.CallEntry>?>(null) }
+    // A failed read (a plain reason) and Retry's counter: one more read only when tapped.
+    var callsError by remember { mutableStateOf<String?>(null) }
+    var callsRetry by remember { mutableIntStateOf(0) }
     if (me != DemoChats.ME) {
         val callKey = chats.chats.joinToString(",") { it.id + ":" + it.updatedAtMillis }
-        LaunchedEffect(me, callKey) { if (!chats.loading) calls = callsRepo.load(me, chats.chats) }
+        LaunchedEffect(me, callKey, callsRetry) {
+            if (!chats.loading) { calls = callsRepo.load(me, chats.chats); callsError = callsRepo.failed }
+        }
     }
     var callsMark by remember { mutableStateOf(com.fariin.app.data.CallsSeen.load(context)) }
     // On the Calls tab every loaded missed call is seen (iOS markCallsSeen).
@@ -240,7 +247,7 @@ fun MainShell(
                         if (!shown) layout(cs.maxWidth, cs.maxHeight) {}
                         else { val p = m.measure(cs); layout(p.width, p.height) { p.place(0, 0) } }
                     }) {
-                        ChatListScreen(chats, me, decryptor, stories = stories,
+                        ChatListScreen(chats, me, decryptor, stories = stories, onRetry = onRetryChats,
                             onSettings = { select(TAB_SETTINGS) },
                             onNewStory = { storyRequest++; select(TAB_STORIES) },
                             active = shown)
@@ -249,7 +256,8 @@ fun MainShell(
                 when (tab) {
                     TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest, shared = if (demo) null else stories)
                     // The calls list scrolls under the bar and lifts its New Call button by the inset.
-                    TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls)
+                    TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls,
+                        error = callsError, onRetry = { callsRetry++ })
                     TAB_CHATS -> {}
                     // My Profile (Settings) reads the same feed for its Posted stories card.
                     else -> com.fariin.app.ui.glow.ProvideMyStories(stories, chats.chats) {

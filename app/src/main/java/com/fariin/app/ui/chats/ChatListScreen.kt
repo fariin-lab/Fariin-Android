@@ -169,6 +169,8 @@ fun ChatListScreen(
     stories: com.fariin.app.data.StoriesState = com.fariin.app.data.StoriesState(),
     /** False while another tab shows: the list stays alive behind it, its Back handlers off. */
     active: Boolean = true,
+    /** Retry on the error page: the list listens again. */
+    onRetry: () -> Unit = {},
 ) {
     val c = Fariin.colors
     // Rings on the photos (iOS storyRing): a tap on a ringed photo opens that story, not the chat.
@@ -522,7 +524,9 @@ fun ChatListScreen(
             when {
                 // iOS ChatListSkeleton: rows the shape of chats while the first page loads.
                 state.loading && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { com.fariin.app.ui.components.ChatListSkeleton() }
-                state.error != null && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(state.error) }
+                state.error != null && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) {
+                    com.fariin.app.ui.components.CenteredNotice("Couldn't load chats", state.error, "Retry", onRetry, Modifier.fillMaxSize())
+                }
                 shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
                     query.isNotBlank() -> "No results"
                     showArchive -> "No archived chats"
@@ -530,7 +534,13 @@ fun ChatListScreen(
                     filter == FILTER_GROUPS -> "No groups yet"
                     filter == FILTER_CHANNELS -> "No channels yet"
                     else -> "No chats yet"
-                }, action = if (filter == FILTER_CHANNELS && query.isBlank()) ("Find Channels" to channels.find) else null) }
+                }, action = when {
+                    query.isNotBlank() -> null
+                    filter == FILTER_CHANNELS -> "Find Channels" to channels.find
+                    // One next step on an empty list: the same new-chat page as the pencil button.
+                    filter == FILTER_ALL && !showArchive -> "Start a Chat" to people.newChat
+                    else -> null
+                }) }
                 else -> LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier), state = listState,
                     contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                     // An invisible first row. At the top the list keeps this row in place, so anything new

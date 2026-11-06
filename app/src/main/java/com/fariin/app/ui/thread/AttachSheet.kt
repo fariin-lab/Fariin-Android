@@ -137,8 +137,24 @@ internal fun AttachSheet(
     // reference app's sheet). Access is asked the first time the sheet opens; "some photos" works too.
     var access by remember { mutableStateOf(RecentMedia.access(context)) }
     var asked by remember { mutableStateOf(false) }
+    // Refused for good (Android shows no dialog any more): the tile opens Settings instead.
+    var photosBlocked by remember { mutableStateOf(false) }
     val askPhotos = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         access = RecentMedia.access(context)
+        photosBlocked = access == RecentMedia.Access.NONE &&
+            com.fariin.app.ui.components.PermissionDenied.isBlocked(context, RecentMedia.permissions().first())
+    }
+    // Back from Settings: access is read again once, so the grid fills without reopening the sheet.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle, photosBlocked) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (photosBlocked && e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                access = RecentMedia.access(context)
+                if (access != RecentMedia.Access.NONE) photosBlocked = false
+            }
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         if (access == RecentMedia.Access.NONE && mediaOff == null && !asked) {
@@ -190,7 +206,8 @@ internal fun AttachSheet(
     }
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) launchCamera() else {
-            com.fariin.app.ui.components.Snack.show("Allow the camera in Settings to take a photo.")
+            com.fariin.app.ui.components.PermissionDenied.explain(context, android.Manifest.permission.CAMERA,
+                "Fariin needs the camera to take photos and videos.")
             if (cameraFirst) onDismiss()
         }
     }
@@ -267,7 +284,10 @@ internal fun AttachSheet(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (none) item(key = "allow", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
-                        AllowTile { askPhotos.launch(RecentMedia.permissions()) }
+                        AllowTile(blocked = photosBlocked) {
+                            if (photosBlocked) com.fariin.app.ui.components.PermissionDenied.openAppSettings(context)
+                            else askPhotos.launch(RecentMedia.permissions())
+                        }
                     }
                     if (access == RecentMedia.Access.PARTIAL) item(key = "more") {
                         AllowTile(short = true) { askPhotos.launch(RecentMedia.permissions()) }
@@ -362,13 +382,14 @@ internal fun AttachSheet(
 
 /** No access yet (or only some photos): one tap asks again. */
 @Composable
-private fun AllowTile(short: Boolean = false, onClick: () -> Unit) {
+private fun AllowTile(short: Boolean = false, blocked: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     Column(Modifier.aspectRatio(if (short) 1f else 2f).background(c.card).clickable(onClick = onClick).padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null, tint = c.accent, modifier = Modifier.size(30.dp))
         Spacer(Modifier.height(6.dp))
-        Text(if (short) "Choose more photos" else "Allow access to your photos to send them here",
+        Text(if (short) "Choose more photos" else if (blocked) "Photo access is off. Tap to open Settings"
+            else "Allow access to your photos to send them here",
             fontSize = 13.sp, color = c.accent, fontWeight = FontWeight.SemiBold,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }

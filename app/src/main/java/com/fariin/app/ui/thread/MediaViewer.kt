@@ -691,6 +691,7 @@ private fun rememberSaver(media: ChatMedia): (List<ViewerRules.Page>) -> Unit {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var waiting by remember { mutableStateOf<List<ViewerRules.Page>>(emptyList()) }
+    var blocked by remember { mutableStateOf(false) }
     val run: (List<ViewerRules.Page>) -> Unit = { pages ->
         scope.launch {
             val saved = withContext(Dispatchers.IO) {
@@ -707,7 +708,27 @@ private fun rememberSaver(media: ChatMedia): (List<ViewerRules.Page>) -> Unit {
     val askStorage = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) run(waiting)
+        else if (com.fariin.app.ui.components.PermissionDenied.isBlocked(ctx, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) blocked = true
         else Toast.makeText(ctx, GallerySaver.PERMISSION_NOTICE, Toast.LENGTH_SHORT).show()
+    }
+    // Refused for good: the viewer is its own window, so the app's snackbar would sit under it.
+    // A small dialog over the viewer offers the way back instead.
+    if (blocked) {
+        val c = com.fariin.app.ui.theme.Fariin.colors
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { blocked = false },
+            title = { androidx.compose.material3.Text("Storage access is off") },
+            text = { androidx.compose.material3.Text("Fariin needs storage access to save photos and videos. Turn it on in Settings.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    blocked = false; com.fariin.app.ui.components.PermissionDenied.openAppSettings(ctx)
+                }) { androidx.compose.material3.Text("Open Settings", color = c.accent) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { blocked = false }) { androidx.compose.material3.Text("Not Now", color = c.label) }
+            },
+            containerColor = c.card, titleContentColor = c.label, textContentColor = c.label,
+        )
     }
     return { pages ->
         if (pages.any { it.once != null }) Unit   // a view-once photo never leaves the viewer

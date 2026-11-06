@@ -3,6 +3,7 @@ package com.fariin.app.ui.chats
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fariin.app.data.ChatList
@@ -53,7 +54,12 @@ class ChatsViewModel(
         }
     }
 
-    val state: StateFlow<ChatsUiState> = repo.listen(me)
+    /** Bumped by Retry on the list's error page: a fresh listener, not a timer. */
+    private val reloadTick = kotlinx.coroutines.flow.MutableStateFlow(0)
+    fun retry() { reloadTick.value++ }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val state: StateFlow<ChatsUiState> = reloadTick.flatMapLatest { repo.listen(me)
         // iOS SessionRecovery: a refused listener comes back. A fresh token, then a new listener, on
         // 1 s, 3 s, 10 s, 30 s, 60 s and every 60 s after; it stops only when the session itself is
         // over (account removed or disabled), which the sign-out path then handles.
@@ -61,7 +67,7 @@ class ChatsViewModel(
             val ended = runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await() }
                 .exceptionOrNull() is com.google.firebase.auth.FirebaseAuthInvalidUserException
             if (ended) {
-                emit(ConversationsRepository.State.Failed(cause.message ?: "Could not load chats")); false
+                emit(ConversationsRepository.State.Failed(com.fariin.app.data.LoadFailure.of(cause))); false
             } else if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != me) {
                 // Logged out (this list outlives it, kept per account): wait quietly for this same
                 // account to sign back in, then listen again. Without this the list stayed on the
@@ -74,7 +80,7 @@ class ChatsViewModel(
         }
         // Given up (signed out, account gone): the refusal ends here. Passed on, it closed the app
         // the moment Log Out signed the account out under a live chat list.
-        .catch { e -> emit(ConversationsRepository.State.Failed(e.message ?: "Could not load chats")) }
+        .catch { e -> emit(ConversationsRepository.State.Failed(com.fariin.app.data.LoadFailure.of(e))) } }
         // Channels I follow are not in their `users`, so they come from my follow list (iOS
         // ConversationsRepository merges ChannelFollows.conversations the same way).
         .combine(com.fariin.app.channel.ChannelFollows.docs.combine(com.fariin.app.channel.ChannelFollows.entries) { _, _ -> Unit }) { s, _ ->
