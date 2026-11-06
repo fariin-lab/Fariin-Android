@@ -126,6 +126,53 @@ object QuoteRules {
         return maxOf(1, Math.round(w * s).toInt()) to maxOf(1, Math.round(h * s).toInt())
     }
 
+    // ---- A quote on its way (owner 2026-11-06) ----
+    // The picked chat opens at once with a card drawn from the post on screen; the server makes
+    // the quote in the background under a local token. The draft carries the token from the start
+    // and the server's qid once it lands. Only a real qid ever goes into a message.
+
+    const val TOKEN_PREFIX = "local:"
+
+    /** The wording when the server refuses (or cannot make) a quote still on its way. */
+    const val REFUSED = "Couldn't quote this post. Try again."
+
+    fun newToken(unique: String): String = TOKEN_PREFIX + unique
+
+    /** A local token (never a qid: the prefix has a colon, which a qid cannot have). */
+    fun isToken(s: String?): Boolean = s != null && s.length > TOKEN_PREFIX.length && s.startsWith(TOKEN_PREFIX)
+
+    /** The post's kind for its card, as the server would name it. */
+    fun kindOf(type: String?, isAlbum: Boolean): String = when {
+        isAlbum || type == "album" -> "album"
+        type == "video" -> "video"
+        type == "image" -> "photo"
+        else -> "text"
+    }
+
+    /** The card shown before the server answers, drawn from the post and its channel on screen. */
+    fun localCard(cid: String, mid: String, title: String, photoUrl: String?, text: String?, type: String?, isAlbum: Boolean): QuoteCard =
+        QuoteCard(QuoteCard.State.OK, cid = cid, mid = mid, title = title.ifEmpty { "Channel" },
+            photoUrl = photoUrl.orEmpty(), text = text?.trim().orEmpty(), kind = kindOf(type, isAlbum))
+
+    /** The id a send may carry, or null while the quote is still on its way. */
+    fun sendableQid(d: QuoteStore.Draft?): String? = d?.qid?.takeIf { isQid(it) }
+
+    /** Made in the background and not landed yet: a send has to wait for it. */
+    fun isWaiting(d: QuoteStore.Draft?): Boolean = d != null && sendableQid(d) == null && isToken(d.token)
+
+    /** One key for the whole life of a draft (it does not change when the qid lands). */
+    fun draftKey(d: QuoteStore.Draft): String = d.token.ifEmpty { d.qid }
+
+    /** Where the phone's own picture of the post is kept: the qid once known, else the token. */
+    fun pictureKey(d: QuoteStore.Draft): String = sendableQid(d) ?: d.token
+
+    /** The server's quote landing: only on the draft it was made for, and only with a real qid. */
+    fun landed(d: QuoteStore.Draft?, token: String, qid: String, card: QuoteCard): QuoteStore.Draft? =
+        if (d == null || d.token != token || !isQid(qid)) d else d.copy(qid = qid, card = card)
+
+    /** A refusal takes away the draft it was made for; any other draft stays. */
+    fun refused(d: QuoteStore.Draft?, token: String): QuoteStore.Draft? = if (d != null && d.token == token) null else d
+
     /** Whether a quote of [c] tapped in the chat [openCid] stays in it (scroll to the post) rather than opening it again. */
     fun jumpsInPlace(c: QuoteCard?, openCid: String?): Boolean =
         c?.state == QuoteCard.State.OK && c.cid.isNotEmpty() && c.mid.isNotEmpty() && c.cid == openCid

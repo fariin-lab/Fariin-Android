@@ -4,12 +4,15 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
@@ -119,8 +122,42 @@ object QuoteStore {
     private val pictures = HashMap<String, ByteArray>()
     fun picture(qid: String): ByteArray? = synchronized(pictures) { pictures[qid] }
 
-    /** A quote waiting for the chat it was sent to, shown above that chat's composer once it opens. */
-    data class Draft(val cid: String, val qid: String, val card: QuoteCard)
+    /**
+     * THE CHAT OPENS BEFORE THE SERVER ANSWERS (owner 2026-11-06: the picked chat took seconds to
+     * open). [start] makes the quote in the background and hands back a local token at once; the
+     * composer asks [follow] (its picture, then the quote) and a send asks [whenMade]. One request
+     * per quote, however many times it is asked.
+     */
+    private class Making(val picture: Deferred<ByteArray?>, val made: Deferred<Made>)
+    private val making = HashMap<String, Making>()
+
+    fun start(cid: String, mid: String, picture: suspend () -> ByteArray?): String {
+        val token = QuoteRules.newToken(UUID.randomUUID().toString())
+        val pic = scope.async {
+            runCatching { picture() }.getOrNull()?.also { b -> synchronized(pictures) { pictures[token] = b } }
+        }
+        making[token] = Making(pic, scope.async { create(cid, mid, pic.await()) })
+        return token
+    }
+
+    /** The quote under [token]: [onPicture] once the phone's picture of the post is kept (under the token), then the server's answer. */
+    suspend fun follow(token: String, onPicture: () -> Unit = {}): Made {
+        val m = making[token] ?: return Made.Refused(QuoteRules.REFUSED)
+        if (m.picture.await() != null) onPicture()
+        return m.made.await()
+    }
+
+    /** The server's answer for [token], handed to [done] on the main thread even if the chat is closed meanwhile. */
+    fun whenMade(token: String, done: (Made) -> Unit) {
+        scope.launch { done(making[token]?.made?.await() ?: Made.Refused(QuoteRules.REFUSED)) }
+    }
+
+    /**
+     * A quote waiting above a chat's composer. [qid] is "" until the server has made it; [token]
+     * is the local one it was started under ("" for none); [pictured] turns true once the phone's
+     * own picture of the post is ready (so the bar redraws with it).
+     */
+    data class Draft(val cid: String, val qid: String, val card: QuoteCard, val token: String = "", val pictured: Boolean = false)
     val pendingDraft = MutableStateFlow<Draft?>(null)
 
     /** A quote card's tap: the channel to open and the post to scroll to once it is open. */

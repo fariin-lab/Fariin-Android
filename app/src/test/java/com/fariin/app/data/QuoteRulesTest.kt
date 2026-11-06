@@ -116,4 +116,74 @@ class QuoteRulesTest {
         assertFalse(QuoteRules.jumpsInPlace(c.copy(mid = ""), "ch1"))
         assertFalse(QuoteRules.jumpsInPlace(null, "ch1"))
     }
+
+    @Test fun tokenIsNeverAQid() {
+        val t = QuoteRules.newToken("0f8e7d6c-1234-4abc-9def-001122334455")
+        assertTrue(QuoteRules.isToken(t))
+        assertFalse(QuoteRules.isQid(t))
+        assertFalse(QuoteRules.isToken("abc123def456gh78"))
+        assertFalse(QuoteRules.isToken(QuoteRules.TOKEN_PREFIX))
+        assertFalse(QuoteRules.isToken(null))
+        // Even a token built around a qid-shaped string is not a qid.
+        assertFalse(QuoteRules.isQid(QuoteRules.newToken("abc123def456gh78")))
+    }
+
+    @Test fun localCardFromThePost() {
+        val c = QuoteRules.localCard("ch1", "m1", "Daily News", "https://x/p.jpg", "  Hello  ", "image", false)
+        assertEquals(QuoteCard.State.OK, c.state)
+        assertEquals("ch1", c.cid); assertEquals("m1", c.mid)
+        assertEquals("Daily News", QuoteRules.heading(c))
+        assertEquals("Hello", QuoteRules.body(c))
+        assertEquals("photo", c.kind)
+        assertEquals("https://x/p.jpg", c.photoUrl)
+        assertNull(QuoteRules.image(c))   // the server's picture comes with its answer
+        val bare = QuoteRules.localCard("ch1", "m1", "", null, null, "video", false)
+        assertEquals("Channel", QuoteRules.heading(bare))
+        assertEquals("Video", QuoteRules.body(bare))
+        assertEquals("", bare.photoUrl)
+        assertEquals("album", QuoteRules.kindOf("image", true))
+        assertEquals("text", QuoteRules.kindOf(null, false))
+    }
+
+    @Test fun draftWaitsUntilItsQidLands() {
+        val tk = QuoteRules.newToken("u1")
+        val local = QuoteRules.localCard("ch1", "m1", "News", "", "Hi", null, false)
+        val d = QuoteStore.Draft("dm1", "", local, tk)
+        assertTrue(QuoteRules.isWaiting(d))
+        assertNull(QuoteRules.sendableQid(d))
+        assertEquals(tk, QuoteRules.pictureKey(d))
+        assertEquals(tk, QuoteRules.draftKey(d))
+
+        val server = local.copy(username = "news", image = "https://x/i.jpg")
+        val ready = QuoteRules.landed(d, tk, "abc123def456gh78", server)!!
+        assertFalse(QuoteRules.isWaiting(ready))
+        assertEquals("abc123def456gh78", QuoteRules.sendableQid(ready))
+        assertEquals(server, ready.card)
+        assertEquals("abc123def456gh78", QuoteRules.pictureKey(ready))
+        assertEquals(tk, QuoteRules.draftKey(ready))   // the bar and the focus keep their key
+
+        // Another quote's answer, or a bad id, changes nothing.
+        assertEquals(d, QuoteRules.landed(d, QuoteRules.newToken("u2"), "abc123def456gh78", server))
+        assertEquals(d, QuoteRules.landed(d, tk, tk, server))
+        assertNull(QuoteRules.landed(null, tk, "abc123def456gh78", server))
+    }
+
+    @Test fun refusalTakesOnlyItsOwnDraft() {
+        val tk = QuoteRules.newToken("u1")
+        val d = QuoteStore.Draft("dm1", "", QuoteCard(QuoteCard.State.OK), tk)
+        assertNull(QuoteRules.refused(d, tk))
+        assertEquals(d, QuoteRules.refused(d, QuoteRules.newToken("u2")))
+        assertNull(QuoteRules.refused(null, tk))
+    }
+
+    @Test fun oldStyleDraftSendsAtOnce() {
+        val d = QuoteStore.Draft("dm1", "abc123def456gh78", QuoteCard(QuoteCard.State.OK))
+        assertFalse(QuoteRules.isWaiting(d))
+        assertEquals("abc123def456gh78", QuoteRules.sendableQid(d))
+        assertEquals("abc123def456gh78", QuoteRules.draftKey(d))
+        // No token and no qid: nothing to send and nothing to wait for.
+        val empty = QuoteStore.Draft("dm1", "", QuoteCard(QuoteCard.State.OK))
+        assertNull(QuoteRules.sendableQid(empty))
+        assertFalse(QuoteRules.isWaiting(empty))
+    }
 }

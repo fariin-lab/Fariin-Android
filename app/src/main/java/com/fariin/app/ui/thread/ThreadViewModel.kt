@@ -184,22 +184,31 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 }
             }
         },
-        // Quote a channel post (iOS startQuote): the server snapshots it (and checks I may see it),
-        // then the chat picked opens with the quote above its composer; this chat keeps it here.
+        // Quote a channel post (iOS startQuote): the chat picked opens AT ONCE with a card drawn from
+        // the post on screen (owner 2026-11-06: it waited seconds for the server). The server
+        // snapshots the post in the background under a local token (and checks I may see it);
+        // ThreadScreen puts its answer into the draft. This chat keeps the quote here.
         onQuoteTo = { m, dest ->
-            vm.viewModelScope.launch {
-                // The post's picture as this phone has it (channel media is sealed; QuotePicture.kt).
-                val picture = com.fariin.app.media.QuotePicture.make(vm.repo.media, m)
-                when (val r = com.fariin.app.data.QuoteStore.create(cid, m.id, picture)) {
-                    is com.fariin.app.data.QuoteStore.Made.Refused -> notice = r.text
-                    is com.fariin.app.data.QuoteStore.Made.Ok -> {
-                        com.fariin.app.data.QuoteStore.pendingDraft.value = com.fariin.app.data.QuoteStore.Draft(dest, r.qid, r.card)
-                        if (dest != cid) nav.chat(dest)
-                    }
+            val media = vm.repo.media
+            // The post's picture as this phone has it (channel media is sealed; QuotePicture.kt).
+            val token = com.fariin.app.data.QuoteStore.start(cid, m.id) { com.fariin.app.media.QuotePicture.make(media, m) }
+            val card = com.fariin.app.data.QuoteRules.localCard(cid, m.id, ui.title, ui.photoUrl,
+                if (m.mediaKind == null) m.bodyText else m.text, m.type, m.album.isNotEmpty())
+            com.fariin.app.data.QuoteStore.pendingDraft.value = com.fariin.app.data.QuoteStore.Draft(dest, "", card, token)
+            if (dest != cid) nav.chat(dest)
+        },
+        // A send before the quote has landed waits for its id; a message never carries the local token.
+        onSendQuote = { t, q, ids, failed ->
+            val repo = vm.repo
+            val qid = com.fariin.app.data.QuoteRules.sendableQid(q)
+            if (qid != null) repo.sendQuote(t, qid, ids, failed)
+            else if (com.fariin.app.data.QuoteRules.isToken(q.token)) com.fariin.app.data.QuoteStore.whenMade(q.token) { r ->
+                when (r) {
+                    is com.fariin.app.data.QuoteStore.Made.Ok -> repo.sendQuote(t, r.qid, ids, failed)
+                    is com.fariin.app.data.QuoteStore.Made.Refused -> com.fariin.app.ui.components.Snack.show(com.fariin.app.data.QuoteRules.REFUSED)
                 }
             }
         },
-        onSendQuote = { t, q, ids, failed -> vm.repo.sendQuote(t, q.qid, ids, failed) },
         onSave = { m -> vm.viewModelScope.launch { notice = com.fariin.app.media.GallerySaver.saveMessage(app, vm.repo.media, m) } },
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
         draft = remember(cid) { Drafts.text(cid) },

@@ -937,10 +937,24 @@ private fun ThreadContent(
                     replyTo = null
                     quoting = q
                 }
+                // The server's quote landing under the draft drawn from the post (its picture first,
+                // then the real id and card); a refusal takes the draft away and says so.
+                LaunchedEffect(quoting?.token) {
+                    val tk = quoting?.token?.takeIf { com.fariin.app.data.QuoteRules.isToken(it) } ?: return@LaunchedEffect
+                    val r = com.fariin.app.data.QuoteStore.follow(tk) { quoting = quoting?.let { if (it.token == tk) it.copy(pictured = true) else it } }
+                    quoting = when (r) {
+                        is com.fariin.app.data.QuoteStore.Made.Ok -> com.fariin.app.data.QuoteRules.landed(quoting, tk, r.qid, r.card)
+                        is com.fariin.app.data.QuoteStore.Made.Refused -> {
+                            if (quoting?.token == tk) actions.onNotice(com.fariin.app.data.QuoteRules.REFUSED)
+                            com.fariin.app.data.QuoteRules.refused(quoting, tk)
+                        }
+                    }
+                }
                 if (editing == null) quoting?.let { q ->
+                    val pk = com.fariin.app.data.QuoteRules.pictureKey(q)
                     ComposerBar("Quote from ${com.fariin.app.data.QuoteRules.heading(q.card)}",
                         com.fariin.app.data.QuoteRules.body(q.card),
-                        thumb = if (com.fariin.app.data.QuoteStore.picture(q.qid) != null || com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card, q.qid) }) else null) { quoting = null }
+                        thumb = if (com.fariin.app.data.QuoteStore.picture(pk) != null || com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card, pk) }) else null) { quoting = null }
                 }
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
@@ -1047,7 +1061,7 @@ private fun ThreadContent(
                     },
                     // A quote may go with no words (owner 2026-11-06, iOS sendsWithoutText).
                     sendsWithoutText = quoting != null && editing == null,
-                    focusKey = quoting?.qid,
+                    focusKey = quoting?.let { com.fariin.app.data.QuoteRules.draftKey(it) },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
                     onSticker = { s ->
