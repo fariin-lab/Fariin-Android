@@ -184,6 +184,8 @@ data class ThreadUi(
     val groupDoc: Map<String, Any?> = emptyMap(),
     /** My mute on this chat for the header menu's Mute row; null leaves the row out. */
     val muted: Boolean? = null,
+    /** Why the messages could not load (a plain reason), or null. Drawn only when nothing else shows. */
+    val loadError: String? = null,
 )
 
 /** The timer in force and since when, for the bubble's timer mark (iOS MessageRowContext.timer). */
@@ -596,11 +598,22 @@ private fun ThreadContent(
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes.
                 com.fariin.app.ui.components.ThreadSkeleton()
+            } else if (ui.messages.isEmpty() && ui.loadError != null && !ui.notAMember) {
+                // A failed load is never drawn as an empty chat.
+                com.fariin.app.ui.components.CenteredNotice("Couldn't load messages", ui.loadError, "Try Again", actions.onReload,
+                    Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty() && ui.isGroup && ui.channel == null && !ui.notAMember && ui.groupDoc.isNotEmpty()) {
                 // iOS encryptionNotice: an empty group shows its welcome card (GroupWelcomeCard.kt).
                 GroupWelcomeCard(ui, onStep = { peopleNav.groupStep(ui.cid, it) }, modifier = Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty()) {
-                Text("No messages here yet", fontSize = 15.sp, color = c.secondary, modifier = Modifier.align(Alignment.Center))
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No messages here yet", fontSize = 15.sp, color = c.secondary)
+                    // One next step: a nudge toward the composer (not in a channel I can only read).
+                    if (ui.channel == null && ui.sendBlocked == null && !ui.notAMember) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("Say hi to start the chat", fontSize = 13.sp, color = c.secondary.copy(alpha = 0.7f))
+                    }
+                }
             }
             val timerMark = TimerMark(ui.disappearSeconds,
                 remember(ui.messages, ui.disappearSeconds) { com.fariin.app.data.Disappearing.timerSince(ui.messages) })
@@ -1110,6 +1123,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
     val tick = ThreadLogic.tick(m, ui.me, ui.receipts)
     val failed = tick == Tick.FAILED
 
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
@@ -1223,6 +1237,12 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         }
         }
         ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
+    }
+    // The red "!" alone says little: the words under the bubble, tappable too.
+    if (failed) {
+        Text("Not sent. Tap to retry", fontSize = 12.sp, color = c.red,
+            modifier = Modifier.padding(start = 12.dp, end = 16.dp, top = 2.dp, bottom = 2.dp).clickable { onRetry(m) })
+    }
     }
 }
 
@@ -1577,7 +1597,11 @@ private fun Composer(
     var lift by remember { mutableStateOf(0f) }
     val elapsed by recorder.elapsed.collectAsState()
     val previewState by preview.state.collectAsState()
-    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) com.fariin.app.ui.components.Snack.show("Hold to record, release to send")
+        else com.fariin.app.ui.components.PermissionDenied.explain(context, Manifest.permission.RECORD_AUDIO,
+            "Fariin needs the microphone to record voice messages.")
+    }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val cancelAt = with(density) { com.fariin.app.media.VoiceRecordRules.CANCEL_DP.dp.toPx() }
     val lockAt = with(density) { com.fariin.app.media.VoiceRecordRules.LOCK_DP.dp.toPx() }

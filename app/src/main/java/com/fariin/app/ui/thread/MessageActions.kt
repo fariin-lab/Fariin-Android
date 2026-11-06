@@ -116,6 +116,8 @@ data class ThreadActions(
     /** The sticker panel: a built-in sticker or a GIF, with the reply it answers (or null). */
     val onSendSticker: (com.fariin.app.data.StickerRef, Message?) -> Unit = { _, _ -> },
     val onSendGif: (com.fariin.app.data.StickerGifRules.Gif, Message?) -> Unit = { _, _ -> },
+    /** "Try Again" after the messages failed to load: the listeners are made again. */
+    val onReload: () -> Unit = {},
 )
 
 

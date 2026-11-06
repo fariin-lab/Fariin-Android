@@ -128,9 +128,11 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
         notAMember = s.former && channel == null,
         muted = conv?.takeIf { !s.former }?.isMuted(me, System.currentTimeMillis().toDouble()),
+        loadError = s.error,
     )
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
+        onReload = vm.repo::reload,
         onUnblock = {
             vm.viewModelScope.launch {
                 val ok = com.fariin.app.data.FirestorePeople(me, CryptoHub.get(ctx))

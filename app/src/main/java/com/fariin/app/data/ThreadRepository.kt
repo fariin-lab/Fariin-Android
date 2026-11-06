@@ -172,6 +172,16 @@ class ThreadRepository(
         for (e in SendQueue.pending(me, cid)) if (!SendQueue.isInFlight(e.clientId)) resend(e)
     }
 
+    /** "Try Again" on a failed first load: the message listeners are made again, once. */
+    fun reload() {
+        if (_state.value.former || !msgFailed) return
+        msgReg?.remove(); msgReg = null
+        convReg?.remove(); convReg = null
+        msgFailed = false
+        _state.update { it.copy(error = null, loaded = it.messages.isNotEmpty()) }
+        startListeners()
+    }
+
     private fun startListeners() {
         if (msgReg != null) return
         msgReg = convRef.collection("messages")
@@ -182,9 +192,10 @@ class ThreadRepository(
             .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, err ->
                 if (snap == null) {
                     msgFailed = true
-                    _state.update { it.copy(loaded = true, synced = true, error = err?.message) }
+                    _state.update { it.copy(loaded = true, synced = true, error = LoadFailure.of(err)) }
                     return@addSnapshotListener
                 }
+                if (_state.value.error != null) _state.update { it.copy(error = null) }
                 // Never blank an open thread on an empty offline snapshot (iOS), nor the saved copy.
                 if (snap.metadata.isFromCache && snap.isEmpty && (liveDocs.isNotEmpty() || seeded)) return@addSnapshotListener
                 seeded = false
