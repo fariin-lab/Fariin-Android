@@ -991,3 +991,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   baa9d82 off note said once. Edit posted story caption: NOT built (owner removed it on iOS 2026-10-28).
   Answered owner: Android shrinks photos/videos exactly as iOS (1280/2560 px, 0.6, 1.5/3 MB; video 540p/1080p),
   keeps opened media in the app's own cache, nothing to the gallery unless saved; Keep Media same.
+- 15:20 walk loop (owner: never stop; security, permissions, UI in turn).
+  Security: share-in rejects file:// and our own provider (incl. "0@" user prefix); FileProvider only cache dirs;
+  allowBackup false; release minified; logs carry errors only, no message text/keys. No change needed.
+  Permissions (revoked on the Pixel, then restored): mic, camera, location each ask at first use and after a "no"
+  explain + Open Settings; Notifications page says "Notifications are off" when blocked. Location left denied
+  (its prior state unknown; the app asks again on next use).
+  UI: rotating a chat keeps the typed draft and lays out sideways.
