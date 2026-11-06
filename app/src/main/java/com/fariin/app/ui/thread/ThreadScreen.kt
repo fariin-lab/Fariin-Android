@@ -1284,8 +1284,13 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         val story = m.replyTo?.takeIf { it.isStatus && !m.deleted }
         Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
         if (story != null) StoryReplyHeader(ui, m, story, isMe)
+        // The sender's bubble style (BubbleStyles.kt): its fill and text colour, on both sides.
+        val styled = styledBubble(m)
+        val chromeMe = isMe && styled == null
+        androidx.compose.runtime.CompositionLocalProvider(LocalStyledInk provides styled?.ink) {
         Column(
-            Modifier.widthIn(max = maxW).clip(shape).background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape))
+            Modifier.widthIn(max = maxW).clip(shape)
+                .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape)))
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp),
         ) {
             if (showSender && g.first) {
@@ -1293,9 +1298,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 Spacer(Modifier.height(1.dp))
             }
             if (m.forwarded && !m.deleted) {
-                ForwardedTag(m, isMe, ui.channel != null)
+                ForwardedTag(m, chromeMe, ui.channel != null)
             }
-            m.replyTo?.takeIf { !m.deleted && !it.isStatus }?.let { ReplyQuote(it, ui, isMe) }
+            m.replyTo?.takeIf { !m.deleted && !it.isStatus }?.let { ReplyQuote(it, ui, chromeMe) }
             if (kind == Message.MediaKind.VOICE) {
                 VoiceBody(m, ui.cid, isMe, maxW * 0.89f - 26.dp) { Meta(m, tick, isMe, is24h) }
                 return@Column
@@ -1325,7 +1330,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                     return@Column
                 }
             }
-            val ink = if (isMe) Color.White else c.label
+            val ink = styled?.ink ?: if (isMe) Color.White else c.label
             val body = when {
                 m.deleted -> if (isMe && m.deletedBy == null) "You deleted this message" else "This message was deleted"
                 else -> m.bodyText
@@ -1334,8 +1339,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // No sealed card (an older message, or previews off): one of our group or channel links
             // in the words still gets the live card.
             // A quoted channel post takes the card's place (iOS quoteBody, QuoteBubble.kt).
-            if (!m.deleted) m.quoteId?.let { QuoteCardBubble(it, isMe) }
-                ?: m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, isMe) else LiveGroupLinkCard(body, isMe) }
+            if (!m.deleted) m.quoteId?.let { QuoteCardBubble(it, chromeMe) }
+                ?: m.linkPreview.let { lp -> if (lp != null) LinkPreviewCard(lp, chromeMe) else LiveGroupLinkCard(body, chromeMe) }
             // A channel post's reactions sit inside its bubble, the time line with them (iOS).
             val ch = ui.channel
             val chips = if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
@@ -1350,10 +1355,11 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                     if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
                 },
                 // iOS BubbleText: links, @usernames, emails and numbers tappable (BubbleLinks.kt).
-                linkInk = if (m.deleted) null else if (isMe) Color.White else c.blue,
+                linkInk = if (m.deleted) null else styled?.ink ?: if (isMe) Color.White else c.blue,
             )
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
+        }
         }
         }
         ui.channel?.let { com.fariin.app.ui.channels.PostShareButton(it, m) }
@@ -1560,7 +1566,9 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
 @Composable
 private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia: Boolean = false, plain: Boolean = false) {
     // [plain]: no bubble under it (a story reaction), so the page's own secondary colour.
+    val styledInk = LocalStyledInk.current.takeIf { !plain && !onMedia }
     val metaColor = if (plain) Fariin.colors.secondary
+        else if (styledInk != null) styledInk.copy(alpha = 0.62f)
         else if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
     Row(verticalAlignment = Alignment.CenterVertically) {
         com.fariin.app.ui.channels.PostViews(metaColor)
@@ -1583,7 +1591,7 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
             if (tick == Tick.SENDING || drawn != null) {
                 Spacer(Modifier.width(3.dp))
                 val tint = if (plain) (if (tick == Tick.READ) Fariin.colors.blue else metaColor)
-                    else Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f)
+                    else (styledInk ?: Color.White).copy(alpha = if (tick == Tick.READ) 1f else 0.55f)
                 if (drawn != null) Icon(androidx.compose.ui.res.painterResource(drawn), contentDescription = tickDescription(tick), tint = tint)
                 else Icon(Icons.Filled.Schedule, contentDescription = tickDescription(tick), tint = tint, modifier = Modifier.size(14.dp))
             }
