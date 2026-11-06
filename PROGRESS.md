@@ -871,3 +871,11 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   visitor sees "User" thread + writes refused; fix agent running); call photo layer 9ec2b6b; illustrated sheets
   b6d32fc; New badges d5bfa43; blue share button c8e991f. iOS: 8 UX-state commits + a54ebb1c link cards, compile
   42211866668 then TestFlight (I own it; tell the iOS session the run id).
+- 2026-11-06 evening: 971bdb3 guest feed fix (verified: visitor sees posts, no "User" thread); 51edafe Back from a
+  channel opened by link returns to the chat; 0e28aae no deleted rows/wallpaper notices in channels; 0788788 no
+  ce_/cu_ keys in list previews; 5950c89 Official row; b940842 + 068bdb9 cu_ emoji; 906f165 empty pages; 43c7372
+  call TalkBack order; 121e8a9 channel intro card + reactions inside posts + follower bell + Broadcast composer;
+  afa4294 Selected Emoji up to 12; e0460e1 Edit History owner/admin only. Pixel check of VE3 as visitor: card
+  (@vee, Be free, Created) matches the owner's iOS photo, menu is Copy/Share/Report. Owner view not yet seen on a
+  device (this Pixel account owns no channel). iOS TestFlight 42213804528 (0f86a861) green; the iOS session ships
+  the next one from 80c6f908.
