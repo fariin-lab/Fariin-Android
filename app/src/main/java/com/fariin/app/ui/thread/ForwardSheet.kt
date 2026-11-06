@@ -47,6 +47,7 @@ import com.fariin.app.data.CryptoHub
 import com.fariin.app.media.MediaRules
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.ui.components.floating
 
 /**
  * The forward picker (iOS ForwardPicker): "Forward to", a search field, the chats newest first,
@@ -102,15 +103,12 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                 }
             }
             Box(
-                // iOS: a solid app-blue capsule with white words, no rim or outline, light and dark
-                // alike; with nothing picked it stays blue and only the words dim.
                 Modifier.fillMaxWidth().padding(16.dp).height(50.dp)
-                    .clip(CircleShape).background(c.blue)
+                    .floating(CircleShape, fill = if (chosen.isEmpty()) c.secondary.copy(alpha = 0.3f) else c.blue)
                     .clickable(enabled = chosen.isNotEmpty()) { onSend(chosen.toList()); onDismiss() },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (chosen.size > 1) "Send to ${chosen.size} chats" else "Send",
-                    color = if (chosen.isEmpty()) Color.White.copy(alpha = 0.6f) else Color.White,
+                Text(if (chosen.size > 1) "Send to ${chosen.size} chats" else "Send", color = Color.White,
                     fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
