@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -539,6 +540,16 @@ fun ChatListScreen(
                     Box(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentAlignment = Alignment.Center) {
                         com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Archive,
                             "No archived chats", "Chats you archive will show here.", Modifier.padding(bottom = 60.dp))
+                    }
+                // A search with nothing found: in the middle of what the keyboard leaves, worded as the
+                // Settings search (and iOS) say it.
+                shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() && query.isNotBlank() ->
+                    Box(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).imePadding().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("No Results", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                            Text("There were no results for \"${query.trim()}\".\nTry a new search.", fontSize = 15.sp,
+                                color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
                     }
                 shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
                     query.isNotBlank() -> "No results"
