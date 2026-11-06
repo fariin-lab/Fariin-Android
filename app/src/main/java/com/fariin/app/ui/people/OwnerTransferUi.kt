@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -101,7 +100,7 @@ internal fun TransferOwnership(cid: String, isChannel: Boolean, heir: String, na
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)) {
             Box(Modifier.size(88.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)).background(c.card),
                 contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.accent, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
+                com.fariin.app.ui.components.FariinSpinner(size = 36.dp, stroke = 4.dp)
             }
         }
         "password" -> AlertDialog(onDismissRequest = { password = ""; onEnd() }, containerColor = c.card,
@@ -161,7 +160,7 @@ internal fun ChooseNewOwnerPage(cid: String, me: String, conv: Map<String, Any?>
             SettingsSection(footer = OwnerTransfer.chooseFooter(isChannel)) {
                 shown.forEach { (uid, name) ->
                     PersonLine(team.photos[uid]?.ifEmpty { null }, name, onClick = { if (picked == null) { failure = null; picked = uid to name } }) {
-                        if (picked?.first == uid) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        if (picked?.first == uid) com.fariin.app.ui.components.FariinSpinner(size = 20.dp)
                     }
                 }
             }

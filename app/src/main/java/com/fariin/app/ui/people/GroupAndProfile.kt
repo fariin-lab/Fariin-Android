@@ -58,7 +58,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -124,8 +123,8 @@ private fun Field(value: String, placeholder: String, onChange: (String) -> Unit
 }
 
 @Composable
-private fun TextAction(text: String, enabled: Boolean, onClick: () -> Unit) =
-    com.fariin.app.ui.components.FloatingTextAction(text, enabled = enabled, onClick = onClick)
+private fun TextAction(text: String, enabled: Boolean, busy: Boolean = false, onClick: () -> Unit) =
+    com.fariin.app.ui.components.FloatingTextAction(text, enabled = enabled, busy = busy, onClick = onClick)
 
 /**
  * Edit Profile (iOS EditProfileView): the photo with "Set New Photo", the name, and the
@@ -143,6 +142,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
     var askDiscard by remember { mutableStateOf(false) }
     var links by remember { mutableStateOf<List<com.fariin.app.data.ProfileLink>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -196,16 +196,16 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                 contentAlignment = Alignment.Center) { Icon(androidx.compose.material.icons.Icons.Filled.Close, null, tint = c.label) }
             Text("Edit Profile", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
             Box(Modifier.align(Alignment.CenterEnd)) {
-            TextAction("Save", enabled = changed && name.isNotBlank() && !busy) {
+            TextAction("Save", enabled = changed && name.isNotBlank() && !busy, busy = saving) {
                 scope.launch {
-                    busy = true
+                    busy = true; saving = true
                     try {
                         if (name.trim() != me?.name) api.saveName(name)
                         // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
                         if (me != null && about.trim() != me?.about?.trim()) com.fariin.app.data.ProfileWrites.saveAbout(api.me, about)
                         onBack()
                     } catch (_: Exception) { error = "Couldn't save. Try again." }
-                    busy = false
+                    busy = false; saving = false
                 }
             }
             }
@@ -215,7 +215,10 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Box(Modifier.clip(CircleShape).clickable { photoMenu = true }, contentAlignment = Alignment.Center) {
                 Avatar(me?.photoUrl, 120.dp)
-                if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                // The photo is going up: the ring over the photo, white on a dimmed circle (iOS).
+                if (busy && !saving) Box(Modifier.size(120.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                    com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = androidx.compose.ui.graphics.Color.White)
+                }
             }
             // iOS ProfilePhotoSheet: Camera, Photo Library, and Remove while there is a photo.
             var askRemove by remember { mutableStateOf(false) }
@@ -329,7 +332,7 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Username", onBack = onBack, action = {
-            TextAction("Done", enabled = !claiming && (Usernames.isValid(draft) && status !is NameStatus.Taken && status !is NameStatus.Problem)) {
+            TextAction("Done", enabled = !claiming && (Usernames.isValid(draft) && status !is NameStatus.Taken && status !is NameStatus.Problem), busy = claiming) {
                 if (unchanged) { onBack(); return@TextAction }
                 claiming = true
                 scope.launch {
@@ -348,7 +351,7 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
         Column(Modifier.padding(horizontal = 32.dp)) {
             when (val s = status) {
                 NameStatus.Quiet -> {}
-                NameStatus.Checking -> Text("Checking username…", fontSize = 13.sp, color = c.secondary)
+                NameStatus.Checking -> com.fariin.app.ui.components.LoadingLine("Checking username…")
                 is NameStatus.Available -> Text("${s.name} is available.", fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF34C759))
                 NameStatus.Taken -> {
                     Text("This username is taken.", fontSize = 13.sp, color = c.red)
@@ -954,8 +957,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
         dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = {
-            if (saving) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
-            else TextAction("Save", enabled = trimmed.isNotEmpty() && changed) {
+            TextAction("Save", enabled = trimmed.isNotEmpty() && changed && !saving, busy = saving) {
                 saving = true; error = null
                 scope.launch {
                     try {

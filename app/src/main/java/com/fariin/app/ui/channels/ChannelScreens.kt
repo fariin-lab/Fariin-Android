@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -95,9 +94,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
         Column(Modifier.fillMaxSize()) {
             com.fariin.app.ui.components.FloatingTopBar("Find Channels", onBack = onBack, container = c.bgSecondary)
             when {
-                loading && rows.isEmpty() -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
-                }
+                loading && rows.isEmpty() -> com.fariin.app.ui.components.LoadingRow(Modifier.padding(vertical = 14.dp))
                 failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
                 rows.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
                 else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
@@ -260,7 +257,7 @@ private fun BigButton(text: String, enabled: Boolean, busy: Boolean = false, onC
     Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).height(52.dp).clip(CircleShape)
         .background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f)).clickable(enabled = enabled && !busy, onClick = onClick),
         contentAlignment = Alignment.Center) {
-        if (busy) CircularProgressIndicator(color = c.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+        if (busy) com.fariin.app.ui.components.ButtonSpinner(c.onAccent)
         else Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
     }
 }
@@ -289,8 +286,7 @@ private fun Details(name: String, about: String, creating: Boolean, error: Strin
     var photoMenu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().imePadding().navigationBarsPadding()) {
         com.fariin.app.ui.components.FloatingTopBar("New Channel", onBack = onBack, container = c.bgSecondary) {
-            if (creating) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(end = 12.dp).size(22.dp))
-            else com.fariin.app.ui.components.FloatingTextAction("Next", enabled = name.isNotBlank(), onClick = onNext)
+            com.fariin.app.ui.components.FloatingTextAction("Next", enabled = name.isNotBlank() && !creating, busy = creating, onClick = onNext)
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Row(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).padding(14.dp),
@@ -355,7 +351,7 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
         linkOk = false
         if (!public || link.isEmpty()) { linkNote = null; return@LaunchedEffect }
         ChannelRules.linkProblem(link)?.let { linkNote = it; return@LaunchedEffect }
-        linkNote = "Checking..."
+        linkNote = "Checking…"
         delay(400)
         val r = ChannelService.checkLink(cid, link)
         linkNote = r ?: "fariin.com/$link is available."
@@ -378,7 +374,10 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
                     BasicTextField(link, { link = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                         cursorBrush = SolidColor(c.accent), modifier = Modifier.weight(1f))
                 }
-                Foot(linkNote ?: "Pick a link of ${ChannelRules.LINK_MIN} to ${ChannelRules.LINK_MAX} characters: letters, numbers and _.",
+                // Asking the server: the ring and the words on one line under the field (iOS).
+                if (linkNote == "Checking…") com.fariin.app.ui.components.LoadingLine("Checking link…",
+                    Modifier.padding(horizontal = 32.dp, vertical = 6.dp))
+                else Foot(linkNote ?: "Pick a link of ${ChannelRules.LINK_MIN} to ${ChannelRules.LINK_MAX} characters: letters, numbers and _.",
                     if (linkOk) Color(0xFF34C759) else null)
             } else {
                 SectionTitle("INVITE LINK")

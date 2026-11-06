@@ -71,7 +71,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -406,7 +405,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             com.fariin.app.data.StoryChips.place(raw)?.let { (label, url) -> addChip("📍 $label", url) }
         }, onCancel = { askPlace = false })
         if (baking) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)).clickable {}, contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color.White)
+            com.fariin.app.ui.components.FariinSpinner(size = 44.dp, stroke = 5.dp, color = Color.White)
         }
         if (audience) {
             ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->

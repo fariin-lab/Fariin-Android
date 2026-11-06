@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -101,7 +100,7 @@ internal fun EditHistorySheet(m: Message, actions: ThreadActions, onDismiss: () 
                 failed -> Text("Couldn't load the edit history. Check your connection and try again.", fontSize = 15.sp,
                     color = c.secondary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
                 else -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    com.fariin.app.ui.components.FariinSpinner(size = 22.dp)
                 }
             }
             }

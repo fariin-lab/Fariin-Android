@@ -34,7 +34,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -96,8 +95,9 @@ internal fun BackRow(onBack: () -> Unit) {
 }
 
 @Composable
-internal fun Busy(color: Color, side: Int = 20) {
-    CircularProgressIndicator(Modifier.size(side.dp), color = color, strokeWidth = 2.dp)
+internal fun Busy(color: Color, side: Int = 22) {
+    // The app's one ring (ui/components/FariinSpinner.kt); button size is iOS BusyArc.small.
+    com.fariin.app.ui.components.FariinSpinner(size = side.dp, stroke = if (side <= 24) 2.5.dp else (side / 8f).dp, color = color)
 }
 
 /** authPrimaryPill: the Fariin-blue pill, white words, 50 high. */
@@ -137,7 +137,7 @@ internal fun RaisedPill(text: String, enabled: Boolean = true, busy: Boolean = f
                 .clickable(enabled = enabled && !busy, onClick = onClick),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (busy) Busy(c.secondary) else {
+            if (busy) Busy(c.label) else {
                 if (icon != null) { icon(); Spacer(Modifier.width(10.dp)) }
                 Text(text, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = c.label)
             }

@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -315,7 +314,8 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
                 if (mayInvite) SettingsSection {
                     SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)),
-                        titleColor = c.accent, trailing = Trailing.NONE) { if (!adding) picking = true }
+                        titleColor = c.accent, trailing = Trailing.NONE,
+                        accessory = if (adding) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) { if (!adding) picking = true }
                     SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
                         titleColor = c.accent, trailing = Trailing.NONE, last = true) { shareLink() }
                 }
@@ -332,9 +332,7 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                         if (f == rows.lastOrNull() && more) LaunchedEffect(f.uid) { load() }
                     }
                     when {
-                        loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
-                        }
+                        loading -> com.fariin.app.ui.components.LoadingRow()
                         failed -> Note(ChannelAdmins.FOLLOWERS_FAILED)
                         followerRows.isEmpty() && !more -> Note(ChannelAdmins.NO_FOLLOWERS)
                     }
@@ -419,7 +417,7 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
     val shown = if (q.isEmpty()) list else list.filter { it.name.contains(q, ignoreCase = true) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Choose Follower", onClose, action = {
-            if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+            if (busy) com.fariin.app.ui.components.BarBusyPill("Adding…")
         })
         SearchField(query, "Search") { query = it }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
@@ -429,9 +427,7 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
                     if (f.uid == rows.lastOrNull()?.uid && more) LaunchedEffect(f.uid) { load() }
                 }
                 when {
-                    loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
-                    }
+                    loading -> com.fariin.app.ui.components.LoadingRow()
                     shown.isEmpty() -> Note(if (failed) ChannelAdmins.PICK_FAILED else if (q.isEmpty()) ChannelAdmins.PICK_EMPTY else ChannelAdmins.PICK_NONE)
                 }
             }
@@ -493,7 +489,7 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = {
-            if (saving) CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+            if (saving) com.fariin.app.ui.components.BarBusyPill("Saving…")
         })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally) {

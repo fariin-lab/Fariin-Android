@@ -39,7 +39,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -201,7 +200,7 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.size(42.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
-                            if (locating) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                            if (locating) com.fariin.app.ui.components.FariinSpinner(size = 20.dp, color = Color.White)
                             else Icon(Icons.Filled.MyLocation, null, tint = Color.White, modifier = Modifier.size(22.dp))
                         }
                         Spacer(Modifier.width(12.dp))
@@ -217,7 +216,7 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                     }
                 }
                 else -> Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                    com.fariin.app.ui.components.FariinSpinner(size = 22.dp)
                 }
             }
             if (canSearch) {
@@ -235,7 +234,7 @@ internal fun LocationSheet(onDismiss: () -> Unit, onSend: (lat: Double, lon: Dou
                 }
                 when {
                     searching -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = c.secondary, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        com.fariin.app.ui.components.LoadingLine("Searching…", fontSize = 15.sp)
                     }
                     searchNote != null -> Text(searchNote!!, fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))

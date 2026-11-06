@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -90,7 +89,7 @@ fun AdminInviteSheet(code: String, onClose: () -> Unit, onOpenChannel: (String) 
             val i = info
             when {
                 problem != null -> Text(problem!!, fontSize = 16.sp, color = c.secondary, textAlign = TextAlign.Center)
-                i == null -> CircularProgressIndicator(Modifier.padding(32.dp))
+                i == null -> com.fariin.app.ui.components.FariinSpinner(Modifier.padding(32.dp), size = 30.dp, stroke = 3.dp)
                 else -> {
                     Avatar(i.photo, 96.dp, squircle = true)
                     Text(i.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)

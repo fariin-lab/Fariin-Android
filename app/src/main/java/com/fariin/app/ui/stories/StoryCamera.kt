@@ -74,7 +74,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.outlined.Cameraswitch
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -627,7 +626,7 @@ private fun StoryCamera(
                 modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.6f))
                     .padding(horizontal = 14.dp, vertical = 8.dp))
         }
-        if (busy) CircularProgressIndicator(color = Color.White, modifier = Modifier.align(Alignment.Center))
+        if (busy) com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 44.dp, stroke = 5.dp, color = Color.White)
 
         // Above the bar: the zoom pill, then the shutter with the lock 78 dp to its right while recording.
         Column(
@@ -708,7 +707,7 @@ private fun StoryCamera(
                             .semantics { contentDescription = "Next" },
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (rendering) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                        if (rendering) com.fariin.app.ui.components.ButtonSpinner(Color.Black, size = 20.dp)
                         else Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null,
                             tint = if (has) Color.Black else Color.White, modifier = Modifier.size(20.dp))
                     }

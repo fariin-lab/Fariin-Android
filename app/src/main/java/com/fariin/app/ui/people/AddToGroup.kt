@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -79,7 +78,7 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 12.dp))
             val list = groups
             when {
-                list == null -> Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                list == null -> com.fariin.app.ui.components.PageLoading(Modifier.fillMaxWidth().height(160.dp))
                 list.isEmpty() -> Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), null, tint = c.secondary, modifier = Modifier.size(40.dp))
@@ -99,7 +98,7 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
                                 Text(g.displayName(me), fontSize = 17.sp, color = if (off) c.secondary else c.label, maxLines = 1)
                                 Text(if (already) "Already a member" else blocked ?: GroupRules.memberCount(g.users.size), fontSize = 13.sp, color = c.secondary)
                             }
-                            if (working == g.id) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            if (working == g.id) com.fariin.app.ui.components.FariinSpinner(size = 20.dp)
                         }
                     }
                 }

@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -89,7 +88,7 @@ fun GlowPeopleListPage(title: String, startOnGlowing: Boolean = false, onOpenPer
             Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 10.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val l = load) {
-                GlowLoad.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.secondary)
+                GlowLoad.Loading -> com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 30.dp, stroke = 3.dp)
                 GlowLoad.Failed -> GlowCouldNotLoad { reload++ }
                 is GlowLoad.Loaded -> {
                     val rows = l.value.filter { GlowRules.matches(it, search) }

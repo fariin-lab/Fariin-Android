@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -137,7 +136,7 @@ fun CircleCropper(uri: Uri, title: String, subtitle: String, onDone: (ByteArray)
                 drawPath(dim, Color.Black.copy(alpha = 0.55f))
             }
         } else {
-            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.align(Alignment.Center).size(28.dp))
+            com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 30.dp, stroke = 3.dp, color = Color.White)
         }
         Row(
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -149,7 +148,7 @@ fun CircleCropper(uri: Uri, title: String, subtitle: String, onDone: (ByteArray)
                 Text(subtitle, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
             }
             if (cutting) Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                com.fariin.app.ui.components.ButtonSpinner(Color.White)
             } else RoundButton(Icons.Filled.Check, "Done") {
                 val b = source ?: return@RoundButton
                 val r = CropMath.cropRect(b.width, b.height, window, scale, offX, offY)

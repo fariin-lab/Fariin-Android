@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -177,7 +176,7 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
         }
         if (!(current && ctl.firstFrame)) {
             if (poster != null) Image(poster, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            if (file == null) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+            if (file == null) com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = Color.White)
         }
     }
 }

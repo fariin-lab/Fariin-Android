@@ -82,7 +82,6 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1289,7 +1288,7 @@ private fun StoryMedia(
             update = { it.player = player },
             modifier = Modifier.fillMaxSize(),
         )
-        if (!ready) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(32.dp))
+        if (!ready) com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = Color.White)
     }
 }
 

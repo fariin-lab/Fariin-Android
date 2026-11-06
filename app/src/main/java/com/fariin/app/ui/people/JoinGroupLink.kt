@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
@@ -163,7 +162,7 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                         else -> if (p.needsApproval) "Request to Join" else "Join Group"
                     }
                     Spacer(Modifier.height(24.dp))
-                    CapsuleButton(title, enabled = !joining && !sent) { join(p) }
+                    CapsuleButton(title, enabled = !joining && !sent, busy = joining) { join(p) }
                 }
                 refused != null -> {
                     Text("Can't join with this link", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
@@ -173,17 +172,18 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                     Text(failed!!, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 16.dp))
                     CapsuleButton("Try Again", enabled = true) { failed = null; attempt++ }
                 }
-                else -> CircularProgressIndicator(Modifier.padding(32.dp))
+                else -> com.fariin.app.ui.components.FariinSpinner(Modifier.padding(32.dp), size = 30.dp, stroke = 3.dp)
             }
         }
     }
 }
 
 @Composable
-private fun CapsuleButton(title: String, enabled: Boolean, onClick: () -> Unit) {
+private fun CapsuleButton(title: String, enabled: Boolean, busy: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
-    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f))
-        .clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(title, color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    // Busy (iOS): the fill stays full and the ring takes the words' place inside the button.
+    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled || busy) c.accent else c.accent.copy(alpha = 0.4f))
+        .clickable(enabled = enabled && !busy, onClick = onClick), contentAlignment = Alignment.Center) {
+        com.fariin.app.ui.components.BusyContent(busy, c.onAccent) { Text(title, color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
     }
 }

@@ -40,7 +40,6 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -146,9 +145,7 @@ fun CreateCallLinkScreen(onClose: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 TextButton(onClick = { attempt++ }) { Text("Try again", color = c.accent) }
             }
-            else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
-            }
+            else -> com.fariin.app.ui.components.PageLoading()
         }
     }
 }

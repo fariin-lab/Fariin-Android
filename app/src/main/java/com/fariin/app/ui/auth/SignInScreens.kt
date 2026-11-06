@@ -391,13 +391,8 @@ private fun OrDivider() {
 
 @Composable
 private fun SigningInOverlay() {
-    val c = Fariin.colors
-    Box(Modifier.fillMaxSize().background(c.bg.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Busy(c.secondary, 28)
-            Text("Signing In…", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 12.dp))
-        }
-    }
+    // iOS BusyOverlay: the page turns plain, the big ring and the words in the middle.
+    com.fariin.app.ui.components.BusyOverlay("Signing In…")
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -426,7 +421,7 @@ private fun SavedAccountRow(a: SavedAccount, photo: Bitmap?, lastUsed: Boolean, 
                 } else Text("@${a.handle}", fontSize = 15.sp, color = c.secondary, maxLines = 1)
             }
             Spacer(Modifier.width(8.dp))
-            if (resuming) Busy(c.secondary, 18)
+            if (resuming) Busy(c.label, 20)
             else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiary)
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -334,7 +333,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                 contentAlignment = Alignment.Center,
             ) {
                 if (loading || url == null || m.uploading && m.audioUrl == null && m.localPath == null) {
-                    CircularProgressIndicator(color = tint, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                    com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = tint)
                 } else {
                     Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         if (playing) "Pause" else "Play", tint = glyph, modifier = Modifier.size(28.dp))

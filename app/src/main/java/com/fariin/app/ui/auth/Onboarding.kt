@@ -240,7 +240,7 @@ private fun HandleMark(state: HandleState) {
     when (state) {
         HandleState.Empty -> {}
         HandleState.Invalid -> Box(Modifier.size(17.dp).border(BorderStroke(1.5.dp, c.secondary.copy(alpha = 0.6f)), CircleShape))
-        HandleState.Checking -> Busy(c.secondary, 17)
+        HandleState.Checking -> Busy(c.label, 18)
         HandleState.Free -> Box(Modifier.size(20.dp).clip(CircleShape).background(GreenOk), contentAlignment = Alignment.Center) {
             Icon(androidx.compose.material.icons.Icons.Filled.Check, "Available", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(13.dp))
         }

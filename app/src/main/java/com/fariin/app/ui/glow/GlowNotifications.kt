@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -180,7 +179,7 @@ fun GlowNotificationsPage(
             FloatingTopBar("Notifications", onBack = onBack)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (val l = load) {
-                    GlowLoad.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.secondary)
+                    GlowLoad.Loading -> com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 30.dp, stroke = 3.dp)
                     GlowLoad.Failed -> GlowCouldNotLoad { reload++ }
                     is GlowLoad.Loaded -> {
                         val rows = l.value.filter(::matches)

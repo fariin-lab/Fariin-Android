@@ -50,7 +50,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Draw
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -649,7 +648,7 @@ private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, 
     LaunchedEffect(current) { if (!current) { scale = 1f; offset = Offset.Zero } }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (bmp == null) {
-            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+            com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = Color.White)
         } else {
             Image(
                 bmp, "Photo", contentScale = ContentScale.Fit,

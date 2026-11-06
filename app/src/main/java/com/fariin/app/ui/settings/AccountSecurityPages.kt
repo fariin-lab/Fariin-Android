@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -122,9 +121,11 @@ internal fun CardField(
 @Composable
 internal fun BarAction(text: String, enabled: Boolean, busy: Boolean = false, color: Color? = null, onClick: () -> Unit) {
     val c = Fariin.colors
-    if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp).size(20.dp))
-    else TextButton(onClick = onClick, enabled = enabled) {
-        Text(text, fontWeight = FontWeight.SemiBold, color = if (enabled) color ?: c.accent else c.tertiary)
+    // Busy: the ring takes the word's place inside the same button, which keeps its width (iOS).
+    TextButton(onClick = { if (!busy) onClick() }, enabled = enabled || busy) {
+        com.fariin.app.ui.components.BusyContent(busy, c.label, size = 20.dp) {
+            Text(text, fontWeight = FontWeight.SemiBold, color = if (enabled) color ?: c.accent else c.tertiary)
+        }
     }
 }
 
@@ -151,8 +152,9 @@ internal fun SignInAgainSection(onVerified: () -> Unit) {
         }
         // The keyboard's Go verifies too: on a small phone the keyboard covers the Verify row.
         CardField(password, "Your current password", secret = true, enabled = !busy, last = false, imeDone = { verify() }) { password = it }
-        SettingsRow(if (busy) "Checking..." else "Verify", trailing = Trailing.NONE,
-            titleColor = if (password.isEmpty() || busy) c.tertiary else c.accent, last = error == null) { verify() }
+        SettingsRow(if (busy) "Checking…" else "Verify", trailing = Trailing.NONE,
+            titleColor = if (password.isEmpty() || busy) c.secondary else c.accent, last = error == null,
+            accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) { verify() }
         error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.padding(16.dp)) }
     }
 }
@@ -296,7 +298,7 @@ private fun TwoStepPage(push: (String) -> Unit, pop: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         PageBar("Two-step verification", onBack = pop)
         when {
-            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.secondary) }
+            loading -> com.fariin.app.ui.components.PageLoading()
             !loadedOnce -> Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("Two-step verification", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label)
                 Spacer(Modifier.height(8.dp))

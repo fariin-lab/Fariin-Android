@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -264,8 +263,7 @@ private fun EditorBody(
                 )
             }
         }
-        if (picture == null) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp,
-            modifier = Modifier.align(Alignment.Center).size(28.dp))
+        if (picture == null) com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 30.dp, stroke = 3.dp, color = Color.White)
         if (drawing && picture != null) StoryEditCanvas(
             edits, img, -1L, true, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = {}, onTapText = {}, onDrag = { _, _ -> }, onDrop = { _, _ -> },

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -85,8 +84,8 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                         else -> "Join Group"
                     }
                     val enabled = !joining && !sent
-                    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f))
-                        .clickable(enabled = enabled) {
+                    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(if (enabled || joining) c.accent else c.accent.copy(alpha = 0.4f))
+                        .clickable(enabled = enabled && !joining) {
                             if (p.isMember) { onClose(); onOpenChat(cid); return@clickable }
                             joining = true; problem = null
                             scope.launch {
@@ -96,11 +95,11 @@ fun PublicGroupSheet(cid: String, onClose: () -> Unit, onOpenChat: (String) -> U
                                 joining = false
                             }
                         }, contentAlignment = Alignment.Center) {
-                        Text(title, color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                        com.fariin.app.ui.components.BusyContent(joining, c.onAccent) { Text(title, color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
                     }
                 }
                 problem != null -> Text(problem!!, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 24.dp))
-                else -> CircularProgressIndicator(Modifier.padding(32.dp))
+                else -> com.fariin.app.ui.components.FariinSpinner(Modifier.padding(32.dp), size = 30.dp, stroke = 3.dp)
             }
         }
     }

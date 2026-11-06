@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -392,7 +391,7 @@ private fun CheckupRow(icon: ImageVector?, tint: Color, title: String, subtitle:
     ) {
         Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterStart) {
             if (icon != null) Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
-            else CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = c.secondary)
+            else com.fariin.app.ui.components.FariinSpinner(size = 20.dp)
         }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {

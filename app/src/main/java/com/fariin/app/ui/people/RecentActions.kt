@@ -50,7 +50,6 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.WorkspacePremium
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -328,7 +327,7 @@ private fun typeIcon(e: AdminLog.Event): ImageVector = when (e.type) {
 private fun MoreLoader(onShown: () -> Unit) {
     LaunchedEffect(Unit) { onShown() }
     Box(Modifier.fillMaxWidth().padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = Fariin.colors.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+        com.fariin.app.ui.components.FariinSpinner(size = 22.dp)
     }
 }
 

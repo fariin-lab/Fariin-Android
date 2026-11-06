@@ -34,7 +34,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -286,7 +285,7 @@ private fun PostedCard(state: GlowLoad<List<PostedStory>>, onSeeAll: () -> Unit,
         }
         when {
             state is GlowLoad.Loading -> Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Secondary) }
+                com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = Label) }
             rows.isEmpty() -> Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
                 Text("You have no live stories.", fontSize = 15.sp, color = Secondary) }
             else -> Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

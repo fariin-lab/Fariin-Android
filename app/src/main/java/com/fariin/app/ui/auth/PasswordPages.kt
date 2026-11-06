@@ -80,9 +80,11 @@ private fun TitleBar(title: String, onBack: () -> Unit, action: String? = null, 
         }
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
         if (action != null) Box(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)) {
-            if (busy) Busy(c.secondary, 18)
-            else Text(action, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (actionEnabled) c.accent else c.tertiary,
-                modifier = Modifier.clickable(enabled = actionEnabled, onClick = onAction).padding(6.dp))
+            // Busy: the ring in the word's place, the word kept unseen so the bar does not shift (iOS).
+            com.fariin.app.ui.components.BusyContent(busy, c.label, size = 20.dp) {
+                Text(action, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (actionEnabled) c.accent else c.tertiary,
+                    modifier = Modifier.clickable(enabled = actionEnabled && !busy, onClick = onAction).padding(6.dp))
+            }
         }
     }
 }
@@ -161,7 +163,7 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
         TitleBar("Password", onBack, action = if (gate == Gate.Open) (if (isFirst) "Create" else "Save") else null,
             actionEnabled = canSave, busy = busy) { save() }
         when (gate) {
-            Gate.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Busy(c.secondary, 40) }
+            Gate.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Busy(c.label, 40) }
             Gate.Refused -> StateCard(Icons.Outlined.LockOpen, "Not verified",
                 "Unlock with your fingerprint, face or screen lock to change your password.", "Try Again") { prove() }
             Gate.NoLock -> StateCard(Icons.Outlined.Lock, "Lock your phone first",
@@ -200,9 +202,7 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (sendingCode) {
-                        androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = c.secondary, strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Sending code…", fontSize = 17.sp, color = c.secondary)
+                        com.fariin.app.ui.components.LoadingLine("Sending code…", fontSize = 17.sp)
                     } else Text("Forgot password?", fontSize = 17.sp, color = c.label, textDecoration = TextDecoration.Underline)
                 }
                 ErrorLine(error)
@@ -307,7 +307,7 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
     val f = DateFormat.getDateInstance(DateFormat.MEDIUM)
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding()) {
         TitleBar("Passkeys", onBack)
-        if (loading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Busy(c.secondary, 28) }
+        if (loading) com.fariin.app.ui.components.PageLoading()
         else if (rows.isEmpty()) Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Text("Sign in securely and protect your account", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
             Point(Icons.Outlined.Shield, "Create a passkey for a secure, easy way to sign in to your account.")

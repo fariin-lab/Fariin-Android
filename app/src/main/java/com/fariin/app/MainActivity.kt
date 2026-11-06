@@ -153,18 +153,8 @@ class MainActivity : ComponentActivity() {
                     com.fariin.app.system.AppUpdateLayer()
                     // Log Out under way (iOS BusyOverlay "Signing Out…"): the app says so and takes no taps.
                     val signingOut by com.fariin.app.device.SessionEnd.signingOut.collectAsState()
-                    if (signingOut) androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
-                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f))
-                        .clickable(enabled = true, onClick = {}), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier
-                            .background(com.fariin.app.ui.theme.Fariin.colors.card, androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
-                            .padding(horizontal = 28.dp, vertical = 22.dp),
-                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                            androidx.compose.material3.CircularProgressIndicator(color = com.fariin.app.ui.theme.Fariin.colors.accent)
-                            androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(14.dp))
-                            androidx.compose.material3.Text("Logging out…", color = com.fariin.app.ui.theme.Fariin.colors.label)
-                        }
-                    }
+                    // The page turns plain with the big ring and the words, not a small card on a dimmed page.
+                    if (signingOut) com.fariin.app.ui.components.BusyOverlay("Logging out…")
                     if (me != null) {
                         com.fariin.app.system.LowStorageSheet()
                         LaunchedEffect(Unit) { kotlinx.coroutines.delay(2_000); com.fariin.app.system.LowStorage.checkAndWarn(applicationContext) }

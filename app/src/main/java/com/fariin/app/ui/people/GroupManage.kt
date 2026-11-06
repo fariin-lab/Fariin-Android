@@ -62,7 +62,6 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -263,8 +262,7 @@ internal fun GroupPagesHost(cid: String, me: String, start: GroupPage, onExit: (
 private fun Loading() = Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary))
 
 @Composable
-private fun BusyMark() = CircularProgressIndicator(color = Fariin.colors.accent, strokeWidth = 2.dp,
-    modifier = Modifier.padding(horizontal = 12.dp).size(22.dp))
+private fun BusyMark() = com.fariin.app.ui.components.BarBusyPill()
 
 @Composable
 private fun Problem(text: String?, onDone: () -> Unit) {
@@ -426,7 +424,7 @@ private fun AdminRightsPage(cid: String, me: String, uid: String, onBack: () -> 
         }) { Text("Dismiss Admin", color = c.red) } },
         dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = { if (saving) BusyMark() })
+        PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = { if (saving) com.fariin.app.ui.components.BarBusyPill("Saving…") })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             AdminHeader(team.photos[uid]?.ifEmpty { null }, name, if (team.isOwner(uid)) "Owner" else "Admin")
             if (team.isOwner(uid)) {
@@ -783,7 +781,7 @@ private fun BannedUsersPage(cid: String, onBack: () -> Unit) {
                     val name = team.names[uid]?.ifEmpty { null } ?: fetched[uid]?.first ?: "User"
                     val photo = team.photos[uid]?.ifEmpty { null } ?: fetched[uid]?.second
                     PersonLine(photo, name) {
-                        if (busy == uid) BusyMark()
+                        if (busy == uid) com.fariin.app.ui.components.FariinSpinner(Modifier.padding(horizontal = 12.dp), size = 20.dp)
                         else TextButton(enabled = busy == null, onClick = {
                             busy = uid
                             scope.launch {
@@ -925,7 +923,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
         ok = false
         if (!showPublic || !changed || typed.isEmpty()) { note = null; return@LaunchedEffect }
         com.fariin.app.channel.ChannelRules.linkProblem(typed)?.let { note = it; return@LaunchedEffect }
-        note = "Checking..."
+        note = "Checking…"
         delay(400)
         val r = com.fariin.app.channel.ChannelService.checkLink(cid, typed)
         note = r ?: "fariin.com/$typed is available."
@@ -978,6 +976,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
             if (showPublic) {
                 SettingsSection(header = "Public Link", footer = when {
                     !changed && typed.isNotEmpty() -> "People can open this $noun with fariin.com/$typed."
+                    note == "Checking…" -> null
                     note != null -> note
                     else -> "Pick a link of ${com.fariin.app.channel.ChannelRules.LINK_MIN} to ${com.fariin.app.channel.ChannelRules.LINK_MAX} characters: letters, numbers and _."
                 }) {
@@ -990,6 +989,9 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                         }
                     }
                 }
+                // Asking the server: the ring and the words on one line under the field (iOS).
+                if (note == "Checking…") com.fariin.app.ui.components.LoadingLine("Checking link…",
+                    Modifier.padding(start = 32.dp, end = 32.dp, bottom = 6.dp))
             }
         }
     }
@@ -1103,7 +1105,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
         }
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Invite Links", onBack, action = { if (working) BusyMark() })
+        PageBar("Invite Links", onBack, action = { if (working) com.fariin.app.ui.components.BarBusyPill("Saving…") })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             val l = list
             val publicName = if (doc["isPublic"] == true) doc["username"] as? String ?: "" else ""
@@ -1124,8 +1126,9 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                                 Text(p.statusLine(now).substringBefore(" · "), fontSize = 14.sp, color = c.secondary,
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             } else {
-                                SettingsRow(if (working) "Creating..." else "Create Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), titleColor = c.accent,
-                                    trailing = Trailing.NONE, last = true) { change("The link was not created. Try again.") { GroupManage.createPrimary(cid) } }
+                                SettingsRow(if (working) "Creating…" else "Create Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), titleColor = c.accent,
+                                    trailing = Trailing.NONE, last = true,
+                                    accessory = if (working) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) { change("The link was not created. Try again.") { GroupManage.createPrimary(cid) } }
                             }
                         }
                         if (p != null) {
@@ -1161,7 +1164,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                     Note(loadError ?: "")
                     SettingsRow("Try Again", titleColor = c.accent, trailing = Trailing.NONE, last = true) { scope.launch { reload() } }
                 }
-                else -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { BusyMark() }
+                else -> com.fariin.app.ui.components.LoadingRow(Modifier.padding(vertical = 14.dp))
             }
         }
     }

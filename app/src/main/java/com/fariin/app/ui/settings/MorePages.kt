@@ -223,7 +223,8 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
         DevicesCheckupHeader(onCheckup)
         ErrorNote(error)
         SettingsSection(header = "This device") {
-            if (mine == null) Text(if (rows == null) "Loading..." else "This device is not registered yet. Check your connection.",
+            if (mine == null && rows == null) com.fariin.app.ui.components.LoadingLine("Loading…", Modifier.padding(16.dp), fontSize = 17.sp)
+            else if (mine == null) Text("This device is not registered yet. Check your connection.",
                 color = Fariin.colors.secondary, modifier = Modifier.padding(16.dp))
             else DeviceLine(mine, true, now, true)
         }

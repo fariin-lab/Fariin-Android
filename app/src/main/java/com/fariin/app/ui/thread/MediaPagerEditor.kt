@@ -42,7 +42,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -285,7 +284,7 @@ private fun PagerPage(uri: Uri, modifier: Modifier) {
     }
     Box(modifier, contentAlignment = Alignment.Center) {
         val b = bmp
-        if (b == null) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+        if (b == null) com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = Color.White)
         else Image(b, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
     }
 }

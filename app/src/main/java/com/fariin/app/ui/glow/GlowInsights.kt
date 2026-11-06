@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -183,7 +182,7 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
                             Text("Try Again", color = c.accent, fontSize = 17.sp, modifier = Modifier.clickable {
                                 historyFailed = false; scope.launch { loadHistory() } })
                         }
-                        h == null -> Card { CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 20.dp), color = c.secondary) }
+                        h == null -> Card { com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 20.dp), size = 22.dp) }
                         report.hasHistory -> content()
                         else -> Card(footer = "Your history starts with your next story view or Glow. Trends and comparisons appear here as the days add up.") {
                             Text("Nothing has been recorded yet.", color = c.secondary)
@@ -251,7 +250,7 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
                                     Text("Try Again", color = c.accent, fontSize = 17.sp, modifier = Modifier.clickable {
                                         countriesFailed = false; scope.launch { loadCountries() } })
                                 }
-                                list == null -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), color = c.secondary)
+                                list == null -> com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.CenterHorizontally), size = 22.dp)
                                 list.isEmpty() -> Text("Not enough Glowers with a known country yet.", color = c.secondary)
                                 else -> list.forEach { (name, p) -> ShareBar(name, p) }
                             }

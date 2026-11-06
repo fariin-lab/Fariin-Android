@@ -27,7 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -197,7 +196,7 @@ fun GlowStoriesPage(me: String, conversations: List<Conversation>, seenOf: (Stri
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
         FloatingTopBar("Glowing", onBack = onBack)
         when (load) {
-            GlowLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.secondary) }
+            GlowLoad.Loading -> com.fariin.app.ui.components.PageLoading()
             GlowLoad.Failed -> GlowCouldNotLoad { reload++ }
             is GlowLoad.Loaded -> if (load.value.isEmpty()) {
                 // Nobody to glow with at all, or people who simply have nothing live right now.

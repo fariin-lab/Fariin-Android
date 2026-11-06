@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -180,9 +179,7 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
                     val a = art
                     when {
                         a == null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Finding the subject…", color = Color.White.copy(alpha = 0.7f), fontSize = 15.sp)
+                            com.fariin.app.ui.components.LoadingLine("Finding the subject…", fontSize = 15.sp, color = Color.White.copy(alpha = 0.7f), spinnerColor = Color.White)
                         }
                         a.cutout == null -> Text("No subject was found, so the whole photo will be the sticker.",
                             color = Color.White.copy(alpha = 0.7f), fontSize = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
@@ -198,7 +195,7 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
                         .clickable(enabled = art != null && !saving) { save() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (saving) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                    if (saving) com.fariin.app.ui.components.ButtonSpinner(Color.Black)
                     else Text("Send Sticker", color = Color.Black, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.height(12.dp))

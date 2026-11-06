@@ -334,7 +334,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 val cards = glowCards.valueOrNull
                 if (cards == null) item(key = "glowLoading") {
                     Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                        androidx.compose.material3.CircularProgressIndicator(color = c.secondary)
+                        com.fariin.app.ui.components.FariinSpinner(size = 22.dp)
                     }
                 } else items(cards.chunked(2), key = { "glow:" + it.first().person.id }) { pair ->
                     com.fariin.app.ui.glow.GlowCardRow(me, pair, glowSeen, glowOpener)

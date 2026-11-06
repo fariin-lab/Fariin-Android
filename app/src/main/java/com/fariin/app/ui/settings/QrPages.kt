@@ -406,7 +406,7 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                             ctx.startActivity(Intent.createChooser(send, null))
                         }
                     }
-                    PosterAction(rememberVectorPainter(Icons.Outlined.Download), if (saving) "Saving..." else "Save", Modifier.weight(1f), enabled = !saving) {
+                    PosterAction(rememberVectorPainter(Icons.Outlined.Download), if (saving) "Saving…" else "Save", Modifier.weight(1f), enabled = !saving) {
                         if (com.fariin.app.media.GallerySaver.needsPermission(ctx)) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else doSave()
                     }
                     PosterAction(rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), "Copy link", Modifier.weight(1f)) {

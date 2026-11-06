@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -203,7 +202,7 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
                         onRestored()
                     }
                 }, contentAlignment = Alignment.Center) {
-                if (working) CircularProgressIndicator(color = c.onAccent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                if (working) com.fariin.app.ui.components.ButtonSpinner(c.onAccent)
                 else Text("Cancel Deletion", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
             }
             Text(RestoreRules.deadline(days), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp))

@@ -390,7 +390,8 @@ private fun ChatKeyPage(pop: () -> Unit) {
             }
         } else {
             SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
-                SettingsRow(if (busy) "Making your key..." else "Make My Chat Key", trailing = Trailing.NONE, titleColor = c.accent, last = true) {
+                SettingsRow(if (busy) "Making your key…" else "Make My Chat Key", trailing = Trailing.NONE, titleColor = c.accent, last = true,
+                    accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) {
                     run { pin = ChatKey.generate(); set = true }
                 }
             }

@@ -190,7 +190,8 @@ internal fun DeleteAccountPage(profile: MyProfile?, pop: () -> Unit, onSignOut: 
                         modifier = Modifier.fillMaxWidth().padding(12.dp))
                 }
                 SettingsSection {
-                    SettingsRow(if (busy) "Checking..." else "Continue", trailing = Trailing.NONE, titleColor = c.red, last = true) {
+                    SettingsRow(if (busy) "Checking…" else "Continue", trailing = Trailing.NONE, titleColor = c.red, last = true,
+                        accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp, color = c.red) }) else null) {
                         if (busy || password.isEmpty()) return@SettingsRow
                         busy = true; error = null
                         scope.launch {
