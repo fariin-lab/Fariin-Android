@@ -39,6 +39,16 @@ object CustomReaction {
     fun looksCustom(key: String): Boolean = key.startsWith("ce_") || key.startsWith("cu_")
     /** What a screen reader says (iOS spoken). */
     fun spoken(key: String) = if (isCustom(key) || looksCustom(key)) "Custom emoji" else key
+    /** An uploaded one taken off the admin list: not drawn, not counted, not offered. */
+    fun isRetired(key: String?): Boolean = com.fariin.app.data.UploadedEmoji.isRetired(key)
+}
+
+/** [CustomReaction.isRetired] that redraws its caller when the admin list changes. */
+@Composable
+fun rememberRetired(): (String) -> Boolean {
+    val items by com.fariin.app.data.UploadedEmoji.items.collectAsState()
+    val known by com.fariin.app.data.UploadedEmoji.known.collectAsState()
+    return remember(items, known) { { key: String -> known && com.fariin.app.data.UploadedEmoji.retired(key, items) } }
 }
 
 /** A reaction as drawn on a chip or the reaction bar: the emoji, or a custom reaction playing. */

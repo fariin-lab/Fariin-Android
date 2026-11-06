@@ -178,14 +178,17 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         if (fresh.isNotEmpty()) try { ChannelService.views(cid, fresh) } catch (_: Exception) { counted.removeAll(fresh.toSet()) }
     }
     @Suppress("UNUSED_VARIABLE") val tick = rx.size + pending.size + served.size + bias.size
+    // An uploaded emoji taken off the admin list leaves the long-press bar and "More".
+    val retired = com.fariin.app.ui.thread.rememberRetired()
+    val liveList = info.reactList.filterNot(retired)
     return ChannelThreadUi(
         info = info.copy(followerCount = ChannelFollows.adjusted(cid, info.followerCount)),
         role = role,
         guest = role == ChannelRules.Role.VISITOR,
         muted = entry?.isMuted() ?: false,
         canReact = ChannelRules.canReact(info, role, guest = false),
-        offered = ChannelRules.offered(info.reactMode, info.reactList),
-        pickable = ChannelRules.pickable(info.reactMode, info.reactList),
+        offered = ChannelRules.offered(info.reactMode, liveList),
+        pickable = ChannelRules.pickable(info.reactMode, liveList),
         mine = { mid -> ChannelFollows.myReaction(cid, mid) },
         held = { mid -> ChannelFollows.confirmedReaction(cid, mid) },
         counts = { m -> ChannelFollows.countsFor(cid, m.id, m.reactionCounts) },

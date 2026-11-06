@@ -36,6 +36,10 @@ object UploadedEmoji {
     private val _landed = MutableStateFlow(0)
     /** Goes up each time a file lands, so a glyph that was waiting draws it. */
     val landed: StateFlow<Int> = _landed
+    /** True once the panel's list is known (saved from an earlier launch, or from the listener):
+     *  before that nothing counts as retired, so a fresh install does not hide every uploaded one. */
+    private val _known = MutableStateFlow(false)
+    val known: StateFlow<Boolean> = _known
 
     private var prefs: android.content.SharedPreferences? = null
     private var dir: File? = null
@@ -46,6 +50,15 @@ object UploadedEmoji {
 
     fun isKey(s: String?): Boolean =
         s != null && s.length == 13 && s.startsWith("cu_") && s.drop(3).all { it in 'a'..'z' || it in '0'..'9' }
+
+    /**
+     * A "cu_" key whose id the panel no longer lists (iOS isRetired): not drawn, not counted, not
+     * offered. A key still on the list, a "ce_" key or a plain emoji is never retired.
+     */
+    fun isRetired(key: String?): Boolean = _known.value && retired(key, _items.value)
+
+    fun retired(key: String?, list: List<Item>): Boolean =
+        isKey(key) && list.none { it.id == key!!.drop(3) }
 
     /** The panel's list, keeping only well-formed https entries, in its order, no repeats. */
     fun parse(raw: Any?): List<Item> {
@@ -67,6 +80,7 @@ object UploadedEmoji {
         val p = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         prefs = p
         dir = File(c.applicationContext.cacheDir, "custom_emoji")
+        _known.value = p.contains(KEY)
         _items.value = runCatching {
             val a = JSONArray(p.getString(KEY, "[]"))
             (0 until a.length()).map { a.getJSONObject(it) }.map { mapOf("id" to it.optString("id"), "url" to it.optString("url")) }
@@ -76,11 +90,30 @@ object UploadedEmoji {
     /** From the config/features listener. */
     fun update(raw: Any?) {
         val list = parse(raw)
-        if (list == _items.value) return
+        val first = !_known.value
+        _known.value = true
+        if (list == _items.value) { if (first) { save(list); prune(list) }; return }
         _items.value = list
+        save(list)
+        prune(list)
+    }
+
+    private fun save(list: List<Item>) {
         val a = JSONArray()
         list.forEach { a.put(JSONObject().put("id", it.id).put("url", it.url)) }
         prefs?.edit()?.putString(KEY, a.toString())?.apply()
+    }
+
+    /** Cached files of ids taken off the list are deleted (iOS removes them the same way). */
+    private fun prune(list: List<Item>) {
+        val d = dir ?: return
+        val keep = list.map { it.id }.toHashSet()
+        scope.launch {
+            d.listFiles()?.forEach { f ->
+                val id = f.name.substringBefore('.')
+                if (id !in keep && synchronized(inFlight) { id !in inFlight }) f.delete()
+            }
+        }
     }
 
     /** The Lottie JSON for a "cu_" key, or null while it is not here yet (a download is started). */

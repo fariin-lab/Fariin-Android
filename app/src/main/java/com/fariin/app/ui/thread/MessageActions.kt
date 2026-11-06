@@ -309,7 +309,8 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
 /** Reactions under the bubble: a pill per emoji, up to three faces, else the count; mine tinted. */
 @Composable
 internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (String) -> Unit) {
-    val chips = remember(m.reactions, ui.me) { MessageRules.reactionChips(m.reactions, ui.me) }
+    val retired = rememberRetired()
+    val chips = remember(m.reactions, ui.me, retired) { MessageRules.reactionChips(m.reactions, ui.me, retired) }
     if (chips.isEmpty()) return
     val c = Fariin.colors
     Row(

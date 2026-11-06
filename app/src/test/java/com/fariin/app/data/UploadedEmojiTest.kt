@@ -37,6 +37,18 @@ class UploadedEmojiTest {
         assertEquals(emptyList<UploadedEmoji.Item>(), UploadedEmoji.parse(null))
     }
 
+    @Test fun aCuKeyOffTheListIsRetiredAndLeavesTheChips() {
+        val list = listOf(UploadedEmoji.Item("aaaaaaaaaa", "https://x/a.tgs"))
+        assertFalse(UploadedEmoji.retired("cu_aaaaaaaaaa", list))
+        assertTrue(UploadedEmoji.retired("cu_bbbbbbbbbb", list))
+        assertFalse(UploadedEmoji.retired("ce_999", list))
+        assertFalse(UploadedEmoji.retired("👍", list))
+        val chips = MessageRules.reactionChips(mapOf("a" to "cu_bbbbbbbbbb", "b" to "cu_aaaaaaaaaa", "me" to "cu_bbbbbbbbbb"), "me") {
+            UploadedEmoji.retired(it, list)
+        }
+        assertEquals(listOf(MessageRules.Chip("cu_aaaaaaaaaa", 1, false, listOf("b"))), chips)
+    }
+
     @Test fun fileMustBeGzipAndAtMost64Kb() {
         val gz = ByteArray(100).also { it[0] = 0x1f; it[1] = 0x8b.toByte() }
         assertTrue(UploadedEmoji.looksValid(gz))

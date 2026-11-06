@@ -378,10 +378,11 @@ private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: 
     val c = Fariin.colors
     val density = LocalDensity.current
     val side = with(density) { sidePx.toDp() }
-    val strip = remember(mine) {
+    val retired = rememberRetired()
+    val strip = remember(mine, retired) {
         val quick = MessageRules.QUICK_REACTIONS
         val list = (quick + ExtraEmojis.filter { it !in quick }).take(STRIP_COUNT).toMutableList()
-        if (mine != null && mine !in list) list.add(mine)
+        if (mine != null && mine !in list && !retired(mine)) list.add(mine)
         list
     }
     val emojiSize = with(density) { (sidePx * 0.72f).toSp() }

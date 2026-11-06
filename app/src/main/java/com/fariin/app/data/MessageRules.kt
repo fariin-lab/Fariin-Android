@@ -58,13 +58,14 @@ object MessageRules {
 
     /**
      * reactionChips: one chip per emoji, up to three reactor faces (sorted uids) else a count,
-     * most picked first, ties by emoji descending.
+     * most picked first, ties by emoji descending. A [hidden] one (an uploaded emoji taken off the
+     * admin list) is left out entirely, as if nobody had picked it.
      */
-    fun reactionChips(reactions: Map<String, String>, me: String): List<Chip> {
+    fun reactionChips(reactions: Map<String, String>, me: String, hidden: (String) -> Boolean = { false }): List<Chip> {
         if (reactions.isEmpty()) return emptyList()
         val mine = reactions[me]
         val byEmoji = LinkedHashMap<String, MutableList<String>>()
-        for ((uid, e) in reactions) if (e.isNotEmpty()) byEmoji.getOrPut(e) { mutableListOf() }.add(uid)
+        for ((uid, e) in reactions) if (e.isNotEmpty() && !hidden(e)) byEmoji.getOrPut(e) { mutableListOf() }.add(uid)
         return byEmoji.map { (e, uids) ->
             Chip(e, uids.size, mine == e, if (uids.size > 3) emptyList() else uids.sorted())
         }.sortedWith(compareByDescending<Chip> { it.count }.thenByDescending { it.emoji })

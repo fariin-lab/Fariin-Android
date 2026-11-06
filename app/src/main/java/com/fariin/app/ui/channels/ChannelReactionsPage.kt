@@ -81,7 +81,8 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
     LaunchedEffect(doc.isNotEmpty()) {
         if (loaded || doc.isEmpty()) return@LaunchedEffect
         val info = ChannelInfo.from(cid, doc)
-        mode = info.reactMode; list = info.reactList
+        // An uploaded emoji taken off the admin list is dropped from the editor (and so from the next save).
+        mode = info.reactMode; list = info.reactList.filterNot { com.fariin.app.ui.thread.CustomReaction.isRetired(it) }
         savedMode = mode; savedList = list
         if (list.isNotEmpty()) lastPicks = list
         loaded = true

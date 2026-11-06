@@ -143,7 +143,8 @@ fun sharePost(ctx: android.content.Context, info: ChannelInfo, m: Message) {
 @Composable
 fun ChannelChips(ch: ChannelThreadUi, m: Message) {
     if (ch.info.reactMode == "off" || m.isSystem || m.deleted) return
-    val chips = ChannelRules.chips(ch.counts(m), ch.mine(m.id), ch.held(m.id))
+    val retired = com.fariin.app.ui.thread.rememberRetired()
+    val chips = ChannelRules.chips(ch.counts(m), ch.mine(m.id), ch.held(m.id)).filterNot { retired(it.emoji) }
     if (chips.isEmpty()) return
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 3.dp), horizontalArrangement = Arrangement.Start) {
