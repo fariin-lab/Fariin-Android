@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -162,8 +164,11 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                         if (value == "some") list = ChannelReactions.startList(list, lastPicks)
                         save()
                     }.heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // A radio at the start, as every other single choice in the app (PrivacyPages.CheckRow).
+                        androidx.compose.material3.RadioButton(selected = mode == value, onClick = null,
+                            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.accent))
+                        Spacer(Modifier.width(16.dp))
                         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                        if (mode == value) Icon(Icons.Filled.Check, null, tint = c.accent)
                     }
                     if (i < 2) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                 }
