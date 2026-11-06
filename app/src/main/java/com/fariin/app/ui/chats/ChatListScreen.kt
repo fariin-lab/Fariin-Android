@@ -378,7 +378,9 @@ fun ChatListScreen(
                         layout(p.width, h) { p.place(0, 0) }
                     }.hazeEffect(haze) {
                         backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
-                        tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.7f)))
+                        // No tint (owner 2026-11-06: "make it not noticeable where it ends", as the chat): a colour over
+                        // the blur leaves a band where it stops; the blur alone eases to nothing.
+                        tints = emptyList()
                         // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
                         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
                         progressive = com.fariin.app.ui.components.edgeStages(0.45f)
