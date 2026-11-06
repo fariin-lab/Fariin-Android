@@ -42,22 +42,25 @@ class PostQuoteRulesTest {
         assertEquals(0, PostQuoteRules.parse(null).total)
     }
 
-    @Test fun numbersRow() {
-        val a = PostQuotesAnswer(3, 1, listOf(QuotedIn("c1", "m1", views = 1200), QuotedIn("c1", "m2", views = 100), QuotedIn("c2", "m3", views = 0)))
-        val s = PostQuoteRules.stats(a)
-        assertEquals(PostQuoteRules.Stat("3", "quotes"), s[0])
-        assertEquals(PostQuoteRules.Stat("2", "channels"), s[1])
-        assertEquals(PostQuoteRules.Stat("1.3K", "views"), s[2])
-        val one = PostQuoteRules.stats(PostQuotesAnswer(1, 0, listOf(QuotedIn("c", "m", views = 1))))
-        assertEquals(listOf("quote", "channel", "view"), one.map { it.label })
+    @Test fun pagesAndTotals() {
+        val first = PostQuoteRules.parse(mapOf("total" to 30, "hidden" to 5, "publicTotal" to 25, "next" to "9.q",
+            "items" to listOf(mapOf("cid" to "c1", "mid" to "m1"), mapOf("cid" to "c2", "mid" to "m2"))))
+        assertEquals(25, first.publicTotal); assertEquals("9.q", first.next)
+        val more = PostQuoteRules.parse(mapOf("total" to 31, "hidden" to 5, "publicTotal" to 26, "next" to "",
+            "items" to listOf(mapOf("cid" to "c2", "mid" to "m2"), mapOf("cid" to "c3", "mid" to "m3"))))
+        val both = PostQuoteRules.appended(first, more)
+        assertEquals(listOf("c1", "c2", "c3"), both.items.map { it.cid })
+        assertEquals(31, both.total); assertEquals(26, both.publicTotal); assertEquals("", both.next)
+        assertEquals(0, PostQuoteRules.parse(null).publicTotal)
     }
 
     @Test fun summaryAndCard() {
-        val a = PostQuotesAnswer(3, 1, listOf(QuotedIn("c1", "m1", views = 1200), QuotedIn("c1", "m2", views = 100), QuotedIn("c2", "m3")))
-        assertEquals("3 quotes · 2 channels · 1.3K views", PostQuoteRules.summaryLine(a))
-        val one = PostQuotesAnswer(1, 0, listOf(QuotedIn("c", "m", views = 1)))
-        assertEquals("1 quote · 1 channel · 1 view", PostQuoteRules.summaryLine(one))
-        assertEquals("2K quotes · 0 channels · 0 views", PostQuoteRules.summaryLine(PostQuotesAnswer(2000, 2000, emptyList())))
+        java.util.Locale.setDefault(java.util.Locale.US)
+        // The post's own numbers, never a sum over the page on screen.
+        assertEquals("3 quotes · 2 in public channels", PostQuoteRules.summaryLine(PostQuotesAnswer(3, 1, emptyList(), publicTotal = 2)))
+        assertEquals("1 quote", PostQuoteRules.summaryLine(PostQuotesAnswer(1, 1, emptyList())))
+        assertEquals("2,000 quotes · 1,500 in public channels", PostQuoteRules.summaryLine(PostQuotesAnswer(2000, 500, emptyList(), publicTotal = 1500)))
+        val one = PostQuotesAnswer(1, 0, listOf(QuotedIn("c", "m", views = 1)), publicTotal = 1)
         assertEquals("1 follower", PostQuoteRules.followersLine(1))
         assertEquals("0 followers", PostQuoteRules.followersLine(0))
         assertEquals("1.2K followers", PostQuoteRules.followersLine(1_250))
@@ -76,7 +79,9 @@ class PostQuoteRulesTest {
         assertEquals("1 view", PostQuoteRules.viewsLine(1))
         assertEquals("2.5M views", PostQuoteRules.viewsLine(2_500_000))
         assertNull(PostQuoteRules.hiddenLine(0))
-        assertEquals("4 more in private chats and groups", PostQuoteRules.hiddenLine(4))
+        java.util.Locale.setDefault(java.util.Locale.US)
+        assertEquals("4 in private chats and groups", PostQuoteRules.hiddenLine(4))
+        assertEquals("1,204 in private chats and groups", PostQuoteRules.hiddenLine(1204))
         assertEquals("Photo", PostQuoteRules.kindName("image", false))
         assertEquals("Video", PostQuoteRules.kindName("video", false))
         assertEquals("Album", PostQuoteRules.kindName("image", true))

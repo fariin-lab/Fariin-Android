@@ -19,8 +19,13 @@ data class QuotedIn(
     val views: Int = 0,
 )
 
-/** `getPostQuotes`' answer: every quote, the public ones by name (most viewed first), the rest a number. */
-data class PostQuotesAnswer(val total: Int, val hidden: Int, val items: List<QuotedIn>)
+/**
+ * `getPostQuotes`' answer, a page of 20 at a time (newest first). [total] = the post's own count,
+ * [publicTotal] = how many of them are in public channels (the ones listed), [hidden] = the rest,
+ * only ever a number. [next] = the cursor of the next page ("" = no more).
+ */
+data class PostQuotesAnswer(val total: Int, val hidden: Int, val items: List<QuotedIn>,
+                            val publicTotal: Int = 0, val next: String = "")
 
 /**
  * WHO QUOTED A POST (owner 2026-11-06, as iOS QuotesPage): the words, numbers and the route of a
@@ -45,7 +50,15 @@ object PostQuoteRules {
         val items = (d?.get("items") as? List<*>)?.mapNotNull { parseItem(it as? Map<*, *>) } ?: emptyList()
         val total = (d?.get("total") as? Number)?.toInt() ?: items.size
         val hidden = maxOf(0, (d?.get("hidden") as? Number)?.toInt() ?: 0)
-        return PostQuotesAnswer(maxOf(total, items.size), hidden, items)
+        val pub = maxOf(0, (d?.get("publicTotal") as? Number)?.toInt() ?: 0)
+        return PostQuotesAnswer(maxOf(total, items.size), hidden, items, pub, d?.get("next") as? String ?: "")
+    }
+
+    /** The next page added under what is shown (each quote once); the totals and cursor are the new page's. */
+    fun appended(a: PostQuotesAnswer, more: PostQuotesAnswer): PostQuotesAnswer {
+        val have = a.items.mapTo(HashSet()) { it.cid + "/" + it.mid }
+        return more.copy(items = a.items + more.items.filter { (it.cid + "/" + it.mid) !in have },
+            total = maxOf(more.total, a.items.size))
     }
 
     private fun compact(n: Int) = com.fariin.app.channel.ChannelRules.compactCount(n)
@@ -53,18 +66,16 @@ object PostQuoteRules {
     /** The bar under the post: "1 Quote", "12 Quotes", "1.2K Quotes". */
     fun barLabel(n: Int): String = compact(n) + if (n == 1) " Quote" else " Quotes"
 
-    /** The numbers row: quotes, channels (distinct public ones), views (summed over the public quotes). */
-    data class Stat(val value: String, val label: String)
+    /**
+     * The small line at the top of the sheet: "12 quotes · 9 in public channels", or "12 quotes".
+     * The post's own numbers, never a sum over the rows on screen (that is only a page).
+     */
+    fun summaryLine(a: PostQuotesAnswer): String {
+        val q = grouped(a.total) + if (a.total == 1) " quote" else " quotes"
+        return if (a.publicTotal > 0) q + " · " + grouped(a.publicTotal) + " in public channels" else q
+    }
 
-    fun stats(a: PostQuotesAnswer): List<Stat> = listOf(
-        Stat(compact(a.total), if (a.total == 1) "quote" else "quotes"),
-        a.items.map { it.cid }.toSet().size.let { Stat(compact(it), if (it == 1) "channel" else "channels") },
-        a.items.sumOf { it.views.toLong() }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-            .let { Stat(compact(it), if (it == 1) "view" else "views") },
-    )
-
-    /** The small line at the top of the sheet: "3 quotes · 2 channels · 1.3K views". */
-    fun summaryLine(a: PostQuotesAnswer): String = stats(a).joinToString(" · ") { it.value + " " + it.label }
+    private fun grouped(n: Int): String = java.text.NumberFormat.getIntegerInstance().format(n)
 
     /** Under a quoting channel's name: "1 follower", "1.2K followers", "12K followers". */
     fun followersLine(n: Int): String = compact(n) + if (n == 1) " follower" else " followers"
@@ -80,7 +91,7 @@ object PostQuoteRules {
     fun viewsLine(n: Int): String = compact(n) + if (n == 1) " view" else " views"
 
     /** The locked row under the list; null when every quote is public. */
-    fun hiddenLine(n: Int): String? = if (n <= 0) null else "$n more in private chats and groups"
+    fun hiddenLine(n: Int): String? = if (n <= 0) null else grouped(n) + " in private chats and groups"
 
     /** The post at the top, when it has no words. */
     fun kindName(type: String?, isAlbum: Boolean): String = when {
@@ -106,14 +117,16 @@ object PostQuoteRules {
     }
 }
 
-/** The network side: one `getPostQuotes` call per open of the Quotes sheet. */
+/** The network side: `getPostQuotes`, a page at a time. */
 object PostQuotes {
     private val fn: FirebaseFunctions get() = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
 
-    /** Null when the call failed (the sheet offers Retry). */
-    suspend fun load(cid: String, mid: String): PostQuotesAnswer? = runCatching {
+    /** [cursor] "" = the first page. Null when the call failed (the sheet offers Try Again). */
+    suspend fun load(cid: String, mid: String, cursor: String = ""): PostQuotesAnswer? = runCatching {
+        val args = mutableMapOf<String, Any>("cid" to cid, "mid" to mid)
+        if (cursor.isNotEmpty()) args["cursor"] = cursor
         val r = fn.getHttpsCallable("getPostQuotes").withTimeout(15, TimeUnit.SECONDS)
-            .call(mapOf("cid" to cid, "mid" to mid)).await().getData() as? Map<*, *>
+            .call(args).await().getData() as? Map<*, *>
         PostQuoteRules.parse(r)
     }.getOrNull()
 }

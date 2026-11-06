@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -41,7 +42,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -98,6 +102,10 @@ import kotlin.math.roundToInt
 /** The channel post whose Quotes sheet is open (one at a time; [PostQuotesHost] draws it). */
 object PostQuotesSheet {
     val open = MutableStateFlow<Message?>(null)
+    /** The tab it opens on: 0 Replies, 1 Quotes (a bar showing only quotes, PostReplyRules.startTab). */
+    @Volatile var startTab = 0
+    /** A reply alert tapped (cid to post id): the chat opens that post's Replies once it is on screen. */
+    val pendingReplies = MutableStateFlow<Pair<String, String>?>(null)
 }
 
 /** Up to 3 quoting channels' round photos, overlapping; "" = a plain circle. */
@@ -154,7 +162,10 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
                 // Across the whole bubble, into its side padding (the bubble's clip trims it).
                 if (inBubble) drawLine(line, Offset(-20.dp.toPx(), 0f), Offset(size.width + 20.dp.toPx(), 0f), strokeWidth = 1f)
             }
-            .clickable { PostQuotesSheet.open.value = m }
+            .clickable {
+                PostQuotesSheet.startTab = PostReplyRules.startTab(m.replyCount, PostReplyRules.repliesOn(channelRepliesOff, m.repliesOff))
+                PostQuotesSheet.open.value = m
+            }
             .semantics { contentDescription = label },
     ) { ms, cons ->
         val loose = cons.copy(minWidth = 0, minHeight = 0)
@@ -177,10 +188,11 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
 
 /**
  * The Replies | Quotes sheet a post's bar opens (iOS PostThreadSheet, owner 2026-11-06), drawn once
- * per chat. It opens on Replies (PostRepliesUi.kt): the thread, refreshed every 6 s while the tab is
- * open, and the field at the bottom; the channel's admins get a menu to turn replies off or on.
+ * per chat. It opens on Replies (PostRepliesUi.kt): the thread, refreshed when the post's change
+ * marker moves while the sheet is open, and the field at the bottom; the channel's admins get a menu
+ * by their rights. A bar showing only quotes opens on Quotes.
  * The Quotes tab (iOS QuotesPage, after the owner's reference). Plain inside:
- * a small count line on top, then each quote in a public channel (most seen first): the quoting
+ * a small count line on top, then each quote in a public channel (newest first, 20 a page): the quoting
  * channel's photo, name and the time, its words, and under them a soft grey card of MY post (my
  * channel, the post's picture and text), then the quote's views. Quotes in private
  * places are only a number at the bottom, never named. A row opens that quote: in this chat it
@@ -201,22 +213,33 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     var answer by remember(m.id) { mutableStateOf<PostQuotesAnswer?>(null) }
     var failed by remember(m.id) { mutableStateOf(false) }
     var attempt by remember(m.id) { mutableIntStateOf(0) }
+    var loadingMore by remember(m.id) { mutableStateOf(false) }
     var thumb by remember(m.id) { mutableStateOf<ImageBitmap?>(null) }
-    var tab by remember(m.id) { mutableIntStateOf(0) }
-    val replies = remember(openCid, m.id) { PostRepliesState(openCid, m.id) }
-    var replyAttempt by remember(m.id) { mutableIntStateOf(0) }
-    LaunchedEffect(m.id, replyAttempt) { replies.load() }
-    // While the sheet is open, new replies arrive every few seconds (only while their tab shows).
-    LaunchedEffect(m.id) {
-        while (true) {
-            kotlinx.coroutines.delay(6_000)
-            if (tab == 0 && !replies.sending) replies.load()
-        }
+    var tab by remember(m.id) { mutableIntStateOf(PostQuotesSheet.startTab) }
+    // The Quotes page loads once it is first shown, and stays loaded when switching back.
+    var quotesShown by remember(m.id) { mutableStateOf(tab == 1) }
+    val scope = rememberCoroutineScope()
+    val replies = remember(openCid, m.id) { PostRepliesState(openCid, m.id, scope) }
+    // The post's change marker is listened to only while the sheet is open (never the replies).
+    DisposableEffect(replies) {
+        replies.start()
+        onDispose { replies.stop() }
     }
-    LaunchedEffect(m.id, attempt) {
+    LaunchedEffect(m.id, attempt, quotesShown) {
+        if (!quotesShown) return@LaunchedEffect
         failed = false
         val a = PostQuotes.load(openCid, m.id)
         if (a == null) failed = true else answer = a
+    }
+    // The next page of 20, when the end of the list comes into view (or Show more is tapped).
+    fun loadMore() {
+        val a = answer ?: return
+        if (a.next.isEmpty() || loadingMore) return
+        loadingMore = true
+        scope.launch {
+            PostQuotes.load(openCid, m.id, a.next)?.let { more -> answer = PostQuoteRules.appended(answer ?: a, more) }
+            loadingMore = false
+        }
     }
     // The post's picture: the same small JPEG this phone makes when quoting it (from this chat's cache,
     // else the post's inline thumbnail). Nothing is downloaded for it.
@@ -248,9 +271,20 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
         RepliesSheetHeader(if (tab == 0) "Replies" else "Quotes", photoUrl,
             (if (m.mediaKind == null) m.bodyText else m.text).trim().replace('\n', ' '),
             if (tab == 0) replies else null)
-        RepliesQuotesTabs(tab) { tab = it; if (it == 0) replyAttempt++ }
+        RepliesQuotesTabs(tab) {
+            tab = it
+            if (it == 1) {
+                quotesShown = true
+                // The field is on the Replies tab: the keyboard goes with it.
+                keyboard?.hide()
+                focus.clearFocus()
+            }
+        }
         if (tab == 0) {
-            RepliesList(replies, Modifier.weight(1f).fillMaxWidth()) { replyAttempt++ }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                RepliesList(replies, Modifier.fillMaxSize())
+                RepliesToast(replies, Modifier.align(Alignment.TopCenter))
+            }
             RepliesComposer(replies)
         } else {
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
@@ -287,6 +321,12 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                         }
                         HorizontalDivider(Modifier.padding(start = 16.dp + QuoteIndent), thickness = 0.5.dp, color = c.separator)
                     }
+                    if (a.next.isNotEmpty()) item(key = "more") {
+                        LaunchedEffect(a.next) { loadMore() }
+                        Text(if (loadingMore) "Loading…" else "Show more", fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            color = c.secondary, textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().clickable { loadMore() }.padding(vertical = 12.dp))
+                    }
                     PostQuoteRules.hiddenLine(a.hidden)?.let { line ->
                         item {
                             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -301,7 +341,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                     Column(Modifier.fillMaxWidth().padding(top = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Couldn't load quotes", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                         Text("Check your connection and try again.", fontSize = 14.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp))
-                        TextButton(onClick = { attempt++ }) { Text("Retry", color = c.blue) }
+                        TextButton(onClick = { attempt++ }) { Text("Try Again", color = c.label) }
                     }
                 }
                 // Loading: three skeleton quotes in the page's own layout (owner 2026-11-06 "use skeleton
@@ -385,7 +425,9 @@ private fun QuoteRow(q: QuotedIn, card: SourceCard, onTap: () -> Unit) {
             Box(Modifier.weight(1f)) { NameAndSeal(q.title, q.verified, 15.sp, 13.dp) }
             if (q.at > 0) {
                 Spacer(Modifier.width(6.dp))
-                Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(q.at)), fontSize = 12.sp,
+                // Today the time; an older quote its day and month.
+                Text(if (android.text.format.DateUtils.isToday(q.at)) DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(q.at))
+                    else android.text.format.DateFormat.format("d MMM", q.at).toString(), fontSize = 12.sp,
                     color = c.secondary, maxLines = 1)
             }
         }

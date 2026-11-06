@@ -174,13 +174,43 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
         }
     }
     // What followers may react with (iOS channelPostsSection): the picks themselves, else Any / Off.
-    if (team.can(me, Right.CHANGE_INFO)) Card {
-        SettingsRow("Reactions", value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
-            else com.fariin.app.data.ChannelReactions.value(info.reactMode), last = true) { nav.reactions(info.cid) }
+    if (team.can(me, Right.CHANGE_INFO)) {
+        Card {
+            SettingsRow("Reactions", value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
+                else com.fariin.app.data.ChannelReactions.value(info.reactMode), last = true) { nav.reactions(info.cid) }
+        }
+        RepliesSwitch(info)
     }
     Card {
         com.fariin.app.ui.people.DisappearingRow(timer, short = false, onClick = onTimer)
         SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.History), last = true, onClick = onRecent)
+    }
+}
+
+/**
+ * Replies under posts, for the whole channel (iOS GroupSettingsView, owner 2026-11-06). Off is
+ * read-only: replies already there stay, no new ones. The new state shows at once and holds while
+ * the server answers (the Change info right, checked there); a refusal puts it back.
+ */
+@Composable
+private fun RepliesSwitch(info: ChannelInfo) {
+    val c = Fariin.colors
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var wanted by androidx.compose.runtime.remember(info.repliesOff) { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+    Column {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
+            SwitchLine("Replies", on = wanted ?: !info.repliesOff, last = true) { on ->
+                wanted = on
+                scope.launch {
+                    if (!com.fariin.app.data.PostReplies.setOff(info.cid, null, off = !on)) {
+                        wanted = null
+                        com.fariin.app.ui.components.Snack.show("Couldn't change replies.")
+                    }
+                }
+            }
+        }
+        Text("When off, followers can read replies already posted but can't add new ones.", fontSize = 13.sp,
+            color = c.secondary, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp))
     }
 }
 
