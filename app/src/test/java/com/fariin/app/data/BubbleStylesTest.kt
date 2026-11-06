@@ -45,6 +45,47 @@ class BubbleStylesTest {
         }
     }
 
+    @Test fun decorOnlyWhenChosenOnTheLastBubbleAndNotFailed() {
+        assertEquals(0, BubbleStyles.placed(null, true, true, false, true, true, false, false).size)
+        assertEquals(0, BubbleStyles.placed("heart", false, true, false, true, true, false, false).size)
+        assertEquals(0, BubbleStyles.placed("heart", true, true, false, true, false, false, false).size)
+        assertEquals(0, BubbleStyles.placed("heart", true, true, false, true, true, true, false).size)
+        assertEquals(0, BubbleStyles.placed("rainbow", true, true, false, true, true, false, false).size)
+        assertEquals(2, BubbleStyles.placed("heart", true, true, false, true, true, false, false).size)
+        assertTrue(BubbleStyles.parseDecor(true))
+        assertFalse(BubbleStyles.parseDecor("true"))
+        assertFalse(BubbleStyles.parseDecor(null))
+    }
+
+    @Test fun topCornersOnlyOnTheRunsFirstBubble() {
+        val mid = BubbleStyles.placed("strawberry", true, true, false, false, true, false, false)
+        assertEquals(listOf(BubbleStyles.Glyph.STRAWBERRY), mid.map { it.glyph })
+    }
+
+    @Test fun theirsIsAMirrorOfMine() {
+        val mine = BubbleStyles.placed("kawaii", true, true, false, true, true, false, false)
+        val theirs = BubbleStyles.placed("kawaii", true, false, false, true, true, false, false)
+        assertEquals(listOf(BubbleStyles.Corner.TOP_TRAILING, BubbleStyles.Corner.BOTTOM_LEADING, BubbleStyles.Corner.BOTTOM_TRAILING),
+            mine.map { it.corner })
+        assertEquals(listOf(BubbleStyles.Corner.TOP_LEADING, BubbleStyles.Corner.BOTTOM_TRAILING, BubbleStyles.Corner.BOTTOM_LEADING),
+            theirs.map { it.corner })
+        assertEquals(-mine[0].rotation, theirs[0].rotation, 0f)
+    }
+
+    @Test fun nothingBesideTheGroupAvatar() {
+        // Theirs in a group: mine's bottom-trailing strawberry mirrors to bottom-leading, by the face.
+        val g = BubbleStyles.placed("strawberry", true, false, false, true, true, false, true)
+        assertEquals(listOf(BubbleStyles.Corner.TOP_TRAILING), g.map { it.corner })
+    }
+
+    @Test fun darkColoursAndCornerPoints() {
+        val d = BubbleStyles.placed("glass", true, true, true, true, true, false, false).single()
+        assertEquals(0xD1D1D6L, d.color)
+        assertEquals(200f to 54f, BubbleStyles.centre(d, 200f, 52f))
+        val bow = BubbleStyles.placed("kawaii", true, true, false, true, true, false, false).first()
+        assertEquals(99f to -1f, BubbleStyles.centre(bow, 100f, 40f))
+    }
+
     private fun lum(c: Long): Double {
         fun ch(v: Long): Double { val x = v / 255.0; return if (x <= 0.03928) x / 12.92 else Math.pow((x + 0.055) / 1.055, 2.4) }
         return 0.2126 * ch(c shr 16 and 0xFF) + 0.7152 * ch(c shr 8 and 0xFF) + 0.0722 * ch(c and 0xFF)

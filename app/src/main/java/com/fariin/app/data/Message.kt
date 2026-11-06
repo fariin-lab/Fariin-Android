@@ -105,6 +105,8 @@ data class Message(
     val quoteId: String? = null,
     /** The sender's bubble style id, plain `bs` beside the sealed text (BubbleStyles); null = normal. */
     val bubbleStyle: String? = null,
+    /** The sender chose the style's corner decorations too, plain `bsd` (BubbleStyles.placed). */
+    val bubbleDecor: Boolean = false,
     /** iOS Message.fwdChannel: the channel a forwarded post came from (sealed JSON on the wire). */
     val fwdChannel: FwdChannel? = null,
     /** iOS isRestrictRequest: the "asked to turn off Restricted chat" line, answerable from the chat. */
@@ -280,6 +282,7 @@ data class Message(
                 },
                 quoteId = ((data["quote"] as? Map<*, *>)?.get("qid") as? String)?.takeIf { QuoteRules.isQid(it) },
                 bubbleStyle = BubbleStyles.parseId(data["bs"]),
+                bubbleDecor = BubbleStyles.parseDecor(data["bsd"]),
                 storyMention = (data["storyMention"] as? Map<*, *>)?.let { sm ->
                     (sm["id"] as? String)?.takeIf { it.isNotEmpty() }?.let { StoryMentionRef(it, sm["thumb"] as? String ?: "") }
                 },

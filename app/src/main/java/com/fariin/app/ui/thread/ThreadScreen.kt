@@ -1309,7 +1309,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         val chromeMe = isMe && styled == null
         androidx.compose.runtime.CompositionLocalProvider(LocalStyledInk provides styled?.ink) {
         Column(
-            Modifier.widthIn(max = maxW).clip(shape)
+            // The style's corner decorations (BubbleStyles.kt), outside the clip so they hang over the edge.
+            Modifier.bubbleDecor(bubbleDecorFor(m, styled, isMe, c.dark, g.first, g.last, failed, showSender))
+                .widthIn(max = maxW).clip(shape)
                 .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape)))
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp),
         ) {
@@ -1588,7 +1590,7 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
     // [plain]: no bubble under it (a story reaction), so the page's own secondary colour.
     val styledInk = LocalStyledInk.current.takeIf { !plain && !onMedia }
     val metaColor = if (plain) Fariin.colors.secondary
-        else if (styledInk != null) styledInk.copy(alpha = 0.62f)
+        else if (styledInk != null) styledInk.copy(alpha = 0.8f)
         else if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
     Row(verticalAlignment = Alignment.CenterVertically) {
         com.fariin.app.ui.channels.PostViews(metaColor)
@@ -1611,7 +1613,8 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
             if (tick == Tick.SENDING || drawn != null) {
                 Spacer(Modifier.width(3.dp))
                 val tint = if (plain) (if (tick == Tick.READ) Fariin.colors.blue else metaColor)
-                    else (styledInk ?: Color.White).copy(alpha = if (tick == Tick.READ) 1f else 0.55f)
+                    else if (styledInk != null) (if (tick == Tick.READ) styledInk else metaColor)   // styled: 80% so the ticks read
+                    else Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f)
                 if (drawn != null) Icon(androidx.compose.ui.res.painterResource(drawn), contentDescription = tickDescription(tick), tint = tint)
                 else Icon(Icons.Filled.Schedule, contentDescription = tickDescription(tick), tint = tint, modifier = Modifier.size(14.dp))
             }
