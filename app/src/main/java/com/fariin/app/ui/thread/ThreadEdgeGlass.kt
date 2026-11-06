@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -40,18 +41,22 @@ private val edgeCurve = floatArrayOf(
     0.547f, 0.389f, 0.589f, 0.306f, 0.659f, 0.190f, 0.697f, 0.139f, 0.791f, 0.056f, 1.000f, 0.000f,
 )
 
-/** The fade as a brush in [color]: solid at the controls' side, nothing at the open end. */
-private fun edgeBrush(color: Color, heightPx: Float, edgePx: Float, top: Boolean): Brush {
+/**
+ * The fade as a brush in [color], in fractions of the strip's own height (Haze reads a mask in
+ * fractions: absolute startY/endY landed off and left a hard line, owner's photo 2026-11-05).
+ * Solid down to [solidFrac], then iOS's eased curve to nothing at the bottom.
+ */
+private fun edgeBrush(color: Color, solidFrac: Float): Brush {
     val n = edgeCurve.size / 2
-    val stops = Array(n) { i ->
-        val loc = edgeCurve[i * 2]
-        val a = edgeCurve[i * 2 + 1]
-        // Top strip: solid above, fading downward. Bottom strip: the mirror, fading upward.
-        if (top) loc to color.copy(alpha = color.alpha * a)
-        else (1f - edgeCurve[(n - 1 - i) * 2]) to color.copy(alpha = color.alpha * edgeCurve[(n - 1 - i) * 2 + 1])
+    val stops = Array(n + 1) { i ->
+        if (i == 0) 0f to color
+        else {
+            val loc = edgeCurve[(i - 1) * 2]
+            val a = edgeCurve[(i - 1) * 2 + 1]
+            (solidFrac + (1f - solidFrac) * loc).coerceIn(0f, 1f) to color.copy(alpha = color.alpha * a)
+        }
     }
-    return if (top) Brush.verticalGradient(*stops, startY = heightPx - edgePx, endY = heightPx)
-    else Brush.verticalGradient(*stops, startY = 0f, endY = edgePx)
+    return Brush.verticalGradient(*stops)
 }
 
 /**
@@ -60,28 +65,29 @@ private fun edgeBrush(color: Color, heightPx: Float, edgePx: Float, top: Boolean
  */
 @Composable
 internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: Boolean, modifier: Modifier = Modifier) {
+    if (!top) return   // no bottom strip (iOS: the owner had the composer's blur removed)
     val c = Fariin.colors
     val density = LocalDensity.current
     val barDp = with(density) { barPx.toDp() }
-    val heightDp = if (top) maxOf(100.dp, barDp + 16.dp) else barDp + 16.dp
-    val heightPx = with(density) { heightDp.toPx() }
-    val edgePx = minOf(with(density) { 80.dp.toPx() }, heightPx)
+    // The strip covers the header and a long tail under it, where the blur and the page colour
+    // melt away together, so there is no line where it ends.
+    val heightDp = barDp + 72.dp
+    val solidFrac = (barDp / heightDp).coerceIn(0f, 0.9f) * 0.75f
     if (haze != null) {
-        val alpha = animateFloatAsState(if (under) 1f else 0f, tween(220), label = "edgeGlass")
-        val mask = remember(heightPx, edgePx, top) { edgeBrush(Color.Black, heightPx, edgePx, top) }
+        // Read here, in composition: read inside the effect's block it was taken once (0) and
+        // never again, so the glass never came on (owner's photo 2026-11-05).
+        val alpha by animateFloatAsState(if (under) 1f else 0f, tween(220), label = "edgeGlass")
+        val mask = remember(solidFrac) { edgeBrush(Color.Black, solidFrac) }
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
-            backgroundColor = c.bg; blurRadius = 8.dp; noiseFactor = 0f
-            tints = listOf(HazeTint(c.bg.copy(alpha = 0.85f)))
+            backgroundColor = c.bg; blurRadius = 20.dp; noiseFactor = 0f
+            tints = listOf(HazeTint(c.bg.copy(alpha = 0.72f)))
             inputScale = HazeInputScale.Fixed(1f / 3)
             this.mask = mask
-            this.alpha = alpha.value
+            this.alpha = alpha
         })
     } else {
-        // No blur to hide a bubble behind the name or the field, so the page colour stays solid over
-        // the controls and only the 24 dp past them fades (the owner's 2026-11-04 ask).
-        val plainDp = barDp + 24.dp
-        val plainPx = with(density) { plainDp.toPx() }
-        val fade = remember(plainPx, top, c.bg) { edgeBrush(c.bg, plainPx, with(density) { 24.dp.toPx() }, top) }
-        Box(modifier.fillMaxWidth().height(plainDp).drawBehind { drawRect(fade) })
+        // No blur: the page colour, solid over the controls, fading out under them.
+        val fade = remember(solidFrac, c.bg) { edgeBrush(c.bg, solidFrac) }
+        Box(modifier.fillMaxWidth().height(heightDp).drawBehind { drawRect(fade) })
     }
 }
