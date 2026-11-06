@@ -132,7 +132,8 @@ fun PostViews(color: Color) {
 /** The round share button beside a post (hidden under Protect Content). */
 @Composable
 fun PostShareButton(ch: ChannelThreadUi, m: Message) {
-    if (m.deleted || ch.info.restricted || m.isSystem) return
+    // Not while it is still on its way: there is no post to link to yet.
+    if (m.deleted || ch.info.restricted || m.isSystem || m.sendState != null) return
     val c = Fariin.colors
     val ctx = LocalContext.current
     Box(

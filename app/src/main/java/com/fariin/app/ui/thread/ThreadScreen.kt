@@ -1611,8 +1611,11 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
     val metaColor = if (plain) Fariin.colors.secondary
         else if (styledInk != null) styledInk.copy(alpha = 0.8f)
         else if (isMe || onMedia) Color.White.copy(alpha = if (onMedia) 0.95f else 0.7f) else Fariin.colors.secondary
+    // A channel post speaks as the channel, so it has no ticks; while it is still on its way it shows
+    // the clock instead of a view count (offline it read "1 view", as if posted).
+    val channelPending = com.fariin.app.ui.channels.LocalPostViews.current != null && m.sendState == Message.SendState.SENDING
     Row(verticalAlignment = Alignment.CenterVertically) {
-        com.fariin.app.ui.channels.PostViews(metaColor)
+        if (!channelPending) com.fariin.app.ui.channels.PostViews(metaColor)
         // On a timer: the timer mark before the time (iOS footer), from the first frame.
         val mark = LocalTimerMark.current
         if (com.fariin.app.data.Disappearing.shownExpiry(m, mark.seconds, mark.sinceMs, System.currentTimeMillis().toDouble()) != null) {
@@ -1622,6 +1625,10 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
         }
         val time = ThreadLogic.timeLabel(m.clientTs?.takeIf { isMe && !m.hasServerTime } ?: m.createdAtMillis, is24h)
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
+        if (channelPending) {
+            Spacer(Modifier.width(3.dp))
+            Icon(Icons.Filled.Schedule, contentDescription = "Sending", tint = metaColor, modifier = Modifier.size(13.dp))
+        }
         if (isMe && !m.deleted) {
             // Sent one drawn check, delivered and read two (iOS BubbleTicks), at their drawn size.
             val drawn = when (tick) {
