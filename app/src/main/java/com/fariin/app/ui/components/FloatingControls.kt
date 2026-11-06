@@ -1,5 +1,7 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
@@ -119,7 +121,12 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+            // The field keeps its own cursor; when the words are set from outside ("Did you mean",
+            // a link), the cursor goes to the end instead of staying where it was in the old words.
+            var field by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(
+                androidx.compose.ui.text.input.TextFieldValue(value, androidx.compose.ui.text.TextRange(value.length))) }
+            if (field.text != value) field = androidx.compose.ui.text.input.TextFieldValue(value, androidx.compose.ui.text.TextRange(value.length))
+            BasicTextField(field, { v -> field = v; if (v.text != value) onChange(v.text) }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                 cursorBrush = SolidColor(c.accent),
                 // Screen readers: the prompt is drawn as a separate Text, so the field names itself.
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = prompt },
