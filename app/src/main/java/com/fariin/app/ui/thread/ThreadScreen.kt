@@ -1087,8 +1087,18 @@ private fun noticeText(m: Message): String = when {
     else -> m.text
 }
 
+/** The header's words grow with the phone's text size only up to 115% (as iOS caps its bars): the
+ *  header is 52 dp high, and at 130% its second line ("last seen", "9 followers") was cut off. */
 @Composable
 private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}, onToggleMute: () -> Unit = {}) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, minOf(d.fontScale, 1.15f)),
+    ) { HeaderBody(ui, onBack, onTitleClick, onToggleMute) }
+}
+
+@Composable
+private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit, onToggleMute: () -> Unit) {
     val c = Fariin.colors
     // A narrow phone (under 360 dp): tighter spacing and a smaller photo, or the name got about
     // 60 dp beside the call buttons ("Fam…" on a 320 dp Android 8.1 phone, 2026-11-05).
