@@ -32,7 +32,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -164,7 +163,7 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
             actionEnabled = canSave, busy = busy) { save() }
         when (gate) {
             Gate.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Busy(c.label, 40) }
-            Gate.Refused -> StateCard(Icons.Outlined.LockOpen, "Not verified",
+            Gate.Refused -> StateCard(Icons.Outlined.Lock, "Not verified",
                 "Unlock with your fingerprint, face or screen lock to change your password.", "Try Again") { prove() }
             Gate.NoLock -> StateCard(Icons.Outlined.Lock, "Lock your phone first",
                 "Set a screen lock (PIN, pattern or password) in your phone's settings first, so nobody else holding it can change your password.",
