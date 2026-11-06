@@ -563,39 +563,22 @@ fun ChatListScreen(
                     }
                     val row: @Composable (Conversation) -> Unit = { conv ->
                         val ring = com.fariin.app.data.StoryRings.forChat(conv, me, stories, storyHidden)
-                        // iOS chat list swipes (ChatListTable): right for Read/Unread and Pin, left for
-                        // Mute, Delete and Archive. Off while selecting or searching.
-                        val nowMs = System.currentTimeMillis().toDouble()
-                        val markedUnread = conv.hasUnreadMark(me)
-                        val pinned = conv.isPinned(me)
-                        val mutedNow = conv.isMuted(me, nowMs)
-                        SwipeActionsRow(conv.id, enabled = !selecting && !searching,
-                            leading = listOf(
-                                SwipeAction(if (markedUnread) "Read" else "Unread",
-                                    androidx.compose.ui.res.painterResource(if (markedUnread) R.drawable.ic_swipe_read else R.drawable.ic_swipe_unread),
-                                    SwipeColors.blue) { scope.launch { ChatListActions.setUnread(me, conv, !markedUnread) } },
-                                SwipeAction(if (pinned) "Unpin" else "Pin", androidx.compose.ui.res.painterResource(R.drawable.ic_pin_menu), SwipeColors.orange) {
-                                    if (pinned || !ChatListActions.pinsFull(me, state.chats, 1)) scope.launch { ChatListActions.setPinned(me, conv, !pinned) }
-                                },
-                            ),
-                            trailing = listOf(
-                                SwipeAction(if (mutedNow) "Unmute" else "Mute",
-                                    androidx.compose.ui.res.painterResource(if (mutedNow) R.drawable.ic_bell else R.drawable.ic_bell_off),
-                                    SwipeColors.indigo) {
-                                    if (mutedNow) scope.launch { ChatListActions.setMute(me, conv, 0.0) } else swipeMute = conv
-                                },
-                                SwipeAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(androidx.compose.material.icons.Icons.Outlined.Delete),
-                                    SwipeColors.red) { swipeDelete = conv },
-                                SwipeAction(if (showArchive) "Unarchive" else "Archive", androidx.compose.ui.res.painterResource(R.drawable.ic_archive_fill), SwipeColors.gray) {
-                                    val on = !showArchive
-                                    scope.launch {
-                                        ChatListActions.setArchived(me, conv, on)
-                                        Snack.show(if (on) "Chat archived" else "Chat unarchived", action = "Undo") {
-                                            scope.launch { ChatListActions.setArchived(me, conv, !on) }
-                                        }
+                        // Android's swipe (owner 2026-11-06): one action, left only, as Google's lists:
+                        // archive (unarchive in the Archive), with Undo. Mute, Delete, Pin and Read are
+                        // on long-press (select mode), where Android people look for them.
+                        SwipeToActRow(conv.id, enabled = !selecting && !searching,
+                            label = if (showArchive) "Unarchive" else "Archive",
+                            icon = androidx.compose.ui.res.painterResource(R.drawable.ic_archive_fill),
+                            fill = c.blue,
+                            onAction = {
+                                val on = !showArchive
+                                scope.launch {
+                                    ChatListActions.setArchived(me, conv, on)
+                                    Snack.show(if (on) "Chat archived" else "Chat unarchived", action = "Undo") {
+                                        scope.launch { ChatListActions.setArchived(me, conv, !on) }
                                     }
-                                },
-                            )) {
+                                }
+                            }) {
                         ChatRow(conv, me, decryptor,
                             selected = conv.id in selected,
                             ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),

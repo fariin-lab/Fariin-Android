@@ -30,6 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
@@ -136,3 +139,68 @@ private fun ActionStrip(actions: List<SwipeAction>, modifier: Modifier, onPick: 
         }
     }
 }
+
+
+/**
+ * The Android chat-list swipe (owner 2026-11-06: "keep what Android people expect"): one action,
+ * as Google's own lists do. Drag the row left; past a third of its width the archive mark grows and
+ * the phone ticks; let go there and the row slides off and [onAction] runs (the caller shows Undo).
+ * Short of it, the row springs back. Only to the left: a swipe from the left edge is Android's back
+ * gesture. The iOS button tray ([SwipeActionsRow]) stays for reference but the list no longer uses it.
+ */
+@Composable
+internal fun SwipeToActRow(
+    id: String,
+    enabled: Boolean,
+    label: String,
+    icon: Painter,
+    fill: Color,
+    onAction: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val offset = remember(id) { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var widthPx by remember { mutableStateOf(1f) }
+    var armed by remember(id) { mutableStateOf(false) }
+    val settle = spring<Float>(dampingRatio = 0.85f, stiffness = 500f)
+    LaunchedEffect(enabled) { if (!enabled) offset.snapTo(0f) }
+    Box(Modifier.fillMaxWidth().height(IntrinsicSize.Min).clipToBounds()
+        .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }) {
+        val x = offset.value
+        if (x < 0f) Box(Modifier.matchParentSize().background(fill), contentAlignment = Alignment.CenterEnd) {
+            val grow by androidx.compose.animation.core.animateFloatAsState(if (armed) 1.15f else 1f, label = "swipeMark")
+            Column(Modifier.padding(end = 24.dp).graphicsLayer { scaleX = grow; scaleY = grow }, horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            }
+        }
+        Box(
+            Modifier.fillMaxWidth()
+                .offset { IntOffset(offset.value.roundToInt(), 0) }
+                .then(if (!enabled) Modifier else Modifier.pointerInput(id) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (armed) scope.launch {
+                                offset.animateTo(-widthPx, spring(dampingRatio = 1f, stiffness = 900f))
+                                onAction()
+                                offset.snapTo(0f)
+                            } else scope.launch { offset.animateTo(0f, settle) }
+                            armed = false
+                        },
+                        onDragCancel = { armed = false; scope.launch { offset.animateTo(0f, settle) } },
+                    ) { change, dx ->
+                        change.consume()
+                        scope.launch {
+                            val v = (offset.value + dx).coerceIn(-widthPx, 0f)
+                            offset.snapTo(v)
+                            val now = -v > widthPx / 3f
+                            if (now != armed) { armed = now; if (now) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
+                        }
+                    }
+                }),
+        ) { content() }
+    }
+}
+
