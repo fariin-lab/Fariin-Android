@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -75,6 +78,7 @@ import com.fariin.app.data.Message
 import com.fariin.app.data.PostQuoteRules
 import com.fariin.app.data.PostQuotes
 import com.fariin.app.data.PostQuotesAnswer
+import com.fariin.app.data.PostReplyRules
 import com.fariin.app.data.QuoteStore
 import com.fariin.app.data.QuotedIn
 import com.fariin.app.media.QuotePicture
@@ -111,25 +115,29 @@ private fun QuoteFaces(urls: List<String>) {
 }
 
 /**
- * "N Quotes" along a channel post's bottom, inside its bubble, under the reactions and time (iOS
- * QuoteBarView): a hairline across the bubble, the quoting channels' faces, the count in blue and a
- * chevron at the right end. The bar is as wide as the bubble's other content once that is known
+ * "3 Replies · 4 Quotes" along a sent channel post's bottom, inside its bubble, under the reactions
+ * and time (iOS QuoteBarView, owner 2026-11-06): a hairline across the bubble, the quoting channels'
+ * faces (once quoted), the words and a chevron at the right end. "Reply" on a post with neither yet;
+ * with replies off (this post's or the whole channel's, [channelRepliesOff]) only the quotes, and no
+ * bar at all when it was never quoted (PostReplyRules.barLabel). The bar is as wide as the bubble's other content once that is known
  * (it takes the parent's width on the next pass), so a short post's bubble does not grow to full width.
  * [inBubble] false: a media post, whose bubble is the picture, gets the same row under it.
  */
 @Composable
-fun PostQuotesBar(m: Message, inBubble: Boolean = true) {
-    if (m.quoteCount <= 0 || m.deleted || m.isSystem) return
+fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = false) {
+    if (m.isSystem) return
+    val label = PostReplyRules.barLabel(m.replyCount, m.quoteCount,
+        repliesOn = PostReplyRules.repliesOn(channelRepliesOff, m.repliesOff),
+        sent = m.sendState == null, deleted = m.deleted) ?: return
     val c = Fariin.colors
     var parentW by remember { mutableIntStateOf(0) }
     var selfX by remember { mutableIntStateOf(0) }
     val line = c.label.copy(alpha = 0.12f)
-    val label = PostQuoteRules.barLabel(m.quoteCount)
     Layout(
         content = {
             // Always one node, even with no faces (QuoteFaces then draws nothing): the measure below
             // reads three children by position, and two crashed the app (a post quoted only privately).
-            Box { QuoteFaces(m.quoteFaces) }
+            Box { QuoteFaces(if (PostReplyRules.showFaces(m.quoteCount, m.quoteFaces)) m.quoteFaces else emptyList()) }
             // The label colour, not blue (owner 2026-11-06: "don't use blue").
             Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiary, modifier = Modifier.size(18.dp))
@@ -168,7 +176,10 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true) {
 }
 
 /**
- * The Quotes sheet (iOS QuotesPage, after the owner's reference), drawn once per chat. Plain inside:
+ * The Replies | Quotes sheet a post's bar opens (iOS PostThreadSheet, owner 2026-11-06), drawn once
+ * per chat. It opens on Replies (PostRepliesUi.kt): the thread, refreshed every 6 s while the tab is
+ * open, and the field at the bottom; the channel's admins get a menu to turn replies off or on.
+ * The Quotes tab (iOS QuotesPage, after the owner's reference). Plain inside:
  * a small count line on top, then each quote in a public channel (most seen first): the quoting
  * channel's photo, name and the time, its words, and under them a soft grey card of MY post (my
  * channel, the post's picture and text), then the quote's views. Quotes in private
@@ -191,6 +202,17 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     var failed by remember(m.id) { mutableStateOf(false) }
     var attempt by remember(m.id) { mutableIntStateOf(0) }
     var thumb by remember(m.id) { mutableStateOf<ImageBitmap?>(null) }
+    var tab by remember(m.id) { mutableIntStateOf(0) }
+    val replies = remember(openCid, m.id) { PostRepliesState(openCid, m.id) }
+    var replyAttempt by remember(m.id) { mutableIntStateOf(0) }
+    LaunchedEffect(m.id, replyAttempt) { replies.load() }
+    // While the sheet is open, new replies arrive every few seconds (only while their tab shows).
+    LaunchedEffect(m.id) {
+        while (true) {
+            kotlinx.coroutines.delay(6_000)
+            if (tab == 0 && !replies.sending) replies.load()
+        }
+    }
     LaunchedEffect(m.id, attempt) {
         failed = false
         val a = PostQuotes.load(openCid, m.id)
@@ -217,13 +239,21 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
         },
         thumb = thumb,
     )
-    ModalBottomSheet(onDismissRequest = close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
-        containerColor = sheetFill, shape = SheetShape) {
-        LazyColumn(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            item {
-                Text("Quotes", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), textAlign = TextAlign.Center)
-            }
+    ModalBottomSheet(onDismissRequest = close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = sheetFill, shape = SheetShape,
+        // The column below takes the navigation bar and the keyboard itself, so the field rides on the keyboard.
+        contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) }) {
+      Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
+        // The channel's photo, the tab's name and the post's opening words; the admins' menu on Replies.
+        RepliesSheetHeader(if (tab == 0) "Replies" else "Quotes", photoUrl,
+            (if (m.mediaKind == null) m.bodyText else m.text).trim().replace('\n', ' '),
+            if (tab == 0) replies else null)
+        RepliesQuotesTabs(tab) { tab = it; if (it == 0) replyAttempt++ }
+        if (tab == 0) {
+            RepliesList(replies, Modifier.weight(1f).fillMaxWidth()) { replyAttempt++ }
+            RepliesComposer(replies)
+        } else {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
             val a = answer
             when {
                 a != null && PostQuoteRules.isEmpty(a) -> item {
@@ -279,6 +309,8 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                 else -> item { QuotesSkeleton() }
             }
         }
+        }
+      }
     }
 }
 

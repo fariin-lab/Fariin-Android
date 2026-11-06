@@ -290,6 +290,8 @@ data class ChannelInfo(
     val bannedUids: List<String> = emptyList(),
     val createdAtMillis: Double = 0.0,
     val names: Map<String, String> = emptyMap(),
+    /** Replies turned off for every post (`repliesOff`, set by `setReplies`). */
+    val repliesOff: Boolean = false,
 ) {
     val shownCount: Int get() = ChannelRules.subscriberCount(followerCount, users.size)
 
@@ -322,6 +324,7 @@ data class ChannelInfo(
                 bannedUids = (d["bannedUids"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                 createdAtMillis = Conversation.millis(d["createdAt"]),
                 names = (d["names"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) -> if (k is String && v is String) k to v else null }?.toMap() ?: emptyMap(),
+                repliesOff = d["repliesOff"] as? Boolean ?: false,
             )
         }
 

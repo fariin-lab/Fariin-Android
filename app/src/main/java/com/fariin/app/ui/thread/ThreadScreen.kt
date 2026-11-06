@@ -774,7 +774,7 @@ private fun ThreadContent(
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     // A text post carries its reactions inside the bubble; the rest under it.
-                                    if (!channelChipsInside(m)) { com.fariin.app.ui.channels.ChannelChips(ch, m); com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false) }
+                                    if (!channelChipsInside(m)) { com.fariin.app.ui.channels.ChannelChips(ch, m); com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
                                 }
                             }
                             selecting -> Row(
@@ -1425,7 +1425,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
             // "N Quotes" along the bubble's bottom (PostQuotesUi.kt).
-            if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m)
+            if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff)
         }
         }
         }
