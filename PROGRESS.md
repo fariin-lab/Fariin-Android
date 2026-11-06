@@ -1002,3 +1002,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   c334b2e Replies | Quotes picked tab invisible in dark mode -> lifted grey (checked dark; Night Mode back to System).
   Cold start 0.68-0.73 s (am start -W, 3 runs). Memory: open/close a chat 30 times, 130 -> 170 MB after the first
   opens then flat (169.5 MB at 30): no leak.
+- 15:35 adnan's real iOS link story (fariin.com/vee card with Join): Visit link closes the story and opens VE3
+  inside the app with Follow; Back returns to Stories. Group Info / Edit Group / Stories tab walked: fine.
