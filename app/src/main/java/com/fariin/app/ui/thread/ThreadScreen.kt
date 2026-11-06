@@ -1623,7 +1623,9 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
                 tint = metaColor, modifier = Modifier.size(11.dp))
             Spacer(Modifier.width(3.dp))
         }
-        val time = ThreadLogic.timeLabel(m.clientTs?.takeIf { isMe && !m.hasServerTime } ?: m.createdAtMillis, is24h)
+        // Not on the server yet: the moment it was sent (only my own messages wait, a channel post of
+        // mine included, which is not drawn as "me"); after a restart offline it showed the restart time.
+        val time = ThreadLogic.timeLabel(m.clientTs?.takeIf { (isMe || channelPending) && !m.hasServerTime } ?: m.createdAtMillis, is24h)
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
         if (channelPending) {
             Spacer(Modifier.width(3.dp))
