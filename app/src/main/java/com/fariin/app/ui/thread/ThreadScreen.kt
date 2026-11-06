@@ -20,6 +20,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import dev.chrisbanes.haze.hazeSource
+import com.kyant.backdrop.backdrops.layerBackdrop
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.filled.Add
@@ -524,11 +525,15 @@ private fun ThreadContent(
     val glass = com.fariin.app.perf.rememberPowerState().glass()
     val hazeState = remember { dev.chrisbanes.haze.HazeState() }
     val edgeHaze = if (glass) hazeState else null
+    // The buttons' liquid glass (Android 13+), from its own copy of the list.
+    val liquidBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val liquid = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
     // Messages under the header: the list can go further back (it is reversed). Under the composer:
     // it can come further forward. Read through derivedStateOf, so a scroll recomposes only on a flip.
     val olderUnder by remember { derivedStateOf { listState.canScrollForward } }
     val searchList = search.active && search.asList && search.matches.isNotEmpty()
-    androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassHaze provides edgeHaze, LocalOnWallpaper provides walled) {
+    androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassHaze provides edgeHaze, LocalOnWallpaper provides walled,
+        com.fariin.app.ui.components.LocalLiquidBackdrop provides (if (liquid) liquidBackdrop else null)) {
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
@@ -603,6 +608,7 @@ private fun ThreadContent(
                 LocalBubbleLinkTap provides linkTap) {
             LazyColumn(
                 Modifier.fillMaxSize().then(if (edgeHaze != null) Modifier.hazeSource(edgeHaze)
+                    .then(if (liquid) Modifier.layerBackdrop(liquidBackdrop) else Modifier)
                     .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier) else Modifier), state = listState, reverseLayout = true,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
             ) {

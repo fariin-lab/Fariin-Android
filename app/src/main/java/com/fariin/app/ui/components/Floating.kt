@@ -12,6 +12,9 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import com.fariin.app.ui.theme.Fariin
 import dev.chrisbanes.haze.hazeEffect
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 
 /**
  * The chat screen's floating controls (iOS glass: the back circle, the call capsule, the "+", the
@@ -25,10 +28,41 @@ import dev.chrisbanes.haze.hazeEffect
  */
 val LocalGlassHaze = androidx.compose.runtime.staticCompositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }
 
+/**
+ * Android 13+ in the chat: the message list as a backdrop for real liquid glass (the backdrop
+ * library: lens refraction at the rim, colour vibrancy, specular edge), as the tab bar (owner
+ * 2026-11-06). Null elsewhere and on older phones, where [LocalGlassHaze] or solid is used.
+ */
+val LocalLiquidBackdrop = androidx.compose.runtime.staticCompositionLocalOf<com.kyant.backdrop.backdrops.LayerBackdrop?> { null }
+
 @Composable
 fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier {
     val c = Fariin.colors
     val haze = LocalGlassHaze.current
+    val liquid = LocalLiquidBackdrop.current
+    if (fill == null && liquid != null) {
+        // Bends what passes under at the rim and lifts its colours, under a thin frost; no blur
+        // pass (it cost 5 ms a frame on the tab bar). The library draws the shine on the edge.
+        return this
+            .shadow(10.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .drawBackdrop(
+                backdrop = liquid,
+                shape = { shape },
+                effects = {
+                    vibrancy()
+                    lens(10.dp.toPx(), 20.dp.toPx())
+                },
+                shadow = null,
+                // Thicker than the tab bar's: the message field holds text, and a bubble's words read
+                // through a thin surface clashed with "Message" (Pixel, 2026-11-06).
+                // Round buttons (circle / capsule) stay clearer; the text field (a rounded rectangle)
+                // is thicker so words passing under never mix with "Message".
+                onDrawSurface = {
+                    val field = shape != CircleShape
+                    drawRect(c.card.copy(alpha = if (field) 0.92f else if (c.dark) 0.76f else 0.8f))
+                },
+            )
+    }
     if (fill == null && haze != null) {
         // Glass (the reference app's recipe in our own terms): what is behind blurred hard, under
         // the page colour at 76 %, a hairline rim and a soft shadow. A bubble or the wallpaper
