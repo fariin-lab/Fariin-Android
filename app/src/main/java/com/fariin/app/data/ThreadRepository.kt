@@ -985,13 +985,11 @@ class ThreadRepository(
         if (members == null) seedDirect(other)
         // One fixed address (iOS textMessageRef): a retried note is never a second note.
         val msgRef = convRef.collection("messages").document(clientId)
-        val batch = db.batch()
-        batch.set(msgRef, MediaMessages.audio(me, meta, r.duration, r.waveform, clientTs, clientId, FieldValue.serverTimestamp(),
-            viewOnce = r.viewOnce))
-        batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.media.VoiceRecordRules.preview(r.duration, r.viewOnce), members ?: listOf(other),
-            FieldValue.serverTimestamp(), FieldValue.increment(1)))
-        batch.commit().await()
-        com.fariin.app.media.ChatSounds.sent()
+        // The sound goes up FIRST, the message after (owner 2026-11-06, the long-standing "voice note
+        // keeps loading"): written first, the message reached the other phone before its file, which
+        // then showed a loading note until (or unless) the upload finished. Now they only ever get a
+        // note that plays; here it shows the clock (the pending copy) while the file goes up. The
+        // Storage rule checks chat membership from the path, not the message, so this is allowed.
         val path = MediaRules.audioPath(cid, msgRef.id)
         var url: String? = null
         var attempt = 0
@@ -1003,7 +1001,14 @@ class ThreadRepository(
         }
         // A one-time note keeps no plain copy here (iOS: the sender cannot replay it either).
         if (!r.viewOnce) media?.store(url, data)
-        msgRef.update(MediaMessages.attachAudio(url, FieldValue.delete())).await()
+        val fields = MediaMessages.audio(me, meta, r.duration, r.waveform, clientTs, clientId, FieldValue.serverTimestamp(),
+            viewOnce = r.viewOnce).toMutableMap().apply { remove("uploading"); put("audioUrl", url) }
+        val batch = db.batch()
+        batch.set(msgRef, fields)
+        batch.update(convRef, MediaMessages.convUpdate(me, com.fariin.app.media.VoiceRecordRules.preview(r.duration, r.viewOnce), members ?: listOf(other),
+            FieldValue.serverTimestamp(), FieldValue.increment(1)))
+        batch.commit().await()
+        com.fariin.app.media.ChatSounds.sent()
         if (r.viewOnce) r.file.delete()
     }
 
