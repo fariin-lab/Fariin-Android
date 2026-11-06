@@ -117,6 +117,12 @@ internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable ()
                 opening = true
                 scope.launch {
                     val f = m.localPath?.let { java.io.File(it) } ?: m.fileUrl?.let { media?.file(it, m.enc) }
+                    // A PDF opens in Fariin's own reader (iOS PDFViewerSheet); other files in the phone's apps.
+                    if (f != null && com.fariin.app.ui.files.PdfViewerActivity.handles(name)) {
+                        opening = false
+                        com.fariin.app.ui.files.PdfViewerActivity.open(ctx, f, name)
+                        return@launch
+                    }
                     val intent = f?.let { FileOpener.intentFor(ctx, it, name) }
                     opening = false
                     val msg = when {
