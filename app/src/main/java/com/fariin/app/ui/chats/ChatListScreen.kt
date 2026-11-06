@@ -133,6 +133,7 @@ import com.fariin.app.ui.components.FloatingBack
 import com.fariin.app.ui.components.FloatingIcon
 import com.fariin.app.ui.components.floating
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.res.painterResource
@@ -549,6 +550,14 @@ fun ChatListScreen(
                             Text("No Results", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                             Text("There were no results for \"${query.trim()}\".\nTry a new search.", fontSize = 15.sp,
                                 color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            // A close spelling of a chat name this phone knows (iOS, owner 2026-10-31); tap searches it.
+                            val suggestion = remember(q, state.chats, state.archived) {
+                                com.fariin.app.data.SearchSuggest.closest(q, (state.chats + state.archived).map { it.displayName(me) }) }
+                            if (suggestion != null) Text(androidx.compose.ui.text.buildAnnotatedString {
+                                append("Did you mean ")
+                                withStyle(androidx.compose.ui.text.SpanStyle(color = c.accent, fontWeight = FontWeight.SemiBold)) { append(suggestion) }
+                                append("?")
+                            }, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp).clickable { query = suggestion })
                         }
                     }
                 shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
