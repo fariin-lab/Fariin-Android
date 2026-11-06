@@ -41,10 +41,14 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
     val haze = LocalGlassHaze.current
     val liquid = LocalLiquidBackdrop.current
     if (fill == null && liquid != null) {
-        // Bends what passes under at the rim and lifts its colours, under a thin frost; no blur
+        // Bends what passes under at the rim and lifts its colours, under a frosted surface; no blur
         // pass (it cost 5 ms a frame on the tab bar). The library draws the shine on the edge.
+        // On a plain white chat (owner 2026-11-06: "without wallpaper, white on white is not
+        // visible"): a faint grey in the surface, a hairline rim and a clearer shadow, as iOS glass
+        // shows on white.
+        val frost = if (c.dark) c.card else Color(0xFFF4F4F7)
         return this
-            .shadow(10.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .shadow(12.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.18f))
             .drawBackdrop(
                 backdrop = liquid,
                 shape = { shape },
@@ -53,15 +57,14 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
                     lens(10.dp.toPx(), 20.dp.toPx())
                 },
                 shadow = null,
-                // Thicker than the tab bar's: the message field holds text, and a bubble's words read
-                // through a thin surface clashed with "Message" (Pixel, 2026-11-06).
                 // Round buttons (circle / capsule) stay clearer; the text field (a rounded rectangle)
                 // is thicker so words passing under never mix with "Message".
                 onDrawSurface = {
                     val field = shape != CircleShape
-                    drawRect(c.card.copy(alpha = if (field) 0.92f else if (c.dark) 0.76f else 0.8f))
+                    drawRect(frost.copy(alpha = if (field) 0.92f else if (c.dark) 0.76f else 0.82f))
                 },
             )
+            .border(0.5.dp, c.label.copy(alpha = if (c.dark) 0.14f else 0.12f), shape)
     }
     if (fill == null && haze != null) {
         // Glass (the reference app's recipe in our own terms): what is behind blurred hard, under
