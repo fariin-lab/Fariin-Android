@@ -16,6 +16,8 @@ data class MyProfile(
     val photoUrl: String? = null,
     val about: String = "",
     val links: List<ProfileLink> = emptyList(),
+    /** iOS Verification.showsBadge: verification.status active (or the old isVerified). */
+    val verified: Boolean = false,
 ) {
     companion object {
         fun fromFirestore(uid: String, data: Map<String, Any?>): MyProfile = MyProfile(
@@ -25,6 +27,9 @@ data class MyProfile(
             photoUrl = (data["photoUrl"] as? String)?.takeIf { it.isNotEmpty() },
             about = data["about"] as? String ?: "",
             links = ProfileLink.list(data["links"]),
+            verified = (data["verification"] as? Map<*, *>)?.let { v ->
+                (v["status"] as? String ?: if (v["isVerified"] == true) "active" else "revoked") == "active"
+            } ?: false,
         )
     }
 }

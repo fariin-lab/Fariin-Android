@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -225,23 +226,33 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     }
 }
 
-/** Android profile header: photo at the start, name and @username beside it, then the two
- *  iOS actions (Edit profile, Share profile) as tonal buttons. */
+/** iOS SettingsView header (owner 2026-11-05, his iPhone beside the Pixel): the photo large and
+ *  centred, the name bold under it with the verified mark, @username under that, then the two
+ *  actions (Edit profile, Share profile). */
 @Composable
 private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -> Unit) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Avatar(profile?.photoUrl, 72.dp)
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(profile?.name?.ifEmpty { null } ?: "You", style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = c.label)
-                val h = profile?.handle.orEmpty()
-                if (h.isNotEmpty()) Text("@$h", style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = c.secondary)
+            Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable(onClickLabel = "Edit profile", onClick = onEdit)) {
+                Avatar(profile?.photoUrl, 120.dp)
             }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(profile?.name?.ifEmpty { null } ?: "You", fontSize = 26.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = c.label, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (profile?.verified == true) {
+                    Spacer(Modifier.width(6.dp))
+                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Verified, "Verified",
+                        tint = c.blue, modifier = Modifier.size(22.dp))
+                }
+            }
+            val h = profile?.handle.orEmpty()
+            if (h.isNotEmpty()) Text("@$h", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(top = 2.dp))
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Capsule("Edit profile", onEdit, Modifier.weight(1f))
