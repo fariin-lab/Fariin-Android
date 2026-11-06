@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -254,6 +257,17 @@ internal fun StoryTextCard(
     val fontSize = with(density) { sizePx.toSp() }
     val textStyle = TextStyle(color = ink, fontSize = fontSize, fontFamily = face, textAlign = TextAlign.Center)
 
+    // iOS StoryTextComposer: the link in the words shows its card live, above them, the same card
+    // the posted picture gets (drawn by the same code), so what he sees is what is posted. Fetched
+    // 400 ms after typing stops; the fetch is cached, so the post step finds it ready.
+    val linkUrl = remember(text) { TextStoryRules.firstLink(text) }
+    var linkDraft by remember { mutableStateOf<com.fariin.app.data.LinkPreviews.Draft?>(null) }
+    LaunchedEffect(linkUrl) {
+        if (linkUrl == null) { linkDraft = null; return@LaunchedEffect }
+        kotlinx.coroutines.delay(400)
+        linkDraft = com.fariin.app.data.LinkPreviews.draftWithin(linkUrl, 8_000)
+    }
+
     fun setFocus(on: Boolean) {
         if (on) { requester.requestFocus(); keyboard?.show() } else { focus.clearFocus(force = true); keyboard?.hide() }
     }
@@ -287,6 +301,16 @@ internal fun StoryTextCard(
                 .padding(top = 6.dp, bottom = if (keyboardUp) ime + 68.dp else bottomReserve),
             contentAlignment = Alignment.Center,
         ) {
+            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            linkDraft?.takeIf { it.url == linkUrl }?.let { d ->
+                val cardW = with(density) { (cardWidth * TextStoryRules.LINK_CARD_WIDTH).toDp() }
+                val cardH = with(density) { TextStoryRules.linkCardHeight(cardWidth * TextStoryRules.LINK_CARD_WIDTH).toDp() }
+                androidx.compose.foundation.Canvas(Modifier.size(cardW, cardH)) {
+                    drawIntoCanvas { drawStoryLinkCard(it.nativeCanvas, d, 0f, 0f, size.width, size.height) }
+                }
+                Spacer(Modifier.height(with(density) { (cardWidth * TextStoryRules.LINK_GAP).toDp() }))
+            }
+            Box(contentAlignment = Alignment.Center) {
             if (text.isEmpty()) {
                 Text("Type something…", style = textStyle.copy(color = ink.copy(alpha = 0.45f)),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = TextStoryRules.CARD_SIDE_DP.dp))
@@ -299,6 +323,8 @@ internal fun StoryTextCard(
                     .focusRequester(requester)
                     .onFocusChanged { focused = it.isFocused; onTyping(it.isFocused) },
             )
+            }
+            }
         }
 
         GlassCircle(ink, "Close", Modifier.statusBarsPadding().padding(14.dp), onClick = { close() }) {

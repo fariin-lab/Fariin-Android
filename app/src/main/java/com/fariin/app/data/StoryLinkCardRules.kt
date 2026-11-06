@@ -11,7 +11,9 @@ package com.fariin.app.data
 object StoryLinkCardRules {
     enum class Pill(val label: String) { JOIN("Join"), CHAT("Chat") }
 
-    private val SIZE_LINE = Regex("^[0-9.,KMB]+ (members?|followers?)$")
+    // A public channel opened by its @name reads "Channel invite · N followers" (GroupLinkCards), so the
+    // prefix is allowed: without it the card for fariin.com/<channel> never got its Join.
+    private val SIZE_LINE = Regex("^(Channel invite · )?[0-9.,KMB]+ (members?|followers?)$")
 
     /** fariin.com/u/<handle> or a bare fariin.com/<name>: a person's (or a public group's) name. */
     private fun isNameLink(url: String): Boolean =
