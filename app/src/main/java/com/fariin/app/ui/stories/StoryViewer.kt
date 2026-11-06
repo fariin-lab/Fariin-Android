@@ -355,7 +355,16 @@ fun StoryViewer(
     // app, any other address in the in-app browser (a Custom Tab).
     val linkTap = com.fariin.app.ui.thread.rememberBubbleLinkTap(
         remember(me) { com.fariin.app.ui.thread.ThreadUi(title = "", me = me) }) { toast = it }
-    val openLink: (String) -> Unit = { url -> linkTap(TextLinks.Span(0, url.length, TextLinks.Kind.WEB, url)) }
+    // OUR OWN LINKS OPEN IN THE APP (owner 2026-11-06: a channel link in a story shows Join, a
+    // person's shows Chat). The story closes, and the app's link host (the one outside links go
+    // through) opens the channel or group page, with Join / Follow there, or the chat with the person.
+    // Everything else stays as it was: the in-app browser over the story.
+    val openLink: (String) -> Unit = { url ->
+        if (com.fariin.app.data.StoryLinkCardRules.opensInApp(url)) {
+            onClose()
+            com.fariin.app.ui.thread.ExternalLinks.pending.value = url
+        } else linkTap(TextLinks.Span(0, url.length, TextLinks.Kind.WEB, url))
+    }
 
     BackHandler(enabled = profileUid != null || sheetFor != null) {
         if (profileUid != null) profileUid = null else sheet.close()

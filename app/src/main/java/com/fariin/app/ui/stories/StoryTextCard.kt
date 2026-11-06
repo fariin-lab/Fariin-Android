@@ -147,7 +147,8 @@ internal fun renderTextStory(text: String, styleIndex: Int, fontIndex: Int,
  * iOS StoryTextLinkPreview, compact style: a 0.97 white card, 18 corners at a 300 wide card (12 when
  * the page gave back only its host), a square of the page's picture on the left, then the title (15
  * semibold, two lines), the description (12.5, two lines) and the host (12.5, grey), 2 apart, 12 in
- * from the sides and 7 from the top. Black on it whatever the story's colour.
+ * from the sides, centred top to bottom. Black on it whatever the story's colour. Our channel, group
+ * and person links add a Join or Chat pill on the right (StoryLinkCardRules).
  */
 private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data.LinkPreviews.Draft,
                               left: Float, top: Float, cw: Float, ch: Float) {
@@ -172,22 +173,39 @@ private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data
         pic.recycle()
         textLeft = left + ch
     }
-    val textW = (left + cw - textLeft - 24f * u).toInt().coerceAtLeast(1)
-    var y = top + 7f * u
-    fun line(s: String, sizePt: Float, bold: Boolean, color: Int, lines: Int) {
-        val p = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = sizePt * u; this.color = color
-            typeface = if (Build.VERSION.SDK_INT >= 28) Typeface.create(Typeface.DEFAULT, if (bold) 600 else 400, false)
-                else if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-        }
-        val l = StaticLayout.Builder.obtain(s, 0, s.length, p, textW)
-            .setMaxLines(lines).setEllipsize(android.text.TextUtils.TruncateAt.END).setIncludePad(false).build()
-        c.save(); c.translate(textLeft + 12f * u, y); l.draw(c); c.restore()
-        y += l.height + 2f * u
+    fun paint(sizePt: Float, bold: Boolean, color: Int) = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = sizePt * u; this.color = color
+        typeface = if (Build.VERSION.SDK_INT >= 28) Typeface.create(Typeface.DEFAULT, if (bold) 600 else 400, false)
+            else if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
     }
-    if (d.title.isNotEmpty()) line(d.title, 15f, true, android.graphics.Color.BLACK, 2)
-    if (d.desc.isNotEmpty()) line(d.desc, 12.5f, false, android.graphics.Color.BLACK, 2)
-    line(d.host, 12.5f, false, android.graphics.Color.argb(153, 60, 60, 67), 1)
+    // Join on a channel's or group's link, Chat on a person's (owner 2026-11-06): a blue pill on the
+    // right, 13 semibold white, 14 by 7 inside, 12 from the edge, in the middle of the card's height.
+    // It is drawn into the picture, so the posted story shows it too.
+    val pill = com.fariin.app.data.StoryLinkCardRules.pill(d.url, d.desc)?.label
+    val pillPaint = paint(13f, true, android.graphics.Color.WHITE)
+    val pillW = pill?.let { pillPaint.measureText(it) + 28f * u } ?: 0f
+    val pillSpace = if (pill != null) pillW + 12f * u else 0f
+    val textW = (left + cw - textLeft - 24f * u - pillSpace).toInt().coerceAtLeast(1)
+    fun line(s: String, p: TextPaint, lines: Int): StaticLayout = StaticLayout.Builder.obtain(s, 0, s.length, p, textW)
+        .setMaxLines(lines).setEllipsize(android.text.TextUtils.TruncateAt.END).setIncludePad(false).build()
+    val lines = buildList {
+        if (d.title.isNotEmpty()) add(line(d.title, paint(15f, true, android.graphics.Color.BLACK), 2))
+        if (d.desc.isNotEmpty()) add(line(d.desc, paint(12.5f, false, android.graphics.Color.BLACK), 2))
+        add(line(d.host, paint(12.5f, false, android.graphics.Color.argb(153, 60, 60, 67)), 1))
+    }
+    // The words CENTRED in the card's fixed height (owner 2026-11-06: they sat at the top, beside a
+    // picture centred on the whole card). The card's size does not change.
+    val wordsH = lines.sumOf { it.height.toDouble() }.toFloat() + 2f * u * (lines.size - 1)
+    var y = top + maxOf(7f * u, (ch - wordsH) / 2f)
+    lines.forEach { l -> c.save(); c.translate(textLeft + 12f * u, y); l.draw(c); c.restore(); y += l.height + 2f * u }
+    if (pill != null) {
+        val fm = pillPaint.fontMetrics
+        val pillH = (fm.descent - fm.ascent) + 14f * u
+        val pr = android.graphics.RectF(left + cw - 12f * u - pillW, top + (ch - pillH) / 2f, left + cw - 12f * u, top + (ch + pillH) / 2f)
+        c.drawRoundRect(pr, pillH / 2f, pillH / 2f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(0, 122, 255) })
+        c.drawText(pill, pr.left + 14f * u, pr.centerY() - (fm.ascent + fm.descent) / 2f, pillPaint)
+    }
     c.restore()
 }
 
