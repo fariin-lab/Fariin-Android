@@ -77,6 +77,8 @@ class ThreadRepository(
         /** A group I am no longer in (removed, or left on another phone): iOS notAMember. `conv` is
          *  then its last copy with me out of `users`; the messages already here stay. */
         val former: Boolean = false,
+        /** 1:1 only: the other person's profile is gone (iOS otherAccountDeleted, see [DeletedAccount]). */
+        val otherDeleted: Boolean = false,
     )
 
     private val convRef = db.collection("conversations").document(cid)
@@ -251,6 +253,10 @@ class ThreadRepository(
             notePresence()
         }
         otherReg = users.document(other).addSnapshotListener { snap, _ ->
+            if (snap != null) {
+                val gone = DeletedAccount.fromProfile(snap.exists(), snap.metadata.isFromCache, _state.value.otherDeleted)
+                if (gone != _state.value.otherDeleted) _state.update { it.copy(otherDeleted = gone) }
+            }
             val d = snap?.data ?: return@addSnapshotListener
             _state.update { it.copy(otherPrivacy = Presence.privacyOf(d)) }
             notePresence()

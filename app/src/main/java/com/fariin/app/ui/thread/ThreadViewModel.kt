@@ -113,6 +113,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         sendBlocked = (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupAdmins.announcementBlock(s.conv, me) else null)
             ?: vm.repo.sendBlockedReason(listed ?: conv),
         cid = cid,
+        otherDeleted = conv?.isGroup != true && channel == null &&
+            (s.otherDeleted || conv?.isDeletedAccount(conv.otherUid(me)) == true),
         adminMayDelete = conv?.isGroup == true && me in admins,
         members = conv?.users ?: emptyList(),
         memberReads = (s.conv["lastRead"] as? Map<*, *>)?.mapNotNull { (k, v) ->

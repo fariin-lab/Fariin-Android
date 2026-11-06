@@ -160,6 +160,8 @@ data class ThreadUi(
     val sendBlocked: String? = null,
     /** A group I am no longer in (iOS notAMember): a plain line instead of the composer, no calls. */
     val notAMember: Boolean = false,
+    /** A 1:1 whose other person deleted their account (iOS otherAccountDeleted): a solid bar, no composer. */
+    val otherDeleted: Boolean = false,
     /** The chat id (voice speed is per chat, as on iOS). */
     val cid: String = "",
     /** Group: I hold the admin "Delete messages" right. */
@@ -637,7 +639,7 @@ private fun ThreadContent(
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("No messages here yet", fontSize = 15.sp, color = c.secondary)
                     // One next step: a nudge toward the composer (not in a channel I can only read).
-                    if (ui.channel == null && ui.sendBlocked == null && !ui.notAMember) {
+                    if (ui.channel == null && ui.sendBlocked == null && !ui.notAMember && !ui.otherDeleted) {
                         Spacer(Modifier.height(4.dp))
                         Text("Say hi to start the chat", fontSize = 13.sp, color = c.secondary.copy(alpha = 0.7f))
                     }
@@ -859,6 +861,9 @@ private fun ThreadContent(
                         Text("Unblock", fontSize = 17.sp, color = c.label)
                     }
                 }
+            } else if (ui.otherDeleted && !ui.isGroup) {
+                // Nobody left to receive, so no composer (iOS decision D15).
+                DeletedAccountBar()
             } else if (ui.notAMember) {
                 // iOS removedBar: one centred line where the composer was.
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
