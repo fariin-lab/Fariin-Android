@@ -970,3 +970,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 12:53 0c85943 Quotes page skeleton loading (owner); 3e261ca (agent) Quote in opens the chat at once with a local
   card (checked: kk open 0.4 s after the pick, bar filled). Channel post send animation already works on Android
   (claims by author, recorded frame by frame). Agent running: Quotes rows option 1 (grey card, 32 avatar).
+- 13:03 e9d7cb6 Chat Key says "set on another device" (was "Hidden on this phone") + iOS Reset/Remove words;
+  f4fc4ba (agent) Quotes rows option 1; 2d71e2a quotes without blue (owner). Safety / Invite Friends pages fine.
+  Quote picture already rounded (10 dp clip). Checked on the Pixel.
