@@ -521,6 +521,8 @@ private fun ThreadContent(
         kotlinx.coroutines.delay(2000)
         if (flashId == row) flashId = null
     }
+    // The Quotes sheet a post's "N Quotes" bar opens (PostQuotesUi.kt).
+    if (ui.channel != null) com.fariin.app.ui.channels.PostQuotesHost(ui.cid)
     // In-chat search (InChatSearch.kt, iOS uiMode .search): opened from the info pages' Search circle.
     val search = remember(ui.cid) { InChatSearchState() }
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -763,7 +765,7 @@ private fun ThreadContent(
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     // A text post carries its reactions inside the bubble; the rest under it.
-                                    if (!channelChipsInside(m)) com.fariin.app.ui.channels.ChannelChips(ch, m)
+                                    if (!channelChipsInside(m)) { com.fariin.app.ui.channels.ChannelChips(ch, m); com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false) }
                                 }
                             }
                             selecting -> Row(
@@ -1389,6 +1391,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 QuoteCardBubble(q, chromeMe, ui.cid, meta = if (chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null)
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
+            // "N Quotes" along the bubble's bottom (PostQuotesUi.kt).
+            if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m)
         }
         }
         }

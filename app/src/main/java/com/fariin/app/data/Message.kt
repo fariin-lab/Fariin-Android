@@ -70,6 +70,10 @@ data class Message(
     val reactions: Map<String, String> = emptyMap(),
     /** A channel post's views, counted by the server (functions-groups channelViews). */
     val views: Int = 0,
+    /** How many times a channel post was quoted anywhere (server noteQuoteSent). */
+    val quoteCount: Int = 0,
+    /** Up to 3 photos of public channels that quoted the post; "" = that channel has no photo. */
+    val quoteFaces: List<String> = emptyList(),
     /** A channel post's reactions as counts only: who picked what is never on the post. */
     val reactionCounts: Map<String, Int> = emptyMap(),
     /** When the disappearing timer takes this message (server `expiresAt`, ms), or null. */
@@ -317,6 +321,8 @@ data class Message(
                 consumed = data["consumed"] as? Boolean ?: false,
                 fileSize = (data["fileSize"] as? Number)?.toLong(),
                 views = maxOf(0, (data["views"] as? Number)?.toInt() ?: 0),
+                quoteCount = maxOf(0, (data["quoteCount"] as? Number)?.toInt() ?: 0),
+                quoteFaces = PostQuoteRules.faces(data["quoteFaces"]),
                 reactionCounts = (data["reactionCounts"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
                     val n = (v as? Number)?.toInt() ?: 0
                     if (k is String && n > 0) k to n else null
