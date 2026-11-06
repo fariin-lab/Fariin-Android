@@ -57,6 +57,9 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
                     lens(10.dp.toPx(), 20.dp.toPx())
                 },
                 shadow = null,
+                // No library rim: with our hairline it drew a second, offset outline (owner's photo
+                // 2026-11-06, "it has something"); on white its shine is invisible anyway.
+                highlight = null,
                 // Round buttons (circle / capsule) stay clearer; the text field (a rounded rectangle)
                 // is thicker so words passing under never mix with "Message".
                 onDrawSurface = {
