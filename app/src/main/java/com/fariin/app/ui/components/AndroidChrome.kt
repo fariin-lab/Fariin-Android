@@ -86,6 +86,9 @@ object Snack {
 
     internal val events = MutableSharedFlow<Event>(extraBufferCapacity = 8)
 
+    /** A bar is on screen: floating buttons in its way (the chat list's New Chat) lift above it. */
+    val showing = androidx.compose.runtime.mutableStateOf(false)
+
     fun show(message: String, action: String? = null, long: Boolean = false, durationMs: Long? = null, onAction: (() -> Unit)? = null) {
         events.tryEmit(Event(message, action, onAction, long, durationMs))
     }
@@ -106,6 +109,8 @@ fun SnackHost(bottomOffset: androidx.compose.ui.unit.Dp = 80.dp) {
             if (r == SnackbarResult.ActionPerformed) e.onAction?.invoke()
         }
     }
+    val active = host.currentSnackbarData != null
+    androidx.compose.runtime.SideEffect { Snack.showing.value = active }
     Box(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(bottom = bottomOffset), contentAlignment = Alignment.BottomCenter) {
         // The action word in the bar's own text colour: Material's default is its purple
         // inverse-primary, which is no colour of this app (iOS is black and white).

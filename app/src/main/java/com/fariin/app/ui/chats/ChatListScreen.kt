@@ -368,7 +368,9 @@ fun ChatListScreen(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val fabLift by androidx.compose.animation.core.animateDpAsState(
         // Card top = banner height less its 40 dp fade; the FAB already sits 16 dp up; keep 12 dp of air.
-        with(density) { (gsHeightPx.toDp() - 44.dp).coerceAtLeast(0.dp) }, label = "fabLift")
+        // A bar at the bottom ("Chat archived  Undo") lifts the buttons over it instead of covering New Chat.
+        with(density) { (gsHeightPx.toDp() - 44.dp).coerceAtLeast(0.dp) } +
+            (if (com.fariin.app.ui.components.Snack.showing.value) 64.dp else 0.dp), label = "fabLift")
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection).nestedScroll(fabScroll),
