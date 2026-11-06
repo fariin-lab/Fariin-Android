@@ -163,8 +163,9 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
             }
             if (shownPeople.isEmpty() && shownGroups.isEmpty()) {
                 item(key = "empty") {
-                    Text(if (q.isBlank()) "People you chat with will appear here." else "No results for \"${q.trim()}\"",
-                        fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
+                    if (q.isBlank()) com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Phone,
+                        "No one to call yet", "People you chat with will appear here.")
+                    else Text("No results for \"${q.trim()}\"", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
                 }
             }
         }

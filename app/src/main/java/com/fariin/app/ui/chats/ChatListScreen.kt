@@ -527,6 +527,12 @@ fun ChatListScreen(
                 state.error != null && source.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) {
                     com.fariin.app.ui.components.CenteredNotice("Couldn't load chats", state.error, "Retry", onRetry, Modifier.fillMaxSize())
                 }
+                // The archive's empty page: the drawing, as the other empty pages.
+                shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() && showArchive && query.isBlank() ->
+                    Box(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentAlignment = Alignment.Center) {
+                        com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Archive,
+                            "No archived chats", "Chats you archive will show here.", Modifier.padding(bottom = 60.dp))
+                    }
                 shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
                     query.isNotBlank() -> "No results"
                     showArchive -> "No archived chats"

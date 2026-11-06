@@ -205,8 +205,12 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
             calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() && error != null ->
                 com.fariin.app.ui.components.CenteredNotice("Couldn't load calls", error, "Retry", onRetry,
                     Modifier.fillMaxSize().padding(bottom = 60.dp))
-            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() -> Empty("No Calls Yet", "Your call history will appear here.",
-                "Make a Call" to { nav.newCall() })
+            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // One next step: the same New Call page as the floating button.
+                com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Phone,
+                    "No Calls Yet", "Your call history will appear here.", Modifier.padding(bottom = 60.dp),
+                    action = "Make a Call") { nav.newCall() }
+            }
             rows.isEmpty() && q.isNotEmpty() -> Empty("No Results for \"${search.trim()}\"", "Check the spelling or try a new search.")
             rows.isEmpty() && live.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
             else -> LazyColumn(Modifier.fillMaxSize(), state = listState,
