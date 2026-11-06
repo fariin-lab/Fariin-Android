@@ -1028,3 +1028,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   spinner every time; cleared on sign-out). Agents running: location rebuild, Export Chat.
 - 16:15 Security notifications fine; Username field drops anything but letters/digits/_ as typed (space, <, -),
   checks availability live, Back leaves it unsaved (@roodo unchanged).
+- 16:17 Privacy & Security, Groups & Channels, Messages privacy pages fine (read-receipt wording matches iOS on
+  purpose). In-chat search in adnan's chat: highlights, 1 of 2, list view, tap jumps + flashes. All fine.
