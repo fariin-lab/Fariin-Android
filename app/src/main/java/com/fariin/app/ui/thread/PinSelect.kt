@@ -147,7 +147,8 @@ internal fun PinnedBar(
     val idx = index.coerceIn(0, ids.size - 1)
     val pid = ids[idx]
     val msg = msgFor(pid)
-    val author = msg?.let { if (it.authorId == ui.me) "You" else ui.names[it.authorId] ?: ui.title } ?: "Pinned Message"
+    // A channel's posts speak as the channel, so its pinned bar names the channel, never "You" or an admin.
+    val author = msg?.let { if (ui.channel != null) ui.title else if (it.authorId == ui.me) "You" else ui.names[it.authorId] ?: ui.title } ?: "Pinned Message"
     var menu by remember { mutableStateOf(false) }
     // A floating rounded card under the header, not a flat strip (iOS pinned banner, owner 2026-11-03).
     // A floating capsule over the chat (iOS pinned banner): a picture of the pinned photo at the start,

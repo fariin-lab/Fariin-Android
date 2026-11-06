@@ -125,7 +125,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         channel = channel,
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),
         pinned = pinnedMsgs,
-        canPin = channel == null && com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),
+        canPin = com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),   // channels too: their owner and admins pin (iOS adminCan pinMessages)
         disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
         groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
         notAMember = s.former && channel == null,
