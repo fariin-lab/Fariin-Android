@@ -239,7 +239,15 @@ fun ThreadScreen(
     Box(Modifier.fillMaxSize()) {
         androidx.compose.runtime.CompositionLocalProvider(LocalBubbleText provides text) {
             androidx.compose.runtime.CompositionLocalProvider(LocalThreadCid provides ui.cid) {
-                ThreadContent(ui, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+                // A channel shows its posts only (owner 2026-11-06, a visitor saw a wall of "This message
+                // was deleted" and wallpaper notices left from when it was a group): a deleted post leaves
+                // no row, and the group's wallpaper notices are not channel news.
+                val shownUi = if (ui.channel == null) ui else remember(ui) {
+                    ui.copy(messages = ui.messages.filter { m ->
+                        !m.deleted && !(m.isSystem && m.text.contains("wallpaper", ignoreCase = true))
+                    })
+                }
+                ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
             }
         }
         if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid, shared = groupShared) { wallpaperOpen = false }
