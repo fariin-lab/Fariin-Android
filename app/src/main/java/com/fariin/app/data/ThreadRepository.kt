@@ -418,7 +418,12 @@ class ThreadRepository(
     private fun parse(d: DocumentSnapshot): Message {
         val data = d.data ?: emptyMap()
         val m = Message.fromFirestore(d.id, data, cid) { raw, author -> crypto.decrypt(raw, cid, author) }
-        return if (d.metadata.hasPendingWrites() && m.authorId == me) m.copy(sendState = Message.SendState.SENDING) else m
+        // My voice note, photo, video or file shows the clock until its file is attached: the message
+        // goes first and the file after, and the tick it showed in between flipped back to the clock
+        // when the file's URL was written (Pixel recording 2026-11-05). Until then the other phone can
+        // not open it anyway.
+        val uploading = data["uploading"] == true && !m.deleted
+        return if (m.authorId == me && (d.metadata.hasPendingWrites() || uploading)) m.copy(sendState = Message.SendState.SENDING) else m
     }
 
     // ------------------------------------------------------------------ send
