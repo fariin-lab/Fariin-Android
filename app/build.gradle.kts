@@ -166,6 +166,9 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     // Glass bottom bar: background blur of only the strip behind the bar (RenderEffect on 12+).
     implementation("dev.chrisbanes.haze:haze:1.6.0")
+    // Liquid glass for the tab bar (Apache-2.0, kyant0/AndroidLiquidGlass). 1.0.0 is the line that
+    // matches our Compose 1.9 / Kotlin 2.2; 2.x needs Compose 1.12 + Kotlin 2.4.
+    implementation("io.github.kyant0:backdrop:1.0.0")
     // Home screen widget (system/FariinWidget.kt).
     implementation("androidx.glance:glance-appwidget:1.1.1")
     debugImplementation(libs.androidx.ui.tooling)

@@ -81,6 +81,11 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 
 /**
  * How much room the floating bar takes at the bottom of a tab (the bar, its margin and the system
@@ -212,9 +217,17 @@ fun MainShell(
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val inset = BarHeight + BarMargin * 2 + navBottom
     val haze = remember { HazeState() }
+    // Android 13+ with glass allowed: real liquid glass (lens refraction at the rim, colour vibrancy,
+    // a specular edge) from the backdrop library; Android 12 keeps the frosted blur; below, solid.
+    val liquid = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    val backdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
-        Box(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)) {
+        Box(Modifier.fillMaxSize().then(when {
+            liquid -> Modifier.layerBackdrop(backdrop)
+            glass -> Modifier.hazeSource(haze)
+            else -> Modifier
+        })) {
             CompositionLocalProvider(LocalBottomBarInset provides inset, LocalTabReselect provides reselect) {
                 // The chat list stays alive once shown: coming back to Chats rebuilt it every time
                 // (one 65 ms frame per switch on the Pixel 5). Behind another tab it is neither
@@ -255,7 +268,7 @@ fun MainShell(
             enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
             FloatingTabBar(
-                tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, animate = power.animations, onSelect = select,
+                tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, backdrop = if (liquid) backdrop else null, animate = power.animations, onSelect = select,
                 modifier = Modifier.navigationBarsPadding().padding(horizontal = BarSide, vertical = BarMargin),
             )
         }
@@ -279,7 +292,7 @@ private val Tabs = listOf(
 
 @Composable
 private fun FloatingTabBar(
-    tab: Int, unread: Int, missed: Int, myPhoto: String?, glass: Boolean, haze: HazeState, animate: Boolean,
+    tab: Int, unread: Int, missed: Int, myPhoto: String?, glass: Boolean, haze: HazeState, backdrop: com.kyant.backdrop.backdrops.LayerBackdrop?, animate: Boolean,
     onSelect: (Int) -> Unit, modifier: Modifier = Modifier,
 ) {
     val c = Fariin.colors
@@ -290,7 +303,22 @@ private fun FloatingTabBar(
     val border = androidx.compose.ui.graphics.Brush.verticalGradient(
         if (c.dark) listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))
         else listOf(Color.White, Color.White.copy(alpha = 0.55f)))
-    val fill = if (glass) {
+    val fill = if (backdrop != null) {
+        // Liquid glass: what passes under bends at the rounded rim (lens), its colours are lifted
+        // (vibrancy), lightly blurred, under a thin frosted surface; the library draws the shine.
+        Modifier.drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                lens(14.dp.toPx(), 28.dp.toPx())
+            },
+            shadow = null,
+            // No blur pass (measured on the Pixel: the blur took the median frame from 13 to 18 ms
+            // while scrolling); a slightly thicker frosted surface keeps the labels readable instead.
+            onDrawSurface = { drawRect(if (c.dark) surface.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.55f)) },
+        )
+    } else if (glass) {
         Modifier.hazeEffect(haze) {
             backgroundColor = c.bg
             blurRadius = 24.dp
