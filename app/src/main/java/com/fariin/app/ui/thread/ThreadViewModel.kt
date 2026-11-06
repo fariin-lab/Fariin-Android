@@ -123,6 +123,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         myPhoto = conv?.photos?.get(me),
         unreadAtOpen = unreadAtOpen,
         channel = channel,
+        channelWaiting = channel == null && com.fariin.app.ui.channels.ChannelGuestPreviews.waiting(cid, me, s.conv),
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),
         pinned = pinnedMsgs,
         canPin = com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),   // channels too: their owner and admins pin (iOS adminCan pinMessages)

@@ -132,6 +132,27 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
 }
 
 /**
+ * Visitors' channel previews, kept for the session (a second open draws the channel at once), and
+ * the chats whose "is it a channel?" answer is still on its way. While that answer is pending the
+ * thread shows a loading ring, not a plain group chat: that drew the admins' notices, deleted rows
+ * and a message field for a moment on a cold open (2026-11-06, the Pixel).
+ */
+object ChannelGuestPreviews {
+    val cache = java.util.concurrent.ConcurrentHashMap<String, ChannelPreview>()
+    /** Chats whose preview answer came back (channel or not), so they are no longer waiting. */
+    val answered = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    /** From the first frame: a group chat I am not in, with no channel flag readable and no answer
+     *  yet, may be a channel I visit; until the answer it is drawn as neither. */
+    fun waiting(cid: String, me: String, doc: Map<String, Any?>): Boolean =
+        // A chat in my list is mine (a member's group, a followed channel): never waiting.
+        com.fariin.app.data.ChatsNow.find(cid) == null &&
+        doc["channel"] != true && com.fariin.app.crypto.Wire.isGroupCid(cid) &&
+            me !in ((doc["users"] as? List<*>) ?: emptyList<Any>()) &&
+            cache[cid] == null && answered[cid] != true
+}
+
+/**
  * The channel half of a chat page, or null when this chat is not a channel. `doc` is the chat's
  * live document (empty when a visitor may not read it: then the preview fills the header).
  */
@@ -142,7 +163,7 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
     val pending by ChannelFollows.pending.collectAsState()
     val served by ChannelFollows.served.collectAsState()
     val bias by ChannelFollows.biasFlow.collectAsState()
-    var preview by remember(cid) { mutableStateOf<ChannelPreview?>(null) }
+    var preview by remember(cid) { mutableStateOf<ChannelPreview?>(ChannelGuestPreviews.cache[cid]) }
     var joining by remember(cid) { mutableStateOf(false) }
     var problem by remember(cid) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -154,6 +175,7 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         me !in ((doc["users"] as? List<*>) ?: emptyList<Any>())
     LaunchedEffect(cid, maybeGuest) {
         if (!maybeGuest || preview != null) return@LaunchedEffect
+        try {
         var r = ChannelService.preview(cid)
         // A dropped connection is asked again a few times, not taken for "not a channel".
         var tries = 1
@@ -163,8 +185,10 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         }
         if (r is ChannelService.PreviewResult.Found && r.preview.isChannel) {
             preview = r.preview
+            ChannelGuestPreviews.cache[cid] = r.preview
             CryptoHub.notePlainGroup(cid)   // read from outside = public and not end-to-end encrypted
         }
+        } finally { ChannelGuestPreviews.answered[cid] = true }
     }
     val info = docInfo ?: preview?.let { ChannelInfo.fromPreview(it) } ?: return null
     if (!info.isChannel) return null

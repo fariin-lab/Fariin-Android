@@ -175,6 +175,8 @@ data class ThreadUi(
     val unreadAtOpen: Int = 0,
     /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
     val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
+    /** A chat that may be a channel I visit, its answer not back yet: drawn as a loading ring. */
+    val channelWaiting: Boolean = false,
     /** Pinned message ids in pin order (conversations/{cid}.pinnedMessageIds), and the pinned
      *  messages fetched by id for pins older than the loaded page. */
     val pinnedIds: List<String> = emptyList(),
@@ -248,7 +250,12 @@ fun ThreadScreen(
                     val admin = ui.channel.role == com.fariin.app.channel.ChannelRules.Role.ADMIN
                     ui.copy(messages = com.fariin.app.channel.ChannelRules.shownMessages(ui.messages, admin))
                 }
-                ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+                // Not known yet whether this chat is a channel I visit: a loading ring, not a group chat.
+                if (ui.channelWaiting)
+                    Box(Modifier.fillMaxSize().background(Fariin.colors.bg), contentAlignment = Alignment.Center) {
+                        com.fariin.app.ui.components.FariinSpinner()
+                    }
+                else ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
             }
         }
         // The status bar's icons follow the chat header over a dark-topped animated wallpaper while the
