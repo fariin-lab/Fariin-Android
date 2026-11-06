@@ -910,7 +910,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   1.7% list / 1.6% chat (unchanged). Agents running: story link card (iOS 0724f430), bubble styles `bs` reading.
 - 09:35 story editor shows the link card live + Join on a public channel's card (ccec7a1); animated wallpapers
   (9a75915, agent) checked on the Pixel: all 7 shaders compile and play (~45 fps, 2% jank in preview); light header
-  words + status bar over dark-topped ones (bddcb62, 52-line fix of a bar-icon leak in a3 follow-up); bubble
+  words + status bar over dark-topped ones (bddcb62; 0c77492 stops the light icons staying on under the picker); bubble
   styles `bs` reading (77f27db, agent, not device-tested: needs an iPhone to send one); tombstone strips bs/bsd
   (c8002e2). Agents running: wallpapers round 2 (stars/particles/doodles + iOS shader fixes), bubble styles
   round 2 (decorations `bsd`, link colour, meta 0.8).
