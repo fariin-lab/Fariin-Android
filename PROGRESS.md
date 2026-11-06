@@ -816,3 +816,9 @@ For the owner: old Oct 23 photos in adnan chat cannot be opened (old key, by des
 ### Gap list iOS -> Android (agent, 2026-11-05 evening; not yet built)
 1 voice record lock (slide up, pause, play back) | 2 one-time voice message | 3 message request bar in thread (Accept/Delete) | 4 sender "request sent" bar + Chat Key | 5 "no longer on Fariin" bar | 6 "You're muted in this group" bar | 7 admin mute/restrict member UI | 8 admin delete sheet (report spam / delete all / ban) | 9 chat list timed mute (1h/8h/1w) | 10 Groups in Common | 11 "restricts who can call" note | 12 edit posted story caption | 13 multi-item story post | 14 add/remove sticker pack | 15 GIF recents/favourites | 16 group call host actions (mute all, remove, end for all) | 17 group call add people / copy link | 18 in-app floating call card (Android uses PiP) | 19 channel statistics page | 20 invite link "Send in Fariin" | 21 who joined via link | 22 role emoji editor | 23 group encryption sheet | 24 search "did you mean" | 25 public channel suggestions | 26 map location picker | 27 story location sticker search | 28 in-app PDF viewer.
 iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->ringingAt 3.5-5.5 s on Android-created calls vs ~1 s iPhone-created. Cause not proven (needs server function logs; gcloud not signed in on this PC).
+
+## 2026-11-05 evening
+- 1083312 send animation (text + voice rise from the composer). Checked on the Pixel by screen recording: bubble rises from the field and settles in ~0.3 s, no crash.
+- 786163e Settings header as iOS (large centred photo, bold name, verified mark, @username). Checked on the Pixel.
+- 301df38 loading states: one iOS ring everywhere (buttons, rows, bars, log-out cover). Not yet checked screen by screen.
+- "app made crash" at 20:38 was my install killing the open app, not a crash. idle.sh now refuses while Fariin is on screen.
