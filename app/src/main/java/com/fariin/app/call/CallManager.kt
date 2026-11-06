@@ -146,7 +146,9 @@ object CallManager {
         // start (endAfterCrash). Cleared when the call ends.
         main.launch {
             ui.collect { u ->
-                val live = u.status.phase == CallPhase.ACTIVE || u.status.phase == CallPhase.RECONNECTING
+                // From the moment the other phone can see the call (my ring out, or my accept), not only
+                // once connected: a death before media also left them ringing / "Connecting..." (review 6).
+                val live = u.status.live && (u.status.callDocCreated || u.status.accepted)
                 val id = callId
                 val p = app.getSharedPreferences(LIVE_PREFS, Context.MODE_PRIVATE)
                 if (live && id != null) { if (p.getString(LIVE_KEY, null) != id) p.edit().putString(LIVE_KEY, id).apply() }
@@ -341,7 +343,7 @@ object CallManager {
         step("ring: pre-negotiate")
         val servers = awaitIceServers()
         if (CallWire.strangerWithoutRelay(contact, alwaysRelay(), servers)) return
-        val e = newEngine(servers, isCaller = false, camera = false) ?: return
+        val e = newEngine(servers, isCaller = false, camera = false, forId = id) ?: return
         e.hold()
         try {
             e.setRemote(SessionDescription.Type.OFFER, sdp)
@@ -354,7 +356,11 @@ object CallManager {
             if (engine === e) { e.close(); engine = null }
             return
         }
-        if (callId != id || heldAnswer == null) return
+        if (callId != id || heldAnswer == null) {
+            // Review finding 2: a held engine left behind kept the shared audio module off.
+            if (engine === e) { e.close(); engine = null }
+            return
+        }
         preNegotiated = true
         listeners += signaling.listenCandidates(id, CallWire.CALLER_CANDIDATES) { onRemoteCandidateDoc(it) }
         // iOS fix-all #230: the answer goes out during the ring only when this account rings on this
@@ -425,7 +431,9 @@ object CallManager {
             val servers = awaitIceServers()
             step("accept: ${servers.size} ice servers")
             if (CallWire.strangerWithoutRelay(contact, alwaysRelay(), servers)) { finish(EndReason.FAILED, true, byUser = false); return@launch }
-            val e = newEngine(servers, isCaller = false, camera = _ui.value.cameraOn) ?: run { finish(EndReason.FAILED, true, false); return@launch }
+            preJob?.cancel()   // review finding 2: a pre-negotiation still running must not reuse the slot
+            if (callId != id || !status.live) return@launch
+            val e = newEngine(servers, isCaller = false, camera = _ui.value.cameraOn, forId = id) ?: run { if (callId == id) finish(EndReason.FAILED, true, false); return@launch }
             try {
                 e.setRemote(SessionDescription.Type.OFFER, sdp)
                 flushPendingRemote()
@@ -606,15 +614,23 @@ object CallManager {
 
     // ================================================================== media
 
-    private fun newEngine(servers: List<IceServerSpec>, isCaller: Boolean, camera: Boolean): RtcEngine? {
+    private fun newEngine(servers: List<IceServerSpec>, isCaller: Boolean, camera: Boolean, forId: String? = callId): RtcEngine? {
+        // Review 2026-11-05: the relay wait before this can outlast the call. Built for a call that
+        // ended meanwhile, the engine opened the mic with nothing live (or, held, left the shared
+        // audio module off for every later call). Only for the call still on, and never two at once.
+        if (forId == null || forId != callId || !status.live) return null
+        engine?.let { old -> engine = null; try { old.close() } catch (_: Exception) {} }
         val relayOnly = CallWire.relayOnly(contact, alwaysRelay())
+        var self: RtcEngine? = null
+        val mine = { self != null && engine === self }
         val e = RtcEngine(app, object : RtcEngine.Listener {
-            override fun onLocalCandidate(c: Candidate) { main.launch { this@CallManager.onLocalCandidate(c) } }
-            override fun onIceState(state: PeerConnection.IceConnectionState) { main.launch { onIce(state) } }
-            override fun onRemoteVideo(track: VideoTrack) { main.launch { edit { it.copy(remoteVideo = track) } } }
-            override fun onAcceptMessage() { main.launch { remoteAccepted() } }
+            override fun onLocalCandidate(c: Candidate) { main.launch { if (mine()) this@CallManager.onLocalCandidate(c) } }
+            override fun onIceState(state: PeerConnection.IceConnectionState) { main.launch { if (mine()) onIce(state) } }
+            override fun onRemoteVideo(track: VideoTrack) { main.launch { if (mine()) edit { it.copy(remoteVideo = track) } } }
+            override fun onAcceptMessage() { main.launch { if (mine()) remoteAccepted() } }
         })
-        if (!e.open(servers.ifEmpty { CallWire.FALLBACK_STUN }, relayOnly, isCaller, micOn = !_ui.value.muted, cameraOn = camera)) return null
+        self = e
+        if (!e.open(servers.ifEmpty { CallWire.FALLBACK_STUN }, relayOnly, isCaller, micOn = !_ui.value.muted, cameraOn = camera)) { e.close(); return null }
         engine = e
         edit { it.copy(localVideo = e.localVideo, frontCamera = e.frontCamera) }
         return e

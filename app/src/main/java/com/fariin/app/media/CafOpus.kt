@@ -38,7 +38,10 @@ object CafOpus {
             val size = be64(b, p + 4)
             val body = p + 12
             // -1 is "to the end of the file" (a data chunk that was never closed).
-            val end = if (size < 0) b.size.toLong() else body + size
+            // A size past the file (or one that would overflow) ends the parse: a crafted note must
+            // not crash the player (review 2026-11-05).
+            if (size >= 0 && size > (b.size - body).toLong() && type != "data") return null
+            val end = if (size < 0 || size > (b.size - body).toLong()) b.size.toLong() else body + size
             if (end > b.size) {
                 if (type != "data") return null
             }

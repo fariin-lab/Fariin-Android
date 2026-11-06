@@ -147,7 +147,9 @@ object VoicePlayer {
         if (!CafOpus.isCaf(head)) return file
         val ogg = File(context.cacheDir, "voice-play-" + file.name + ".ogg")
         if (ogg.exists() && ogg.length() > 0) return ogg
-        val out = CafOpus.toOgg(file.readBytes()) ?: return null
+        // A malformed or crafted .caf (oversized chunk, a packet too big for one Ogg page) is
+        // "can't play", never a crash (review 2026-11-05).
+        val out = try { CafOpus.toOgg(file.readBytes()) } catch (_: Exception) { null } ?: return null
         ogg.writeBytes(out)
         return ogg
     }

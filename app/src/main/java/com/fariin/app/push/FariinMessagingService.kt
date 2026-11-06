@@ -143,13 +143,21 @@ class FariinMessagingService : FirebaseMessagingService() {
                     val path = NotifStore.storagePath(url)
                     when {
                         path != null -> FirebaseStorage.getInstance().reference.child(path).getBytes(2_000_000).await()
-                        url.startsWith("https://") -> download(url)
+                        url.startsWith("https://") && photoHostAllowed(url) -> download(url)
                         else -> null
                     }
                 } catch (_: Exception) { null }
             } ?: return null
             NotifStore.saveAvatar(c, url, bytes)
             return bytes
+        }
+
+        /** Only our own storage hosts: a sender photo pointing anywhere else would tell that server the
+         *  reader's IP and the time of every notification (review 2026-11-05). */
+        private fun photoHostAllowed(url: String): Boolean {
+            val host = runCatching { URL(url).host.lowercase() }.getOrNull() ?: return false
+            return host == "firebasestorage.googleapis.com" || host == "storage.googleapis.com" ||
+                host.endsWith(".firebasestorage.app") || host.endsWith(".appspot.com")
         }
 
         private fun download(url: String): ByteArray? {
@@ -159,7 +167,16 @@ class FariinMessagingService : FirebaseMessagingService() {
                 if (conn.responseCode != 200) return null
                 val len = conn.contentLengthLong
                 if (len > 2_000_000) return null
-                conn.inputStream.use { it.readBytes() }.takeIf { it.isNotEmpty() && it.size <= 2_000_000 }
+                // Read in a loop that stops at 2 MB: a reply with no length was read whole (review).
+                conn.inputStream.use { input ->
+                    val out = java.io.ByteArrayOutputStream()
+                    val buf = ByteArray(16 * 1024)
+                    while (true) {
+                        val n = input.read(buf); if (n < 0) break
+                        out.write(buf, 0, n); if (out.size() > 2_000_000) return null
+                    }
+                    out.toByteArray()
+                }.takeIf { it.isNotEmpty() }
             } finally { conn.disconnect() }
         }
 

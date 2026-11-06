@@ -65,16 +65,26 @@ class CallService : Service() {
                 if (video && granted(Manifest.permission.CAMERA)) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
             }
         }
-        try {
-            ServiceCompat.startForeground(this, ONGOING_ID, CallNotifications.ongoing(this), types)
-            ready?.invoke(true)
-        } catch (_: Exception) {
-            if (ready != null) {
-                // The projection type was refused: the call itself stays up without it.
-                ready(false)
-                try { ServiceCompat.startForeground(this, ONGOING_ID, CallNotifications.ongoing(this), types and ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION.inv()) } catch (_: Exception) { stopSelf() }
-            } else stopSelf()
+        // Started with startForegroundService, so a type refused (screen share without its grant,
+        // mic or camera while the app is not in front: answering from a headset, car or watch on a
+        // locked phone) must still end in startForeground, or Android kills the app mid-accept
+        // (review 2026-11-05). Tried with fewer types each time: all, without the screen, the call
+        // type alone, none.
+        val tries = buildList {
+            add(types)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                add(types and ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION.inv())
+                add(ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+            }
+            add(0)
+        }.distinct()
+        var started = -1
+        for (t in tries) {
+            try { ServiceCompat.startForeground(this, ONGOING_ID, CallNotifications.ongoing(this), t); started = t; break } catch (_: Exception) {}
         }
+        val shareOk = started >= 0 && (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || started and ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION != 0)
+        ready?.invoke(shareOk)
+        if (started < 0) stopSelf()
         return START_NOT_STICKY
     }
 
