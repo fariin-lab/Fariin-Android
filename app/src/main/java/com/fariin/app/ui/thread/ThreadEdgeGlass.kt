@@ -64,43 +64,39 @@ private fun edgeBrush(color: Color, solidFrac: Float): Brush {
  * One edge strip. [barPx] is the floating controls' measured height (header cluster or composer);
  * [under] is true while messages sit under them. Place it under the controls and over the list.
  */
+/**
+ * The chat's top edge as the reference app draws it (owner 2026-11-05, his Pixel photo of it: "the
+ * kind soft blur"): no blur on the messages. The page colour (or the wallpaper, see ThreadScreen) is
+ * laid over them at 81 % from the screen's top down through the header, so they show faintly, and
+ * over the header's last 48 dp it steps down 81 % -> 62 % -> 34 % -> 0, so the bubbles right under
+ * the controls are sharp. Plain colour: free for the GPU and the battery, the same on every phone.
+ */
+internal val EDGE_FADE = 48.dp
+internal val EDGE_STOPS = floatArrayOf(0.814f, 0.618f, 0.337f, 0f)
+
+/** The edge as alpha stops over [heightPx]: [EDGE_STOPS] over its last [fadePx]. */
+internal fun edgeAlphaBrush(color: Color, heightPx: Float, fadePx: Float): Brush {
+    val f = fadePx.coerceAtMost(heightPx)
+    val start = ((heightPx - f) / heightPx).coerceIn(0f, 1f)
+    return Brush.verticalGradient(
+        0f to color.copy(alpha = color.alpha * EDGE_STOPS[0]),
+        start to color.copy(alpha = color.alpha * EDGE_STOPS[0]),
+        (start + (1f - start) / 3f) to color.copy(alpha = color.alpha * EDGE_STOPS[1]),
+        (start + (1f - start) * 2f / 3f) to color.copy(alpha = color.alpha * EDGE_STOPS[2]),
+        1f to color.copy(alpha = 0f),
+        startY = 0f, endY = heightPx)
+}
+
 @Composable
 internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: Boolean, walled: Boolean = false, modifier: Modifier = Modifier) {
-    if (!top) return   // no bottom strip (iOS: the owner had the composer's blur removed)
+    if (!top || walled) return   // no bottom edge (iOS); a wallpaper chat draws its own (ThreadScreen)
     val c = Fariin.colors
     val density = LocalDensity.current
-    val barDp = with(density) { barPx.toDp() }
-    // The owner's iPhone photos 2026-11-05: under the header the bubbles are blurred but keep their
-    // colour, the blur ends about one bubble below the controls, and only the status bar band is
-    // washed with the page colour.
-    val heightDp = barDp + 48.dp
-    val solidFrac = (barDp / heightDp).coerceIn(0f, 0.9f) * 0.8f
-    if (haze != null) {
-        val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = top)
-        // The status bar band: the page colour from almost solid at the screen's edge to clear 48 dp
-        // down, in four steps (the curve the reference app draws over its list). Not over a wallpaper,
-        // which is itself in the blur.
-        val bandPx = with(density) { 48.dp.toPx() }
-        val wash = remember(c.bg, bandPx) {
-            Brush.verticalGradient(0f to c.bg.copy(alpha = 0.91f), 0.33f to c.bg.copy(alpha = 0.69f),
-                0.66f to c.bg.copy(alpha = 0.38f), 1f to c.bg.copy(alpha = 0f), startY = 0f, endY = bandPx)
-        }
-        val under0 = remember(solidFrac, c.bg) { edgeBrush(c.bg, solidFrac) }
-        Box(modifier.fillMaxWidth().height(heightDp).drawWithContent {
-            // Under the glass for its first frame only (it needs one frame to capture the list).
-            if (alpha > 0f && !walled) drawRect(under0, alpha = alpha)
-            drawContent()
-            if (alpha > 0f && !walled) drawRect(wash, alpha = alpha)
-        }.hazeEffect(haze) {
-            backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
-            tints = listOf(HazeTint(c.bg.copy(alpha = if (walled) 0.12f else 0.22f)))
-            inputScale = HazeInputScale.Fixed(1f / 3)
-            progressive = com.fariin.app.ui.components.edgeStages(solidFrac)
-            this.alpha = alpha
-        })
-    } else {
-        // No blur: the page colour, solid over the controls, fading out under them.
-        val fade = remember(solidFrac, c.bg) { edgeBrush(c.bg, solidFrac) }
-        Box(modifier.fillMaxWidth().height(heightDp).drawBehind { drawRect(fade) })
-    }
+    // Solid through the whole header (our name has no pill of its own, so a bubble behind
+    // "last seen" must stay faint), the four-step fade in the 48 dp under it.
+    val heightDp = with(density) { barPx.toDp() } + EDGE_FADE
+    val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
+    Box(modifier.fillMaxWidth().height(heightDp).drawBehind {
+        if (alpha > 0f) drawRect(edgeAlphaBrush(c.bg, size.height, EDGE_FADE.toPx()), alpha = alpha)
+    })
 }

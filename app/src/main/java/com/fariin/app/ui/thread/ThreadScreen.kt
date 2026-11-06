@@ -108,6 +108,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.gestures.scrollBy
@@ -509,12 +510,11 @@ private fun ThreadContent(
     val pins = visiblePins(ui)
     // The header and the pinned capsule float over the top of the chat (iOS): the messages run under
     // them and fade out behind a soft wash, and the list is padded by their height so nothing hides.
-    var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    // True for the chat's first two frames only: the header covers the top until the glass has
-    // drawn once. (400 ms hid a glass that was already up, and lifting it read as the blur arriving
-    // late on a cold start, owner 2026-11-05.)
-    var openCover by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { androidx.compose.runtime.withFrameNanos { }; androidx.compose.runtime.withFrameNanos { }; openCover = false }
+    // Started at the header's usual height (status bar + the 52 dp row) so the top fade is there on
+    // the chat's first frame, before the header has been measured.
+    val topEstimate = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(androidx.compose.ui.platform.LocalDensity.current) +
+        with(androidx.compose.ui.platform.LocalDensity.current) { 52.dp.roundToPx() }
+    var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(topEstimate) }
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val walled = com.fariin.app.ui.components.hasChatWallpaper(ui.cid)
@@ -544,50 +544,30 @@ private fun ThreadContent(
             onDispose { StickerSendHook.send = null }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            // The scroll edges (ThreadEdgeGlass.kt): under the header and over the composer, blurred
-            // glass only while messages sit under them. Over a wallpaper the page colour read as a
-            // pale band, so there the header keeps the wallpaper strip and the bottom has nothing.
-            if (!walled || edgeHaze != null) {
+            // The top edge (ThreadEdgeGlass.kt): the page colour, or the wallpaper, laid over the
+            // messages through the header and fading out over its last 48 dp.
+            run {
                 ThreadEdgeGlass(edgeHaze, top = true, barPx = topBarPx, under = olderUnder && !searchList, walled = walled,
                     modifier = Modifier.align(Alignment.TopCenter).zIndex(0.5f))
                 // No bottom strip: iOS took its bottom blur off on the owner's order (2026-08-25, "remove
                 // chat bottom blur, don't touch top header"); messages pass behind the floating composer.
-            } else {
-                // Over a wallpaper (owner 2026-11-05: "when you set a wallpaper it becomes a border"): the
-                // wallpaper behind the header used to stop at its lower edge in a hard line. It now runs
-                // 72 dp further and melts away along the same eased curve, so the bubbles fade in under
-                // the name instead of being cut.
-                val tailPx = with(density) { 72.dp.toPx() }
+            }
+            if (walled) {
+                // A wallpaper chat: the wallpaper itself laid over the top at the same stops as the
+                // page colour (ThreadEdgeGlass.kt), so the messages show faintly through it and are
+                // sharp right under the header.
                 Box(Modifier.align(Alignment.TopCenter).zIndex(0.5f).fillMaxWidth()
-                    .height(with(density) { topBarPx.toDp() } + 72.dp)
+                    .height(with(density) { topBarPx.toDp() } + EDGE_FADE)
                     .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
-                        val solid = ((size.height - tailPx) / size.height).coerceIn(0f, 1f)
-                        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(
-                            0f to Color.Black, solid to Color.Black,
-                            (solid + (1f - solid) * 0.35f) to Color.Black.copy(alpha = 0.7f),
-                            (solid + (1f - solid) * 0.7f) to Color.Black.copy(alpha = 0.25f),
-                            1f to Color.Transparent),
+                        drawRect(edgeAlphaBrush(Color.Black, size.height, EDGE_FADE.toPx()),
                             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
                     }
                     .then(com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid)))
             }
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
                 // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
-                // The chat's first moment (owner 2026-11-05: "when you open a chat it must be there"):
-                // the glass strip needs a frame to capture the list, and one frame showed the bubbles
-                // sharp under the name. The header, drawn from frame one, lays the page-colour fade
-                // behind itself (reaching 72 dp below) until the glass is up.
-                .then(if (walled) Modifier else Modifier.drawBehind {
-                    if (openCover) {
-                        val tail = 72.dp.toPx()
-                        val h = size.height + tail
-                        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(
-                            0f to c.bg, size.height / h to c.bg, (size.height + tail * 0.5f) / h to c.bg.copy(alpha = 0.6f), 1f to c.bg.copy(alpha = 0f),
-                            startY = 0f, endY = h), size = androidx.compose.ui.geometry.Size(size.width, h))
-                    }
-                })
                 .onSizeChanged { topBarPx = it.height }) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
                     // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).
