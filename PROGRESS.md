@@ -1010,3 +1010,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 15:46 6c505d0 Calls search empty: words were behind the keyboard (only a cut-off phone showed) -> centred above
   it; 80c749d New Call empty search matches the others. Searches tested on the Pixel: chat list, Calls, New Call,
   Settings; by code only (keyboard handled): in-chat, Glow, official chat, sticker/GIF, chat picker.
+- 15:47 MY MISTAKE: a test script kept tapping after a failed step and its blind tap on New Call STARTED A GROUP
+  CALL to "kaz" (2 members) at 15:46:37; ended at 15:46:52 (server: groupCalls/kaz ended, no participants; a call
+  card is in kaz). Fixed the method: every UI step chained with &&, scratchpad/home.sh refuses unless it is on the
+  chat list, no raw-coordinate taps on pages with call buttons. Recorded in memory.
