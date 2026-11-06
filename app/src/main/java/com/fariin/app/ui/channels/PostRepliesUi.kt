@@ -499,7 +499,8 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
             s.threads.isEmpty() -> Column(Modifier.fillMaxWidth().padding(top = 36.dp, start = 24.dp, end = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (s.off) "Replies are off" else "No replies yet", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-                Text(if (s.off) PostReplyRules.offNote(s.channelOff) else "Be the first to reply.", fontSize = 14.sp,
+                // When off, the reason is said once, at the bottom where the field was.
+                if (!s.off) Text("Be the first to reply.", fontSize = 14.sp,
                     color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
             }
             else -> LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp)) {
