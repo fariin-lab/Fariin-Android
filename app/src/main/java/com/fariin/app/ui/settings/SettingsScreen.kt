@@ -456,6 +456,8 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
                     SettingsRow("Particles", value = com.fariin.app.data.AnimatedWallpapers.INTENSITY_NAMES[level],
                         trailing = Trailing.NONE, titleColor = if (animOn) null else com.fariin.app.ui.theme.Fariin.colors.secondary,
                         last = true, onClick = if (animOn) ({ particleMenu = true }) else null)
+                    // The menu opens under the value it changes, on the right, not over the row above.
+                    Box(Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 16.dp)) {
                     DropdownMenu(expanded = particleMenu && animOn, onDismissRequest = { particleMenu = false },
                         shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
                         containerColor = com.fariin.app.ui.components.FariinMenu.container) {
@@ -467,6 +469,7 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
                                 Icon(Icons.Filled.Check, contentDescription = "Selected")
                             }) else null)
                         }
+                    }
                     }
                 }
             }
