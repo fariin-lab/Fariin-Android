@@ -865,3 +865,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   2ac145e8 voice upload-first; iOS Build green, TestFlight run 42201295191.
   Owner: TestFlight is my call now (batch fixes). Next ideas: RNNoise call noise filter, Android Auto check,
   share contact, video streaming.
+- 2026-11-06 afternoon (agents + device checks): 4471aa6 Android Auto; 6a49aea in-app browser, "vee" search, bare
+  fariin.com/<name> links; UX states 173f4f2/6e2e0d1/4ce6a59; careful sheets 5d44470 (+291fe5f tonal second red);
+  link cards 606f37b/7fbfe50 + group/channel avatars f039603/b2b40f7; channel links -> feed 9c1a43b (BUG on device:
+  visitor sees "User" thread + writes refused; fix agent running); call photo layer 9ec2b6b; illustrated sheets
+  b6d32fc; New badges d5bfa43; blue share button c8e991f. iOS: 8 UX-state commits + a54ebb1c link cards, compile
+  42211866668 then TestFlight (I own it; tell the iOS session the run id).
