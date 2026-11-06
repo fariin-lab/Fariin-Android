@@ -3,6 +3,7 @@ package com.fariin.app.ui.chats
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import com.fariin.app.ui.components.listPress
@@ -323,8 +324,16 @@ fun ChatListScreen(
             0.94f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
     }
     val scrolled by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
+    // Owner 2026-11-05: the glass only when something is under the bar, as iOS's scroll edge. It
+    // fades in and out (the effect stays attached, so nothing is rebuilt and there is no hitch).
+    val glassAlpha by androidx.compose.animation.core.animateFloatAsState(
+        if (scrolled || selecting) 1f else 0f, androidx.compose.animation.core.tween(220), label = "barGlass")
+    // The bar's search button only once the field in the list has shrunk away (it showed while the
+    // field was still two-thirds there: two search buttons at once).
     val searchGone by remember { androidx.compose.runtime.derivedStateOf {
-        listState.firstVisibleItemIndex > 1 || (listState.firstVisibleItemIndex == 1 && listState.firstVisibleItemScrollOffset > 24)
+        val info = listState.layoutInfo.visibleItemsInfo
+        val field = info.firstOrNull { it.key == "search" }
+        if (field == null) info.isNotEmpty() && info.first().index > 0 else field.offset <= -(field.size * 0.9f)
     } }
     // At the very top the bar is always shown: a second tap on Chats scrolls there without a drag,
     // and the bar stayed hidden from the scroll down.
@@ -374,6 +383,7 @@ fun ChatListScreen(
                         // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
                         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
                         mask = barFade
+                        alpha = glassAlpha
                     }.padding(bottom = 36.dp)
                     scrolled || selecting -> Modifier.background(c.bg.copy(alpha = 0.97f))
                     else -> Modifier.background(c.bg)
@@ -531,7 +541,13 @@ fun ChatListScreen(
                     item(key = "top-anchor", contentType = "anchor") { Spacer(Modifier.fillMaxWidth().height(1.dp)) }
                     // The search field heads the list and scrolls away with it, as iOS's does
                     // (owner 2026-11-03): one tap and the keyboard is up.
-                    if (!showArchive && !searching) item(key = "search", contentType = "search") { SearchCapsule { searching = true } }
+                    if (!showArchive && !searching) item(key = "search", contentType = "search") {
+                        // How much of the field the list has pulled under the bar (0 at rest), read
+                        // while drawing only, so the shrink costs no recomposition.
+                        SearchCapsule(hiddenPx = {
+                            (-(listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "search" }?.offset ?: 0)).toFloat().coerceAtLeast(0f)
+                        }) { searching = true }
+                    }
                     // A voice message playing on after its chat was left (iOS VoiceNoteBar, under the header).
                     if (!searching) item(key = "voicebar", contentType = "voicebar") {
                         com.fariin.app.ui.thread.VoiceNoteBar(null, me) { cid -> (state.chats + state.archived).firstOrNull { it.id == cid }?.let { if (!selecting) onOpen(it) } }
@@ -810,18 +826,36 @@ private fun SelectionBar(
 
 /** The resting search field, a grey capsule; a tap opens the live one. */
 @Composable
-private fun SearchCapsule(onOpen: () -> Unit) {
+private fun SearchCapsule(hiddenPx: () -> Float, onOpen: () -> Unit) {
     val c = Fariin.colors
-    Row(
-        Modifier.fillMaxWidth().background(c.bg).padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
-            // A grey field on the white page (owner 2026-11-03: white on white could not be seen).
-            .height(44.dp).clip(RoundedCornerShape(22.dp)).background(c.fieldFill)
-            .clickable(onClickLabel = "Search", onClick = onOpen).padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    // iOS search field on scroll (owner's iPhone video 2026-11-05): it does not slide away under the
+    // bar, it shrinks in place. The word and the glass fade within the first few points, then the
+    // grey capsule gets thinner from the bottom until it is gone; scrolling back grows it again.
+    val fill = c.fieldFill
+    Box(
+        Modifier.fillMaxWidth().height(54.dp)
+            .graphicsLayer { translationY = hiddenPx() }   // the top edge stays put while the list moves
+            .padding(start = 16.dp, end = 16.dp, top = 2.dp),
     ) {
-        Icon(Icons.Outlined.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("Search", fontSize = 17.sp, color = c.secondary, maxLines = 1)
+        Box(
+            Modifier.fillMaxWidth().height(44.dp)
+                .drawBehind {
+                    val h = (size.height - hiddenPx()).coerceAtLeast(0f)
+                    if (h > 0.5f) drawRoundRect(fill, size = androidx.compose.ui.geometry.Size(size.width, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(minOf(22.dp.toPx(), h / 2f)))
+                }
+                .clickable(onClickLabel = "Search", onClick = onOpen, indication = null,
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() })
+                .padding(horizontal = 14.dp)
+                .graphicsLayer { alpha = (1f - hiddenPx() / 10.dp.toPx()).coerceIn(0f, 1f) },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Search", fontSize = 17.sp, color = c.secondary, maxLines = 1)
+            }
+        }
     }
 }
 

@@ -192,6 +192,11 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     // iOS SettingsView (owner 2026-11-05): the title centred, the search in its floating circle, and
     // no solid bar: the page scrolls under a soft fade instead of being cut by a hard edge.
     val haze = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+    // The glass only once the page is under the bar (iOS scroll edge), faded in and out.
+    // derivedStateOf: the page is not recomposed for every pixel scrolled, only when this flips.
+    val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { scroll.value > 0 } }
+    val glassAlpha by androidx.compose.animation.core.animateFloatAsState(
+        if (underBar) 1f else 0f, androidx.compose.animation.core.tween(220), label = "barGlass")
     val glass = com.fariin.app.perf.rememberPowerState().glass()
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         val barH = 56.dp
@@ -247,6 +252,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                 tints = listOf(dev.chrisbanes.haze.HazeTint(c.bgSecondary.copy(alpha = 0.7f)))
                 inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
                 mask = fade
+                alpha = glassAlpha
             }
             else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
                 0f to c.bgSecondary, 0.5f to c.bgSecondary, 0.75f to c.bgSecondary.copy(alpha = 0.6f),
