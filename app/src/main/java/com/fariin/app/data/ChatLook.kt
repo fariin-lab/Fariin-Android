@@ -7,7 +7,7 @@ package com.fariin.app.data
  * ChatLookStore. Everything is kept on this phone only, never synced (iOS: "local, never synced").
  */
 
-/** iOS ChatWallpaper, with the same stored strings ("none", "g:", "p:", "c:", "b:"). */
+/** iOS ChatWallpaper, with the same stored strings ("none", "g:", "p:", "c:", "b:", "a:"). */
 sealed class ChatWallpaper {
     object None : ChatWallpaper()
     data class Gradient(val id: String) : ChatWallpaper()
@@ -15,6 +15,10 @@ sealed class ChatWallpaper {
     data class Solid(val hex: Long) : ChatWallpaper()
     /** A legacy built-in id; resolves to a theme (WallpaperPreset.theme). */
     data class Preset(val id: String) : ChatWallpaper()
+    /** A moving wallpaper drawn by a shader, an id in AnimatedWallpapers.all. Older builds read "a:" as none. */
+    data class Animated(val id: String) : ChatWallpaper() {
+        val wallpaper: AnimatedWallpaper? get() = AnimatedWallpapers.find(id)
+    }
 
     val stored: String get() = when (this) {
         None -> "none"
@@ -22,6 +26,7 @@ sealed class ChatWallpaper {
         is Photo -> "p:$id"
         is Solid -> "c:" + "%06X".format(hex)
         is Preset -> "b:$id"
+        is Animated -> "a:$id"
     }
 
     /** The theme this draws, for a gradient or a legacy preset. */
@@ -41,6 +46,8 @@ sealed class ChatWallpaper {
             s.startsWith("p:") -> Photo(s.drop(2))
             s.startsWith("c:") -> Solid(s.drop(2).toLongOrNull(16) ?: 0)
             s.startsWith("b:") -> Preset(s.drop(2))
+            // An id this build does not know (a newer phone's) reads as none, as iOS.
+            s.startsWith("a:") -> s.drop(2).let { if (AnimatedWallpapers.find(it) != null) Animated(it) else None }
             else -> None
         }
 

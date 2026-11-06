@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -88,6 +89,7 @@ import com.fariin.app.data.ChatWallpapers
 import com.fariin.app.ui.components.WallpaperArt
 import com.fariin.app.ui.components.brush
 import com.fariin.app.ui.components.drawWallpaper
+import com.fariin.app.data.AnimatedWallpapers
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.theme.FariinTheme
@@ -232,12 +234,18 @@ private fun WallTile(w: ChatWallpaper, current: ChatWallpaper, modifier: Modifie
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
     val solid = w as? ChatWallpaper.Solid
+    val motion = com.fariin.app.ui.components.rememberWallpaperMotion(w)
     Box(modifier.height(150.dp).clip(shape)
-        .drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo) }
+        .then(motion.isolate { Modifier.drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo, motion = motion) } })
         // The plain page ("no wallpaper") is the page colour too, so it gets the same rim a solid has.
         .then(if (solid != null || w == ChatWallpaper.None) Modifier.border(1.dp, c.label.copy(alpha = 0.10f), shape) else Modifier)
         .combinedClickable(onLongClick = onLong, onClick = onTap),
         contentAlignment = Alignment.Center) {
+        if (w is ChatWallpaper.Animated) {
+            Icon(Icons.Filled.AutoAwesome, contentDescription = "${w.wallpaper?.name ?: "Animated"}, animated", tint = Color.White,
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(22.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f)).padding(5.dp))
+        }
         if (current == w) {
             val darkTick = (solid != null && !ChatWallpapers.isDark(solid.hex)) || (w == ChatWallpaper.None && !c.dark)
             // iOS: the white tick carries a soft black shadow (0.5, radius 3); a dimmed copy under it here.
@@ -282,6 +290,8 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
             Text("Presets", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.padding(horizontal = 4.dp))
             val tiles = buildList<@Composable (Modifier) -> Unit> {
                 add { m -> WallTile(ChatWallpaper.None, current, m) { previewing = ChatWallpaper.None } }
+                // Moving wallpapers, playing in their tiles; in a group too (an admin sets it for everyone).
+                AnimatedWallpapers.all.forEach { a -> add { m -> WallTile(ChatWallpaper.Animated(a.id), current, m) { previewing = ChatWallpaper.Animated(a.id) } } }
                 library.forEach { id ->
                     add { m ->
                         Box(m) {
@@ -301,7 +311,8 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
     }
     previewing?.let { w ->
         val alone = w is ChatWallpaper.Photo && w.id == justPicked
-        WallpaperPreview(w, siblings = if (alone) emptyList() else library.map { ChatWallpaper.Photo(it) } + ChatWallpapers.all.map { ChatWallpaper.Gradient(it.id) },
+        WallpaperPreview(w, siblings = if (alone) emptyList() else AnimatedWallpapers.all.map { ChatWallpaper.Animated(it.id) } +
+            library.map { ChatWallpaper.Photo(it) } + ChatWallpapers.all.map { ChatWallpaper.Gradient(it.id) },
             cid = cid, shared = shared, onApplied = pop,
             onClose = {
                 // Not kept unless applied (iOS): a picked photo closed without Apply leaves the library.
@@ -396,13 +407,15 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                     HorizontalPager(pager, Modifier.fillMaxSize()) { i ->
                         val w = siblings[i]
                         val photo = (w as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
-                        Box(Modifier.fillMaxSize().drawBehind { drawWallpaper(w, dark, c.bg, pattern, photo) })
+                        val motion = com.fariin.app.ui.components.rememberWallpaperMotion(w, preview = false)
+                        Box(Modifier.fillMaxSize().drawBehind { drawWallpaper(w, dark, c.bg, pattern, photo, motion = motion) })
                     }
                 } else if (editable && photoBitmap != null) {
                     EditablePhoto(photoBitmap, canvas, zoom, pan, blurred, dark) { z, p -> zoom = z; pan = p }
                 } else {
                     val photo = (first as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
-                    Box(Modifier.fillMaxSize().drawBehind { drawWallpaper(first, dark, c.bg, pattern, photo) })
+                    val motion = com.fariin.app.ui.components.rememberWallpaperMotion(first, preview = false)
+                    Box(Modifier.fillMaxSize().drawBehind { drawWallpaper(first, dark, c.bg, pattern, photo, motion = motion) })
                 }
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 14.dp)) {
@@ -521,11 +534,12 @@ private fun ChatColorPage(pop: () -> Unit) {
     val wall = ChatLookStore.defaultWallpaper(ctx)
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (wall as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    val wallMotion = com.fariin.app.ui.components.rememberWallpaperMotion(wall)
     Column(Modifier.fillMaxSize()) {
         PageBar("Chat Color", onBack = pop, action = { ResetMenu(wallpaperPage = false) })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                .drawBehind { drawWallpaper(wall, c.dark, c.card, pattern, photo) }.padding(16.dp),
+                .then(wallMotion.isolate { Modifier.drawBehind { drawWallpaper(wall, c.dark, c.card, pattern, photo, motion = wallMotion) } }).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PreviewBubble("Here's a preview of the chat color.", false, null, Modifier.padding(end = 36.dp).align(Alignment.Start))
                 PreviewBubble("The color is visible to only you.", true, ChatLookStore.globalColor(ctx)?.brush(), Modifier.padding(start = 36.dp).align(Alignment.End))
@@ -617,6 +631,7 @@ private fun CustomColorSheet(onClose: () -> Unit, onSet: (ChatColorSpec) -> Unit
     val wall = ChatLookStore.defaultWallpaper(ctx)
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (wall as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    val wallMotion = com.fariin.app.ui.components.rememberWallpaperMotion(wall)
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = com.fariin.app.ui.components.sheetFill,
         shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -628,7 +643,7 @@ private fun CustomColorSheet(onClose: () -> Unit, onSet: (ChatColorSpec) -> Unit
             com.fariin.app.ui.components.FloatingSegments(listOf("Solid", "Gradient"), if (gradient) 1 else 0,
                 { gradient = it == 1; stop = 0 }, Modifier.align(Alignment.CenterHorizontally))
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(20.dp))
-                .drawBehind { drawWallpaper(wall, c.dark, c.bg, pattern, photo) }.padding(16.dp),
+                .then(wallMotion.isolate { Modifier.drawBehind { drawWallpaper(wall, c.dark, c.bg, pattern, photo, motion = wallMotion) } }).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Today", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.label,
                     modifier = Modifier.align(Alignment.CenterHorizontally).floating(CircleShape).padding(horizontal = 12.dp, vertical = 5.dp))
@@ -694,8 +709,9 @@ internal fun ChatThemeBlock() {
     val mine = remember(v) { ChatLookStore.globalColor(ctx) }
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (current as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    val motion = com.fariin.app.ui.components.rememberWallpaperMotion(current)
     Column(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().drawBehind { drawWallpaper(current, c.dark, c.bg, pattern, photo) }
+        Column(Modifier.fillMaxWidth().then(motion.isolate { Modifier.drawBehind { drawWallpaper(current, c.dark, c.bg, pattern, photo, motion = motion) } })
             .padding(horizontal = 14.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Today", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 modifier = Modifier.align(Alignment.CenterHorizontally).clip(CircleShape).background(c.fieldFill.copy(alpha = 0.3f))

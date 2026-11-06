@@ -440,6 +440,14 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
             SettingsSection {
                 SettingsRow("Night Mode", value = AppearancePrefs.current(ctx).label, last = true) { push(PAGE_NIGHT) }
             }
+            // Moving wallpapers can be stilled here, on top of the phone's own animation and Battery Saver settings.
+            com.fariin.app.data.AnimatedWallpapers.load(ctx)
+            SettingsSection(footer = "When off, animated wallpapers show a still picture. They also stop moving when animations " +
+                "are turned off in Power Saving or on the phone, or Battery Saver is on.") {
+                SwitchRow("Animated Wallpapers", com.fariin.app.data.AnimatedWallpapers.enabled.value, last = true) {
+                    com.fariin.app.data.AnimatedWallpapers.setEnabled(ctx, it)
+                }
+            }
         }
     }
 }
