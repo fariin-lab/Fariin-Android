@@ -165,7 +165,13 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
                 item(key = "empty") {
                     if (q.isBlank()) com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Phone,
                         "No one to call yet", "People you chat with will appear here.")
-                    else Text("No results for \"${q.trim()}\"", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
+                    // Worded and placed as the other searches (chat list, Calls, Settings).
+                    else androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().padding(top = 120.dp, start = 32.dp, end = 32.dp),
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Text("No Results", fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label)
+                        Text("There were no results for \"${q.trim()}\".\nTry a new search.", fontSize = 15.sp, color = c.secondary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                    }
                 }
             }
         }
