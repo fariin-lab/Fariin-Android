@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -168,9 +168,9 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true) {
 
 /**
  * The Quotes sheet (iOS QuotesPage, after the owner's reference), drawn once per chat. Plain inside:
- * a small count line on top, then each quote in a public channel (most seen first) as the quoting
- * channel's photo, name and followers, its words, and under them an outlined card of MY post (my
- * channel, when it was quoted, the post's picture and text, the quote's views). Quotes in private
+ * a small count line on top, then each quote in a public channel (most seen first): the quoting
+ * channel's photo, name and the time, its words, and under them a soft grey card of MY post (my
+ * channel, the post's picture and text), then the quote's views. Quotes in private
  * places are only a number at the bottom, never named. A row opens that quote: in this chat it
  * scrolls there; in a channel I have it opens there; in a public channel I don't follow it opens that
  * channel from outside, the way its fariin.com link does.
@@ -254,7 +254,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                                 }
                             }
                         }
-                        HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 0.5.dp, color = c.separator)
+                        HorizontalDivider(Modifier.padding(start = 16.dp + QuoteIndent), thickness = 0.5.dp, color = c.separator)
                     }
                     PostQuoteRules.hiddenLine(a.hidden)?.let { line ->
                         item {
@@ -291,94 +291,107 @@ private data class SourceCard(
     val thumb: ImageBitmap?,
 )
 
-/** One quote: who quoted, what they wrote, then my post as an outlined card. */
+/** My post's card fill: soft grey with no border (iOS systemGray6). */
+@Composable
+private fun cardFill(): Color = if (Fariin.colors.dark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+
+/** Where everything under a quote's first line starts: past the 32 dp photo and its 9 dp gap, under the name. */
+private val QuoteIndent = 41.dp
+
+/** Three quotes' shapes while the page loads, in the same layout as [QuoteRow]. */
 @Composable
 private fun QuotesSkeleton() {
     val c = Fariin.colors
     val grey = c.secondary.copy(alpha = 0.16f)
+    val fill = cardFill()
     val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "quotesSkeleton").animateFloat(
         1f, 0.45f, androidx.compose.animation.core.infiniteRepeatable(
             androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulse")
-    @Composable fun bar(w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp = 10.dp) =
+    @Composable fun bar(w: Dp, h: Dp = 10.dp) =
         Box(Modifier.width(w).height(h).clip(RoundedCornerShape(h / 2)).background(grey))
     Column(Modifier.fillMaxWidth().graphicsLayer { alpha = pulse }.padding(horizontal = 16.dp)) {
         repeat(3) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(grey))
-                    Spacer(Modifier.width(10.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { bar(120.dp); bar(70.dp, 8.dp) }
+                    Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(grey))
+                    Spacer(Modifier.width(9.dp)); bar(120.dp); Spacer(Modifier.weight(1f)); bar(36.dp, 8.dp)
                 }
-                bar(220.dp)
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .border(1.dp, grey, RoundedCornerShape(14.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(grey))
-                        Spacer(Modifier.width(8.dp)); bar(90.dp); Spacer(Modifier.weight(1f)); bar(36.dp, 8.dp)
+                Column(Modifier.padding(start = QuoteIndent)) {
+                    Box(Modifier.padding(top = 4.dp)) { bar(200.dp) }
+                    Column(Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .background(fill).padding(9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(16.dp).clip(RoundedCornerShape(5.dp)).background(grey))
+                            Spacer(Modifier.width(6.dp)); bar(90.dp, 8.dp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(grey))
+                            Spacer(Modifier.width(9.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { bar(150.dp, 8.dp); bar(100.dp, 8.dp) }
+                        }
                     }
-                    Row {
-                        Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(grey))
-                        Spacer(Modifier.width(10.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { bar(160.dp); bar(110.dp) }
-                    }
+                    Box(Modifier.padding(top = 6.dp)) { bar(50.dp, 8.dp) }
                 }
-                bar(40.dp, 8.dp)
             }
         }
     }
 }
 
+/**
+ * One quote (the owner's option 1, 2026-11-06): the quoting channel's photo, name, seal and the time
+ * on one line; under the name, their words; then my post in a soft grey card (my channel, the post's
+ * picture and words); its views last.
+ */
 @Composable
 private fun QuoteRow(q: QuotedIn, card: SourceCard, onTap: () -> Unit) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth().clickable(onClick = onTap).padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(q.photoUrl.ifEmpty { null }, 40.dp, squircle = true, kind = AvatarKind.of(true, true))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                NameAndSeal(q.title, q.verified, 16.sp, 15.dp)
-                Text(PostQuoteRules.followersLine(q.followers), fontSize = 12.sp, color = c.secondary, maxLines = 1)
-            }
-        }
-        if (q.text.isNotEmpty()) {
-            Text(q.text, fontSize = 15.sp, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp))
-        }
-        Column(
-            Modifier.padding(top = 8.dp).fillMaxWidth()
-                .border(1.dp, c.secondary.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
-                .padding(12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(card.photoUrl, 20.dp, squircle = true, kind = AvatarKind.of(true, true))
+            Avatar(q.photoUrl.ifEmpty { null }, 32.dp, squircle = true, kind = AvatarKind.of(true, true))
+            Spacer(Modifier.width(9.dp))
+            Box(Modifier.weight(1f)) { NameAndSeal(q.title, q.verified, 15.sp, 13.dp) }
+            if (q.at > 0) {
                 Spacer(Modifier.width(6.dp))
-                Box(Modifier.weight(1f)) { NameAndSeal(card.title, card.verified, 14.sp, 13.dp) }
-                if (q.at > 0) {
+                Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(q.at)), fontSize = 12.sp,
+                    color = c.secondary, maxLines = 1)
+            }
+        }
+        Column(Modifier.padding(start = QuoteIndent)) {
+            if (q.text.isNotEmpty()) {
+                Text(q.text, fontSize = 15.sp, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
+            Column(
+                Modifier.padding(top = 8.dp).fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp)).background(cardFill()).padding(9.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(card.photoUrl, 16.dp, squircle = true, kind = AvatarKind.of(true, true))
                     Spacer(Modifier.width(6.dp))
-                    Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(q.at)), fontSize = 12.sp,
-                        color = c.secondary, maxLines = 1)
+                    NameAndSeal(card.title, card.verified, 13.sp, 11.dp, c.secondary)
                 }
-            }
-            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Top) {
-                val shape = RoundedCornerShape(8.dp)
-                val pic = card.thumb
-                val icon = card.kindIcon
-                if (pic != null) {
-                    Image(pic, null, contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp).clip(shape))
-                    Spacer(Modifier.width(10.dp))
-                } else if (icon != null) {
-                    Box(Modifier.size(56.dp).clip(shape).background(c.secondary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                        Icon(icon, null, tint = c.secondary, modifier = Modifier.size(22.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val shape = RoundedCornerShape(8.dp)
+                    val pic = card.thumb
+                    val icon = card.kindIcon
+                    if (pic != null) {
+                        Image(pic, null, contentScale = ContentScale.Crop, modifier = Modifier.size(40.dp).clip(shape))
+                        Spacer(Modifier.width(9.dp))
+                    } else if (icon != null) {
+                        Box(Modifier.size(40.dp).clip(shape).background(c.secondary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                            Icon(icon, null, tint = c.secondary, modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(Modifier.width(9.dp))
                     }
-                    Spacer(Modifier.width(10.dp))
+                    Text(card.text, fontSize = 13.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f))
                 }
-                Text(card.text, fontSize = 14.sp, color = c.label, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f))
             }
-            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(13.dp))
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(PostQuoteRules.viewsLine(q.views), fontSize = 12.sp, color = c.secondary)
+                Text(PostQuoteRules.viewsLine(q.views), fontSize = 11.sp, color = c.secondary)
             }
         }
     }
@@ -386,10 +399,10 @@ private fun QuoteRow(q: QuotedIn, card: SourceCard, onTap: () -> Unit) {
 
 /** A bold name that gives way (ellipsis) before the blue seal does. */
 @Composable
-private fun NameAndSeal(name: String, verified: Boolean, size: TextUnit, seal: Dp) {
+private fun NameAndSeal(name: String, verified: Boolean, size: TextUnit, seal: Dp, color: Color = Fariin.colors.label) {
     val c = Fariin.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(name, fontSize = size, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
+        Text(name, fontSize = size, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (verified) {
             Spacer(Modifier.width(4.dp))
