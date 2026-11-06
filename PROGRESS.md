@@ -973,3 +973,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 13:03 e9d7cb6 Chat Key says "set on another device" (was "Hidden on this phone") + iOS Reset/Remove words;
   f4fc4ba (agent) Quotes rows option 1; 2d71e2a quotes without blue (owner). Safety / Invite Friends pages fine.
   Quote picture already rounded (10 dp clip). Checked on the Pixel.
+- 13:40 2e0808e (agent) Replies v2 under channel posts, checked on the Pixel in kk: bar "Reply" -> "3 Replies",
+  sheet header + tabs + empty state, send, like (red heart 1), answer threaded under its reply ("Replying to",
+  Hide replies), field above the keyboard, no crash. Test post deleted. Not tried: admin off toggles, 6 s refresh
+  from another phone, Delete of a reply.
