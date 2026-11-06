@@ -493,11 +493,11 @@ private fun ModeThumb(mode: AppAppearance) {
 @Composable
 private fun HelpAboutPage(pop: () -> Unit) {
     val ctx = LocalContext.current
-    var licences by remember { mutableStateOf(false) }
-    if (licences) { LicensesPage { licences = false }; return }
+    var appInfo by remember { mutableStateOf(false) }
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "1.0"
     }
+    if (appInfo) { AppInfoPage(version) { appInfo = false }; return }
     Column(Modifier.fillMaxSize()) {
         PageBar("Help & About", onBack = pop)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
@@ -511,10 +511,9 @@ private fun HelpAboutPage(pop: () -> Unit) {
                 header = "About",
                 footer = "One-to-one messages and calls are end-to-end encrypted. Made for Somalia.",
             ) {
-                SettingsRow("Version", value = version, trailing = Trailing.NONE)
+                SettingsRow("App info") { appInfo = true }
                 SettingsRow("Privacy Policy", trailing = Trailing.OUT_LINK) { openWeb(ctx, "https://fariin.com/privacy") }
-                SettingsRow("Terms & Conditions", trailing = Trailing.OUT_LINK) { openWeb(ctx, "https://fariin.com/terms") }
-                SettingsRow("Open-source licences", last = true) { licences = true }
+                SettingsRow("Terms & Conditions", trailing = Trailing.OUT_LINK, last = true) { openWeb(ctx, "https://fariin.com/terms") }
             }
         }
     }
