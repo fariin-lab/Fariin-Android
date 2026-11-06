@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Add
@@ -1065,6 +1066,22 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
     }
     // Only once the group is known: an empty doc read as "not public" and made a link for a public one.
     LaunchedEffect(cid, doc.isNotEmpty()) { if (doc.isNotEmpty() && list == null) reload() }
+    // iOS "Send in Fariin": the link goes into the chats I pick, as a plain text message.
+    var sendingLink by remember { mutableStateOf<String?>(null) }
+    val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    sendingLink?.let { url ->
+        if (myUid != null) com.fariin.app.ui.thread.ForwardSheet(myUid, onDismiss = { sendingLink = null }, title = "Share with") { targets ->
+            sendingLink = null
+            val crypto = com.fariin.app.data.CryptoHub.get(ctx.applicationContext)
+            scope.launch {
+                var ok = true
+                for (t in targets) try {
+                    com.fariin.app.data.ThreadRepository.openOrQuiet(t, myUid, crypto, scope).sendForwardedText(url, forwarded = false)
+                } catch (_: Exception) { ok = false }
+                Snack.show(if (ok) "Sent" else "Couldn't send. Try again.")
+            }
+        }
+    }
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't change the link") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     if (confirmReset) AlertDialog(onDismissRequest = { confirmReset = false }, containerColor = c.card, title = { Text("Reset Link") },
@@ -1092,6 +1109,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                     val revoked = l.revoked
                     if (!revoked) {
                         SettingsRow("Copy", icon = rememberVectorPainter(Icons.Filled.ContentCopy), trailing = Trailing.NONE) { copy(ctx, l.url); detail = null }
+                        SettingsRow("Send in Fariin", icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Send), trailing = Trailing.NONE) { detail = null; sendingLink = l.url }
                         SettingsRow("Share", icon = rememberVectorPainter(Icons.Filled.Share), trailing = Trailing.NONE) { share(ctx, l.url); detail = null }
                         SettingsRow("Edit", icon = rememberVectorPainter(Icons.Filled.Edit), trailing = Trailing.NONE) { detail = null; onEdit(l) }
                         SettingsRow("Revoke Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block)), titleColor = c.red, trailing = Trailing.NONE, last = true) { detail = null; revokeTarget = l }
@@ -1114,7 +1132,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                     if (publicName.isNotEmpty()) {
                         SettingsSection(header = "Public Link", footer = w("Anyone can find this group and join it with this link. Change it under Group Type.")) {
                             LinkPill("fariin.com/$publicName") { copy(ctx, "https://fariin.com/$publicName") }
-                            LinkButtons({ copy(ctx, "https://fariin.com/$publicName") }, { share(ctx, "https://fariin.com/$publicName") })
+                            LinkButtons({ copy(ctx, "https://fariin.com/$publicName") }, { sendingLink = "https://fariin.com/$publicName" }, { share(ctx, "https://fariin.com/$publicName") })
                         }
                     } else {
                         val p = l.primary
@@ -1122,7 +1140,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
                             else "Anyone with Fariin who has this link can join the group.")) {
                             if (p != null) {
                                 LinkPill(p.shortUrl) { copy(ctx, p.url) }
-                                LinkButtons({ copy(ctx, p.url) }, { share(ctx, p.url) })
+                                LinkButtons({ copy(ctx, p.url) }, { sendingLink = p.url }, { share(ctx, p.url) })
                                 Text(p.statusLine(now).substringBefore(" · "), fontSize = 14.sp, color = c.secondary,
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             } else {
@@ -1183,10 +1201,12 @@ private fun LinkPill(text: String, onCopy: () -> Unit) {
 }
 
 @Composable
-private fun LinkButtons(onCopy: () -> Unit, onShare: () -> Unit) {
+private fun LinkButtons(onCopy: () -> Unit, onSend: () -> Unit, onShare: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-        for ((label, icon, act) in listOf(Triple("Copy", Icons.Filled.ContentCopy, onCopy), Triple("Share", Icons.Filled.Share, onShare))) {
+        // iOS order: Copy, Send (into chats here), Share (out of the app).
+        for ((label, icon, act) in listOf(Triple("Copy", Icons.Filled.ContentCopy, onCopy),
+            Triple("Send", Icons.AutoMirrored.Filled.Send, onSend), Triple("Share", Icons.Filled.Share, onShare))) {
             Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = act).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(54.dp).clip(CircleShape).background(c.bgSecondary), contentAlignment = Alignment.Center) {
                     Icon(icon, label, tint = c.label, modifier = Modifier.size(24.dp))
