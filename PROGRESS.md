@@ -928,3 +928,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   name + Quote tag, time below; keyboard rises after picking the chat; test post deleted). Not done: quote counts
   in Statistics (Android's stats page has no Recent Posts section yet - gap). be50528 profile opened from a call
   shows the call's card (Nov 6 · Outgoing voice call · 4:00 AM), checked.
+- 10:37 e499979 Settings profile photo named for TalkBack (scanned Chats, Calls, Stories, Settings, a chat, a
+  profile, a channel for nameless clickables: only that one). e1b554c (agent) Statistics Recent Posts with quote
+  counts (iOS uses the same stats page for channels, so no separate page needed). Background: 0.4% CPU, no wake
+  locks after 30 s. Manage storage Keep Media order matches iOS (left).
