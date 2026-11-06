@@ -38,7 +38,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.FormatQuote
 import com.fariin.app.ui.components.floating
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
@@ -167,7 +166,7 @@ internal fun MessageMenu(
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
             // Quote a channel post into a chat of mine, with my own words (iOS, owner 2026-11-06):
             // only where Forward is offered.
-            if (!restricted && MessageRules.canForward(m) && ui.channel != null) add(MenuItem("Quote", Icons.Outlined.FormatQuote) {
+            if (!restricted && MessageRules.canForward(m) && ui.channel != null) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onQuote(m) })
             if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })

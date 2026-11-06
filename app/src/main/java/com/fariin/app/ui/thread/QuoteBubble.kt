@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -94,7 +93,7 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                     modifier = Modifier.weight(1f))
                 // A short "Quote" tag at the row's right end; the name shrinks to leave it room.
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.Filled.FormatQuote, null, tint = ink.copy(alpha = 0.55f), modifier = Modifier.size(14.dp))
+                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_quote), null, tint = ink.copy(alpha = 0.55f), modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(2.dp))
                 Text("Quote", fontSize = 12.sp, color = ink.copy(alpha = 0.55f), maxLines = 1)
             }

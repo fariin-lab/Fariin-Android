@@ -39,7 +39,6 @@ import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Edit
@@ -272,13 +271,15 @@ fun ChannelPostMenu(
     val ctx = LocalContext.current
     var more by remember { mutableStateOf(false) }
     val mine = ch.mine(m.id)
+    // The owner's quote mark (a speech bubble with two lines), as everywhere a quote shows.
+    val quoteIcon = ImageVector.vectorResource(com.fariin.app.R.drawable.ic_quote)
     val items = buildList {
         if (!m.deleted) {
             if (!ch.info.restricted && m.bodyText.isNotEmpty()) add(PostItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.bodyText) })
             if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward) { sharePost(ctx, ch.info, m) })
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m))
-                add(PostItem("Quote", Icons.Outlined.FormatQuote) { onDismiss(); onQuote(m) })
+                add(PostItem("Quote", quoteIcon) { onDismiss(); onQuote(m) })
             if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true) { ch.onReport(m) })
         }
         // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).

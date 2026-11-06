@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -226,7 +225,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
             when {
                 a != null && PostQuoteRules.isEmpty(a) -> item {
                     Column(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Filled.FormatQuote, null, tint = c.secondary, modifier = Modifier.size(36.dp))
+                        Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_quote), null, tint = c.secondary, modifier = Modifier.size(36.dp))
                         Text("No quotes yet", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                             modifier = Modifier.padding(top = 8.dp))
                     }
