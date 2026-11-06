@@ -70,16 +70,21 @@ object ChatList {
      */
     fun reactionPreview(c: Conversation, me: String, decryptor: MessageDecryptor, senderName: (String) -> String?): String? {
         if (!c.freshReaction(me)) return null
-        val emoji = decryptor.open(c, c.lastReactionEnc ?: return null, c.lastReactionBy)?.takeIf { it.isNotEmpty() && it != "…" && it != "🔒" } ?: return null
+        val raw = decryptor.open(c, c.lastReactionEnc ?: return null, c.lastReactionBy)?.takeIf { it.isNotEmpty() && it != "…" && it != "🔒" } ?: return null
+        // An animated or uploaded reaction ("ce_5", "cu_<id>") is never shown as its key: the line
+        // reads "Reacted" alone (2026-11-06).
+        val keyed = Regex("^(ce|cu)_[A-Za-z0-9]+$").matches(raw)
+        val emoji = if (keyed) "" else raw
         val words = c.lastReactionToEnc?.let { decryptor.open(c, it, c.lastReactionBy) }
         val on = if (words.isNullOrEmpty() || words == "…" || words == "🔒") "" else " to \"$words\""
-        if (c.lastReactionBy == me) return "You reacted $emoji$on"
+        val emo = if (emoji.isEmpty()) "" else " $emoji"
+        if (c.lastReactionBy == me) return "You reacted$emo$on"
         if (c.isGroup) {
             val n = senderName(c.lastReactionBy) ?: c.names[c.lastReactionBy] ?: "Someone"
-            return "${n.split(" ").first()} reacted $emoji$on"
+            return "${n.split(" ").first()} reacted$emo$on"
         }
-        if (on.isNotEmpty()) return "Reacted $emoji$on"
-        return if (c.lastReactionToAuthor == me) "Reacted $emoji to your message" else "Reacted $emoji"
+        if (on.isNotEmpty()) return "Reacted$emo$on"
+        return if (c.lastReactionToAuthor == me) "Reacted$emo to your message" else "Reacted$emo"
     }
 
     /** The preview line under the name. */
