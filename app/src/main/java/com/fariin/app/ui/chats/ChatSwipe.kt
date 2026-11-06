@@ -5,6 +5,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -158,19 +159,34 @@ internal fun SwipeToActRow(
     onAction: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val offset = remember(id) { Animatable(0f) }
+    // The row follows the finger directly: one number, written in the drag callback and read only
+    // while placing and drawing (owner 2026-11-06: "not smooth, it keeps jumping" — each move used to
+    // launch its own coroutine, and those could land out of order).
+    var x by remember(id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var widthPx by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    val armed by remember(id) { androidx.compose.runtime.derivedStateOf { -x > widthPx / 3f } }
     val scope = rememberCoroutineScope()
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
-    var widthPx by remember { mutableStateOf(1f) }
-    var armed by remember(id) { mutableStateOf(false) }
-    val settle = spring<Float>(dampingRatio = 0.85f, stiffness = 500f)
-    LaunchedEffect(enabled) { if (!enabled) offset.snapTo(0f) }
-    Box(Modifier.fillMaxWidth().height(IntrinsicSize.Min).clipToBounds()
-        .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }) {
-        val x = offset.value
-        if (x < 0f) Box(Modifier.matchParentSize().background(fill), contentAlignment = Alignment.CenterEnd) {
-            val grow by androidx.compose.animation.core.animateFloatAsState(if (armed) 1.15f else 1f, label = "swipeMark")
-            Column(Modifier.padding(end = 24.dp).graphicsLayer { scaleX = grow; scaleY = grow }, horizontalAlignment = Alignment.CenterHorizontally) {
+    var settleJob by remember(id) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    LaunchedEffect(armed) { if (armed) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
+    LaunchedEffect(enabled) { if (!enabled) { settleJob?.cancel(); x = 0f } }
+    fun settle(to: Float, velocity: Float, then: (() -> Unit)? = null) {
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            androidx.compose.animation.core.animate(x, to, velocity,
+                spring(dampingRatio = if (to == 0f) 0.85f else 1f, stiffness = if (to == 0f) 500f else 700f)) { v, _ -> x = v }
+            then?.invoke()
+        }
+    }
+    val drag = androidx.compose.foundation.gestures.rememberDraggableState { d ->
+        x = (x + d).coerceIn(-widthPx, 0f)
+    }
+    Box(Modifier.fillMaxWidth().onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }.clipToBounds()) {
+        // The action under the row, always there and drawn only while the row is pulled.
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = if (x < 0f) 1f else 0f }.background(fill),
+            contentAlignment = Alignment.CenterEnd) {
+            Column(Modifier.padding(end = 24.dp).graphicsLayer { val k = if (armed) 1.15f else 1f; scaleX = k; scaleY = k },
+                horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.height(4.dp))
                 Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
@@ -178,29 +194,20 @@ internal fun SwipeToActRow(
         }
         Box(
             Modifier.fillMaxWidth()
-                .offset { IntOffset(offset.value.roundToInt(), 0) }
-                .then(if (!enabled) Modifier else Modifier.pointerInput(id) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (armed) scope.launch {
-                                offset.animateTo(-widthPx, spring(dampingRatio = 1f, stiffness = 900f))
-                                onAction()
-                                offset.snapTo(0f)
-                            } else scope.launch { offset.animateTo(0f, settle) }
-                            armed = false
-                        },
-                        onDragCancel = { armed = false; scope.launch { offset.animateTo(0f, settle) } },
-                    ) { change, dx ->
-                        change.consume()
-                        scope.launch {
-                            val v = (offset.value + dx).coerceIn(-widthPx, 0f)
-                            offset.snapTo(v)
-                            val now = -v > widthPx / 3f
-                            if (now != armed) { armed = now; if (now) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
-                        }
-                    }
-                }),
+                .offset { IntOffset(x.roundToInt(), 0) }
+                // Opaque, so only the part the finger uncovers shows the action (the row itself is
+                // see-through, and the whole of it turned blue the moment a drag began).
+                .background(com.fariin.app.ui.theme.Fariin.colors.bg)
+                .then(if (!enabled) Modifier else Modifier.draggable(
+                    state = drag,
+                    orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
+                    onDragStarted = { settleJob?.cancel() },
+                    onDragStopped = { v ->
+                        // Past a third, or a quick flick to the left: it goes. Otherwise it springs back.
+                        if (armed || v < -2500f) settle(-widthPx, v) { onAction(); x = 0f }
+                        else settle(0f, v)
+                    },
+                )),
         ) { content() }
     }
 }
-
