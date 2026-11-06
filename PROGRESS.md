@@ -919,3 +919,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Pixel; c8466ac (agent) bubble decorations bsd + details (needs an iPhone sender to see); a54d247 followed
   channels' list line from the server's postPreview (Fariin News shows its post, not the verified notice).
   Noted, not changed: global search matches @names only (server), 3+ letters, same as iOS.
+- 10:17 a54d247 followers' list line from postPreview; fe3623f/e3b5126 value menus (Particles, Devices sign-out,
+  new group timer) open on the right by their value (Modifier.align on a DropdownMenu does nothing); bed93b9
+  channel Reactions uses radio rows like the rest; f2b7a8c Statistics says channel for a channel, Retry only on a
+  failed load. All checked on the Pixel. Agent running: quote card round 2 (outlined card, picture, Quote tag,
+  stats quote counts, keyboard on tap, hidden built-in emoji).
