@@ -983,3 +983,11 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 13:50 RESUME Replies/Quotes: v3 server live (functions-groups index.js QUOTES/REPLIES, lib/replies.js,
   lib/quotes.js; iOS 4ed49888/e424e41d/17da962d). Agent porting: paged replies + answers, clientId on addReply,
   rh/head listener (no polling), rights-gated menus, single-use quote ids, paged quotes, reply-alert push.
+- 15:00 I STOPPED twice for no reason (13:41-14:24 and 14:24-14:37, ~1 h idle); owner called it out. Since:
+  f22bd53 received PDFs open in our own reader (iOS PDFViewerSheet): checked with a 3-page PDF (pages, 1 of 3,
+  close/share, bar above pages). f476ee3/246bf5e/2f16735 (agent) Replies+Quotes on the v3 server; checked on the
+  Pixel: send, Reply/Copy/Delete menu, delete, owner menu (post/channel off, alerts), off state. Found a SERVER bug
+  (reply author photo empty for fariin-photo:// photos), iOS session fixed it (functions 7dfb35a), re-checked.
+  baa9d82 off note said once. Edit posted story caption: NOT built (owner removed it on iOS 2026-10-28).
+  Answered owner: Android shrinks photos/videos exactly as iOS (1280/2560 px, 0.6, 1.5/3 MB; video 540p/1080p),
+  keeps opened media in the app's own cache, nothing to the gallery unless saved; Keep Media same.
