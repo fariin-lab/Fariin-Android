@@ -1014,3 +1014,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   CALL to "kaz" (2 members) at 15:46:37; ended at 15:46:52 (server: groupCalls/kaz ended, no participants; a call
   card is in kaz). Fixed the method: every UI step chained with &&, scratchpad/home.sh refuses unless it is on the
   chat list, no raw-coordinate taps on pages with call buttons. Recorded in memory.
+- 15:56 a12ac95 group calls missing from Calls until restart (no server time yet -> sorted last; call end does not
+  move the chat) -> estimate time + re-read on start/end (built, tests pass, not phone-tested: needs another call).
+  Location compared (owner): WhatsApp on the Pixel (adnan chat, nothing sent; location allowed "only this time"):
+  map, live location, current location with accuracy, nearby places, search. Fariin Android: only "Send My Current
+  Location" + search, no map (iOS has map, pin, places). Agent rebuilding: MapLibre + OpenFreeMap (free, no key),
+  drag-to-pin, honest accuracy, Exact/Approximate privacy choice, places + search (Photon), map card + full map.
+  Live location left for later (needs server, iOS has none).
