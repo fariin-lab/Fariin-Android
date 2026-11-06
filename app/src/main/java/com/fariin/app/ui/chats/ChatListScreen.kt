@@ -986,11 +986,19 @@ fun ChatRow(
     val now = System.currentTimeMillis().toDouble()
     val muted = conv.isMuted(me, now)
     val keys by CryptoHub.keysEpoch.collectAsState()
-    val preview = remember(conv, me, keys) {
-        val raw = ChatList.previewLine(conv, me, decryptor) { null }
+    // Battery/lag audit 2026-11-06: no box is opened during composition. A line opened before
+    // shows at once; a new one opens on a background thread, the old words staying until then.
+    val photoLabel: (String) -> String = { raw ->
         // iOS photoPreviewLabel: with the little picture beside it the emoji goes ("Photo", not "📷 Photo").
         if (!conv.lastImageUrl.isNullOrEmpty()) listOf("📷 ", "🎥 ", "🎬 ").firstOrNull { raw.startsWith(it) }?.let { raw.removePrefix(it) } ?: raw else raw
     }
+    val cachedPreview = remember(conv, me, keys) { ChatList.cachedPreviewLine(conv, me, decryptor) { null }?.let(photoLabel) }
+    val openedPreview by androidx.compose.runtime.produceState<String?>(null, conv, me, keys) {
+        if (cachedPreview == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            photoLabel(ChatList.previewLine(conv, me, decryptor) { null })
+        }
+    }
+    val preview = cachedPreview ?: openedPreview ?: ""
     // iOS: a chat with unsent words in its box says "Draft:" (red) and the words, not the last line.
     // Only this chat's draft: reading the whole map redrew every row whenever any chat's draft
     // changed, which leaving a chat does (it saves or clears that chat's draft).

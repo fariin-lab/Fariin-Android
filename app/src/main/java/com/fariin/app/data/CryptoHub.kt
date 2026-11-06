@@ -88,4 +88,13 @@ class CryptoDecryptor(private val crypto: FariinCrypto) : MessageDecryptor {
 
     override fun open(conv: Conversation, sealed: String, author: String): String? =
         try { crypto.decrypt(sealed, conv.id, author) } catch (_: Exception) { null }
+
+    override fun peekPreview(conv: Conversation, me: String): String? {
+        val raw = conv.lastMessageCipher
+        if (raw.isEmpty()) return null
+        return crypto.cachedDecrypt(raw, conv.id, conv.lastSender) ?: ChatList.PEEK_MISS
+    }
+
+    override fun peekOpen(conv: Conversation, sealed: String, author: String): String? =
+        try { crypto.cachedDecrypt(sealed, conv.id, author) ?: ChatList.PEEK_MISS } catch (_: Exception) { null }
 }

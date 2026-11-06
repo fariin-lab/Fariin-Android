@@ -385,6 +385,13 @@ class FariinCrypto(
         return out
     }
 
+    /** [decrypt] with no box opened: the remembered open, or null when it would need one. Plain
+     *  and old lines need no box, so they answer as [decrypt] does. */
+    fun cachedDecrypt(raw: String, cid: String, authorId: String): String? {
+        if (!raw.startsWith(Wire.ENCG1) && !raw.startsWith(Wire.ENC1)) return decrypt(raw, cid)
+        return opened["$cid|$authorId|$raw"]
+    }
+
     private val opened: MutableMap<String, String> = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, String>(256, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 1500

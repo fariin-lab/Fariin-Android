@@ -11,6 +11,13 @@ fun interface MessageDecryptor {
 
     /** Any other sealed line of [conv] (a reaction's emoji, the words it was on), written by [author]. */
     fun open(conv: Conversation, sealed: String, author: String): String? = null
+
+    /** [previewText] without opening a box: [ChatList.PEEK_MISS] when it would have to. The
+     *  default is the real call, for openers that do no crypto work. */
+    fun peekPreview(conv: Conversation, me: String): String? = previewText(conv, me)
+
+    /** [open] without opening a box: [ChatList.PEEK_MISS] when it would have to. */
+    fun peekOpen(conv: Conversation, sealed: String, author: String): String? = open(conv, sealed, author)
 }
 
 object NoDecryptor : MessageDecryptor {
@@ -114,5 +121,24 @@ object ChatList {
             if (spoken && !who.isNullOrEmpty()) return "${who.split(" ").first()}: $text"
         }
         return text
+    }
+
+    /** What a peek returns when the line has not been opened yet. */
+    const val PEEK_MISS = "\u0000peek-miss"
+
+    /**
+     * [previewLine] from lines already opened, with no box opened now: null when one would have
+     * to be. The chat row shows this at once and opens the rest off the main thread.
+     */
+    fun cachedPreviewLine(c: Conversation, me: String, decryptor: MessageDecryptor, senderName: (String) -> String?): String? {
+        var missed = false
+        val peek = object : MessageDecryptor {
+            override fun previewText(conv: Conversation, me: String): String? =
+                decryptor.peekPreview(conv, me).let { if (it == PEEK_MISS) { missed = true; null } else it }
+            override fun open(conv: Conversation, sealed: String, author: String): String? =
+                decryptor.peekOpen(conv, sealed, author).let { if (it == PEEK_MISS) { missed = true; null } else it }
+        }
+        val line = previewLine(c, me, peek, senderName)
+        return if (missed) null else line
     }
 }

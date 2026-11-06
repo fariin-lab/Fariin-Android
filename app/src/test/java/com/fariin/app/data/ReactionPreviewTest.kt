@@ -34,4 +34,16 @@ class ReactionPreviewTest {
         assertEquals("Reacted 😂", line(conv("b", on = "sealed")))
         assertNull(ChatList.reactionPreview(conv("b", at = 500.0), "a", open) { null })
     }
+
+    @Test fun cachedLineOnlyWhenNothingToOpen() {
+        // An opener with no crypto work: the cached line is the full line.
+        assertEquals("Reacted 😂", ChatList.cachedPreviewLine(conv("b"), "a", open) { null })
+        // A line not opened yet: null, so the row opens it off the main thread.
+        val cold = object : MessageDecryptor {
+            override fun previewText(conv: Conversation, me: String) = "last words"
+            override fun peekPreview(conv: Conversation, me: String) = ChatList.PEEK_MISS
+        }
+        assertNull(ChatList.cachedPreviewLine(conv("b", at = 500.0), "a", cold) { null })
+        assertEquals("last words", ChatList.previewLine(conv("b", at = 500.0), "a", cold) { null })
+    }
 }
