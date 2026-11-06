@@ -998,3 +998,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   explain + Open Settings; Notifications page says "Notifications are off" when blocked. Location left denied
   (its prior state unknown; the app asks again on next use).
   UI: rotating a chat keeps the typed draft and lays out sideways.
+- 15:30 Screen Security checked on the Pixel: on = screenshot blocked + blank card in recents; turned off again.
+  c334b2e Replies | Quotes picked tab invisible in dark mode -> lifted grey (checked dark; Night Mode back to System).
+  Cold start 0.68-0.73 s (am start -W, 3 runs). Memory: open/close a chat 30 times, 130 -> 170 MB after the first
+  opens then flat (169.5 MB at 30): no leak.
