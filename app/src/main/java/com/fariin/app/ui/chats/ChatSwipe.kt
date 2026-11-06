@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -180,9 +182,6 @@ internal fun SwipeToActRow(
             then?.invoke()
         }
     }
-    val drag = androidx.compose.foundation.gestures.rememberDraggableState { d ->
-        x = (x + d).coerceIn(-widthPx, 0f)
-    }
     val c = com.fariin.app.ui.theme.Fariin.colors
     val density = LocalDensity.current
     val gapPx = with(density) { 8.dp.toPx() }
@@ -198,7 +197,8 @@ internal fun SwipeToActRow(
         spring(dampingRatio = 0.45f, stiffness = 600f), label = "swipePop")
     Box(Modifier.fillMaxWidth().onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }.clipToBounds()) {
         // The capsule: as wide as the uncovered space less the gap, laid out and drawn from x only.
-        Box(Modifier.matchParentSize().padding(vertical = 8.dp, horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+        // 4 dp above and below (owner 2026-11-06: "ours looks thin"; fuller, still not the full row).
+        Box(Modifier.matchParentSize().padding(vertical = 4.dp, horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
             Box(
                 Modifier.fillMaxHeight()
                     .layout { m, k ->
@@ -221,9 +221,9 @@ internal fun SwipeToActRow(
                     alpha = ((-x - with(density) { 56.dp.toPx() }) / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
                 }, horizontalAlignment = Alignment.CenterHorizontally) {
                     val ink = androidx.compose.ui.graphics.lerp(c.blue, Color.White, tone)
-                    Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(22.dp))
+                    Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.height(3.dp))
-                    Text(label, color = ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(label, color = ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }
@@ -239,16 +239,45 @@ internal fun SwipeToActRow(
                 }
                 // Opaque, so only the part the finger uncovers shows the action.
                 .background(c.bg)
-                .then(if (!enabled) Modifier else Modifier.draggable(
-                    state = drag,
-                    orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
-                    onDragStarted = { settleJob?.cancel() },
-                    onDragStopped = { v ->
-                        // Past a third, or a quick flick to the left: it goes. Otherwise it springs back.
-                        if (armed || v < -2500f) settle(-widthPx, v) { onAction(); x = 0f }
-                        else settle(0f, v)
-                    },
-                )),
+                .then(if (!enabled) Modifier else Modifier.pointerInput(id) {
+                    // Never steals a scroll (owner 2026-11-06): the row only takes the finger once it has
+                    // moved past the touch slop clearly to the LEFT, at least twice as far sideways as up
+                    // or down. Anything else (up, down, diagonal, rightward) is left to the list.
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val slop = viewConfiguration.touchSlop
+                        val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                        tracker.addPosition(down.uptimeMillis, down.position)
+                        var dragging = false
+                        var tx = 0f; var ty = 0f
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            tracker.addPosition(ch.uptimeMillis, ch.position)
+                            if (!ch.pressed) {
+                                if (dragging) {
+                                    val v = tracker.calculateVelocity().x
+                                    if (armed || v < -2500f) settle(-widthPx, v) { onAction(); x = 0f } else settle(0f, v)
+                                }
+                                break
+                            }
+                            val d = ch.position - ch.previousPosition
+                            if (!dragging) {
+                                if (ch.isConsumed) break      // the list is already scrolling
+                                tx += d.x; ty += d.y
+                                if (kotlin.math.abs(tx) > slop || kotlin.math.abs(ty) > slop) {
+                                    if (tx < 0f && kotlin.math.abs(tx) > kotlin.math.abs(ty) * 2f) {
+                                        dragging = true; settleJob?.cancel(); ch.consume()
+                                    } else break
+                                }
+                            } else {
+                                x = (x + d.x).coerceIn(-widthPx, 0f)
+                                ch.consume()
+                            }
+                        }
+                        if (dragging && x != 0f && settleJob?.isActive != true) settle(0f, 0f)   // cancelled mid-drag
+                    }
+                }),
         ) { content() }
     }
 }
