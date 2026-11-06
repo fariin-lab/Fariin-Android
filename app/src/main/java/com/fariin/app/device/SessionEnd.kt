@@ -35,8 +35,30 @@ object SessionEnd {
         wipe(c)
     }
 
+    /** Texts still in this account's send queue (they are wiped with the account on log out). */
+    fun unsentCount(): Int {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return 0
+        return runCatching { com.fariin.app.local.SendQueue.all(uid).size }.getOrDefault(0)
+    }
+
+    /** How many texts a remote sign-out dropped, for its notice; 0 once the notice is read. */
+    @Volatile var droppedByRevoke = 0
+
+    /** Pure, tested: the line the Log Out dialog and the remote sign-out notice add, or null. */
+    fun unsentLine(n: Int, afterRevoke: Boolean): String? = when {
+        n <= 0 -> null
+        afterRevoke -> if (n == 1) "1 message that was not sent yet could not be delivered."
+            else "$n messages that were not sent yet could not be delivered."
+        n == 1 -> "1 message is not sent yet. If you log out now, it will be lost. " +
+            "Wait until you are online so it can be sent, or log out anyway."
+        else -> "$n messages are not sent yet. If you log out now, they will be lost. " +
+            "Wait until you are online so they can be sent, or log out anyway."
+    }
+
     /** The server removed this phone (another phone signed in, or it was signed out from one). */
     suspend fun revokedSignOut(c: Context) {
+        // The server already ended this session, so nothing can wait: the count goes into the notice.
+        droppedByRevoke = unsentCount()
         DeviceRegistry.forgetAfterRevoke()
         Push.unregister(c)
         FirebaseAuth.getInstance().signOut()
@@ -89,10 +111,12 @@ object SessionEnd {
 /** The iOS alert after a remote sign-out, same wording, one OK. */
 @Composable
 fun SignedOutNotice(reason: DeviceRecord.Reason, onDismiss: () -> Unit) {
+    val lost = SessionEnd.unsentLine(SessionEnd.droppedByRevoke, afterRevoke = true)
+    val done = { SessionEnd.droppedByRevoke = 0; onDismiss() }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = done,
         title = { Text(DeviceRecord.noticeTitle(reason)) },
-        text = { Text(DeviceRecord.noticeMessage(reason)) },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        text = { Text(DeviceRecord.noticeMessage(reason) + (lost?.let { "\n\n$it" } ?: "")) },
+        confirmButton = { TextButton(onClick = done) { Text("OK") } },
     )
 }

@@ -373,14 +373,24 @@ private fun AccountPage(
         }
     }
     if (confirm) {
+        // Unsent texts are wiped with the account: say how many, and offer to wait (a send is tried now).
+        val unsent = remember { com.fariin.app.device.SessionEnd.unsentCount() }
+        val warning = com.fariin.app.device.SessionEnd.unsentLine(unsent, afterRevoke = false)
         AlertDialog(
             onDismissRequest = { confirm = false },
             title = { Text("Log out?") },
-            text = { Text("You'll need to log in again to use Fariin on this device.") },
+            text = { Text(warning ?: "You'll need to log in again to use Fariin on this device.") },
             confirmButton = {
-                TextButton(onClick = { confirm = false; onSignOut() }) { Text("Log Out", color = c.red) }
+                TextButton(onClick = { confirm = false; onSignOut() }) {
+                    Text(if (warning != null) "Log Out Anyway" else "Log Out", color = c.red)
+                }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel", color = c.label) } },
+            dismissButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    if (warning != null) com.fariin.app.AppLifecycle.reconnect()
+                }) { Text(if (warning != null) "Wait" else "Cancel", color = c.label) }
+            },
             containerColor = c.card,
             titleContentColor = c.label,
             textContentColor = c.label,
