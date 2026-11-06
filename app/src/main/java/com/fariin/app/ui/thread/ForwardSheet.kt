@@ -82,7 +82,10 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                 BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
                     cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
             }
-            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
+            // A search that finds nothing says so, rather than leaving an empty sheet.
+            if (shown.isEmpty()) Text(if (query.isBlank()) "No chats yet" else "No chats found", fontSize = 15.sp, color = c.secondary,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            else LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
                 items(shown, key = { it.id }) { conv ->
                     val on = conv.id in chosen
@@ -118,9 +121,10 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
     }
 }
 
-/** Chats a forward can land in: not a channel I only follow, not a request I sent that waits. */
+/** Chats a forward can land in: not a channel I only follow (its admins are its members and may post
+ *  there, as iOS canPostHere), not a request I sent that waits. */
 internal fun forwardable(conv: Conversation, me: String): Boolean {
-    if (conv.isChannel) return false
+    if (conv.isChannel && me !in conv.users) return false
     if (conv.users.isNotEmpty() && me !in conv.users) return false
     if (!conv.isGroup && conv.startedBy == me && !conv.accepted) return false
     return true

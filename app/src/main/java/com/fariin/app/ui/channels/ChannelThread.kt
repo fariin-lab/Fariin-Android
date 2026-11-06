@@ -13,6 +13,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -254,6 +256,7 @@ private data class PostItem(val title: String, val icon: ImageVector, val destru
 fun ChannelPostMenu(
     ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit,
     onCopy: (String) -> Unit, onDelete: (Message) -> Unit,
+    onQuote: ((Message) -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val ctx = LocalContext.current
@@ -263,6 +266,9 @@ fun ChannelPostMenu(
         if (!m.deleted) {
             if (!ch.info.restricted && m.bodyText.isNotEmpty()) add(PostItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.bodyText) })
             if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward) { sharePost(ctx, ch.info, m) })
+            // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
+            if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m))
+                add(PostItem("Quote", Icons.Outlined.FormatQuote) { onDismiss(); onQuote(m) })
             if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true) { ch.onReport(m) })
         }
         if (ch.role == Role.ADMIN) add(PostItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
@@ -287,26 +293,27 @@ fun ChannelPostMenu(
                             }
                         }
                     } else {
-                        // Up to six in one pill; a channel's own list past six wraps into a second row of six.
-                        val rows = ch.offered.chunked(com.fariin.app.data.ChannelReactions.PER_ROW).ifEmpty { listOf(emptyList()) }
-                        val shape = if (rows.size > 1) RoundedCornerShape(26.dp) else CircleShape
-                        Column(Modifier.shadow(8.dp, shape).clip(shape).background(c.card).padding(horizontal = 6.dp, vertical = 4.dp)) {
-                            rows.forEachIndexed { r, row ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    for (e in row) {
-                                        Box(
-                                            Modifier.size(44.dp).clip(CircleShape)
-                                                .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
-                                                .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
-                                            contentAlignment = Alignment.Center,
-                                        ) { com.fariin.app.ui.thread.ReactionGlyph(e, 26.sp, 32.dp) }
-                                    }
-                                    if (r == rows.lastIndex && ch.pickable.size > ch.offered.size) {
-                                        Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },
-                                            contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "More reactions", tint = c.secondary)
-                                        }
-                                    }
+                        // One pill, at most seven slots wide (iOS d0617d33): a channel's longer list (up to 12)
+                        // scrolls sideways inside it instead of growing past the screen or into a second row.
+                        Row(
+                            Modifier.shadow(8.dp, CircleShape).clip(CircleShape).background(c.card)
+                                .widthIn(max = 44.dp * 7 + 12.dp)
+                                .horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            for (e in ch.offered) {
+                                Box(
+                                    Modifier.size(44.dp).clip(CircleShape)
+                                        .background(if (ChannelRules.sameEmoji(mine, e)) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
+                                        .clickable { ch.onReact(m, ChannelRules.nextPick(mine, e)); onDismiss() },
+                                    contentAlignment = Alignment.Center,
+                                ) { com.fariin.app.ui.thread.ReactionGlyph(e, 26.sp, 32.dp) }
+                            }
+                            if (ch.pickable.size > ch.offered.size) {
+                                Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "More reactions", tint = c.secondary)
                                 }
                             }
                         }

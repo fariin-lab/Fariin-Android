@@ -385,7 +385,7 @@ private fun ThreadContent(
     postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
-            onDelete = { deleteFor = it })
+            onDelete = { deleteFor = it }, onQuote = { quoteFor = it })
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
     infoFor?.let { m -> MessageInfoSheet(m, ui, is24h) { infoFor = null } }
