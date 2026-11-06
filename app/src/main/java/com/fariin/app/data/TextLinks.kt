@@ -22,7 +22,9 @@ object TextLinks {
      * A domain typed without a scheme ("fariin.com", "x.so/abc"), as the system link detector finds it
      * (iOS 9332362b). Only real endings count, so "photo.jpg", "v1.2" and "e.g." stay words.
      */
-    private val BARE = Regex("""(?i)\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+([a-z]{2,24})\b(?:[/?#][^\s<>"]*)?""")
+    // Starts only where a word starts and allows at most 10 parts of at most 63 letters, so its work
+    // stays small on any text: unbounded, "a.a.a.a..." took ~180 ms per 4,000 characters to draw.
+    private val BARE = Regex("""(?i)(?<![\w.@-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.){1,10}([a-z]{2,24})\b(?:[/?#][^\s<>"]*)?""")
     private val TLDS = setOf(
         "com", "net", "org", "io", "so", "co", "app", "dev", "me", "info", "biz", "ai", "gg", "ly", "tv", "fm",
         "xyz", "site", "online", "store", "shop", "news", "blog", "link", "live", "tech", "cloud", "page", "edu",
@@ -31,7 +33,9 @@ object TextLinks {
         "my", "id", "ph", "th", "vn", "ae", "sa", "qa", "kw", "om", "eg", "ma", "ng", "ke", "et", "dj", "za", "br",
         "mx", "ar", "cl", "eu", "to", "ws", "cc",
     )
-    private val EMAIL = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}""")
+    // Every repeat is bounded: an unbounded domain part made the regex engine recurse once per
+    // part, and a message like "x@a.a.a.a..." overflowed the stack and crashed the chat.
+    private val EMAIL = Regex("""(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){0,8}\.[A-Za-z]{2,24}""")
     private val HANDLE = Regex("""@([A-Za-z0-9_]{3,24})""")
     /** Off: iOS links no phone numbers. */
     const val LINK_PHONES = false
@@ -52,7 +56,10 @@ object TextLinks {
             out += Span(s, s + raw.length, Kind.WEB, url)
         }
         // Emails before bare domains, so "abc@def.com" stays one email.
-        val emails = EMAIL.findAll(text).map { it.range }.toList()
+        // An email needs an "@": without one the pattern is not run at all (it rescans from every
+        // letter, which on a long run like "a.a.a..." cost a frame).
+        val hasAt = text.indexOf('@') >= 0
+        val emails = if (hasAt) EMAIL.findAll(text).map { it.range }.toList() else emptyList()
         for (m in BARE.findAll(text)) {
             val s = m.range.first
             if (s > 0 && (wordy(text[s - 1]) || text[s - 1] in "./-:")) continue
@@ -63,7 +70,7 @@ object TextLinks {
             if (emails.any { s <= it.last && it.first < e }) continue
             if (free(s, e)) out += Span(s, e, Kind.WEB, "https://$raw")
         }
-        for (m in EMAIL.findAll(text)) {
+        if (hasAt) for (m in EMAIL.findAll(text)) {
             val s = m.range.first
             var e = m.range.last + 1
             if (s > 0 && (wordy(text[s - 1]) || text[s - 1] == '.')) continue
@@ -71,7 +78,7 @@ object TextLinks {
             if (e < text.length && (text[e].isLetterOrDigit() || text[e] == '_' || text[e] == '@')) continue
             if (free(s, e)) out += Span(s, e, Kind.EMAIL, text.substring(s, e))
         }
-        for (m in HANDLE.findAll(text)) {
+        if (hasAt) for (m in HANDLE.findAll(text)) {
             val s = m.range.first
             val e = m.range.last + 1
             if (s > 0 && (wordy(text[s - 1]) || text[s - 1] == '.' || text[s - 1] == '/')) continue

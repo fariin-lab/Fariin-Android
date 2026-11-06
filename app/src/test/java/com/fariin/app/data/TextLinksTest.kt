@@ -76,4 +76,12 @@ class TextLinksTest {
         assertEquals("https://fariin.com/vee", LinkPreviews.firstUrl("look fariin.com/vee"))
         assertEquals(null, LinkPreviews.firstUrl("http://plain.com"))         // previews stay https only
     }
+
+    @Test fun bareDomainsStayFastOnHostileText() {
+        for (t in listOf("a.".repeat(2000), "a-".repeat(2000), "ab.".repeat(1400), "x@" + "a.".repeat(2000), "a.".repeat(2000) + "@x")) {
+            val start = System.nanoTime()
+            TextLinks.find(t)
+            assertTrue("too slow on ${t.take(6)}...", (System.nanoTime() - start) / 1_000_000 < 50)
+        }
+    }
 }
