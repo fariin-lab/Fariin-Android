@@ -144,9 +144,21 @@ fun PostShareButton(ch: ChannelThreadUi, m: Message) {
     ) { Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = "Share", tint = c.secondary, modifier = Modifier.size(18.dp)) }
 }
 
+/**
+ * A post's words for Share. A location card goes out as its place and coordinates, a contact card as
+ * nothing (the channel link alone): the card marker is never shown as text.
+ */
+internal fun shareBody(m: Message): String? {
+    com.fariin.app.data.CardRules.location(m.text)?.let { l ->
+        return com.fariin.app.data.CardRules.title(l) + "\n" + com.fariin.app.data.CardRules.coords(l.lat, l.lon)
+    }
+    if (com.fariin.app.data.CardRules.isCard(m.text)) return null
+    return m.bodyText.takeIf { it.isNotBlank() }
+}
+
 fun sharePost(ctx: android.content.Context, info: ChannelInfo, m: Message) {
     val link = if (info.username.isEmpty()) "" else "https://fariin.com/${info.username}"
-    val text = listOf(m.bodyText.takeIf { it.isNotBlank() }, link.ifEmpty { null }).filterNotNull().joinToString("\n\n")
+    val text = listOf(shareBody(m), link.ifEmpty { null }).filterNotNull().joinToString("\n\n")
     if (text.isEmpty()) return
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
     ctx.startActivity(Intent.createChooser(send, "Share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -277,7 +289,8 @@ fun ChannelPostMenu(
     val quoteIcon = ImageVector.vectorResource(com.fariin.app.R.drawable.ic_quote)
     val items = buildList {
         if (!m.deleted) {
-            if (!ch.info.restricted && m.bodyText.isNotEmpty()) add(PostItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.bodyText) })
+            // A contact or location card is no text to copy (as the chat menu, MessageActions).
+            if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.bodyText) })
             if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward) { sharePost(ctx, ch.info, m) })
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m))
@@ -343,7 +356,7 @@ fun ChannelPostMenu(
                     Spacer(Modifier.height(10.dp))
                 }
                 Text(
-                    if (m.deleted) "This post was deleted" else m.bodyText.ifEmpty { "Post" },
+                    if (m.deleted) "This post was deleted" else com.fariin.app.data.CardRules.previewWord(m.text) ?: m.bodyText.ifEmpty { "Post" },
                     fontSize = 15.sp, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp))
                         .background(if (c.dark) Color(0xFF26262B) else Color(0xFFF2F2F2)).padding(horizontal = 14.dp, vertical = 8.dp),

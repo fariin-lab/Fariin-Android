@@ -15,6 +15,10 @@ class ChannelPostLineTest {
         assertEquals("Post", ChatList.channelPostLine(ch("", "something-new")))
     }
 
+    @Test fun cardMarkerNeverShown() {
+        assertEquals("Location", ChatList.channelPostLine(ch("fariin-location:47.93|-97.02|Near East Grand Forks", "text")))
+    }
+
     @Test fun noPostYet() {
         assertEquals("No posts yet", ChatList.channelPostLine(ch(null, null)))
     }

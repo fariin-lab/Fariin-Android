@@ -413,7 +413,7 @@ internal fun LocationMapPage(loc: CardRules.Location, approx: Boolean, onDismiss
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         PageButton("Directions", Icons.Filled.Directions, filled = true, Modifier.weight(1f)) { openDirections(ctx, loc) }
-                        PageButton("Copy coordinates", Icons.Filled.ContentCopy, filled = false, Modifier.weight(1f)) { copyCoordinates(ctx, loc) }
+                        PageButton("Copy", Icons.Filled.ContentCopy, filled = false, Modifier.weight(1f)) { copyCoordinates(ctx, loc) }
                     }
                 }
             }

@@ -1035,3 +1035,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 16:29 Location agent 34a6788 + 991cc8d (MapLibre map, drag-to-pin, Exact/Approximate, Photon places, map card;
   APK +50 MB all ABIs, ~+13 MB arm64 from Play). Pixel: map, address, "Within 29 m", drag updates address,
   Places In This Area lists real places. Fixed: Approximate showed "Within 6 m" under a 1 km area.
+- 16:41 Location on the Pixel (kk, Approximate, posts deleted after): map card with area circle, full map,
+  Directions hands to Google Maps. Fixed: full map "Copy coordina…" cut off (now "Copy"); a channel post's
+  long-press showed the raw "fariin-location:47.93|..." text and offered Copy, Share sent the marker, and a
+  follower's list line would show it. Now "Location", no Copy, Share = place + coordinates. home.sh no longer
+  leaves chat search open after a cold start (script bug, not the app).

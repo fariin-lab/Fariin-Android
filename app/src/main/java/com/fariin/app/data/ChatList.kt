@@ -134,7 +134,8 @@ object ChatList {
     /** A follower's line for a channel: the last post's words, else a word for its kind; "No posts yet". */
     fun channelPostLine(c: Conversation): String {
         if (c.postPreviewText == null && c.postPreviewType == null) return "No posts yet"
-        c.postPreviewText?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        // A location or contact card's marker text is never shown: its word instead ("Location").
+        c.postPreviewText?.trim()?.takeIf { it.isNotEmpty() }?.let { return CardRules.previewWord(it) ?: it }
         return when (c.postPreviewType) {
             "image" -> "Photo"
             "video" -> "Video"
