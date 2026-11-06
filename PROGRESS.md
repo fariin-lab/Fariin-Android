@@ -897,3 +897,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   device-tested: chooser account only); da6d97a (agent) multi-select Selected Emoji, checked on kk (restored to Any).
   Walked and fine: cold start, Chats/Stories/Calls/Settings, Notifications, Appearance, Privacy, Storage, Power
   Saving, + sheet, long-press menus, channel owner card. Tool: scratchpad/tt.sh taps a node by its text.
+- 08:10 d358ce7 group card in the channel card's frame + group symbol; 54f5832 group symbol in the chat picker and
+  recent actions; 59eeb5e (agent) server-only channel edit history, notices for admins only, quote without words;
+  e233827 quote-only preview "Quoted post". Checked on the Pixel: quote with an empty field sends, list shows
+  "Quoted post", after deleting it falls back to "Channel created". Call info -> profile, New Call: fine.
