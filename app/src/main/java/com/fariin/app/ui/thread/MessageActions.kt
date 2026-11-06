@@ -54,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -409,14 +408,15 @@ internal fun ComposerBar(title: String, text: String, thumb: (@Composable () -> 
 internal fun JumpArrow(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Fariin.colors
     Box(modifier) {
+        // iOS: a 40 glass circle, the chevron in the text colour; the count 11 bold on blue, 9 above it.
         Box(
-            Modifier.size(40.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(c.card).clickable(onClick = onClick),
+            Modifier.size(40.dp).floating().clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.KeyboardArrowDown, "Jump to the newest message", tint = c.secondary, modifier = Modifier.size(28.dp)) }
+        ) { Icon(Icons.Filled.KeyboardArrowDown, "Jump to the newest message", tint = c.label, modifier = Modifier.size(28.dp)) }
         if (count > 0) Text(
-            if (count > 99) "99+" else "$count", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
-            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-8).dp).clip(CircleShape).background(c.blue)
-                .padding(horizontal = 6.dp, vertical = 1.dp),
+            if (count > 99) "99+" else "$count", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
+            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-9).dp).clip(CircleShape).background(c.blue)
+                .padding(horizontal = 5.dp, vertical = 1.dp),
         )
     }
 }

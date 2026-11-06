@@ -1,6 +1,11 @@
 package com.fariin.app.ui.call
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Videocam
@@ -12,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -37,20 +41,13 @@ import com.google.firebase.auth.FirebaseAuth
 fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, photoUrl: String?) {
     if (cid.isEmpty() || FirebaseAuth.getInstance().currentUser == null) return
     val ctx = LocalContext.current
-    val tint = Fariin.colors.accent
-    // No side padding on a narrow phone: the chat's name needs the room (see ThreadScreen Header).
-    val side = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 360) 0.dp else 4.dp
     if (!isGroup) {
         val peer = Wire.otherUid(cid, me)
         if (peer.isEmpty() || peer == me) return
-        // One floating capsule, video then voice, outline icons (iOS ChatHeaderView call pill).
-        Row(Modifier.padding(horizontal = side)) {
-            IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = true) }) {
-                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Video call", tint = tint)
-            }
-            IconButton(onClick = { CallActivity.startDial(ctx, peer, title, photoUrl, video = false) }) {
-                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), contentDescription = "Voice call", tint = tint)
-            }
+        // One glass capsule, video then voice (iOS 26 bar button group: 44 high, 22 icons in the label colour).
+        CallCapsule {
+            CallSlot(com.fariin.app.R.drawable.ic_call_video, "Video call") { CallActivity.startDial(ctx, peer, title, photoUrl, video = true) }
+            CallSlot(com.fariin.app.R.drawable.ic_call_voice, "Voice call") { CallActivity.startDial(ctx, peer, title, photoUrl, video = false) }
         }
         return
     }
@@ -63,18 +60,31 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         onDispose { reg.remove(); conv.remove() }
     }
     if (live) {
-        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false) }, modifier = Modifier) {
-            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), contentDescription = "Join call", tint = tint)
+        CallCapsule {
+            CallSlot(com.fariin.app.R.drawable.ic_call_voice, "Join call", width = 44.dp) { CallActivity.startGroup(ctx, cid, title, video = false) }
         }
         return
     }
     if (!mayStart) return
-    Row(Modifier.padding(horizontal = side)) {
-        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }) {
-            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), contentDescription = "Group video call", tint = tint)
-        }
-        IconButton(onClick = { CallActivity.startGroup(ctx, cid, title, video = false, start = true) }) {
-            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), contentDescription = "Group voice call", tint = tint)
-        }
+    CallCapsule {
+        CallSlot(com.fariin.app.R.drawable.ic_call_video, "Group video call") { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }
+        CallSlot(com.fariin.app.R.drawable.ic_call_voice, "Group voice call") { CallActivity.startGroup(ctx, cid, title, video = false, start = true) }
+    }
+}
+
+/** The calls' glass capsule, 44 high (one button alone is a 44 circle). */
+@Composable
+private fun CallCapsule(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    Row(Modifier.height(44.dp).floating(CircleShape), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, content = content)
+}
+
+/** One call button in the capsule: a 48 x 44 slot (the recording's spacing), a 22 icon. */
+@Composable
+private fun CallSlot(icon: Int, label: String, width: androidx.compose.ui.unit.Dp = 48.dp, onClick: () -> Unit) {
+    androidx.compose.foundation.layout.Box(
+        Modifier.size(width, 44.dp).clickable(onClick = onClick).semantics { role = Role.Button },
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = label, tint = Fariin.colors.label, modifier = Modifier.size(22.dp))
     }
 }

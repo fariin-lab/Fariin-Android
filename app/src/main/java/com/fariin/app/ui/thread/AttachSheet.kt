@@ -109,6 +109,8 @@ internal fun AttachSheet(
     /** The Location page and the contact picker (CardSheets); the sheet goes down before either opens. */
     onLocation: (() -> Unit)? = null,
     onContact: (() -> Unit)? = null,
+    /** Opened from the field's camera: the camera comes up at once, and a cancelled shot closes the sheet. */
+    cameraFirst: Boolean = false,
     /** The GIF tile (iOS attach bar): a GIPHY pick, sent like the sticker panel's. Null hides it. */
     onGif: ((com.fariin.app.data.StickerGifRules.Gif) -> Unit)? = null,
 ) {
@@ -174,6 +176,7 @@ internal fun AttachSheet(
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val u = shotUri
         if (ok && u != null && picked.size < MediaRules.MEDIA_PER_PICK) picked += u
+        else if (cameraFirst && picked.isEmpty()) onDismiss()
     }
     val launchCamera = {
         runCatching {
@@ -186,13 +189,19 @@ internal fun AttachSheet(
         Unit
     }
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) launchCamera() else com.fariin.app.ui.components.Snack.show("Allow the camera in Settings to take a photo.")
+        if (ok) launchCamera() else {
+            com.fariin.app.ui.components.Snack.show("Allow the camera in Settings to take a photo.")
+            if (cameraFirst) onDismiss()
+        }
     }
     val openCamera = {
         if (mediaOff != null) com.fariin.app.ui.components.Snack.show(mediaOff)
         else if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED) launchCamera()
         else askCamera.launch(android.Manifest.permission.CAMERA)
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (cameraFirst) { if (mediaOff != null) { com.fariin.app.ui.components.Snack.show(mediaOff); onDismiss() } else openCamera() }
     }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         // Kept for the Files page's Recent list (iOS RecentFiles), then sent.

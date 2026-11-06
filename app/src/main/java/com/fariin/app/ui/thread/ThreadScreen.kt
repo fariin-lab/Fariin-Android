@@ -19,6 +19,7 @@ import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.filled.Add
@@ -67,6 +68,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.tappableElement
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -507,6 +512,15 @@ private fun ThreadContent(
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val walled = com.fariin.app.ui.components.hasChatWallpaper(ui.cid)
+    // Glass at the edges only where PowerState allows it (see ThreadEdgeGlass.kt).
+    val glass = com.fariin.app.perf.rememberPowerState().glass() && !walled
+    val hazeState = remember { dev.chrisbanes.haze.HazeState() }
+    val edgeHaze = if (glass) hazeState else null
+    // Messages under the header: the list can go further back (it is reversed). Under the composer:
+    // it can come further forward. Read through derivedStateOf, so a scroll recomposes only on a flip.
+    val olderUnder by remember { derivedStateOf { listState.canScrollForward } }
+    val newerUnder by remember { derivedStateOf { listState.canScrollBackward } }
+    val searchList = search.active && search.asList && search.matches.isNotEmpty()
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
@@ -522,18 +536,18 @@ private fun ThreadContent(
             onDispose { StickerSendHook.send = null }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
+            // The scroll edges (ThreadEdgeGlass.kt): under the header and over the composer, blurred
+            // glass only while messages sit under them. Over a wallpaper the page colour read as a
+            // pale band, so there the header keeps the wallpaper strip and the bottom has nothing.
+            if (!walled) {
+                ThreadEdgeGlass(edgeHaze, top = true, barPx = topBarPx, under = olderUnder && !searchList,
+                    modifier = Modifier.align(Alignment.TopCenter).zIndex(0.5f))
+                ThreadEdgeGlass(edgeHaze, top = false, barPx = bottomBarPx, under = newerUnder && !searchList,
+                    modifier = Modifier.align(Alignment.BottomCenter).zIndex(0.5f))
+            }
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
-                // Over a wallpaper the page-colour fade read as a pale band: it steps aside then.
-                .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) /* the same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind */ else Modifier.drawBehind {
-                    // The page colour all the way down the header, then a 24 dp fade below it, so a
-                    // bubble passing under never shows behind the name or the call buttons (it did
-                    // when the fade ran out inside the header).
-                    val tail = 24.dp.toPx()
-                    val h = size.height + tail
-                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(
-                        0f to c.bg, (size.height / h) to c.bg.copy(alpha = 0.94f), 1f to c.bg.copy(alpha = 0f), endY = h),
-                        size = androidx.compose.ui.geometry.Size(size.width, h))
-                })
+                // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
+                .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier)
                 .onSizeChanged { topBarPx = it.height }) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
                     // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).
@@ -568,7 +582,7 @@ private fun ThreadContent(
             androidx.compose.runtime.CompositionLocalProvider(LocalTimerMark provides timerMark, LocalSearchTerm provides search.term,
                 LocalBubbleLinkTap provides linkTap) {
             LazyColumn(
-                Modifier.fillMaxSize(), state = listState, reverseLayout = true,
+                Modifier.fillMaxSize().then(if (edgeHaze != null) Modifier.hazeSource(edgeHaze) else Modifier), state = listState, reverseLayout = true,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
             ) {
                 itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId }) { _, i ->
@@ -722,7 +736,8 @@ private fun ThreadContent(
             if (!atBottom && !search.active) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
                     scope.launch { listState.animateScrollToItem(0) }
-                }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = with(density) { bottomBarPx.toDp() } + 12.dp))
+                // iOS: at the composer's side margin, 10 above it, over the edge glass.
+                }, modifier = Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp))
             }
         }
         // The bottom bar floats over the end of the chat too (iOS paints no bar behind its controls):
@@ -795,6 +810,8 @@ private fun ThreadContent(
                     }
                 }
                 var attachOpen by remember { mutableStateOf(false) }
+                // The field's camera opens the same sheet straight onto the camera (iOS showCamera).
+                var attachCamera by remember { mutableStateOf(false) }
                 var pollOpen by remember { mutableStateOf(false) }
                 var locationOpen by remember { mutableStateOf(false) }
                 var contactOpen by remember { mutableStateOf(false) }
@@ -812,7 +829,8 @@ private fun ThreadContent(
                     val stop = slow() ?: links
                     if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids)
                 }
-                if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false },
+                if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false; attachCamera = false },
+                    cameraFirst = attachCamera,
                     onSendMedia = { uris, cap, once ->
                         val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
                             else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
@@ -855,6 +873,10 @@ private fun ThreadContent(
                         }
                     }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
                     onRowPlaced = { sendMotion.composerRow = it },
+                    onCamera = {
+                        val stop = held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
+                        if (stop != null) actions.onNotice(stop) else { attachCamera = true; attachOpen = true }
+                    },
                     initialDraft = actions.draft, onDraft = { actions.onDraft(it); linkText = it },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
@@ -902,13 +924,14 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
     // A narrow phone (under 360 dp): tighter spacing and a smaller photo, or the name got about
     // 60 dp beside the call buttons ("Fam…" on a 320 dp Android 8.1 phone, 2026-11-05).
     val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 360
+    // No bar of its own (iOS 26 chat header, measured on the owner's 2026-11-05 recording): a 44 glass
+    // circle for back 16 from the edge, the 40 photo 16 after it, the name 12 after the photo, and one
+    // 44-high glass capsule for the calls 16 from the right edge. The messages run under all of it.
+    val side = if (narrow) 8.dp else 16.dp
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Back in its own floating circle, the chevron as iOS (ChatHeaderView).
-            IconButton(onClick = onBack, modifier = Modifier.padding(start = if (narrow) 0.dp else 4.dp, end = if (narrow) 2.dp else 8.dp).size(44.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Back", tint = c.label,
-                    modifier = Modifier.padding(start = 6.dp).size(20.dp))
-            }
+        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = side), verticalAlignment = Alignment.CenterVertically) {
+            com.fariin.app.ui.components.FloatingBack(onBack, circle = true)
+            Spacer(Modifier.width(if (narrow) 8.dp else 16.dp))
             // Photo and name beside it; the whole block opens the profile.
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
@@ -916,23 +939,23 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
                 Spacer(Modifier.width(if (narrow) 8.dp else 12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(ui.title, style = MaterialTheme.typography.titleMedium, color = c.label,
+                        Text(ui.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         // A verified channel: the blue tick beside its name (iOS ChatHeaderView).
                         if (ui.channel?.info?.verified == true) {
-                            Spacer(Modifier.width(4.dp))
-                            Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(17.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(16.dp))
                         }
                         // The timer is on: a small mark beside the name (iOS ChatHeaderView secondary icon).
                         if (ui.disappearSeconds > 0) {
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(5.dp))
                             Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing),
                                 contentDescription = "Disappearing messages on", tint = c.secondary, modifier = Modifier.size(16.dp))
                         }
                     }
                     // The second line's room is kept even while it is empty, so the name never jumps when
                     // "online" or "typing…" arrives (owner 2026-11-04).
-                    Text(ui.subtitle.ifEmpty { " " }, style = MaterialTheme.typography.bodySmall, color = c.secondary, maxLines = 1)
+                    Text(ui.subtitle.ifEmpty { " " }, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.secondary, maxLines = 1)
                 }
             }
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
@@ -942,18 +965,19 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
 }
 
 /**
- * The header's overflow (Android top bar): Search in this chat and Mute, the two things people
- * reach for most, without a trip through the info page.
+ * The header's overflow: Search in this chat and Mute. iOS has no such button; both live on the
+ * profile, group and channel pages opened from the name. The one chat whose page lacks them is the
+ * chat with myself (my own profile shows no Search), so the menu stays there, in a glass circle.
  */
 @Composable
 private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
-    if (ui.cid.isEmpty()) return
+    if (ui.cid.isEmpty() || ui.isGroup || ui.channel != null) return
+    val peer = com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me)
+    if (peer.isNotEmpty() && peer != ui.me) return
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
-    Box(Modifier.padding(start = 6.dp, end = 4.dp)) {
-        IconButton(onClick = { open = true }, modifier = Modifier.size(44.dp)) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
-        }
+    Box(Modifier.padding(start = 8.dp)) {
+        com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { open = true }, circle = true)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })
@@ -1451,6 +1475,8 @@ private fun Composer(
     mentions: MentionSource? = null,
     /** The field / record bar row's place on screen, where a send flies from (SendMotion.kt). */
     onRowPlaced: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
+    /** The camera in the field (iOS, 2026-10-15); null hides it. */
+    onCamera: (() -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1538,15 +1564,18 @@ private fun Composer(
         }
     }
 
-    // As iOS ChatComposerView: a floating "+" (the attach sheet), the floating message pill with the
-    // emoji button inside, and a floating round button that is the mic until there are words, then Send.
+    // As iOS ChatComposerView: a 40 glass "+" (the attach sheet), the glass message pill with the
+    // camera and the sticker button inside, and a 40 glass circle that is the mic until there are
+    // words, then Send. No bar behind them: the chat's bottom edge strip (ThreadEdgeGlass) is that.
     var emojiOpen by rememberSaveable { mutableStateOf(false) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val field = MaterialTheme.colorScheme.surfaceContainerHigh
-    // A soft wash, not a bar: clear at the top, the page colour behind the controls (iOS composer).
-    val walled = com.fariin.app.data.ChatLookStore.openCid.value?.let { com.fariin.app.ui.components.hasChatWallpaper(it) } == true
-    Column(Modifier.fillMaxWidth().then(if (walled) Modifier else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.bg.copy(alpha = 0f), 0.45f to c.bg.copy(alpha = 0.92f), 1f to c.bg))).navigationBarsPadding()) {
+    // Where the row rests (iOS positionBottomBar): 8 above the keys; at rest, sunk 5 into the gesture
+    // strip (8 + strip - 13), above a 3-button bar by 8. Measured in layout, never recomposed.
+    val restInsets = rememberComposerRestInsets()
+    Column(Modifier.fillMaxWidth()
+        .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.navigationBars.only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))
+        .windowInsetsPadding(restInsets).padding(bottom = 8.dp)) {
         // iOS mentionPicker, above the bar; hidden while editing (an edit tags nobody).
         if (mentions != null && prefill == null && !recording) MentionPicker(mentions, boxValue) { v, uid, name ->
             boxValue = v; draft = v.text
@@ -1555,7 +1584,7 @@ private fun Composer(
         }
         Row(Modifier.fillMaxWidth()
             .onGloballyPositioned { onRowPlaced(if (it.isAttached) it.boundsInRoot() else null) }
-            .padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
+            .padding(start = COMPOSER_SIDE, end = COMPOSER_SIDE, top = 8.dp), verticalAlignment = Alignment.Bottom) {
             if (locked) {
                 LockedVoiceBar(
                     Modifier.weight(1f), elapsed = elapsed, levels = recorder.level, reviewing = reviewing,
@@ -1571,7 +1600,8 @@ private fun Composer(
                     },
                 )
             } else if (recording) {
-                Row(Modifier.weight(1f).height(48.dp).floating(RoundedCornerShape(24.dp)).padding(start = 16.dp),
+                // iOS recordBar: one 44 capsule while the hold runs.
+                Row(Modifier.weight(1f).height(44.dp).floating(CircleShape).padding(start = 16.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(c.red))
                     Spacer(Modifier.width(8.dp))
@@ -1584,19 +1614,21 @@ private fun Composer(
                     Spacer(Modifier.width(12.dp))
                 }
             } else {
-                IconButton(onClick = onAttach, modifier = Modifier.size(48.dp).floating()) {
-                    Icon(Icons.Filled.Add, contentDescription = "Attach", tint = c.label, modifier = Modifier.size(26.dp))
+                Box(Modifier.size(COMPOSER_BUTTON).floating().clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Add, contentDescription = "Attach", tint = c.label, modifier = Modifier.size(28.dp))
                 }
                 Spacer(Modifier.width(8.dp))
+                // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
                 Row(
-                    Modifier.weight(1f).heightIn(min = 48.dp).floating(RoundedCornerShape(24.dp)),
+                    Modifier.weight(1f).heightIn(min = COMPOSER_BUTTON).floating(RoundedCornerShape(20.dp)),
                     verticalAlignment = Alignment.Bottom,
                 ) {
                 Box(
-                    Modifier.weight(1f).heightIn(min = 48.dp).padding(start = 16.dp, top = 12.dp, bottom = 12.dp),
+                    Modifier.weight(1f).heightIn(min = COMPOSER_BUTTON).padding(start = 14.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (draft.isEmpty()) Text("Message", style = MaterialTheme.typography.bodyLarge, color = c.secondary)
+                    val fieldText = TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
+                    if (draft.isEmpty()) Text("Message", style = fieldText, color = c.tertiary, maxLines = 1)
                     BasicTextField(
                         value = boxValue, onValueChange = {
                             val now = System.currentTimeMillis()
@@ -1604,7 +1636,7 @@ private fun Composer(
                             boxValue = it
                             draft = it.text
                         },
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.label),
+                        textStyle = fieldText.copy(color = c.label),
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
                         modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) emojiOpen = false }
@@ -1612,30 +1644,33 @@ private fun Composer(
                             .semantics { contentDescription = "Message" },
                     )
                 }
-                IconButton(onClick = {
+                // The field's icons, 24 each, 32 apart, the last one centred 24 in from the pill's end
+                // (iOS fieldIconPitch / micTrailing); dimmer than the mic (label at 55%). The camera
+                // shows only on an empty field and steps aside while the sticker panel is up.
+                if (onCamera != null && draft.isEmpty() && !emojiOpen) FieldIcon(com.fariin.app.R.drawable.ic_camera_field, "Camera") {
+                    keyboard?.hide(); onCamera()
+                }
+                // The sticker mark opens the sticker panel, the keyboard mark brings the keys back.
+                FieldIcon(if (emojiOpen) com.fariin.app.R.drawable.ic_keyboard else com.fariin.app.R.drawable.ic_gif,
+                    if (emojiOpen) "Keyboard" else "GIF") {
                     emojiOpen = !emojiOpen
                     if (emojiOpen) keyboard?.hide() else keyboard?.show()
-                }) {
-                    // iOS gifButton: the GIF mark opens the sticker panel, the keyboard mark brings the keys
-                    // back; dimmer than the mic (label at 55%).
-                    Icon(androidx.compose.ui.res.painterResource(if (emojiOpen) com.fariin.app.R.drawable.ic_keyboard else com.fariin.app.R.drawable.ic_gif),
-                        contentDescription = if (emojiOpen) "Keyboard" else "GIF", tint = c.label.copy(alpha = 0.55f),
-                        modifier = Modifier.size(24.dp))
                 }
+                Spacer(Modifier.width(8.dp))
                 }
             }
             Spacer(Modifier.width(8.dp))
             if (locked) {
                 // The locked recording's Send (iOS stripSend): the note, stitched if it was paused.
                 Box(
-                    Modifier.size(48.dp).floating(fill = myFill()).clickable { sendVoice() },
+                    Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).clickable { sendVoice() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else if (draft.isNotBlank() && !recording) {
                 Box(
-                    Modifier.size(48.dp).floating(fill = myFill()).clickable {
+                    Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).clickable {
                         val t = draft
                         val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
                         picks = emptyMap()
@@ -1644,9 +1679,9 @@ private fun Composer(
                     },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
-            } else Box(Modifier.size(48.dp)) {
+            } else Box(Modifier.size(COMPOSER_BUTTON)) {
                 // The lock target floats over the mic while the hold runs and comes down to meet
                 // the finger (iOS lockTarget); hidden once the cancel slide is under way.
                 if (recording && slide > -cancelAt / 2) {
@@ -1655,7 +1690,7 @@ private fun Composer(
                         .graphicsLayer { translationY = -(lockAt + 8.dp.toPx()) + 20.dp.toPx() * p })
                 }
                 Box(
-                    Modifier.size(48.dp).floating(fill = if (recording) myFill() else null)
+                    Modifier.size(COMPOSER_BUTTON).floating(fill = if (recording) myFill() else null)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown()
@@ -1707,7 +1742,7 @@ private fun Composer(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Outlined.Mic, contentDescription = "Record a voice message. Tap for hands-free, hold to record",
-                        tint = if (recording) Color.White else c.label, modifier = Modifier.size(26.dp))
+                        tint = if (recording) Color.White else c.label, modifier = Modifier.size(28.dp))
                 }
             }
         }
@@ -1719,6 +1754,50 @@ private fun Composer(
 }
 
 /** The emoji panel that replaces the keyboard (Android messengers keep one under the field). */
+/** iOS ChatComposerView: every round button and the pill's one-line height. */
+private val COMPOSER_BUTTON = 40.dp
+/** iOS composerMargin: the composer's side inset (and the jump arrow's). */
+internal val COMPOSER_SIDE = 20.dp
+
+/** One icon inside the message pill: a 32 x 40 slot (the iOS pitch), a 24 icon at 55 % ink. */
+@Composable
+private fun FieldIcon(icon: Int, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(width = 32.dp, height = COMPOSER_BUTTON).clip(CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) {
+        Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = label,
+            tint = Fariin.colors.label.copy(alpha = 0.55f), modifier = Modifier.size(24.dp))
+    }
+}
+
+/**
+ * Where the composer rests (iOS positionBottomBar), as window insets so it is worked out at layout
+ * time: 8 is always added below the row; on top of that, a gesture strip's height less 13 (the row
+ * sinks 5 into the strip) or a 3-button bar's full height. The keyboard, consumed above by
+ * imePadding, takes this to zero, which leaves the 8 above the keys.
+ */
+@Composable
+private fun rememberComposerRestInsets(): androidx.compose.foundation.layout.WindowInsets {
+    val nav = androidx.compose.foundation.layout.WindowInsets.navigationBars
+    val tappable = androidx.compose.foundation.layout.WindowInsets.tappableElement
+    return remember(nav, tappable) { ComposerRestInsets(nav, tappable) }
+}
+
+private class ComposerRestInsets(
+    private val nav: androidx.compose.foundation.layout.WindowInsets,
+    private val tappable: androidx.compose.foundation.layout.WindowInsets,
+) : androidx.compose.foundation.layout.WindowInsets {
+    override fun getLeft(density: androidx.compose.ui.unit.Density, layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0
+    override fun getTop(density: androidx.compose.ui.unit.Density) = 0
+    override fun getRight(density: androidx.compose.ui.unit.Density, layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0
+    override fun getBottom(density: androidx.compose.ui.unit.Density): Int {
+        val strip = nav.getBottom(density)
+        if (strip <= 0) return 0
+        // A 3-button bar is tappable: never sink into it.
+        if (tappable.getBottom(density) > 0) return strip
+        return (strip - with(density) { 13.dp.roundToPx() }).coerceAtLeast(0)
+    }
+}
+
 @Composable
 private fun EmojiPanel(onPick: (String) -> Unit) {
     val list = remember { EMOJI.split(' ').filter { it.isNotBlank() } }
