@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -62,6 +63,7 @@ import com.fariin.app.ui.components.FariinTopBar
 import com.fariin.app.ui.components.SkeletonBlock
 import com.fariin.app.ui.components.SkeletonCircle
 import com.fariin.app.ui.theme.Fariin
+import coil3.compose.AsyncImage
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.launch
@@ -162,6 +164,7 @@ private fun StatsBody(s: GroupStats.Data) {
     if (s.topPosters.isNotEmpty()) PeopleCard("Top Members", s.topPosters)
     if (s.topAdmins.isNotEmpty()) PeopleCard("Top Admins", s.topAdmins)
     if (s.topInviters.isNotEmpty()) PeopleCard("Top Inviters", s.topInviters)
+    if (s.recentPosts.isNotEmpty()) PostsCard("Recent Posts", s.recentPosts, dayText)
     s.sinceMs?.let { ms ->
         val since = java.time.Instant.ofEpochMilli(ms.toLong()).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
         Text("Counting started ${since.format(DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "MMMdyyyy"), locale))}",
@@ -419,6 +422,36 @@ private fun PeopleCard(title: String, people: List<GroupStats.Person>) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(p.name.ifEmpty { "Member" }, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(p.detail, fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A channel's Recent Posts (iOS GroupStatsPostsCard): the people list's rows, with the post's picture
+ * (or a plain mark) where the face would be, and what it got.
+ */
+@Composable
+private fun PostsCard(title: String, posts: List<GroupStats.Post>, dayText: (LocalDate) -> String) {
+    val c = Fariin.colors
+    val zone = java.time.ZoneId.systemDefault()
+    StatsCard(title) {
+        Column {
+            posts.forEachIndexed { i, p ->
+                if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 48.dp))
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val shape = RoundedCornerShape(8.dp)
+                    Box(Modifier.size(36.dp).clip(shape).background(c.separator.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
+                        if (p.thumb != null) AsyncImage(p.thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        else Text(if (p.isStory) "◌" else "≡", fontSize = 15.sp, color = c.secondary)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(GroupStats.postTitle(p), fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val day = p.atMs?.let { dayText(java.time.Instant.ofEpochMilli(it.toLong()).atZone(zone).toLocalDate()) }
+                        Text(GroupStats.postDetail(p, day), fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

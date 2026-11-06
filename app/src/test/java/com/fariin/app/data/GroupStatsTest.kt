@@ -109,4 +109,28 @@ class GroupStatsTest {
         assertEquals("Oct 27 – Nov 3", GroupStats.period(1_762_128_000_000.0, ZoneOffset.UTC, "MMM d", Locale.US))
         assertEquals(75, GroupStats.percent(3, listOf(GroupStats.Language(0, "en", 3), GroupStats.Language(1, "so", 1))))
     }
+
+    @Test fun recentPostsParseAndRead() {
+        val s = GroupStats.parse(mapOf("recentPosts" to listOf(
+            mapOf("id" to "p1", "kind" to "post", "at" to 1_762_128_000_000L, "preview" to "Hello", "thumb" to "",
+                "views" to 1412, "reactions" to 1, "shares" to 3, "quotes" to 2),
+            "junk",
+            mapOf("kind" to "story", "preview" to "📷 Photo", "views" to 5, "shares" to 1, "quotes" to 4),
+            mapOf("kind" to "post", "preview" to "", "quotes" to 1),
+        )), ZoneOffset.UTC, Locale.US, today)
+        val p = s.recentPosts
+        assertEquals(3, p.size)
+        assertEquals("p1", p[0].id); assertNull(p[0].thumb); assertEquals(1_762_128_000_000.0, p[0].atMs!!, 0.0)
+        assertEquals("Hello", GroupStats.postTitle(p[0]))
+        assertEquals("Nov 3 · 1,412 views · 1 reaction · 2 quotes · 3 shares", GroupStats.postDetail(p[0], "Nov 3", Locale.US))
+        // A story names itself, never shows quotes, and its shares are reposts.
+        assertTrue(p[1].isStory); assertEquals("post1", p[1].id)
+        assertEquals("Photo Story", GroupStats.postTitle(p[1]))
+        assertEquals("5 views · 1 repost", GroupStats.postDetail(p[1], null, Locale.US))
+        assertEquals("Post", GroupStats.postTitle(p[2]))
+        assertEquals("1 quote", GroupStats.postDetail(p[2], null, Locale.US))
+        assertEquals("Story: Hi", GroupStats.postTitle(p[1].copy(preview = "Hi")))
+        assertEquals("Video Story", GroupStats.postTitle(p[1].copy(preview = "📹 Video")))
+        assertTrue(GroupStats.parse(emptyMap<String, Any>(), ZoneOffset.UTC, Locale.US, today).recentPosts.isEmpty())
+    }
 }

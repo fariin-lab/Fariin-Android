@@ -29,6 +29,15 @@ object GroupStats {
     data class Bin(val id: Int, val label: String, val value: Int)
     data class Series(val name: String, val values: List<Int>)
 
+    /**
+     * One row of a channel's Recent Posts (iOS GroupStatsPost): a post or a story, with only the counts
+     * the server sent. [quotes] is how many times a post was quoted; never shown for a story.
+     */
+    data class Post(
+        val id: String, val isStory: Boolean, val atMs: Double?, val preview: String, val thumb: String?,
+        val views: Int?, val reactions: Int?, val shares: Int?, val quotes: Int?,
+    )
+
     data class Data(
         val nowMs: Double,
         val sinceMs: Double?,
@@ -40,6 +49,7 @@ object GroupStats {
         val hours: List<Bin>, val weekdays: List<Bin>,
         val languages: List<Language>,
         val topPosters: List<Person>, val topAdmins: List<Person>, val topInviters: List<Person>,
+        val recentPosts: List<Post> = emptyList(),
     )
 
     /** The Statistics row on Group Info (iOS showStatsRow): owner or admin, not locked, big enough or a Fariin admin. */
@@ -94,7 +104,55 @@ object GroupStats {
             },
             topAdmins = people(d["topAdmins"]) { m -> "${f.format(int(m["deleted"]))} deleted · ${f.format(int(m["banned"]))} removed" },
             topInviters = people(d["topInviters"]) { m -> "${f.format(int(m["invited"]))} invited" },
+            recentPosts = posts(d["recentPosts"]),
         )
+    }
+
+    /** A channel's `recentPosts` rows (iOS GroupStatsChannelData.posts); a row that is not a map is skipped. */
+    fun posts(v: Any?): List<Post> {
+        val out = mutableListOf<Post>()
+        (v as? List<*>)?.forEach { item ->
+            val m = item as? Map<*, *> ?: return@forEach
+            out.add(Post(
+                id = m["id"] as? String ?: "post${out.size}",
+                isStory = m["kind"] == "story",
+                atMs = date(m["at"]),
+                preview = m["preview"] as? String ?: "",
+                thumb = (m["thumb"] as? String)?.ifEmpty { null },
+                views = optInt(m["views"]), reactions = optInt(m["reactions"]),
+                shares = optInt(m["shares"]), quotes = optInt(m["quotes"]),
+            ))
+        }
+        return out
+    }
+
+    /**
+     * A row's first line. A story says it is one, so a channel's stories never read as posts the
+     * owner did not make: "Photo Story", "Video Story", or "Story: " and its caption.
+     */
+    fun postTitle(p: Post): String {
+        if (!p.isStory) return p.preview.ifEmpty { "Post" }
+        return when (p.preview) {
+            "", "📷 Photo" -> "Photo Story"
+            "📹 Video" -> "Video Story"
+            else -> "Story: " + p.preview
+        }
+    }
+
+    /**
+     * "Oct 28 · 412 views · 12 reactions · 2 quotes · 3 shares": only what the server counted. Quotes
+     * are for posts only; a story's shares are reposts, so it says so.
+     */
+    fun postDetail(p: Post, dayText: String?, locale: Locale = Locale.getDefault()): String {
+        val f = number(locale)
+        fun count(n: Int, one: String, many: String) = "${f.format(n)} ${if (n == 1) one else many}"
+        val parts = mutableListOf<String>()
+        if (dayText != null) parts.add(dayText)
+        p.views?.let { parts.add(count(it, "view", "views")) }
+        p.reactions?.let { parts.add(count(it, "reaction", "reactions")) }
+        if (!p.isStory) p.quotes?.let { parts.add(count(it, "quote", "quotes")) }
+        p.shares?.let { parts.add(if (p.isStory) count(it, "repost", "reposts") else count(it, "share", "shares")) }
+        return parts.joinToString(" · ")
     }
 
     fun number(locale: Locale = Locale.getDefault()): NumberFormat = NumberFormat.getIntegerInstance(locale)
