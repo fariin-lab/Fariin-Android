@@ -1030,3 +1030,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   checks availability live, Back leaves it unsaved (@roodo unchanged).
 - 16:17 Privacy & Security, Groups & Channels, Messages privacy pages fine (read-receipt wording matches iOS on
   purpose). In-chat search in adnan's chat: highlights, 1 of 2, list view, tap jumps + flashes. All fine.
+- 16:27 Photo viewer (adnan): double-tap zoom, swipe-down close fine. Export Chat agent fc4ac1a; 704778e hides it
+  on both pages as iOS (owner's order), ChatExportRun.SHOWN brings it back.
+- 16:29 Location agent 34a6788 + 991cc8d (MapLibre map, drag-to-pin, Exact/Approximate, Photon places, map card;
+  APK +50 MB all ABIs, ~+13 MB arm64 from Play). Pixel: map, address, "Within 29 m", drag updates address,
+  Places In This Area lists real places. Fixed: Approximate showed "Within 6 m" under a 1 km area.
