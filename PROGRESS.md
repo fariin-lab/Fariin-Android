@@ -833,3 +833,11 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Left on purpose: (1) turning Firestore off in the background: the incoming-call watcher reads Firestore when the push
   wakes it, so this needs a careful enable-on-push path; Android 12+ already freezes cached apps, so the gain is small.
   (2) 300 per-channel listeners: only matters for someone following many channels; revisit with whereIn batching.
+- Evening 2026-11-05, owner-driven UI:
+  - 76af847/3b6a320/9507a5a/9b8b7d5 Settings: header as iOS (big centred photo), centred title, glass only when scrolled, long eased fade.
+  - d16f798/9b8b7d5 Chats: glass only when rows are under the bar (fades 220 ms), search field shrinks in place as the owner's iPhone video.
+  - 2acb8ce call speaker button answers at once, one speaker icon lit when on.
+  - 0fab9c1 video call: no zoomed flash (SurfaceViewRenderer hardware scaler off). "Ringback once" = Pixel speaker call volume 1/7, not a bug.
+  - 326715f (helper) 1:1 chat header/composer as iOS; 09b4fb1 no bottom blur; 9294883 top glass fixed (it never turned on).
+  - Install guard: scratchpad/safe_install.sh (telecom states, audio mode, CallActivity, live Firestore call). An install killed the owner's dialling call at 22:28.
+  Next: verify the helper's composer pieces on the Pixel myself (camera in the field, mic hold/tap/lock/cancel, send animation from the new composer, group header, self chat menu).
