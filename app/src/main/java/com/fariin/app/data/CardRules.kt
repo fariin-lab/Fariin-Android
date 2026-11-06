@@ -69,9 +69,11 @@ object CardRules {
         return "geo:$ll?q=$q"
     }
 
-    /** For a phone with no maps app: the same spot on the open map, in the browser. No key. */
-    fun webUri(l: Location): String =
-        "https://www.openstreetmap.org/?mlat=${l.lat}&mlon=${l.lon}#map=16/${l.lat}/${l.lon}"
+    /**
+     * Turn-by-turn to the spot, for the navigation apps that take it. The coordinates go to an app
+     * on the phone through an intent, never into a web link: no website learns where the place is.
+     */
+    fun navigationUri(l: Location): String = "google.navigation:q=${l.lat},${l.lon}"
 
     /**
      * LocationPickerSheet.resolveName: the building or landmark, then the street, the area, the

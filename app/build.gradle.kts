@@ -175,6 +175,9 @@ dependencies {
     implementation("com.mikepenz:aboutlibraries-core:12.2.4")
     // Home screen widget (system/FariinWidget.kt).
     implementation("androidx.glance:glance-appwidget:1.1.1")
+    // Maps for Share Location and the location card (ui/thread/LocationMaps.kt): MapLibre Native
+    // (BSD-2), drawing the free OpenFreeMap tiles of OpenStreetMap. No key, no Google account.
+    implementation("org.maplibre.gl:android-sdk:13.7.1")
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     // The real org.json for the local-cache codec tests (Android ships it; plain JVM tests do not).

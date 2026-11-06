@@ -25,6 +25,10 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,34 +46,37 @@ import com.fariin.app.ui.people.LocalPeopleNav
 import com.fariin.app.ui.theme.Fariin
 
 /**
- * A shared place (iOS location bubble): the red pin, the place's name ("Location" when none
- * travelled) and its coordinates, the time under them. iOS draws a map picture on top; that needs a
- * map service with a key, so the card stays words. Tap opens the phone's maps app on the spot.
+ * A shared place (iOS location bubble): a small map of the spot with its pin (LocationMaps.kt), the
+ * place's name ("Location" when none travelled) beside a red pin, the time. An approximate share
+ * shows the town zoomed out with a soft circle and says so. Tap opens the full-screen map with
+ * Directions and Copy coordinates.
  */
 @Composable
 internal fun LocationBody(loc: CardRules.Location, isMe: Boolean, width: Dp, meta: @Composable () -> Unit) {
     val c = Fariin.colors
-    val ctx = LocalContext.current
     val ink = if (isMe) Color.White else c.label
     val sub = if (isMe) Color.White.copy(alpha = 0.75f) else c.secondary
+    val approx = remember(loc) { com.fariin.app.data.LocationShare.looksApproximate(loc) }
+    var open by remember { mutableStateOf(false) }
     Column(Modifier.width(width)) {
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { openMaps(ctx, loc) }.padding(vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(if (isMe) Color.White else c.red), contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), null, tint = if (isMe) c.red else Color.White, modifier = Modifier.size(26.dp))
+        Column(Modifier.fillMaxWidth().padding(top = 3.dp).clip(RoundedCornerShape(12.dp)).clickable { open = true }) {
+            LocationCardMap(loc, approx, width, 140.dp)
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(24.dp).clip(CircleShape).background(if (isMe) Color.White else c.red), contentAlignment = Alignment.Center) {
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), null, tint = if (isMe) c.red else Color.White, modifier = Modifier.size(15.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(CardRules.title(loc), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = ink,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (approx) Text("Approximate area", fontSize = 13.sp, color = sub, maxLines = 1)
+                }
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = sub, modifier = Modifier.size(22.dp))
             }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(CardRules.title(loc), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = ink,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(CardRules.coords(loc.lat, loc.lon), fontSize = 13.sp, color = sub, maxLines = 1)
-            }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = sub, modifier = Modifier.size(22.dp))
         }
         Box(Modifier.align(Alignment.End)) { meta() }
     }
+    if (open) LocationMapPage(loc, approx) { open = false }
 }
 
 /**
@@ -106,15 +113,4 @@ internal fun ContactBody(card: CardRules.Contact, isMe: Boolean, me: String, cid
             ) { Text("Message", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = ink) }
         }
     }
-}
-
-/** The maps app with the pin; the open map in the browser when no maps app is installed. */
-internal fun openMaps(ctx: Context, loc: CardRules.Location) {
-    for (u in listOf(CardRules.geoUri(loc), CardRules.webUri(loc))) {
-        try {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return
-        } catch (_: ActivityNotFoundException) {}
-    }
-    com.fariin.app.ui.components.Snack.show("No app on this phone can show a map.")
 }

@@ -61,8 +61,7 @@ class CardRulesTest {
         assertEquals("geo:1.5,2.25?q=1.5,2.25", CardRules.geoUri(CardRules.Location(1.5, 2.25, null)))
         assertEquals("geo:1.5,2.25?q=1.5,2.25(Caf%C3%A9%20%26%20Bar%20%28old%29)",
             CardRules.geoUri(CardRules.Location(1.5, 2.25, "Café & Bar (old)")))
-        assertEquals("https://www.openstreetmap.org/?mlat=1.5&mlon=2.25#map=16/1.5/2.25",
-            CardRules.webUri(CardRules.Location(1.5, 2.25, "x")))
+        assertEquals("google.navigation:q=1.5,2.25", CardRules.navigationUri(CardRules.Location(1.5, 2.25, "x")))
         assertEquals("52.36760, 4.90410", CardRules.coords(52.3676, 4.9041))
     }
 
