@@ -28,7 +28,9 @@ jobs:
       - name: Build and test
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon -Dorg.gradle.jvmargs=-Xmx5g assembleBenchmark testDebugUnitTest
+          # The runner has 7 GB: one JVM (Kotlin compiled in-process, no separate daemon) at 4 GB.
+          # 5 GB plus a Kotlin daemon got the job killed after 6 minutes (run 42368777461).
+          ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC" -Pkotlin.compiler.execution.strategy=in-process assembleBenchmark testDebugUnitTest
 
       - name: Keep the APK
         if: success()
