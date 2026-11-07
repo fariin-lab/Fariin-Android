@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Mic
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material3.MaterialTheme
@@ -1883,10 +1884,21 @@ private fun Composer(
     // iOS broadcastRecording: on while capturing, re-sent every 10 s; off when it stops or pauses.
     val capturing = recording && !reviewing
     var capturedOnce by remember { mutableStateOf(false) }
-    LaunchedEffect(capturing) {
+    // Only while the app is in front: a locked recording left running behind the home screen kept
+    // writing "recording…" every 10 s for as long as the phone kept the app alive. Going to the
+    // background sends the "off" at once; coming back starts the refresh again.
+    val recLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(capturing, recLifecycle) {
         if (!capturing) { if (capturedOnce) onCapturing(false); return@LaunchedEffect }
         capturedOnce = true
-        while (true) { onCapturing(true); kotlinx.coroutines.delay(com.fariin.app.data.MessageRules.RECORDING_REFRESH_MS) }
+        recLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            try {
+                while (true) { onCapturing(true); kotlinx.coroutines.delay(com.fariin.app.data.MessageRules.RECORDING_REFRESH_MS) }
+            } finally {
+                // Stopped by the background (not by the recording ending, which sends its own "off").
+                if (!recLifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) onCapturing(false)
+            }
+        }
     }
     DisposableEffect(Unit) { onDispose { if (capturedOnce) onCapturing(false) } }
     // The "1": this note goes as a one-time listen. It arms ONE note (iOS resetRecordingState).
