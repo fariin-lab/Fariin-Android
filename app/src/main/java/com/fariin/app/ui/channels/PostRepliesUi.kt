@@ -773,7 +773,7 @@ private const val LINE_NONE = 0
 private const val LINE_DOWN = 1
 private const val LINE_BRANCH = 2
 private val ThreadLineX = 16.dp + 20.dp
-private val ThreadLineRadius = 16.dp
+private val ThreadLineRadius = 12.dp   // iOS 2026-11-07: 12, was 16
 private val ThreadLineWidth = 1.5.dp
 /** Where an answer row starts in the list (its Box padding); the line sits left of it. */
 private val AnswerIndent = 46.dp
@@ -850,7 +850,8 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
             val w = ThreadLineWidth.toPx()
             if (line == LINE_DOWN) {
                 val x = at.x + photo.size.width / 2f
-                drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, at.y + photo.size.height), androidx.compose.ui.geometry.Offset(x, size.height), w)
+                // Starts 2 under the photo's edge (iOS), so no gap shows between the photo and the line.
+                drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, at.y + photo.size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Offset(x, size.height), w)
             } else {
                 // An answer: the parent's line goes on through the row; a bend leaves it into my photo.
                 val x = (ThreadLineX - AnswerIndent).toPx()
