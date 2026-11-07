@@ -92,11 +92,15 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
     var requestSent by remember { mutableStateOf(false) }
     var joinError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
+    // iOS GroupInvites.errorText: the server's own words for these, DEADLINE_EXCEEDED included
+    // ("This invite link has expired."). A timeout on this phone carries the bare code as its
+    // message, never a sentence, so it still gets the fallback.
     fun told(e: Throwable, fallback: String): String =
         if (e is FirebaseFunctionsException && e.code in setOf(FirebaseFunctionsException.Code.INVALID_ARGUMENT,
                 FirebaseFunctionsException.Code.PERMISSION_DENIED, FirebaseFunctionsException.Code.NOT_FOUND,
-                FirebaseFunctionsException.Code.FAILED_PRECONDITION, FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED))
-            e.message ?: fallback else fallback
+                FirebaseFunctionsException.Code.FAILED_PRECONDITION, FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED,
+                FirebaseFunctionsException.Code.DEADLINE_EXCEEDED))
+            e.message?.takeIf { it.isNotBlank() && it != e.code.name } ?: fallback else fallback
     LaunchedEffect(code, attempt) {
         runCatching { fn.getHttpsCallable("groupLinkPreview").call(mapOf("code" to code)).await().getData() as? Map<*, *> }
             .onSuccess { preview = LinkPreview(it ?: emptyMap<String, Any>()) }
