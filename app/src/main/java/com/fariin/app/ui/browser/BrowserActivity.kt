@@ -295,6 +295,11 @@ private fun Browser(start: String, motion: SheetMotion) {
                     settings.setSupportMultipleWindows(false)   // a "new window" opens in this one
                     // Muted autoplay, as the iOS browser: a video page otherwise stays black.
                     settings.mediaPlaybackRequiresUserGesture = false
+                    // Android flashes the page's scrollbar on every load: a grey bar ran down the
+                    // sheet's edge while it slid up (frame by frame, 2026-11-06). No scrollbars.
+                    isVerticalScrollBarEnabled = false
+                    isHorizontalScrollBarEnabled = false
+                    overScrollMode = android.view.View.OVER_SCROLL_NEVER
                     // The phone's Chrome name without the "; wv" web-view tag: some sites serve a
                     // web view a cut-down page with no video (iOS's browser reads as plain Safari).
                     settings.userAgentString = settings.userAgentString

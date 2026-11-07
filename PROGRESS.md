@@ -1070,3 +1070,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   fast then crept the last few pixels for ~0.25 s. Now the iOS sheet curve cubic-bezier(0.32,0.72,0,1) (as the
   open-source Vaul drawer): open 500 ms, close 380 ms; a flick still closes from its own speed; spring-back stops
   at 0.5 px. Re-recorded: up in ~0.45 s, no crawl. Also 32 dp rounded page top, no strip (f5da926).
+- 20:40 Owner: Settings > Safety sheet, frame by frame. Found Android's page scrollbar flashing down the sheet's
+  edge on every load (also the grey line in the Facebook recording). Scrollbars and overscroll glow off in the
+  browser. Pixel: right edge clean after load. Note: our X covers the site's logo, as iOS does on facebook.
