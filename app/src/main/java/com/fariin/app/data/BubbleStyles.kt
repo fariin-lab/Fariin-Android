@@ -90,6 +90,8 @@ object BubbleStyles {
         val p = app?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE) ?: return
         p.edit().apply { if (id == null) remove(KEY) else putString(KEY, id) }.putBoolean(DECOR_KEY, decor).apply()
         version.intValue++
+        // The new-account card ("Bubble style") is done once a style is saved; the page no longer sets a colour.
+        if (id != null) app?.let { com.fariin.app.ui.chats.GetStartedStore.markDone(it, com.fariin.app.ui.chats.GetStartedCard.CHAT_COLOR) }
     }
 
     /** May I pick it: every picture style; a colour style unless it is Plus (not on sale yet). */

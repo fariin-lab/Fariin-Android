@@ -52,7 +52,8 @@ enum class GetStartedCard(val title: String, val icon: ImageVector) {
     NEW_GROUP("New group", Icons.Filled.Groups),
     INVITE("Invite friends", Icons.Filled.Email),
     ADD_PHOTO("Add photo", Icons.Filled.AccountCircle),
-    CHAT_COLOR("Chat color", Icons.Filled.Palette),
+    // Chat Color now lives inside Bubble Style (2026-11-07), so the card opens that page and says so.
+    CHAT_COLOR("Bubble style", Icons.Filled.Palette),
 }
 
 /**
