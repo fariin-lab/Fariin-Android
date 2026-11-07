@@ -473,9 +473,7 @@ class ThreadRepository(
         val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
         val tap = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
-        // On disk BEFORE the network (iOS SendQueue.add), so a kill or an outage cannot lose it.
         val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text, mentions)
-        SendQueue.add(me, e)
         // The link card follows the text (iOS attachLinkPreview): one built while typing shows on
         // my bubble at once; otherwise it is fetched for up to 6 s beside the send.
         LinkPreviews.cardUrlFor(t, LinkPreviews.enabled(), LinkPreviews.takeSuppressed(cid))
@@ -483,7 +481,9 @@ class ThreadRepository(
                 cardFor[clientId] = u
                 LinkPreviews.cached(u)?.let { showLocalCard(clientId, it) }
             }
-        drive(e, checkFirst = false)
+        // On disk BEFORE the network (iOS SendQueue.add), so a kill or an outage cannot lose it;
+        // written by the send's own coroutine, off the main thread (see drive).
+        drive(e, checkFirst = false, sendScope, save = true)
     }
 
     private fun showLocalCard(clientId: String, d: LinkPreviews.Draft) {
@@ -509,7 +509,12 @@ class ThreadRepository(
 
     private fun drive(e: SendQueue.Entry, checkFirst: Boolean) = drive(e, checkFirst, sendScope)
 
-    private fun drive(e: SendQueue.Entry, checkFirst: Boolean, on: CoroutineScope) {
+    /**
+     * [save]: a new send, put in [SendQueue] first. That write seals the file with the phone's
+     * keystore and was on the main thread at the tap: part of the frames lost right as the bubble
+     * should start moving. It now runs here, still before any network write.
+     */
+    private fun drive(e: SendQueue.Entry, checkFirst: Boolean, on: CoroutineScope, save: Boolean = false) {
         if (!SendQueue.begin(e.clientId)) return
         val ref = e.replyId?.let { Message.ReplyRef(it, e.replyAuthor ?: "", e.replyText ?: "") }
         pending[e.clientId] = Message(
@@ -520,6 +525,7 @@ class ThreadRepository(
         rebuild()
         on.launch {
             try {
+                if (save) SendQueue.add(me, e)
                 if (checkFirst && alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return@launch }
                 turn.withLock {
                     if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions) else sendDirect(e.text, e.clientId, e.ts, ref)
