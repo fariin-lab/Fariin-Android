@@ -260,6 +260,51 @@ internal fun BubbleStyleChooser(
     }
 }
 
+/**
+ * The "Bubble Styles" strip on one chat's wallpaper picker (owner 2026-11-07): six picture styles,
+ * the one in use first and ringed, and "See all" opening the full chooser as a sheet. A tap picks a
+ * style at once with a light tick; the style is mine for every chat, so the caption says so.
+ */
+@Composable
+internal fun BubbleStylesStrip() {
+    val ctx = LocalContext.current
+    remember { BubbleStyles.init(ctx) }
+    val c = Fariin.colors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val v = BubbleStyles.version.intValue
+    val current = remember(v) { BubbleStyles.current() }
+    val picks = remember(current) {
+        val first = BubbleArt.all.take(6)
+        val cur = BubbleArt.find(current)
+        if (cur != null && cur !in first) listOf(cur) + first.take(5) else first
+    }
+    var all by remember { mutableStateOf(false) }
+    val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
+    DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Bubble Styles", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.weight(1f))
+            Text("See all", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.accent,
+                modifier = Modifier.clip(RoundedCornerShape(50)).clickable { all = true }.padding(horizontal = 8.dp, vertical = 4.dp))
+        }
+        LazyRow(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(picks.size, key = { picks[it].id }) { i ->
+                val s = picks[i]
+                Box(Modifier.width(96.dp)) {
+                    Tile(s.name, current == s.id, onTap = {
+                        if (current != s.id) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            BubbleStyles.save(s.id, BubbleStyles.decorations())
+                        }
+                    }) { PictureSwatch(s, thumbPx) }
+                }
+            }
+        }
+        Text("Applies to all your chats", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+    }
+    if (all) BubbleStyleSheet.Show(onDismiss = { all = false })
+}
+
 /** One category in the row above the grid; the shown one filled. */
 @Composable
 private fun Chip(title: String, on: Boolean, onTap: () -> Unit) {

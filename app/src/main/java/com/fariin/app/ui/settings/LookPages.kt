@@ -286,6 +286,8 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
         PageBar(if (cid != null) "Chat Wallpaper" else "Set Wallpaper", onBack = pop,
             action = { if (cid != null) ChatResetMenu(cid, shared, pop) else ResetMenu(wallpaperPage = true) })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            // One chat's picker: a strip of picture bubble styles above the photo row (owner 2026-11-07).
+            if (cid != null && com.fariin.app.data.BubbleStyles.SHOWN) BubbleStylesStrip()
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.card)) {
                 SettingsRow("Choose from Photos") {
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))

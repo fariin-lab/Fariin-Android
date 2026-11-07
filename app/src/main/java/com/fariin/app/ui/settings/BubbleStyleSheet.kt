@@ -35,6 +35,10 @@ object BubbleStyleSheet {
         androidx.compose.runtime.DisposableEffect(Unit) { onDispose { open.value = false } }
         if (open.value) Sheet(onDismiss = { open.value = false })
     }
+
+    /** The same sheet opened from elsewhere (the chat wallpaper picker's "See all"). */
+    @Composable
+    fun Show(onDismiss: () -> Unit) = Sheet(onDismiss)
 }
 
 @Composable
