@@ -34,9 +34,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /** Where a notification tap should land, and which chat is open now (iOS AppRouter.activeChatId). */
 object PushRouter {
     const val EXTRA_OPEN_CID = "openCid"
+    /** Beside [EXTRA_OPEN_CID]: the message the notification was about (the push's `mid`). */
+    const val EXTRA_OPEN_MID = "openMid"
     @Volatile var activeChatId: String? = null
     /** A tap on a chat notification, waiting for the signed-in shell to open it. */
     val pendingOpen = MutableStateFlow<String?>(null)
+    /** The tapped notification's message, waiting for its chat to open (see [PushOpen]). */
+    val pendingMid = MutableStateFlow<PushOpen?>(null)
 }
 
 /**
@@ -85,6 +89,7 @@ object NotificationPoster {
         val tap = Intent(c, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (spec.opensChat) putExtra(PushRouter.EXTRA_OPEN_CID, spec.key)
+            if (spec.opensChat && !spec.mid.isNullOrEmpty()) putExtra(PushRouter.EXTRA_OPEN_MID, spec.mid)
         }
         val pending = PendingIntent.getActivity(c, spec.key.hashCode(), tap,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
