@@ -27,8 +27,8 @@ import kotlinx.coroutines.tasks.await
  * The debug demo (made-up chats) never writes.
  */
 object ChatListActions {
-    /** iOS AppLimits.pinnedChatsMax default (admin panel `pinned_chats_max`). */
-    const val PINNED_MAX = 3
+    /** iOS AppLimits.pinnedChatsMax (admin panel `pinned_chats_max`, 5 when it has none). */
+    val PINNED_MAX: Int get() = com.fariin.app.data.AppLimits.pinnedChatsMax
 
     private fun doc(cid: String) = FirebaseFirestore.getInstance().collection("conversations").document(cid)
 
