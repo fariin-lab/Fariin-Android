@@ -238,6 +238,7 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
         if (doc.isEmpty()) { Loading(); return@Column }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             GroupManageRows(doc, me, cid, open)
+            BubbleStylesSwitch(cid, me, doc)
             SettingsSection {
                 DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false, onClick = onTimer)
                 SettingsRow("Recent Actions", icon = rememberVectorPainter(Icons.Filled.History), last = true) { open(GroupPage.RecentActions) }
@@ -245,6 +246,44 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+/**
+ * Bubble Styles on or off for the whole group (server `setGroupBubbleStyles`, which writes the
+ * server-only `bubbleStylesOff`). Only the owner, or an admin with the Change Info right, sees it:
+ * the server refuses anyone else, members-may-edit-info included. While the write runs the switch
+ * shows the new position and stays still; the group's doc then confirms it, or it springs back
+ * with the reason.
+ */
+@Composable
+private fun BubbleStylesSwitch(cid: String, me: String, doc: Map<String, Any?>) {
+    if (!com.fariin.app.data.BubbleStyles.SHOWN || doc["channel"] == true || !Team.from(doc).may(me, Right.CHANGE_INFO)) return
+    val scope = rememberCoroutineScope()
+    val off = doc["bubbleStylesOff"] == true
+    var pending by remember { mutableStateOf<Boolean?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    // The doc caught up with the write (or a slow listener: let the switch go after a while).
+    LaunchedEffect(off, pending) {
+        val p = pending ?: return@LaunchedEffect
+        if (off == !p) pending = null else { delay(8_000); pending = null }
+    }
+    SettingsSection(footer = "When this is on, members' chosen bubble styles show in this group. When it is off, everyone sees the plain bubbles here.") {
+        com.fariin.app.ui.settings.SwitchRow("Bubble Styles", checked = pending ?: !off, enabled = pending == null, last = true) { on ->
+            pending = on
+            scope.launch {
+                val r = runCatching {
+                    com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                        .getHttpsCallable("setGroupBubbleStyles").call(mapOf("cid" to cid, "off" to !on)).await()
+                }
+                r.exceptionOrNull()?.let { e ->
+                    pending = null
+                    error = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.message?.takeIf { it.isNotBlank() }
+                        ?: "Check your connection and try again."
+                } ?: Snack.show(if (on) "Bubble styles are on in this group." else "Bubble styles are off in this group.")
+            }
+        }
+    }
+    Problem(error) { error = null }
 }
 
 /** Draws the page on top of the stack; back pops it. False when nothing is pushed. */
