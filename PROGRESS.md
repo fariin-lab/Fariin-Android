@@ -1066,3 +1066,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   top, release by speed (flick or long pull closes, else a spring back from that speed), grabs mid-animation never
   jump. The page itself pulls the sheet when scrolled to its top (velocity tracked), other touches stay the page's.
   Pixel: slow short pull springs back, quick flick closes, page taps still work.
+- 20:30 Owner: opening looked wrong. Screen-recorded and read frame by frame: the critically damped spring rose
+  fast then crept the last few pixels for ~0.25 s. Now the iOS sheet curve cubic-bezier(0.32,0.72,0,1) (as the
+  open-source Vaul drawer): open 500 ms, close 380 ms; a flick still closes from its own speed; spring-back stops
+  at 0.5 px. Re-recorded: up in ~0.45 s, no crawl. Also 32 dp rounded page top, no strip (f5da926).

@@ -177,13 +177,23 @@ internal class SheetMotion(
         }
     }
 
-    fun open() = run(0f, 0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 320f))
+    // Open and close by button follow the iOS sheet curve (the one the open-source "Vaul" drawer uses
+    // to match it): a quick start, a soft stop, no crawl at the end. The old critically damped spring
+    // spent its last ~0.25 s creeping the final pixels (frame by frame on the Pixel, 2026-11-06).
+    fun open() = run(0f, 0f, tween(500, easing = SheetEase))
 
     fun close(velocity: Float = 0f) {
         if (closing) return
         closing = true
-        run(full, velocity.coerceAtLeast(0f), androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 260f,
-            visibilityThreshold = 4f)) { onClosed() }
+        // A flick keeps its own speed (a spring started from it); a button or Back uses the curve.
+        val spec: androidx.compose.animation.core.AnimationSpec<Float> =
+            if (velocity > 0f) androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 700f, visibilityThreshold = 4f)
+            else tween(380, easing = SheetEase)
+        run(full, velocity.coerceAtLeast(0f), spec) { onClosed() }
+    }
+
+    private companion object {
+        val SheetEase = androidx.compose.animation.core.CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
     }
 
     fun drag(dy: Float) {
@@ -198,7 +208,7 @@ internal class SheetMotion(
         if (closing) return
         val projected = y + velocity * 0.2f      // where the flick would carry it
         if (y > dismissAt || velocity > flingClose || projected > full * 0.45f) close(velocity)
-        else { raw = 0f; run(0f, velocity, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 420f)) }
+        else { raw = 0f; run(0f, velocity, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f)) }
     }
 }
 
