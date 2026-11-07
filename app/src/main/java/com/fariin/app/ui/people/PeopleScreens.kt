@@ -500,7 +500,20 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     }
                 },
             ),
-        ))) else ask?.let { what ->
+        ))) else if (ask == "delete") AlertDialog(onDismissRequest = { ask = null },
+            title = { Text("Delete this chat?") },
+            text = { Text("Every message in this chat will be removed from this device. The other person keeps their own copy.") },
+            // The chat list's own Delete for Me (iOS ChatService.deleteForMe), not a second delete.
+            confirmButton = { TextButton({
+                ask = null
+                val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
+                if (chat != null) scope.launch {
+                    if (com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, chat)) onBack()
+                    else notice = "Check your connection and try again."
+                }
+            }) { Text("Delete Chat", color = c.red) } },
+            dismissButton = { TextButton({ ask = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
+        else ask?.let { what ->
         val block = what == "block"
         AlertDialog(onDismissRequest = { ask = null },
             title = { Text(if (block) (if (blocked) "Unblock $name?" else "Block $name?") else "Report $name?") },
@@ -634,9 +647,17 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             SharedMediaCard(cid, shared) { allMedia = true }
             if (uid != me) GroupsInCommonSection(commonGroups, me, onAdd = { addingToGroup = true },
                 onSeeAll = { allGroups = true }, onOpenChat = onOpenChat)
+            // iOS dangerCard: a blocked person's page is Delete Chat and Unblock and nothing else
+            // (no Report while blocked, owner 2026-09-27); Delete Chat only where a chat exists.
+            val deletable = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
             SettingsSection {
-                SettingsRow(if (blocked) "Unblock $name" else "Block $name", titleColor = c.red, trailing = Trailing.NONE) { ask = "block" }
-                SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "report" }
+                if (blocked) {
+                    if (deletable != null) SettingsRow("Delete Chat", titleColor = c.red, trailing = Trailing.NONE) { ask = "delete" }
+                    SettingsRow("Unblock $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "block" }
+                } else {
+                    SettingsRow("Block $name", titleColor = c.red, trailing = Trailing.NONE) { ask = "block" }
+                    SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "report" }
+                }
             }
             Spacer(Modifier.height(30.dp))
         }
