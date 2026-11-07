@@ -75,7 +75,7 @@ data class AnswersPage(val items: List<PostReply>, val next: String)
  */
 object PostReplyRules {
     /** The longest reply the server takes. */
-    const val MAX_LENGTH = 1000
+    const val MAX_LENGTH = 250   // server addReply (owner 2026-11-07), was 1000
 
     /** A refresh may drop my own reply saved this recently only if the page really lacks it. */
     const val RECENT_MINE_MS = 8_000L

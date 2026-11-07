@@ -81,8 +81,8 @@ class PostReplyRulesTest {
     @Test fun draftTrimmedAndCapped() {
         assertEquals("hi", PostReplyRules.cleanDraft("  hi \n"))
         assertNull(PostReplyRules.cleanDraft("   "))
-        assertNull(PostReplyRules.cleanDraft("a".repeat(1001)))
-        assertEquals(1000, PostReplyRules.cleanDraft("a".repeat(1000))?.length)
+        assertNull(PostReplyRules.cleanDraft("a".repeat(251)))
+        assertEquals(250, PostReplyRules.cleanDraft("a".repeat(250))?.length)
     }
 
     @Test fun clientIdFitsTheServer() {

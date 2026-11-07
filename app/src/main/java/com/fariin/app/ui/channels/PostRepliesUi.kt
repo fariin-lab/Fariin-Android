@@ -829,7 +829,7 @@ private fun ThreadToggle(label: String, onTap: () -> Unit) {
 
 /**
  * One reply (iOS, the owner's reference 2026-11-07): name, seal and age over the bubble, the photo
- * beside the bubble's middle (40 dp, an answer 28), the words in a soft rounded bubble, and under it
+ * beside the bubble's top (40 dp, an answer 28; it stays up top on a long reply), the words in a soft rounded bubble, and under it
  * the chat's reaction pills and Reply. Double-tap the bubble = the Quick Reaction ([quick]); a
  * long press = the chat's six-emoji bar (a pick closes it) over the menu the server's rights allow
  * (PostReplyRules.actions). Mine on its way reads "Sending…"; failed, "Not sent" with Retry.
@@ -882,7 +882,8 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
             Spacer(Modifier.width(4.dp))
             Text(PostReplyRules.age(r.at, now), fontSize = 13.sp, color = c.secondary, maxLines = 1)
         }
-        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The photo level with the bubble's top, not its middle (iOS): a long reply keeps it up top.
+        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.Top) {
             // A Creator reply wears the channel's squircle photo.
             Avatar(r.photoUrl.ifEmpty { null }, side, squircle = r.creator,
                 kind = if (r.creator) AvatarKind.CHANNEL else AvatarKind.PERSON,
@@ -955,7 +956,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                         Spacer(Modifier.width(12.dp))
                         FooterWord("Delete") { s.discard(r) }
                     }
-                    PostReply.Send.SENT -> {
+                    PostReply.Send.SENT -> FooterFlow {
                         // THE CHAT'S REACTION PILL, NOT A HEART BUTTON (iOS, owner 2026-11-07: "make it like
                         // how bubble react works in my app"): no empty outline; a pill per emoji with its
                         // count, mine the dark filled one; a tap on a pill takes mine back or adds it.
@@ -973,16 +974,41 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                                     fontWeight = FontWeight.SemiBold, color = if (mine) c.bg else c.label)
                             }
                         }
-                        if (!s.off) {
-                            if (r.rx.isNotEmpty()) Spacer(Modifier.width(2.dp))
-                            FooterWord("Reply", bold = true) { s.startAnswer(r) }
-                        }
-                        if (r.held) {
-                            Spacer(Modifier.width(12.dp))
-                            Text("Hidden after reports", fontSize = 11.sp, color = c.secondary)
-                        }
+                        // Reply on the pills' line only when it fits there; else on its own line under them.
+                        if (!s.off) FooterWord("Reply", bold = true) { s.startAnswer(r) }
+                        if (r.held) Text("Hidden after reports", fontSize = 11.sp, color = c.secondary,
+                            modifier = Modifier.padding(start = 6.dp))
                     }
                 }
+        }
+    }
+}
+
+/**
+ * A reply's footer: its pieces left to right, each moved to the next line when it does not fit
+ * (the pills, then Reply). Measured and placed in one pass, no extra frame. Each line's pieces are
+ * centred on that line's height.
+ */
+@Composable
+private fun FooterFlow(content: @Composable () -> Unit) {
+    androidx.compose.ui.layout.Layout(content) { ms, cons ->
+        val loose = cons.copy(minWidth = 0, minHeight = 0)
+        val ps = ms.map { it.measure(loose) }
+        val rows = mutableListOf(mutableListOf<androidx.compose.ui.layout.Placeable>())
+        var x = 0
+        for (p in ps) {
+            if (rows.last().isNotEmpty() && x + p.width > cons.maxWidth) { rows += mutableListOf<androidx.compose.ui.layout.Placeable>(); x = 0 }
+            rows.last() += p; x += p.width
+        }
+        val heights = rows.map { r -> r.maxOfOrNull { it.height } ?: 0 }
+        val w = rows.maxOf { r -> r.sumOf { it.width } }.coerceAtMost(cons.maxWidth)
+        layout(w, heights.sum()) {
+            var y = 0
+            rows.forEachIndexed { i, r ->
+                var px = 0
+                r.forEach { p -> p.place(px, y + (heights[i] - p.height) / 2); px += p.width }
+                y += heights[i]
+            }
         }
     }
 }
