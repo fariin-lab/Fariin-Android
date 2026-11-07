@@ -1,8 +1,11 @@
 package com.fariin.app.ui.thread.bubbles
 
-import androidx.compose.foundation.layout.absolutePadding
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.ceil
+import kotlin.math.max
+import kotlin.math.roundToInt
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
@@ -13,7 +16,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import com.fariin.app.data.BubbleArt
 
 /** The words' colour on a picture bubble. */
@@ -35,7 +37,6 @@ internal fun BubbleArt.Spec.fillColor(): Color = Color(0xFF000000 or fill)
 internal fun Modifier.artBubble(spec: BubbleArt.Spec, image: ImageBitmap?, dark: Boolean): Modifier {
     val l = spec.layout
     return this
-        .defaultMinSize(minWidth = l.minWidth.dp, minHeight = l.minHeight.dp)
         .drawWithCache {
             val d = density
             val w = size.width.toInt()
@@ -71,7 +72,23 @@ internal fun Modifier.artBubble(spec: BubbleArt.Spec, image: ImageBitmap?, dark:
                 if (rim != null) drawRoundRect(rimColor, rimAt, rimSize, radius, style = rim)
             }
         }
-        .absolutePadding(left = l.padLeft.dp, top = l.padTop.dp, right = l.padRight.dp, bottom = l.padBottom.dp)
+        .layout { measurable, constraints ->
+            // The words get the room inside both clearances; BubbleArt.place centres a short line
+            // between the bubble's edges and keeps long ones where they always were.
+            val d = density
+            val padH = ((l.padLeft + l.padRight) * d).roundToInt()
+            val padV = ((l.padTop + l.padBottom) * d).roundToInt()
+            val p = measurable.measure(Constraints(
+                maxWidth = if (constraints.hasBoundedWidth) max(0, constraints.maxWidth - padH) else Constraints.Infinity,
+                maxHeight = if (constraints.hasBoundedHeight) max(0, constraints.maxHeight - padV) else Constraints.Infinity,
+            ))
+            val maxW = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.MAX_VALUE
+            val at = BubbleArt.place(spec, p.width.toFloat(), p.height.toFloat(), maxW, d)
+            val w = ceil(at.width).toInt().coerceIn(constraints.minWidth, constraints.maxWidth)
+            val h = ceil(at.height).toInt().coerceIn(constraints.minHeight, constraints.maxHeight)
+            // Absolute, like the picture: it is not mirrored right to left.
+            layout(w, h) { p.place(at.x.roundToInt(), at.y.roundToInt()) }
+        }
 }
 
 /** [artBubble] with its picture loaded here (decoded off the main thread the first time). */

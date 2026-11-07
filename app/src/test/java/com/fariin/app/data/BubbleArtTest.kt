@@ -84,6 +84,45 @@ class BubbleArtTest {
         }
     }
 
+    /**
+     * A short line ("test" + time + ticks, about 70 dp by 22 dp) sits in the middle between the
+     * bubble's own edges, both ways, and outside both art clearances; the box is never under the slices.
+     */
+    @Test fun shortLineIsCentredBetweenTheBubbleEdgesAndClearOfTheArt() {
+        for (s in BubbleArt.all) for ((cw, ch) in listOf(70f to 22f, 4f to 22f, 160f to 22f)) {
+            val l = s.layout
+            val p = BubbleArt.place(s, cw, ch, maxW = 300f)
+            val edgeL = l.edgeLeft
+            val edgeR = p.width - l.edgeRight
+            val gapL = p.x - edgeL
+            val gapR = edgeR - (p.x + cw)
+            assertEquals("${s.id} $cw centred", gapL, gapR, 0.01f)
+            assertTrue("${s.id} $cw left clearance", p.x >= l.padLeft - 1e-3f)
+            assertTrue("${s.id} $cw right clearance", p.x + cw <= p.width - l.padRight + 1e-3f)
+            assertTrue("${s.id} min width", p.width >= l.minWidth - 1e-3f)
+            assertTrue("${s.id} not wider than needed", p.width <= maxOf(l.minWidth,
+                cw + l.edgeLeft + l.edgeRight + 2 * maxOf(l.padLeft - l.edgeLeft, l.padRight - l.edgeRight)) + 1e-3f)
+            val gapT = p.y - l.edgeTop
+            val gapB = (p.height - l.edgeBottom) - (p.y + ch)
+            assertEquals("${s.id} vertical", gapT, gapB, 0.01f)
+            assertTrue("${s.id} top", p.y >= l.padTop - 1e-3f && p.y + ch <= p.height - l.padBottom + 1e-3f)
+        }
+    }
+
+    /** Long words (the box at its widest) keep the old layout: at the left clearance, the box ending at the right one. */
+    @Test fun longWordsKeepTheOldSnugLayout() {
+        for (s in BubbleArt.all) {
+            val l = s.layout
+            val maxW = 300f
+            val cw = maxW - l.padLeft - l.padRight
+            val p = BubbleArt.place(s, cw, 66f, maxW)
+            assertEquals(s.id, maxW, p.width, 1e-3f)
+            assertEquals(s.id, l.padLeft, p.x, 1e-3f)
+            assertEquals(s.id, l.padTop, p.y, 1e-3f)
+            assertEquals(s.id, l.padTop + 66f + l.padBottom, p.height, 1e-3f)
+        }
+    }
+
     @Test fun nineSliceTilesTheBoxAndThePicture() {
         for (s in BubbleArt.all) for ((bw, bh) in listOf(s.width to s.height, s.width / 2 to s.height / 2, 337 to 151)) {
             val l = s.layout

@@ -85,6 +85,38 @@ object BubbleArt {
         )
     }
 
+    /** Where the words go: the box drawn is [width] by [height], the words' top left at [x], [y]. */
+    class Placement(val width: Float, val height: Float, val x: Float, val y: Float)
+
+    /**
+     * The box and the words' spot for words measured [contentW] by [contentH] (measured with at most
+     * `maxW - padLeft - padRight` of room), all in one unit: [d] units per dp (1 for dp, density for px).
+     *
+     * Short words sit in the middle between the bubble's own edges, with the same gap on both sides:
+     * the larger of the two art clearances, so they never enter either one (owner 2026-11-07: a
+     * short "test" had a lopsided empty gap beside it, left on manga, right on bunny). When that
+     * wider box would pass [maxW] (long or wrapped words), the old snug box: words at the left
+     * clearance, the box ending at the right one. The box is never under the left + right slices.
+     * Vertically the words are centred between the bubble's top and bottom edges, so a one-line
+     * bubble that the caps make taller than its words keeps them in the middle.
+     */
+    fun place(s: Spec, contentW: Float, contentH: Float, maxW: Float = Float.MAX_VALUE, d: Float = 1f): Placement {
+        val l = s.layout
+        val padL = l.padLeft * d; val padR = l.padRight * d
+        val outL = l.edgeLeft * d; val outR = l.edgeRight * d
+        val gap = max(padL - outL, padR - outR)
+        val snug = contentW + padL + padR
+        val even = contentW + outL + outR + 2 * gap
+        val w = max(l.minWidth * d, if (even <= maxW) even else snug)
+        val edgeL = outL; val edgeR = w - outR
+        val x = ((edgeL + edgeR - contentW) / 2f).coerceIn(padL, max(padL, w - padR - contentW))
+        val padT = l.padTop * d; val padB = l.padBottom * d
+        val h = max(l.minHeight * d, contentH + padT + padB)
+        val edgeT = l.edgeTop * d; val edgeB = h - l.edgeBottom * d
+        val y = ((edgeT + edgeB - contentH) / 2f).coerceIn(padT, max(padT, h - padB - contentH))
+        return Placement(w, h, x, y)
+    }
+
     /**
      * The 9 parts: for each, the source rect in a bitmap [bw] by [bh] (the picture decoded at any
      * size) and the destination rect in a box [w] by [h] px, with the caps [capT]..[capL] in px.
