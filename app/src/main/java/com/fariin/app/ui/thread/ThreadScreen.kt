@@ -1690,8 +1690,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             // A QUOTE POST SAYS WHOSE IT IS (iOS, owner 2026-11-07, "show my channel name in quote
             // posts"): the channel's name at the top of the bubble, over its words and the quoted card,
-            // in the bubble's text colour; no photo, and a tap does nothing. Quote posts only.
-            ui.channel?.info?.title?.takeIf { it.isNotEmpty() && m.quoteId != null && !m.deleted }?.let { name ->
+            // in the bubble's text colour; no photo, and a tap does nothing. Quote posts only, and
+            // only text ones: a photo, video or album quote post has no name band over its media (iOS).
+            ui.channel?.info?.title?.takeIf { it.isNotEmpty() && m.quoteId != null && !m.deleted && m.mediaKind == null }?.let { name ->
                 Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = styled?.ink ?: if (isMe) Color.White else c.label,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(1.dp))
