@@ -154,7 +154,7 @@ internal fun MessageMenu(
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
         if (!m.deleted) {
-            if (MessageRules.canReply(m)) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply) { onReply(m) })
+            if (MessageRules.canReplyHere(m, mayReplyHere(ui))) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply) { onReply(m) })
             // A call record: call back from here too, through the same confirm as its tap (iOS);
             // not while the call is still ringing or going.
             if (m.isCall && onCallBack != null) {
@@ -495,6 +495,10 @@ internal fun UnreadDivider() {
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
     )
 }
+
+/** iOS mayReplyHere: in a group where only admins send, a member gets no Reply (menu or swipe). */
+internal fun mayReplyHere(ui: ThreadUi): Boolean =
+    com.fariin.app.data.GroupAdmins.announcementBlock(ui.groupDoc, ui.me) == null
 
 /** iOS: a photo, a video or an album can be saved; a view-once photo never. */
 internal fun canSaveToGallery(m: Message): Boolean = !m.deleted && !m.viewOnce && m.sendState == null && when (m.mediaKind) {

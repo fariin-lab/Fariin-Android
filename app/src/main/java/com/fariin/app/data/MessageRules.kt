@@ -51,6 +51,15 @@ object MessageRules {
     /** Reply needs a server copy (a clientId-only send cannot be quoted yet). */
     fun canReply(m: Message): Boolean = m.sendState == null && !m.deleted && !m.isSystem
 
+    /** iOS Message.isStoryReaction: an emoji sent from a story's react bar takes no reply. */
+    fun isStoryReaction(m: Message): Boolean = m.replyTo?.let { it.isStatus && it.isReaction } == true
+
+    /**
+     * Reply offered here, by menu row and by swipe (iOS: `!m.isStoryReaction && mayReplyHere`).
+     * [mayReply] is false in a group where only admins send and I am not one.
+     */
+    fun canReplyHere(m: Message, mayReply: Boolean): Boolean = mayReply && canReply(m) && !isStoryReaction(m)
+
     /** Info: my own delivered message in a group (iOS). */
     fun canInfo(m: Message, me: String, isGroup: Boolean): Boolean = isGroup && m.authorId == me && m.sendState == null
 
