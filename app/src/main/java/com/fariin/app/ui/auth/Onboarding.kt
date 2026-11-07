@@ -167,7 +167,10 @@ fun OnboardingPage(
                 val h = Usernames.sanitize(handle)
                 if (h.isNotEmpty() && !h.equals(currentHandle, ignoreCase = false)) api.claimUsername(h)
                 api.saveName(name.trim())
-                photo?.let { try { api.uploadPhoto(it) } catch (_: Exception) {} }
+                photo?.let {
+                    try { api.uploadPhoto(it) }
+                    catch (_: Exception) { com.fariin.app.ui.components.Snack.show("Photo couldn't be uploaded. Add it later in Edit Profile.", long = true) }
+                }
                 onSaved()
             } catch (e: Exception) {
                 val msg = e.message ?: "Try again."

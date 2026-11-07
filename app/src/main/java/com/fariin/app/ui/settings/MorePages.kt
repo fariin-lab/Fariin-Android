@@ -259,8 +259,11 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                         text = { Text(SettingsRules.autoSignOutLabel(d), color = Fariin.colors.label) },
                         trailingIcon = { if (auto == d) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Check, null, tint = Fariin.colors.accent) },
                         onClick = {
-                            menu = false; auto = d
-                            scope.launch { runCatching { db.collection("users").document(me!!).set(mapOf("deviceAutoSignOutDays" to d), SetOptions.merge()).await() } }
+                            menu = false; val was = auto; auto = d
+                            scope.launch {
+                                val ok = runCatching { db.collection("users").document(me!!).set(mapOf("deviceAutoSignOutDays" to d), SetOptions.merge()).await() }.isSuccess
+                                if (!ok) { auto = was; com.fariin.app.ui.components.Snack.show("Couldn't save. Check your connection.") }
+                            }
                         })
                 }
                 }
@@ -315,9 +318,15 @@ private fun NotificationsPage(pop: () -> Unit) {
     if (askOn) com.fariin.app.push.NotificationsSheet { askOn = false }
     var reset by remember { mutableStateOf(false) }
     val me = FirebaseAuth.getInstance().currentUser?.uid
-    fun account(field: String, v: Boolean) {
+    var resetting by remember { mutableStateOf(false) }
+    suspend fun saveAccount(field: String, v: Boolean): Boolean = me != null &&
+        runCatching { FirebaseFirestore.getInstance().collection("users").document(me).set(mapOf(field to v), SetOptions.merge()).await() }.isSuccess
+    /** Saves the switch on the account; if that fails the switch goes back and the user is told. */
+    fun account(field: String, v: Boolean, undo: () -> Unit) {
         me ?: return
-        scope.launch { runCatching { FirebaseFirestore.getInstance().collection("users").document(me).set(mapOf(field to v), SetOptions.merge()).await() } }
+        scope.launch {
+            if (!saveAccount(field, v)) { undo(); com.fariin.app.ui.components.Snack.show("Couldn't save. Check your connection.") }
+        }
     }
     fun openSystem(channel: String? = null) {
         val i = if (channel != null) Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_CHANNEL_ID, channel)
@@ -330,12 +339,19 @@ private fun NotificationsPage(pop: () -> Unit) {
         }
         SettingsSection(footer = "Everything below depends on this. With it off, Fariin does not notify you at all, on the lock screen or inside the app.") {
             SwitchRow("Show Notifications", push, last = true) { on ->
-                push = on; p.edit().putBoolean(Push.PUSH_ON, on).apply(); account("notifPush", on)
+                push = on; p.edit().putBoolean(Push.PUSH_ON, on).apply()
                 if (on) Push.register(ctx) else scope.launch { Push.unregister(ctx) }
+                account("notifPush", on) {
+                    push = !on; p.edit().putBoolean(Push.PUSH_ON, !on).apply()
+                    if (!on) Push.register(ctx) else scope.launch { Push.unregister(ctx) }
+                }
             }
         }
         SettingsSection(header = "Message Notifications", footer = "Preview shows the sender and the message. Sound and vibration are set by Android for each kind of notification.") {
-            SwitchRow("Message Preview", preview, enabled = push) { on -> preview = on; p.edit().putBoolean("notif.preview", on).apply(); account("notifPreview", on) }
+            SwitchRow("Message Preview", preview, enabled = push) { on ->
+                preview = on; p.edit().putBoolean("notif.preview", on).apply()
+                account("notifPreview", on) { preview = !on; p.edit().putBoolean("notif.preview", !on).apply() }
+            }
             SettingsRow("Message Sound", trailing = Trailing.OUT_LINK) { openSystem(com.fariin.app.push.NotifChannel.MESSAGES.id) }
             SettingsRow("Call Ringtone", trailing = Trailing.OUT_LINK, last = true) { openSystem(com.fariin.app.push.NotifChannel.CALLS.id) }
         }
@@ -348,7 +364,8 @@ private fun NotificationsPage(pop: () -> Unit) {
             SwitchRow("Sound When Sent", sent, last = true) { sent = it; p.edit().putBoolean("chat.sentSound", it).apply() }
         }
         SettingsSection(footer = "Undo all custom notification settings, including muted chats.") {
-            SettingsRow("Reset All Notifications", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { reset = true }
+            SettingsRow("Reset All Notifications", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true,
+                accessory = { if (resetting) com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) { if (!resetting) reset = true }
         }
     }
     if (reset) YesNo("Reset all notifications?", "Every muted chat goes back to normal notifications.", "Reset", onYes = {
@@ -356,12 +373,23 @@ private fun NotificationsPage(pop: () -> Unit) {
         p.edit().putBoolean(Push.PUSH_ON, true).putBoolean("notif.preview", true).putBoolean("notif.inAppSound", true)
             .putBoolean("notif.inAppVibrate", true).putBoolean("notif.inAppPreview", true).putBoolean("chat.sentSound", true).apply()
         push = true; preview = true; inSound = true; inVibrate = true; inPreview = true; sent = true
-        account("notifPush", true); account("notifPreview", true)
         Push.register(ctx)
-        if (me != null) scope.launch {
-            val db = FirebaseFirestore.getInstance()
-            for (c in com.fariin.app.data.CryptoHub.listedAll()) if ((c.mutedBy[me] ?: 0.0) > System.currentTimeMillis()) {
-                runCatching { db.collection("conversations").document(c.id).set(mapOf("mutedBy" to mapOf(me to 0.0)), SetOptions.merge()).await() }
+        if (me != null) {
+            resetting = true
+            scope.launch {
+                val savedAccount = saveAccount("notifPush", true) and saveAccount("notifPreview", true)
+                val db = FirebaseFirestore.getInstance()
+                var unmuteFailed = 0
+                for (c in com.fariin.app.data.CryptoHub.listedAll()) if ((c.mutedBy[me] ?: 0.0) > System.currentTimeMillis()) {
+                    val ok = runCatching { db.collection("conversations").document(c.id).set(mapOf("mutedBy" to mapOf(me to 0.0)), SetOptions.merge()).await() }.isSuccess
+                    if (!ok) unmuteFailed++
+                }
+                resetting = false
+                com.fariin.app.ui.components.Snack.show(when {
+                    unmuteFailed > 0 -> "Some chats couldn't be unmuted. Check your connection and try again."
+                    !savedAccount -> "Couldn't save. Check your connection."
+                    else -> "Notifications reset"
+                })
             }
         }
     }, onNo = { reset = false })
@@ -560,7 +588,13 @@ private fun StoriesSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         SettingsSection(footer = "See and share when stories are viewed. If disabled, you won't see when others view your stories.") {
             SwitchRow("View Receipts", on, last = true) { v ->
                 on = v; p.edit().putBoolean("storyViewReceipts", v).apply()
-                scope.launch { runCatching { ref?.set(mapOf("receipts" to v, "offAt" to if (v) null else FieldValue.serverTimestamp()))?.await() } }
+                scope.launch {
+                    val ok = runCatching { ref?.set(mapOf("receipts" to v, "offAt" to if (v) null else FieldValue.serverTimestamp()))?.await() }.isSuccess
+                    if (!ok) {
+                        on = !v; p.edit().putBoolean("storyViewReceipts", !v).apply()
+                        com.fariin.app.ui.components.Snack.show("Couldn't save. Check your connection.")
+                    }
+                }
             }
         }
     }

@@ -71,6 +71,10 @@ internal fun MessageInfoSheet(m: Message, ui: ThreadUi, is24h: Boolean, onDismis
                     }
                 }
             }
+            if (split.readBy.isEmpty() && split.deliveredTo.isEmpty()) item {
+                Text("No one has received it yet.", fontSize = 15.sp, color = c.secondary,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
             if (split.readBy.isNotEmpty()) item {
                 MemberSection("Read by ${split.readBy.size}", Icons.Filled.CheckCircle, split.readBy, ui, name)
             }

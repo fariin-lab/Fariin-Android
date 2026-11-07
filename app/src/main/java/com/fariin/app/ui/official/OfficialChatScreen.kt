@@ -253,6 +253,12 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Never a blank page: the ring until the first answer, then words if there is nothing.
+            if (view.visible.isEmpty()) item(key = "empty") {
+                if (!view.loaded) com.fariin.app.ui.components.LoadingRow(Modifier.fillMaxWidth().padding(top = 24.dp))
+                else Text("No messages yet", fontSize = 15.sp, color = c.secondary,
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
             items(view.visible, key = { it.id }) { a ->
                 val now = System.currentTimeMillis().toDouble()
                 AnnouncementCard(a, timeLabel(a.sortAt, is24h), a.buttons.filter { it.isUsable(now) }, ::tap,

@@ -205,11 +205,17 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
                     val id = halfMade ?: ChannelService.createGroupForChannel(name, my.getString("name") ?: "", my.getString("photoUrl")).also { halfMade = it }
                     if (!ChannelService.makeChannelWithRetry(id)) { error = "Could not create the channel. Try again."; creating = false; return@launch }
                     halfMade = null
-                    try { ChannelService.setDescription(id, about) } catch (_: Exception) {}
-                    try { ChannelService.createPrimaryLink(id) } catch (_: Exception) {}
-                    // The photo picked on this page, best-effort: the channel stands without it.
-                    photo?.let { ph -> try { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(appCtx)).setGroupPhoto(id, ph) } catch (_: Exception) {} }
+                    // The rest is best-effort: the channel stands without it, but the user is told what is missing.
+                    val missed = mutableListOf<String>()
+                    try { ChannelService.setDescription(id, about) } catch (_: Exception) { if (about.isNotBlank()) missed += "description" }
+                    try { ChannelService.createPrimaryLink(id) } catch (_: Exception) { missed += "invite link" }
+                    photo?.let { ph -> try { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(appCtx)).setGroupPhoto(id, ph) } catch (_: Exception) { missed += "photo" } }
                     cid = id; creating = false; step = 2
+                    if (missed.isNotEmpty()) {
+                        val what = when (missed.size) { 1 -> "the ${missed[0]}"; 2 -> "the ${missed[0]} and ${missed[1]}"; else -> "the ${missed[0]}, ${missed[1]} and ${missed[2]}" }
+                        val them = if (missed.size == 1) "it" else "them"
+                        com.fariin.app.ui.components.Snack.show("Channel created, but $what couldn't be saved. Add $them in channel settings.", long = true)
+                    }
                 } catch (_: Exception) { error = "Could not create the channel. Try again."; creating = false }
             }
         }

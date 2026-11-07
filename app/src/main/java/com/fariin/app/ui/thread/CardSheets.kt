@@ -111,6 +111,9 @@ internal fun ContactPickSheet(me: String, cid: String, onDismiss: () -> Unit, on
             if (people.isEmpty()) {
                 Text("People you chat with show up here.", fontSize = 15.sp, color = c.secondary,
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp))
+            } else if (shown.isEmpty()) {
+                Text("No results", fontSize = 15.sp, color = c.secondary,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp))
             }
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {

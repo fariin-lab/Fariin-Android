@@ -76,6 +76,10 @@ internal fun ReactorsSheet(m: Message, ui: ThreadUi, onRemoveMine: () -> Unit, o
             tabs.forEach { (e, n) -> Tab(e, "$n", active == e) { picked = e } }
         }
         LazyColumn(Modifier.fillMaxWidth().heightIn(min = 120.dp).navigationBarsPadding().padding(bottom = 12.dp)) {
+            if (rows.isEmpty()) item {
+                Text("No reactions yet", fontSize = 15.sp, color = c.secondary,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
             items(rows, key = { it.uid }) { r ->
                 val mine = r.uid == ui.me && canRemove
                 Row(
