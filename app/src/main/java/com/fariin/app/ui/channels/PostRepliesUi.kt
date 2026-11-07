@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -1030,7 +1031,7 @@ internal fun RepliesComposer(s: PostRepliesState) {
                 }
             }
             Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.fieldFill)
-                .padding(start = 18.dp, end = 6.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                .padding(start = 18.dp, end = 5.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f).padding(vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
                     if (s.draft.isEmpty()) Text("Add a reply…", fontSize = 16.sp, color = c.tertiary)
                     BasicTextField(
@@ -1042,9 +1043,18 @@ internal fun RepliesComposer(s: PostRepliesState) {
                         modifier = Modifier.fillMaxWidth().focusRequester(s.field),
                     )
                 }
+                // The chat's send button (iOS 2026-11-07): a white up arrow on a 40x34 blue pill, inside the
+                // field on the right, there only while the field has words; it scales and fades in.
                 val can = PostReplyRules.cleanDraft(s.draft) != null
-                TextButton(onClick = { s.send() }, enabled = can) {
-                    Text("Send", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = if (can) c.accent else c.tertiary)
+                androidx.compose.animation.AnimatedVisibility(can,
+                    enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(150)) +
+                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(150), initialScale = 0.7f),
+                    exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) +
+                        androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(120), targetScale = 0.7f)) {
+                    Box(Modifier.padding(start = 6.dp, end = 0.dp).size(width = 40.dp, height = 34.dp).clip(RoundedCornerShape(17.dp))
+                        .background(c.blue).clickable(onClickLabel = "Send") { s.send() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }
