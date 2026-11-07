@@ -550,12 +550,14 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
  * Quotes only), the admins' ... and a round 40 dp X on the right.
  */
 @Composable
-internal fun RepliesSheetTop(tab: Int, showReplies: Boolean, s: PostRepliesState, onPick: (Int) -> Unit, onClose: () -> Unit) {
+internal fun RepliesSheetTop(tab: Int, showReplies: Boolean, s: PostRepliesState, showQuotes: Boolean = true,
+                             onPick: (Int) -> Unit, onClose: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             if (showReplies) TabWord("Replies", tab == 0) { onPick(0) }
-            TabWord("Quotes", tab == 1) { onPick(1) }
+            // The channel's Quotes switch off: no Quotes tab.
+            if (showQuotes) TabWord("Quotes", tab == 1) { onPick(1) }
         }
         Spacer(Modifier.weight(1f))
         if (PostReplyRules.showsAdminMenu(s.may)) {

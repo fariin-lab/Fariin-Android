@@ -27,6 +27,13 @@ class PostReplyRulesTest {
         assertNull(PostReplyRules.barLabel(0, 0, repliesOn = false))
     }
 
+    @Test fun quotesOffDropsTheQuotesPart() {
+        assertEquals("3 Replies", PostReplyRules.barLabel(3, 4, repliesOn = true, quotesOn = false))
+        assertEquals("Reply", PostReplyRules.barLabel(0, 4, repliesOn = true, quotesOn = false))
+        // Replies off too: no bar at all.
+        assertNull(PostReplyRules.barLabel(3, 4, repliesOn = false, quotesOn = false))
+    }
+
     @Test fun offOpensQuotesOnly() {
         assertEquals(1, PostReplyRules.startTab(repliesOn = false))
         assertEquals(0, PostReplyRules.startTab(repliesOn = true))
