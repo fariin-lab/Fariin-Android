@@ -94,20 +94,25 @@ object BubbleArt {
      *
      * Short words sit in the middle between the bubble's own edges, with the same gap on both sides:
      * the larger of the two art clearances, so they never enter either one (owner 2026-11-07: a
-     * short "test" had a lopsided empty gap beside it, left on manga, right on bunny). When that
-     * wider box would pass [maxW] (long or wrapped words), the old snug box: words at the left
-     * clearance, the box ending at the right one. The box is never under the left + right slices.
-     * Vertically the words are centred between the bubble's top and bottom edges, so a one-line
-     * bubble that the caps make taller than its words keeps them in the middle.
+     * short "test" had a lopsided empty gap beside it, left on manga, right on bunny). The same
+     * rule as iOS: the box widens until the smaller side's gap equals the larger clearance, up to
+     * [maxW]; past that the words go as near the middle as they can without entering either
+     * clearance, so words that fill the width keep the old layout. The box is never under the
+     * left + right slices. Vertically the words are centred between the bubble's top and bottom
+     * edges, so a one-line bubble that the caps make taller than its words keeps them in the middle.
+     * [centre] false (a link-card bubble): the old snug layout, words at the left and top clearances.
      */
-    fun place(s: Spec, contentW: Float, contentH: Float, maxW: Float = Float.MAX_VALUE, d: Float = 1f): Placement {
+    fun place(s: Spec, contentW: Float, contentH: Float, maxW: Float = Float.MAX_VALUE, d: Float = 1f,
+              centre: Boolean = true): Placement {
         val l = s.layout
         val padL = l.padLeft * d; val padR = l.padRight * d
         val outL = l.edgeLeft * d; val outR = l.edgeRight * d
         val gap = max(padL - outL, padR - outR)
         val snug = contentW + padL + padR
+        if (!centre) return Placement(max(l.minWidth * d, snug),
+            max(l.minHeight * d, contentH + (l.padTop + l.padBottom) * d), padL, l.padTop * d)
         val even = contentW + outL + outR + 2 * gap
-        val w = max(l.minWidth * d, if (even <= maxW) even else snug)
+        val w = max(l.minWidth * d, max(snug, min(even, maxW)))
         val edgeL = outL; val edgeR = w - outR
         val x = ((edgeL + edgeR - contentW) / 2f).coerceIn(padL, max(padL, w - padR - contentW))
         val padT = l.padTop * d; val padB = l.padBottom * d

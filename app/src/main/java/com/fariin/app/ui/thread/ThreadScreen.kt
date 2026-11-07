@@ -1587,7 +1587,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             Modifier.bubbleDecor(bubbleDecorFor(m, styled, isMe, c.dark, g.first, g.last, failed, showSender))
                 .widthIn(max = maxW)
                 // A picture style: its own 9-slice picture on every message, unclipped, no run shape (bubbles/BubbleArtDraw.kt).
-                .then(if (art != null) Modifier.artBubble(art, c.dark) else Modifier.clip(shape)
+                .then(if (art != null) Modifier.artBubble(art, c.dark, centre = m.linkPreview == null) else Modifier.clip(shape)
                 .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape)))
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp)),
         ) {

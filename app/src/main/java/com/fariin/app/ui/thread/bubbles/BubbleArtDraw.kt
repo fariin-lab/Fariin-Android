@@ -34,7 +34,7 @@ internal fun BubbleArt.Spec.fillColor(): Color = Color(0xFF000000 or fill)
  * jumps when the picture arrives. Dark mode: a dark bubble gets a 0.5 dp light rim (white 45%) so
  * it does not vanish on black. Cost per frame: 9 bitmap draws (or one rounded rect), no allocation.
  */
-internal fun Modifier.artBubble(spec: BubbleArt.Spec, image: ImageBitmap?, dark: Boolean): Modifier {
+internal fun Modifier.artBubble(spec: BubbleArt.Spec, image: ImageBitmap?, dark: Boolean, centre: Boolean = true): Modifier {
     val l = spec.layout
     return this
         .drawWithCache {
@@ -83,7 +83,7 @@ internal fun Modifier.artBubble(spec: BubbleArt.Spec, image: ImageBitmap?, dark:
                 maxHeight = if (constraints.hasBoundedHeight) max(0, constraints.maxHeight - padV) else Constraints.Infinity,
             ))
             val maxW = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.MAX_VALUE
-            val at = BubbleArt.place(spec, p.width.toFloat(), p.height.toFloat(), maxW, d)
+            val at = BubbleArt.place(spec, p.width.toFloat(), p.height.toFloat(), maxW, d, centre)
             val w = ceil(at.width).toInt().coerceIn(constraints.minWidth, constraints.maxWidth)
             val h = ceil(at.height).toInt().coerceIn(constraints.minHeight, constraints.maxHeight)
             // Absolute, like the picture: it is not mirrored right to left.
@@ -91,6 +91,7 @@ internal fun Modifier.artBubble(spec: BubbleArt.Spec, image: ImageBitmap?, dark:
         }
 }
 
-/** [artBubble] with its picture loaded here (decoded off the main thread the first time). */
+/** [artBubble] with its picture loaded here (decoded off the main thread the first time). [centre] false: a link-card bubble, laid out as before. */
 @Composable
-internal fun Modifier.artBubble(spec: BubbleArt.Spec, dark: Boolean): Modifier = artBubble(spec, rememberBubbleArt(spec), dark)
+internal fun Modifier.artBubble(spec: BubbleArt.Spec, dark: Boolean, centre: Boolean = true): Modifier =
+    artBubble(spec, rememberBubbleArt(spec), dark, centre)

@@ -96,7 +96,9 @@ class BubbleArtTest {
             val edgeR = p.width - l.edgeRight
             val gapL = p.x - edgeL
             val gapR = edgeR - (p.x + cw)
-            assertEquals("${s.id} $cw centred", gapL, gapR, 0.01f)
+            // Same rule as iOS: left and right within 1 unit (1 dp; iOS 1 pt).
+            assertEquals("${s.id} $cw centred", gapL, gapR, 1f)
+            assertEquals("${s.id} $cw centred exactly", gapL, gapR, 0.01f)
             assertTrue("${s.id} $cw left clearance", p.x >= l.padLeft - 1e-3f)
             assertTrue("${s.id} $cw right clearance", p.x + cw <= p.width - l.padRight + 1e-3f)
             assertTrue("${s.id} min width", p.width >= l.minWidth - 1e-3f)
@@ -120,6 +122,37 @@ class BubbleArtTest {
             assertEquals(s.id, l.padLeft, p.x, 1e-3f)
             assertEquals(s.id, l.padTop, p.y, 1e-3f)
             assertEquals(s.id, l.padTop + 66f + l.padBottom, p.height, 1e-3f)
+        }
+    }
+
+    /** Too wide to centre fully: the box takes the max width and the words go as near the middle as the clearances allow. */
+    @Test fun nearlyFullLineCentresAsFarAsItCan() {
+        for (s in BubbleArt.all) {
+            val l = s.layout
+            val maxW = 300f
+            val gap = maxOf(l.padLeft - l.edgeLeft, l.padRight - l.edgeRight)
+            val room = maxW - l.padLeft - l.padRight
+            val cw = room - 0.5f * kotlin.math.abs((l.padLeft - l.edgeLeft) - (l.padRight - l.edgeRight))
+            val p = BubbleArt.place(s, cw, 22f, maxW)
+            assertEquals(s.id, maxW, p.width, 1e-3f)
+            assertTrue(s.id, p.x >= l.padLeft - 1e-3f && p.x + cw <= maxW - l.padRight + 1e-3f)
+            val gapL = p.x - l.edgeLeft
+            val gapR = maxW - l.edgeRight - (p.x + cw)
+            // Less lopsided than the old snug layout (which was off by the clearances' difference).
+            val oldDiff = kotlin.math.abs((l.padLeft - l.edgeLeft) - (l.padRight - l.edgeRight))
+            assertTrue("${s.id} ${gapL - gapR} vs $oldDiff", kotlin.math.abs(gapL - gapR) <= oldDiff * 0.5f + 1e-3f)
+            assertTrue(s.id, minOf(gapL, gapR) <= gap + 1e-3f)
+        }
+    }
+
+    /** A link-card bubble keeps the old layout. */
+    @Test fun linkCardBubbleUnchanged() {
+        for (s in BubbleArt.all) {
+            val l = s.layout
+            val p = BubbleArt.place(s, 70f, 22f, 300f, centre = false)
+            assertEquals(s.id, l.padLeft, p.x, 1e-3f)
+            assertEquals(s.id, l.padTop, p.y, 1e-3f)
+            assertEquals(s.id, maxOf(l.minWidth, 70f + l.padLeft + l.padRight), p.width, 1e-3f)
         }
     }
 
