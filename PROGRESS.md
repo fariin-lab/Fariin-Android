@@ -1198,3 +1198,16 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Merged, not yet exercised on the phone: group confirm sheets (e2c57b9), feedback states (d2d071a, ba1cc0e),
   and reply Creator/Pin/tap-to-profile (0ed4ecf), plus the Creator reply now opening the channel for everyone.
   Running: New badges on the 115 catalog spots.
+- 2026-11-07 midday: on main:
+  - Checked on the Pixel: rounded-corner bubble art v2 (449a4f9); wallpaper brightness slider (fb3e154);
+    GIF grid 3 columns edge to edge (9ee9fdb); attach HD button (055bbc2); Chat Bubble row removed from
+    profile and group info (de26bfe); Bubble Style preview fixed height (ca0fef5); animated wallpaper badge
+    icon (2002605).
+  - Bold un-toggle verified; long-press with the keyboard open does not jump (recorded).
+  - Merged, not yet checked on the Pixel: compact picture quote card (c4f20e8); replies prefetch (f78d843);
+    Delete Account no longer calls notifyAccountDeleted (9e0aa57); story reel link card with 3 styles
+    (c55f9a0); channel media reactions inside the bubble with one-pass layout (78b8dd0); admin-hidden
+    wallpapers and bubbles (ddc4f97); Bubble Color row removed from Appearance (e3ca54d).
+  - Running: channel Reactions switch, Quotes switch, Share and Search buttons, reply arc lines, service-line
+    menu; per-chat bubble style (top priority).
+  - A GIF went to kream by mistake at 10:41 during a GIF-panel test; delete waits for the owner's word.
