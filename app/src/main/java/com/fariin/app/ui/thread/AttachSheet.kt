@@ -512,9 +512,13 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
         }
         Box(Modifier.align(Alignment.TopEnd).size(44.dp).clickable(onClick = onToggle)
             .semantics { contentDescription = if (chosen) "Selected, number $number" else "Select" }, contentAlignment = Alignment.TopEnd) {
+            // On a light picture the white ring vanished (seen on the Pixel, 2026-11-07): a soft dark
+            // edge just outside it keeps the empty circle visible on any picture.
             Box(
-                Modifier.padding(7.dp).size(24.dp).clip(CircleShape)
-                    .background(if (chosen) c.blue else Color.Black.copy(alpha = 0.12f))
+                Modifier.padding(7.dp).size(24.dp)
+                    .border(0.5.dp, Color.Black.copy(alpha = 0.28f), CircleShape)
+                    .padding(0.5.dp).clip(CircleShape)
+                    .background(if (chosen) c.blue else Color.Black.copy(alpha = 0.18f))
                     .border(1.5.dp, Color.White, CircleShape),
                 contentAlignment = Alignment.Center,
             ) { if (chosen) Text("$number", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
