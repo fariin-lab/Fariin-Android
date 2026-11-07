@@ -164,9 +164,10 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         onReact = { m, e -> vm.viewModelScope.launch { if (!vm.repo.setReaction(m, e)) notice = "Couldn't react. Try again." } },
         onSendReply = { t, r -> vm.repo.sendText(t, r) },
         onSendMentioned = { t, r, ids -> vm.repo.sendText(t, r, ids) },
+        onSendBold = { t, r, ids, fmt -> vm.repo.sendText(t, r, ids, fmt) },
         onSendSticker = { s, r -> vm.repo.sendSticker(s, r) },
         onSendGif = { g, r -> vm.repo.sendGif(g, r) },
-        onEdit = { m, t -> vm.viewModelScope.launch { if (!vm.repo.editMessage(m, t)) notice = "Couldn't edit this message." } },
+        onEdit = { m, t, fmt -> vm.viewModelScope.launch { if (!vm.repo.editMessage(m, t, fmt)) notice = "Couldn't edit this message." } },
         onDeleteForEveryone = { m ->
             vm.viewModelScope.launch {
                 if (!vm.repo.deleteForEveryone(m)) notice = "The server refused the delete. The message is still there for both of you."
@@ -219,13 +220,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
             if (dest != cid) nav.chat(dest)
         },
         // A send before the quote has landed waits for its id; a message never carries the local token.
-        onSendQuote = { t, q, ids, failed ->
+        onSendQuote = { t, q, ids, fmt, failed ->
             val repo = vm.repo
             val qid = com.fariin.app.data.QuoteRules.sendableQid(q)
-            if (qid != null) repo.sendQuote(t, qid, ids, failed)
+            if (qid != null) repo.sendQuote(t, qid, ids, failed, fmt)
             else if (com.fariin.app.data.QuoteRules.isToken(q.token)) com.fariin.app.data.QuoteStore.whenMade(q.token) { r ->
                 when (r) {
-                    is com.fariin.app.data.QuoteStore.Made.Ok -> repo.sendQuote(t, r.qid, ids, failed)
+                    is com.fariin.app.data.QuoteStore.Made.Ok -> repo.sendQuote(t, r.qid, ids, failed, fmt)
                     is com.fariin.app.data.QuoteStore.Made.Refused -> com.fariin.app.ui.components.Snack.show(com.fariin.app.data.QuoteRules.REFUSED)
                 }
             }

@@ -101,7 +101,7 @@ object DemoPeople : PeopleApi {
                 set(u.copy(messages = u.messages + Message(id = "local-$now", authorId = me, text = t.trim(), createdAtMillis = now,
                     clientTs = now, replyTo = Message.ReplyRef(r.id, r.authorId, r.bodyText))))
             },
-            onEdit = { m, t -> change(m.id) { it.copy(text = t.trim(), edited = true) } },
+            onEdit = { m, t, _ -> change(m.id) { it.copy(text = t.trim(), edited = true) } },
             onDeleteForEveryone = { m -> change(m.id) { it.copy(deleted = true, text = "", reactions = emptyMap(), type = "text", imageUrl = null) } },
             onDeleteForMe = { m -> val u = get(); set(u.copy(messages = u.messages.filter { it.id != m.id })) },
             onTitleClick = onTitle,

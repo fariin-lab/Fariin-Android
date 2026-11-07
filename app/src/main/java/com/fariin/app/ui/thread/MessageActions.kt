@@ -81,7 +81,10 @@ data class ThreadActions(
     val onSendReply: (String, Message) -> Unit = { _, _ -> },
     /** A text with group @mentions (uids), optionally a reply; null falls back to the plain sends. */
     val onSendMentioned: ((String, Message?, List<String>) -> Unit)? = null,
-    val onEdit: (Message, String) -> Unit = { _, _ -> },
+    /** A channel post with bold runs ([TextFormat] wire JSON), with its reply and @mentions. */
+    val onSendBold: ((String, Message?, List<String>, String) -> Unit)? = null,
+    /** The new words, and their bold runs as wire JSON (null = none). */
+    val onEdit: (Message, String, String?) -> Unit = { _, _, _ -> },
     val onDeleteForEveryone: (Message) -> Unit = {},
     val onDeleteForMe: (Message) -> Unit = {},
     val onTyping: (Boolean) -> Unit = {},
@@ -103,7 +106,7 @@ data class ThreadActions(
     val onQuote: (Message) -> Unit = {},
     val onQuoteTo: (Message, String) -> Unit = { _, _ -> },
     /** My words with the quote waiting above the composer; the last callback runs when it failed. */
-    val onSendQuote: (String, com.fariin.app.data.QuoteStore.Draft, List<String>, () -> Unit) -> Unit = { _, _, _, _ -> },
+    val onSendQuote: (String, com.fariin.app.data.QuoteStore.Draft, List<String>, String?, () -> Unit) -> Unit = { _, _, _, _, _ -> },
     /** Save a photo or video to the phone's gallery. */
     val onSave: (Message) -> Unit = {},
     /** The words left in the box last time (iOS Drafts), and where new ones are kept. */

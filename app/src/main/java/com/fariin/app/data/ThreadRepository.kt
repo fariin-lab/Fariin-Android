@@ -473,12 +473,16 @@ class ThreadRepository(
     fun sendText(text: String, reply: Message?) = sendText(text, reply, emptyList())
 
     /** [mentions]: the uids @-mentioned in a group (MentionRules.forSend), written in the clear. */
-    fun sendText(text: String, reply: Message?, mentions: List<String>) {
+    fun sendText(text: String, reply: Message?, mentions: List<String>) = sendText(text, reply, mentions, null)
+
+    /** [fmt]: a channel post's bold runs as wire JSON (TextFormat) for text.trim(); null = none. */
+    fun sendText(text: String, reply: Message?, mentions: List<String>, fmt: String?) {
         val t = text.trim()
         if (t.isEmpty()) return
         // iOS ThreadView.send: one bubble holds 2,500 (owner 2026-10-29); longer text goes out as
         // several messages, in order, each one waiting for the one before. The reply, the
         // @-mentions and the link card ride the first (a mention pings once, not once per bubble).
+        // The bold does not survive the split (iOS): the runs were made for the whole text.
         val parts = MessageLength.splitForBubbles(t)
         if (parts.size > 1) {
             var before: kotlinx.coroutines.Job? = null
@@ -487,19 +491,21 @@ class ThreadRepository(
             }
             return
         }
-        sendOne(t, reply, mentions, null)
+        sendOne(t, reply, mentions, null, fmt = fmt)
     }
 
     private var lastTap = 0.0
 
     /** One bubble's text; [after] = the send it must follow (a long text's earlier bubble). */
-    private fun sendOne(t: String, reply: Message?, mentions: List<String>, after: kotlinx.coroutines.Job?, card: Boolean = true): kotlinx.coroutines.Job? {
+    private fun sendOne(t: String, reply: Message?, mentions: List<String>, after: kotlinx.coroutines.Job?, card: Boolean = true,
+                        fmt: String? = null): kotlinx.coroutines.Job? {
         // A card is quoted by its noun (iOS safeText), never by its raw marker.
         val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
         // Never the same millisecond as the bubble before (a long text's parts keep their order on screen).
         val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
         val clientId = UUID.randomUUID().toString().uppercase()
-        val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text, mentions)
+        val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text, mentions,
+            fmt = fmt?.takeIf { Wire.isGroupCid(cid) })
         // The link card follows the text (iOS attachLinkPreview): one built while typing shows on
         // my bubble at once; otherwise it is fetched for up to 6 s beside the send.
         if (card) LinkPreviews.cardUrlFor(t, LinkPreviews.enabled(), LinkPreviews.takeSuppressed(cid))
@@ -551,6 +557,7 @@ class ThreadRepository(
             id = e.clientId, authorId = me, text = e.text, createdAtMillis = e.ts, hasServerTime = false,
             clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
             mentions = e.mentions, bubbleStyle = style.first, bubbleDecor = style.second,   // from the first frame
+            bold = TextFormat.parse(e.fmt, e.text.length),
         )
         rebuild()
         return on.launch {
@@ -561,7 +568,7 @@ class ThreadRepository(
                 after?.join()
                 if (checkFirst && alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return@launch }
                 turn.withLock {
-                    if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions) else sendDirect(e.text, e.clientId, e.ts, ref)
+                    if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref)
                 }
                 SendQueue.remove(me, e.clientId)
                 styleAtSend.remove(e.clientId)
@@ -595,7 +602,7 @@ class ThreadRepository(
         return try {
             if (alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return QueuedResult.SENT }
             turn.withLock {
-                if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions) else sendDirect(e.text, e.clientId, e.ts, ref)
+                if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref)
             }
             SendQueue.remove(me, e.clientId)
             QueuedResult.SENT
@@ -881,7 +888,7 @@ class ThreadRepository(
      * and [onFailed] puts the quote and the words back in the composer, rather than leaving a Resend
      * that would go without its quote.
      */
-    fun sendQuote(text: String, qid: String, mentions: List<String>, onFailed: () -> Unit) {
+    fun sendQuote(text: String, qid: String, mentions: List<String>, onFailed: () -> Unit, fmt: String? = null) {
         if (!QuoteRules.isQid(qid)) return
         val t = text.trim()
         val clientId = UUID.randomUUID().toString().uppercase()
@@ -889,12 +896,13 @@ class ThreadRepository(
         pending[clientId] = Message(
             id = clientId, authorId = me, text = t, createdAtMillis = ts, hasServerTime = false,
             clientTs = ts, clientId = clientId, sendState = Message.SendState.SENDING, mentions = mentions, quoteId = qid,
+            bold = TextFormat.parse(fmt, t.length),
         )
         rebuild()
         sendScope.launch {
             try {
                 turn.withLock {
-                    if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, mentions = mentions, quote = qid)
+                    if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, mentions = mentions, quote = qid, fmt = fmt)
                     else sendDirect(t, clientId, ts, quote = qid)
                 }
             } catch (_: Exception) {
@@ -1294,7 +1302,7 @@ class ThreadRepository(
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                   forwarded: Boolean = false, countsAsUnread: Boolean = true,
                                   mentions: List<String> = emptyList(), fwdChannelJson: String? = null,
-                                  quote: String? = null) {
+                                  quote: String? = null, fmt: String? = null) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
@@ -1314,6 +1322,8 @@ class ThreadRepository(
         if (forwarded) msg["forwarded"] = true
         fwdChannelJson?.let { j -> runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwdChannel"] = it } }
         if (quote != null) msg["quote"] = mapOf("qid" to quote)   // a quoted channel post (iOS sendGroupText)
+        // Bold runs (TextFormat), sealed like the text: plain in a plain channel.
+        if (fmt != null && t.isNotEmpty()) msg["fmt"] = crypto.sealForGroup(fmt, members, cid)
         if (countsAsUnread && CryptoHub.listedConversation(cid)?.isChannel != true) putBubbleStyle(msg, clientId)
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
@@ -1343,7 +1353,7 @@ class ThreadRepository(
     }
 
     /** ChatService.editMessage: re-sealed, the replaced text appended to `edits` (at most 10). */
-    suspend fun editMessage(m: Message, newText: String): Boolean {
+    suspend fun editMessage(m: Message, newText: String, fmt: String? = null): Boolean {
         val t = newText.trim()
         if (t.isEmpty()) return false
         return try {
@@ -1360,6 +1370,9 @@ class ThreadRepository(
             fun size() = edits.sumOf { ((it["t"] as? String)?.length ?: 0) } + cipher.length
             while (edits.size > 10 || (edits.size > 1 && size() > 700_000)) edits.removeAt(0)
             val update = hashMapOf<String, Any>("text" to cipher, "edited" to true, "editedAt" to FieldValue.serverTimestamp())
+            // The bold goes with the new words (iOS); an edit that leaves none takes the old runs off.
+            if (fmt != null && members != null) update["fmt"] = seal(fmt, members)
+            else if (data.containsKey("fmt")) update["fmt"] = FieldValue.delete()
             // Not in a channel post (owner 2026-11-06): every follower reads the post, so the old
             // versions stay off it; the server keeps them for the owner and admins.
             if (size() <= 700_000 && !isChannel()) update["edits"] = edits
@@ -1706,6 +1719,6 @@ class ThreadRepository(
         val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
             "fileName", "fileSize", "waveform", "duration", "blurhash", "linkPreview", "poll", "locationCard",
             "contactCard", "replyTo", "reactions", "videoEnc", "thumbEnc", "viewOnce", "mentions", "forwarded",
-            "fwdChannel", "thumb", "edits", "editedAt", "quote", "bs", "bsd")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
+            "fwdChannel", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
     }
 }

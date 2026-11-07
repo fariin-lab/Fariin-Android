@@ -32,6 +32,8 @@ object SendQueue {
         val replyText: String? = null,
         /** Group @mentions (iOS SendQueue.Entry.mentions), so a resend still tags them. */
         val mentions: List<String> = emptyList(),
+        /** A channel post's bold runs as the wire JSON (TextFormat), sealed only at the send. */
+        val fmt: String? = null,
     )
 
     @Volatile private var root: File? = null
@@ -105,6 +107,7 @@ object SendQueue {
             e.replyAuthor?.let { put("ra", it) }
             e.replyText?.let { put("rt", it) }
             if (e.mentions.isNotEmpty()) put("mn", JSONArray(e.mentions))
+            e.fmt?.let { put("fm", it) }
         })
     }.toString()
 
@@ -116,7 +119,8 @@ object SendQueue {
             if (id.isEmpty() || cid.isEmpty() || t.isEmpty()) return@mapNotNull null
             Entry(id, cid, t, o.optDouble("ts", 0.0),
                 o.optString("rid").ifEmpty { null }, o.optString("ra").ifEmpty { null }, if (o.has("rt")) o.getString("rt") else null,
-                o.optJSONArray("mn")?.let { m -> (0 until m.length()).mapNotNull { j -> m.optString(j).ifEmpty { null } } } ?: emptyList())
+                o.optJSONArray("mn")?.let { m -> (0 until m.length()).mapNotNull { j -> m.optString(j).ifEmpty { null } } } ?: emptyList(),
+                o.optString("fm").ifEmpty { null })
         }
     }
 }

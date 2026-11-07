@@ -1211,22 +1211,28 @@ private fun ThreadContent(
                 }
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
-                val send: (String, List<String>) -> Unit = { t, ids ->
+                val send: (String, List<String>, String?) -> Unit = { t, ids, fmt ->
                     val r = replyTo
                     val e = editing
                     val tagged = actions.onSendMentioned.takeIf { ids.isNotEmpty() }
+                    val bolded = actions.onSendBold.takeIf { fmt != null }
                     if (e == null) sendMotion.arm(SendMotion.Kind.TEXT, ui.messages, sendAnim)
                     val q = quoting
                     when {
-                        e != null -> { editing = null; if (t.trim() != e.text.trim()) actions.onEdit(e, t) }
+                        e != null -> {
+                            editing = null
+                            // A change of bold alone is an edit too.
+                            if (t.trim() != e.text.trim() || fmt != com.fariin.app.data.TextFormat.serialize(e.bold, e.text.length)) actions.onEdit(e, t, fmt)
+                        }
                         // My words with the quote: one message carrying only the quote's id (iOS sendQuote).
                         q != null -> {
                             quoting = null; replyTo = null
-                            actions.onSendQuote(t, q, ids) {
+                            actions.onSendQuote(t, q, ids, fmt) {
                                 quoting = q
                                 actions.onNotice("Couldn't send the quote. Try again.")
                             }
                         }
+                        bolded != null && fmt != null -> { replyTo = null; bolded(t, r, ids, fmt) }
                         tagged != null -> { replyTo = null; tagged(t, r, ids) }
                         r != null -> { replyTo = null; actions.onSendReply(t, r) }
                         else -> onSend(t)
@@ -1247,7 +1253,7 @@ private fun ThreadContent(
                 fun slow(): String? = if (!ui.isGroup || doc.isEmpty()) null else com.fariin.app.data.GroupAdmins.slowWait(doc, ui.me,
                     ui.messages.lastOrNull { it.authorId == ui.me && !it.isSystem }?.createdAtMillis, System.currentTimeMillis().toDouble())
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
-                val gatedSend: (String, List<String>) -> Unit = { t, ids ->
+                val gatedSend: (String, List<String>, String?) -> Unit = { t, ids, fmt ->
                     val links = if (com.fariin.app.data.GroupAdmins.hasLink(t)) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
                     // Slow mode lets one message through per wait, so a text that splits into several
                     // bubbles (ThreadRepository.sendText) could not all go: said before, not refused after.
@@ -1255,7 +1261,7 @@ private fun ThreadContent(
                         com.fariin.app.data.GroupAdmins.slows(doc, ui.me) && com.fariin.app.data.MessageLength.splitForBubbles(t).size > 1)
                         "Slow mode is on. Messages here can be up to ${com.fariin.app.data.MessageLength.BUBBLE_CHARS} characters." else null
                     val stop = slow() ?: links ?: long
-                    if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids)
+                    if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids, fmt)
                 }
                 if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false; attachCamera = false },
                     cameraFirst = attachCamera,
@@ -1297,13 +1303,16 @@ private fun ThreadContent(
                 // newest code. A new message used to hand the composer fresh lambdas (they hold `ui`
                 // and `actions`, both new on every update), so the whole composer and its field were
                 // rebuilt in the very frame my sent bubble should start rising; now it skips.
-                Composer(steady2(gatedSend), steady0 { attachOpen = true }, steady1 { r: VoiceRecorder.Result ->
+                Composer(steady3(gatedSend), steady0 { attachOpen = true }, steady1 { r: VoiceRecorder.Result ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                         if (stop != null) actions.onNotice(stop) else {
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
                             onSendVoice(r)
                         }
-                    }, prefill = editing?.let { it.id to it.text }, onTyping = steady1(actions.onTyping),
+                    }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(),
+                    // Bold in the selection menu: a channel post only (iOS Format > Bold).
+                    boldable = ch != null,
+                    onTyping = steady1(actions.onTyping),
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
                     onCamera = steady0 {
@@ -1743,6 +1752,10 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 bold = remember(body, m.mentions, ui.names, m.deleted) {
                     if (m.deleted) emptyList() else com.fariin.app.data.MentionRules.ranges(body, m.mentions, ui.names)
                 },
+                // A channel post's bold runs (TextFormat), only over the words they were made for.
+                fmtBold = remember(body, m.bold, m.deleted) {
+                    if (m.deleted || m.bold.isEmpty() || body != m.text) emptyList() else com.fariin.app.data.TextFormat.ranges(m.bold)
+                },
                 // iOS BubbleText: links, @usernames, emails and numbers tappable (BubbleLinks.kt).
                 linkInk = if (m.deleted) null else styled?.ink ?: if (isMe) Color.White else c.blue,
             )
@@ -2025,15 +2038,17 @@ private fun tickDescription(t: Tick) = when (t) {
  * (iOS MessageRowLayout: `metaInlineGap` 5, `metaGap` under a full last line).
  */
 @Composable
-private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), linkInk: Color? = null, meta: @Composable () -> Unit) {
+private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = emptyList(), fmtBold: List<IntRange> = emptyList(),
+                         linkInk: Color? = null, meta: @Composable () -> Unit) {
     val layoutRef = remember { arrayOfNulls<TextLayoutResult>(1) }
     Layout(content = {
         // In-chat search: the matched terms marked in yellow, never the whole bubble (iOS BubbleText).
         val term = LocalSearchTerm.current
         // Outside the list (the long-press menu's copy) the links are drawn but take no taps.
         val tap = LocalBubbleLinkTap.current ?: NoLinkTap
-        Text(remember(text, term, bold, linkInk, tap) {
-            val marked = mentionMarked(searchMarked(text, term), bold)
+        Text(remember(text, term, bold, fmtBold, linkInk, tap) {
+            // The post's own bold in the bold weight, same size; the mentions keep their semibold.
+            val marked = mentionMarked(searchMarked(text, term), bold).let { if (fmtBold.isEmpty()) it else boldMarked(it, fmtBold) }
             if (linkInk == null) marked else linkMarked(marked, bold, linkInk, tap)
         }, style = style, onTextLayout = { layoutRef[0] = it })
         // Exactly one node whatever meta() draws: the measure reads [0] and [1] by position.
@@ -2090,6 +2105,12 @@ private fun <A, B> steady2(f: (A, B) -> Unit): (A, B) -> Unit {
     return remember { { a: A, b: B -> now.value(a, b) } }
 }
 
+@Composable
+private fun <A, B, C> steady3(f: (A, B, C) -> Unit): (A, B, C) -> Unit {
+    val now = androidx.compose.runtime.rememberUpdatedState(f)
+    return remember { { a: A, b: B, c: C -> now.value(a, b, c) } }
+}
+
 /**
  * The composer, in the iOS order: attach on the left, the field, and on the right the send arrow
  * when there are words, else the mic. Hold the mic to record, slide left to cancel, let go to
@@ -2099,8 +2120,14 @@ private fun <A, B> steady2(f: (A, B) -> Unit): (A, B) -> Unit {
  */
 @Composable
 private fun Composer(
-    onSend: (String, List<String>) -> Unit, onAttach: () -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
-    prefill: Pair<String, String>? = null, onTyping: (Boolean) -> Unit = {},
+    /** The words, the @mentions' uids, and the bold runs of the trimmed words as wire JSON (null = none). */
+    onSend: (String, List<String>, String?) -> Unit, onAttach: () -> Unit, onSendVoice: (VoiceRecorder.Result) -> Unit,
+    prefill: Pair<String, String>? = null,
+    /** The edited post's bold runs, put in the field with its words. */
+    prefillBold: List<com.fariin.app.data.TextFormat.Span> = emptyList(),
+    /** A channel post: "Bold" in the selection menu, and the runs go with the send. */
+    boldable: Boolean = false,
+    onTyping: (Boolean) -> Unit = {},
     initialDraft: String = "", onDraft: (String) -> Unit = {},
     me: String = "", onSticker: (com.fariin.app.data.StickerRef) -> Unit = {},
     onGif: (com.fariin.app.data.StickerGifRules.Gif) -> Unit = {},
@@ -2132,10 +2159,12 @@ private fun Composer(
     var wasEditing by remember { mutableStateOf(false) }
     // iOS mentionMap: the members picked from the @ list, by name; resolved against the text at send.
     var picks by remember { mutableStateOf(emptyMap<String, List<String>>()) }
+    // The field's bold runs (TextFormat), kept in step with every change to its words.
+    var boxBold by remember { mutableStateOf(emptyList<com.fariin.app.data.TextFormat.Span>()) }
     // Edit puts the message's words in the field (keyed by message id, so it happens once).
     LaunchedEffect(prefill?.first) {
-        if (prefill != null) { draft = prefill.second; wasEditing = true; picks = emptyMap() }
-        else if (wasEditing) { draft = kept; wasEditing = false }
+        if (prefill != null) { draft = prefill.second; wasEditing = true; picks = emptyMap(); boxBold = if (boldable) prefillBold else emptyList() }
+        else if (wasEditing) { draft = kept; wasEditing = false; boxBold = emptyList() }
     }
     // The box's text with its cursor. Words put in from outside (an edit, the draft coming back,
     // a clear after send) get the cursor at their end; before, an edit started with the cursor in
@@ -2258,6 +2287,7 @@ private fun Composer(
         .windowInsetsPadding(restInsets).padding(bottom = 8.dp)) {
         // iOS mentionPicker, above the bar; hidden while editing (an edit tags nobody).
         if (mentions != null && prefill == null && !recording) MentionPicker(mentions, boxValue) { v, uid, name ->
+            if (boldable) boxBold = com.fariin.app.data.TextFormat.adjust(boxBold, boxValue.text, v.text)
             boxValue = v; draft = v.text
             picks = com.fariin.app.data.MentionRules.addPick(picks, name, uid)
             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
@@ -2309,6 +2339,16 @@ private fun Composer(
                 ) {
                     val fieldText = TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
                     if (draft.isEmpty()) Text(placeholder, style = fieldText, color = c.tertiary, maxLines = 1)
+                    // A channel post: the selection menu gets "Bold" (iOS Format > Bold).
+                    val fieldView = androidx.compose.ui.platform.LocalView.current
+                    val boldBar = remember(fieldView) { BoldTextToolbar(fieldView) }
+                    boldBar.onBold = {
+                        val sel = boxValue.selection
+                        boxBold = com.fariin.app.data.TextFormat.toggle(boxBold, sel.min, sel.max, boxValue.text.length)
+                    }
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        androidx.compose.ui.platform.LocalTextToolbar provides (if (boldable) boldBar else androidx.compose.ui.platform.LocalTextToolbar.current),
+                    ) {
                     BasicTextField(
                         value = boxValue, onValueChange = { v ->
                             // iOS messageMaxChars: typing stops at 6,400, a paste past it is trimmed to fit.
@@ -2318,16 +2358,21 @@ private fun Composer(
                                 } ?: return@BasicTextField
                             val now = System.currentTimeMillis()
                             if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
+                            // What is typed or pasted starts regular, even next to bold.
+                            if (boldable) boxBold = com.fariin.app.data.TextFormat.adjust(boxBold, boxValue.text, fv.text)
                             boxValue = fv
                             draft = fv.text
                         },
                         textStyle = fieldText.copy(color = c.label),
+                        visualTransformation = if (boldable && boxBold.isNotEmpty()) BoldRunsTransformation(boxBold)
+                            else androidx.compose.ui.text.input.VisualTransformation.None,
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
                         modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged { if (it.isFocused) emojiOpen = false }
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },
                     )
+                    }
                 }
                 // The field's icons, 24 each, 32 apart, the last one centred 24 in from the pill's end
                 // (iOS fieldIconPitch / micTrailing); dimmer than the mic (label at 55%). The camera
@@ -2363,9 +2408,13 @@ private fun Composer(
                     Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).clickable {
                         val t = draft
                         val ids = mentions?.let { com.fariin.app.data.MentionRules.forSend(t.trim(), picks, it.members) } ?: emptyList()
+                        // The runs measured on the words as sent (trimmed), as iOS does.
+                        val fmt = if (boldable) com.fariin.app.data.TextFormat.serialize(
+                            com.fariin.app.data.TextFormat.forTrimmed(boxBold, t), t.trim().length) else null
                         picks = emptyMap()
+                        boxBold = emptyList()
                         draft = ""
-                        onSend(t, ids)
+                        onSend(t, ids, fmt)
                     },
                     contentAlignment = Alignment.Center,
                 ) {
