@@ -72,6 +72,7 @@ import com.fariin.app.data.ThreadLogic
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /** What the long-press menu, swipe, typing and read-at-bottom call back into (live or demo). */
 data class ThreadActions(
@@ -371,34 +372,77 @@ internal fun ReactionChips(m: Message, ui: ThreadUi, isMe: Boolean, onTap: (Stri
     }
 }
 
-/** Swipe a bubble right to reply (iOS: past 60 pt, the reply arrow shows and the quote starts). */
-internal fun Modifier.swipeToReply(enabled: Boolean, onReply: () -> Unit, offset: (Float) -> Unit): Modifier =
+/**
+ * Swipe a bubble LEFT to reply, as iOS (NativeMessageList handleSwipePan): one to one with the
+ * finger up to 55 dp, then the overflow moves at a quarter speed with no cap. It arms on the raw
+ * distance, with a light tap the moment 55 is crossed (and again on a re-crossing), and replies
+ * on release only while armed. [offset] gets the eased shift, negative = left.
+ */
+internal fun Modifier.swipeToReply(enabled: Boolean, onReply: () -> Unit, onArm: () -> Unit,
+                                   onRelease: () -> Unit, offset: (Float) -> Unit): Modifier =
     if (!enabled) this else pointerInput(Unit) {
-        var dx = 0f
-        val trigger = 60.dp.toPx()
+        var raw = 0f
+        var armed = false
+        val trigger = SWIPE_REPLY_DP.dp.toPx()
+        fun end(fire: Boolean) {
+            raw = 0f; armed = false; onRelease()
+            if (fire) onReply()
+        }
         detectHorizontalDragGestures(
-            onDragEnd = { if (dx > trigger) onReply(); dx = 0f; offset(0f) },
-            onDragCancel = { dx = 0f; offset(0f) },
+            onDragStart = { raw = 0f; armed = false },
+            onDragEnd = { end(armed) },
+            onDragCancel = { end(false) },
         ) { change, amount ->
-            dx = (dx + amount).coerceIn(0f, trigger * 1.4f)
-            if (dx > 0f) change.consume()
-            offset(dx)
+            raw = (raw - amount).coerceAtLeast(0f)
+            if (raw > 0f) change.consume()
+            offset(-SwipeReplyMath.eased(raw, trigger))
+            if (raw >= trigger && !armed) { armed = true; onArm() } else if (raw < trigger) armed = false
         }
     }
 
-/** A swipe-able row: the content follows the finger, the reply arrow fades in behind it. */
+internal const val SWIPE_REPLY_DP = 55
+
+/** iOS swipe numbers, pure so they are tested. */
+internal object SwipeReplyMath {
+    /** Past the threshold the overflow moves at a quarter of the finger's speed. */
+    fun eased(raw: Float, threshold: Float): Float = if (raw > threshold) threshold + (raw - threshold) / 4f else raw
+    /** The arrow's fade and size: 0..1 over the threshold, scale 0.6 to 1. */
+    fun progress(eased: Float, threshold: Float): Float = (eased / threshold).coerceIn(0f, 1f)
+    fun arrowScale(progress: Float): Float = 0.6f + 0.4f * progress
+}
+
+/**
+ * A swipe-able row: the content follows the finger to the left, the reply arrow fades in and grows
+ * at the row's right edge, and on release everything goes back in a plain 0.2 s ease (iOS: no
+ * spring). The drag offset is read only in layout and draw, so a swipe does not recompose the row.
+ */
 @Composable
 internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit, content: @Composable () -> Unit) {
-    var dx by remember { mutableFloatStateOf(0f) }
-    val trigger = with(LocalDensity.current) { 60.dp.toPx() }
+    val dx = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val trigger = with(LocalDensity.current) { SWIPE_REPLY_DP.dp.toPx() }
+    val view = androidx.compose.ui.platform.LocalView.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val back = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     // The drag loop starts once; it calls the newest reply action (the newest copy of the message),
     // so replying to a message edited since its row was drawn quotes its current words.
     val latest = androidx.compose.runtime.rememberUpdatedState(onReply)
-    Box(Modifier.fillMaxWidth().swipeToReply(enabled, { latest.value() }) { dx = it }) {
-        if (dx > 4f) Icon(Icons.AutoMirrored.Filled.Reply, null, tint = Fariin.colors.secondary,
-            modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp).size(22.dp)
-                .graphicsLayer { alpha = (dx / trigger).coerceIn(0f, 1f) })
-        Box(Modifier.offset { IntOffset(dx.roundToInt(), 0) }) { content() }
+    val showArrow by remember { androidx.compose.runtime.derivedStateOf { dx.floatValue < -4f } }
+    Box(Modifier.fillMaxWidth().swipeToReply(enabled, onReply = { latest.value() }, onArm = { view.lightTap() },
+        onRelease = {
+            val from = dx.floatValue
+            back[0]?.cancel()
+            back[0] = scope.launch {
+                androidx.compose.animation.core.animate(from, 0f,
+                    animationSpec = androidx.compose.animation.core.tween(200)) { v, _ -> dx.floatValue = v }
+            }
+        }) { back[0]?.cancel(); dx.floatValue = it }) {
+        if (showArrow) Icon(Icons.AutoMirrored.Filled.Reply, null, tint = Fariin.colors.secondary,
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).size(22.dp)
+                .graphicsLayer {
+                    val p = SwipeReplyMath.progress(-dx.floatValue, trigger)
+                    alpha = p; scaleX = SwipeReplyMath.arrowScale(p); scaleY = scaleX
+                })
+        Box(Modifier.offset { IntOffset(dx.floatValue.roundToInt(), 0) }) { content() }
     }
 }
 
