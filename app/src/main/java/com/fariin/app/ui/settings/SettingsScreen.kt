@@ -153,7 +153,6 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             page == PAGE_PASSWORD -> com.fariin.app.ui.auth.PasswordPage(remember { AuthRepository() }, pop, onForgot = { push(PAGE_RESET + it) }, demoOpen = demoProfile != null)
             page.startsWith(PAGE_RESET) == true -> com.fariin.app.ui.auth.ResetCodePage(remember { AuthRepository() }, page.removePrefix(PAGE_RESET), pop,
                 onDone = { stack = stack.dropLast(2) }, demo = demoProfile != null)
-            page == PAGE_DELETE -> DeleteAccountPage(profile, pop, onSignOut)
             page == PAGE_USERNAME -> UsernamePage(me, profile, pop)
             accountSecurityRoute(page, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             privacyRoute(page, push, pop) -> Unit
@@ -343,26 +342,14 @@ private fun AccountPage(
     val ctx = LocalContext.current
     val exportScope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf(false) }
-    var menu by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     val hasTwoStep = !demo && rememberHasTwoStep()
     // iOS shows Password only when the account has an address a person can type.
     val hasEmail = demo || runCatching {
         !com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.isNullOrEmpty()
     }.getOrDefault(false)
     Column(Modifier.fillMaxSize()) {
-        PageBar("Account", onBack = pop, action = {
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = c.label)
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
-                    DropdownMenuItem(
-                        text = { Text("Delete Account", color = c.red) },
-                        onClick = { menu = false; push(PAGE_DELETE) },
-                    )
-                }
-            }
-        })
+        PageBar("Account", onBack = pop)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection(header = "Sign-in") {
                 SettingsRow("Email address", last = !hasEmail) { push(PAGE_EMAIL) }
@@ -394,8 +381,13 @@ private fun AccountPage(
                 }
                 SettingsRow("Log out", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirm = true }
             }
+            // Owner 2026-11-07: a plain red row opening two sheets (DeleteAccountSheets.kt), as on iOS.
+            if (!demo) SettingsSection {
+                SettingsRow("Delete Account", trailing = Trailing.NONE, titleColor = c.red, last = true) { deleting = true }
+            }
         }
     }
+    if (deleting) DeleteAccountFlow(profile, onDone = { deleting = false }, onSignOut = onSignOut)
     if (confirm) {
         // Unsent texts are wiped with the account: say how many, and offer to wait (a send is tried now).
         val unsent = remember { com.fariin.app.device.SessionEnd.unsentCount() }
