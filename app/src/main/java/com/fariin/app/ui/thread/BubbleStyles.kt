@@ -20,24 +20,40 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.fariin.app.data.BubbleArt
 import com.fariin.app.data.BubbleStyles
 import com.fariin.app.data.CardRules
 import com.fariin.app.data.Message
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.ui.thread.bubbles.fillColor
+import com.fariin.app.ui.thread.bubbles.ink
 
-/** A text bubble drawn in the sender's bubble style: its fill and its own text colour. */
-internal class StyledBubble(val fill: Brush, val ink: Color, val glass: Boolean)
+/**
+ * A text bubble drawn in the sender's bubble style: its fill and its own text colour. [art]: a
+ * picture style drawn as its picture (the LAST bubble of a run, SPEC 3); its earlier bubbles have
+ * [art] null and draw the style's flat colour in the normal shape.
+ */
+internal class StyledBubble(val fill: Brush, val ink: Color, val glass: Boolean, val art: BubbleArt.Spec? = null,
+                            val rim: Boolean = false)
 
 /**
  * The style a text bubble draws in, or null for the normal bubble: an unknown id, a deleted
  * message, or a bubble that is not plain words (media, poll, contact or location card).
+ * [lastOfRun]: the run's last bubble, the only one a picture style draws as its picture.
+ * [stylesOff]: a channel, or a group whose owner or admin turned bubble styles off (`bubbleStylesOff`).
  */
 @Composable
-internal fun styledBubble(m: Message): StyledBubble? {
-    if (!BubbleStyles.SHOWN) return null
-    val style = BubbleStyles.find(m.bubbleStyle) ?: return null
+internal fun styledBubble(m: Message, lastOfRun: Boolean, stylesOff: Boolean): StyledBubble? {
+    if (!BubbleStyles.SHOWN || stylesOff) return null
     if (m.deleted || m.mediaKind != null || m.poll != null) return null
     if (CardRules.location(m.text) != null || CardRules.contact(m.text) != null) return null
+    // A picture style (BubbleArt) wins over a colour style with the same id.
+    BubbleArt.find(m.bubbleStyle)?.let { a ->
+        val look = BubbleArt.look(a.id, lastOfRun, stylesOff = false)
+        return StyledBubble(androidx.compose.ui.graphics.SolidColor(a.fillColor()), a.ink(), glass = false,
+            art = if (look == BubbleArt.Look.ART) a else null, rim = a.lightText && Fariin.colors.dark)
+    }
+    val style = BubbleStyles.find(m.bubbleStyle) ?: return null
     val look = style.look(Fariin.colors.dark)
     val colors = look.fill.map { Color(0xFF000000 or it) }
     // Soft Glass is a live blur on iOS; a blur in the list would cost every scrolled frame, so here
@@ -49,10 +65,15 @@ internal fun styledBubble(m: Message): StyledBubble? {
     return StyledBubble(brush, Color(0xFF000000 or look.text), look.glass)
 }
 
-/** The styled fill, with a hairline edge for Soft Glass. */
+/** The styles' on/off for a chat: never in a channel, and off in a group whose `bubbleStylesOff` is set (SPEC 5). */
+internal fun bubbleStylesOff(channel: Boolean, groupDoc: Map<String, Any?>): Boolean =
+    channel || groupDoc["bubbleStylesOff"] == true
+
+/** The styled fill, with a hairline edge for Soft Glass, and a light rim on a dark picture style's plain bubble in dark mode. */
 internal fun Modifier.styledFill(s: StyledBubble, shape: Shape, dark: Boolean): Modifier =
     background(s.fill).then(
         if (s.glass) Modifier.border(0.5.dp, if (dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.10f), shape)
+        else if (s.rim) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.45f), shape)
         else Modifier,
     )
 
@@ -65,7 +86,7 @@ internal val LocalStyledInk = staticCompositionLocalOf<Color?> { null }
  */
 internal fun bubbleDecorFor(m: Message, styled: StyledBubble?, isMe: Boolean, dark: Boolean, first: Boolean,
                             last: Boolean, failed: Boolean, besideAvatar: Boolean): List<BubbleStyles.Placed> =
-    if (styled == null) emptyList()
+    if (styled == null || BubbleArt.find(m.bubbleStyle) != null) emptyList()   // a picture style has its own art
     else BubbleStyles.placed(m.bubbleStyle, m.bubbleDecor, isMe, dark, first, last, failed, besideAvatar)
 
 /**

@@ -9,9 +9,9 @@ package com.fariin.app.data
  * Soft Glass is the system blur on iOS; here it is its colour, partly see-through (see [Look.glass]).
  */
 object BubbleStyles {
-    /** Owner 2026-11-06: hidden until next year ("completely hide it"), as iOS BubbleStyles.shown.
-     *  Off: every message, mine or others', draws as a normal bubble. The code stays for later. */
-    const val SHOWN = false
+    /** Shown (owner 2026-11-07, lifting the 2026-11-06 hide). Off: every message, mine or others',
+     *  draws as a normal bubble, nothing is sent with a style and the Settings row is gone. */
+    const val SHOWN = true
 
     data class Look(
         /** 0xRRGGBB, one = solid, two = gradient from top to bottom. */
@@ -53,6 +53,53 @@ object BubbleStyles {
     )
 
     fun find(id: String?): Style? = if (id.isNullOrEmpty()) null else all.firstOrNull { it.id == id }
+
+    /**
+     * The colour styles the picker lists. "strawberry" is also a picture style's id (bubbles/,
+     * SPEC 8: picture ids are the file names, fixed forever), and a picture style wins a shared id
+     * everywhere, so the colour one is not offered: nothing was ever sent with it (hidden until now).
+     */
+    val colours: List<Style> get() = all.filter { BubbleArt.find(it.id) == null }
+
+    /** Any style this build can draw, picture or colour. */
+    fun known(id: String?): Boolean = BubbleArt.find(id) != null || find(id) != null
+
+    /** The name a picker row shows; "Default" for none. */
+    fun name(id: String?): String = BubbleArt.find(id)?.name ?: find(id)?.name ?: "Default"
+
+    // ---- My choice (iOS bubbleStyle.v1 / bubbleStyle.decor.v1, one for all chats) ----
+
+    private const val PREFS = "fariin_bubble_style"
+    const val KEY = "bubbleStyle.v1"
+    const val DECOR_KEY = "bubbleStyle.decor.v1"
+    @Volatile private var app: android.content.Context? = null
+    fun init(context: android.content.Context) { if (app == null) app = context.applicationContext }
+
+    /** Bumped on Save, so a Settings row naming the style reads it again. */
+    val version = androidx.compose.runtime.mutableIntStateOf(0)
+
+    /** The style I picked, or null for the normal bubble. */
+    fun current(): String? = app?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+        ?.getString(KEY, null)?.takeIf { it.isNotEmpty() }
+
+    /** The colour styles' corner decorations, on by default (iOS). Picture styles have their own art. */
+    fun decorations(): Boolean = app?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+        ?.getBoolean(DECOR_KEY, true) ?: true
+
+    fun save(id: String?, decor: Boolean) {
+        val p = app?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE) ?: return
+        p.edit().apply { if (id == null) remove(KEY) else putString(KEY, id) }.putBoolean(DECOR_KEY, decor).apply()
+        version.intValue++
+    }
+
+    /** May I pick it: every picture style; a colour style unless it is Plus (not on sale yet). */
+    fun mayUse(id: String?): Boolean = id == null || BubbleArt.find(id) != null || find(id)?.plus == false
+
+    /** What a text I send now carries as `bs` (null = nothing). */
+    fun forSending(): String? = if (!SHOWN) null else current()?.takeIf { known(it) && mayUse(it) }
+
+    /** `bsd` beside it: a colour style's decorations chosen (iOS sends it with any style). */
+    fun decorForSending(id: String?): Boolean = id != null && decorations()
 
     /** The `bs` field as it arrives: a short plain string, else nothing (iOS: 1 to 32 characters). */
     fun parseId(raw: Any?): String? = (raw as? String)?.takeIf { it.isNotEmpty() && it.length <= 32 }

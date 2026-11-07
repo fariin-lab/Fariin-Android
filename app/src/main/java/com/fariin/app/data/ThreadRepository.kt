@@ -527,7 +527,7 @@ class ThreadRepository(
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.text, createdAtMillis = e.ts, hasServerTime = false,
             clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
-            mentions = e.mentions,
+            mentions = e.mentions, bubbleStyle = BubbleStyles.forSending(),   // my bubble style from the first frame
         )
         rebuild()
         on.launch {
@@ -1147,6 +1147,13 @@ class ThreadRepository(
         (snap.get("users") as? List<*>)?.filterIsInstance<String>()
     } catch (_: Exception) { null } ?: memberUids()
 
+    /** My bubble style on a text I send (iOS ChatService): plain `bs`, and `bsd` for a colour style's decorations. */
+    private fun putBubbleStyle(msg: HashMap<String, Any>) {
+        val bs = BubbleStyles.forSending() ?: return
+        msg["bs"] = bs
+        if (BubbleStyles.decorForSending(bs)) msg["bsd"] = true
+    }
+
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                    forwarded: Boolean = false, countsAsUnread: Boolean = true,
                                    storyMention: Message.StoryMentionRef? = null, fwdChannelJson: String? = null,
@@ -1190,6 +1197,7 @@ class ThreadRepository(
         if (storyMention != null) msg["storyMention"] = mapOf("id" to storyMention.id, "thumb" to storyMention.thumbUrl)
         // A quoted channel post: only the server snapshot's id, in the clear (iOS ChatService).
         if (quote != null) msg["quote"] = mapOf("qid" to quote)
+        if (countsAsUnread && storyMention == null) putBubbleStyle(msg)
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
@@ -1272,6 +1280,7 @@ class ThreadRepository(
         if (forwarded) msg["forwarded"] = true
         fwdChannelJson?.let { j -> runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwdChannel"] = it } }
         if (quote != null) msg["quote"] = mapOf("qid" to quote)   // a quoted channel post (iOS sendGroupText)
+        if (countsAsUnread && CryptoHub.listedConversation(cid)?.isChannel != true) putBubbleStyle(msg)
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)
