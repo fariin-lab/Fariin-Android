@@ -141,7 +141,7 @@ private fun QuoteFaces(urls: List<String>, people: Boolean = false) {
  * [inBubble] false: a media post, whose bubble is the picture, gets the same row under it.
  */
 @Composable
-fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = true) {
+fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = true, edge: Dp = 0.dp) {
     if (m.isSystem) return
     // The post's own switch wins over the channel's (off by default); one just changed here wins over both.
     val local = PostRepliesSwitch.of(m.id)
@@ -171,7 +171,7 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiary, modifier = Modifier.size(18.dp))
         },
         modifier = Modifier
-            .padding(top = if (inBubble) 6.dp else 4.dp)
+            .padding(top = if (inBubble && edge == 0.dp) 6.dp else if (inBubble) 0.dp else 4.dp)
             .then(if (inBubble) Modifier else Modifier.padding(horizontal = 12.dp).clip(RoundedCornerShape(10.dp))
                 .background(c.label.copy(alpha = 0.06f)))
             .onPlaced { co ->
@@ -191,7 +191,8 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
     ) { ms, cons ->
         val loose = cons.copy(minWidth = 0, minHeight = 0)
         val gap = 9.dp.roundToPx()
-        val side = if (inBubble) 0 else 10.dp.roundToPx()
+        // [edge]: a bubble with no side padding of its own (a photo or video post) insets the bar itself.
+        val side = if (inBubble) edge.roundToPx() else 10.dp.roundToPx()
         val chev = ms[2].measure(loose)
         val faces = ms[0].measure(loose)
         val facesW = if (faces.width > 0) faces.width + gap else 0
