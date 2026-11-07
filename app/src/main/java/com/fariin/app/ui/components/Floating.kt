@@ -42,6 +42,14 @@ val LocalLiquidBackdrop = androidx.compose.runtime.staticCompositionLocalOf<com.
  */
 val LocalGlassWindow = androidx.compose.runtime.staticCompositionLocalOf<android.view.View?> { null }
 
+/**
+ * The glass surface's colour where the page under it is not white. The chat's faint grey frost
+ * reads on a white chat, but on the grey Settings page it was the page's own colour; there the
+ * page host ([GlassBarPage]) asks for the card white instead, as the solid circle was. Null keeps
+ * the chat's frost.
+ */
+val LocalGlassFrost = androidx.compose.runtime.staticCompositionLocalOf<Color?> { null }
+
 @Composable
 fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier {
     val c = Fariin.colors
@@ -54,7 +62,7 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
         // On a plain white chat (owner 2026-11-06: "without wallpaper, white on white is not
         // visible"): a faint grey in the surface, a hairline rim and a clearer shadow, as iOS glass
         // shows on white.
-        val frost = if (c.dark) c.card else Color(0xFFF4F4F7)
+        val frost = LocalGlassFrost.current ?: if (c.dark) c.card else Color(0xFFF4F4F7)
         return this
             .shadow(12.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.18f))
             .drawBackdrop(

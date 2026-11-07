@@ -516,7 +516,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
 
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
+    val pageScroll = rememberScrollState()
+    val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), bar = {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
             // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
@@ -540,6 +543,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup,
                 onClearMine = clearMine, onShare = shareProfile, onExport = exportChat)
         }
+    }) { top ->
         exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
         if (askClearMine) androidx.compose.material3.AlertDialog(onDismissRequest = { askClearMine = false },
             title = { Text("Clear your messages?") },
@@ -572,8 +576,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         // drawing the photo and buttons first let the bio push in under them (owner 2026-11-04).
         var waited by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { kotlinx.coroutines.delay(1500); waited = true }
-        if (person == null && !waited) return@Column
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (person == null && !waited) return@GlassBarPage
+        Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
             Spacer(Modifier.height(10.dp))
             Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)

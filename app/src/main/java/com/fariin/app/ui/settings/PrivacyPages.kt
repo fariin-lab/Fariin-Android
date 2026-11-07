@@ -104,9 +104,11 @@ internal fun ErrorNote(text: String?) {
 
 @Composable
 internal fun ScrollPage(title: String, pop: () -> Unit, action: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        PageBar(title, onBack = pop, action = action)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) { content() }
+    // The rows run under the bar, so its back and action are glass over them (GlassBarPage).
+    val scroll = rememberScrollState()
+    val under by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { scroll.value > 0 } }
+    com.fariin.app.ui.components.GlassBarPage(under, bar = { PageBar(title, onBack = pop, action = action) }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = top + 8.dp)) { content() }
     }
 }
 

@@ -222,13 +222,17 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         )))
 
     // The grey page with white cards and floating action circles (iOS ChannelInfo on grouped background).
+    // The page runs under its bar, so back and Edit are glass over it (GlassBarPage).
+    val pageScroll = rememberScrollState()
+    val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        Column(Modifier.fillMaxSize()) {
+        com.fariin.app.ui.components.GlassBarPage(underBar, bar = {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             PageBar("", onBack, action = if (canEdit) ({
                 com.fariin.app.ui.components.FloatingTextAction("Edit") { manage.edit(info.cid) }
             }) else null)
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
+        }) { top ->
+            Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top).padding(horizontal = 16.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL, modifier = if (canEdit) Modifier.clickable { manage.edit(info.cid) } else Modifier)
                 Spacer(Modifier.height(16.dp))

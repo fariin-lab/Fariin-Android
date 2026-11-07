@@ -294,11 +294,15 @@ private fun StoryPeoplePicker(
     val shown = if (q.isEmpty()) people else people.filter { it.name.lowercase().contains(q) }
     val picked = shown.filter { it.uid in selected }
     val rest = shown.filter { it.uid !in selected }
-    Column(Modifier.fillMaxSize()) {
+    // The list runs under the bar, so its back is glass over it (GlassBarPage).
+    val scroll = rememberScrollState()
+    val under by remember { androidx.compose.runtime.derivedStateOf { scroll.value > 0 } }
+    com.fariin.app.ui.components.GlassBarPage(under, bar = {
         PageBar(title, onBack = onBack, action = {
             TextButton(onClick = onSave, enabled = canSave) { Text(saveTitle, color = if (canSave) c.accent else c.secondary, fontSize = 16.sp) }
         })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+    }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(top = top + 8.dp)) {
             Box(
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(22.dp)).background(c.fieldFill).padding(horizontal = 16.dp),

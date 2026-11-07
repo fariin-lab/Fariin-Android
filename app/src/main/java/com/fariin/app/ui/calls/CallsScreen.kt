@@ -191,32 +191,40 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
 
     // The bar, the search capsule, All / Missed as a floating segmented pill (iOS MainShell Calls'
     // picker), New Call as a floating blue circle.
+    // The list runs under the bar, search and picker, so they are glass over it (GlassBarPage).
+    val underBar by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bg), page = c.bg, barEstimate = 160.dp, bar = {
+      Column(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
         if (selecting) com.fariin.app.ui.components.FloatingTopBar("${picked.size} Selected", onBack = { picked = emptySet() }) {
             com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.Delete, contentDescription = "Delete", onClick = { askDelete = true }, tint = c.red)
         } else com.fariin.app.ui.components.FloatingTopBar("Calls", tabRoot = true)
         SearchField(search, { search = it }, "Search calls")
         com.fariin.app.ui.components.FloatingSegments(listOf("All", "Missed"), if (missedOnly) 1 else 0,
             onSelect = { missedOnly = it == 1 }, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+      }
+    }) { top ->
+      // The list pads itself by [top] and scrolls under; the other states sit below the bar.
+      Box(Modifier.fillMaxSize()) {
+        val below = Modifier.padding(top = top)
         when {
             // iOS CallListSkeleton while the history is read.
-            !loaded -> com.fariin.app.ui.components.CallListSkeleton()
+            !loaded -> com.fariin.app.ui.components.CallListSkeleton(below)
             // A failed read is never drawn as an empty history.
             calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() && error != null ->
                 com.fariin.app.ui.components.CenteredNotice("Couldn't load calls", error, "Retry", onRetry,
-                    Modifier.fillMaxSize().padding(bottom = 60.dp))
-            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    below.fillMaxSize().padding(bottom = 60.dp))
+            calls.isEmpty() && allLinks.isEmpty() && live.isEmpty() -> Box(below.fillMaxSize(), contentAlignment = Alignment.Center) {
                 // One next step: the same New Call page as the floating button.
                 com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Phone,
                     "No Calls Yet", "Your call history will appear here.", Modifier.padding(bottom = 60.dp),
                     action = "Make a Call") { nav.newCall() }
             }
             // Worded as the chat and Settings searches.
-            rows.isEmpty() && q.isNotEmpty() -> Empty("No Results", "There were no results for \"${search.trim()}\".\nTry a new search.", search = true)
-            rows.isEmpty() && live.isEmpty() -> Empty("No Missed Calls", "Missed calls will appear here.")
+            rows.isEmpty() && q.isNotEmpty() -> Box(below) { Empty("No Results", "There were no results for \"${search.trim()}\".\nTry a new search.", search = true) }
+            rows.isEmpty() && live.isEmpty() -> Box(below) { Empty("No Missed Calls", "Missed calls will appear here.") }
             else -> LazyColumn(Modifier.fillMaxSize(), state = listState,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = top, bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
                 if (!selecting) items(live, key = { "live:" + it.cid }) { l -> com.fariin.app.ui.call.LiveGroupCallRow(l, groups.firstOrNull { it.id == l.cid }) }
 
                 items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r ->
@@ -245,6 +253,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                 }
             }
         }
+      }
     }
     if (!selecting) com.fariin.app.ui.components.FloatingIcon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call",
         onClick = { nav.newCall() }, tint = c.onAccent, fill = c.accent,

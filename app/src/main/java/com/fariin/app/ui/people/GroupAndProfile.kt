@@ -693,7 +693,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
     if (showQr && inviteLink != null) com.fariin.app.ui.settings.GroupQrSheet(conv["title"] as? String ?: "Group", inviteLink,
         (conv["avatarUrl"] as? String)?.ifEmpty { null }, users.size, onClose = { showQr = false })
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
+    val pageScroll = rememberScrollState()
+    val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), bar = {
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
@@ -712,7 +715,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     }))
             }
         }))
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+    }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(conv["avatarUrl"] as? String, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
                 modifier = if (canEdit) Modifier.clickable(onClickLabel = "Edit group") { editing = true }.semantics { contentDescription = "Group photo" } else Modifier)
             Spacer(Modifier.height(10.dp))

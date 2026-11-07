@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,7 +66,8 @@ fun FariinTopBar(
             // Back in the chat screen's floating circle with the iOS chevron, on every page.
             if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp))
         },
-        actions = actions,
+        // Glass circles at the end keep the back circle's distance from the edge (the last one was cut).
+        actions = { actions(); if (glassBar()) androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp)) },
         windowInsets = insets,
 
         colors = TopAppBarDefaults.topAppBarColors(
