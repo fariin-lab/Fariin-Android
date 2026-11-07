@@ -435,7 +435,6 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
     var blocked by remember { mutableStateOf(false) }
-    var muted by remember(conv) { mutableStateOf(conv?.isMuted(me, System.currentTimeMillis().toDouble()) == true) }
     var safety by remember { mutableStateOf<String?>(null) }
     var showSafety by remember { mutableStateOf(false) }
     var ask by remember { mutableStateOf<String?>(null) }
@@ -457,6 +456,23 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // The chat's timer, live (either person may change it; iOS ContactInfoView).
     val live = if (api is com.fariin.app.data.FirestorePeople) liveGroupDoc(cid) else emptyMap()
     val timer = (live["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0
+    // My mute of this chat: the live `mutedBy.<me>` end, or the one just picked until the doc answers.
+    var muteOverride by remember(cid) { mutableStateOf<Double?>(null) }
+    val liveUntil = if (live.containsKey("mutedBy")) com.fariin.app.data.GroupInfoCircles.mutedUntil(live, me) else conv?.mutedBy?.get(me) ?: 0.0
+    androidx.compose.runtime.LaunchedEffect(liveUntil) { muteOverride = null }
+    val muteUntil = muteOverride ?: liveUntil
+    val muted = muteUntil > System.currentTimeMillis()
+    fun setMute(until: Double) {
+        muteOverride = until
+        if (api !is com.fariin.app.data.FirestorePeople) return
+        scope.launch {
+            if (!writeContactMute(cid, me, until)) { muteOverride = null; notice = com.fariin.app.data.GroupInfoCircles.MUTE_FAILED }
+        }
+    }
+    var soundsOpen by remember { mutableStateOf(false) }
+    if (soundsOpen) { ContactSoundsPage(muteUntil, onMute = { setMute(it) }, onBack = { soundsOpen = false }); return }
+    // iOS reachedMeWithMyKey: they opened this chat with my Chat Key (the server's acceptedVia "pin").
+    val reachedWithMyKey = uid != me && live["acceptedVia"] == "pin" && live["acceptedBy"] == uid
     var timerOpen by remember { mutableStateOf(false) }
     if (DisappearingEditor(api, cid, isGroup = false, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
     val shared = rememberSharedMedia(cid, me)
@@ -618,7 +634,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 ActionTile(if (muted) "Unmute" else "Mute",
                     if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
                     else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off)) {
-                    scope.launch { if (api.setMuted(cid, !muted)) muted = !muted else notice = "Check your connection and try again." }
+                    setMute(if (muted) 0.0 else com.fariin.app.data.GroupInfoCircles.FOREVER)
                 }
                 if (fromChat && uid != me) ActionTile("Search", androidx.compose.material.icons.Icons.Filled.Search) {
                     com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack()
@@ -639,6 +655,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 if (uid != me && chatNow != null) SettingsRow("Restricted Chat",
                     icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_restricted_chat),
                     value = if (chatNow.isRestricted) "On" else "Off") { restrictOpen = true }
+                // iOS: Sounds & Notifications, "Muted" or "On"; the page picks how long.
+                if (uid != me) SettingsRow("Sounds & Notifications",
+                    icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_notifications),
+                    value = contactNotifValue(muteUntil)) { soundsOpen = true }
                 if (com.fariin.app.data.BubbleStyles.SHOWN && uid != me) SettingsRow("Chat Bubble",
                     icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat)) { bubbleOpen = true }
                 SettingsRow("Verify Encryption", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_verify_encryption), last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
@@ -655,6 +675,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     if (deletable != null) SettingsRow("Delete Chat", titleColor = c.red, trailing = Trailing.NONE) { ask = "delete" }
                     SettingsRow("Unblock $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "block" }
                 } else {
+                    // iOS: told when someone reached me with my Chat Key; read only, never on their side.
+                    if (reachedWithMyKey) SettingsRow("Used your Chat Key to reach you",
+                        icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat_key),
+                        trailing = Trailing.NONE)
                     SettingsRow("Block $name", titleColor = c.red, trailing = Trailing.NONE) { ask = "block" }
                     SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "report" }
                 }
