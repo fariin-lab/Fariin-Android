@@ -231,6 +231,19 @@ class SheetMotion internal constructor(
     // spent its last ~0.25 s creeping the final pixels (frame by frame on the Pixel, 2026-11-06).
     fun open() = run(mid, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
 
+    /**
+     * Moves the middle stop to where the content, now measured, really ends (a sheet as tall as what
+     * it holds, no empty band under the last button). A sheet opening to, or resting at, the old stop
+     * carries on to the new one.
+     */
+    fun fitMid(newMid: Float) {
+        if (kotlin.math.abs(newMid - mid) < 1f) return
+        val old = mid
+        mid = newMid
+        if (closing || old <= 0f) return
+        if (job?.isActive == true || kotlin.math.abs(y - old) < 1f) open()
+    }
+
     /** To full height on the same curve (a list opened, the keyboard coming up). */
     fun expand() {
         if (closing || (atFull && job?.isActive != true)) return

@@ -27,6 +27,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -174,14 +177,24 @@ private fun ConfirmSheet(handle: String, dueText: String, busy: Boolean, error: 
     }
 }
 
-/** Rests the sheet with about [height] showing, as tall as its content; a drag up gives the rest. */
+/**
+ * A first guess of the sheet's height ([height]) so it can start opening; [AccountSheetFrame] then
+ * measures the content and moves the stop to fit it exactly (owner 2026-11-07: empty band under Cancel).
+ */
 @Composable
 internal fun sheetRestAt(motion: SheetMotion, height: Dp) {
+    val stop = restStop(height.value)
+    if (motion.mid <= 0f) motion.mid = stop
+}
+
+/** The middle stop that leaves [heightDp] of sheet showing above the navigation bar. */
+@Composable
+private fun restStop(heightDp: Float): Float {
     val density = LocalDensity.current
     val windowH = LocalWindowInfo.current.containerSize.height
     val statusTop = WindowInsets.statusBars.getTop(density)
     val navBottom = WindowInsets.navigationBars.getBottom(density)
-    motion.mid = with(density) { windowH - statusTop - 10.dp.toPx() - height.toPx() - navBottom }.coerceAtLeast(0f)
+    return with(density) { windowH - statusTop - 10.dp.toPx() - heightDp.dp.toPx() - navBottom }.coerceAtLeast(0f)
 }
 
 /**
@@ -191,8 +204,14 @@ internal fun sheetRestAt(motion: SheetMotion, height: Dp) {
 @Composable
 @Suppress("UNUSED_PARAMETER")
 internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    var contentDp by remember { mutableFloatStateOf(0f) }
+    if (contentDp > 0f) { val stop = restStop(contentDp); SideEffect { motion.fitMid(stop) } }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 16.dp),
+        // Measured inside the scroll (unbounded), so this is the content's own height with its padding.
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+            .onSizeChanged { contentDp = with(density) { it.height.toDp().value } }
+            .padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) { content() }
         Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
     }
