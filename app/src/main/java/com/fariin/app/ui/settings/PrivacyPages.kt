@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.data.NewBadgeSpots
 import com.fariin.app.ui.components.listPress
 import android.content.Context
 import android.widget.Toast
@@ -67,13 +68,19 @@ internal val SwitchGreen = Color(0xFF34C759)
 
 /** A Material switch row: the title at the start, the switch at the end, the whole row toggles it. */
 @Composable
-internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true, last: Boolean = false, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true, last: Boolean = false,
+    /** The row's NewBadgeSpots id: the green "New" pill after the title while the panel has it on. */
+    badge: String? = null, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
     Row(
         Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+        if (com.fariin.app.ui.components.isNew(badge)) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f, fill = false))
+            com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp, end = 8.dp))
+        } else Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
             color = if (enabled) c.label else c.secondary, modifier = Modifier.weight(1f))
         com.fariin.app.ui.components.FariinSwitch(
             checked = checked, onCheckedChange = onChange, enabled = enabled,
@@ -147,6 +154,13 @@ internal fun privacyRoute(page: String, push: (String) -> Unit, pop: () -> Unit)
     return true
 }
 
+/** The audience rows' "New" spots, by privacy key. */
+private val PRIVACY_SPOTS = mapOf(
+    "lastSeen" to NewBadgeSpots.PRIVACY_LAST_SEEN, "photo" to NewBadgeSpots.PRIVACY_PHOTO,
+    "bio" to NewBadgeSpots.PRIVACY_BIO, "groups" to NewBadgeSpots.PRIVACY_GROUPS,
+    "messages" to NewBadgeSpots.PRIVACY_MESSAGES, "calls" to NewBadgeSpots.PRIVACY_CALLS,
+)
+
 @Composable
 private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
     val ctx = LocalContext.current
@@ -157,25 +171,30 @@ private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
     ScrollPage("Privacy & Security", pop) {
         SettingsSection {
             for (key in listOf("lastSeen", "photo", "bio", "groups", "messages", "calls")) {
-                SettingsRow(PrivacyRules.title(key), value = PrivacyRules.audience(map, key).label(key), last = key == "calls") {
+                SettingsRow(PrivacyRules.title(key), value = PrivacyRules.audience(map, key).label(key), last = key == "calls",
+                    badge = PRIVACY_SPOTS[key]) {
                     push(if (key == "messages") PAGE_MESSAGES else PAGE_AUDIENCE + key)
                 }
             }
         }
-        SettingsSection { SettingsRow("Blocked Users", value = "${blocked.entries.size}", last = true) { push(PAGE_BLOCKED) } }
+        SettingsSection { SettingsRow("Blocked Users", value = "${blocked.entries.size}", last = true,
+            badge = NewBadgeSpots.PRIVACY_BLOCKED) { push(PAGE_BLOCKED) } }
         SettingsSection(footer = "Send every call through Fariin's server so the people you call can't see your IP address. Call quality may be a little lower.") {
-            SwitchRow("Always Relay Calls", relay, last = true) { relay = it; calls.edit().putBoolean("calls.alwaysRelay", it).apply() }
+            SwitchRow("Always Relay Calls", relay, last = true, badge = NewBadgeSpots.PRIVACY_ALWAYS_RELAY) { relay = it; calls.edit().putBoolean("calls.alwaysRelay", it).apply() }
         }
         SettingsSection(footer = com.fariin.app.data.Disappearing.SETTINGS_FOOTER) {
-            SettingsRow("Disappearing Messages", value = com.fariin.app.data.Disappearing.label(com.fariin.app.data.Disappearing.defaultSeconds), last = true) {
+            SettingsRow("Disappearing Messages", value = com.fariin.app.data.Disappearing.label(com.fariin.app.data.Disappearing.defaultSeconds), last = true,
+                badge = NewBadgeSpots.PRIVACY_DISAPPEARING) {
                 push(PAGE_DISAPPEAR_DEFAULT)
             }
         }
         SettingsSection(footer = "Require your fingerprint, face or phone PIN to unlock Fariin.") {
-            SettingsRow("App Lock", value = if (AppLock.enabled(ctx)) "On" else "Off", last = true) { push(PAGE_APP_LOCK) }
+            SettingsRow("App Lock", value = if (AppLock.enabled(ctx)) "On" else "Off", last = true,
+                badge = NewBadgeSpots.PRIVACY_APP_LOCK) { push(PAGE_APP_LOCK) }
         }
         SettingsSection(footer = "How Fariin keeps your chats private, and what to do if something feels wrong.") {
-            SettingsRow("Safety Tips", trailing = Trailing.OUT_LINK, last = true) { openWeb(ctx, "https://fariin.com/safety") }
+            SettingsRow("Safety Tips", trailing = Trailing.OUT_LINK, last = true,
+                badge = NewBadgeSpots.PRIVACY_SAFETY_TIPS) { openWeb(ctx, "https://fariin.com/safety") }
         }
     }
 }

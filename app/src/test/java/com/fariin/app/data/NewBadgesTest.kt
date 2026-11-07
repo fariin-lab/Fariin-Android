@@ -11,6 +11,19 @@ class NewBadgesTest {
         assertEquals(mapOf("chats" to 2000L, "help" to 3000L, "privacy" to 5L), NewBadges.parse(raw))
     }
 
+    @Test fun parseKeepsAnyCataloguedSpot() {
+        val raw = mapOf("chatMenu.reply" to 10L, "storyStickers.time" to 20L, "myProfile" to 30L,
+            "chatMenu.nope" to 40L, "privacy.lastSeen" to 50L)
+        assertEquals(mapOf("chatMenu.reply" to 10L, "storyStickers.time" to 20L, "myProfile" to 30L,
+            "privacy.lastSeen" to 50L), NewBadges.parse(raw))
+    }
+
+    @Test fun catalogHasEveryIdOnceAndTheOldKeys() {
+        assertEquals(115, NewBadgeSpots.ALL.size)
+        for (k in listOf("subscriptions", "account", "devices", "notifications", "appearance", "chats",
+            "stories", "privacy", "storage", "invite", "safety", "help")) assert(k in NewBadgeSpots.ALL) { k }
+    }
+
     @Test fun parseNonMapIsEmpty() {
         assertEquals(emptyMap<String, Long>(), NewBadges.parse(null))
         assertEquals(emptyMap<String, Long>(), NewBadges.parse("x"))

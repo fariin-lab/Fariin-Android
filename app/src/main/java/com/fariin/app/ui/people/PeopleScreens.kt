@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.material.icons.filled.CallReceived
 import androidx.compose.material.icons.filled.CallMissed
 import androidx.compose.material.icons.filled.CallMade
@@ -638,20 +639,22 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             person?.links?.let { ProfileLinkChips(it, Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) }
             if (uid != me) com.fariin.app.data.ContactNames.note(uid)?.let { NotesCard(it) }
             SettingsSection {
-                DisappearingRow(timer, short = true) { timerOpen = true }
+                DisappearingRow(timer, short = true, badge = NewBadgeSpots.PROFILE_DISAPPEARING) { timerOpen = true }
                 // iOS: Restricted chat, for a chat that exists (the switch lives on it).
                 val chatNow = com.fariin.app.data.ChatsNow.find(cid)
                 // Each row with its iOS icon, so the three line up (only the first had one).
                 if (uid != me && chatNow != null) SettingsRow("Restricted Chat",
                     icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_restricted_chat),
-                    value = if (chatNow.isRestricted) "On" else "Off") { restrictOpen = true }
+                    value = if (chatNow.isRestricted) "On" else "Off", badge = NewBadgeSpots.PROFILE_RESTRICTED) { restrictOpen = true }
                 // iOS: Sounds & Notifications, "Muted" or "On"; the page picks how long.
                 if (uid != me) SettingsRow("Sounds & Notifications",
                     icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_notifications),
-                    value = contactNotifValue(muteUntil)) { soundsOpen = true }
+                    value = contactNotifValue(muteUntil), badge = NewBadgeSpots.PROFILE_SOUNDS) { soundsOpen = true }
                 if (com.fariin.app.data.BubbleStyles.SHOWN && uid != me) SettingsRow("Chat Bubble",
-                    icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat)) { bubbleOpen = true }
-                SettingsRow("Verify Encryption", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_verify_encryption), last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
+                    icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat),
+                    badge = NewBadgeSpots.PROFILE_CHAT_BUBBLE) { bubbleOpen = true }
+                SettingsRow("Verify Encryption", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_verify_encryption), last = true,
+                    badge = NewBadgeSpots.PROFILE_VERIFY_ENCRYPTION) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
             }
             // iOS: after the settings card, and only when the chat has photos or videos.
             SharedMediaCard(cid, shared) { allMedia = true }

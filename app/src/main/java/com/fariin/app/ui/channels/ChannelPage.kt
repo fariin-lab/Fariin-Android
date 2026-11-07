@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.res.vectorResource
 import android.content.Intent
 import android.text.format.DateFormat
@@ -284,16 +285,16 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     val admin = role == Role.ADMIN && team != null
                     com.fariin.app.ui.settings.SettingsRow("Sounds & Notifications",
                         icon = androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell),
-                        value = if (muted && shownRole != Role.VISITOR) "Off" else "On") {
+                        value = if (muted && shownRole != Role.VISITOR) "Off" else "On", badge = NewBadgeSpots.GROUP_INFO_SOUNDS) {
                         if (shownRole == Role.VISITOR) notice = "Follow this channel to change its notifications."
                         else tap(if (muted) Action.UNMUTE else Action.MUTE, false)
                     }
                     com.fariin.app.ui.settings.SettingsRow("Storage Used", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_set_storage),
-                        last = !admin) { sub = "storage" }
+                        last = !admin, badge = NewBadgeSpots.GROUP_INFO_STORAGE) { sub = "storage" }
                     if (admin) {
                         ChannelManageRows(info, team!!, me, shownCount, manage, last = false)
                         com.fariin.app.ui.settings.SettingsRow("Statistics", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_statistics),
-                            last = true) { sub = "stats" }
+                            last = true, badge = NewBadgeSpots.GROUP_INFO_STATISTICS) { sub = "stats" }
                     }
                     // Channel Type and Protect Content live on Channel Settings (as iOS).
                 }

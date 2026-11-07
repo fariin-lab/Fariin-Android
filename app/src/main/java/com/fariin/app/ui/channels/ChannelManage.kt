@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.layout.Arrangement
@@ -105,10 +106,12 @@ internal fun ChannelManageSection(info: ChannelInfo, team: Team, me: String, sho
 @Composable
 internal fun ChannelManageRows(info: ChannelInfo, team: Team, me: String, shownCount: Int, nav: ChannelManageNav, last: Boolean) {
     val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = team.can(me, Right.INVITE_USERS))
-    SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
-    SettingsRow("Channel Settings", icon = painterResource(R.drawable.ic_group_settings), last = last && reqs.isEmpty()) { nav.settings(info.cid) }
+    SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount",
+        badge = NewBadgeSpots.GROUP_INFO_FOLLOWERS) { nav.followers(info.cid) }
+    SettingsRow("Channel Settings", icon = painterResource(R.drawable.ic_group_settings), last = last && reqs.isEmpty(),
+        badge = NewBadgeSpots.GROUP_INFO_SETTINGS) { nav.settings(info.cid) }
     if (reqs.isNotEmpty()) SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
-        value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = last) { nav.requests(info.cid) }
+        value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = last, badge = NewBadgeSpots.GROUP_SETTINGS_REQUESTS) { nav.requests(info.cid) }
 }
 
 /** Channel Settings (iOS GroupSettingsView for a channel): the whole management list on its own page. */
@@ -154,22 +157,26 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
     val invite = team.can(me, Right.INVITE_USERS)
     if (owner || invite) Card {
         if (owner) SettingsRow("Channel Type", icon = painterResource(R.drawable.ic_gs_group_type),
-            value = if (info.isPublic) "Public" else "Private", last = !invite) { nav.type(info.cid) }
+            value = if (info.isPublic) "Public" else "Private", last = !invite, badge = NewBadgeSpots.GROUP_SETTINGS_TYPE) { nav.type(info.cid) }
         if (invite) {
             val reqs = com.fariin.app.ui.people.rememberJoinRequests(info.cid, allowed = true)
             SettingsRow("Invite Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
-                value = if (inviteOn) "On" else "Off") { nav.links(info.cid) }
+                value = if (inviteOn) "On" else "Off", badge = NewBadgeSpots.GROUP_SETTINGS_INVITE_LINK) { nav.links(info.cid) }
             SettingsRow("Follow Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
-                value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true) { nav.requests(info.cid) }
+                value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true,
+                badge = NewBadgeSpots.GROUP_SETTINGS_REQUESTS) { nav.requests(info.cid) }
         }
     }
     val canBan = team.can(me, Right.BAN_USERS)
     Card {
-        SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount") { nav.followers(info.cid) }
-        SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sorted().size}", last = !canBan) {
+        SettingsRow("Followers", icon = painterResource(R.drawable.ic_gs_members), value = "$shownCount",
+            badge = NewBadgeSpots.CHANNEL_SETTINGS_FOLLOWERS) { nav.followers(info.cid) }
+        SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sorted().size}", last = !canBan,
+            badge = NewBadgeSpots.GROUP_SETTINGS_ADMINS) {
             nav.admins(info.cid)
         }
-        if (canBan) SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "${info.bannedUids.size}", last = true) {
+        if (canBan) SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "${info.bannedUids.size}", last = true,
+            badge = NewBadgeSpots.GROUP_SETTINGS_BANNED) {
             nav.banned(info.cid)
         }
     }
@@ -177,13 +184,15 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
     if (team.can(me, Right.CHANGE_INFO)) {
         Card {
             SettingsRow("Reactions", value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
-                else com.fariin.app.data.ChannelReactions.value(info.reactMode), last = true) { nav.reactions(info.cid) }
+                else com.fariin.app.data.ChannelReactions.value(info.reactMode), last = true,
+                badge = NewBadgeSpots.CHANNEL_SETTINGS_REACTIONS) { nav.reactions(info.cid) }
         }
         RepliesSwitch(info)
     }
     Card {
-        com.fariin.app.ui.people.DisappearingRow(timer, short = false, onClick = onTimer)
-        SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.History), last = true, onClick = onRecent)
+        com.fariin.app.ui.people.DisappearingRow(timer, short = false, badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)
+        SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.History), last = true,
+            badge = NewBadgeSpots.GROUP_SETTINGS_RECENT_ACTIONS, onClick = onRecent)
     }
 }
 
@@ -199,7 +208,7 @@ private fun RepliesSwitch(info: ChannelInfo) {
     var wanted by androidx.compose.runtime.remember(info.repliesOff) { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
     Column {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
-            SwitchLine("Replies", on = wanted ?: !info.repliesOff, last = true) { on ->
+            SwitchLine("Replies", on = wanted ?: !info.repliesOff, last = true, badge = NewBadgeSpots.CHANNEL_SETTINGS_REPLIES) { on ->
                 wanted = on
                 scope.launch {
                     if (!com.fariin.app.data.PostReplies.setOff(info.cid, null, off = !on)) {
@@ -618,12 +627,18 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
 }
 
 @Composable
-internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabled: Boolean = true, last: Boolean = false, onChange: (Boolean) -> Unit) {
+internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabled: Boolean = true, last: Boolean = false,
+                        /** The row's NewBadgeSpots id: the green "New" pill after the title while the panel has it on. */
+                        badge: String? = null, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
     // The whole row flips the switch (Android settings rows).
     Row(Modifier.fillMaxWidth().toggleable(on, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange)
         .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, fontSize = 17.sp, color = c.label, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+        if (com.fariin.app.ui.components.isNew(badge)) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 17.sp, color = c.label, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.weight(1f, fill = false))
+            com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp, end = 8.dp))
+        } else Text(title, fontSize = 17.sp, color = c.label, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
         com.fariin.app.ui.components.FariinSwitch(on, onCheckedChange = null, enabled = enabled,
             colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent))
     }

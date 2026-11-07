@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.isNew
+import com.fariin.app.ui.components.NewCornerPill
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ime
@@ -405,13 +408,22 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 if (canEdit) Row(Modifier.height(52.dp).clip(RoundedCornerShape(26.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Add text") { addText() }, contentAlignment = Alignment.Center) {
-                        Text("Aa", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Box {
+                            Text("Aa", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                            NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_TEXT))
+                        }
                     }
                     if (media.video == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
-                        Icon(androidx.compose.material.icons.Icons.Outlined.EmojiEmotions, contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Box {
+                            Icon(androidx.compose.material.icons.Icons.Outlined.EmojiEmotions, contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
+                            NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_STICKERS))
+                        }
                     }
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { openPen() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Box {
+                            Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(24.dp))
+                            NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_DRAW))
+                        }
                     }
                 }
                 Spacer(Modifier.weight(1f))
@@ -499,20 +511,24 @@ suspend fun prepareStoryMedia(context: android.content.Context, uri: Uri): Resul
 private fun StickerTray(onClose: () -> Unit, onTime: () -> Unit, onLink: () -> Unit, onPlace: () -> Unit) {
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onClose, containerColor = Color(0xFF1C1C1E)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TrayPill("📍", "Location", Color(0xFFFF453A), onPlace)
-            TrayPill("🔗", "Link", Color(0xFF0A84FF), onLink)
-            TrayPill("🕒", "Time", Color(0xFFFF9F0A), onTime)
+            TrayPill("📍", "Location", Color(0xFFFF453A), NewBadgeSpots.STORY_STICKERS_LOCATION, onPlace)
+            TrayPill("🔗", "Link", Color(0xFF0A84FF), NewBadgeSpots.STORY_STICKERS_LINK, onLink)
+            TrayPill("🕒", "Time", Color(0xFFFF9F0A), NewBadgeSpots.STORY_STICKERS_TIME, onTime)
         }
     }
 }
 
 @Composable
-private fun TrayPill(glyph: String, title: String, tint: Color, onClick: () -> Unit) {
-    Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClick)
-        .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(glyph, fontSize = 16.sp)
-        Spacer(Modifier.width(6.dp))
-        Text(title, color = tint, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+private fun TrayPill(glyph: String, title: String, tint: Color, badge: String, onClick: () -> Unit) {
+    // Three pills fill a small phone's width, so the "New" sits on the pill's corner, not beside it.
+    Box {
+        Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(glyph, fontSize = 16.sp)
+            Spacer(Modifier.width(6.dp))
+            Text(title, color = tint, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        }
+        NewCornerPill(isNew(badge))
     }
 }
 

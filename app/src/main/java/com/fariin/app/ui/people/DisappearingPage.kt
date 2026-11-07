@@ -122,10 +122,10 @@ private fun UnitChip(text: String, on: Boolean, onClick: () -> Unit) {
 
 /** The row on a chat's info page: Fariin's timer icon, the title, the value under it. */
 @Composable
-internal fun DisappearingRow(seconds: Int, short: Boolean, last: Boolean = false, onClick: () -> Unit) {
+internal fun DisappearingRow(seconds: Int, short: Boolean, last: Boolean = false, badge: String? = null, onClick: () -> Unit) {
     SettingsRow("Disappearing Messages", icon = painterResource(R.drawable.ic_disappearing),
         value = if (seconds <= 0) "Off" else if (short) Disappearing.shortLabel(seconds) else Disappearing.label(seconds),
-        last = last, onClick = onClick)
+        last = last, badge = badge, onClick = onClick)
 }
 
 /** New Group's timer (iOS NewGroupView): Off / 1 Day / 1 Week / 1 Month, the whole row opens the menu. */

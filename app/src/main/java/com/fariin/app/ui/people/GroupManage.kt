@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.ui.components.listPress
@@ -198,29 +199,35 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = 
     val showType = team.isOwner(me) && team.may(me, Right.CHANGE_INFO)
     if (showType || team.may(me, Right.INVITE_USERS)) com.fariin.app.ui.settings.SettingsSection {
     if (showType) {
-        SettingsRow("Group Type", icon = painterResource(R.drawable.ic_gs_group_type), value = if (isPublic) "Public" else "Private") { open(GroupPage.Type) }
+        SettingsRow("Group Type", icon = painterResource(R.drawable.ic_gs_group_type), value = if (isPublic) "Public" else "Private",
+            badge = NewBadgeSpots.GROUP_SETTINGS_TYPE) { open(GroupPage.Type) }
     }
     if (team.may(me, Right.INVITE_USERS)) {
         SettingsRow("Invite Link", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
-            value = if ((conv["inviteCode"] as? String).isNullOrEmpty()) "Off" else "On") { open(GroupPage.Links) }
+            value = if ((conv["inviteCode"] as? String).isNullOrEmpty()) "Off" else "On", badge = NewBadgeSpots.GROUP_SETTINGS_INVITE_LINK) { open(GroupPage.Links) }
         // iOS GroupSettingsView joining section: the people waiting through a link with Approve New Members.
         val reqs = rememberJoinRequests(cid, allowed = cid.isNotEmpty() && !team.closed)
         if (cid.isNotEmpty()) SettingsRow("Join Requests", icon = painterResource(R.drawable.ic_gs_join_requests),
-            value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true) { open(GroupPage.JoinRequests) }
+            value = com.fariin.app.data.JoinRequests.rowValue(reqs.size), last = true,
+            badge = NewBadgeSpots.GROUP_SETTINGS_REQUESTS) { open(GroupPage.JoinRequests) }
     }
     }
     // iOS GroupSettingsView people section: Members, Administrators, Banned Users (Remove members right).
     com.fariin.app.ui.settings.SettingsSection {
-    SettingsRow("Members", icon = painterResource(R.drawable.ic_gs_members), value = "${team.users.size}") { open(GroupPage.Members) }
-    SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sortedAdmins().size}") { open(GroupPage.Admins) }
+    SettingsRow("Members", icon = painterResource(R.drawable.ic_gs_members), value = "${team.users.size}",
+        badge = NewBadgeSpots.GROUP_SETTINGS_MEMBERS) { open(GroupPage.Members) }
+    SettingsRow("Administrators", icon = painterResource(R.drawable.ic_gs_admins), value = "${team.sortedAdmins().size}",
+        badge = NewBadgeSpots.GROUP_SETTINGS_ADMINS) { open(GroupPage.Admins) }
     if (team.may(me, Right.BAN_USERS)) {
         val banned = (conv["bannedUids"] as? List<*>)?.size ?: 0
-        SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "$banned", last = true) { open(GroupPage.Banned) }
+        SettingsRow("Banned Users", icon = painterResource(R.drawable.ic_gs_banned), value = "$banned", last = true,
+            badge = NewBadgeSpots.GROUP_SETTINGS_BANNED) { open(GroupPage.Banned) }
     }
     }
     val (on, of) = GroupAdmins.permissionCount(conv)
     com.fariin.app.ui.settings.SettingsSection {
-    SettingsRow("Permissions", icon = painterResource(R.drawable.ic_gs_permissions), value = "$on/$of", last = true) { open(GroupPage.Permissions) }
+    SettingsRow("Permissions", icon = painterResource(R.drawable.ic_gs_permissions), value = "$on/$of", last = true,
+        badge = NewBadgeSpots.GROUP_SETTINGS_PERMISSIONS) { open(GroupPage.Permissions) }
     }
 }
 
@@ -240,8 +247,10 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
             GroupManageRows(doc, me, cid, open)
             BubbleStylesSwitch(cid, me, doc)
             SettingsSection {
-                DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false, onClick = onTimer)
-                SettingsRow("Recent Actions", icon = rememberVectorPainter(Icons.Filled.History), last = true) { open(GroupPage.RecentActions) }
+                DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false,
+                    badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)
+                SettingsRow("Recent Actions", icon = rememberVectorPainter(Icons.Filled.History), last = true,
+                    badge = NewBadgeSpots.GROUP_SETTINGS_RECENT_ACTIONS) { open(GroupPage.RecentActions) }
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -956,7 +965,8 @@ private fun PermissionsPage(cid: String, me: String, onBack: () -> Unit) {
             }
             val protect = shown("protect", (doc["restrictedBy"] as? Map<*, *>)?.isNotEmpty() == true)
             SettingsSection(header = "Content", footer = "Stops forwarding, copying, saving and screenshots for everyone.") {
-                SwitchLine("Protect Content", protect, enabled = canEdit, last = true) { v -> flip("protect", v) { GroupManage.setProtected(cid, v) } }
+                SwitchLine("Protect Content", protect, enabled = canEdit, last = true,
+                    badge = NewBadgeSpots.GROUP_SETTINGS_PROTECT_CONTENT) { v -> flip("protect", v) { GroupManage.setProtected(cid, v) } }
             }
         }
     }
@@ -1039,7 +1049,8 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
                 var protectProblem by remember { mutableStateOf<String?>(null) }
                 SettingsSection(header = "Saving and Copying",
                     footer = protectProblem ?: com.fariin.app.channel.ChannelRules.protectFooter(protect)) {
-                    com.fariin.app.ui.settings.SwitchRow("Protect Content", protect, last = true) { v ->
+                    com.fariin.app.ui.settings.SwitchRow("Protect Content", protect, last = true,
+                        badge = NewBadgeSpots.GROUP_SETTINGS_PROTECT_CONTENT) { v ->
                         protect = v; protectProblem = null
                         scope.launch {
                             try { com.fariin.app.channel.ChannelService.setProtected(cid, v) }

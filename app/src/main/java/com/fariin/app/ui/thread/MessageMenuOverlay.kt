@@ -98,7 +98,9 @@ internal fun menuSourceOf(lc: androidx.compose.ui.layout.LayoutCoordinates, alig
 }
 
 /** One row of the overlay's card. */
-internal class MenuRow(val title: String, val icon: Painter, val destructive: Boolean, val countdown: String?, val run: () -> Unit)
+internal class MenuRow(val title: String, val icon: Painter, val destructive: Boolean, val countdown: String?, val run: () -> Unit,
+                       /** The admin panel's green "New" pill after the title. */
+                       val isNew: Boolean = false)
 
 /** The strip after the quick six: iOS CMReactionBar.extraEmojis, fifteen in all (owner 2026-09-28). */
 private val ExtraEmojis = listOf(
@@ -430,11 +432,12 @@ private fun ActionsCard(rows: List<MenuRow>, onPick: (MenuRow) -> Unit) {
                 Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(r.icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(12.dp))
-                    Column {
+                    Column(if (r.isNew) Modifier.weight(1f, fill = false) else Modifier) {
                         Text(r.title, color = tint, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         // Whole-width digits, so the line does not shiver as the seconds change.
                         r.countdown?.let { Text(it, color = tint, fontSize = 13.sp, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum")) }
                     }
+                    if (r.isNew) com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp))
                 }
             }
         }

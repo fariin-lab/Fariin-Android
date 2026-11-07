@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Call
@@ -136,7 +137,9 @@ data class ThreadActions(
 
 /** One row of the menu. */
 private data class MenuItem(val title: String, val icon: ImageVector?, val destructive: Boolean = false,
-                            val iconRes: Int = 0, val countdownTo: Double? = null, val run: () -> Unit)
+                            val iconRes: Int = 0, val countdownTo: Double? = null,
+                            /** The row's NewBadgeSpots id, for the admin panel's "New" pill. */
+                            val badge: String? = null, val run: () -> Unit)
 
 /**
  * The long-press menu, after iOS customMenuActions: the quick reaction bar on top (the six
@@ -167,7 +170,7 @@ internal fun MessageMenu(
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
         if (!m.deleted) {
-            if (MessageRules.canReplyHere(m, mayReplyHere(ui))) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply) { onReply(m) })
+            if (MessageRules.canReplyHere(m, mayReplyHere(ui))) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply, badge = NewBadgeSpots.CHAT_MENU_REPLY) { onReply(m) })
             // A call record: call back from here too, through the same confirm as its tap (iOS);
             // not while the call is still ringing or going.
             if (m.isCall && onCallBack != null) {
@@ -176,29 +179,29 @@ internal fun MessageMenu(
                 if (!live) add(MenuItem(if (m.callVideo) "Video Call" else "Voice Call",
                     if (m.callVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice)) { onCallBack(m) })
             }
-            if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward) {
+            if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
             // Quote a channel post into a chat of mine, with my own words (iOS, owner 2026-11-06):
             // only where Forward is offered.
-            if (!restricted && MessageRules.canForward(m) && ui.channel != null) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote) {
+            if (!restricted && MessageRules.canForward(m) && ui.channel != null) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote, badge = NewBadgeSpots.CHAT_MENU_QUOTE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onQuote(m) })
-            if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download) {
+            if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })
             // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).
             val card = com.fariin.app.data.CardRules.isCard(m.text)
-            if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy) {
+            if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy, badge = NewBadgeSpots.CHAT_MENU_COPY) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) onCopy(m.text) })
             // My own words: change the style my next messages carry, right from here (owner 2026-11-07).
             // Not in a channel, nor in a group whose owner or admin turned styles off.
             if (com.fariin.app.data.BubbleStyles.SHOWN && m.authorId == ui.me && !card && m.text.isNotEmpty() &&
                 m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem &&
                 !bubbleStylesOff(ui.channel != null, ui.groupDoc))
-                add(MenuItem("Bubble Style", Icons.Outlined.Palette) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
-            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit) { onStartEdit(m) })
+                add(MenuItem("Bubble Style", Icons.Outlined.Palette, badge = NewBadgeSpots.CHAT_MENU_BUBBLE_STYLE) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
+            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onStartEdit(m) })
             // In a channel only its owner and admins see a post's earlier versions (iOS 0ed7fa04);
             // groups and 1:1 chats unchanged.
             val historyAllowed = ui.channel?.let { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN } ?: true
-            if (m.edited && historyAllowed) add(MenuItem("Edit History", Icons.Outlined.History) { onEditHistory(m) })
+            if (m.edited && historyAllowed) add(MenuItem("Edit History", Icons.Outlined.History, badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onEditHistory(m) })
             // Keep a sticker or a GIF from the chat, mine or theirs (iOS, owner 2026-10-17 / 10-18);
             // not in a restricted chat, where nothing is saved.
             if (!restricted) FavoriteToggles.stickerTitle(m)?.let { t ->
@@ -216,11 +219,11 @@ internal fun MessageMenu(
         }
         if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) })
         if (!m.deleted) {
-            if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", Icons.Outlined.Info) { onInfo(m) })
+            if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", Icons.Outlined.Info, badge = NewBadgeSpots.CHAT_MENU_INFO) { onInfo(m) })
             if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) {
                 val pinnedNow = m.id in ui.pinnedIds
-                if (pinnedNow) add(MenuItem("Unpin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu) { actions.onUnpin(m.id) })
-                else add(MenuItem("Pin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu) { actions.onPin(m) })
+                if (pinnedNow) add(MenuItem("Unpin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu, badge = NewBadgeSpots.CHAT_MENU_PIN) { actions.onUnpin(m.id) })
+                else add(MenuItem("Pin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu, badge = NewBadgeSpots.CHAT_MENU_PIN) { actions.onPin(m) })
             }
         }
         // On a disappearing message Delete carries a live countdown from the server's stamp only
@@ -251,6 +254,7 @@ internal fun MessageMenu(
                 it.destructive,
                 it.countdownTo?.let { until -> com.fariin.app.data.Disappearing.countdown(until - clock.longValue) },
                 it.run,
+                isNew = com.fariin.app.ui.components.isNew(it.badge),
             )
         }
         val mine = m.reactions[ui.me]
@@ -310,6 +314,7 @@ internal fun MessageMenu(
                                 fontSize = 13.sp, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"), maxLines = 1) }
                         },
                         last = i == items.lastIndex,
+                        newBadge = com.fariin.app.ui.components.isNew(it.badge),
                         onClick = { onDismiss(); it.run() },
                     )
                 }

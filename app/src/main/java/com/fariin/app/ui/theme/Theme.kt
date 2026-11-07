@@ -149,7 +149,11 @@ fun FariinTheme(dark: Boolean = AppearancePrefs.isDark(), bars: Boolean = true, 
         }
     }
     CompositionLocalProvider(LocalFariinColors provides c) {
-        MaterialTheme(colorScheme = scheme, shapes = RoundShapes, content = content)
+        // The "New" pills: one read for the whole window. A nested theme ([bars] off) sits inside
+        // a root one and inherits its set.
+        if (bars) com.fariin.app.ui.components.ProvideNewBadges {
+            MaterialTheme(colorScheme = scheme, shapes = RoundShapes, content = content)
+        } else MaterialTheme(colorScheme = scheme, shapes = RoundShapes, content = content)
     }
 }
 

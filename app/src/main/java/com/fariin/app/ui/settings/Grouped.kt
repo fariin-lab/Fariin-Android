@@ -1,6 +1,8 @@
 package com.fariin.app.ui.settings
 
 import com.fariin.app.ui.components.listPress
+import com.fariin.app.ui.components.NewPill
+import com.fariin.app.ui.components.isNew
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -114,9 +116,12 @@ internal fun SettingsRow(
     accessory: (@Composable () -> Unit)? = null,
     /** The admin panel's green "New" pill after the title (iOS NewBadges); see [rememberNewBadges]. */
     newBadge: Boolean = false,
+    /** The row's NewBadgeSpots id: its pill shows while the panel has it on. */
+    badge: String? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val c = Fariin.colors
+    val showNew = newBadge || isNew(badge)
     Row(
         Modifier.fillMaxWidth()
             .then(if (onClick != null) Modifier.listPress(onClick = onClick) else Modifier)
@@ -136,7 +141,7 @@ internal fun SettingsRow(
         // the title's line before the chevron; a long one (a sentence) stays under the title.
         val side = value != null && value.length <= SIDE_VALUE_MAX
         Column(Modifier.weight(1f)) {
-            if (newBadge) Row(verticalAlignment = Alignment.CenterVertically) {
+            if (showNew) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.bodyLarge, color = titleColor ?: c.label,
                     modifier = Modifier.weight(1f, fill = false))
                 NewPill(Modifier.padding(start = 8.dp))
@@ -160,33 +165,6 @@ internal fun SettingsRow(
     // Full width, edge to edge of the card (owner 2026-11-04).
     // No line between rows (owner 2026-11-04: "just leave the rounded way, remove the lines").
     if (!last && SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-}
-
-/** The green "New" capsule (iOS: systemGreen text on a ~16% green fill, 13 pt semibold). */
-@Composable
-internal fun NewPill(modifier: Modifier = Modifier) {
-    val green = if (Fariin.colors.dark) Color(0xFF30D158) else Color(0xFF34C759)
-    Text("New", color = green, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-        modifier = modifier.clip(RoundedCornerShape(50)).background(green.copy(alpha = 0.16f))
-            .padding(horizontal = 8.dp, vertical = 2.dp))
-}
-
-/**
- * The row keys whose "New" pill shows now. Live from config/features; one timer to the soonest end
- * takes a pill down on time while the screen stays open (no polling).
- */
-@Composable
-internal fun rememberNewBadges(): Set<String> {
-    val ends by com.fariin.app.data.NewBadges.ends.collectAsState()
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(ends) {
-        while (true) {
-            now = System.currentTimeMillis()
-            val next = com.fariin.app.data.NewBadges.nextEnd(ends, now) ?: break
-            kotlinx.coroutines.delay((next - now).coerceAtLeast(1L))
-        }
-    }
-    return remember(ends, now) { com.fariin.app.data.NewBadges.active(ends, now) }
 }
 
 /** The longest value drawn beside the title (iOS); longer ones go under it. */

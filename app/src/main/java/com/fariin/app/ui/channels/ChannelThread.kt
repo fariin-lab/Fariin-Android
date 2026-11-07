@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.Close
@@ -279,7 +280,9 @@ fun ChannelChipsInBubble(ch: ChannelThreadUi, m: Message, chips: List<ChannelRul
     }
 }
 
-private data class PostItem(val title: String, val icon: ImageVector, val destructive: Boolean = false, val run: () -> Unit)
+private data class PostItem(val title: String, val icon: ImageVector, val destructive: Boolean = false,
+                            /** The row's NewBadgeSpots id, for the admin panel's "New" pill. */
+                            val badge: String? = null, val run: () -> Unit)
 
 /**
  * Long press on a post: the channel's reactions (its own list, or the first six of the 73, with
@@ -308,28 +311,28 @@ fun ChannelPostMenu(
     val items = buildList {
         if (!m.deleted) {
             // A contact or location card is no text to copy (as the chat menu, MessageActions).
-            if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", Icons.Filled.ContentCopy) { onCopy(m.bodyText) })
-            if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward) { sharePost(ctx, ch.info, m) })
+            if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", Icons.Filled.ContentCopy, badge = NewBadgeSpots.CHAT_MENU_COPY) { onCopy(m.bodyText) })
+            if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) { sharePost(ctx, ch.info, m) })
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m))
-                add(PostItem("Quote", quoteIcon) { onDismiss(); onQuote(m) })
+                add(PostItem("Quote", quoteIcon, badge = NewBadgeSpots.CHAT_MENU_QUOTE) { onDismiss(); onQuote(m) })
             // Tick several posts to forward, copy or (owner and admins) delete them together.
             if (onSelect != null) add(PostItem("Select", Icons.Outlined.CheckCircle) { onDismiss(); onSelect(m) })
-            if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true) { ch.onReport(m) })
+            if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true, badge = NewBadgeSpots.CHAT_MENU_REPORT) { ch.onReport(m) })
         }
         // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).
         if (ch.role == Role.ADMIN && !m.deleted) {
             // onEdit is only passed when this post may be edited (my own, in the edit window).
-            if (onEdit != null) add(PostItem("Edit", Icons.Outlined.Edit) { onDismiss(); onEdit(m) })
-            if (onEditHistory != null && m.edited) add(PostItem("Edit History", Icons.Outlined.History) { onDismiss(); onEditHistory(m) })
-            if (pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", Icons.Outlined.PushPin) { onDismiss(); onPin(m) })
+            if (onEdit != null) add(PostItem("Edit", Icons.Outlined.Edit, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onDismiss(); onEdit(m) })
+            if (onEditHistory != null && m.edited) add(PostItem("Edit History", Icons.Outlined.History, badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onDismiss(); onEditHistory(m) })
+            if (pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", Icons.Outlined.PushPin, badge = NewBadgeSpots.CHAT_MENU_PIN) { onDismiss(); onPin(m) })
             // Replies off or on for this post (iOS, owner 2026-11-06): the Change info right, which the
             // server checks too. The post's own switch wins over the channel's; the post changes on
             // screen at once (PostRepliesSwitch), older posts included.
             if (ch.canEdit && m.sendState == null) {
                 val off = com.fariin.app.data.PostReplyRules.postOff(m.repliesOff, ch.info.repliesOff, PostRepliesSwitch.of(m.id))
                 add(PostItem(if (off) "Turn On Replies" else "Turn Off Replies",
-                    if (off) replyIcon else Icons.Outlined.Block) {
+                    if (off) replyIcon else Icons.Outlined.Block, badge = NewBadgeSpots.CHAT_MENU_REPLIES) {
                     onDismiss(); PostRepliesSwitch.set(ch.info.cid, m.id, !off, ch.notice)
                 })
             }
@@ -396,7 +399,10 @@ fun ChannelPostMenu(
                         if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                         Row(Modifier.fillMaxWidth().clickable { onDismiss(); it.run() }.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text(it.title, fontSize = 17.sp, color = if (it.destructive) c.red else c.label, modifier = Modifier.weight(1f))
+                            if (com.fariin.app.ui.components.isNew(it.badge)) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                Text(it.title, fontSize = 17.sp, color = if (it.destructive) c.red else c.label, modifier = Modifier.weight(1f, fill = false))
+                                com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp, end = 8.dp))
+                            } else Text(it.title, fontSize = 17.sp, color = if (it.destructive) c.red else c.label, modifier = Modifier.weight(1f))
                             Icon(it.icon, null, tint = if (it.destructive) c.red else c.label, modifier = Modifier.size(20.dp))
                         }
                     }

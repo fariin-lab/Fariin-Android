@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.filled.Close
@@ -812,22 +813,27 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // someone waits; a member's Disappearing Messages row stays here, read-only.
                 // Not in a channel (its posts are never styled) nor when the owner or an admin turned styles off.
                 if (com.fariin.app.data.BubbleStyles.SHOWN && conv["channel"] != true && conv["bubbleStylesOff"] != true)
-                    SettingsRow("Chat Bubble", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat)) { bubbleOpen = true }
-                SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats) {
+                    SettingsRow("Chat Bubble", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat),
+                        badge = NewBadgeSpots.GROUP_INFO_CHAT_BUBBLE) { bubbleOpen = true }
+                SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats,
+                    badge = NewBadgeSpots.GROUP_INFO_STORAGE) {
                     pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))
                 }
-                if (!iAmAdmin && timer > 0) DisappearingRow(timer, short = false, last = !showStats) {
+                if (!iAmAdmin && timer > 0) DisappearingRow(timer, short = false, last = !showStats,
+                    badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING) {
                     notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
                 if (iAmAdmin) {
                     val waiting = rememberJoinRequests(cid, allowed = team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS) && !team.closed)
                     SettingsRow("Group Settings", icon = painterResource(com.fariin.app.R.drawable.ic_group_settings),
-                        last = !showStats && waiting.isEmpty()) { pages.add(GroupPage.Settings) }
+                        last = !showStats && waiting.isEmpty(), badge = NewBadgeSpots.GROUP_INFO_SETTINGS) { pages.add(GroupPage.Settings) }
                     if (waiting.isNotEmpty()) SettingsRow("Join Requests", icon = painterResource(com.fariin.app.R.drawable.ic_gs_join_requests),
-                        value = com.fariin.app.data.JoinRequests.rowValue(waiting.size), last = !showStats) { pages.add(GroupPage.JoinRequests) }
+                        value = com.fariin.app.data.JoinRequests.rowValue(waiting.size), last = !showStats,
+                        badge = NewBadgeSpots.GROUP_SETTINGS_REQUESTS) { pages.add(GroupPage.JoinRequests) }
                 }
                 // Statistics (iOS showStatsRow): owner and admins of a big enough group, last row.
-                if (showStats) SettingsRow("Statistics", icon = painterResource(com.fariin.app.R.drawable.ic_statistics), last = true) {
+                if (showStats) SettingsRow("Statistics", icon = painterResource(com.fariin.app.R.drawable.ic_statistics), last = true,
+                    badge = NewBadgeSpots.GROUP_INFO_STATISTICS) {
                     pages.add(GroupPage.Stats(conv["title"] as? String ?: "Group"))
                 }
             }

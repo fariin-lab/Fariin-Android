@@ -60,6 +60,8 @@ fun SheetRow(
     tint: Color = Fariin.colors.label,
     supporting: (@Composable () -> Unit)? = null,
     last: Boolean = false,
+    /** The admin panel's green "New" pill after the title ([isNew]). */
+    newBadge: Boolean = false,
     onClick: () -> Unit,
 ) {
     val c = Fariin.colors
@@ -75,7 +77,10 @@ fun SheetRow(
             Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = tint)
+            if (newBadge) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, color = tint, modifier = Modifier.weight(1f, fill = false))
+                NewPill(Modifier.padding(start = 8.dp))
+            } else Text(title, style = MaterialTheme.typography.bodyLarge, color = tint)
             supporting?.invoke()
         }
     }

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
@@ -409,7 +410,7 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
                 }
             }
             SectionTitle("SAVING AND COPYING")
-            ToggleRow("Protect Content", protect) { v ->
+            ToggleRow("Protect Content", protect, badge = NewBadgeSpots.GROUP_SETTINGS_PROTECT_CONTENT) { v ->
                 protect = v
                 scope.launch { try { ChannelService.setProtected(cid, v) } catch (_: Exception) { protect = !v; problem = "Couldn't save. Try again." } }
             }
@@ -445,11 +446,14 @@ private fun TypeRow(title: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ToggleRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
+private fun ToggleRow(title: String, on: Boolean, badge: String? = null, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
     Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)
         .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+        if (com.fariin.app.ui.components.isNew(badge)) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f, fill = false))
+            com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp, end = 8.dp))
+        } else Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
         com.fariin.app.ui.components.FariinSwitch(on, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = com.fariin.app.ui.theme.Fariin.colors.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent))
     }
 }

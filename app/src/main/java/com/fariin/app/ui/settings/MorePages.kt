@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.data.NewBadgeSpots
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -338,7 +339,7 @@ private fun NotificationsPage(pop: () -> Unit) {
             SettingsRow("Turn On Notifications", last = true) { if (android.os.Build.VERSION.SDK_INT >= 33) askOn = true else openSystem() }
         }
         SettingsSection(footer = "Everything below depends on this. With it off, Fariin does not notify you at all, on the lock screen or inside the app.") {
-            SwitchRow("Show Notifications", push, last = true) { on ->
+            SwitchRow("Show Notifications", push, last = true, badge = NewBadgeSpots.NOTIFICATIONS_SHOW) { on ->
                 push = on; p.edit().putBoolean(Push.PUSH_ON, on).apply()
                 if (on) Push.register(ctx) else scope.launch { Push.unregister(ctx) }
                 account("notifPush", on) {
@@ -348,23 +349,24 @@ private fun NotificationsPage(pop: () -> Unit) {
             }
         }
         SettingsSection(header = "Message Notifications", footer = "Preview shows the sender and the message. Sound and vibration are set by Android for each kind of notification.") {
-            SwitchRow("Message Preview", preview, enabled = push) { on ->
+            SwitchRow("Message Preview", preview, enabled = push, badge = NewBadgeSpots.NOTIFICATIONS_PREVIEW) { on ->
                 preview = on; p.edit().putBoolean("notif.preview", on).apply()
                 account("notifPreview", on) { preview = !on; p.edit().putBoolean("notif.preview", !on).apply() }
             }
-            SettingsRow("Message Sound", trailing = Trailing.OUT_LINK) { openSystem(com.fariin.app.push.NotifChannel.MESSAGES.id) }
+            SettingsRow("Message Sound", trailing = Trailing.OUT_LINK, badge = NewBadgeSpots.NOTIFICATIONS_SOUND) { openSystem(com.fariin.app.push.NotifChannel.MESSAGES.id) }
             SettingsRow("Call Ringtone", trailing = Trailing.OUT_LINK, last = true) { openSystem(com.fariin.app.push.NotifChannel.CALLS.id) }
         }
         SettingsSection(header = "In-App Notifications", footer = "Alerts while Fariin is open. Preview shows the sender and message in the banner.") {
-            SwitchRow("In-App Sounds", inSound, enabled = push) { inSound = it; p.edit().putBoolean("notif.inAppSound", it).apply() }
-            SwitchRow("In-App Vibrate", inVibrate, enabled = push) { inVibrate = it; p.edit().putBoolean("notif.inAppVibrate", it).apply() }
-            SwitchRow("In-App Preview", inPreview, enabled = push, last = true) { inPreview = it; p.edit().putBoolean("notif.inAppPreview", it).apply() }
+            SwitchRow("In-App Sounds", inSound, enabled = push, badge = NewBadgeSpots.NOTIFICATIONS_IN_APP_SOUNDS) { inSound = it; p.edit().putBoolean("notif.inAppSound", it).apply() }
+            SwitchRow("In-App Vibrate", inVibrate, enabled = push, badge = NewBadgeSpots.NOTIFICATIONS_IN_APP_VIBRATE) { inVibrate = it; p.edit().putBoolean("notif.inAppVibrate", it).apply() }
+            SwitchRow("In-App Preview", inPreview, enabled = push, last = true, badge = NewBadgeSpots.NOTIFICATIONS_IN_APP_PREVIEW) { inPreview = it; p.edit().putBoolean("notif.inAppPreview", it).apply() }
         }
         SettingsSection(footer = "A short sound when your message reaches Fariin.") {
-            SwitchRow("Sound When Sent", sent, last = true) { sent = it; p.edit().putBoolean("chat.sentSound", it).apply() }
+            SwitchRow("Sound When Sent", sent, last = true, badge = NewBadgeSpots.NOTIFICATIONS_SENT_SOUND) { sent = it; p.edit().putBoolean("chat.sentSound", it).apply() }
         }
         SettingsSection(footer = "Undo all custom notification settings, including muted chats.") {
             SettingsRow("Reset All Notifications", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true,
+                badge = NewBadgeSpots.NOTIFICATIONS_RESET_ALL,
                 accessory = { if (resetting) com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) { if (!resetting) reset = true }
         }
     }
@@ -411,28 +413,30 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     val clearScope = rememberCoroutineScope()
     ScrollPage("Chats", pop) {
         SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
-            SettingsRow("Chat Key", last = true) { push(PAGE_CHAT_KEY) }
+            SettingsRow("Chat Key", last = true, badge = NewBadgeSpots.CHATS_CHAT_KEY) { push(PAGE_CHAT_KEY) }
         }
         SettingsSection(header = "Message Text Size") {
             val sizes = listOf("small" to "Small", "medium" to "Medium", "large" to "Large")
             for ((raw, label) in sizes) CheckRow(label, raw == size, last = raw == "large") { size = raw; p.edit().putString("chat.textSize", raw).apply() }
         }
         SettingsSection {
-            SettingsRow("Quick Reaction", value = quick) { push(PAGE_QUICK) }
-            SettingsRow("Night Mode", value = com.fariin.app.data.AppearancePrefs.current(ctx).label, last = true) { push("night") }
+            SettingsRow("Quick Reaction", value = quick, badge = NewBadgeSpots.APPEARANCE_QUICK_REACTION) { push(PAGE_QUICK) }
+            SettingsRow("Night Mode", value = com.fariin.app.data.AppearancePrefs.current(ctx).label, last = true,
+                badge = NewBadgeSpots.APPEARANCE_NIGHT_MODE) { push("night") }
         }
         SettingsSection(footer = "Automatically save received photos to your gallery.") {
-            SwitchRow("Save to Photos", savePhotos, last = true) { savePhotos = it; p.edit().putBoolean(com.fariin.app.media.AutoSaveMedia.KEY, it).apply() }
+            SwitchRow("Save to Photos", savePhotos, last = true, badge = NewBadgeSpots.CHATS_SAVE_TO_PHOTOS) { savePhotos = it; p.edit().putBoolean(com.fariin.app.media.AutoSaveMedia.KEY, it).apply() }
         }
         SettingsSection(footer = "Show a preview card for links you type or paste. Your phone contacts the site to build it, before the message is sent.") {
-            SwitchRow("Link Previews", links, last = true) { links = it; p.edit().putBoolean("linkPreviewsEnabled", it).apply() }
+            SwitchRow("Link Previews", links, last = true, badge = NewBadgeSpots.CHATS_LINK_PREVIEWS) { links = it; p.edit().putBoolean("linkPreviewsEnabled", it).apply() }
         }
         SettingsSection(header = "New Chats from Your Chat Key", footer = "When someone uses your Chat Key to message you, the chat goes to Archived, muted.") {
-            SwitchRow("Automatically Archive", archive, last = true) { archive = it; p.edit().putBoolean("unknownChats.autoArchive", it).apply() }
+            SwitchRow("Automatically Archive", archive, last = true, badge = NewBadgeSpots.CHATS_AUTO_ARCHIVE) { archive = it; p.edit().putBoolean("unknownChats.autoArchive", it).apply() }
         }
         // iOS ChatsSettingsView: the last row, red, with what it does written under it.
         SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {
-            SettingsRow("Clear Chat History", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { if (!clearing) confirmClear = true }
+            SettingsRow("Clear Chat History", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true,
+                badge = NewBadgeSpots.CHATS_CLEAR_HISTORY) { if (!clearing) confirmClear = true }
         }
     }
     if (confirmClear) YesNo("Clear Chat History?",
@@ -492,6 +496,12 @@ private fun QuickReactionPage(pop: () -> Unit) {
 
 // ---------------------------------------------------------------- Storage and Data
 
+/** The auto-download rows' "New" spots, by media kind. */
+private val AUTO_DOWNLOAD_SPOTS = mapOf(
+    "photos" to NewBadgeSpots.STORAGE_AUTO_DOWNLOAD_PHOTOS, "videos" to NewBadgeSpots.STORAGE_AUTO_DOWNLOAD_VIDEOS,
+    "audio" to NewBadgeSpots.STORAGE_AUTO_DOWNLOAD_AUDIO, "documents" to NewBadgeSpots.STORAGE_AUTO_DOWNLOAD_DOCUMENTS,
+)
+
 @Composable
 private fun StorageDataPage(push: (String) -> Unit, pop: () -> Unit) {
     val ctx = LocalContext.current
@@ -502,12 +512,13 @@ private fun StorageDataPage(push: (String) -> Unit, pop: () -> Unit) {
     // iOS StorageDataView: Manage storage, Media auto-download (+ reset), Sent Media, Calls.
     ScrollPage("Storage and Data", pop) {
         SettingsSection(header = "Storage") {
-            SettingsRow("Manage storage", last = true) { push(PAGE_MANAGE_STORAGE) }
+            SettingsRow("Manage storage", last = true, badge = NewBadgeSpots.STORAGE_MANAGE) { push(PAGE_MANAGE_STORAGE) }
         }
         SettingsSection(header = "Media auto-download", footer = "When media downloads by itself. Anything else downloads when you open it.") {
             for ((k, label) in SettingsRules.autoKinds) {
                 val v = media.getString("autodl.$k", SettingsRules.autoDefault(k)) ?: ""
-                SettingsRow(label, value = SettingsRules.label(SettingsRules.autoPolicies, v) + if (tick < 0) "" else "") { push(PAGE_AUTODL + k) }
+                SettingsRow(label, value = SettingsRules.label(SettingsRules.autoPolicies, v) + if (tick < 0) "" else "",
+                    badge = AUTO_DOWNLOAD_SPOTS[k]) { push(PAGE_AUTODL + k) }
             }
             SettingsRow("Reset Auto-Download Settings", trailing = Trailing.NONE, titleColor = if (isDefault) Fariin.colors.secondary else Fariin.colors.label, last = true) {
                 if (!isDefault) { media.edit().apply { SettingsRules.autoKinds.forEach { (k, _) -> remove("autodl.$k") } }.apply(); tick++ }
@@ -515,10 +526,11 @@ private fun StorageDataPage(push: (String) -> Unit, pop: () -> Unit) {
         }
         SettingsSection(header = "Sent Media", footer = "Choose the quality you send photos and videos.") {
             SettingsRow("Sent Media Quality", value = SettingsRules.label(SettingsRules.sentQuality, media.getString(com.fariin.app.media.SentQuality.KEY, "standard") ?: "standard"),
-                last = true) { push(PAGE_SENT_QUALITY) }
+                last = true, badge = NewBadgeSpots.STORAGE_SENT_MEDIA_QUALITY) { push(PAGE_SENT_QUALITY) }
         }
         SettingsSection(header = "Calls", footer = "Using less data may improve calls on bad networks.") {
-            SettingsRow("Use Less Data", value = SettingsRules.label(SettingsRules.lessData, calls.getString("calls.lessData", "never") ?: "never"), last = true) { push(PAGE_LESS_DATA) }
+            SettingsRow("Use Less Data", value = SettingsRules.label(SettingsRules.lessData, calls.getString("calls.lessData", "never") ?: "never"), last = true,
+                badge = NewBadgeSpots.STORAGE_USE_LESS_DATA) { push(PAGE_LESS_DATA) }
         }
     }
 }
@@ -586,7 +598,7 @@ private fun StoriesSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         // iOS StorySettingsView: the audiences first, then View Receipts.
         StoryAudienceRows(push)
         SettingsSection(footer = "See and share when stories are viewed. If disabled, you won't see when others view your stories.") {
-            SwitchRow("View Receipts", on, last = true) { v ->
+            SwitchRow("View Receipts", on, last = true, badge = NewBadgeSpots.STORIES_VIEW_RECEIPTS) { v ->
                 on = v; p.edit().putBoolean("storyViewReceipts", v).apply()
                 scope.launch {
                     val ok = runCatching { ref?.set(mapOf("receipts" to v, "offAt" to if (v) null else FieldValue.serverTimestamp()))?.await() }.isSuccess

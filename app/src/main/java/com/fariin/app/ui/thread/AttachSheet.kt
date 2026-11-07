@@ -1,5 +1,8 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.isNew
+import com.fariin.app.ui.components.NewCornerPill
+import com.fariin.app.data.NewBadgeSpots
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -328,10 +331,10 @@ internal fun AttachSheet(
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         val w = if (onPoll != null) 58.dp else 72.dp
                         if (onGif != null) SheetButton("GIF", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gif_tile), w,
-                            selected = page == SheetPage.GIFS) { page = SheetPage.GIFS }
-                        SheetButton("Files", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), w) { page = SheetPage.FILES }
-                        if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), w) { onDismiss(); onLocation() }
-                        if (onPoll != null) SheetButton("Poll", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_poll_tile), w) { onDismiss(); onPoll() }
+                            selected = page == SheetPage.GIFS, badge = NewBadgeSpots.ATTACH_GIF) { page = SheetPage.GIFS }
+                        SheetButton("Files", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), w, badge = NewBadgeSpots.ATTACH_FILES) { page = SheetPage.FILES }
+                        if (onLocation != null) SheetButton("Location", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_location), w, badge = NewBadgeSpots.ATTACH_LOCATION) { onDismiss(); onLocation() }
+                        if (onPoll != null) SheetButton("Poll", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_poll_tile), w, badge = NewBadgeSpots.ATTACH_POLL) { onDismiss(); onPoll() }
                     }
                 }
             } else {
@@ -432,14 +435,19 @@ private fun Modifier.sheetGlass(shape: androidx.compose.ui.graphics.Shape, backd
 }
 
 @Composable
-private fun SheetButton(label: String, icon: ImageVector, width: androidx.compose.ui.unit.Dp, selected: Boolean = false, onClick: () -> Unit) {
+private fun SheetButton(label: String, icon: ImageVector, width: androidx.compose.ui.unit.Dp, selected: Boolean = false,
+                        /** The tile's NewBadgeSpots id: a small "New" on the glyph's corner, the tile does not move. */
+                        badge: String? = null, onClick: () -> Unit) {
     val c = Fariin.colors
     // iOS attachTile: a 28 glyph over its 12 name, one fixed width per tile (58 in groups, else 72).
     Column(Modifier.width(width).height(54.dp).clip(RoundedCornerShape(22.dp))
         .then(if (selected) Modifier.background(c.label.copy(alpha = 0.08f)) else Modifier)
         .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(icon, null, tint = c.label, modifier = Modifier.size(28.dp))
+        Box {
+            Icon(icon, null, tint = c.label, modifier = Modifier.size(28.dp))
+            NewCornerPill(isNew(badge))
+        }
         Spacer(Modifier.height(2.dp))
         Text(label, fontSize = 12.sp, lineHeight = 14.sp, color = c.label, maxLines = 1)
     }

@@ -2,7 +2,7 @@ package com.fariin.app.ui.settings
 
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import com.fariin.app.data.NewBadges
+import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.animation.togetherWith
 import android.content.Context
 import android.content.Intent
@@ -213,43 +213,43 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             Spacer(Modifier.height(8.dp))
             // The admin panel's "New" pills (config/features newBadges). No Subscriptions row on
             // Android yet; its key is read but has nowhere to show.
-            val newBadges = rememberNewBadges()
             // My Profile, its own card under the header (iOS; hidden unless the switch is on).
             if (com.fariin.app.data.AppFeatures.myProfileCard) SettingsSection {
-                SettingsRow("My Profile", painterResource(R.drawable.ic_account), last = true) { push(PAGE_GLOW_PROFILE) }
+                SettingsRow("My Profile", painterResource(R.drawable.ic_account), last = true,
+                    badge = NewBadgeSpots.MY_PROFILE) { push(PAGE_GLOW_PROFILE) }
             }
             SettingsSection {
                 SettingsRow("Account", painterResource(R.drawable.ic_account),
-                    newBadge = NewBadges.ACCOUNT in newBadges) { push(PAGE_ACCOUNT) }
+                    badge = NewBadgeSpots.ACCOUNT) { push(PAGE_ACCOUNT) }
                 SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true,
-                    newBadge = NewBadges.DEVICES in newBadges) { push(PAGE_DEVICES) }
+                    badge = NewBadgeSpots.DEVICES) { push(PAGE_DEVICES) }
             }
             SettingsSection {
                 SettingsRow("Notifications", painterResource(R.drawable.ic_notifications),
-                    newBadge = NewBadges.NOTIFICATIONS in newBadges) { push(PAGE_NOTIFS) }
+                    badge = NewBadgeSpots.NOTIFICATIONS) { push(PAGE_NOTIFS) }
                 SettingsRow("Appearance", painterResource(R.drawable.ic_set_appearance),
-                    newBadge = NewBadges.APPEARANCE in newBadges) { push(PAGE_APPEARANCE) }
+                    badge = NewBadgeSpots.APPEARANCE) { push(PAGE_APPEARANCE) }
                 SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats),
-                    newBadge = NewBadges.CHATS in newBadges) { push(PAGE_CHATS) }
+                    badge = NewBadgeSpots.CHATS) { push(PAGE_CHATS) }
                 SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack),
-                    newBadge = NewBadges.STORIES in newBadges) { push(PAGE_STORIES) }
+                    badge = NewBadgeSpots.STORIES) { push(PAGE_STORIES) }
                 SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy),
-                    newBadge = NewBadges.PRIVACY in newBadges) { push(PAGE_PRIVACY) }
+                    badge = NewBadgeSpots.PRIVACY) { push(PAGE_PRIVACY) }
                 SettingsRow("Storage and Data", painterResource(R.drawable.ic_set_storage),
-                    newBadge = NewBadges.STORAGE in newBadges) { push(PAGE_STORAGE) }
+                    badge = NewBadgeSpots.STORAGE) { push(PAGE_STORAGE) }
                 SettingsRow("Power Saving", painterResource(R.drawable.ic_set_power), last = true) { push(PAGE_POWER) }
             }
             SettingsSection {
                 SettingsRow("Invite Friends", painterResource(R.drawable.ic_invite_friends), trailing = Trailing.NONE,
-                    newBadge = NewBadges.INVITE in newBadges) {
+                    badge = NewBadgeSpots.INVITE) {
                     shareInvite(ctx, profile?.handle)
                 }
                 SettingsRow("Safety", painterResource(R.drawable.ic_set_safety), trailing = Trailing.NONE,
-                    newBadge = NewBadges.SAFETY in newBadges) {
+                    badge = NewBadgeSpots.SAFETY) {
                     openWeb(ctx, "https://fariin.com/safety")
                 }
                 SettingsRow("Help & About", painterResource(R.drawable.ic_set_help), last = true,
-                    newBadge = NewBadges.HELP in newBadges) { push(PAGE_ABOUT) }
+                    badge = NewBadgeSpots.HELP) { push(PAGE_ABOUT) }
             }
             Spacer(Modifier.height(12.dp))
         }
@@ -352,8 +352,8 @@ private fun AccountPage(
         PageBar("Account", onBack = pop)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection(header = "Sign-in") {
-                SettingsRow("Email address", last = !hasEmail) { push(PAGE_EMAIL) }
-                if (hasEmail) SettingsRow("Password", last = true) { push(PAGE_PASSWORD) }
+                SettingsRow("Email address", last = !hasEmail, badge = NewBadgeSpots.ACCOUNT_EMAIL) { push(PAGE_EMAIL) }
+                if (hasEmail) SettingsRow("Password", last = true, badge = NewBadgeSpots.ACCOUNT_PASSWORD) { push(PAGE_PASSWORD) }
             }
             SettingsSection(
                 header = "Security",
@@ -363,18 +363,20 @@ private fun AccountPage(
                 SettingsRow(
                     "Username",
                     value = when { profile == null -> ""; handle.isNullOrEmpty() -> "Not set"; else -> "@$handle" },
+                    badge = NewBadgeSpots.ACCOUNT_USERNAME,
                 ) { push(PAGE_USERNAME) }
-                SettingsRow("Passkeys") { push(PAGE_PASSKEYS) }
+                SettingsRow("Passkeys", badge = NewBadgeSpots.ACCOUNT_PASSKEYS) { push(PAGE_PASSKEYS) }
                 // iOS: hidden while the feature is off (Flags.twoStepEnabled), except for an account
                 // that already has it on, so it can be turned off again.
-                if (hasTwoStep) SettingsRow("Two-step verification") { push(PAGE_TWOSTEP) }
-                SettingsRow("Security notifications", last = true) { push(PAGE_SEC_NOTIFS) }
+                if (hasTwoStep) SettingsRow("Two-step verification", badge = NewBadgeSpots.ACCOUNT_TWO_STEP) { push(PAGE_TWOSTEP) }
+                SettingsRow("Security notifications", last = true, badge = NewBadgeSpots.ACCOUNT_SECURITY_NOTIFICATIONS) { push(PAGE_SEC_NOTIFS) }
             }
             SettingsSection(
                 header = "Account",
                 footer = "Saves your profile, devices and privacy settings to a text file you can share or keep. Messages are not included.",
             ) {
-                SettingsRow("Your Account Data", trailing = Trailing.NONE, last = true) {
+                SettingsRow("Your Account Data", trailing = Trailing.NONE, last = true,
+                    badge = NewBadgeSpots.ACCOUNT_ACCOUNT_DATA) {
                     exportScope.launch {
                         try { AccountReport.share(ctx) } catch (e: Exception) { toast(ctx, e.message ?: "Could not load everything. Check your connection and try again.") }
                     }
@@ -386,7 +388,8 @@ private fun AccountPage(
             }
             // Alone at the bottom, no note under it; the note above belongs to Your Account Data only.
             SettingsSection {
-                SettingsRow("Log out", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirm = true }
+                SettingsRow("Log out", trailing = Trailing.NONE, titleColor = c.red, last = true,
+                    badge = NewBadgeSpots.ACCOUNT_LOG_OUT) { confirm = true }
             }
         }
     }
@@ -406,26 +409,27 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
             SettingsSection(header = "Chat Theme") { ChatThemeBlock() }
             SettingsSection {
-                SettingsRow("Chat Wallpaper") { push(PAGE_WALLPAPER) }
+                SettingsRow("Chat Wallpaper", badge = NewBadgeSpots.APPEARANCE_CHAT_WALLPAPER) { push(PAGE_WALLPAPER) }
                 // "Bubble Color" (owner 2026-11-07: renamed from Chat Color, its own card again).
                 val lookV = com.fariin.app.data.ChatLookStore.version.intValue
                 val myColor = remember(lookV) { com.fariin.app.data.ChatLookStore.globalColor(ctx) }
                 val blue = com.fariin.app.ui.theme.Fariin.colors.blue
-                SettingsRow("Bubble Color", accessory = {
+                SettingsRow("Bubble Color", badge = NewBadgeSpots.APPEARANCE_CHAT_COLOR, accessory = {
                     Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape)
                         .background(myColor?.brush() ?: androidx.compose.ui.graphics.SolidColor(blue)))
                 }) { push(PAGE_CHAT_COLOR) }
                 if (com.fariin.app.data.BubbleStyles.SHOWN) {
                     val bubbleV = com.fariin.app.data.BubbleStyles.version.intValue
                     val bubbleName = remember(bubbleV) { com.fariin.app.data.BubbleStyles.init(ctx); com.fariin.app.data.BubbleStyles.name(com.fariin.app.data.BubbleStyles.current()) }
-                    SettingsRow("Bubble Style", value = bubbleName) { push(PAGE_BUBBLE_STYLE) }
+                    SettingsRow("Bubble Style", value = bubbleName, badge = NewBadgeSpots.APPEARANCE_BUBBLE_STYLES) { push(PAGE_BUBBLE_STYLE) }
                 }
-                SettingsRow("App Icon") { push(PAGE_APP_ICON) }
+                SettingsRow("App Icon", badge = NewBadgeSpots.APPEARANCE_APP_ICON) { push(PAGE_APP_ICON) }
                 val quick = remember { ctx.getSharedPreferences(CHAT_PREFS, android.content.Context.MODE_PRIVATE).getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️" }
-                SettingsRow("Quick Reaction", value = quick, last = true) { push(PAGE_QUICK) }
+                SettingsRow("Quick Reaction", value = quick, last = true, badge = NewBadgeSpots.APPEARANCE_QUICK_REACTION) { push(PAGE_QUICK) }
             }
             SettingsSection {
-                SettingsRow("Night Mode", value = AppearancePrefs.current(ctx).label, last = true) { push(PAGE_NIGHT) }
+                SettingsRow("Night Mode", value = AppearancePrefs.current(ctx).label, last = true,
+                    badge = NewBadgeSpots.APPEARANCE_NIGHT_MODE) { push(PAGE_NIGHT) }
             }
             // Moving wallpapers have no switch and no amount setting (owner 2026-11-06: the big apps have
             // none): a moving one always moves; to stop it, pick another. Only the phone's "Remove animations" stills it.
@@ -517,15 +521,16 @@ private fun HelpAboutPage(pop: () -> Unit) {
                 header = "Help",
                 footer = "Fariin has zero tolerance for objectionable content or abusive behavior. Reports are reviewed within 24 hours.",
             ) {
-                SettingsRow("Help Center", trailing = Trailing.OUT_LINK, last = true) { openWeb(ctx, "https://fariin.com/help") }
+                SettingsRow("Help Center", trailing = Trailing.OUT_LINK, last = true, badge = NewBadgeSpots.HELP_HELP_CENTER) { openWeb(ctx, "https://fariin.com/help") }
             }
             SettingsSection(
                 header = "About",
                 footer = "One-to-one messages and calls are end-to-end encrypted. Made for Somalia.",
             ) {
                 SettingsRow("App info") { appInfo = true }
-                SettingsRow("Privacy Policy", trailing = Trailing.OUT_LINK) { openWeb(ctx, "https://fariin.com/privacy") }
-                SettingsRow("Terms & Conditions", trailing = Trailing.OUT_LINK, last = true) { openWeb(ctx, "https://fariin.com/terms") }
+                SettingsRow("Privacy Policy", trailing = Trailing.OUT_LINK, badge = NewBadgeSpots.HELP_PRIVACY_POLICY) { openWeb(ctx, "https://fariin.com/privacy") }
+                SettingsRow("Terms & Conditions", trailing = Trailing.OUT_LINK, last = true,
+                    badge = NewBadgeSpots.HELP_TERMS) { openWeb(ctx, "https://fariin.com/terms") }
             }
         }
     }
