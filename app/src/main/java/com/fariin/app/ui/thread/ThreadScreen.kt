@@ -1006,7 +1006,10 @@ private fun ThreadContent(
                                 // The bubble takes no taps of its own while ticking (a photo would open).
                                 Box(Modifier.weight(1f)) {
                                     Column(Modifier.fillMaxWidth()) {
-                                        MessageRow(ui, m, g, is24h, {}) {}
+                                        // No share button beside a post while ticking (iOS).
+                                        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.channels.LocalPostSelecting provides true) {
+                                            MessageRow(ui, m, g, is24h, {}) {}
+                                        }
                                         ReactionChips(m, ui, m.authorId == ui.me) {}
                                     }
                                     Box(Modifier.matchParentSize().pointerInput(m.rowId) {

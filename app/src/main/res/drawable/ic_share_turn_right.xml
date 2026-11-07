@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A channel post's share button (iOS arrowshape.turn.up.right.fill): a filled curved arrow turning
+     up and to the right. The Material filled Reply arrow, mirrored. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group android:scaleX="-1" android:pivotX="12">
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M10,9V5l-7,7 7,7v-4.1c5,0 8.5,1.6 11,5.1 -1,-5 -4,-10 -11,-11z" />
+    </group>
+</vector>
