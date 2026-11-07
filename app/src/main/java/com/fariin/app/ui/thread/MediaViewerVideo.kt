@@ -176,7 +176,8 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
         }
         if (!(current && ctl.firstFrame)) {
             if (poster != null) Image(poster, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            if (file == null) com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = Color.White)
+            // The clip's bytes fill the ring as they come (iOS), not a bare spinner.
+            if (file == null) DownloadBadge(p.url, Fetch.LOADING, isVideo = true, showPill = false, showCross = false)
         }
     }
 }

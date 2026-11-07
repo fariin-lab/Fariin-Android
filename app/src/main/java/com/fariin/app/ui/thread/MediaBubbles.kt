@@ -100,7 +100,16 @@ internal fun rememberPlainFile(url: String?, enc: EncMeta?): File? {
  */
 internal enum class Fetch { WAITING, LOADING, FAILED, DONE }
 
-internal class GatedFile(val file: File?, val state: Fetch, val start: () -> Unit)
+internal class GatedFile(val file: File?, val state: Fetch, val url: String? = null, val start: () -> Unit,
+    /** The X on the download ring: the transfer stops and the arrow comes back (iOS MediaDownloads.cancel). */
+    val cancel: () -> Unit = {}) {
+    /** A tap on the picture that belongs to the download (start, retry or cancel), not to opening it. */
+    fun tap(): Boolean = when (state) {
+        Fetch.DONE -> false
+        Fetch.LOADING -> { cancel(); true }
+        else -> { start(); true }
+    }
+}
 
 /**
  * [rememberPlainFile] with the Storage and Data rules (iOS AutoDownloadPrefs): a picture that is
@@ -114,25 +123,23 @@ internal fun rememberGatedFile(url: String?, enc: EncMeta?, kind: AutoDownload.K
     var file by remember(url) { mutableStateOf(url?.let { media.cached(it) }) }
     var state by remember(url) {
         val auto = url == null || ChatMedia.isLocal(url) || kind == null || AutoDownload.allowedNow(ctx, kind)
-        mutableStateOf(when { url == null || file != null -> Fetch.DONE; auto -> Fetch.LOADING; else -> Fetch.WAITING })
+        // A transfer already running (started by a tap, then scrolled away and back) is picked up.
+        mutableStateOf(when { url == null || file != null -> Fetch.DONE; auto || ChatMedia.isFetching(url) -> Fetch.LOADING; else -> Fetch.WAITING })
     }
     LaunchedEffect(url, state) {
         if (state == Fetch.LOADING && url != null) {
-            val f = media.file(url, enc)
+            val f = media.file(url, enc, video = kind == AutoDownload.Kind.VIDEOS)
             file = f
-            state = if (f != null) Fetch.DONE else Fetch.FAILED
+            state = when {
+                f != null -> Fetch.DONE
+                com.fariin.app.media.MediaDownloads.takeCancelled(url) -> Fetch.WAITING
+                else -> Fetch.FAILED
+            }
         }
     }
-    return GatedFile(file, state) { if (state == Fetch.WAITING || state == Fetch.FAILED) state = Fetch.LOADING }
-}
-
-/** The disc on a picture that waits for a tap: an arrow to download, or a turn arrow to try again. */
-@Composable
-internal fun FetchDisc(state: Fetch, modifier: Modifier = Modifier) {
-    Box(modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-        Icon(if (state == Fetch.FAILED) Icons.Filled.Refresh else Icons.Filled.Download,
-            if (state == Fetch.FAILED) "Try again" else "Download", tint = Color.White, modifier = Modifier.size(24.dp))
-    }
+    return GatedFile(file, state, url,
+        start = { if (state == Fetch.WAITING || state == Fetch.FAILED) state = Fetch.LOADING },
+        cancel = { if (state == Fetch.LOADING && url != null && !ChatMedia.isLocal(url)) com.fariin.app.media.MediaDownloads.cancel(url) })
 }
 
 /**
@@ -242,6 +249,8 @@ internal fun PictureBox(
     originKey: String? = null,
     /** The corners the picture shows with in its bubble. */
     originRadius: Dp = 18.dp,
+    /** A video's clip (iOS MediaDownloadOverlay): its download is drawn and tapped here, the poster's is not. */
+    clip: GatedFile? = null,
 ) {
     val (wDp, hDp) = MediaRules.photoBox(m.width, m.height, maxW.value, captionWidth)
     val px = with(LocalDensity.current) { minOf(wDp, hDp).dp.roundToPx() }
@@ -257,14 +266,24 @@ internal fun PictureBox(
         val f = got.file ?: return@LaunchedEffect
         autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, it, f, isVideo = false) }
     }
-    val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
+    // The download whose state this picture wears: a video's clip, or the photo itself (iOS
+    // MediaDownloadOverlay). A video's poster just loads (small), with nothing drawn over it.
+    val fetch = when {
+        busy -> null
+        clip != null -> clip
+        m.mediaKind == Message.MediaKind.PHOTO -> got
+        else -> null
+    }
+    val pending = fetch != null && fetch.state != Fetch.DONE
     Box(
         Modifier.size(wDp.dp, hDp.dp)
             .heroSource(originKey, originRadius, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == originKey }
             .clip(shape).background(Fariin.colors.secondary.copy(alpha = 0.18f))
-            .clickable(enabled = bmp != null || waits, onClickLabel = if (bmp != null) "Open" else "Download",
-                onClick = { if (bmp != null) onOpen() else got.start() })
-            .semantics { contentDescription = "Photo" },
+            .clickable(enabled = bmp != null || pending,
+                onClickLabel = when (fetch?.state) { Fetch.LOADING -> "Cancel download"; Fetch.WAITING -> "Download"; Fetch.FAILED -> "Try again"; else -> "Open" },
+                // A tap that belongs to the download starts, retries or cancels it; it opens only what is here.
+                onClick = { if (fetch?.tap() != true && bmp != null) onOpen() })
+            .semantics { contentDescription = if (clip != null) "Video" else "Photo" },
     ) {
         if (bmp != null) {
             Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -273,11 +292,11 @@ internal fun PictureBox(
         } else if (placeholder != null) {
             Image(placeholder, null, contentScale = ContentScale.Crop, filterQuality = FilterQuality.High, modifier = Modifier.fillMaxSize())
         }
-        if (waits && !busy) {
-            FetchDisc(got.state, Modifier.align(Alignment.Center))
-        } else if (busy || (bmp == null && url != null)) {
-            // My own upload shows its progress (iOS ring); a download waits on a plain spinner.
-            UploadRing(if (busy) m.clientId else null, Modifier.align(Alignment.Center), onCancel = if (busy) uploadCancelFor(m) else null)
+        if (busy) {
+            // My own upload shows its progress (iOS ring); somebody else's still going up only spins.
+            UploadRing(m.clientId, Modifier.align(Alignment.Center), onCancel = uploadCancelFor(m))
+        } else if (pending) {
+            DownloadBadge(fetch!!.url, fetch.state, isVideo = clip != null)
         }
         overlay()
     }
@@ -285,9 +304,10 @@ internal fun PictureBox(
 
 /** A video bubble: the poster, a play disc, the length in a pill (iOS durationPill). */
 @Composable
-internal fun VideoOverlay(m: Message, ready: Boolean) {
+internal fun VideoOverlay(m: Message, ready: Boolean, showDuration: Boolean = true) {
     Box(Modifier.fillMaxSize()) {
-        m.duration?.let { d ->
+        // While the clip waits or comes down, the corner says its size instead (the download badge).
+        if (showDuration) m.duration?.let { d ->
             Box(Modifier.padding(8.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f))
                 .padding(horizontal = 7.dp, vertical = 2.dp)) {
                 Text(MediaRules.durationLabel(d), fontSize = 12.sp, color = Color.White)

@@ -235,15 +235,16 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                             val f = got.file ?: return@LaunchedEffect
                             autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/${tile.index}", f, isVideo = false) }
                         }
-                        val waits = got.state == Fetch.WAITING || got.state == Fetch.FAILED
+                        val pendingFetch = got.state != Fetch.DONE
                         Box(
                             Modifier.offset(tile.x.dp, tile.y.dp).size(w.dp, h.dp)
                                 // The viewer zooms out of this tile and back into it (hero).
                                 .heroSource(MediaOrigins.keyOf(m, tile.index), 18.dp, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == MediaOrigins.keyOf(m, tile.index) }
                                 .background(Fariin.colors.secondary.copy(alpha = 0.18f))
-                                .clickable(enabled = (bmp != null || waits) && !busy) {
+                                .clickable(enabled = (bmp != null || pendingFetch) && !busy) {
                                     val v = item.videoUrl
-                                    if (bmp == null) got.start()
+                                    if (!item.isVideo && got.tap()) Unit
+                                    else if (bmp == null) got.start()
                                     else {
                                         val at = tile.index
                                         if (v != null) onView(Viewing.Video(v, item.videoEnc, msg = m, albumIndex = at))
@@ -256,7 +257,8 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                             else if (tile.index == 0) rememberPlaceholder(m.thumb, m.blurhash)?.let {
                                 Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             }
-                            if (waits && !busy) FetchDisc(got.state, Modifier.align(Alignment.Center))
+                            // A photo tile's own download (iOS MediaDownloadOverlay per tile); a poster just loads.
+                            if (pendingFetch && !busy && !item.isVideo) DownloadBadge(got.url, got.state, isVideo = false)
                             if (item.isVideo) {
                                 Box(Modifier.align(Alignment.Center).size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
                                     contentAlignment = Alignment.Center) {

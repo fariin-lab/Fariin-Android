@@ -8,11 +8,12 @@ import com.google.firebase.storage.FirebaseStorage
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /**
@@ -31,7 +32,6 @@ class ChatMedia(
     private val crypto: FariinCrypto?,
 ) {
     private val dir: File get() = File(context.cacheDir, "chat-media").also { it.mkdirs() }
-    private val inflight = ConcurrentHashMap<String, Deferred<File?>>()
 
     /** Where my own outgoing files wait (cleared with the cache, as iOS's temp folder is). */
     fun localDir(): File = File(context.cacheDir, "outgoing").also { it.mkdirs() }
@@ -49,8 +49,12 @@ class ChatMedia(
         withContext(Dispatchers.IO) { runCatching { f.readBytes() }.getOrNull() }
     }
 
-    /** A readable file with the plain bytes, or null when it cannot be had or opened. */
-    suspend fun file(url: String, enc: EncMeta?): File? = withContext(Dispatchers.IO) {
+    /**
+     * A readable file with the plain bytes, or null when it cannot be had or opened. [video] puts
+     * the download in the narrow lane (two at a time). The transfer runs in [MediaDownloads]'s own
+     * scope: a caller that goes away (a bubble scrolled off) leaves it running for the next look.
+     */
+    suspend fun file(url: String, enc: EncMeta?, video: Boolean = false): File? = withContext(Dispatchers.IO) {
         when {
             url.startsWith(ASSET) -> assetFile(url)
             url.startsWith("/") -> File(url).takeIf { it.exists() }
@@ -61,10 +65,15 @@ class ChatMedia(
                     withContext(Dispatchers.Main) { com.fariin.app.system.LowStorage.warnForDownload(context) }
                     return@withContext null
                 }
-                coroutineScope {
-                    val job = inflight.getOrPut(url) { async { download(url, enc) } }
-                    try { job.await() } finally { inflight.remove(url, job) }
+                val job = inflight.computeIfAbsent(url) {
+                    MediaDownloads.clearCancel(url)
+                    MediaDownloads.scope.async(start = CoroutineStart.LAZY) {
+                        val lane = if (video) MediaDownloads.videoLane else MediaDownloads.photoLane
+                        lane.withPermit { cached(url) ?: download(url, enc) }
+                    }.also { d -> d.invokeOnCompletion { inflight.remove(url, d) } }
                 }
+                job.start()
+                job.await()
             }
         }
     }
@@ -72,7 +81,7 @@ class ChatMedia(
     private suspend fun download(url: String, enc: EncMeta?): File? {
         val ref = try { FirebaseStorage.getInstance().getReferenceFromUrl(url) } catch (_: Exception) { null }
         val cipher = try {
-            ref?.getBytes(MediaRules.MAX_DOWNLOAD)?.await() ?: fetchByUrl(url)
+            if (ref != null) fetchWithProgress(ref, url) else fetchByUrl(url)
         } catch (e: Exception) {
             // Why a picture stays on its retry button (the kind of failure only, never the address).
             android.util.Log.w("ChatMedia", "download failed: ${e.javaClass.simpleName} ${(e as? com.google.firebase.storage.StorageException)?.errorCode ?: ""}")
@@ -85,6 +94,27 @@ class ChatMedia(
         val f = key(url)
         atomicWrite(f, plain)
         return f
+    }
+
+    /** The sealed bytes through a file task, so the bubble's ring fills by bytes and its X stops it. */
+    private suspend fun fetchWithProgress(ref: com.google.firebase.storage.StorageReference, url: String): ByteArray? {
+        val part = File(dir, "dl-" + sha(url) + ".part")
+        val task = ref.getFile(part)
+        task.addOnProgressListener { s ->
+            if (s.totalByteCount > MediaRules.MAX_DOWNLOAD) task.cancel()
+            else MediaDownloads.progress(url, s.bytesTransferred, s.totalByteCount.takeIf { it > 0 })
+        }
+        MediaDownloads.started(url) { task.cancel() }
+        try {
+            try { task.await() } catch (e: Exception) {
+                if (task.isCanceled) return null
+                throw e
+            }
+            return part.readBytes()
+        } finally {
+            MediaDownloads.ended(url)
+            part.delete()
+        }
     }
 
     /** A download address the Storage SDK cannot map to a bucket object (the local emulator's
@@ -154,6 +184,12 @@ class ChatMedia(
             File(context.cacheDir, "chat-media").deleteRecursively()
             File(context.cacheDir, "outgoing").deleteRecursively()
         }
+
+        /** One transfer per URL in this process, whichever chat or bubble asked first. */
+        private val inflight = ConcurrentHashMap<String, Deferred<File?>>()
+
+        /** True while [url] is coming down here (a bubble back on screen picks the same one up). */
+        fun isFetching(url: String): Boolean = inflight.containsKey(url)
 
         fun isLocal(url: String) = url.startsWith(ASSET) || url.startsWith("/")
         fun sha(s: String): String = MessageDigest.getInstance("SHA-256").digest(s.toByteArray())

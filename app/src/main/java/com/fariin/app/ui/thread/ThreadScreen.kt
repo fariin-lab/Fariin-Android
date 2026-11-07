@@ -1680,9 +1680,14 @@ private fun MediaRow(
                 val ready = m.videoUrl != null
                 // My video still going up: the poster on this phone, sharp from the first frame.
                 val local = m.localPath?.takeIf { java.io.File(it).exists() }
+                // iOS MediaDownloadOverlay: the clip comes down IN the bubble (sealed as one piece, it
+                // cannot stream), by the Videos auto-download rule or a tap; play only once it is here.
+                val clip = rememberGatedFile(if (ready && !busy) m.videoUrl else null, m.enc, com.fariin.app.media.AutoDownload.Kind.VIDEOS)
+                val here = ready && clip.state == Fetch.DONE
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
-                }, overlay = { VideoOverlay(m, ready); capsule() }, originKey = MediaOrigins.keyOf(m))
+                }, overlay = { VideoOverlay(m, here && !busy, showDuration = here || busy || !ready || clip.state == Fetch.FAILED); capsule() },
+                    originKey = MediaOrigins.keyOf(m), clip = clip.takeIf { ready && !busy })
             }
             else -> {
                 val threadCid = LocalThreadCid.current
