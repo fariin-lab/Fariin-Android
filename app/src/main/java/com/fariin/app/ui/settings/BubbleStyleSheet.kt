@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
@@ -22,7 +22,7 @@ import com.fariin.app.ui.theme.Fariin
 
 /**
  * The Bubble Style picker as a sheet over the chat (owner 2026-11-07): the long-press menu on my own
- * text opens it. The same chooser as Settings > Bubble Style, with Cancel and Save in its top strip;
+ * text opens it. The same chooser as Settings > Bubble Style, with a round X and Save in its top strip;
  * the strip also drags the sheet down.
  */
 object BubbleStyleSheet {
@@ -51,9 +51,9 @@ private fun Sheet(onDismiss: () -> Unit) {
             onSaved = { motion.close() },
             bar = { dirty, save ->
                 Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(horizontal = 8.dp, vertical = 10.dp)) {
-                    TextButton({ motion.close() }, Modifier.align(Alignment.CenterStart)) {
-                        Text("Cancel", fontSize = 17.sp, color = c.accent)
-                    }
+                    // The round X the other sheets use (owner 2026-11-07), not a "Cancel" word.
+                    com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.Close, "Cancel",
+                        onClick = { motion.close() }, modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp))
                     Text("Bubble Style", Modifier.align(Alignment.Center), fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold, color = c.label)
                     Box(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) {
