@@ -61,21 +61,21 @@ import com.fariin.app.ui.thread.bubbles.rememberBubbleThumb
 
 internal const val PAGE_BUBBLE_STYLE = "look:bubblestyle"
 
-/** The chips under the preview, in this order (owner 2026-11-07: Colours first). */
-private const val COLOURS = "Colours"
-private val CATEGORIES: List<String> = listOf(COLOURS) + BubbleArt.sections
+/**
+ * The chips under the preview: the picture sections only. Colours are not offered here (owner
+ * 2026-11-07); my bubble's colour is the Bubble Color page's (LookPages.kt).
+ */
+private val CATEGORIES: List<String> = BubbleArt.sections
 
 /**
  * Settings > Appearance > Bubble Style (SPEC 4, iOS BubbleStylesPage). Save at the top; the chat info
- * "Chat Bubble" row opens this same page. [startOnColours]: opened as the old "Chat Color" (Settings
- * search, the new-account card), so the Colours chip shows whatever is saved.
+ * "Chat Bubble" row opens this same page.
  */
 @Composable
-internal fun BubbleStylePage(startOnColours: Boolean = false, onClose: () -> Unit) {
+internal fun BubbleStylePage(onClose: () -> Unit) {
     BubbleStyleChooser(
         bottomPad = 16.dp + com.fariin.app.ui.shell.bottomBarInset(),
         onSaved = onClose,
-        startOnColours = startOnColours,
         bar = { dirty, save ->
             PageBar("Bubble Style", onBack = onClose, action = {
                 com.fariin.app.ui.components.FloatingTextAction("Save", enabled = dirty) { save() }
@@ -98,7 +98,6 @@ internal fun BubbleStyleChooser(
     bottomPad: androidx.compose.ui.unit.Dp,
     onSaved: () -> Unit,
     bar: @Composable (dirty: Boolean, save: () -> Unit) -> Unit,
-    startOnColours: Boolean = false,
 ) {
     val ctx = LocalContext.current
     remember { BubbleStyles.init(ctx) }
@@ -109,14 +108,13 @@ internal fun BubbleStyleChooser(
     var decor by remember { mutableStateOf(savedDecor) }
     var plusNote by remember { mutableStateOf(false) }
     var category by remember {
-        mutableStateOf(if (startOnColours) COLOURS else BubbleArt.find(saved)?.section ?: COLOURS)
+        mutableStateOf(BubbleArt.find(saved)?.section ?: CATEGORIES.first())
     }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
     val dirty = selected != saved || decor != savedDecor
     // "Default" is the plain bubble, which is drawn in my chat colour (the wallpaper's own on Auto).
     ChatLookStore.version.intValue
     val plain: Brush = ChatLookStore.globalColor(ctx)?.brush() ?: SolidColor(c.blue)
-    val colourPicked = selected != null && BubbleArt.find(selected) == null
     val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
     val grid = rememberLazyGridState()
     LaunchedEffect(category) { grid.scrollToItem(0) }
@@ -151,22 +149,8 @@ internal fun BubbleStyleChooser(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "default") { Tile("Default", selected == null, onTap = { selected = null }) { DefaultSwatch(plain) } }
-            if (category == COLOURS) {
-                items(BubbleStyles.colours, key = { "c:" + it.id }) { s ->
-                    Tile(s.name, selected == s.id, plus = s.plus, onTap = { selected = s.id }) { ColourSwatch(s) }
-                }
-                if (colourPicked) item(span = { GridItemSpan(maxLineSpan) }, key = "decor") {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card)
-                        .clickable { decor = !decor }.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text("Decorations", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                        com.fariin.app.ui.components.FariinSwitch(checked = decor, onCheckedChange = { decor = it })
-                    }
-                }
-            } else {
-                items(BubbleArt.all.filter { it.section == category }, key = { "p:" + it.id }) { s ->
-                    Tile(s.name, selected == s.id, onTap = { selected = s.id }) { PictureSwatch(s, thumbPx) }
-                }
+            items(BubbleArt.all.filter { it.section == category }, key = { "p:" + it.id }) { s ->
+                Tile(s.name, selected == s.id, onTap = { selected = s.id }) { PictureSwatch(s, thumbPx) }
             }
         }
     }
@@ -290,12 +274,6 @@ private fun Tile(name: String, on: Boolean, plus: Boolean = false, onTap: () -> 
 /** The plain bubble, in my chat colour. */
 @Composable
 private fun DefaultSwatch(fill: Brush) = Bar(fill, Color.White)
-
-@Composable
-private fun ColourSwatch(s: BubbleStyles.Style) {
-    val look = s.look(Fariin.colors.dark)
-    Bar(brushOf(look), Color(0xFF000000 or look.text))
-}
 
 /** A bubble-shaped bar with a short line for the words. */
 @Composable
