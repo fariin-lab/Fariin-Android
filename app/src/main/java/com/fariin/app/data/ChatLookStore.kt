@@ -68,23 +68,26 @@ object ChatLookStore {
 
     /**
      * iOS syncGroupWallpapers: the group's `wallpaper` field as the server has it now (null = never set).
-     * Called from every live snapshot (chat list, followed channels, the open chat). Prefs are read and
-     * written on a background thread, only when the value changed; a new photo starts downloading at
-     * once instead of on the chat's first draw.
+     * Called from every live snapshot (chat list, followed channels, the open chat). An unchanged value
+     * returns at once from memory; a changed one is put in prefs right away (apply: in memory now, the
+     * disk write in the background), so a group's own Apply never flashes the old one between its
+     * pending picture and the stored one. The photo check and download run on a background thread,
+     * at once instead of on the chat's first draw.
      */
     fun syncGroupWallpaper(c: Context, cid: String, raw: String?) {
         val key = raw ?: NO_WALL
         if (synchronized(groupPending) { groupSynced.put(cid, key) } == key) return
         val app = c.applicationContext
+        if (groupStored(app, cid) != raw) {
+            val e = prefs(app).edit()
+            if (raw != null) e.putString(ChatLookRules.groupKey(cid), raw) else e.remove(ChatLookRules.groupKey(cid))
+            e.apply()
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) bump()
+            else android.os.Handler(android.os.Looper.getMainLooper()).post { bump() }
+        }
         val gen = wipeGen
         syncThread.execute {
-            if (gen != wipeGen) return@execute   // signed out since: nothing goes back into the wiped prefs
-            if (groupStored(app, cid) != raw) {
-                val e = prefs(app).edit()
-                if (raw != null) e.putString(ChatLookRules.groupKey(cid), raw) else e.remove(ChatLookRules.groupKey(cid))
-                e.apply()
-                android.os.Handler(android.os.Looper.getMainLooper()).post { bump() }
-            }
+            if (gen != wipeGen) return@execute   // signed out since: no download for the old account
             ChatLookRules.photoLink(raw)?.let { link ->
                 if (!libraryFile(app, ChatLookRules.photoId(link)).exists()) fetchGroupPhoto(app, link)
             }
