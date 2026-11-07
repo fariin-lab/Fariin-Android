@@ -1,5 +1,10 @@
 package com.fariin.app.ui.thread
 
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.navigationBars
@@ -68,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import com.fariin.app.ui.components.floating
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -230,6 +236,8 @@ internal fun AttachSheet(
     // The reference sheet: the phone's photos edge to edge in threes (camera first), a select circle
     // on each, the sources in one floating bar over the grid's bottom; once something is chosen
     // that bar becomes the caption and Send.
+    val attachBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val attachLiquid = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, dragHandle = null,
         containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
         // Lists other than the photos open the sheet fully, as iOS does.
@@ -259,6 +267,12 @@ internal fun AttachSheet(
                 IntOffset(0, -(top + z + boxH - usableBottom).coerceIn(0f, atHalf.coerceAtLeast(0f)).toInt())
             }
             val none = access == RecentMedia.Access.NONE
+            // The photos are the glass source for the bar over them (iOS: liquid glass over the grid,
+            // owner 2026-11-06); the sheet is its own window, so it carries its own source.
+            // Nothing inside the source reads a backdrop: a layer that holds its own reader never ends.
+            Box(Modifier.fillMaxSize().then(if (attachLiquid) Modifier.layerBackdrop(attachBackdrop) else Modifier)) {
+            androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalLiquidBackdrop provides null,
+                com.fariin.app.ui.components.LocalGlassHaze provides null) {
             if (mediaOff != null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(mediaOff, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(24.dp))
@@ -302,21 +316,27 @@ internal fun AttachSheet(
                     }
                 }
             }
+            }
+            }
             // The phone's Back steps out of a page (folders, GIFs, Files) before it closes the sheet.
             androidx.activity.compose.BackHandler(enabled = backShown) { albumButton() }
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.fariin.app.ui.components.LocalLiquidBackdrop provides (if (attachLiquid) attachBackdrop else null),
+                com.fariin.app.ui.components.LocalGlassWindow provides androidx.compose.ui.platform.LocalView.current) {
             if (page == SheetPage.FILES) {
                 // The Files page has its own bar; no sources, no caption.
             } else if (picked.isEmpty()) {
+                val sourceGlass = if (attachLiquid) attachBackdrop else null
                 // iOS sourceBar: the round album button LEFT (a back arrow once a list is open), the
                 // sources in one capsule RIGHT: GIF, Files, Location, Poll (groups only).
                 Row(Modifier.align(Alignment.BottomCenter).then(lift).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(60.dp).floating().clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(60.dp).sheetGlass(CircleShape, sourceGlass).clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
                         if (backShown) Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.label, modifier = Modifier.size(26.dp))
                         else Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Albums", tint = c.label, modifier = Modifier.size(29.dp))
                     }
                     Spacer(Modifier.weight(1f).widthIn(min = 12.dp))
-                    Row(Modifier.height(60.dp).floating(RoundedCornerShape(30.dp)).padding(horizontal = 6.dp),
+                    Row(Modifier.height(60.dp).sheetGlass(RoundedCornerShape(30.dp), sourceGlass).padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         val w = if (onPoll != null) 58.dp else 72.dp
                         if (onGif != null) SheetButton("GIF", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gif_tile), w,
@@ -364,6 +384,7 @@ internal fun AttachSheet(
                     }
                 }
             }
+            }
         }
     }
     drawOn?.let { u ->
@@ -393,6 +414,33 @@ private fun AllowTile(short: Boolean = false, blocked: Boolean = false, onClick:
             fontSize = 13.sp, color = c.accent, fontWeight = FontWeight.SemiBold,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
+}
+
+/**
+ * The source bar's glass over the photos (iOS: frosted, the pictures showing through, a bright
+ * rim). Thinner than the chat's [floating] glass, with a light blur so the labels stay readable
+ * over busy photos. Without a source (older phones, power saving) it is the solid [floating].
+ */
+@Composable
+private fun Modifier.sheetGlass(shape: androidx.compose.ui.graphics.Shape, backdrop: com.kyant.backdrop.backdrops.LayerBackdrop?): Modifier {
+    if (backdrop == null) return floating(shape)
+    val c = Fariin.colors
+    val frost = if (c.dark) c.card else Color.White
+    return this
+        .shadow(12.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.18f))
+        .drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(4.dp.toPx())
+                lens(10.dp.toPx(), 20.dp.toPx())
+            },
+            shadow = null,
+            highlight = null,
+            onDrawSurface = { drawRect(frost.copy(alpha = if (c.dark) 0.50f else 0.55f)) },
+        )
+        .border(1.dp, Color.White.copy(alpha = if (c.dark) 0.22f else 0.85f), shape)
 }
 
 @Composable
