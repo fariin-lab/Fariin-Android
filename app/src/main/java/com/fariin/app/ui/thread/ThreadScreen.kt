@@ -1235,7 +1235,12 @@ private fun ThreadContent(
                 val mediaOff = if (ui.isGroup && doc.isNotEmpty()) com.fariin.app.data.GroupAdmins.mediaOff(doc, ui.me) else null
                 val gatedSend: (String, List<String>) -> Unit = { t, ids ->
                     val links = if (com.fariin.app.data.GroupAdmins.hasLink(t)) held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) else null
-                    val stop = slow() ?: links
+                    // Slow mode lets one message through per wait, so a text that splits into several
+                    // bubbles (ThreadRepository.sendText) could not all go: said before, not refused after.
+                    val long = if (editing == null && quoting == null && ui.isGroup && doc.isNotEmpty() &&
+                        com.fariin.app.data.GroupAdmins.slows(doc, ui.me) && com.fariin.app.data.MessageLength.splitForBubbles(t).size > 1)
+                        "Slow mode is on. Messages here can be up to ${com.fariin.app.data.MessageLength.BUBBLE_CHARS} characters." else null
+                    val stop = slow() ?: links ?: long
                     if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids)
                 }
                 if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false; attachCamera = false },
@@ -2276,11 +2281,16 @@ private fun Composer(
                     val fieldText = TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
                     if (draft.isEmpty()) Text(placeholder, style = fieldText, color = c.tertiary, maxLines = 1)
                     BasicTextField(
-                        value = boxValue, onValueChange = {
+                        value = boxValue, onValueChange = { v ->
+                            // iOS messageMaxChars: typing stops at 6,400, a paste past it is trimmed to fit.
+                            val fv = if (v.text.length <= com.fariin.app.data.MessageLength.MAX_CHARS) v else
+                                com.fariin.app.data.MessageLength.fit(boxValue.text, v.text, v.selection.end)?.let { (t, at) ->
+                                    androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(at))
+                                } ?: return@BasicTextField
                             val now = System.currentTimeMillis()
                             if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
-                            boxValue = it
-                            draft = it.text
+                            boxValue = fv
+                            draft = fv.text
                         },
                         textStyle = fieldText.copy(color = c.label),
                         cursorBrush = SolidColor(c.accent),

@@ -476,21 +476,40 @@ class ThreadRepository(
     fun sendText(text: String, reply: Message?, mentions: List<String>) {
         val t = text.trim()
         if (t.isEmpty()) return
+        // iOS ThreadView.send: one bubble holds 2,500 (owner 2026-10-29); longer text goes out as
+        // several messages, in order, each one waiting for the one before. The reply, the
+        // @-mentions and the link card ride the first (a mention pings once, not once per bubble).
+        val parts = MessageLength.splitForBubbles(t)
+        if (parts.size > 1) {
+            var before: kotlinx.coroutines.Job? = null
+            parts.forEachIndexed { i, p ->
+                before = sendOne(p, if (i == 0) reply else null, if (i == 0) mentions else emptyList(), before, card = i == 0)
+            }
+            return
+        }
+        sendOne(t, reply, mentions, null)
+    }
+
+    private var lastTap = 0.0
+
+    /** One bubble's text; [after] = the send it must follow (a long text's earlier bubble). */
+    private fun sendOne(t: String, reply: Message?, mentions: List<String>, after: kotlinx.coroutines.Job?, card: Boolean = true): kotlinx.coroutines.Job? {
         // A card is quoted by its noun (iOS safeText), never by its raw marker.
         val ref = reply?.let { Message.ReplyRef(it.id, it.authorId, (CardRules.previewWord(it.text) ?: it.bodyText).take(200)) }
-        val tap = System.currentTimeMillis().toDouble()
+        // Never the same millisecond as the bubble before (a long text's parts keep their order on screen).
+        val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
         val clientId = UUID.randomUUID().toString().uppercase()
         val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text, mentions)
         // The link card follows the text (iOS attachLinkPreview): one built while typing shows on
         // my bubble at once; otherwise it is fetched for up to 6 s beside the send.
-        LinkPreviews.cardUrlFor(t, LinkPreviews.enabled(), LinkPreviews.takeSuppressed(cid))
+        if (card) LinkPreviews.cardUrlFor(t, LinkPreviews.enabled(), LinkPreviews.takeSuppressed(cid))
             ?.takeIf { LinkPreviews.allowedIn(CryptoHub.listedConversation(cid), me) }?.let { u ->
                 cardFor[clientId] = u
                 LinkPreviews.cached(u)?.let { showLocalCard(clientId, it) }
             }
         // On disk BEFORE the network (iOS SendQueue.add), so a kill or an outage cannot lose it;
         // written by the send's own coroutine, off the main thread (see drive).
-        drive(e, checkFirst = false, sendScope, save = true)
+        return drive(e, checkFirst = false, sendScope, save = true, after = after)
     }
 
     private fun showLocalCard(clientId: String, d: LinkPreviews.Draft) {
@@ -521,8 +540,9 @@ class ThreadRepository(
      * keystore and was on the main thread at the tap: part of the frames lost right as the bubble
      * should start moving. It now runs here, still before any network write.
      */
-    private fun drive(e: SendQueue.Entry, checkFirst: Boolean, on: CoroutineScope, save: Boolean = false) {
-        if (!SendQueue.begin(e.clientId)) return
+    private fun drive(e: SendQueue.Entry, checkFirst: Boolean, on: CoroutineScope, save: Boolean = false,
+                      after: kotlinx.coroutines.Job? = null): kotlinx.coroutines.Job? {
+        if (!SendQueue.begin(e.clientId)) return null
         val ref = e.replyId?.let { Message.ReplyRef(it, e.replyAuthor ?: "", e.replyText ?: "") }
         // My bubble style read ONCE, at the tap: the bubble on screen and the message sent carry the
         // same one even if the style is changed while this one is still going up.
@@ -533,9 +553,12 @@ class ThreadRepository(
             mentions = e.mentions, bubbleStyle = style.first, bubbleDecor = style.second,   // from the first frame
         )
         rebuild()
-        on.launch {
+        return on.launch {
             try {
                 if (save) SendQueue.add(me, e)
+                // A long text's later bubble goes up only after the one before it (landed or
+                // failed); it is on disk first, like any send.
+                after?.join()
                 if (checkFirst && alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return@launch }
                 turn.withLock {
                     if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions) else sendDirect(e.text, e.clientId, e.ts, ref)
