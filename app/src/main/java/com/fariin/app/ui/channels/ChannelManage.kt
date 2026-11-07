@@ -208,7 +208,7 @@ private fun RepliesSwitch(info: ChannelInfo) {
     var wanted by androidx.compose.runtime.remember(info.repliesOff) { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
     Column {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
-            SwitchLine("Replies", on = wanted ?: !info.repliesOff, last = true, badge = NewBadgeSpots.CHANNEL_SETTINGS_REPLIES) { on ->
+            SwitchLine("Replies", on = wanted ?: !info.repliesOff, badge = NewBadgeSpots.CHANNEL_SETTINGS_REPLIES) { on ->
                 wanted = on
                 scope.launch {
                     if (!com.fariin.app.data.PostReplies.setOff(info.cid, null, off = !on)) {
@@ -217,9 +217,36 @@ private fun RepliesSwitch(info: ChannelInfo) {
                     }
                 }
             }
+            // Quotes of this channel's posts (iOS 1280e92d, owner 2026-11-07), the same way as Replies.
+            // Off: no new quotes (the server refuses them); quotes already made stay.
+            QuotesLine(info)
         }
-        Text("When off, followers can read replies already posted but can't add new ones.", fontSize = 13.sp,
+        Text(QUOTES_FOOTER, fontSize = 13.sp,
             color = c.secondary, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp))
+    }
+}
+
+private const val QUOTES_FOOTER =
+    "Replies off: followers can read replies already posted but can't add new ones. Quotes off: nobody can quote your posts."
+
+/** The Quotes switch: shows the new state at once with a spinner; a refusal puts it back and says why. */
+@Composable
+private fun QuotesLine(info: ChannelInfo) {
+    val c = Fariin.colors
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var wanted by androidx.compose.runtime.remember(info.quotesOff) { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+    var busy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    SwitchLine("Quotes", on = wanted ?: !info.quotesOff, enabled = !busy, busy = busy, last = true, badge = NewBadgeSpots.CHANNEL_SETTINGS_QUOTES) { on ->
+        wanted = on; busy = true
+        scope.launch {
+            try {
+                com.fariin.app.data.PostReplies.setQuotesOff(info.cid, off = !on)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                wanted = null
+                com.fariin.app.ui.components.Snack.show(com.fariin.app.channel.ChannelService.errorText(e, "Couldn't change quotes. Try again."))
+            } finally { busy = false }
+        }
     }
 }
 
@@ -629,7 +656,9 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
 @Composable
 internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabled: Boolean = true, last: Boolean = false,
                         /** The row's NewBadgeSpots id: the green "New" pill after the title while the panel has it on. */
-                        badge: String? = null, onChange: (Boolean) -> Unit) {
+                        badge: String? = null,
+                        /** A save under way: a small spinner before the switch. */
+                        busy: Boolean = false, onChange: (Boolean) -> Unit) {
     val c = Fariin.colors
     // The whole row flips the switch (Android settings rows).
     Row(Modifier.fillMaxWidth().toggleable(on, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange)
@@ -639,6 +668,7 @@ internal fun SwitchLine(title: String, on: Boolean, bold: Boolean = false, enabl
                 modifier = Modifier.weight(1f, fill = false))
             com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp, end = 8.dp))
         } else Text(title, fontSize = 17.sp, color = c.label, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+        if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.padding(end = 12.dp).size(18.dp), color = c.secondary, strokeWidth = 2.dp)
         com.fariin.app.ui.components.FariinSwitch(on, onCheckedChange = null, enabled = enabled,
             colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = com.fariin.app.ui.theme.Fariin.colors.onAccent))
     }

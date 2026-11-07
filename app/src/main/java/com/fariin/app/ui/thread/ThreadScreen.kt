@@ -1450,6 +1450,12 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                     circle = true,
                 )
             }
+            // My own channel (owner or admin): Search there instead (iOS 93160b88, owner 2026-11-07:
+            // "the right side looks empty"); it opens the in-chat search.
+            ui.channel?.takeIf { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN }?.let {
+                com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search,
+                    contentDescription = "Search", onClick = { InChatSearchLink.request(ui.cid) }, circle = true)
+            }
             HeaderMenu(ui, onToggleMute)
         }
     }

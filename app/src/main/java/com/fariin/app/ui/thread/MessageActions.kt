@@ -183,7 +183,8 @@ internal fun MessageMenu(
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
             // Quote a channel post into a chat of mine, with my own words (iOS, owner 2026-11-06):
             // only where Forward is offered.
-            if (!restricted && MessageRules.canForward(m) && ui.channel != null) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote, badge = NewBadgeSpots.CHAT_MENU_QUOTE) {
+            // Not when the channel turned Quotes off, except for its own owner/admins (iOS 1280e92d).
+            if (!restricted && MessageRules.canForward(m) && ui.channel?.let { it.info.canQuote(it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN) } == true) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote, badge = NewBadgeSpots.CHAT_MENU_QUOTE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onQuote(m) })
             if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })

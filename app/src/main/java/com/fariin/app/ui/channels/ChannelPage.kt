@@ -167,6 +167,17 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     LaunchedEffect(undo) { if (undo) { delay(5000); undo = false } }
 
     fun share() {
+        // A private channel: its invite link, for an admin who may invite (iOS 1280e92d, More > Share Channel).
+        if (info.username.isEmpty() && role == Role.ADMIN && team?.can(me, com.fariin.app.channel.ChannelAdmins.Right.INVITE_USERS) == true) {
+            scope.launch {
+                val link = com.fariin.app.data.ChannelAddFollowers.link(info.cid, mapOf("username" to info.username, "isPublic" to info.isPublic))
+                    ?: run { notice = com.fariin.app.data.ChannelAddFollowers.NO_LINK; return@launch }
+                ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, com.fariin.app.data.ChannelAddFollowers.shareText(info.title, link)), "Share")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            return
+        }
         val text = ChannelRules.shareText(info.title, info.username) ?: run { notice = "This channel has no public link."; return }
         ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

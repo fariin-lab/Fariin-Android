@@ -456,6 +456,11 @@ object PostReplies {
         call("setReplies", args); true
     }.getOrDefault(false)
 
+    /** The channel's Quotes switch (setChannelQuotes {cid, off}, changeInfo right; writes quotesOff). Throws on refusal. */
+    suspend fun setQuotesOff(cid: String, off: Boolean) {
+        call("setChannelQuotes", mapOf("cid" to cid, "off" to off))
+    }
+
     /** An admin's summaries of new replies in this channel, on or off. */
     suspend fun setAlerts(cid: String, on: Boolean): Boolean = runCatching {
         call("setReplyAlerts", mapOf("cid" to cid, "on" to on)); true

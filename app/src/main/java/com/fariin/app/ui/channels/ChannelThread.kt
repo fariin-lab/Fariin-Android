@@ -315,7 +315,8 @@ fun ChannelPostMenu(
             if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", Icons.Filled.ContentCopy, badge = NewBadgeSpots.CHAT_MENU_COPY) { onCopy(m.bodyText) })
             if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) { sharePost(ctx, ch.info, m) })
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
-            if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m))
+            // Not when the channel turned Quotes off, except for its own owner/admins (iOS 1280e92d).
+            if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m) && ch.info.canQuote(ch.role == Role.ADMIN))
                 add(PostItem("Quote", quoteIcon, badge = NewBadgeSpots.CHAT_MENU_QUOTE) { onDismiss(); onQuote(m) })
             // Tick several posts to forward, copy or (owner and admins) delete them together.
             if (onSelect != null) add(PostItem("Select", Icons.Outlined.CheckCircle) { onDismiss(); onSelect(m) })

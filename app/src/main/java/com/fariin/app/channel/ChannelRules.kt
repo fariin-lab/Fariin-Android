@@ -295,7 +295,12 @@ data class ChannelInfo(
      * DEFAULT (server, owner 2026-11-07): missing = off; only an explicit false turns them on.
      */
     val repliesOff: Boolean = true,
+    /** The Quotes switch off (`quotesOff`, set by `setChannelQuotes`): followers can't quote posts. Missing = on. */
+    val quotesOff: Boolean = false,
 ) {
+    /** Quote in a post's menu: unless the channel turned Quotes off; its own admins always (the server's rule). */
+    fun canQuote(isAdmin: Boolean): Boolean = !quotesOff || isAdmin
+
     val shownCount: Int get() = ChannelRules.subscriberCount(followerCount, users.size)
 
     companion object {
@@ -328,6 +333,7 @@ data class ChannelInfo(
                 createdAtMillis = Conversation.millis(d["createdAt"]),
                 names = (d["names"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) -> if (k is String && v is String) k to v else null }?.toMap() ?: emptyMap(),
                 repliesOff = d["repliesOff"] as? Boolean ?: true,
+                quotesOff = d["quotesOff"] as? Boolean ?: false,
             )
         }
 
