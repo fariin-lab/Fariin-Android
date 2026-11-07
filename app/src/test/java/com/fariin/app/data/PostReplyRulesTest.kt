@@ -113,6 +113,12 @@ class PostReplyRulesTest {
         assertEquals(ReplyRights(del = true, ban = false, settings = true), p.may); assertEquals(12, p.rev)
         val empty = PostReplyRules.parsePage(null)
         assertEquals(0, empty.count); assertFalse(empty.off); assertEquals(ReplyRights(), empty.may); assertEquals("", empty.next)
+        assertNull(p.pinned)
+        // The first page's pinned thread, and a Creator reply (the owner writing as the channel).
+        val pp = PostReplyRules.parsePage(mapOf("items" to emptyList<Any>(),
+            "pinned" to mapOf("id" to "p1", "n" to "News", "cr" to true, "ac" to 2)))
+        assertEquals("p1", pp.pinned?.id); assertTrue(pp.pinned!!.creator); assertEquals(2, pp.pinned!!.answers)
+        assertFalse(PostReplyRules.parseReply(mapOf("id" to "x"))!!.creator)
         // The server's postOff is the effective switch: a post turned on in an off channel takes replies.
         assertFalse(PostReplyRules.parsePage(mapOf("channelOff" to true, "postOff" to false, "off" to true)).off)
         val a = PostReplyRules.parseAnswers(mapOf("items" to listOf(mapOf("id" to "a1")), "next" to ""), "t1")
@@ -212,6 +218,12 @@ class PostReplyRulesTest {
         assertEquals(listOf(Action.COPY, Action.DELETE), PostReplyRules.actions(mine, off = true, may = mod))
         assertEquals(listOf(Action.RETRY, Action.COPY, Action.DELETE), PostReplyRules.actions(mine.copy(send = PostReply.Send.FAILED), false, mod))
         assertEquals(listOf(Action.COPY), PostReplyRules.actions(mine.copy(send = PostReply.Send.SENDING), false, mod))
+        // Pin / Unpin with the switches' right, top-level replies only, never held ones.
+        val admin = ReplyRights(settings = true)
+        assertEquals(listOf(Action.REPLY, Action.PIN, Action.COPY, Action.REPORT), PostReplyRules.actions(theirs, false, admin))
+        assertEquals(listOf(Action.REPLY, Action.UNPIN, Action.COPY, Action.REPORT), PostReplyRules.actions(theirs, false, admin, pinnedId = "a"))
+        assertEquals(listOf(Action.REPLY, Action.COPY, Action.REPORT), PostReplyRules.actions(theirs.copy(parentId = "t"), false, admin))
+        assertEquals(listOf(Action.REPLY, Action.COPY, Action.REPORT), PostReplyRules.actions(theirs.copy(held = true), false, admin))
         assertFalse(PostReplyRules.showsAdminMenu(ReplyRights(ban = true)))
         assertTrue(PostReplyRules.showsAdminMenu(ReplyRights(settings = true)))
         assertTrue(PostReplyRules.showsAdminMenu(ReplyRights(del = true)))
