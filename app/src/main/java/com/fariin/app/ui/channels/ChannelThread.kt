@@ -63,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -130,19 +131,33 @@ fun PostViews(color: Color) {
         modifier = Modifier.semantics { contentDescription = "$v views" })
 }
 
-/** The round share button beside a post (hidden under Protect Content). */
+/** The chat is ticking rows (Select): a post's share button hides, as iOS. */
+val LocalPostSelecting = compositionLocalOf { false }
+
+/**
+ * The round share button beside a post (iOS applyShareButton, owner 2026-11-07 "share use ios
+ * style"): 32 dp, soft fill (black 8% light, white 12% dark), no edge or shadow, the filled curved
+ * arrow in the label colour; 8 dp right of the bubble, its bottom level with the bubble's bottom.
+ * Hidden on a post still sending or failed, while selecting, and under Protect Content. It fades in
+ * (180 ms) the first time it shows instead of moving in with the row.
+ */
 @Composable
 fun PostShareButton(ch: ChannelThreadUi, m: Message) {
     // Not while it is still on its way: there is no post to link to yet.
-    if (m.deleted || ch.info.restricted || m.isSystem || m.sendState != null) return
+    if (m.deleted || ch.info.restricted || m.isSystem || m.sendState != null || LocalPostSelecting.current) return
     val c = Fariin.colors
     val ctx = LocalContext.current
+    val shown = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { shown.animateTo(1f, androidx.compose.animation.core.tween(180)) }
     Box(
-        Modifier.padding(start = 6.dp).size(32.dp).clip(CircleShape)
-            .background(if (c.dark) Color(0xFF26262B) else Color(0xFFEDEDEF))
+        Modifier.padding(start = 8.dp).size(32.dp).graphicsLayer { alpha = shown.value }.clip(CircleShape)
+            .background(if (c.dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
             .clickable { sharePost(ctx, ch.info, m) },
         contentAlignment = Alignment.Center,
-    ) { Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = "Share", tint = c.secondary, modifier = Modifier.size(18.dp)) }
+    ) {
+        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_share_turn_right), contentDescription = "Share",
+            tint = c.label, modifier = Modifier.size(15.dp))
+    }
 }
 
 /**
