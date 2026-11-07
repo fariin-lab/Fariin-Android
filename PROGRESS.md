@@ -1073,3 +1073,20 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 20:40 Owner: Settings > Safety sheet, frame by frame. Found Android's page scrollbar flashing down the sheet's
   edge on every load (also the grey line in the Facebook recording). Scrollbars and overscroll glow off in the
   browser. Pixel: right edge clean after load. Note: our X covers the site's logo, as iOS does on facebook.
+- 20:55 Team round (owner: manage agents, find what's missing). Builders: attach glass (emu 5554), receive
+  animation (5556, owns ThreadScreen row arrival), shared iOS sheet (5558). Gap hunters: chat screen (done), rest
+  of app (running). PC memory: 3 headless emulators ~3 GB each + 3 Gradle builds; no room for more builders.
+  QUEUE from chat gap hunt (iOS vs Android, both sides checked in code):
+   1 reaction pill tap should open Who Reacted sheet (tabs per emoji, Tap to remove) not react
+   2 swipe-to-reply: iOS swipes LEFT, 55 pt arm, 1/4 overflow resistance, arrow scales 0.6->1, light haptic
+   3 haptics missing: swipe arm, double-tap react, poll vote, + button, sticker panel, mention pick, photo saved
+   4 floating day pill at top while scrolling (fades ~1.2 s after stop)
+   5 "recording..." in header (write typing=audio-<sec> every 10 s, read it), typing line obeys Typing Indicators
+     setting, group wording "N people typing..."
+   6 jump arrow: first tap to first unread (once), then newest; hidden while recording
+   7 GIF panel: Favorites, Recent, categories; GIF long-press Add to/Remove from Favorites
+   8 sticker long-press Save to/Remove from Favorites
+   9 admins: long-press system notice -> Select / Delete
+  10 no Reply (menu or swipe) where I cannot send (admins-only group) or on a story-reaction message
+  11 emoji-only messages (1-5) drawn big and bare (3.5x down to 2.25x)
+  12 unknown fariin-<x>: marker -> "sent using a newer version" notice
