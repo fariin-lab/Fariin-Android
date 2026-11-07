@@ -2,7 +2,6 @@ package com.fariin.app.ui.thread
 
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -13,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.TransformOrigin
@@ -34,7 +34,8 @@ import kotlinx.coroutines.launch
  * size on a spring.
  *
  * iOS numbers: 0.3 s, vertical curve (0.199, 0.011, 0.279, 0.910), landing scale 0.94, then a
- * spring of stiffness 420 and damping 22 (mass 1, a damping ratio of about 0.54).
+ * spring of stiffness 420 and damping 22 (mass 1, a damping ratio of about 0.54). The rise here
+ * runs on [GlideCurve] (see there), and the list glides up under it on the same clock.
  *
  * Safety: only the row this phone just sent moves, once, found by its row id. Everything is a
  * graphicsLayer transform, so the list's layout never changes. Any unknown (no composer place,
@@ -48,6 +49,8 @@ class SendMotion {
 
     private var arm: Arm? = null
     private val flown = HashSet<String>()
+    /** The row whose flight the list glides along with (see [glidesFor]). */
+    private var gliding: String? = null
 
     /** The composer's row (field or record bar) in root coordinates; null until it is laid out. */
     var composerRow: Rect? = null
@@ -73,8 +76,20 @@ class SendMotion {
         if (!isNewest || me.isEmpty() || m.authorId != me || m.rowId in a.before) return null
         arm = null
         flown.add(m.rowId)
-        return if (atBottom) Flight(a.kind, a.origin) else null
+        if (!atBottom) return null
+        gliding = m.rowId
+        return Flight(a.kind, a.origin)
     }
+
+    /**
+     * Whether my newest row [rowId] may still get a flight: a send is armed and its row not yet
+     * placed, or the row already took one. The list then waits for the flight's start and glides
+     * up with it (ThreadScreen's stick-to-newest effect) instead of jumping in one frame.
+     */
+    fun mayFly(rowId: String): Boolean = arm != null || gliding == rowId
+
+    /** True once when [rowId] took a flight: the list glides up with it. */
+    fun glidesFor(rowId: String): Boolean = (gliding == rowId).also { if (it) gliding = null }
 
     /** One bubble in flight. Its live place is kept from layout; the draw reads it every frame. */
     @Stable
@@ -82,6 +97,8 @@ class SendMotion {
         internal val progress = Animatable(0f)
         internal val scale = Animatable(START_SCALE)
         private var bounds by mutableStateOf<Rect?>(null)
+        /** The composer-to-row distance when the flight starts; fixed from then on (see [run]). */
+        private var startDrop: Float? = null
 
         internal fun place(c: LayoutCoordinates) {
             // Landed: the place no longer matters, so later scrolling writes nothing.
@@ -91,25 +108,48 @@ class SendMotion {
             bounds = if (r.isUsable()) r else null
         }
 
-        /** How far below its place the bubble is drawn at [p] (0 = start, 1 = landed). */
-        internal fun dropAt(p: Float): Float {
-            val r = bounds ?: return 0f
+        /** The composer-to-row distance at the row's current place, or null when it makes no sense. */
+        private fun liveDrop(): Float? {
+            val r = bounds ?: return null
             val d = origin.center.y - r.center.y
-            // The row must sit above the composer and within a screen's reach of it.
-            if (!d.isFinite() || d <= 0f || d > origin.bottom) return 0f
-            return d * (1f - VerticalCurve.transform(p.coerceIn(0f, 1f)))
+            // Within a screen's reach of the composer. The row may start a little below the
+            // composer's middle: it waits under the composer until the list glides it up.
+            return if (d.isFinite() && kotlin.math.abs(d) <= origin.bottom) d else null
+        }
+
+        /**
+         * How far below its place the bubble is drawn at [p] (0 = start, 1 = landed). The distance
+         * is fixed when the flight starts, while the list glides the row itself up on the same
+         * curve: place + fixed drop * (1 - curve) then runs from the composer to the landing in one
+         * line, and lands exactly where the row is.
+         */
+        internal fun dropAt(p: Float): Float {
+            val d = startDrop ?: liveDrop() ?: return 0f
+            return d * (1f - GlideCurve.transform(p.coerceIn(0f, 1f)))
         }
 
         internal suspend fun run() = coroutineScope {
-            launch { progress.animateTo(1f, tween(DURATION_MS, easing = VerticalCurve)) }
+            // The frame that adds the new row is the heavy one; starting in it lost that time and
+            // the first visible step was a jump. Two quiet frames first, the same two the list
+            // waits (ThreadScreen), so both start on the same frame.
+            withFrameNanos { }
+            withFrameNanos { }
+            startDrop = liveDrop()   // none yet (the row not placed): the live place decides, as before
+            launch { progress.animateTo(1f, tween(DURATION_MS, easing = GlideCurve)) }
             launch { scale.animateTo(1f, spring(dampingRatio = DAMPING_RATIO, stiffness = STIFFNESS)) }
         }
     }
 
     companion object {
         const val DURATION_MS = 300
-        /** iOS sendVerticalCurve. */
-        val VerticalCurve = CubicBezierEasing(0.19919473f, 0.010644531f, 0.27920937f, 0.91025390f)
+        /**
+         * The rise and the list's glide under it, one curve for both so the bubble's path stays one
+         * line. iOS's vertical curve sits nearly still for its first fifth (owner's frame-by-frame
+         * look at the iOS recording reads as one decelerating move, the field morph covers that
+         * start there); without a morph that stillness read as a pause under the composer here.
+         * The same quick-out, soft-landing curve as a received message's glide, no overshoot.
+         */
+        val GlideCurve = ArrivalMotion.Curve
         /** iOS lands at 0.94; the bubble starts a touch smaller here, as it has no pill shape to shrink from. */
         const val START_SCALE = 0.9f
         /** iOS settle spring: stiffness 420, damping 22, mass 1. */

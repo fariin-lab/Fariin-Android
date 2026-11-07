@@ -448,6 +448,7 @@ private fun ThreadContent(
     // (the open showed old rows with the unread ones under the arrow; iOS opens at the newest).
     // Declared before the stick-to-newest effect, which asks it whether to glide (ArrivalMotion.kt).
     val arrivalMotion = remember(ui.cid) { ArrivalMotion() }
+    val sendMotion = remember(ui.cid) { SendMotion() }
     var stick by remember { mutableStateOf(true) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { if (!it) stick = listState.firstVisibleItemIndex <= 1 }
@@ -460,10 +461,26 @@ private fun ThreadContent(
             // recordings, frame by frame), so its clock runs 2.2x slower here.
             // The frame that builds the new row ran ~57 ms on the Pixel; a glide started in it lost
             // that time and its first visible step was a jump. Two quiet frames first, then the glide.
+            val last = ui.messages.lastOrNull()
             if (arrivalMotion.takeListGlide() && listState.firstVisibleItemIndex <= 1) {
                 androidx.compose.runtime.withFrameNanos { }
                 androidx.compose.runtime.withFrameNanos { }
                 kotlinx.coroutines.withContext(GlideTiming) { listState.animateScrollToItem(0) }
+            }
+            else if (last != null && last.authorId == ui.me && sendMotion.mayFly(last.rowId) && listState.firstVisibleItemIndex <= 1) {
+                // My own send (iOS startSendGlide): the list glides up WITH the bubble flying out of
+                // the composer, on the flight's curve and clock, instead of jumping a row in one
+                // frame. The same two quiet frames as the flight (SendMotion.run), so both start
+                // together; the new row waits under the composer until then.
+                androidx.compose.runtime.withFrameNanos { }
+                androidx.compose.runtime.withFrameNanos { }
+                // The new row sits just below the newest end; its offset is how far the list moves.
+                val row = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == 0 }
+                if (sendMotion.glidesFor(last.rowId) && row != null && row.offset < 0 && listState.firstVisibleItemIndex <= 1) {
+                    listState.animateScrollBy(row.offset.toFloat(),
+                        androidx.compose.animation.core.tween(SendMotion.DURATION_MS, easing = SendMotion.GlideCurve))
+                }
+                listState.scrollToItem(0)   // lands exactly; a no-op after the glide
             }
             else listState.scrollToItem(0)
         }
@@ -517,8 +534,8 @@ private fun ThreadContent(
     val rowFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(220, delayMillis = 40) else null }
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
     // My own send rises out of the composer (iOS send flight, SendMotion.kt); off with Power
-    // Saving > Animations or the system's Remove animations.
-    val sendMotion = remember(ui.cid) { SendMotion() }
+    // Saving > Animations or the system's Remove animations. (sendMotion is declared above, with
+    // arrivalMotion: the stick-to-newest effect asks both.)
     val sendAnim = anim && systemAnimationsOn()
     // A message from someone else that lands live while I am at the newest rises into place
     // (ArrivalMotion.kt). Noted here, before the list lays out the new rows, so "at the newest"
@@ -1103,27 +1120,31 @@ private fun ThreadContent(
                 // iOS: the link card rides the same slot as the reply bar, never while editing.
                 if (editing == null && quoting == null) LinkDraftBar(ui.cid, ui.me, linkText,
                     allowed = held(com.fariin.app.data.GroupAdmins.SendKind.LINKS) == null)
-                Composer(gatedSend, { attachOpen = true }, { r ->
+                // Every handler goes in through steady0/1/2: the same instance on every pass, calling the
+                // newest code. A new message used to hand the composer fresh lambdas (they hold `ui`
+                // and `actions`, both new on every update), so the whole composer and its field were
+                // rebuilt in the very frame my sent bubble should start rising; now it skips.
+                Composer(steady2(gatedSend), steady0 { attachOpen = true }, steady1 { r: VoiceRecorder.Result ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                         if (stop != null) actions.onNotice(stop) else {
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
                             onSendVoice(r)
                         }
-                    }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
-                    onRecording = { voiceRecording = it }, onCapturing = actions.onRecordingVoice,
-                    onRowPlaced = { sendMotion.composerRow = it },
-                    onCamera = {
+                    }, prefill = editing?.let { it.id to it.text }, onTyping = steady1(actions.onTyping),
+                    onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
+                    onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
+                    onCamera = steady0 {
                         val stop = held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
                         if (stop != null) actions.onNotice(stop) else { attachCamera = true; attachOpen = true }
                     },
-                    initialDraft = actions.draft, onDraft = { actions.onDraft(it); linkText = it },
+                    initialDraft = actions.draft, onDraft = steady1 { d: String -> actions.onDraft(d); linkText = d },
                     // A channel's admin writes a "Broadcast", with the post-without-sound bell (iOS).
                     placeholder = if (ch != null) "Broadcast" else "Message",
                     channelSilent = if (ch != null && ch.role == com.fariin.app.channel.ChannelRules.Role.ADMIN) {
                         LaunchedEffect(ui.cid) { com.fariin.app.channel.ChannelPosting.load(ui.cid) }
                         com.fariin.app.channel.ChannelPosting.isSilent(ui.cid)
                     } else null,
-                    onToggleSilent = {
+                    onToggleSilent = steady0 {
                         val on = !com.fariin.app.channel.ChannelPosting.isSilent(ui.cid)
                         com.fariin.app.channel.ChannelPosting.setSilent(ui.cid, on) { actions.onNotice("Couldn't change that. Try again.") }
                         actions.onNotice(if (on) "Followers will get your posts without sound." else "Followers will get your posts with sound.")
@@ -1133,11 +1154,11 @@ private fun ThreadContent(
                     focusKey = quoting?.let { com.fariin.app.data.QuoteRules.draftKey(it) },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
-                    onSticker = { s ->
+                    onSticker = steady1 { s: com.fariin.app.data.StickerRef ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.STICKERS)
                         if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendSticker(s, r) }
                     },
-                    onGif = { gif ->
+                    onGif = steady1 { gif: com.fariin.app.data.StickerGifRules.Gif ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
                         if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
                     },
@@ -1816,6 +1837,25 @@ private fun TextWithMeta(text: String, style: TextStyle, bold: List<IntRange> = 
             mt.place(w - mt.width, metaY)
         }
     }
+}
+
+/** [f] as one lasting instance that always runs the newest [f] (see the Composer call). */
+@Composable
+private fun steady0(f: () -> Unit): () -> Unit {
+    val now = androidx.compose.runtime.rememberUpdatedState(f)
+    return remember { { now.value() } }
+}
+
+@Composable
+private fun <A> steady1(f: (A) -> Unit): (A) -> Unit {
+    val now = androidx.compose.runtime.rememberUpdatedState(f)
+    return remember { { a: A -> now.value(a) } }
+}
+
+@Composable
+private fun <A, B> steady2(f: (A, B) -> Unit): (A, B) -> Unit {
+    val now = androidx.compose.runtime.rememberUpdatedState(f)
+    return remember { { a: A, b: B -> now.value(a, b) } }
 }
 
 /**
