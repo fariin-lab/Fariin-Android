@@ -357,25 +357,15 @@ internal fun AttachSheet(
                         Spacer(Modifier.width(8.dp))
                     }
                     Box(
-                        Modifier.weight(1f).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp)).padding(start = 16.dp, end = 6.dp),
+                        Modifier.weight(1f).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.weight(1f).padding(vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
-                                if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
-                                BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                                    cursorBrush = SolidColor(c.accent), maxLines = 5,
-                                    // Typing opens the sheet fully: at half height the caption sat under the
-                                    // keyboard (Pixel 2026-11-05).
-                                    modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
-                            }
-                            // HD for every chosen photo and video, as the editors' HD button.
-                            Box(Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(16.dp)).clickable { hd = !hd }.padding(horizontal = 10.dp)
-                                .semantics { contentDescription = if (hd) "HD on" else "HD off" },
-                                contentAlignment = Alignment.Center) {
-                                Text("HD", color = if (hd) c.accent else c.secondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
+                        if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
+                        BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                            cursorBrush = SolidColor(c.accent), maxLines = 5,
+                            // Typing opens the sheet fully: at half height the caption sat under the
+                            // keyboard (Pixel 2026-11-05).
+                            modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
@@ -393,8 +383,16 @@ internal fun AttachSheet(
                         }
                     }
                 }
-                // The editors' "HD" / "Standard" words after a tap, just above the bar.
-                Box(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).padding(bottom = 30.dp)) { QualityHint(hd) }
+                // HD for every chosen photo and video (as the editors' HD button): its own round glass
+                // button over the grid, 8dp above Send, the bar's side margin (owner 2026-11-07).
+                Box(Modifier.align(Alignment.BottomEnd).then(lift).then(barsPad).padding(end = 12.dp, bottom = 72.dp)
+                    .size(40.dp).floating().clickable { hd = !hd }
+                    .semantics { contentDescription = if (hd) "HD on" else "HD off" },
+                    contentAlignment = Alignment.Center) {
+                    Text("HD", color = if (hd) c.accent else c.label, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                // The editors' "HD" / "Standard" words after a tap, above the HD button's row.
+                Box(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).padding(bottom = 82.dp)) { QualityHint(hd) }
             }
             }
         }
