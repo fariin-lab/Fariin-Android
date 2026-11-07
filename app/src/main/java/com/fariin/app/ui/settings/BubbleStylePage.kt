@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -52,6 +53,9 @@ import androidx.compose.ui.unit.sp
 import com.fariin.app.data.BubbleArt
 import com.fariin.app.data.BubbleStyles
 import com.fariin.app.data.ChatLookStore
+import com.fariin.app.ui.components.drawWallpaper
+import com.fariin.app.ui.components.drawWallpaperDim
+import androidx.compose.ui.graphics.asImageBitmap
 import com.fariin.app.ui.components.brush
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.thread.bubbles.BubbleArtCache
@@ -160,7 +164,7 @@ internal fun BubbleStyleChooser(
         }
         // Pinned: never scrolls away, redrawn at once when a tile is tapped.
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
-            Preview(selected, plain)
+            Preview(selected, plain, cid)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (cid != null) "Only this chat" else "Applies to messages you send from now on.", fontSize = 13.sp,
                     color = c.secondary, modifier = Modifier.weight(1f).padding(start = 4.dp))
@@ -269,14 +273,29 @@ private fun Chip(title: String, on: Boolean, onTap: () -> Unit) {
 
 /** My bubble in the chosen style (as the chat draws it, the picture for a picture style), then a reply. */
 @Composable
-private fun Preview(selected: String?, plain: Brush) {
+private fun Preview(selected: String?, plain: Brush, cid: String?) {
     val c = Fariin.colors
+    val ctx = LocalContext.current
+    // The real chat wallpaper behind the samples: this chat's (its own, else the Settings one), or
+    // the Settings one; drawn as the chat draws it, dim included. Animated: a still frame.
+    ChatLookStore.version.intValue
+    val wall = if (cid != null) ChatLookStore.wallpaper(ctx, cid) else ChatLookStore.defaultWallpaper(ctx)
+    val onWall = wall != com.fariin.app.data.ChatWallpaper.None
+    val pattern = com.fariin.app.ui.components.WallpaperArt.pattern(ctx)
+    val photo = (wall as? com.fariin.app.data.ChatWallpaper.Photo)?.let {
+        ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
+    val motion = com.fariin.app.ui.components.rememberWallpaperMotion(wall, animates = false)
+    val dim = ChatLookStore.wallpaperDim(ctx)
     val text = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
     // Owner 2026-11-07: changing style must not resize the card (the chips and grid jumped). A
     // FIXED height that holds the tallest picture style, one-line samples, the same width cap for
     // every style, and the new style faded in where the old one was.
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.bg).padding(14.dp),
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+        .then(motion.isolate { Modifier.drawBehind {
+            drawWallpaper(wall, c.dark, c.bg, pattern, photo, motion = motion)
+            if (onWall) drawWallpaperDim(dim.floatValue)
+        } }).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val mine = "My new bubble style!"
         androidx.compose.animation.Crossfade(selected, animationSpec = androidx.compose.animation.core.tween(180),
@@ -296,9 +315,13 @@ private fun Preview(selected: String?, plain: Brush) {
                 }
             }
         }
-        Text("Looks so cute!", style = text, color = c.label, maxLines = 1,
-            modifier = Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp))
-                .background(if (c.dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)).padding(horizontal = 14.dp, vertical = 9.dp))
+        // The chat's own incoming bubble: frosted with a hairline rim on a wallpaper, solid without.
+        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.thread.LocalOnWallpaper provides onWall) {
+            val shape = RoundedCornerShape(18.dp)
+            Text("Looks so cute!", style = text, color = c.label, maxLines = 1,
+                modifier = Modifier.widthIn(max = maxW).clip(shape).background(com.fariin.app.ui.thread.receivedFill())
+                    .then(com.fariin.app.ui.thread.receivedRim(isMe = false, shape)).padding(horizontal = 14.dp, vertical = 9.dp))
+        }
     }
 }
 
