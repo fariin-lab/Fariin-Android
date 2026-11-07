@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -71,8 +70,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -80,7 +77,9 @@ import com.fariin.app.data.CardRules
 import com.fariin.app.data.LocationShare
 import com.fariin.app.data.LocationShare.Source
 import com.fariin.app.data.PhotonPlaces
+import com.fariin.app.ui.components.FariinSheetDialog
 import com.fariin.app.ui.components.FloatingIcon
+import com.fariin.app.ui.components.SheetHandleStrip
 import com.fariin.app.ui.components.FloatingSearchField
 import com.fariin.app.ui.components.FloatingSegments
 import com.fariin.app.ui.components.PermissionDenied
@@ -113,12 +112,9 @@ import kotlin.coroutines.resume
  */
 @Composable
 internal fun LocationPicker(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double, label: String?) -> Unit) {
-    val c = Fariin.colors
-    Dialog(onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        MapDialogWindow(c.dark)
-        PickerPage(onDismiss, onSend)
-    }
+    // A sheet over the chat, as iOS (.sheet with its grabber): the map keeps every drag of its own,
+    // so the sheet moves by the strip at its top; X, Back and a tap on the dim close it too.
+    FariinSheetDialog(onDismiss, handle = true) { motion -> PickerPage({ motion.close() }, onSend) }
 }
 
 /** What the list under the header is showing: search answers or the places around the pin. */
@@ -350,7 +346,7 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
         if (!mapsOk) Box(Modifier.weight(1f).fillMaxWidth()) {
             // No map on this phone: my own fix only, sent from the panel below.
             FloatingIcon(Icons.Filled.Close, "Close", onDismiss,
-                Modifier.statusBarsPadding().padding(start = 16.dp, top = 8.dp), circle = true)
+                Modifier.padding(start = 16.dp, top = SheetHandleStrip), circle = true)
             MapsMissingNote(Modifier.align(Alignment.Center))
         } else Box(Modifier.weight(1f).fillMaxWidth()) {
             val start = remember {
@@ -374,7 +370,8 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
                 }
             }
             CentrePin(dragging)
-            Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            // Below the sheet's grabber strip, which drags the sheet.
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = SheetHandleStrip, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FloatingIcon(Icons.Filled.Close, "Close", onDismiss, circle = true)
                     Text("Location", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,

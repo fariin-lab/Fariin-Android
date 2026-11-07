@@ -1,7 +1,7 @@
 <resources>
     <style name="Theme.Fariin" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <!-- A sheet over the app (the in-app browser): the chat stays visible behind it; the sheet draws
+    <!-- A sheet over the app (the in-app browser, the PDF reader; ui/components/FariinSheet.kt): the chat stays visible behind it; the sheet draws
          its own slide-up, so no window animation. -->
     <style name="Theme.Fariin.Sheet" parent="Theme.Fariin">
         <item name="android:windowIsTranslucent">true</item>

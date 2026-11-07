@@ -27,11 +27,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.MyLocation
@@ -40,7 +40,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +54,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,17 +62,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.fariin.app.R
 import com.fariin.app.data.CardRules
 import com.fariin.app.data.LocationShare
-import com.fariin.app.ui.components.FloatingBack
+import com.fariin.app.ui.components.FariinSheetDialog
 import com.fariin.app.ui.components.FloatingIcon
+import com.fariin.app.ui.components.SheetHandleStrip
 import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.theme.Fariin
 import com.google.android.gms.common.ConnectionResult
@@ -276,15 +271,16 @@ internal fun LocationMapPage(loc: CardRules.Location, approx: Boolean, onDismiss
     val zoom = if (approx) 13.5f else 17f
     val ok = remember { MapsAvailable.ok(ctx) }
     var map by remember { mutableStateOf<GoogleMap?>(null) }
-    Dialog(onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        MapDialogWindow(c.dark)
+    // A sheet over the chat, like the picker: the map keeps its own drag, the strip at the top moves
+    // the sheet; X, Back and a tap on the dim close it.
+    FariinSheetDialog(onDismiss, handle = true) { motion ->
         Box(Modifier.fillMaxSize().background(c.bg)) {
             if (ok) FariinMap(Modifier.fillMaxSize(), c.dark, CameraPosition.fromLatLngZoom(spot, zoom)) { m ->
                 map = m
                 m.markSpot(spot, approx, density)
             } else MapsMissingNote(Modifier.align(Alignment.Center))
-            FloatingBack(onDismiss, Modifier.statusBarsPadding().padding(start = 12.dp, top = 8.dp), circle = true)
+            FloatingIcon(Icons.Filled.Close, "Close", { motion.close() },
+                Modifier.padding(start = 12.dp, top = SheetHandleStrip), circle = true)
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 12.dp)) {
                 if (ok) FloatingIcon(Icons.Filled.MyLocation, "Show the place", {
                     map?.animateCamera(CameraUpdateFactory.newLatLngZoom(spot, zoom), 400, null)
@@ -364,30 +360,4 @@ internal fun copyCoordinates(ctx: Context, loc: CardRules.Location) {
     cm.setPrimaryClip(ClipData.newPlainText("Coordinates", CardRules.coords(loc.lat, loc.lon)))
     // Android 13 and later show their own "Copied" panel.
     if (Build.VERSION.SDK_INT < 33) Snack.show("Coordinates copied")
-}
-
-/**
- * A full-screen map dialog: edge to edge, the bars clear, their icons dark on the light map and
- * light on the dark one; the keyboard lays over the page instead of squeezing the map.
- */
-@Composable
-internal fun MapDialogWindow(dark: Boolean) {
-    val view = LocalView.current
-    SideEffect {
-        (view.parent as? DialogWindowProvider)?.window?.let { w ->
-            w.setDimAmount(0f)
-            w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
-            @Suppress("DEPRECATION") w.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-            WindowCompat.setDecorFitsSystemWindows(w, false)
-            @Suppress("DEPRECATION") run {
-                w.statusBarColor = android.graphics.Color.TRANSPARENT
-                w.navigationBarColor = android.graphics.Color.TRANSPARENT
-            }
-            if (Build.VERSION.SDK_INT >= 29) { w.isStatusBarContrastEnforced = false; w.isNavigationBarContrastEnforced = false }
-            WindowCompat.getInsetsController(w, view).apply {
-                isAppearanceLightStatusBars = !dark
-                isAppearanceLightNavigationBars = !dark
-            }
-        }
-    }
 }

@@ -1,6 +1,5 @@
 package com.fariin.app.ui.files
 
-import androidx.compose.foundation.layout.statusBars
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -9,6 +8,7 @@ import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -58,7 +57,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.media.FileOpener
+import com.fariin.app.ui.components.FariinSheet
 import com.fariin.app.ui.components.FloatingIcon
+import com.fariin.app.ui.components.SheetMotion
+import com.fariin.app.ui.components.rememberSheetMotion
+import com.fariin.app.ui.components.sheetDrag
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.theme.FariinTheme
 import kotlinx.coroutines.Dispatchers
@@ -97,7 +100,15 @@ class PdfViewerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val path = intent.getStringExtra(EXTRA_PATH) ?: run { finish(); return }
         val name = intent.getStringExtra(EXTRA_NAME) ?: File(path).name
-        setContent { FariinTheme { PdfReader(File(path), name, onClose = { finish() }) } }
+        // A sheet over the chat (owner, 2026-11-06): it slides up, the chat stays dimmed at the top,
+        // and it closes by X, Back, a tap on the dim, the bar dragged down, or the first page pulled down.
+        setContent {
+            FariinTheme {
+                val motion = rememberSheetMotion { finish(); @Suppress("DEPRECATION") overridePendingTransition(0, 0) }
+                BackHandler { motion.close() }
+                FariinSheet(motion) { PdfReader(File(path), name, motion) }
+            }
+        }
     }
 }
 
@@ -110,7 +121,7 @@ private sealed interface Opened {
 }
 
 @Composable
-private fun PdfReader(file: File, name: String, onClose: () -> Unit) {
+private fun PdfReader(file: File, name: String, motion: SheetMotion) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     var opened by remember { mutableStateOf<Opened>(Opened.Loading) }
@@ -150,14 +161,16 @@ private fun PdfReader(file: File, name: String, onClose: () -> Unit) {
                 "Open in Another App") { openElsewhere() }
             Opened.Broken -> Notice("Couldn't open the file.", "It may be damaged, or in a format this phone can't open.",
                 "Open in Another App") { openElsewhere() }
-            is Opened.Ready -> Pages(o, gate)
+            is Opened.Ready -> Pages(o, gate, motion)
         }
         // The bar: close, the name, share (iOS: close · filename · share).
         // On the page's grey, so the white circles never sit on a white page (pages scroll under it).
-        Row(Modifier.fillMaxWidth().background(c.bgSecondary.copy(alpha = 0.97f)).statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+        // The sheet sits under the status bar, so the bar starts at the sheet's rounded top; a drag on
+        // it moves the sheet (a tap still reaches the buttons).
+        Row(Modifier.fillMaxWidth().background(c.bgSecondary.copy(alpha = 0.97f)).sheetDrag(motion)
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            FloatingIcon(Icons.Filled.Close, "Close", onClick = onClose)
+            FloatingIcon(Icons.Filled.Close, "Close", onClick = { motion.close() })
             Spacer(Modifier.width(10.dp))
             Text(name, fontSize = 16.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(c.card.copy(alpha = 0.92f))
@@ -174,16 +187,16 @@ private fun PdfReader(file: File, name: String, onClose: () -> Unit) {
 }
 
 @Composable
-private fun Pages(o: Opened.Ready, gate: Mutex) {
+private fun Pages(o: Opened.Ready, gate: Mutex, motion: SheetMotion) {
     val c = Fariin.colors
     val list = rememberLazyListState()
     var widthPx by remember { mutableStateOf(0) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     val page by remember { derivedStateOf { list.firstVisibleItemIndex + 1 } }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val topInset = with(density) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density).toDp() }
     Box(Modifier.fillMaxSize().onSizeChanged { widthPx = it.width }
+        // One finger pulling down on the first page's top moves the sheet instead (as the browser).
+        .sheetDrag(motion, atTop = { !list.canScrollBackward })
         // Two fingers zoom (1x to 4x) and move the zoomed page; one finger still scrolls the list.
         .pointerInput(Unit) {
             detectTransformGestures(panZoomLock = false) { _, p, z, _ ->
@@ -196,9 +209,9 @@ private fun Pages(o: Opened.Ready, gate: Mutex) {
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().graphicsLayer {
             scaleX = zoom; scaleY = zoom; translationX = pan.x
         }, verticalArrangement = Arrangement.spacedBy(10.dp),
-            // The first page starts below the bar (status bar + the 56 dp bar), the last above the page count.
+            // The first page starts below the bar (62 dp), the last above the page count.
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = topInset + 64.dp,
+                top = 70.dp,
                 bottom = 72.dp, start = 10.dp, end = 10.dp)) {
             items(o.ratios.size) { i -> PageImage(o.renderer, i, o.ratios[i], widthPx, gate) }
         }
