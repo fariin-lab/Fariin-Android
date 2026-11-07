@@ -360,6 +360,11 @@ class FirestorePeople(
         // iOS: re-adding a removed (banned) person lifts the ban, and only an admin who may remove
         // members may do that; an arrayRemove is written only when someone here really is banned.
         val d = runCatching { conv(cid).get().await().data }.getOrNull() ?: emptyMap()
+        // The member cap (config/limits group_members_max, fallback 30): the rules hold it on every
+        // add, this says it in words first. A channel's users are its admins, so it is exempt.
+        val max = AppLimits.groupMembersMax
+        val count = (d["users"] as? List<*>)?.size ?: 0
+        if (d["channel"] != true && count + ok.size > max) return AppLimits.membersCapSentence(max)
         val banned = (d["bannedUids"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         val lifted = ok.map { it.uid }.filter { it in banned }
         if (lifted.isNotEmpty()) {
