@@ -1056,3 +1056,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   link the page asked for (fb://, intent://) straight to Android, with no tap. Now BrowserLinks: only a tap leaves,
   only to a real app (REQUIRE_NON_BROWSER), intent:// parsed BROWSABLE with no component, web fallback loads here.
   Also the page now stops above our bottom bar (site's Open app / Log in buttons were under it). Pixel: stays in.
+- 19:36 kream voice notes: newer sent ones draw bars; the 3:13 AM one is flat because it is a silent recording
+  (plays, progress + 1x button fine). No change.
