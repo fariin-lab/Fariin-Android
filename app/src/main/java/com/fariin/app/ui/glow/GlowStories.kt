@@ -193,8 +193,8 @@ fun GlowStoriesPage(me: String, conversations: List<Conversation>, seenOf: (Stri
     var reload by remember { mutableIntStateOf(0) }
     val load = rememberGlowCards(me, reload)
     val opener = remember { GlowOpener() }
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        FloatingTopBar("Glowing", onBack = onBack)
+    com.fariin.app.ui.components.FloatingBarPage("Glowing", onBack) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         when (load) {
             GlowLoad.Loading -> com.fariin.app.ui.components.PageLoading()
             GlowLoad.Failed -> GlowCouldNotLoad { reload++ }

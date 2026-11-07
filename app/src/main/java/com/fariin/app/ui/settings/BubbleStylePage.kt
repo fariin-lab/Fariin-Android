@@ -93,6 +93,7 @@ internal fun BubbleStylePage(onClose: () -> Unit) {
     BubbleStyleChooser(
         bottomPad = 16.dp + com.fariin.app.ui.shell.bottomBarInset(),
         onSaved = onClose,
+        glassPage = true,
         bar = { dirty, save ->
             PageBar("Bubble Style", onBack = onClose, action = {
                 com.fariin.app.ui.components.FloatingTextAction("Save", enabled = dirty) { save() }
@@ -120,6 +121,8 @@ internal fun BubbleStyleChooser(
     onSaved: () -> Unit,
     /** Opened from a chat: the style and colour picked here are that chat's own; null = the Settings ones. */
     cid: String? = null,
+    /** The Settings page: its bar's back and Save are liquid glass over the page (the sheet keeps its look). */
+    glassPage: Boolean = false,
     bar: @Composable (dirty: Boolean, save: () -> Unit) -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -151,22 +154,23 @@ internal fun BubbleStyleChooser(
     val categories = remember(pictures) { listOf(COLOR) + BubbleArt.sections.filter { sec -> pictures.any { it.section == sec } } }
     LaunchedEffect(categories) { if (category !in categories) category = COLOR }
 
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        bar(dirty) {
-            if (!BubbleStyles.mayUse(selected)) plusNote = true
-            else {
-                // A colour applies only with no picture style; saving null clears a saved style.
-                if (selected == null && chatColor != savedColor) {
-                    if (cid != null) ChatLookStore.setColor(ctx, cid, chatColor) else ChatLookStore.setDefaultColor(ctx, chatColor)
-                }
-                if (cid != null) {
-                    // This chat only: the Settings style stays; decorations are one switch for all.
-                    BubbleStyles.saveForChat(cid, selected)
-                    if (decor != savedDecor) BubbleStyles.save(BubbleStyles.current(), decor)
-                } else BubbleStyles.save(selected, decor)
-                onSaved()
+    val save: () -> Unit = {
+        if (!BubbleStyles.mayUse(selected)) plusNote = true
+        else {
+            // A colour applies only with no picture style; saving null clears a saved style.
+            if (selected == null && chatColor != savedColor) {
+                if (cid != null) ChatLookStore.setColor(ctx, cid, chatColor) else ChatLookStore.setDefaultColor(ctx, chatColor)
             }
+            if (cid != null) {
+                // This chat only: the Settings style stays; decorations are one switch for all.
+                BubbleStyles.saveForChat(cid, selected)
+                if (decor != savedDecor) BubbleStyles.save(BubbleStyles.current(), decor)
+            } else BubbleStyles.save(selected, decor)
+            onSaved()
         }
+    }
+    com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), enabled = glassPage, bar = { bar(dirty, save) }) { top ->
+        Spacer(Modifier.height(top))
         // Pinned: never scrolls away, redrawn at once when a tile is tapped.
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
             Preview(selected, plain, cid)

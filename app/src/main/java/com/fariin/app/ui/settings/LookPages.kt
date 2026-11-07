@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.foundation.layout.PaddingValues
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -140,7 +142,7 @@ private fun ResetMenu(wallpaperPage: Boolean) {
     fun resetWallpaper() = ChatLookStore.resetAllWallpapers(ctx, ChatWallpaper.None)
     fun resetColor() = ChatLookStore.setDefaultColor(ctx, null)
     Box {
-        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Reset options", tint = c.label) }
+        IconButton(onClick = { open = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(Icons.Filled.MoreVert, contentDescription = "Reset options", tint = c.label) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
             DropdownMenuItem(text = { Text(if (wallpaperPage) "Reset Wallpaper" else "Reset Bubble Color") },
@@ -309,10 +311,10 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
             if (id != null) { justPicked = id; previewing = ChatWallpaper.Photo(id) }
         }
     }
-    Column(Modifier.fillMaxSize()) {
-        PageBar(if (cid != null) "Chat Wallpaper" else "Set Wallpaper", onBack = pop,
-            action = { if (cid != null) ChatResetButton(cid, shared) else ResetMenu(wallpaperPage = true) })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage(if (cid != null) "Chat Wallpaper" else "Set Wallpaper", onBack = pop, under = underBar(barScroll),
+        action = { if (cid != null) ChatResetButton(cid, shared) else ResetMenu(wallpaperPage = true) }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             val photoRows: @Composable () -> Unit = {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.card)) {
                     SettingsRow(if (cid != null) "Choose Wallpaper from Photos" else "Choose from Photos") {
@@ -380,9 +382,9 @@ private fun WallpaperColorPage(pop: () -> Unit, cid: String? = null, done: () ->
     ChatLookStore.version.intValue
     val current = cid?.let { ChatLookStore.wallpaper(ctx, it) } ?: ChatLookStore.defaultWallpaper(ctx)
     var previewing by remember { mutableStateOf<ChatWallpaper?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Wallpaper Color", onBack = pop)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Wallpaper Color", onBack = pop, under = underBar(barScroll)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(16.dp)) {
             GridCard(3, 10, 14, ChatWallpapers.colors.map<Long, @Composable (Modifier) -> Unit> { hex ->
                 { m -> WallTile(ChatWallpaper.Solid(hex), current, m) { previewing = ChatWallpaper.Solid(hex) } }
             })
@@ -665,9 +667,9 @@ private fun ChatColorPage(pop: () -> Unit) {
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (wall as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
     val wallMotion = com.fariin.app.ui.components.rememberWallpaperMotion(wall)
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Bubble Color", onBack = pop, action = { ResetMenu(wallpaperPage = false) })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Bubble Color", onBack = pop, under = underBar(barScroll), action = { ResetMenu(wallpaperPage = false) }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
                 .then(wallMotion.isolate { Modifier.drawBehind { drawWallpaper(wall, c.dark, c.card, pattern, photo, motion = wallMotion) } }).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {

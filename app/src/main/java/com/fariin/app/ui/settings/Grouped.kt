@@ -66,6 +66,24 @@ internal fun PageBar(title: String, onBack: (() -> Unit)?, action: (@Composable 
     }
 }
 
+/**
+ * A pushed page: [PageBar] over [content], the content running under the bar so its back and
+ * actions are liquid glass (GlassBarPage; plain bar on Power Saving and Android 12 and older).
+ * [content] gets the bar's height: pad the top INSIDE the scroll by it (see GlassColumnPage).
+ * [under]: underBar(scrollState) of the page's scroll.
+ */
+@Composable
+internal fun BarPage(
+    title: String,
+    onBack: (() -> Unit)?,
+    under: Boolean = false,
+    modifier: Modifier = Modifier,
+    /** A body in another colour than the grey page (the bar and its glass stay on the grey). */
+    body: Color? = null,
+    action: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.(top: androidx.compose.ui.unit.Dp) -> Unit,
+) = com.fariin.app.ui.components.GlassColumnPage(under, modifier, body = body, bar = { PageBar(title, onBack, action) }, content = content)
+
 /** One section: an optional header above, its rows in one rounded card, an optional footer below. */
 @Composable
 internal fun SettingsSection(

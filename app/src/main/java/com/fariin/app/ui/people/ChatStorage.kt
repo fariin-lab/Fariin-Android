@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import androidx.compose.foundation.layout.height
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -135,14 +138,14 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
     fun toggle(id: String) { selected = if (id in selected) selected - id else selected + id }
 
     androidx.activity.compose.BackHandler(selecting) { selecting = false; selected = emptySet() }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(if (selecting) (if (selected.isEmpty()) "Select Items" else "${selected.size} Selected") else "Storage",
+    BarPage(if (selecting) (if (selected.isEmpty()) "Select Items" else "${selected.size} Selected") else "Storage",
             onBack = if (selecting) null else pop,
             action = if (!list.isNullOrEmpty()) ({
-                TextButton(onClick = { selecting = !selecting; if (!selecting) selected = emptySet() }) {
-                    Text(if (selecting) "Done" else "Select", color = c.accent, fontSize = 17.sp)
+                com.fariin.app.ui.components.FloatingTextAction(if (selecting) "Done" else "Select") {
+                    selecting = !selecting; if (!selecting) selected = emptySet()
                 }
-            }) else null)
+            }) else null, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         Box(Modifier.weight(1f)) {
             LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {

@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
@@ -76,9 +79,9 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
         theirs -> "$them turned this on. You can ask $them to turn it off."
         else -> "When either of you turns this on, it applies to both of you. Only the person who turned it on can turn it off."
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Restricted Chat", onBack = onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Restricted Chat", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(top = 8.dp)) {
             SettingsSection(footer = footer) {
                 SwitchRow("Restricted Chat", isOn, last = false) { flip(it) }
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

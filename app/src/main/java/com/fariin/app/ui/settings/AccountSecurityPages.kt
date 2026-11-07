@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -295,8 +297,8 @@ private fun TwoStepPage(push: (String) -> Unit, pop: () -> Unit) {
     }
     LaunchedEffect(Unit) { load() }
 
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Two-step verification", onBack = pop)
+    val barScroll = rememberScrollState()
+    BarPage("Two-step verification", onBack = pop, under = enabled && underBar(barScroll)) { top ->
         when {
             loading -> com.fariin.app.ui.components.PageLoading()
             !loadedOnce -> Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -306,7 +308,7 @@ private fun TwoStepPage(push: (String) -> Unit, pop: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { scope.launch { load() } }, colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent)) { Text("Try Again") }
             }
-            enabled -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
+            enabled -> Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = top + 8.dp)) {
                 SettingsSection(footer = "An additional password is required when you sign in on a new device.") {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Shield, null, tint = IosGreen, modifier = Modifier.size(22.dp))
@@ -324,7 +326,7 @@ private fun TwoStepPage(push: (String) -> Unit, pop: () -> Unit) {
                 }
                 ErrorNote(error)
             }
-            else -> Column(Modifier.fillMaxSize().padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+            else -> Column(Modifier.fillMaxSize().padding(top = top).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
                 Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Text("🔐", fontSize = 80.sp)
                     Text("Additional Password", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 18.dp))

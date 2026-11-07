@@ -217,7 +217,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
     val tab = tabs[pager.currentPage]
     val media = SharedMedia.filtered(state.lists.media, filter)
     ProvideChatMedia(cid) {
-        Column(Modifier.fillMaxSize().background(c.bg)) {
+        com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bg), page = c.bg, bar = {
             Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
                 com.fariin.app.ui.components.FariinTopBar(
                     "All Media", onBack = onBack,
@@ -226,7 +226,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                     actions = {
                         // No menu on an empty tab (iOS showsMoreMenu): Show is the only thing in it here.
                         if (tab == SharedMedia.Tab.MEDIA && state.lists.media.isNotEmpty()) Box {
-                            IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = c.label) }
+                            IconButton({ menu = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(Icons.Filled.MoreVert, "More", tint = c.label) }
                             DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                                 Text("Show", style = MaterialTheme.typography.labelMedium, color = c.secondary,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
@@ -239,6 +239,8 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                     },
                 )
             }
+        }) { top ->
+            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
             // The tabs as one floating capsule with the chosen one in a pill (iOS segmented picker),
             // in place of Material's underlined tab row.
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(40.dp)

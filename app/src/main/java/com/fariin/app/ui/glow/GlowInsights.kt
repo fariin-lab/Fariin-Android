@@ -149,8 +149,8 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
         loadHistory(); loadCountries(); refreshing = false
     }
 
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding()) {
-        FloatingTopBar("Insights", onBack = onBack, container = c.bgSecondary)
+    com.fariin.app.ui.components.FloatingBarPage("Insights", onBack, page = c.bgSecondary) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         if (!unlocked) {
             Column(Modifier.fillMaxSize().padding(horizontal = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center) {
@@ -166,7 +166,7 @@ fun GlowInsightsPage(me: String, handle: String, live: List<PostedStory>, onPeop
                 Spacer(Modifier.height(8.dp))
                 Text("$glowers of ${Insights.GLOWERS_NEEDED} Glowers", fontSize = 15.sp, color = c.secondary)
             }
-            return@Column
+            return@FloatingBarPage
         }
         val h = history
         val report = InsightsReport.build(period, InsightsCalendar.today(), h?.days.orEmpty(), h?.stories.orEmpty(), h?.firstDay, glowers)

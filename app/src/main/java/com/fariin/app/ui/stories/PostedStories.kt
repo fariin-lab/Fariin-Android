@@ -105,23 +105,27 @@ fun PostedStoriesPage(
     }
 
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label) }
-            Box {
-                Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = { filterMenu = true }).padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text(filter.title, color = c.label, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Icon(Icons.Filled.ArrowDropDown, contentDescription = "Filter", tint = c.label)
-                }
-                DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
-                    PostedStoriesRules.Filter.entries.forEach { f ->
-                        DropdownMenuItem(text = { Text(f.title, fontWeight = if (f == filter) FontWeight.SemiBold else FontWeight.Normal) },
-                            onClick = { filter = f; filterMenu = false })
+    com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bg), page = c.bg, barEstimate = 56.dp, bar = {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.fariin.app.ui.components.FloatingBack(onBack, Modifier.padding(start = 4.dp))
+                Box {
+                    Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = { filterMenu = true }).padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(filter.title, color = c.label, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Filled.ArrowDropDown, contentDescription = "Filter", tint = c.label)
+                    }
+                    DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
+                        PostedStoriesRules.Filter.entries.forEach { f ->
+                            DropdownMenuItem(text = { Text(f.title, fontWeight = if (f == filter) FontWeight.SemiBold else FontWeight.Normal) },
+                                onClick = { filter = f; filterMenu = false })
+                        }
                     }
                 }
             }
         }
+    }) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         error?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp)) }
         when {
             all.isEmpty() -> Empty(R.drawable.ic_stories_stack, "No live stories", "Stories disappear after 24 hours.")

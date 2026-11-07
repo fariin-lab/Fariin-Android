@@ -393,7 +393,11 @@ fun ChatListScreen(
         containerColor = c.bg,
         // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
         contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
-        topBar = { androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalLiquidBackdrop provides glassLayer) {
+        // In the Archive and in search the back (and the Archive's search button) are glass circles over
+        // the rows, as on every pushed page; the Chats tab's own icons stay plain.
+        topBar = { androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalLiquidBackdrop provides glassLayer,
+            com.fariin.app.ui.components.LocalGlassBar provides (showArchive || searching),
+            com.fariin.app.ui.components.LocalGlassWindow provides androidx.compose.ui.platform.LocalView.current) {
             Column(
                 Modifier.then(when {
                     // Owner 2026-11-05 ("make it high end like Settings"): the glass is always on, so

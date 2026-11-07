@@ -133,8 +133,8 @@ fun CreateCallLinkScreen(onClose: () -> Unit) {
     fun persist() { state?.let { CallLinks.persist(CallLinkDraft(it.roomId, it.key, it.name, it.approval ?: true, it.video ?: true)) } }
     val close = { persist(); onClose() }
     BackHandler { close() }
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        FariinTopBar("Call Link", onBack = close)
+    CallLinkPage(close) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         when {
             state != null -> LinkBody(state, onUsed = { persist() }, onDeleted = null)
             failed -> Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
@@ -167,8 +167,8 @@ fun CallLinkDetailsScreen(roomId: String, onBack: () -> Unit) {
             state.video = d["video"] != false
         } else state.video = true
     }
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        FariinTopBar("Call Link", onBack = onBack)
+    CallLinkPage(onBack) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         LinkBody(state, onUsed = {}, onDeleted = { closing = true; onBack() }, saved = link)
     }
 }
@@ -371,4 +371,15 @@ fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onIn
             }
         }
     }
+}
+
+/** The Call Link page's frame: its back is liquid glass over the page, as on every pushed page (GlassBarPage). */
+@Composable
+private fun CallLinkPage(onBack: () -> Unit, content: @Composable androidx.compose.foundation.layout.ColumnScope.(top: androidx.compose.ui.unit.Dp) -> Unit) {
+    val c = Fariin.colors
+    com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bg), page = c.bg, bar = {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
+            FariinTopBar("Call Link", onBack = onBack)
+        }
+    }, content = content)
 }

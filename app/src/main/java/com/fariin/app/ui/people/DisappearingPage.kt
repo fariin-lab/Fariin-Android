@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -64,11 +67,11 @@ fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: (
     var custom by remember { mutableStateOf(false) }
     BackHandler(onBack = onBack)
     if (custom) CustomTimeDialog(selected, onDismiss = { custom = false }) { selected = it; custom = false }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Disappearing Messages", onBack = onBack, action = {
-            IconButton(onClick = { onApply(selected) }) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = c.accent) }
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    val barScroll = rememberScrollState()
+    BarPage("Disappearing Messages", onBack = onBack, action = {
+            IconButton(onClick = { onApply(selected) }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = c.accent) }
+        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top)) {
             Text(Disappearing.pageHeader(isChannel), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
                 modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 2.dp))
             SettingsSection {

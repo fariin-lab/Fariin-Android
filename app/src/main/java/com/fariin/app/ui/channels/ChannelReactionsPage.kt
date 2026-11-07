@@ -1,5 +1,8 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.background
@@ -185,9 +188,9 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
           }
         }
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Reactions", onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage("Reactions", onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             // ONE SWITCH (iOS 2dc585e8, owner 2026-11-07): on = the picks below, off = no reactions.
             SettingsSection(footer = ChannelReactions.footer(mode)) {
                 com.fariin.app.ui.settings.SwitchRow("Reactions", checked = mode != "off", enabled = loaded, last = true) { setOn(it) }

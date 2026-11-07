@@ -188,7 +188,8 @@ fun OfficialChatScreen(onBack: () -> Unit) {
 
     // The grey page with the notes as white rounded cards and no hard lines at the bar edges
     // (iOS OfficialChatView), the back in its floating circle as in a chat.
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    // The bar's back and buttons are liquid glass over the notes passing under (GlassBarPage).
+    com.fariin.app.ui.components.GlassColumnPage(com.fariin.app.ui.components.underBar(listState), Modifier.background(c.bgSecondary), bar = {
         Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
             // The bell (iOS bellButton): mutes the announcements; security posts still come.
             val muted = view.state.isMutedNow(System.currentTimeMillis().toDouble())
@@ -250,8 +251,9 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }) { top ->
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = top + 12.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Never a blank page: the ring until the first answer, then words if there is nothing.
             if (view.visible.isEmpty()) item(key = "empty") {

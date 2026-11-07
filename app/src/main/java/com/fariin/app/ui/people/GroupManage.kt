@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -240,9 +243,9 @@ internal fun GroupManageRows(conv: Map<String, Any?>, me: String, cid: String = 
 private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open: (GroupPage) -> Unit, onTimer: () -> Unit) {
     val c = Fariin.colors
     val doc = liveGroupDoc(cid)
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Group Settings", onBack)
-        if (doc.isEmpty()) { Loading(); return@Column }
+    BarPage("Group Settings", onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
+        if (doc.isEmpty()) { Loading(); return@BarPage }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             GroupManageRows(doc, me, cid, open)
             BubbleStylesSwitch(cid, me, doc)
@@ -359,9 +362,9 @@ private fun GroupAdminsPage(cid: String, me: String, onBack: () -> Unit, push: (
     val doc = liveGroupDoc(cid)
     if (doc.isEmpty()) { Loading(); return }
     val team = Team.from(doc)
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Administrators", onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage("Administrators", onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(footer = GroupAdmins.ADMINS_FOOTER) {
                 if (team.may(me, Right.ADD_ADMINS) && team.others().isNotEmpty()) {
                     SettingsRow("Add Admin", icon = rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)), titleColor = c.accent,
@@ -388,8 +391,8 @@ private fun ChooseMemberPage(cid: String, me: String, onBack: () -> Unit, onPick
     val team = Team.from(doc)
     val q = query.trim()
     val list = team.others().filter { it != me && (q.isEmpty() || (team.names[it] ?: "").contains(q, ignoreCase = true)) }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Choose Member", onBack)
+    BarPage("Choose Member", onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         SearchField(query, "Search") { query = it }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection {
@@ -432,8 +435,8 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
     val on = rights ?: GroupAdmins.startRights(grantable)
     val name = team.names[uid] ?: "Member"
     Problem(problem) { problem = null }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Add Admin", onDone, action = {
+    val barScroll = rememberScrollState()
+    BarPage("Add Admin", onDone, action = {
             if (busy) BusyMark() else Text("Add", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable {
                     busy = true
@@ -445,8 +448,8 @@ private fun AddAdminPage(cid: String, me: String, uid: String, onDone: () -> Uni
                         busy = false
                     }
                 }.padding(horizontal = 18.dp, vertical = 11.dp))
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             AdminHeader(team.photos[uid]?.ifEmpty { null }, name, "Admin")
             SettingsSection(header = "What this admin can do",
                 footer = if (Right.ADD_ADMINS in grantable && Right.ADD_ADMINS.slug !in on) GroupAdmins.NO_ADD_ADMINS else null) {
@@ -503,9 +506,9 @@ private fun AdminRightsPage(cid: String, me: String, uid: String, onBack: () -> 
             if (ok) leave()
             ok
         }), onDismiss = { confirmDismiss = false })
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = { if (saving) com.fariin.app.ui.components.BarBusyPill("Saving…") })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = { if (saving) com.fariin.app.ui.components.BarBusyPill("Saving…") }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             AdminHeader(team.photos[uid]?.ifEmpty { null }, name, if (team.isOwner(uid)) "Owner" else "Admin")
             if (team.isOwner(uid)) {
                 SettingsSection { Note(if (uid == me) GroupAdmins.OWNER_NOTE else "$name is the owner of this group and can do everything in it.") }
@@ -727,14 +730,15 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                                     }
                                 }
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        if (selecting) PageBar("${picked.size} Selected", onBack = { picked = emptySet() }) {
-            androidx.compose.material3.IconButton({ pendingRemove = picked.toList() }) {
+    BarPage(if (selecting) "${picked.size} Selected" else "Members", onBack = if (selecting) ({ picked = emptySet() }) else onBack,
+        modifier = Modifier.background(c.bgSecondary), action = {
+        if (selecting) {
+            androidx.compose.material3.IconButton({ pendingRemove = picked.toList() }, modifier = com.fariin.app.ui.components.barGlass()) {
                 Icon(Icons.Filled.PersonRemove, "Remove", tint = c.red)
             }
-        } else PageBar("Members", onBack) {
+        } else {
             Box {
-                androidx.compose.material3.IconButton({ sortOpen = true }) {
+                androidx.compose.material3.IconButton({ sortOpen = true }, modifier = com.fariin.app.ui.components.barGlass()) {
                     Icon(Icons.Filled.FilterList, "Sort", tint = c.label)
                 }
                 androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
@@ -746,6 +750,8 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                 }
             }
         }
+    }) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         SearchField(query, "Search") { query = it }
         Box(Modifier.fillMaxSize()) {
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().imePadding(), state = listState,
@@ -848,9 +854,9 @@ private fun BannedUsersPage(cid: String, onBack: () -> Unit) {
         }
     }
     Problem(problem) { problem = null }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Banned Users", onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage("Banned Users", onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection {
                 if (banned.isEmpty()) Note(if (doc["channel"] == true) "Nobody is banned from this channel." else com.fariin.app.data.GroupMembers.NOBODY_BANNED)
                 banned.forEach { uid ->
@@ -897,9 +903,9 @@ private fun PermissionsPage(cid: String, me: String, onBack: () -> Unit) {
     }
     fun shown(key: String, live: Boolean) = inFlight[key] ?: live
     Problem(problem) { problem = null }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Permissions", onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage("Permissions", onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(header = "What can members do?", footer = "Turned off, only admins can do it.") {
                 val sendOn = shown("send", doc["onlyAdminsSend"] != true)
                 SwitchLine("Send messages", sendOn, enabled = canEdit) { v -> flip("send", v) { GroupManage.setOnlyAdminsSend(cid, !v) } }
@@ -1029,14 +1035,14 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
         }), onDismiss = { confirmPrivate = false }, kind = com.fariin.app.ui.components.AvatarKind.of(true, ch))
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not save") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
-        PageBar("$Noun Type", onBack, action = {
+    val barScroll = rememberScrollState()
+    BarPage("$Noun Type", onBack, action = {
             if (saving) BusyMark() else Text("Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = if (showPublic && changed && ok) c.accent else c.secondary,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable(enabled = showPublic && changed && ok) { save(typed) }
                     .padding(horizontal = 18.dp, vertical = 11.dp))
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding()) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(header = "$Noun Type", footer = if (showPublic) (if (ch) "Anyone can find this channel in search and follow it." else "Anyone can find this group in search and join it without an invite.")
                 else if (ch) "People can follow only with an invite link." else "People can join only with an invite link, or when an admin adds them.") {
                 TypeLine("Public $Noun", showPublic) { wantsPublic = true }
@@ -1222,9 +1228,9 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
             }
         }
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Invite Links", onBack, action = { if (working) com.fariin.app.ui.components.BarBusyPill("Saving…") })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage("Invite Links", onBack, action = { if (working) com.fariin.app.ui.components.BarBusyPill("Saving…") }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             val l = list
             val publicName = if (doc["isPublic"] == true) doc["username"] as? String ?: "" else ""
             when {
@@ -1361,8 +1367,8 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
     val isChannel = liveGroupDoc(cid)["channel"] == true
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't save the link") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
-        PageBar(if (link == null) "New Link" else "Edit Link", onDone, action = {
+    val barScroll = rememberScrollState()
+    BarPage(if (link == null) "New Link" else "Edit Link", onDone, action = {
             if (saving) BusyMark() else Text(if (link == null) "Create" else "Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
                 modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable {
                     saving = true
@@ -1379,8 +1385,8 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
                         saving = false
                     }
                 }.padding(horizontal = 18.dp, vertical = 11.dp))
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding()) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(header = "Name", footer = "Only admins see the name. ${name.length}/32") {
                 Box(Modifier.fillMaxWidth().padding(16.dp)) {
                     if (name.isEmpty()) Text("Link name (optional)", fontSize = 17.sp, color = c.secondary)

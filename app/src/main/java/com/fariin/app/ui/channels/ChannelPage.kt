@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.settings.BarPage
+
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.res.vectorResource
 import android.content.Intent
@@ -108,8 +110,8 @@ fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> 
     val base = if (doc["channel"] == true) ChannelInfo.from(cid, doc) else preview?.let { ChannelInfo.fromPreview(it) }
     val c = Fariin.colors
     if (base == null) {
-        Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-            PageBar("", onBack)
+        BarPage("", onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
+            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
             Text(refused ?: "", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(32.dp))
         }

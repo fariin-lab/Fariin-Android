@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.underBar
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -80,13 +82,13 @@ internal fun LicensesPage(pop: () -> Unit) {
             }.getOrDefault(emptyList())
         }
     }
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Licences", onBack = pop)
+    val barList = androidx.compose.foundation.lazy.rememberLazyListState()
+    BarPage("Licences", onBack = pop, under = blocks != null && underBar(barList)) { top ->
         val list = blocks
         if (list == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { com.fariin.app.ui.components.FariinSpinner() }
         } else {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
+            LazyColumn(Modifier.fillMaxSize(), state = barList, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = top + 8.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(list.size) { i -> Text(list[i], fontSize = 13.sp, color = if (i == 0) c.label else c.secondary, lineHeight = 18.sp) }
             }
@@ -109,9 +111,8 @@ internal fun AppInfoPage(version: String, pop: () -> Unit) {
     val icon = remember {
         runCatching { ctx.packageManager.getApplicationIcon(ctx.packageName).toBitmap(192, 192).asImageBitmap() }.getOrNull()
     }
-    Column(Modifier.fillMaxSize()) {
-        PageBar("", onBack = pop)
-        Column(Modifier.fillMaxSize().padding(bottom = 96.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    BarPage("", onBack = pop) { top ->
+        Column(Modifier.fillMaxSize().padding(top = top).padding(bottom = 96.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
             Text("Fariin", fontSize = 20.sp, color = c.label)
             Text("Version $version", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp))

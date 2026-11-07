@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.underBar
+
 import android.content.Context
 import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
@@ -340,9 +342,9 @@ private fun SecurityCheckupPage(profile: MyProfile?, demo: Boolean, push: (Strin
         // New devices get "Is this you?"; a tick row has nothing new to confirm, so back to the list.
         else -> if (chk.unreviewed.isEmpty()) pop() else push(PAGE_CHECKUP_REVIEW)
     }
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Security Checkup", onBack = pop)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 16.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Security Checkup", onBack = pop, under = underBar(barScroll)) { top ->
+        Column(Modifier.weight(1f).verticalScroll(barScroll).padding(top = top + 8.dp, bottom = 16.dp)) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Avatar(profile?.photoUrl, 96.dp)
                 Spacer(Modifier.size(10.dp))
@@ -409,9 +411,9 @@ private fun DeviceReviewPage(onClose: () -> Unit, onYes: (Context) -> Unit, onNo
     val ctx = LocalContext.current
     val devices = SecurityCheckup.unreviewed
     val one = devices.size == 1
-    Column(Modifier.fillMaxSize()) {
-        PageBar("", onBack = onClose)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 16.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("", onBack = onClose, under = underBar(barScroll)) { top ->
+        Column(Modifier.weight(1f).verticalScroll(barScroll).padding(top = top + 8.dp, bottom = 16.dp)) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (one) "Is this you?" else "Are these you?", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label)
                 Spacer(Modifier.size(8.dp))

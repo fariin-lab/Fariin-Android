@@ -59,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.fariin.app.ui.components.floating
+import com.fariin.app.ui.components.underBar
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
 import com.fariin.app.ui.components.brush
@@ -348,9 +349,9 @@ private fun AccountPage(
     val hasEmail = demo || runCatching {
         !com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.isNullOrEmpty()
     }.getOrDefault(false)
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Account", onBack = pop)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Account", onBack = pop, under = underBar(barScroll)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = top + 8.dp)) {
             SettingsSection(header = "Sign-in") {
                 SettingsRow("Email address", last = !hasEmail, badge = NewBadgeSpots.ACCOUNT_EMAIL) { push(PAGE_EMAIL) }
                 if (hasEmail) SettingsRow("Password", last = true, badge = NewBadgeSpots.ACCOUNT_PASSWORD) { push(PAGE_PASSWORD) }
@@ -404,9 +405,9 @@ private fun AccountPage(
 @Composable
 private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
     val ctx = LocalContext.current
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Appearance", onBack = pop)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Appearance", onBack = pop, under = underBar(barScroll)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = top + 8.dp)) {
             SettingsSection(header = "Chat Theme") { ChatThemeBlock() }
             SettingsSection {
                 SettingsRow("Chat Wallpaper", badge = NewBadgeSpots.APPEARANCE_CHAT_WALLPAPER) { push(PAGE_WALLPAPER) }
@@ -437,9 +438,8 @@ private fun NightModePage(pop: () -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     val current = AppearancePrefs.current(ctx)
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Night Mode", onBack = pop)
-        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    BarPage("Night Mode", onBack = pop) { top ->
+        Column(Modifier.fillMaxWidth().padding(top = top).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 for (mode in AppAppearance.entries) {
                     val sel = mode == current
@@ -508,9 +508,9 @@ private fun HelpAboutPage(pop: () -> Unit) {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "1.0"
     }
     if (appInfo) { AppInfoPage(version) { appInfo = false }; return }
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Help & About", onBack = pop)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = 8.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Help & About", onBack = pop, under = underBar(barScroll)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = top + 8.dp)) {
             SettingsSection(
                 header = "Help",
                 footer = "Fariin has zero tolerance for objectionable content or abusive behavior. Reports are reviewed within 24 hours.",
@@ -534,9 +534,8 @@ private fun HelpAboutPage(pop: () -> Unit) {
 @Composable
 internal fun ComingSoonPage(title: String, pop: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxSize()) {
-        PageBar(title, onBack = pop)
-        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+    BarPage(title, onBack = pop) { top ->
+        Box(Modifier.fillMaxSize().padding(top = top).padding(32.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Coming soon on Android", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                 Spacer(Modifier.height(8.dp))

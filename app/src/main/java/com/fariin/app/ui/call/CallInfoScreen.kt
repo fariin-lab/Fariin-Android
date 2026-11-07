@@ -83,14 +83,18 @@ fun CallInfoScreen(run: CallRun, me: String, onBack: () -> Unit, onCall: (video:
     val c = Fariin.colors
     val call = run.latest
     val now = System.currentTimeMillis()
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = c.label) }
-            Text("Call info", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            Spacer(Modifier.width(48.dp))
+    val barScroll = rememberScrollState()
+    com.fariin.app.ui.components.GlassColumnPage(com.fariin.app.ui.components.underBar(barScroll), Modifier.background(c.bg), page = c.bg, barEstimate = 52.dp, bar = {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.fariin.app.ui.components.FloatingBack(onBack, Modifier.padding(start = 4.dp))
+                Text("Call info", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                    modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                Spacer(Modifier.width(48.dp))
+            }
         }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+    }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(12.dp))
             Avatar(call.photoUrl, 96.dp, squircle = call.groupCid != null, kind = com.fariin.app.ui.components.AvatarKind.of(call.groupCid != null, false))

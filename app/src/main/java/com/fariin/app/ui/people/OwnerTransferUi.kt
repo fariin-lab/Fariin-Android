@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -152,8 +155,8 @@ internal fun ChooseNewOwnerPage(cid: String, me: String, conv: Map<String, Any?>
         TransferOwnership(cid, isChannel, uid, name, leaving = true, inlineRefusal = { failure = it },
             onDone = { picked = null; onTransferred() }, onEnd = { picked = null })
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(OwnerTransfer.CHOOSE_TITLE, onBack)
+    BarPage(OwnerTransfer.CHOOSE_TITLE, onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         SearchField(query, "Search") { query = it }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             failure?.let { f -> SettingsSection { Text(f, fontSize = 16.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(16.dp)) } }
@@ -207,9 +210,9 @@ internal fun JoinRequestsPage(cid: String, onBack: () -> Unit) {
     }
     problem?.let { p -> AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
         text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } }) }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(JoinRequests.title(isChannel), onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage(JoinRequests.title(isChannel), onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             if (shown.isEmpty()) {
                 SettingsSection(footer = JoinRequests.emptyFooter(isChannel, doc["title"] as? String ?: "")) {
                     Text(JoinRequests.empty(isChannel), fontSize = 17.sp, color = c.secondary,

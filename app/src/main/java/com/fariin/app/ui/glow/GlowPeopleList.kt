@@ -81,8 +81,8 @@ fun GlowPeopleListPage(title: String, startOnGlowing: Boolean = false, onOpenPer
     val scope = rememberCoroutineScope()
     val side = if (tab == 0) "Glowers" else "Glowing"
 
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        FloatingTopBar(title.ifEmpty { "Glow" }, onBack = onBack)
+    com.fariin.app.ui.components.FloatingBarPage(title.ifEmpty { "Glow" }, onBack) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         // Full width, 20 in (the back button's own edge), 46 tall: the search field's size.
         HalvesSwitch(listOf("Glowers", "Glowing"), tab, { tab = it },
             Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 10.dp))

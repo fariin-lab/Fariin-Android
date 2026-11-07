@@ -119,10 +119,12 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
         }
     }
     LaunchedEffect(cid) { if (stats == null) load() }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), bar = {
         Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
             FariinTopBar("Statistics", onBack = onBack, subtitle = title, container = c.bgSecondary)
         }
+    }) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         val s = stats
         val f = failure
         when {

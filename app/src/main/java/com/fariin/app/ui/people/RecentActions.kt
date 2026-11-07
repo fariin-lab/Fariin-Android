@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+
 import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
@@ -172,13 +174,13 @@ internal fun RecentActionsPage(cid: String, me: String, onBack: () -> Unit) {
     }
     val shown = AdminLog.shown(events, kinds, actors)
 
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Recent Actions", onBack, action = {
+    BarPage("Recent Actions", onBack, action = {
             FloatingIcon(Icons.Filled.FilterList, if (filtering) "Filter, on" else "Filter",
                 onClick = { if (events.isNotEmpty()) showFilter = true },
                 tint = when { events.isEmpty() -> c.tertiary; filtering -> c.accent; else -> c.label },
                 modifier = Modifier.padding(end = 8.dp))
-        })
+        }, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         PullToRefreshBox(refreshing, onRefresh = { refreshing = true; scope.launch { load(false); refreshing = false } },
             modifier = Modifier.fillMaxSize()) {
             LazyColumn(Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 16.dp)) {

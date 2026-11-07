@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
@@ -206,12 +209,9 @@ private fun Page(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun BarButton(title: String, enabled: Boolean, onClick: () -> Unit) {
-    val c = Fariin.colors
-    TextButton(onClick = onClick, enabled = enabled) {
-        Text(title, color = if (enabled) c.accent else c.secondary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
+private fun BarButton(title: String, enabled: Boolean, onClick: () -> Unit) =
+    // The page bar's word capsule, liquid glass on a glass bar (as every other page's Edit/Done).
+    com.fariin.app.ui.components.FloatingTextAction(title, enabled = enabled, onClick = onClick)
 
 /** A custom list's picture: its emoji, or the folder drawing (iOS CustomStoryEmojiHeader / badge). */
 @Composable
@@ -294,8 +294,8 @@ fun SelectViewersPage(
     val visible = if (q.isEmpty()) pool else pool.filter { it.name.lowercase().contains(q) }
     val sections = StoryPrivacyRules.letterSections(visible) { it.name }
     Page {
-        Column(Modifier.fillMaxSize()) {
-            PageBar(title, onBack = onCancel, action = { BarButton(actionTitle, !requiresSelection || selected.isNotEmpty(), onAction) })
+        BarPage(title, onBack = onCancel, action = { BarButton(actionTitle, !requiresSelection || selected.isNotEmpty(), onAction) }) { top ->
+            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
             val chosen = people.filter { it.uid in selected }
             if (chosen.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -368,11 +368,11 @@ private fun NameStoryPage(
     BackHandler { onBack() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     Page {
-        Column(Modifier.fillMaxSize()) {
-            PageBar("Choose name & emoji", onBack = onBack, action = {
+        val barScroll = rememberScrollState()
+        BarPage("Choose name & emoji", onBack = onBack, action = {
                 BarButton("Create", name.trim().isNotEmpty()) { onCreate(name, replies, emoji) }
-            })
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+            }, under = underBar(barScroll)) { top ->
+            Column(Modifier.weight(1f).verticalScroll(barScroll).padding(top = top).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
                 EmojiHeader(emoji, onChange = { picking = true })
                 NameField(name, { name = it }, focus)
                 SettingsSection(header = "Replies", footer = "Let people who can view your story reply.") {
@@ -436,9 +436,9 @@ fun CustomStoryDetailPage(id: String, people: List<StoryPerson>, onBack: () -> U
     val byId = people.associateBy { it.uid }
     val viewers = a.members.mapNotNull { byId[it] }
     Page {
-        Column(Modifier.fillMaxSize()) {
-            PageBar("", onBack = onBack, action = { BarButton("Edit", true) { editing = true } })
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+        val barScroll = rememberScrollState()
+        BarPage("", onBack = onBack, action = { BarButton("Edit", true) { editing = true } }, under = underBar(barScroll)) { top ->
+            Column(Modifier.weight(1f).verticalScroll(barScroll).padding(top = top).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
                 EmojiHeader(a.emoji, title = a.name)
                 SettingsSection(header = "Replies", footer = "Let people who can view your story reply.") {
                     SwitchRow("Allow Replies", a.allowReplies, last = true) { v -> StoryPrivacyStore.updateCustom(a.copy(allowReplies = v)) }
@@ -492,11 +492,11 @@ private fun CustomStoryEditPage(a: StoryListDoc, onBack: () -> Unit) {
     BackHandler { onBack() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     Page {
-        Column(Modifier.fillMaxSize()) {
-            PageBar("Edit", onBack = onBack, action = {
+        val barScroll = rememberScrollState()
+        BarPage("Edit", onBack = onBack, action = {
                 BarButton("Done", trimmed.isNotEmpty() && changed) { StoryPrivacyStore.updateCustom(a.copy(name = trimmed, emoji = emoji)); onBack() }
-            })
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+            }, under = underBar(barScroll)) { top ->
+            Column(Modifier.weight(1f).verticalScroll(barScroll).padding(top = top).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
                 EmojiHeader(emoji, onChange = { picking = true })
                 NameField(name, { name = it }, focus)
             }

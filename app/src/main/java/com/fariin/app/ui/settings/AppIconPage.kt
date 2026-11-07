@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.underBar
+
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
@@ -102,9 +104,9 @@ internal fun AppIconPage(pop: () -> Unit) {
     val c = Fariin.colors
     var current by remember { mutableStateOf(AppIcons.shown(ctx)) }
     var error by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        PageBar("App Icon", onBack = pop)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("App Icon", onBack = pop, under = underBar(barScroll)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 AppIcons.all.chunked(4).forEach { row ->

@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,11 +72,11 @@ fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
         confirmButton = { TextButton({ confirmDelete = false; ContactNames.remove(uid); onBack() }) { Text("Delete", color = c.red) } },
         dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
 
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
-        PageBar("Set nickname", onBack = onBack) {
+    val barScroll = rememberScrollState()
+    BarPage("Set nickname", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding(), action = {
             com.fariin.app.ui.components.FloatingTextAction("Save", enabled = changed) { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }
-        }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(8.dp))
             Avatar(photoUrl, 120.dp)
             Spacer(Modifier.height(12.dp))

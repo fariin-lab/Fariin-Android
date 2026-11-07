@@ -1,5 +1,8 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -124,9 +127,9 @@ fun ChannelSettingsScreen(cid: String, me: String, onBack: () -> Unit, nav: Chan
     var timerOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val timer = (doc["disappearSeconds"] as? Number)?.toInt() ?: 0
     if (com.fariin.app.ui.people.DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Channel Settings", onBack)
-        if (doc["channel"] != true) return@Column
+    BarPage("Channel Settings", onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
+        if (doc["channel"] != true) return@BarPage
         val info = ChannelInfo.from(cid, doc)
         val shown = ChannelRules.subscriberCount(com.fariin.app.channel.ChannelFollows.adjusted(cid, info.followerCount), info.users.size)
         val team = Team.from(doc)
@@ -372,8 +375,8 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
         title = { Text("Send Invite Link") }, text = { Text(com.fariin.app.data.ChannelAddFollowers.inviteInstead(linkInstead)) },
         confirmButton = { TextButton({ linkInstead = emptyList(); shareLink() }) { Text("Share Link", color = c.accent) } },
         dismissButton = { TextButton({ linkInstead = emptyList() }) { Text("Cancel", color = c.accent) } })
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Followers", onBack)
+    BarPage("Followers", onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         PullToRefreshBox(refreshing, onRefresh = {
             refreshing = true
             scope.launch { rows = emptyList(); more = true; load(); refreshing = false }
@@ -443,9 +446,9 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
         ChannelAdminPicker(cid, exclude = team.sorted().toSet() + pending.map { it.uid }, onClose = { picking = false })
         return
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Administrators", onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val barScroll = rememberScrollState()
+    BarPage("Administrators", onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(footer = ChannelAdmins.ADMINS_FOOTER) {
                 if (team.can(me, Right.ADD_ADMINS)) {
                     SettingsRow("Add Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)),
@@ -512,10 +515,10 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
     val q = query.trim()
     val list = rows.filter { it.uid !in exclude }
     val shown = if (q.isEmpty()) list else list.filter { it.name.contains(q, ignoreCase = true) }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Choose Follower", onClose, action = {
+    BarPage("Choose Follower", onClose, action = {
             if (busy) com.fariin.app.ui.components.BarBusyPill("Adding…")
-        })
+        }, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         SearchField(query, "Search") { query = it }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection {
@@ -584,11 +587,11 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
         }) { Text("Dismiss Admin", color = c.red) } },
         dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
 
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = {
+    val barScroll = rememberScrollState()
+    BarPage(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = {
             if (saving) com.fariin.app.ui.components.BarBusyPill("Saving…")
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding(),
+        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(team.photos[uid], 80.dp, modifier = Modifier.padding(top = 8.dp))
             Text(name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,

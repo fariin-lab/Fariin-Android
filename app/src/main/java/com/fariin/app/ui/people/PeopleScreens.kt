@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.material.icons.filled.CallReceived
 import androidx.compose.material.icons.filled.CallMissed
@@ -380,15 +383,15 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
         text = { Text("Check your connection and try again.") },
         confirmButton = { TextButton({ failed = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     val list = requests.filter { it.id !in gone }
-    Column(Modifier.fillMaxSize().background(c.bg)) {
-        PageBar("Message Requests", onBack = onBack)
+    BarPage("Message Requests", onBack = onBack, body = c.bg) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         if (list.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("No message requests", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                 Spacer(Modifier.height(6.dp))
                 Text("Messages from people you haven't chatted with yet will appear here.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
             }
-            return@Column
+            return@BarPage
         }
         Text("Messages from people you haven’t chatted with before arrive here as requests. To reply, accept the request.",
             fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
@@ -727,9 +730,9 @@ private fun GroupInCommonRow(g: Conversation, me: String, onOpenChat: (String) -
 private fun GroupsInCommonPage(groups: List<Conversation>, me: String, onBack: () -> Unit, onOpenChat: (String) -> Unit) {
     val c = Fariin.colors
     androidx.activity.compose.BackHandler(onBack = onBack)
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Groups in Common", onBack = onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    val barScroll = rememberScrollState()
+    BarPage("Groups in Common", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top)) {
             Spacer(Modifier.height(12.dp))
             SettingsSection { groups.forEach { g -> GroupInCommonRow(g, me, onOpenChat) } }
             Spacer(Modifier.height(30.dp))
@@ -876,13 +879,13 @@ private fun NewContactPage(api: PeopleApi, onBack: () -> Unit, onOpenChat: (Stri
         }
     }
     androidx.activity.compose.BackHandler { onBack() }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        com.fariin.app.ui.settings.PageBar("New Contact", onBack = onBack) {
-            androidx.compose.material3.IconButton(onClick = { add() }, enabled = canSave) {
+    com.fariin.app.ui.settings.BarPage("New Contact", onBack = onBack, modifier = Modifier.background(c.bgSecondary), action = {
+            androidx.compose.material3.IconButton(onClick = { add() }, enabled = canSave, modifier = com.fariin.app.ui.components.barGlass()) {
                 if (working) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 else Icon(Icons.Filled.Check, "Add contact", tint = if (canSave) c.accent else c.secondary)
             }
-        }
+        }) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
                 PlainField(first, "First Name") { first = it }

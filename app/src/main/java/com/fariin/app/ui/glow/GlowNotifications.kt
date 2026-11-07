@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -174,9 +175,9 @@ fun GlowNotificationsPage(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-            FloatingTopBar("Notifications", onBack = onBack)
+    Box(Modifier.fillMaxSize().background(c.bg)) {
+        com.fariin.app.ui.components.FloatingBarPage("Notifications", onBack) { top ->
+            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (val l = load) {
                     GlowLoad.Loading -> com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 30.dp, stroke = 3.dp)

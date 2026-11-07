@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
@@ -82,9 +85,9 @@ fun ProfileLinksPage(me: String, initial: List<ProfileLink>, onChanged: (List<Pr
         return
     }
     val atCeiling = links.size >= ProfileLink.MAX_PER_USER
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Links", onBack = onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+    val barScroll = rememberScrollState()
+    BarPage("Links", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(top = 8.dp)) {
             SettingsSection(footer = if (atCeiling) "You can have up to ${ProfileLink.MAX_PER_USER} links on your profile." else null) {
                 if (!atCeiling) LinkRow(Icons.Filled.Add, "Add Link", null, last = links.isEmpty()) { editing = -1 to null }
                 links.forEachIndexed { i, l -> LinkRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), l.title, l.displayUrl, last = i == links.lastIndex) { editing = i to l } }
@@ -121,11 +124,11 @@ private fun ProfileLinkEditPage(existing: ProfileLink?, onSave: (ProfileLink) ->
         if (t.isEmpty() || u.isEmpty()) null else ProfileLink(t.take(ProfileLink.MAX_TITLE), u.take(ProfileLink.MAX_URL)).takeIf { it.openUrl != null }
     }
     androidx.activity.compose.BackHandler(onBack = onBack)
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(if (existing == null) "Add Link" else "Edit Link", onBack = onBack, action = {
+    val barScroll = rememberScrollState()
+    BarPage(if (existing == null) "Add Link" else "Edit Link", onBack = onBack, action = {
             com.fariin.app.ui.components.FloatingTextAction("Save", enabled = candidate != null && candidate != existing) { candidate?.let(onSave) }
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(top = 8.dp)) {
             SettingsSection(header = "URL",
                 footer = if (url.isNotBlank() && title.isNotBlank() && candidate == null) "That does not look like a web address." else null) {
                 PlainLine(url, "https://example.com", KeyboardType.Uri) { url = it.take(ProfileLink.MAX_URL) }

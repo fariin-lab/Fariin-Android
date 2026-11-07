@@ -91,9 +91,9 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
         loading = false
     }
     toast?.let { t -> LaunchedEffect(t) { delay(2500); toast = null } }
-    Box(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding()) {
-        Column(Modifier.fillMaxSize()) {
-            com.fariin.app.ui.components.FloatingTopBar("Find Channels", onBack = onBack, container = c.bgSecondary)
+    Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+        com.fariin.app.ui.components.FloatingBarPage("Find Channels", onBack, page = c.bgSecondary) { top ->
+            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
             when {
                 loading && rows.isEmpty() -> com.fariin.app.ui.components.LoadingRow(Modifier.padding(vertical = 14.dp))
                 failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
@@ -230,8 +230,8 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
 @Composable
 private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
     val c = Fariin.colors
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
-        com.fariin.app.ui.components.FloatingTopBar("", onBack = onBack)
+    com.fariin.app.ui.components.FloatingBarPage("", onBack, modifier = Modifier.navigationBarsPadding()) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
             // A made-up channel post, as the iOS intro shows one (ChannelIntroPreview).
@@ -299,11 +299,12 @@ private fun Details(name: String, about: String, creating: Boolean, error: Strin
     val c = Fariin.colors
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var photoMenu by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().imePadding().navigationBarsPadding()) {
-        com.fariin.app.ui.components.FloatingTopBar("New Channel", onBack = onBack, container = c.bgSecondary) {
-            com.fariin.app.ui.components.FloatingTextAction("Next", enabled = name.isNotBlank() && !creating, busy = creating, onClick = onNext)
-        }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+    val barScroll = rememberScrollState()
+    com.fariin.app.ui.components.FloatingBarPage("New Channel", onBack, under = com.fariin.app.ui.components.underBar(barScroll), page = c.bgSecondary,
+        modifier = Modifier.imePadding().navigationBarsPadding(), actions = {
+        com.fariin.app.ui.components.FloatingTextAction("Next", enabled = name.isNotBlank() && !creating, busy = creating, onClick = onNext)
+    }) { top ->
+        Column(Modifier.weight(1f).verticalScroll(barScroll).padding(top = top)) {
             Row(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 val shape = RoundedCornerShape(16.dp)

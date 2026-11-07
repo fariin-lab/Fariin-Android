@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.settings.BarPage
+import com.fariin.app.ui.components.underBar
+
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -327,8 +330,7 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
             }.filterNotNull().take(3)
         }
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Username", onBack = onBack, action = {
+    BarPage("Username", onBack = onBack, action = {
             TextAction("Done", enabled = !claiming && (Usernames.isValid(draft) && status !is NameStatus.Taken && status !is NameStatus.Problem), busy = claiming) {
                 if (unchanged) { onBack(); return@TextAction }
                 claiming = true
@@ -340,7 +342,8 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
                     claiming = false
                 }
             }
-        })
+        }, modifier = Modifier.background(c.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         SettingsSection { Row(verticalAlignment = Alignment.CenterVertically) {
             Text("@", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(start = 16.dp))
             Box(Modifier.weight(1f)) { Field(draft, "Username") { draft = Usernames.sanitize(it) } }
@@ -382,8 +385,8 @@ internal fun contactsFrom(chats: List<Conversation>, me: String): List<Person> =
 internal fun PickPeoplePage(title: String, action: String, people: List<Person>, onBack: () -> Unit, onDone: (List<String>) -> Unit) {
     var picked by remember { mutableStateOf(setOf<String>()) }
     androidx.activity.compose.BackHandler(onBack = onBack)
-    Column(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
-        PageBar(title, onBack = onBack, action = { TextAction(action, picked.isNotEmpty()) { onDone(picked.toList()) } })
+    BarPage(title, onBack = onBack, action = { TextAction(action, picked.isNotEmpty()) { onDone(picked.toList()) } }, modifier = Modifier.background(Fariin.colors.bgSecondary)) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         PickPeople(people, picked) { u -> picked = if (u in picked) picked - u else picked + u }
     }
 }
@@ -541,13 +544,43 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     // The bar floats: back in its circle, Next / Create in a capsule (iOS NewGroupView's glass bar buttons).
     val bar: @Composable (String, () -> Unit, @Composable () -> Unit) -> Unit = { t, back, action ->
-        com.fariin.app.ui.components.FloatingTopBar(t, onBack = back, container = c.bgSecondary) {
-            Box(Modifier.floating(CircleShape)) { action() }
-        }
+        // The capsule is the action's own (TextAction floats), so no second circle around it.
+        com.fariin.app.ui.components.FloatingTopBar(t, onBack = back, container = c.bgSecondary) { action() }
     }
-    Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding()) {
+    // Every step's bar is glass over its page (GlassBarPage); each step lays out below it.
+    com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), bar = {
+        Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
+            when (step) {
+                1 -> bar("Add Members", onBack) { TextAction("Next", picked.isNotEmpty()) { step = 2 } }
+                3 -> com.fariin.app.ui.components.FloatingTopBar("Permissions", onBack = { step = 2 }, container = c.bgSecondary)
+                else -> bar("New Group", { step = 1 }) {
+                    TextAction("Create", title.isNotBlank() && !busy) {
+                        busy = true
+                        scope.launch {
+                            // At most N groups owned (iOS NewGroupView): the server counts, and says so here.
+                            com.fariin.app.data.AppLimits.ownedGroupsFull()?.let { max ->
+                                error = com.fariin.app.data.AppLimits.ownedGroupsSentence(max); busy = false; return@launch
+                            }
+                            try {
+                                // iOS NewGroupView `perms`: edit info and share link stay admins' only.
+                                val perms = mapOf("onlyAdminsSend" to !canSend, "membersCanAdd" to canAdd,
+                                    "membersCanEditInfo" to false, "onlyAdminsCall" to !canCall, "membersCanShareLink" to false)
+                                val cid = api.createGroup(title, chosen.map { it.uid }, photo, perms)
+                                // After "created the group", as iOS: the timer and its notice for everyone.
+                                if (timer > 0) api.setDisappear(cid, timer)
+                                // "New group" on the new-account card is done.
+                                com.fariin.app.ui.chats.GetStartedStore.markDone(gsCtx, com.fariin.app.ui.chats.GetStartedCard.NEW_GROUP)
+                                onCreated(cid)
+                            } catch (_: Exception) { error = "Could not create the group. Try again." }
+                            busy = false
+                        }
+                    }
+                }
+            }
+        }
+    }) { top ->
+        androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         if (step == 1) {
-            bar("Add Members", onBack) { TextAction("Next", picked.isNotEmpty()) { step = 2 } }
             // The create rule allows at most group_members_max people, me included (iOS
             // NewGroupView.maxOthersAtCreate): the picker stops one short, the other place is mine.
             val maxOthers = maxOf(1, com.fariin.app.data.AppLimits.groupMembersMax - 1)
@@ -556,7 +589,6 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             }
         } else if (step == 3) {
             // iOS NewGroupView.permissionsPage: Send messages, Add members, Start group calls.
-            com.fariin.app.ui.components.FloatingTopBar("Permissions", onBack = { step = 2 }, container = c.bgSecondary)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 SettingsSection(header = "What members can do", footer = "Admins can always do these. Switch one off and only admins can.") {
                     com.fariin.app.ui.channels.SwitchLine("Send messages", canSend) { canSend = it }
@@ -565,29 +597,6 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                 }
             }
         } else {
-            bar("New Group", { step = 1 }) {
-                TextAction("Create", title.isNotBlank() && !busy) {
-                    busy = true
-                    scope.launch {
-                        // At most N groups owned (iOS NewGroupView): the server counts, and says so here.
-                        com.fariin.app.data.AppLimits.ownedGroupsFull()?.let { max ->
-                            error = com.fariin.app.data.AppLimits.ownedGroupsSentence(max); busy = false; return@launch
-                        }
-                        try {
-                            // iOS NewGroupView `perms`: edit info and share link stay admins' only.
-                            val perms = mapOf("onlyAdminsSend" to !canSend, "membersCanAdd" to canAdd,
-                                "membersCanEditInfo" to false, "onlyAdminsCall" to !canCall, "membersCanShareLink" to false)
-                            val cid = api.createGroup(title, chosen.map { it.uid }, photo, perms)
-                            // After "created the group", as iOS: the timer and its notice for everyone.
-                            if (timer > 0) api.setDisappear(cid, timer)
-                            // "New group" on the new-account card is done.
-                            com.fariin.app.ui.chats.GetStartedStore.markDone(gsCtx, com.fariin.app.ui.chats.GetStartedCard.NEW_GROUP)
-                            onCreated(cid)
-                        } catch (_: Exception) { error = "Could not create the group. Try again." }
-                        busy = false
-                    }
-                }
-            }
             // iOS NewGroupView: the photo and the name side by side in one rounded card.
             SettingsSection {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -798,8 +807,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             confirmButton = { TextButton({ addError = null }) { Text("OK", color = c.accent) } }) }
         addNote?.let { n -> AlertDialog(onDismissRequest = { addNote = null }, containerColor = c.card, text = { Text(n) },
             confirmButton = { TextButton({ addNote = null; if (picked.any { it in users }) done() }) { Text("OK", color = c.accent) } }) }
-        Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-            PageBar("Add Members", onBack = { adding = false }, action = {
+        BarPage("Add Members", onBack = { adding = false }, action = {
                 TextAction("Add", picked.isNotEmpty() && !addBusy, busy = addBusy) {
                     val names = people.filter { it.uid in picked }.map { it.shownName }
                     addBusy = true
@@ -817,7 +825,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                         addBusy = false
                     }
                 }
-            })
+            }, modifier = Modifier.background(c.bgSecondary)) { top ->
+            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
             PickPeople(people, picked) { u -> picked = if (u in picked) picked - u else picked + u }
         }
         return
@@ -1157,8 +1166,8 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
     if (confirmRemove) PersonConfirmSheet(photoUrl.takeIf { newPhoto == null }, title, w("Remove group photo?"), w("Members will see the group's initial instead. It goes when you tap Save."),
         listOf(PersonAction("Remove") { newPhoto = null; removePhoto = true; true }),
         onDismiss = { confirmRemove = false }, kind = com.fariin.app.ui.components.AvatarKind.of(true, channel))
-    Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = {
+    val barScroll = rememberScrollState()
+    BarPage(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = {
             TextAction("Save", enabled = trimmed.isNotEmpty() && changed && !saving, busy = saving) {
                 saving = true; error = null
                 scope.launch {
@@ -1176,8 +1185,8 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                     }
                 }
             }
-        })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(8.dp))
             Box {
                 Box(Modifier.size(120.dp).clip(shape).clickable(onClick = pick), contentAlignment = Alignment.Center) {

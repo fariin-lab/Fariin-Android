@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -50,11 +52,13 @@ fun GlassBarPage(
     page: Color = Fariin.colors.bgSecondary,
     /** The bar's height under the status bar before it is measured (64 dp, a plain page bar). */
     barEstimate: Dp = 64.dp,
+    /** False: always the plain bar (a host that is sometimes a sheet). */
+    enabled: Boolean = true,
     bar: @Composable () -> Unit,
     content: @Composable (top: Dp) -> Unit,
 ) {
     val glass = com.fariin.app.perf.rememberPowerState().glass()
-    val liquid = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    val liquid = enabled && glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
     if (!liquid) {
         Column(modifier.fillMaxSize()) { bar(); content(0.dp) }
         return
@@ -99,3 +103,61 @@ fun GlassBarPage(
         }
     }
 }
+
+/**
+ * [GlassBarPage] for a page laid out as a column (bar, then the body): the body is a [Column], so
+ * `weight` and the like keep working. Pad the scroll's top INSIDE it by `top`; a body part that
+ * stays put (a search field, a spinner) starts with `Spacer(Modifier.height(top))` instead.
+ */
+@Composable
+fun GlassColumnPage(
+    under: Boolean,
+    modifier: Modifier = Modifier,
+    page: Color = Fariin.colors.bgSecondary,
+    barEstimate: Dp = 64.dp,
+    enabled: Boolean = true,
+    /** The body's own colour where it is not [page]; the bar and its glass stay on [page]. */
+    body: Color? = null,
+    bar: @Composable () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.(top: Dp) -> Unit,
+) = GlassBarPage(under, modifier, page, barEstimate, enabled, bar) { top ->
+    Column(Modifier.fillMaxSize().then(if (body != null) Modifier.background(body) else Modifier)) { content(top) }
+}
+
+/** True once a scrolled page's rows are under its bar (the fade under a [GlassBarPage] bar). */
+@Composable
+fun underBar(scroll: androidx.compose.foundation.ScrollState): Boolean {
+    val u by remember(scroll) { androidx.compose.runtime.derivedStateOf { scroll.value > 0 } }
+    return u
+}
+
+/** The same for a lazy list. */
+@Composable
+fun underBar(list: androidx.compose.foundation.lazy.LazyListState): Boolean {
+    val u by remember(list) { androidx.compose.runtime.derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > 0 } }
+    return u
+}
+
+/** A plain Material icon or text button in a bar: in a glass circle on a [GlassBarPage] bar, as the floating ones. */
+@Composable
+fun barGlass(): Modifier = if (glassBar()) Modifier.size(44.dp).floating() else Modifier
+
+/**
+ * A pushed page with a [FloatingTopBar] (the status bar inside the bar, in [page] colour) over a
+ * column body, its back and actions glass as on [GlassColumnPage]. The body gets the bar's height.
+ */
+@Composable
+fun FloatingBarPage(
+    title: String,
+    onBack: (() -> Unit)?,
+    under: Boolean = false,
+    modifier: Modifier = Modifier,
+    page: Color = Fariin.colors.bg,
+    subtitle: String? = null,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.(top: Dp) -> Unit,
+) = GlassColumnPage(under, modifier.background(page), page = page, bar = {
+    Box(Modifier.fillMaxWidth().background(page).statusBarsPadding()) {
+        FloatingTopBar(title, onBack = onBack, subtitle = subtitle, container = page, actions = actions)
+    }
+}, content = content)
