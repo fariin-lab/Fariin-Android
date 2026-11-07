@@ -994,7 +994,8 @@ private fun ThreadContent(
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     // A text post carries its reactions inside the bubble; the rest under it.
-                                    if (!channelChipsInside(m)) { com.fariin.app.ui.channels.ChannelChips(ch, m); com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
+                                    // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
+                                    if (!channelChipsInside(m)) { com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
                                 }
                             }
                             selecting -> Row(
@@ -1533,6 +1534,10 @@ private fun SenderLine(ui: ThreadUi, uid: String) {
 }
 
 /** A channel post drawn as a text bubble: its reactions go inside the bubble (iOS), not under it. */
+/** A channel photo, video or album post: its Replies / Quotes bar is the bubble's last row (MediaRow). */
+private fun mediaBarInside(m: Message): Boolean = !m.deleted &&
+    (m.mediaKind == Message.MediaKind.PHOTO || m.mediaKind == Message.MediaKind.VIDEO || m.mediaKind == Message.MediaKind.ALBUM)
+
 private fun channelChipsInside(m: Message): Boolean =
     !m.deleted && m.mediaKind == null && m.poll == null && !m.isSticker && !m.isGif && m.storyMention == null &&
         com.fariin.app.data.CardRules.location(m.text) == null && com.fariin.app.data.CardRules.contact(m.text) == null
@@ -1867,6 +1872,9 @@ private fun MediaRow(
                 TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue) { Meta(m, tick, isMe, is24h) }
             }
         }
+        // A channel post's "Replies · Quotes" bar along the bubble's bottom, under a hairline, as a
+        // text post has it (iOS: the bubble grows by the bar; a bare picture too).
+        ui.channel?.let { ch -> if (mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, edge = 10.dp) }
     }
 }
 
