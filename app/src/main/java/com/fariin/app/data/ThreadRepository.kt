@@ -1524,6 +1524,22 @@ class ThreadRepository(
         }
     }
 
+    /**
+     * iOS setRecording: while my mic captures a voice note, `typing.<me>` = "audio-<seconds>",
+     * re-sent every 10 s by the composer (receivers drop it after 15 s); false when it stops. Same
+     * setting and membership checks as typing.
+     */
+    fun setRecording(on: Boolean) {
+        if (on && !PrivacySettings.typingIndicators()) return
+        if (Wire.isGroupCid(cid) && me !in ((_state.value.conv["users"] as? List<*>) ?: emptyList<Any>())) return
+        scope.launch {
+            try {
+                val v = MessageRules.recordingValue(on, System.currentTimeMillis())
+                convRef.set(mapOf("typing" to mapOf(me to v)), SetOptions.merge()).await()
+            } catch (_: Exception) {}
+        }
+    }
+
     // ------------------------------------------------------------------ read state
 
     private val readMutex = Mutex()

@@ -66,18 +66,15 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         blockSnap.contains(com.fariin.app.crypto.Wire.otherUid(cid, me))) s.receipts.copy(iBlocked = true) else s.receipts
     // Typing: theirs from `typing.<uid>`, cleared 15 s after the value last changed (iOS expiry).
     val typingMap = s.conv["typing"] as? Map<*, *> ?: emptyMap<String, Any>()
-    val typers = typingMap.filter { (k, v) -> k != me && MessageRules.isTyping(v) }.keys.mapNotNull { it as? String }
+    // Recording a voice note rides the same field ("audio-<sec>", iOS setRecording) and expiry.
+    val anyLive = typingMap.any { (k, v) -> k != me && (MessageRules.isTyping(v) || MessageRules.isRecording(v)) }
     var typingTick by remember { mutableStateOf(0) }
-    LaunchedEffect(typingMap) { if (typers.isNotEmpty()) { delay(MessageRules.TYPING_EXPIRY_MS); typingTick++ } }
+    LaunchedEffect(typingMap) { if (anyLive) { delay(MessageRules.TYPING_EXPIRY_MS); typingTick++ } }
     val typingSince = remember(typingMap) { System.currentTimeMillis() }
-    val typingNow = typers.isNotEmpty() && System.currentTimeMillis() - typingSince < MessageRules.TYPING_EXPIRY_MS && typingTick >= 0
-    val typingLine = when {
-        !typingNow -> null
-        receipts.iBlocked -> null
-        conv?.isGroup != true -> "typing…"
-        typers.size == 1 -> "${conv.names[typers[0]] ?: "Someone"} is typing…"
-        else -> "${typers.size} people are typing…"
-    }
+    val typingNow = anyLive && System.currentTimeMillis() - typingSince < MessageRules.TYPING_EXPIRY_MS && typingTick >= 0
+    // My own Typing Indicators setting hides theirs too (iOS typingPref: it is mutual); blocked shows none.
+    val typingLine = if (receipts.iBlocked) null else MessageRules.liveLine(typingMap, me, conv?.isGroup == true,
+        com.fariin.app.data.PrivacySettings.typingIndicators(), typingNow) { conv?.names?.get(it) }
     val unreadAtOpen = remember(cid) { CryptoHub.listedConversation(cid)?.unread(me) ?: 0 }
     // Online / last seen for a 1:1 (iOS ThreadView subtitle), redrawn each minute so "5 min. ago" moves.
     var minute by remember { mutableStateOf(0) }
@@ -160,6 +157,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         },
         onDeleteForMe = { m -> vm.repo.hideForMe(app, m) },
         onTyping = { on -> vm.repo.setTyping(on) },
+        onRecordingVoice = { on -> vm.repo.setRecording(on) },
         onAtBottom = { atBottom.value = it },
         onTitleClick = {
             InChatSearchLink.openedFrom = cid   // the info page's Search circle shows only when opened from here

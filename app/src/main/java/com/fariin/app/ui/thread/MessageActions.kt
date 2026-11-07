@@ -84,6 +84,8 @@ data class ThreadActions(
     val onDeleteForEveryone: (Message) -> Unit = {},
     val onDeleteForMe: (Message) -> Unit = {},
     val onTyping: (Boolean) -> Unit = {},
+    /** The mic is capturing a voice note (iOS setRecording): "recording…" on their side. */
+    val onRecordingVoice: (Boolean) -> Unit = {},
     /** The list reached (true) or left (false) the newest message. */
     val onAtBottom: (Boolean) -> Unit = {},
     val onTitleClick: () -> Unit = {},

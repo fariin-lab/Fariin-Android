@@ -160,6 +160,30 @@ object MessageRules {
     fun isRecording(v: Any?): Boolean = (v as? String)?.startsWith("audio") == true
     const val TYPING_EXPIRY_MS = 15_000L
 
+    /** The value iOS setRecording writes while the mic is live: "audio-<seconds>", re-sent every 10 s. */
+    fun recordingValue(on: Boolean, nowMs: Long): Any = if (on) "audio-${nowMs / 1000}" else false
+    const val RECORDING_REFRESH_MS = 10_000L
+
+    /**
+     * The header's live line from `typing` (iOS presenceSubtitle): typing first, then recording.
+     * A 1:1 says "typing…" / "recording…"; a group names one person or counts them ("N people
+     * typing…"). None at all with my own Typing Indicators off (it is mutual), or when [live] is
+     * false (the values went stale).
+     */
+    fun liveLine(typing: Map<*, *>, me: String, isGroup: Boolean, typingPref: Boolean, live: Boolean,
+                 name: (String) -> String?): String? {
+        if (!typingPref || !live) return null
+        val typers = typing.filter { (k, v) -> k != me && isTyping(v) }.keys.mapNotNull { it as? String }.sorted()
+        val recorders = typing.filter { (k, v) -> k != me && isRecording(v) }.keys.mapNotNull { it as? String }.sorted()
+        fun group(uids: List<String>, verb: String) =
+            if (uids.size == 1) "${name(uids[0]) ?: "Someone"} is $verb…" else "${uids.size} people $verb…"
+        return when {
+            typers.isNotEmpty() -> if (isGroup) group(typers, "typing") else "typing…"
+            recorders.isNotEmpty() -> if (isGroup) group(recorders, "recording") else "recording…"
+            else -> null
+        }
+    }
+
     /**
      * DeliveryReceipts.mark: the 1:1 chats whose newest message is theirs and newer than what I
      * confirmed, as cid to the updatedAt to write into `delivered.<me>`. At most 400.

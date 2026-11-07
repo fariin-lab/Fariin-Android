@@ -1092,7 +1092,7 @@ private fun ThreadContent(
                             onSendVoice(r)
                         }
                     }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
-                    onRecording = { voiceRecording = it },
+                    onRecording = { voiceRecording = it }, onCapturing = actions.onRecordingVoice,
                     onRowPlaced = { sendMotion.composerRow = it },
                     onCamera = {
                         val stop = held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
@@ -1830,6 +1830,8 @@ private fun Composer(
     focusKey: Any? = null,
     /** The mic is live, held or locked (the jump arrow hides meanwhile, as iOS). */
     onRecording: (Boolean) -> Unit = {},
+    /** The mic is capturing (not paused to listen back): "recording…" for the others (iOS isCapturing). */
+    onCapturing: (Boolean) -> Unit = {},
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1875,6 +1877,15 @@ private fun Composer(
     var locked by remember { mutableStateOf(false) }
     var reviewing by remember { mutableStateOf(false) }
     var review by remember { mutableStateOf<VoiceRecorder.Review?>(null) }
+    // iOS broadcastRecording: on while capturing, re-sent every 10 s; off when it stops or pauses.
+    val capturing = recording && !reviewing
+    var capturedOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(capturing) {
+        if (!capturing) { if (capturedOnce) onCapturing(false); return@LaunchedEffect }
+        capturedOnce = true
+        while (true) { onCapturing(true); kotlinx.coroutines.delay(com.fariin.app.data.MessageRules.RECORDING_REFRESH_MS) }
+    }
+    DisposableEffect(Unit) { onDispose { if (capturedOnce) onCapturing(false) } }
     // The "1": this note goes as a one-time listen. It arms ONE note (iOS resetRecordingState).
     var voiceOnce by remember { mutableStateOf(false) }
     var slide by remember { mutableStateOf(0f) }
