@@ -9,7 +9,9 @@ on:
 
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: true
+  # A builder's branch keeps only its newest run; main runs always finish (several builders merge
+  # into main close together, and cancelling there meant no main APK ever finished).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build:
