@@ -811,10 +811,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // iOS settingsCard (owner 2026-10-18/20): Storage Used, then for the owner and admins one
                 // Group Settings row (the management lives on that page) and Join Requests while
                 // someone waits; a member's Disappearing Messages row stays here, read-only.
-                // Not in a channel (its posts are never styled) nor when the owner or an admin turned styles off.
-                if (com.fariin.app.data.BubbleStyles.SHOWN && conv["channel"] != true && conv["bubbleStylesOff"] != true)
-                    SettingsRow("Chat Bubble", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat),
-                        badge = NewBadgeSpots.GROUP_INFO_CHAT_BUBBLE) { bubbleOpen = true }
+                // No Chat Bubble row (owner 2026-11-07): bubble styles live in Settings > Appearance and the chat's wallpaper sheet.
                 SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats,
                     badge = NewBadgeSpots.GROUP_INFO_STORAGE) {
                     pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))

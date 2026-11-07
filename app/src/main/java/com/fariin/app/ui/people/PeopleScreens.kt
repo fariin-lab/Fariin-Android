@@ -650,9 +650,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 if (uid != me) SettingsRow("Sounds & Notifications",
                     icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_notifications),
                     value = contactNotifValue(muteUntil), badge = NewBadgeSpots.PROFILE_SOUNDS) { soundsOpen = true }
-                if (com.fariin.app.data.BubbleStyles.SHOWN && uid != me) SettingsRow("Chat Bubble",
-                    icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat),
-                    badge = NewBadgeSpots.PROFILE_CHAT_BUBBLE) { bubbleOpen = true }
+                // No Chat Bubble row (owner 2026-11-07): bubble styles live in Settings > Appearance and the chat's wallpaper sheet.
                 SettingsRow("Verify Encryption", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_verify_encryption), last = true,
                     badge = NewBadgeSpots.PROFILE_VERIFY_ENCRYPTION) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
             }
