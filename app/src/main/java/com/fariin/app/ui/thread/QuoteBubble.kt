@@ -43,8 +43,8 @@ import com.fariin.app.ui.theme.Fariin
 /**
  * A quoted channel post in a bubble (iOS quote card, owner 2026-11-06, his reference). It sits
  * UNDER my words, with the time on its own line below it ([meta]). The card is outlined, not
- * filled: the channel's 20 dp photo and its name in blue, the post's picture with its own
- * corners, then the post's words (4 lines). Until the first answer lands it shows quietly as
+ * filled: the channel's 20 dp photo and its name, the post's words (8 lines), then its picture
+ * with its own corners (iOS, owner 2026-11-07: words above the picture). Until the first answer lands it shows quietly as
  * "Channel post / Loading…", never the raw id.
  * A tap opens the post in its channel; when that channel is the chat already open ([openCid]) it
  * scrolls to the post and lights it instead. A post this reader may not see gets a short notice.
@@ -98,6 +98,12 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 Spacer(Modifier.width(2.dp))
                 Text("Quote", fontSize = 12.sp, color = ink.copy(alpha = 0.55f), maxLines = 1)
             }
+            val body = QuoteRules.body(card)
+            if (body.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(body, fontSize = 14.sp, color = ink.copy(alpha = if (quiet) 0.5f else 1f), maxLines = 8,
+                    overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
+            }
             if (image != null) {
                 Spacer(Modifier.height(8.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -106,12 +112,6 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                         coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     }
                 }
-            }
-            val body = QuoteRules.body(card)
-            if (body.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(body, fontSize = 14.sp, color = ink.copy(alpha = if (quiet) 0.5f else 1f), maxLines = 4,
-                    overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
             }
         }
         if (meta != null) Box(Modifier.align(Alignment.End)) { meta() }
