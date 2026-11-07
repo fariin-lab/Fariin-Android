@@ -351,7 +351,8 @@ object PostReplyRules {
         // must follow a joiner (a ZWJ sequence such as a family is still one emoji).
         val flags = cps.count(::flag)
         if (flags > 0) return if (flags == 2 && cps.size == 2) String(cps.toIntArray(), 0, 2) else null
-        val pictos = cps.withIndex().filter { picto(it.value) }
+        // A skin tone sits inside the pictograph range but is part of the emoji before it.
+        val pictos = cps.withIndex().filter { picto(it.value) && !part(it.value) }
         if (pictos.isEmpty()) return null
         for (p in pictos.drop(1)) if (p.index == 0 || cps[p.index - 1] != 0x200D) return null
         return String(cps.toIntArray(), 0, cps.size)
