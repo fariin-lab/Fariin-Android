@@ -94,7 +94,9 @@ import com.fariin.app.ui.theme.Fariin
  * TODO: Subscriptions (iOS shows it to @v only), the admin sections.
  */
 @Composable
-fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
+fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
+                /** False while another tab is open (MainShell keeps this one alive behind it). */
+                active: Boolean = true) {
     val profile = if (demoProfile != null) {
         demoProfile
     } else {
@@ -106,7 +108,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
     var stack by rememberSaveable { mutableStateOf(listOf<String>()) }
     val push: (String) -> Unit = { stack = stack + it }
     val pop: () -> Unit = { stack = stack.dropLast(1) }
-    BackHandler(enabled = stack.isNotEmpty(), onBack = pop)
+    BackHandler(enabled = active && stack.isNotEmpty(), onBack = pop)
     // A page asked for from outside Settings (the chat list's Things you can do > Chat color).
     val asked by SettingsLink.requests.collectAsState()
     LaunchedEffect(asked) { asked?.let { stack = listOf(it); SettingsLink.requests.value = null } }
@@ -118,8 +120,9 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
 
     val page = stack.lastOrNull()
     // A Settings page hides the tab bar, the home list shows it (iOS).
-    androidx.compose.runtime.DisposableEffect(page == null) {
-        com.fariin.app.ui.shell.TabBarVisibility.hidden = page != null
+    // Hidden behind another tab, it leaves the bar alone.
+    androidx.compose.runtime.DisposableEffect(page == null, active) {
+        if (active) com.fariin.app.ui.shell.TabBarVisibility.hidden = page != null
         onDispose { com.fariin.app.ui.shell.TabBarVisibility.hidden = false }
     }
     // The grey page under the white section cards (iOS grouped background).

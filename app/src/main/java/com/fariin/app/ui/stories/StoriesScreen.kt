@@ -102,7 +102,9 @@ import kotlinx.coroutines.delay
  * a row's face wears one arc per story (StoryRing).
  */
 @Composable
-fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0, shared: StoriesState? = null) {
+fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfile, StoriesState>?, addRequest: Int = 0, shared: StoriesState? = null,
+               /** False while another tab is open (MainShell keeps this one alive behind it). */
+               active: Boolean = true) {
     val state: StoriesState
     val profile: MyProfile?
     if (demo != null) {
@@ -121,7 +123,7 @@ fun StoriesTab(me: String, conversations: List<Conversation>, demo: Pair<MyProfi
             }.collectFlow(StoriesState())
         }
     }
-    StoriesScreen(me, conversations, profile, state, live = demo == null, addRequest)
+    StoriesScreen(me, conversations, profile, state, live = demo == null, addRequest, active)
 }
 
 @Composable
@@ -132,7 +134,7 @@ private fun <T> kotlinx.coroutines.flow.Flow<T>.collectFlow(initial: T): T {
 }
 
 @Composable
-private fun StoriesScreen(me: String, conversations: List<Conversation>, profile: MyProfile?, state: StoriesState, live: Boolean, addRequest: Int) {
+private fun StoriesScreen(me: String, conversations: List<Conversation>, profile: MyProfile?, state: StoriesState, live: Boolean, addRequest: Int, active: Boolean = true) {
     val c = Fariin.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -166,7 +168,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     LaunchedEffect(pickError) { if (pickError != null) { delay(3000); pickError = null } }
     // "Xm ago" moves once a minute.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
+    LaunchedEffect(active) { if (active) { now = System.currentTimeMillis(); while (true) { delay(60_000); now = System.currentTimeMillis() } } }
     var viewedCollapsed by rememberSaveable { mutableStateOf(false) }
     var hiddenCollapsed by rememberSaveable { mutableStateOf(false) }
     var posted by rememberSaveable { mutableStateOf(false) }
@@ -216,6 +218,15 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // Glow notifications (iOS GlowNotificationsView): the iOS bell is not drawn in this layout, so
     // its door is in the overflow, with the bell's unread dot (iOS hasUnreadGlow).
     var glowNotifs by rememberSaveable { mutableStateOf(false) }
+    // The tab stays alive behind the others (MainShell), but its pages are windows of their own and
+    // would stay on screen over the open tab: they close when it is hidden, as they did when the
+    // whole tab went.
+    LaunchedEffect(active) {
+        if (!active) {
+            viewing = null; camera = false; composing = null; composingText = false; posted = false
+            privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
+        }
+    }
     val glowSeenUpTo by com.fariin.app.data.Glow.seenUpTo.collectAsState()
     var newestGlowMs by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(glowOn, glowState.glowers) {

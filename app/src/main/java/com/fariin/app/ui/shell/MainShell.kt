@@ -213,10 +213,12 @@ fun MainShell(
     val storiesAsk by com.fariin.app.system.SystemRouter.storiesTabRequests.collectAsState()
     var storiesSeen by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(storiesAsk) { if (storiesAsk > storiesSeen) { storiesSeen = storiesAsk; tab = TAB_STORIES } }
-    var reselect by rememberSaveable { mutableIntStateOf(0) }
+    // One count per tab: the tabs stay alive behind each other, and a second tap on Settings must
+    // not scroll the hidden chat list to the top (one shared count did).
+    var reselect by rememberSaveable { mutableStateOf(listOf(0, 0, 0, 0)) }
     // No vibration on a tab tap (owner 2026-11-03: remove it).
     val select: (Int) -> Unit = { t ->
-        if (t == tab) reselect++
+        if (t == tab) reselect = reselect.toMutableList().also { it[t]++ }
         tab = t
     }
     // System back on another tab goes to Chats first, then leaves the app (Android tab apps).
@@ -236,33 +238,29 @@ fun MainShell(
             glass -> Modifier.hazeSource(haze)
             else -> Modifier
         })) {
-            CompositionLocalProvider(LocalBottomBarInset provides inset, LocalTabReselect provides reselect) {
-                // The chat list stays alive once shown: coming back to Chats rebuilt it every time
-                // (one 65 ms frame per switch on the Pixel 5). Behind another tab it is neither
-                // measured nor drawn nor touchable, and its Back handlers are off.
-                var chatsBorn by remember { mutableStateOf(tab == TAB_CHATS) }
-                if (tab == TAB_CHATS) chatsBorn = true
-                if (chatsBorn) {
-                    val shown = tab == TAB_CHATS
-                    Box(Modifier.fillMaxSize().layout { m, cs ->
-                        if (!shown) layout(cs.maxWidth, cs.maxHeight) {}
-                        else { val p = m.measure(cs); layout(p.width, p.height) { p.place(0, 0) } }
-                    }) {
-                        ChatListScreen(chats, me, decryptor, stories = stories, onRetry = onRetryChats,
-                            onSettings = { select(TAB_SETTINGS) },
-                            onNewStory = { storyRequest++; select(TAB_STORIES) },
-                            active = shown)
-                    }
+            CompositionLocalProvider(LocalBottomBarInset provides inset) {
+                // Every tab stays alive once shown: coming back rebuilt it every time (Chats one
+                // 65 ms frame on the Pixel 5; Stories, Calls or Settings about 210 ms on the low-end
+                // phone). Four tabs at most, so the memory is bounded. See [KeptTab].
+                KeptTab(TAB_CHATS, tab, reselect[TAB_CHATS]) { shown ->
+                    ChatListScreen(chats, me, decryptor, stories = stories, onRetry = onRetryChats,
+                        onSettings = { select(TAB_SETTINGS) },
+                        onNewStory = { storyRequest++; select(TAB_STORIES) },
+                        active = shown)
                 }
-                when (tab) {
-                    TAB_STORIES -> StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest, shared = if (demo) null else stories)
-                    // The calls list scrolls under the bar and lifts its New Call button by the inset.
-                    TAB_CALLS -> CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls,
-                        error = callsError, onRetry = { callsRetry++ })
-                    TAB_CHATS -> {}
-                    // My Profile (Settings) reads the same feed for its Posted stories card.
-                    else -> com.fariin.app.ui.glow.ProvideMyStories(stories, chats.chats) {
-                        SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut)
+                KeptTab(TAB_STORIES, tab, reselect[TAB_STORIES]) { shown ->
+                    StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest, shared = if (demo) null else stories,
+                        active = shown)
+                }
+                // The calls list scrolls under the bar and lifts its New Call button by the inset.
+                KeptTab(TAB_CALLS, tab, reselect[TAB_CALLS]) { shown ->
+                    CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls,
+                        error = callsError, onRetry = { callsRetry++ }, active = shown)
+                }
+                // My Profile (Settings) reads the same feed for its Posted stories card.
+                KeptTab(TAB_SETTINGS, tab, reselect[TAB_SETTINGS]) { shown ->
+                    com.fariin.app.ui.glow.ProvideMyStories(stories, chats.chats) {
+                        SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut, active = shown)
                     }
                 }
             }
@@ -280,6 +278,40 @@ fun MainShell(
                 tab = tab, unread = unread, missed = missed, myPhoto = myPhoto, glass = glass, haze = haze, backdrop = if (liquid) backdrop else null, animate = power.animations, onSelect = select,
                 modifier = Modifier.navigationBarsPadding().padding(horizontal = BarSide, vertical = BarMargin),
             )
+        }
+    }
+}
+
+/**
+ * One tab, built the first time it opens and then kept. Behind another tab it is neither measured
+ * nor drawn nor touchable; its Back handlers, even those deep in a page it has open, are tied to a
+ * dispatcher nothing presses (so the open tab's Back is never taken by a hidden one); and its
+ * second-tap count does not move. [content] gets whether the tab is the open one, for the work that
+ * must stop while hidden (listeners, the tab bar's hiding, dialogs).
+ */
+@Composable
+private fun KeptTab(id: Int, open: Int, reselect: Int, content: @Composable (shown: Boolean) -> Unit) {
+    var born by remember { mutableStateOf(open == id) }
+    if (open == id) born = true
+    if (!born) return
+    val shown = open == id
+    val real = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
+    val life = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val inert = remember(life) {
+        object : androidx.activity.OnBackPressedDispatcherOwner {
+            override val onBackPressedDispatcher = androidx.activity.OnBackPressedDispatcher()
+            override val lifecycle: androidx.lifecycle.Lifecycle get() = life.lifecycle
+        }
+    }
+    Box(Modifier.fillMaxSize().layout { m, cs ->
+        if (!shown) layout(cs.maxWidth, cs.maxHeight) {}
+        else { val p = m.measure(cs); layout(p.width, p.height) { p.place(0, 0) } }
+    }) {
+        if (real == null) {
+            CompositionLocalProvider(LocalTabReselect provides reselect) { content(shown) }
+        } else {
+            CompositionLocalProvider(LocalTabReselect provides reselect,
+                androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides (if (shown) real else inert)) { content(shown) }
         }
     }
 }

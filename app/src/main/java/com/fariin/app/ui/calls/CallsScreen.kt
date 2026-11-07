@@ -107,9 +107,11 @@ import java.util.Locale
  */
 @Composable
 fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<CallEntry>?, shared: List<CallEntry>? = null,
-             error: String? = null, onRetry: () -> Unit = {}) {
+             error: String? = null, onRetry: () -> Unit = {},
+             /** False while another tab is open (MainShell keeps this one alive behind it). */
+             active: Boolean = true) {
     // The shell already reads the history for the missed badge: shown as is, not read twice.
-    if (demoCalls == null && shared != null) { CallsScreen(me, shared, true, conversations, error, onRetry); return }
+    if (demoCalls == null && shared != null) { CallsScreen(me, shared, true, conversations, error, onRetry, active); return }
     val repo = remember { CallsRepository() }
     var calls by remember { mutableStateOf(demoCalls ?: emptyList()) }
     var loaded by remember { mutableStateOf(demoCalls != null) }
@@ -121,7 +123,7 @@ fun CallsTab(me: String, conversations: List<Conversation>, demoCalls: List<Call
             loaded = true
         }
     }
-    CallsScreen(me, calls, loaded, conversations)
+    CallsScreen(me, calls, loaded, conversations, active = active)
 }
 
 /**
@@ -164,7 +166,7 @@ internal object CallsLive {
 
 @Composable
 private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, groups: List<Conversation> = emptyList(),
-                        error: String? = null, onRetry: () -> Unit = {}) {
+                        error: String? = null, onRetry: () -> Unit = {}, active: Boolean = true) {
     val c = Fariin.colors
     var missedOnly by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -208,9 +210,10 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     }).sortedByDescending { it.first }.map { it.second }
     // iOS LiveGroupCalls: the calls going in my groups, above the history (not under Missed or a search).
     val groupKey = groups.filter { it.isGroup }.joinToString(",") { it.id }
-    LaunchedEffect(groupKey) { com.fariin.app.ui.call.LiveGroupCalls.sync(groups) }
-    // Up to 40 group-call listeners, only while this tab is shown (battery audit 2026-11-05).
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { com.fariin.app.ui.call.LiveGroupCalls.stopAll() } }
+    LaunchedEffect(groupKey, active) { if (active) com.fariin.app.ui.call.LiveGroupCalls.sync(groups) }
+    // Up to 40 group-call listeners, only while this tab is shown (battery audit 2026-11-05): the
+    // tab stays alive behind the others now, so they stop when it is hidden, not only when it goes.
+    androidx.compose.runtime.DisposableEffect(active) { onDispose { com.fariin.app.ui.call.LiveGroupCalls.stopAll() } }
     val liveAll by com.fariin.app.ui.call.LiveGroupCalls.calls.collectAsState()
     val live = if (missedOnly || q.isNotEmpty()) emptyList() else liveAll
     // Select mode (iOS edit mode): run ids (a run's newest call) and "link:<roomId>" for links.
@@ -221,7 +224,9 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     // The long-press menu's Voice / Video Call asks first (iOS pendingCall); the row's tap does not.
     var pendingCall by remember { mutableStateOf<Pair<CallEntry, Boolean>?>(null) }
     fun leaveSelect() { selecting = false; picked = emptySet() }
-    androidx.activity.compose.BackHandler(enabled = selecting) { leaveSelect() }
+    // Hidden behind another tab, its dialogs (windows of their own) close, as when the tab went.
+    LaunchedEffect(active) { if (!active) { askDelete = false; linkFailed = false; pendingCall = null } }
+    androidx.activity.compose.BackHandler(enabled = active && selecting) { leaveSelect() }
     fun toggle(id: String) { picked = if (id in picked) picked - id else picked + id }
     fun deletePicked() {
         val ids = mutableSetOf<String>()
