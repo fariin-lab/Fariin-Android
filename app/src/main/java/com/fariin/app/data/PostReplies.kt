@@ -34,6 +34,11 @@ data class PostReply(
     val my: String = "",
     /** Each emoji's count, biggest first (server `rx`; old hearts come as the heart). */
     val rx: List<Rx> = emptyList(),
+    /**
+     * The channel's owner wrote it, as the channel (server `cr`, owner 2026-11-07): [name], [photoUrl]
+     * and [verified] are then the channel's; the row shows the channel's squircle and "Creator".
+     */
+    val creator: Boolean = false,
 ) {
     enum class Send { SENT, SENDING, FAILED }
     data class Rx(val emoji: String, val count: Int)
@@ -56,6 +61,8 @@ data class RepliesPage(
     val may: ReplyRights,
     val staff: Boolean,
     val rev: Int,
+    /** The first page's pinned thread (one per post; left out of [items]); null = none. */
+    val pinned: PostReply? = null,
 )
 
 /** One page of a thread's answers (`getReplyAnswers`), oldest first. */
@@ -187,6 +194,7 @@ object PostReplyRules {
             held = d["held"] as? Boolean ?: false,
             my = (d["my"] as? String)?.take(16) ?: if (d["liked"] == true) HEART else "",
             rx = parseRx(d["rx"], n(d["lc"])),
+            creator = d["cr"] == true,
         ).let { it.copy(liked = it.my.isNotEmpty()) }
     }
 
@@ -213,6 +221,7 @@ object PostReplyRules {
             may = parseRights(d?.get("may")),
             staff = d?.get("staff") as? Boolean ?: false,
             rev = n(d?.get("rev")),
+            pinned = parseReply(d?.get("pinned") as? Map<*, *>),
         )
     }
 
@@ -307,19 +316,21 @@ object PostReplyRules {
             canDelete = true, parentId = parent, send = PostReply.Send.SENDING)
 
     /** A row's long-press menu, in order. */
-    enum class Action { REPLY, COPY, REPORT, DELETE, BAN, RETRY }
+    enum class Action { REPLY, COPY, REPORT, DELETE, BAN, RETRY, PIN, UNPIN }
 
     /**
      * What the long-press offers, gated by the server's answer: Reply while replies are on; Copy;
      * Report on someone else's; Delete on mine or with the Delete messages right (the row's `del`);
      * Ban (and remove their replies) with the Ban users right, never on my own. A failed send offers
-     * Retry and Delete only; one still sending, Copy only.
+     * Retry and Delete only; one still sending, Copy only. Pin / Unpin with the switches' right
+     * (owner, or Change info), on a top-level reply only, never an answer or a held one.
      */
-    fun actions(r: PostReply, off: Boolean, may: ReplyRights): List<Action> = when (r.send) {
+    fun actions(r: PostReply, off: Boolean, may: ReplyRights, pinnedId: String = ""): List<Action> = when (r.send) {
         PostReply.Send.SENDING -> listOf(Action.COPY)
         PostReply.Send.FAILED -> listOf(Action.RETRY, Action.COPY, Action.DELETE)
         PostReply.Send.SENT -> buildList {
             if (!off) add(Action.REPLY)
+            if (may.settings && r.parentId.isEmpty() && !r.held) add(if (r.id == pinnedId) Action.UNPIN else Action.PIN)
             add(Action.COPY)
             if (!r.mine) add(Action.REPORT)
             if (r.canDelete) add(Action.DELETE)
@@ -419,6 +430,24 @@ object PostReplies {
     suspend fun ban(cid: String, mid: String, r: PostReply, all: Boolean): Boolean = runCatching {
         call("banReplier", mapOf("cid" to cid, "mid" to mid, "all" to all) + target(r), seconds = 120); true
     }.getOrDefault(false)
+
+    /** Pins thread [rid] under the post (one pin per post, a new one replaces it); "" unpins. */
+    suspend fun pin(cid: String, mid: String, rid: String): Boolean = runCatching {
+        val a = mutableMapOf<String, Any>("cid" to cid, "mid" to mid)
+        if (rid.isNotEmpty()) a["rid"] = rid
+        call("pinReply", a); true
+    }.getOrDefault(false)
+
+    /**
+     * Who wrote [r], for a tap on its photo or name (pages carry no authors' ids): their uid, or
+     * null with [channel] true for a Creator reply (it speaks as the channel). Failure = the error.
+     */
+    data class Author(val uid: String, val channel: Boolean)
+
+    suspend fun author(cid: String, mid: String, r: PostReply): Result<Author> = runCatching {
+        val d = call("replyAuthor", mapOf("cid" to cid, "mid" to mid) + target(r))
+        Author(d?.get("uid") as? String ?: "", d?.get("channel") == true)
+    }
 
     /** Change info right: [mid] null = the whole channel. */
     suspend fun setOff(cid: String, mid: String?, off: Boolean): Boolean = runCatching {

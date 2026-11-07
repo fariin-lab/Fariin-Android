@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -137,7 +138,7 @@ internal fun rememberReplyQuickReaction(): String {
  * before it. A send carries the phone's id, which becomes the reply's id: a retry cannot post twice.
  */
 @Stable
-class PostRepliesState(private val cid: String, private val mid: String, private val scope: CoroutineScope) {
+class PostRepliesState(val cid: String, private val mid: String, private val scope: CoroutineScope) {
     private val cacheKey = (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "") + "/$cid/$mid"
 
     var threads by mutableStateOf(cache[cacheKey] ?: emptyList())
@@ -154,6 +155,14 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         private set
     var loaded by mutableStateOf(cache[cacheKey] != null)
         private set
+    /**
+     * The pinned thread (one per post, owner 2026-11-07): "" = none. Its row is kept in [threads]
+     * like any other (so a reaction or an answer reaches it) and drawn first under "Pinned".
+     */
+    var pinnedId by mutableStateOf(pinCache[cacheKey] ?: "")
+        private set
+    /** A pin or unpin on its way: the pages' answer does not overrule it meanwhile. */
+    private var pinBusy = false
     var failed by mutableStateOf(false)
         private set
     /** The server answered at least once while open (its off/on then counts over the bar's guess). */
@@ -210,6 +219,7 @@ class PostRepliesState(private val cid: String, private val mid: String, private
     companion object {
         /** The last first page per post, for an instant paint when the sheet opens again (this run, this account). */
         private val cache = HashMap<String, List<PostReply>>()
+        private val pinCache = HashMap<String, String>()
     }
 
     // ---- Loading ----
@@ -251,6 +261,21 @@ class PostRepliesState(private val cid: String, private val mid: String, private
     private fun rows(list: List<PostReply>): List<PostReply> =
         list.filter { it.id !in deletedIds }.map { PostReplyRules.overlay(it, pendingLikes[it.id]) }
 
+    /**
+     * The first page's pinned thread put in [list] (the server leaves it out of `items`, on every
+     * page). While a pin of mine is on its way, the row I pinned stays where it is.
+     */
+    private fun withPin(p: com.fariin.app.data.RepliesPage, list: List<PostReply>): List<PostReply> {
+        if (pinBusy) {
+            val keep = threads.firstOrNull { it.id == pinnedId }
+            return if (keep != null && list.none { it.id == keep.id }) list + keep else list
+        }
+        val pin = p.pinned?.let { rows(listOf(it)).firstOrNull() }
+        pinnedId = pin?.id ?: ""
+        pinCache[cacheKey] = pinnedId
+        return if (pin == null) list else list.filterNot { it.id == pin.id } + pin
+    }
+
     suspend fun loadFirst() {
         val p = PostReplies.page(cid, mid)
         if (p == null) { failed = true; loaded = true; return }
@@ -258,11 +283,11 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         answered = true
         val page = rows(p.items)
         if (threads.isEmpty() || olderCursor.isEmpty()) olderCursor = p.next
-        threads = PostReplyRules.mergeFirst(threads, page)
+        threads = withPin(p, PostReplyRules.mergeFirst(threads, page))
         if (lastRev < 0) lastRev = p.rev
         loaded = true
         failed = false
-        cache[cacheKey] = page
+        cache[cacheKey] = page + listOfNotNull(threads.firstOrNull { it.id == pinnedId })
     }
 
     fun retry() { failed = false; scope.launch { loadFirst() } }
@@ -277,14 +302,15 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         val now = System.currentTimeMillis()
         recentMine.entries.removeAll { now - it.value > PostReplyRules.RECENT_MINE_MS }
         val m = PostReplyRules.mergeNewest(threads, page, p.next, recentMine.keys)
-        threads = m.list
+        threads = withPin(p, m.list)
         m.resetCursor?.let { olderCursor = it }
         if (m.added > 0) {
             if (atEnd) scrollTarget = m.list.lastOrNull()?.id else unseenNew += m.added
         }
-        cache[cacheKey] = page
+        val pinRow = threads.firstOrNull { it.id == pinnedId }
+        cache[cacheKey] = page + listOfNotNull(pinRow)
         val changed = open.filter { t ->
-            val r = page.firstOrNull { it.id == t } ?: return@filter false
+            val r = (page + listOfNotNull(pinRow)).firstOrNull { it.id == t } ?: return@filter false
             r.answers != (answers[t]?.count { it.send == PostReply.Send.SENT } ?: -1)
         }
         changed.take(5).forEach { t -> scope.launch { loadAnswers(t, more = false) } }
@@ -409,9 +435,41 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         }
     }
 
+    /** Pin [r] (replacing any other pin) or, [on] false, unpin it. Shown at once; put back if refused. */
+    fun pin(r: PostReply, on: Boolean) {
+        val before = pinnedId
+        pinnedId = if (on) r.id else ""
+        pinBusy = true
+        scope.launch {
+            val ok = PostReplies.pin(cid, mid, if (on) r.id else "")
+            pinBusy = false
+            if (!ok) pinnedId = before
+            pinCache[cacheKey] = pinnedId
+            toast = if (!ok) "Couldn't change the pin." else if (on) "Reply pinned." else "Reply unpinned."
+        }
+    }
+
+    /**
+     * A tap on a reply's photo or name: [open] gets the author's uid, or null for a Creator reply
+     * (it speaks as the channel: the channel's page). Moderators have the uid on the row already;
+     * everyone else asks `replyAuthor` for this one reply. My own reply does nothing.
+     */
+    fun openAuthor(r: PostReply, open: (String?) -> Unit) {
+        if (r.mine || r.send != PostReply.Send.SENT) return
+        if (r.uid.isNotEmpty()) { open(r.uid); return }
+        scope.launch {
+            PostReplies.author(cid, mid, r)
+                .onSuccess { a -> if (a.channel) open(null) else if (a.uid.isNotEmpty()) open(a.uid) else toast = "Couldn't open this profile." }
+                .onFailure { toast = "Couldn't open this profile." }
+        }
+    }
+
     fun delete(r: PostReply) {
         deletedIds += r.id
         val t = r.parentId
+        // The server unpins a deleted pinned thread.
+        val wasPinned = t.isEmpty() && r.id == pinnedId
+        if (wasPinned) pinnedId = ""
         if (answering?.let { it.id == r.id || it.parentId == r.id } == true) answering = null
         edit(t) { list -> list.filterNot { it.id == r.id } }
         if (t.isNotEmpty()) threads = threads.map { if (it.id == t) it.copy(answers = maxOf(0, it.answers - 1)) else it }
@@ -421,6 +479,7 @@ class PostRepliesState(private val cid: String, private val mid: String, private
             if (removed != null) { count = maxOf(0, count - removed); return@launch }
             // Refused: only this one row comes back, never a saved list over newer arrivals.
             deletedIds -= r.id
+            if (wasPinned) pinnedId = r.id
             edit(t) { list -> (list + r).sortedBy { it.at } }
             if (t.isNotEmpty()) threads = threads.map { if (it.id == t) it.copy(answers = it.answers + 1) else it }
             toast = "Couldn't delete this reply."
@@ -528,6 +587,7 @@ private fun RepliesAdminMenu(s: PostRepliesState) {
 private sealed interface ReplyItem {
     val key: String
     data object Older : ReplyItem { override val key = "older" }
+    data object PinLabel : ReplyItem { override val key = "pinned" }
     data class Thread(val r: PostReply) : ReplyItem { override val key = "t-" + r.id }
     data class Answer(val r: PostReply) : ReplyItem { override val key = "a-" + r.id }
     data class Toggle(val rid: String, val n: Int, val open: Boolean) : ReplyItem { override val key = "g-$rid" }
@@ -535,12 +595,11 @@ private sealed interface ReplyItem {
 }
 
 private fun replyItems(s: PostRepliesState): List<ReplyItem> = buildList {
-    if (s.olderCursor.isNotEmpty()) add(ReplyItem.Older)
-    for (r in s.threads) {
+    fun thread(r: PostReply) {
         add(ReplyItem.Thread(r))
         val got = s.answers[r.id].orEmpty()
         val total = maxOf(r.answers, got.size)
-        if (total <= 0) continue
+        if (total <= 0) return
         val isOpen = r.id in s.open
         if (isOpen) {
             got.forEach { add(ReplyItem.Answer(it)) }
@@ -548,6 +607,11 @@ private fun replyItems(s: PostRepliesState): List<ReplyItem> = buildList {
         }
         add(ReplyItem.Toggle(r.id, total, isOpen))
     }
+    // The pinned thread first, under a small "Pinned" line, then the rest oldest first.
+    val pin = s.pinnedId.takeIf { it.isNotEmpty() }?.let { id -> s.threads.firstOrNull { it.id == id } }
+    if (pin != null) { add(ReplyItem.PinLabel); thread(pin) }
+    if (s.olderCursor.isNotEmpty()) add(ReplyItem.Older)
+    for (r in s.threads) if (r.id != pin?.id) thread(r)
 }
 
 /** The Replies tab's list: skeleton while loading, a failed page with Retry, the empty words, or the threads. */
@@ -575,6 +639,17 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
     }
     val scope = rememberCoroutineScope()
     val quick = rememberReplyQuickReaction()
+    // A photo or name tapped: the sheet goes down, then that person's profile (or the channel's page
+    // for a Creator reply) opens.
+    val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
+    val channelNav = LocalChannelNav.current
+    val author: (PostReply) -> Unit = { r ->
+        s.openAuthor(r) { uid ->
+            PostQuotesSheet.open.value = null
+            PostQuotesSheet.startOff = false
+            if (uid == null) channelNav.page(s.cid) else peopleNav.contact(uid)
+        }
+    }
     Box(modifier) {
         when {
             s.failed && s.threads.isEmpty() -> Column(Modifier.fillMaxWidth().padding(top = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -597,8 +672,14 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                     when (val row = items[i]) {
                         ReplyItem.Older -> SmallLink(if (s.loadingOlder) "Loading…" else "Show earlier replies",
                             Modifier.fillMaxWidth().padding(vertical = 4.dp), center = true) { s.loadOlder() }
-                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick)
-                        is ReplyItem.Answer -> Box(Modifier.padding(start = 46.dp)) { ReplyRow(s, row.r, small = true, now, quick) }
+                        ReplyItem.PinLabel -> Row(Modifier.padding(start = 16.dp + 40.dp + 24.dp, top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.PushPin, null, tint = c.secondary, modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Pinned", fontSize = 12.sp, color = c.secondary)
+                        }
+                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick) { author(row.r) }
+                        is ReplyItem.Answer -> Box(Modifier.padding(start = 46.dp)) { ReplyRow(s, row.r, small = true, now, quick) { author(row.r) } }
                         is ReplyItem.Toggle -> ThreadToggle(PostReplyRules.threadToggle(row.n, row.open)) { s.toggleThread(row.rid) }
                         is ReplyItem.More -> SmallLink("Show more replies", Modifier.padding(start = 108.dp, bottom = 8.dp)) {
                             scope.launch { s.loadAnswers(row.rid, more = true) }
@@ -673,7 +754,7 @@ private fun ThreadToggle(label: String, onTap: () -> Unit) {
  * (PostReplyRules.actions). Mine on its way reads "Sending…"; failed, "Not sent" with Retry.
  */
 @Composable
-private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Long, quick: String) {
+private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Long, quick: String, onAuthor: () -> Unit) {
     val c = Fariin.colors
     val clipboard = LocalClipboardManager.current
     var menu by remember { mutableStateOf(false) }
@@ -682,16 +763,26 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(Modifier.padding(start = side + 24.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(r.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+                    .clickable(enabled = !r.mine, interactionSource = null, indication = null, onClick = onAuthor))
             if (r.verified) {
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(12.dp))
+            }
+            // The channel's owner, writing as the channel (owner 2026-11-07).
+            if (r.creator) {
+                Spacer(Modifier.width(5.dp))
+                Text("Creator", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, maxLines = 1,
+                    modifier = Modifier.clip(CircleShape).background(c.label.copy(alpha = 0.08f)).padding(horizontal = 6.dp, vertical = 1.5.dp))
             }
             Spacer(Modifier.width(4.dp))
             Text(PostReplyRules.age(r.at, now), fontSize = 13.sp, color = c.secondary, maxLines = 1)
         }
         Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(r.photoUrl.ifEmpty { null }, side)
+            // A Creator reply wears the channel's squircle photo.
+            Avatar(r.photoUrl.ifEmpty { null }, side, squircle = r.creator,
+                kind = if (r.creator) AvatarKind.CHANNEL else AvatarKind.PERSON,
+                modifier = Modifier.clickable(enabled = !r.mine, interactionSource = null, indication = null, onClick = onAuthor))
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f, fill = false).padding(end = 24.dp)) {
                 Text(r.text, fontSize = if (small) 15.sp else 17.sp, color = c.label,
@@ -721,7 +812,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                         }
                         androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                     }
-                    for (a in PostReplyRules.actions(r, s.off, s.may)) {
+                    for (a in PostReplyRules.actions(r, s.off, s.may, s.pinnedId)) {
                         val (label, red) = when (a) {
                             PostReplyRules.Action.REPLY -> "Reply" to false
                             PostReplyRules.Action.COPY -> "Copy" to false
@@ -729,6 +820,8 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                             PostReplyRules.Action.DELETE -> "Delete" to true
                             PostReplyRules.Action.BAN -> "Delete and Ban" to true
                             PostReplyRules.Action.RETRY -> "Retry" to false
+                            PostReplyRules.Action.PIN -> "Pin" to false
+                            PostReplyRules.Action.UNPIN -> "Unpin" to false
                         }
                         DropdownMenuItem(text = { Text(label, color = if (red) c.red else c.label) }, onClick = {
                             menu = false
@@ -739,6 +832,8 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                                 PostReplyRules.Action.DELETE -> if (r.send == PostReply.Send.FAILED) s.discard(r) else s.delete(r)
                                 PostReplyRules.Action.BAN -> s.banning = r
                                 PostReplyRules.Action.RETRY -> s.retry(r)
+                                PostReplyRules.Action.PIN -> s.pin(r, on = true)
+                                PostReplyRules.Action.UNPIN -> s.pin(r, on = false)
                             }
                         })
                     }
