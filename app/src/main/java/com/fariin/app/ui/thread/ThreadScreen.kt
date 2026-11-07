@@ -897,6 +897,9 @@ private fun ThreadContent(
                     goToMatch()
                 }
             }
+            // The day of the topmost message while scrolling (iOS floating date pill), under the header.
+            if (!search.active) FloatingDayPill(listState, ui.messages, now,
+                Modifier.align(Alignment.TopCenter).zIndex(1f).padding(top = with(density) { topBarPx.toDp() } + 8.dp))
             // iOS: hidden while a voice note is being recorded.
             if (!atBottom && !search.active && !voiceRecording) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
