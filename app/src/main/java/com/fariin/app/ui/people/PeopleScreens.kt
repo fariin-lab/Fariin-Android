@@ -430,7 +430,6 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // The copy from the last visit draws at once; the fresh read replaces it (no bio popping in).
     var person by remember { mutableStateOf<Person?>(ProfileMemo.get(uid)) }
     var addingToGroup by remember { mutableStateOf(false) }
-    var askClearMine by remember { mutableStateOf(false) }
     var sharingProfile by remember { mutableStateOf(false) }
     var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
@@ -498,51 +497,53 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         VerifyEncryptionPage(cid, name, person?.photoUrl ?: conv?.photos?.get(uid), myPhotoUrl, safety, onClose = { showSafety = false })
         return
     }
-    // Block (not Unblock): the careful sheet, with Block and Report as the second choice (the same report call).
-    if (ask == "block" && !blocked) com.fariin.app.ui.components.CarefulSheet(onDismiss = { ask = null }, steps = listOf(
-        com.fariin.app.ui.components.CarefulStep(
-            title = "Block ${name.ifEmpty { "this person" }}?",
-            body = "Blocked people can't message or call you. You can unblock them later in Privacy & Security.",
-            buttons = listOf(
-                com.fariin.app.ui.components.CarefulButton("Block", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
-                    scope.launch { if (api.setBlocked(uid, true)) blocked = true else notice = "Check your connection and try again." }
-                },
-                com.fariin.app.ui.components.CarefulButton("Block and Report", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
-                    scope.launch {
-                        val done = api.setBlocked(uid, true)
-                        if (done) blocked = true
-                        val sent = api.report(uid, cid, "spam")
-                        notice = if (done && sent) "Blocked. Thanks, your report was sent." else "Check your connection and try again."
-                    }
-                },
-            ),
-        ))) else if (ask == "delete") AlertDialog(onDismissRequest = { ask = null },
-            title = { Text("Delete this chat?") },
-            text = { Text("Every message in this chat will be removed from this device. The other person keeps their own copy.") },
-            // The chat list's own Delete for Me (iOS ChatService.deleteForMe), not a second delete.
-            confirmButton = { TextButton({
-                ask = null
-                val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
-                if (chat != null) scope.launch {
-                    if (com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, chat)) onBack()
-                    else notice = "Check your connection and try again."
-                }
-            }) { Text("Delete Chat", color = c.red) } },
-            dismissButton = { TextButton({ ask = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
-        else ask?.let { what ->
-        val block = what == "block"
-        AlertDialog(onDismissRequest = { ask = null },
-            title = { Text(if (block) (if (blocked) "Unblock $name?" else "Block $name?") else "Report $name?") },
-            text = { Text(if (block) (if (blocked) "They will be able to message and call you again." else "Blocked people can't message or call you.")
-                else "Fariin can't read your messages, so the report says who and why, never what was written.") },
-            confirmButton = { TextButton({
-                ask = null
-                scope.launch {
-                    if (block) { if (api.setBlocked(uid, !blocked)) blocked = !blocked else notice = "Check your connection and try again." }
-                    else notice = if (api.report(uid, cid, "spam")) "Thanks. Your report was sent." else "Check your connection and try again."
-                }
-            }) { Text(if (block) (if (blocked) "Unblock" else "Block") else "Report", color = c.red) } },
-            dismissButton = { TextButton({ ask = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
+    // Report, Block, Unblock, Delete Chat: one bottom sheet that fits its words, the person's photo
+    // and name on top (owner 2026-11-07: not a centred dialog), one red action and Cancel; Block and
+    // Report is gone from the block sheet, Report is its own row.
+    ask?.let { what ->
+        val who = name.ifEmpty { "this person" }
+        val handle = person?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" }
+        val failed = "Check your connection and try again."
+        val (title, body, actions) = when {
+            what == "report" -> Triple("Report ${handle ?: who}?",
+                "Fariin can't read your messages, so the report says who and why, never what was written.",
+                listOf(PersonAction("Report") {
+                    val ok = api.report(uid, cid, "spam")
+                    if (ok) com.fariin.app.ui.components.Snack.show("Thanks. Your report was sent.") else notice = failed
+                    ok
+                }))
+            what == "delete" -> Triple("Delete this chat?",
+                "Every message in this chat will be removed from this device. The other person keeps their own copy.",
+                // The chat list's own Delete for Me (iOS ChatService.deleteForMe), not a second delete.
+                listOf(PersonAction("Delete Chat") {
+                    val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
+                    val ok = chat != null && com.fariin.app.ui.chats.ChatListActions.deleteForMe(me, chat)
+                    if (ok) onBack() else notice = failed
+                    ok
+                }))
+            what == "clearMine" -> Triple("Clear your messages?",
+                "This deletes the messages you sent in this chat. It can't be undone.",
+                listOf(PersonAction("Clear") {
+                    val id = conv?.id
+                    val ok = id != null && com.fariin.app.ui.chats.ChatListActions.clearMyMessages(me, id)
+                    com.fariin.app.ui.components.Snack.show(if (ok) "Your messages were cleared" else "Couldn't clear. Check your connection and try again.")
+                    ok
+                }))
+            what == "unblock" -> Triple("Unblock $who?", "They will be able to message and call you again.",
+                listOf(PersonAction("Unblock") {
+                    val ok = api.setBlocked(uid, false)
+                    if (ok) blocked = false else notice = failed
+                    ok
+                }))
+            else -> Triple("Block $who?",
+                "Blocked people can't message or call you. You can unblock them later in Privacy & Security.",
+                listOf(PersonAction("Block") {
+                    val ok = api.setBlocked(uid, true)
+                    if (ok) blocked = true else notice = failed
+                    ok
+                }))
+        }
+        PersonConfirmSheet(person?.photoUrl ?: conv?.photos?.get(uid), name, title, body, actions, onDismiss = { ask = null })
     }
     if (glowOn) com.fariin.app.ui.glow.GlowDoorHost(glowDoor)
     notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
@@ -558,7 +559,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // under Glow Story and a divider when Glow is on, as iOS orders the menu.
             val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
             val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
-            val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ askClearMine = true }) else null
+            val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ ask = "clearMine" }) else null
             val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
             // iOS Export Chat: only where a real 1:1 chat exists, never on my own page.
             val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
@@ -577,17 +578,6 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         }
     }) { top ->
         exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
-        if (askClearMine) androidx.compose.material3.AlertDialog(onDismissRequest = { askClearMine = false },
-            title = { Text("Clear your messages?") },
-            text = { Text("This deletes the messages you sent in this chat. It can't be undone.") },
-            confirmButton = { androidx.compose.material3.TextButton(onClick = {
-                askClearMine = false
-                conv?.id?.let { id -> scope.launch {
-                    val ok = com.fariin.app.ui.chats.ChatListActions.clearMyMessages(me, id)
-                    com.fariin.app.ui.components.Snack.show(if (ok) "Your messages were cleared" else "Couldn't clear. Check your connection and try again.")
-                } }
-            }) { Text("Clear", color = c.red) } },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { askClearMine = false }) { Text("Cancel") } })
         if (sharingProfile) com.fariin.app.ui.thread.ForwardSheet(me, onDismiss = { sharingProfile = false }, title = "Share Profile") { targets ->
             sharingProfile = false
             val shownName = person?.shownName ?: conv?.displayName(me) ?: ""
@@ -673,7 +663,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             SettingsSection {
                 if (blocked) {
                     if (deletable != null) SettingsRow("Delete Chat", titleColor = c.red, trailing = Trailing.NONE) { ask = "delete" }
-                    SettingsRow("Unblock $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "block" }
+                    SettingsRow("Unblock $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "unblock" }
                 } else {
                     // iOS: told when someone reached me with my Chat Key; read only, never on their side.
                     if (reachedWithMyKey) SettingsRow("Used your Chat Key to reach you",
