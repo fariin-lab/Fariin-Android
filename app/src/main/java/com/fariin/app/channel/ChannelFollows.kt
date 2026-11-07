@@ -121,6 +121,9 @@ object ChannelFollows {
                     if (storedAtBias[cid] != null && storedAtBias[cid] != stored) { storedAtBias.remove(cid); _bias.update { it - cid } }
                 }
                 _docs.update { it + (cid to d) }
+                // iOS attachDocListener: the channel's shared wallpaper lands now, not when the chat opens.
+                runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()
+                    ?.let { com.fariin.app.data.ChatLookStore.syncGroupWallpaper(it, cid, d["wallpaper"] as? String) }
             }
         }
     }

@@ -64,6 +64,11 @@ class ConversationsRepository(
                 val datas = snap.documents.map { it.id to (it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()) }
                 val convs = snap.documents.mapIndexed { i, d -> parse(d, datas[i].second) }
                 trySend(State.Loaded(convs, snap.metadata.isFromCache))
+                // iOS syncGroupWallpapers on the list snapshot: a group's shared wallpaper (and its
+                // photo) is ready before the chat is opened. Unchanged values cost nothing.
+                if (useDiskCache) runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()?.let { app ->
+                    for (cv in convs) if (cv.isGroup) ChatLookStore.syncGroupWallpaper(app, cv.id, cv.groupWallpaper)
+                }
                 if (useDiskCache && !snap.metadata.isFromCache && LocalCache.currentGeneration == gen) LocalCache.saveChats(uid, datas)
             }
         awaitClose { reg.remove() }

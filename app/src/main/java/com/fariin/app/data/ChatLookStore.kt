@@ -59,12 +59,36 @@ object ChatLookStore {
     /** The group's raw stored value as last read ("none", "g:..", "u:<link>"), null when it has none. */
     fun groupStored(c: Context, cid: String): String? = prefs(c).getString(ChatLookRules.groupKey(cid), null)
 
-    /** iOS syncGroupWallpapers: the group's `wallpaper` field as the server has it now (null = never set). */
+    /** The value last handed to [syncGroupWallpaper] per chat ([NO_WALL] = none), so a snapshot that changes nothing costs nothing. */
+    private val groupSynced = HashMap<String, String>()
+    private const val NO_WALL = "\u0000"
+    @Volatile private var wipeGen = 0
+    private val syncThread: java.util.concurrent.Executor =
+        java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "group-wallpaper-sync").apply { isDaemon = true } }
+
+    /**
+     * iOS syncGroupWallpapers: the group's `wallpaper` field as the server has it now (null = never set).
+     * Called from every live snapshot (chat list, followed channels, the open chat). Prefs are read and
+     * written on a background thread, only when the value changed; a new photo starts downloading at
+     * once instead of on the chat's first draw.
+     */
     fun syncGroupWallpaper(c: Context, cid: String, raw: String?) {
-        if (groupStored(c, cid) == raw) return
-        val e = prefs(c).edit()
-        if (raw != null) e.putString(ChatLookRules.groupKey(cid), raw) else e.remove(ChatLookRules.groupKey(cid))
-        e.apply(); bump()
+        val key = raw ?: NO_WALL
+        if (synchronized(groupPending) { groupSynced.put(cid, key) } == key) return
+        val app = c.applicationContext
+        val gen = wipeGen
+        syncThread.execute {
+            if (gen != wipeGen) return@execute   // signed out since: nothing goes back into the wiped prefs
+            if (groupStored(app, cid) != raw) {
+                val e = prefs(app).edit()
+                if (raw != null) e.putString(ChatLookRules.groupKey(cid), raw) else e.remove(ChatLookRules.groupKey(cid))
+                e.apply()
+                android.os.Handler(android.os.Looper.getMainLooper()).post { bump() }
+            }
+            ChatLookRules.photoLink(raw)?.let { link ->
+                if (!libraryFile(app, ChatLookRules.photoId(link)).exists()) fetchGroupPhoto(app, link)
+            }
+        }
     }
 
     /** Apply in a group: shown at once here while it uploads and saves; null drops it again. */
@@ -250,10 +274,11 @@ object ChatLookStore {
 
     /** Sign-out (iOS WallpaperStore.reset / ChatColorStore.reset): nothing carries into the next account. */
     fun wipe(c: Context) {
+        wipeGen++
         prefs(c).edit().clear().apply()
         File(c.filesDir, "wallpapers").deleteRecursively()
         synchronized(images) { images.evictAll() }
-        synchronized(groupPending) { groupPending.clear(); groupLastShown.clear() }
+        synchronized(groupPending) { groupPending.clear(); groupLastShown.clear(); groupSynced.clear() }
         bump()
     }
 }
