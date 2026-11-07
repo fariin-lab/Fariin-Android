@@ -3,7 +3,6 @@ package com.fariin.app.data
 import com.fariin.app.security.AppLock
 import com.fariin.app.ui.settings.AccountReport
 import com.fariin.app.ui.settings.SettingsRules
-import com.fariin.app.ui.settings.leaveReasons
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -109,8 +108,8 @@ class SettingsPagesTest {
 
     @Test fun noEmDashesInPageWords() {
         val words = listOf(PrivacyRules.footer("lastSeen"), PrivacyRules.footer("groups"), PrivacyRules.footer("calls")) +
-            leaveReasons.map { it.second } + SettingsRules.lessData.map { it.second } + AppLock.delays.map { it.second }
+            AccountDeletion.reasons.map { it.second } + SettingsRules.lessData.map { it.second } + AppLock.delays.map { it.second }
         for (w in words) assertFalse(w, w.contains('—'))
-        assertEquals(listOf("", "not-using", "privacy", "other-app", "unwanted-messages", "problems", "other"), leaveReasons.map { it.first })
+        assertEquals(listOf("other_account", "abusive_users", "app_problem", "not_using", "other"), AccountDeletion.reasons.map { it.first })
     }
 }
