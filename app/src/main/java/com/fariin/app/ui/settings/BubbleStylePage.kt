@@ -240,24 +240,30 @@ private fun Preview(selected: String?, plain: Brush) {
     val c = Fariin.colors
     val text = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
+    // Owner 2026-11-07: changing style must not resize the card (the chips and grid jumped). A
+    // FIXED height that holds the tallest picture style, one-line samples, the same width cap for
+    // every style, and the new style faded in where the old one was.
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.bg).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val mine = "Did you know you can change your bubble style? So cool!"
-        val art = BubbleArt.find(selected)
-        val colour = if (art == null) BubbleStyles.find(selected) else null
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-            when {
-                art != null -> Text(mine, style = text, color = art.ink(),
-                    modifier = Modifier.widthIn(max = maxW).artBubble(art, c.dark))
-                else -> {
-                    val look = colour?.look(c.dark)
-                    Text(mine, style = text, color = look?.let { Color(0xFF000000 or it.text) } ?: Color.White,
-                        modifier = Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp))
-                            .background(look?.let { brushOf(it) } ?: plain).padding(horizontal = 14.dp, vertical = 9.dp))
+        val mine = "My new bubble style!"
+        androidx.compose.animation.Crossfade(selected, animationSpec = androidx.compose.animation.core.tween(180),
+            label = "bubble preview", modifier = Modifier.fillMaxWidth().height(PREVIEW_MINE_HEIGHT)) { sel ->
+            val art = BubbleArt.find(sel)
+            val colour = if (art == null) BubbleStyles.find(sel) else null
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
+                when {
+                    art != null -> Text(mine, style = text, color = art.ink(), maxLines = 1,
+                        modifier = Modifier.widthIn(max = maxW).artBubble(art, c.dark))
+                    else -> {
+                        val look = colour?.look(c.dark)
+                        Text(mine, style = text, color = look?.let { Color(0xFF000000 or it.text) } ?: Color.White, maxLines = 1,
+                            modifier = Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp))
+                                .background(look?.let { brushOf(it) } ?: plain).padding(horizontal = 14.dp, vertical = 9.dp))
+                    }
                 }
             }
         }
-        Text("Looks so cute! I'm changing mine.", style = text, color = c.label,
+        Text("Looks so cute!", style = text, color = c.label, maxLines = 1,
             modifier = Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp))
                 .background(if (c.dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)).padding(horizontal = 14.dp, vertical = 9.dp))
     }
@@ -311,3 +317,6 @@ private fun PictureSwatch(s: BubbleArt.Spec, widthPx: Int) {
     if (img != null) Image(img, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
     else Box(Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(10.dp)).background(s.fillColor()))
 }
+
+/** The preview's own-bubble row: tall enough for the tallest picture style's art around one line. */
+private val PREVIEW_MINE_HEIGHT = 120.dp
