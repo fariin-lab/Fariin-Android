@@ -242,8 +242,11 @@ fun ThreadScreen(
         }
     }
     // A group's wallpaper is everyone's: its picker opens only for someone who may change group info.
-    val groupShared = ui.isGroup && ui.channel == null
-    if (wallpaperOpen && groupShared && ui.groupDoc.isNotEmpty() && !com.fariin.app.data.GroupRules.canEditInfo(ui.me, ui.groupDoc)) wallpaperOpen = false
+    // A channel's is every follower's too (iOS: the group route): only its owner or an admin with the
+    // change-info right gets the picker; anyone else asking is refused here.
+    val groupShared = ui.isGroup || ui.channel != null
+    if (wallpaperOpen && ui.channel == null && groupShared && ui.groupDoc.isNotEmpty() && !com.fariin.app.data.GroupRules.canEditInfo(ui.me, ui.groupDoc)) wallpaperOpen = false
+    if (wallpaperOpen && ui.channel != null && !ui.channel.canEdit) wallpaperOpen = false
     // Restricted chat: no screenshots or screen recording while it is open (FLAG_SECURE), as iOS hides it from capture.
     RestrictedWindow(com.fariin.app.data.ChatRestrictions.isOn(ui.cid))
     Box(Modifier.fillMaxSize()) {

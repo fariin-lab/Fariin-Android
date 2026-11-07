@@ -240,8 +240,13 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         com.fariin.app.ui.components.GlassBarPage(underBar, bar = {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
+            // The ••• menu holds Change Wallpaper for the same people (iOS Group Info's first menu
+            // section): back to the chat, which opens the channel's shared picker for every follower.
             PageBar("", onBack, action = if (canEdit) ({
-                com.fariin.app.ui.components.FloatingTextAction("Edit") { manage.edit(info.cid) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    com.fariin.app.ui.components.FloatingTextAction("Edit") { manage.edit(info.cid) }
+                    ChannelInfoMenu { com.fariin.app.ui.settings.ChatWallpaperLink.request(info.cid); onBack() }
+                }
             }) else null)
         }) { top ->
             Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top).padding(horizontal = 16.dp).navigationBarsPadding(),
@@ -416,4 +421,21 @@ private fun createdLine(ctx: android.content.Context, ms: Double): String {
     val day = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(ms.toLong()))
     val time = DateFormat.getTimeFormat(ctx).format(java.util.Date(ms.toLong()))
     return "on $day at $time"
+}
+
+/** The channel page's three-dot menu, shown only to whoever may change its info: Change Wallpaper. */
+@Composable
+private fun ChannelInfoMenu(onWallpaper: () -> Unit) {
+    val c = Fariin.colors
+    var open by remember { mutableStateOf(false) }
+    Box {
+        com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "More",
+            onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
+        androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+            androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
+                leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
+                onClick = { open = false; onWallpaper() })
+        }
+    }
 }

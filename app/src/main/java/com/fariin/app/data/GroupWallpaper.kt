@@ -54,7 +54,8 @@ object GroupWallpaper {
                 FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("setGroupWallpaper")
                     .withTimeout(30, TimeUnit.SECONDS).call(mapOf("cid" to cid, "wallpaper" to stored)).await()
                 ChatLookStore.syncGroupWallpaper(app, cid, stored)
-                runCatching { GroupManage.systemLine(cid, noticeText(GroupManage.myName(cid), stored)) }
+                // A channel shows posts only: its wallpaper change writes no notice line (as iOS).
+                if (!isChannel(cid)) runCatching { GroupManage.systemLine(cid, noticeText(GroupManage.myName(cid), stored)) }
                 ChatLookRules.photoLink(previous)?.takeIf { previous != stored }?.let { old ->
                     runCatching { FirebaseStorage.getInstance().getReferenceFromUrl(old).delete().await() }
                 }
@@ -63,6 +64,15 @@ object GroupWallpaper {
             }
             ChatLookStore.setGroupPending(cid, null)
         }
+    }
+
+    /** The chat list knows it as a channel, else the conversation says so (one read). */
+    private suspend fun isChannel(cid: String): Boolean {
+        if (ChatsNow.list.any { it.id == cid && it.isChannel }) return true
+        return runCatching {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations").document(cid)
+                .get().await().getBoolean("channel") == true
+        }.getOrDefault(false)
     }
 
     /** iOS sharedUploadJPEG: longest side 2000, JPEG 0.8. */
