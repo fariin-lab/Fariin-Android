@@ -1177,3 +1177,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   (2596f4e), channel posts wide + glass Mute (4c54544), channel delete sheet (b7d32ce). Installed 7140d88 on the Pixel.
   Running on CI: limits, backlog A, B, C, Chat Color merge (+ wallpaper-sheet styles row, round X), push-tap open,
   short styled bubble centring. Owner asked: back up C:\Users\abdik\.fariin\upload-test.jks safely.
+- 2026-11-07 afternoon: VE3 channel-open shake fix (6bdf3b5) checked on the Pixel frame by frame. The first frame
+  is already the channel (10 followers, wide post, Mute bar), with no group flash, and the quote card shows at once
+  on the second open. Merged: Blocked Users page, blocked profile, contact Sounds & Notifications with timed mute,
+  contact Report/Block/Unblock/Delete as one bottom sheet with no "Block and Report" (8190de6..af6c8f2). Group pages
+  still use centred dialogs for confirms.
