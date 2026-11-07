@@ -3,7 +3,18 @@ package com.fariin.app.ui.calls
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.clickable
 import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.layout.Box
@@ -87,6 +98,36 @@ object NewCallRules {
         return people to groups
     }
 
+    /** People picked for one call besides me: the rules' member cap for a multi-person call. */
+    const val MAX_PICK = com.fariin.app.call.GroupCallWire.ADHOC_MAX_MEMBERS - 1
+
+    /** A tap on a person's row: picked comes off, else goes on at the end (nothing past [max]). */
+    fun toggle(picked: List<String>, uid: String, max: Int = MAX_PICK): List<String> = when {
+        uid.isEmpty() -> picked
+        uid in picked -> picked - uid
+        picked.size >= max -> picked
+        else -> picked + uid
+    }
+
+    /** The picked people still on the list (a chat gone or blocked drops out), in the order picked. */
+    fun chosen(people: List<CallTarget>, picked: List<String>): List<CallTarget> {
+        val byUid = people.filter { it.uid != null }.associateBy { it.uid!! }
+        return picked.distinct().mapNotNull { byUid[it] }
+    }
+
+    /** What the strip's call buttons start: nothing, a 1:1 call, or a multi-person call. */
+    sealed interface Plan {
+        data object None : Plan
+        data class One(val t: CallTarget) : Plan
+        data class Many(val people: List<com.fariin.app.call.CallPerson>) : Plan
+    }
+
+    fun plan(chosen: List<CallTarget>): Plan = when (chosen.size) {
+        0 -> Plan.None
+        1 -> Plan.One(chosen[0])
+        else -> Plan.Many(chosen.map { com.fariin.app.call.CallPerson(it.uid ?: "", it.name, it.photo) })
+    }
+
     fun search(list: List<CallTarget>, q: String): List<CallTarget> {
         val t = q.trim().removePrefix("@")
         return if (t.isEmpty()) list else list.filter { it.name.contains(t, ignoreCase = true) }
@@ -94,10 +135,11 @@ object NewCallRules {
 }
 
 /**
- * New Call, the Calls tab's floating button, laid out the way Android messengers do it: a top app
- * bar with a search button, "Create a call link" first, then the people from my chats (recent
- * first), each with a voice and a video button, then my groups. A tap dials exactly as the chat
- * header's buttons do (CallActivity.startDial / startGroup).
+ * New Call, the Calls tab's floating button: a top app bar with a search button, "Create a call
+ * link" first, then the people from my chats (recent first), then my groups. People are PICKED
+ * (a circle on each row); the picked ones line up in a strip under the bar with a video and a
+ * voice button. One person picked is a 1:1 call (CallActivity.startDial), two or more a
+ * multi-person call (CallActivity.startAdhoc). A group row calls the group at once (startGroup).
  */
 @Composable
 fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onCreateLink: () -> Unit) {
@@ -110,6 +152,8 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
     val (people, groups) = remember(chats, me, blocked) { NewCallRules.targets(chats, me, blocked) }
     val shownPeople = NewCallRules.search(people, q)
     val shownGroups = NewCallRules.search(groups, q)
+    var picked by rememberSaveable { mutableStateOf(listOf<String>()) }
+    val chosen = NewCallRules.chosen(people, picked)
     BackHandler(enabled = searching) { searching = false; q = "" }
 
     fun call(t: CallTarget, video: Boolean) {
@@ -117,6 +161,18 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
         val g = t.groupCid
         if (g != null) CallActivity.startGroup(ctx, g, t.name, video, start = true)
         else CallActivity.startDial(ctx, t.uid ?: return, t.name, t.photo, video)
+    }
+
+    fun callPicked(video: Boolean) {
+        when (val p = NewCallRules.plan(chosen)) {
+            NewCallRules.Plan.None -> return
+            is NewCallRules.Plan.One -> call(p.t, video)
+            is NewCallRules.Plan.Many -> {
+                if (com.fariin.app.call.CallManager.ui.value.status.live) { CallActivity.startRing(ctx); return }
+                CallActivity.startAdhoc(ctx, p.people, video)
+            }
+        }
+        picked = emptyList()
     }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
@@ -133,6 +189,9 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
             com.fariin.app.ui.components.FloatingTopBar("New Call", onBack = onBack) {
                 com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, "Search", onClick = { searching = true })
             }
+        }
+        AnimatedVisibility(chosen.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            PickedStrip(chosen, onUnpick = { t -> picked = picked - (t.uid ?: "") }, onVoice = { callPicked(false) }, onVideo = { callPicked(true) })
         }
         LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
             if (q.isBlank()) {
@@ -155,7 +214,9 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
             }
             if (shownPeople.isNotEmpty()) {
                 item(key = "h-people") { Header(if (q.isBlank()) "Recent chats" else "People") }
-                items(shownPeople, key = { "p-" + it.id }) { t -> TargetRow(t, onVoice = { call(t, false) }, onVideo = { call(t, true) }) }
+                items(shownPeople, key = { "p-" + it.id }) { t ->
+                    PersonPickRow(t, on = t.uid in picked) { picked = NewCallRules.toggle(picked, t.uid ?: "") }
+                }
             }
             if (shownGroups.isNotEmpty()) {
                 item(key = "h-groups") { Header("Groups") }
@@ -182,6 +243,63 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
 private fun Header(text: String) {
     Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Fariin.colors.accent,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp))
+}
+
+/** The picked people under the bar, each with an x to take them off, and the two call buttons. */
+@Composable
+private fun PickedStrip(chosen: List<CallTarget>, onUnpick: (CallTarget) -> Unit, onVoice: () -> Unit, onVideo: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.Top) {
+        LazyRow(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
+            items(chosen, key = { "c-" + it.id }) { t ->
+                Column(Modifier.width(66.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .clickable(onClickLabel = "Remove ${t.name}") { onUnpick(t) }.padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(54.dp)) {
+                        Avatar(t.photo, 52.dp, Modifier.align(Alignment.Center))
+                        Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(c.bg).padding(2.dp)
+                            .clip(CircleShape).background(c.tertiary), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Close, null, tint = c.bg, modifier = Modifier.size(11.dp))
+                        }
+                    }
+                    Text(t.name.substringBefore(' ').ifEmpty { t.name }, fontSize = 12.sp, color = c.label, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp))
+                }
+            }
+        }
+        Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            StripCallButton(com.fariin.app.R.drawable.ic_call_video, if (chosen.size > 1) "Video call with ${chosen.size} people" else "Video call", onVideo)
+            Spacer(Modifier.width(10.dp))
+            StripCallButton(com.fariin.app.R.drawable.ic_call_voice, if (chosen.size > 1) "Voice call with ${chosen.size} people" else "Voice call", onVoice)
+        }
+    }
+}
+
+@Composable
+private fun StripCallButton(icon: Int, label: String, onClick: () -> Unit) {
+    val c = Fariin.colors
+    Box(Modifier.size(44.dp).clip(CircleShape).background(c.accent).clickable(onClick = onClick)
+        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Icon(ImageVector.vectorResource(icon), null, tint = c.onAccent, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** A person on New Call: tapping the row picks them; the circle on the right says so. */
+@Composable
+private fun PersonPickRow(t: CallTarget, on: Boolean, onToggle: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().listPress(onClick = onToggle).semantics { selected = on }
+        .padding(start = 16.dp, end = 20.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Avatar(t.photo, 46.dp)
+        Spacer(Modifier.width(14.dp))
+        Text(t.name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        val ring = Modifier.size(24.dp).clip(CircleShape)
+        if (on) Box(ring.background(c.accent), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Check, null, tint = c.onAccent, modifier = Modifier.size(16.dp))
+        } else Box(ring.border(1.5.dp, c.tertiary, CircleShape))
+    }
 }
 
 @Composable
