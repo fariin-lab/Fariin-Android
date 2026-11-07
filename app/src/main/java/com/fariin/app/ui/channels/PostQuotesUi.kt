@@ -104,19 +104,28 @@ object PostQuotesSheet {
     val open = MutableStateFlow<Message?>(null)
     /** The tab it opens on: 0 Replies, 1 Quotes (a bar showing only quotes, PostReplyRules.startTab). */
     @Volatile var startTab = 0
+    /** The post's replies were off when its bar was tapped: the sheet opens as Quotes only. */
+    @Volatile var startOff = false
     /** A reply alert tapped (cid to post id): the chat opens that post's Replies once it is on screen. */
     val pendingReplies = MutableStateFlow<Pair<String, String>?>(null)
 }
 
-/** Up to 3 quoting channels' round photos, overlapping; "" = a plain circle. */
+/** The bar's start, 24 dp (iOS, owner 2026-11-07 "a little bigger"). */
+private val BarFace = 24.dp
+
+/**
+ * Up to 3 round photos, overlapping: the quoting channels' ("" = a plain circle) or the repliers'
+ * ([people]: "" = the person placeholder).
+ */
 @Composable
-private fun QuoteFaces(urls: List<String>) {
+private fun QuoteFaces(urls: List<String>, people: Boolean = false) {
     if (urls.isEmpty()) return
     val c = Fariin.colors
-    Row(horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
         urls.forEach { u ->
-            Box(Modifier.size(22.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.25f))) {
-                if (u.isNotEmpty()) coil3.compose.AsyncImage(u, null, contentScale = ContentScale.Crop, modifier = Modifier.size(22.dp))
+            if (people) Avatar(u.ifEmpty { null }, BarFace)
+            else Box(Modifier.size(BarFace).clip(CircleShape).background(c.secondary.copy(alpha = 0.25f))) {
+                if (u.isNotEmpty()) coil3.compose.AsyncImage(u, null, contentScale = ContentScale.Crop, modifier = Modifier.size(BarFace))
             }
         }
     }
@@ -132,11 +141,15 @@ private fun QuoteFaces(urls: List<String>) {
  * [inBubble] false: a media post, whose bubble is the picture, gets the same row under it.
  */
 @Composable
-fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = false) {
+fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = true) {
     if (m.isSystem) return
-    val label = PostReplyRules.barLabel(m.replyCount, m.quoteCount,
-        repliesOn = PostReplyRules.repliesOn(channelRepliesOff, m.repliesOff),
+    // The post's own switch wins over the channel's (off by default); one just changed here wins over both.
+    val local = PostRepliesSwitch.of(m.id)
+    if (local != null) androidx.compose.runtime.SideEffect { PostRepliesSwitch.settled(m.id, m.repliesOff) }
+    val repliesOn = !PostReplyRules.postOff(m.repliesOff, channelRepliesOff, local)
+    val label = PostReplyRules.barLabel(m.replyCount, m.quoteCount, repliesOn = repliesOn,
         sent = m.sendState == null, deleted = m.deleted) ?: return
+    val start = PostReplyRules.barStart(repliesOn, m.replyCount, m.replyFaces, m.quoteCount, m.quoteFaces)
     val c = Fariin.colors
     var parentW by remember { mutableIntStateOf(0) }
     var selfX by remember { mutableIntStateOf(0) }
@@ -145,9 +158,16 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
         content = {
             // Always one node, even with no faces (QuoteFaces then draws nothing): the measure below
             // reads three children by position, and two crashed the app (a post quoted only privately).
-            Box { QuoteFaces(if (PostReplyRules.showFaces(m.quoteCount, m.quoteFaces)) m.quoteFaces else emptyList()) }
-            // The label colour, not blue (owner 2026-11-06: "don't use blue").
-            Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Replies on: the owner's comment icon until someone replies, then the repliers' faces.
+            Box {
+                when (start) {
+                    PostReplyRules.BarStart.Icon -> Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_reply_comment),
+                        null, tint = c.label, modifier = Modifier.size(BarFace))
+                    is PostReplyRules.BarStart.Faces -> QuoteFaces(start.urls, start.people)
+                }
+            }
+            // The label colour, not blue (owner 2026-11-06: "don't use blue"); 15 sp (2026-11-07).
+            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiary, modifier = Modifier.size(18.dp))
         },
         modifier = Modifier
@@ -163,13 +183,14 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
                 if (inBubble) drawLine(line, Offset(-20.dp.toPx(), 0f), Offset(size.width + 20.dp.toPx(), 0f), strokeWidth = 1f)
             }
             .clickable {
-                PostQuotesSheet.startTab = PostReplyRules.startTab(m.replyCount, PostReplyRules.repliesOn(channelRepliesOff, m.repliesOff))
+                PostQuotesSheet.startTab = PostReplyRules.startTab(repliesOn)
+                PostQuotesSheet.startOff = !repliesOn
                 PostQuotesSheet.open.value = m
             }
             .semantics { contentDescription = label },
     ) { ms, cons ->
         val loose = cons.copy(minWidth = 0, minHeight = 0)
-        val gap = 8.dp.roundToPx()
+        val gap = 9.dp.roundToPx()
         val side = if (inBubble) 0 else 10.dp.roundToPx()
         val chev = ms[2].measure(loose)
         val faces = ms[0].measure(loose)
@@ -177,7 +198,7 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
         val text = ms[1].measure(loose.copy(maxWidth = maxOf(0, cons.maxWidth - 2 * side - facesW - gap - chev.width)))
         val own = 2 * side + facesW + text.width + gap + chev.width
         val w = if (inBubble) maxOf(own, parentW - selfX).coerceAtMost(cons.maxWidth) else own.coerceAtMost(cons.maxWidth)
-        val h = maxOf(36.dp.roundToPx(), text.height)
+        val h = maxOf(44.dp.roundToPx(), text.height)
         layout(w, h) {
             faces.place(side, (h - faces.height) / 2)
             text.place(side + facesW, (h - text.height) / 2)
@@ -209,13 +230,14 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val media = LocalChatMedia.current
-    val close = { PostQuotesSheet.open.value = null }
+    val close = { PostQuotesSheet.open.value = null; PostQuotesSheet.startOff = false }
     var answer by remember(m.id) { mutableStateOf<PostQuotesAnswer?>(null) }
     var failed by remember(m.id) { mutableStateOf(false) }
     var attempt by remember(m.id) { mutableIntStateOf(0) }
     var loadingMore by remember(m.id) { mutableStateOf(false) }
     var thumb by remember(m.id) { mutableStateOf<ImageBitmap?>(null) }
-    var tab by remember(m.id) { mutableIntStateOf(PostQuotesSheet.startTab) }
+    val startOff = remember(m.id) { PostQuotesSheet.startOff }
+    var tab by remember(m.id) { mutableIntStateOf(if (startOff) 1 else PostQuotesSheet.startTab) }
     // The Quotes page loads once it is first shown, and stays loaded when switching back.
     var quotesShown by remember(m.id) { mutableStateOf(tab == 1) }
     val scope = rememberCoroutineScope()
@@ -224,6 +246,12 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     DisposableEffect(replies) {
         replies.start()
         onDispose { replies.stop() }
+    }
+    // Replies off (this post's or the channel's, as the bar said until the server answers): no
+    // Replies tab, Quotes alone (iOS, owner 2026-11-07). The admin's ... still turns them back on.
+    val repliesShown = if (replies.answered) !replies.off else !startOff
+    LaunchedEffect(repliesShown) {
+        if (!repliesShown && tab == 0) { tab = 1; quotesShown = true; keyboard?.hide(); focus.clearFocus() }
     }
     LaunchedEffect(m.id, attempt, quotesShown) {
         if (!quotesShown) return@LaunchedEffect
@@ -262,16 +290,18 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
         },
         thumb = thumb,
     )
-    ModalBottomSheet(onDismissRequest = close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    // ⛔ 70% AND ONLY 70% (iOS, owner 2026-11-07, twice: a scroll made it full, then tapping the reply
+    // field made it full). One height, no taller stop: the keyboard does not grow it, the field rides
+    // above the keyboard inside it.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val sheetH = with(density) { (androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height * 0.70f).toDp() }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = close, sheetState = sheetState,
         containerColor = sheetFill, shape = SheetShape,
         // The column below takes the navigation bar and the keyboard itself, so the field rides on the keyboard.
         contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) }) {
-      Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
-        // The channel's photo, the tab's name and the post's opening words; the admins' menu on Replies.
-        RepliesSheetHeader(if (tab == 0) "Replies" else "Quotes", photoUrl,
-            (if (m.mediaKind == null) m.bodyText else m.text).trim().replace('\n', ' '),
-            if (tab == 0) replies else null)
-        RepliesQuotesTabs(tab) {
+      Column(Modifier.fillMaxWidth().height(sheetH).navigationBarsPadding().imePadding()) {
+        RepliesSheetTop(tab, repliesShown, replies, onPick = {
             tab = it
             if (it == 1) {
                 quotesShown = true
@@ -279,7 +309,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                 keyboard?.hide()
                 focus.clearFocus()
             }
-        }
+        }, onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { close() } })
         if (tab == 0) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 RepliesList(replies, Modifier.fillMaxSize())

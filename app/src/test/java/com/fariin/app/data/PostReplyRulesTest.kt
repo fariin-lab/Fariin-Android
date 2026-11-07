@@ -19,18 +19,37 @@ class PostReplyRulesTest {
         assertEquals("1.2K Replies", PostReplyRules.barLabel(1234, 0, repliesOn = true))
     }
 
-    @Test fun offIsReadOnly() {
-        // Replies already there stay reachable; none and off leaves only the quotes, or no bar.
-        assertEquals("5 Replies · 2 Quotes", PostReplyRules.barLabel(5, 2, repliesOn = false))
-        assertEquals("5 Replies", PostReplyRules.barLabel(5, 0, repliesOn = false))
+    @Test fun offHidesTheReplyPart() {
+        // Off: no Reply part at all (iOS 2026-11-07); only the quotes, or no bar.
+        assertEquals("2 Quotes", PostReplyRules.barLabel(5, 2, repliesOn = false))
+        assertNull(PostReplyRules.barLabel(5, 0, repliesOn = false))
         assertEquals("2 Quotes", PostReplyRules.barLabel(0, 2, repliesOn = false))
         assertNull(PostReplyRules.barLabel(0, 0, repliesOn = false))
     }
 
-    @Test fun quotesOnlyBarOpensQuotes() {
-        assertEquals(1, PostReplyRules.startTab(0, repliesOn = false))
-        assertEquals(0, PostReplyRules.startTab(3, repliesOn = false))
-        assertEquals(0, PostReplyRules.startTab(0, repliesOn = true))
+    @Test fun offOpensQuotesOnly() {
+        assertEquals(1, PostReplyRules.startTab(repliesOn = false))
+        assertEquals(0, PostReplyRules.startTab(repliesOn = true))
+    }
+
+    @Test fun postSwitchWinsOverChannel() {
+        // Missing on the post = the channel's; an explicit false turns a post on in an off channel.
+        assertTrue(PostReplyRules.postOff(null, channelOff = true))
+        assertFalse(PostReplyRules.postOff(null, channelOff = false))
+        assertFalse(PostReplyRules.postOff(false, channelOff = true))
+        assertTrue(PostReplyRules.postOff(true, channelOff = false))
+        // A switch changed on this phone wins over the post's doc.
+        assertFalse(PostReplyRules.postOff(true, channelOff = true, local = false))
+        assertTrue(PostReplyRules.postOff(false, channelOff = false, local = true))
+    }
+
+    @Test fun barStartIconFacesOrChannels() {
+        assertEquals(PostReplyRules.BarStart.Icon, PostReplyRules.barStart(true, 0, listOf("a"), 3, listOf("q")))
+        assertEquals(PostReplyRules.BarStart.Icon, PostReplyRules.barStart(true, 2, emptyList(), 0, emptyList()))
+        assertEquals(PostReplyRules.BarStart.Faces(listOf("a", "", "c"), people = true),
+            PostReplyRules.barStart(true, 9, listOf("a", "", "c", "d"), 0, emptyList()))
+        assertEquals(PostReplyRules.BarStart.Faces(listOf("q"), people = false), PostReplyRules.barStart(false, 5, listOf("a"), 1, listOf("q")))
+        assertEquals(PostReplyRules.BarStart.Faces(emptyList(), people = false), PostReplyRules.barStart(false, 5, listOf("a"), 0, listOf("q")))
     }
 
     @Test fun noBarWhileSendingOrDeleted() {
@@ -76,7 +95,8 @@ class PostReplyRulesTest {
     @Test fun parseShortKeys() {
         val x = PostReplyRules.parseReply(mapOf("id" to "r1", "t" to "Nice", "at" to 5000L, "n" to "Amina", "ph" to "https://p",
             "v" to true, "lc" to 4, "ac" to 2, "mine" to true, "del" to true, "liked" to true, "held" to true, "u" to "u1"))!!
-        assertEquals(PostReply("r1", "u1", "Amina", "https://p", true, "Nice", 5000, true, true, "", 4, true, 2, true), x)
+        assertEquals(PostReply("r1", "u1", "Amina", "https://p", true, "Nice", 5000, true, true, "", 4, true, 2, true,
+            my = PostReplyRules.HEART, rx = listOf(PostReply.Rx(PostReplyRules.HEART, 4))), x)
         val bare = PostReplyRules.parseReply(mapOf("id" to "r", "n" to " ", "lc" to -3), parent = "t")!!
         assertEquals("Someone", bare.name); assertEquals(0, bare.likes); assertEquals("t", bare.parentId); assertEquals("", bare.uid)
         assertNull(PostReplyRules.parseReply(mapOf("t" to "no id")))
@@ -93,6 +113,8 @@ class PostReplyRulesTest {
         assertEquals(ReplyRights(del = true, ban = false, settings = true), p.may); assertEquals(12, p.rev)
         val empty = PostReplyRules.parsePage(null)
         assertEquals(0, empty.count); assertFalse(empty.off); assertEquals(ReplyRights(), empty.may); assertEquals("", empty.next)
+        // The server's postOff is the effective switch: a post turned on in an off channel takes replies.
+        assertFalse(PostReplyRules.parsePage(mapOf("channelOff" to true, "postOff" to false, "off" to true)).off)
         val a = PostReplyRules.parseAnswers(mapOf("items" to listOf(mapOf("id" to "a1")), "next" to ""), "t1")
         assertEquals("t1", a.items[0].parentId)
     }
@@ -151,13 +173,28 @@ class PostReplyRulesTest {
         assertEquals(listOf("a1", "a2", "mine"), PostReplyRules.mergeAnswers(shown, listOf(r("a1", 1), r("a2", 2)), more = true).map { it.id })
     }
 
-    @Test fun heartsOverlayAndFlip() {
-        val x = PostReply("a", likes = 2)
+    @Test fun emojiReactionsParse() {
+        val x = PostReplyRules.parseReply(mapOf("id" to "r", "lc" to 3, "my" to "😂",
+            "rx" to mapOf("❤️" to 1, "😂" to 2, "👍" to 0, "" to 4)))!!
+        assertEquals(listOf(PostReply.Rx("😂", 2), PostReply.Rx("❤️", 1)), x.rx)
+        assertEquals("😂", x.my); assertTrue(x.liked); assertEquals(3, x.likes)
+        val none = PostReplyRules.parseReply(mapOf("id" to "n", "lc" to 0, "my" to ""))!!
+        assertEquals("", none.my); assertFalse(none.liked); assertTrue(none.rx.isEmpty())
+    }
+
+    @Test fun mineMovesBetweenPills() {
+        val x = PostReply("a", likes = 2, rx = listOf(PostReply.Rx("❤️", 2)))
         assertEquals(x, PostReplyRules.overlay(x, null))
-        assertEquals(PostReply("a", likes = 3, liked = true), PostReplyRules.overlay(x, true))
-        assertEquals(x, PostReplyRules.overlay(x, false))
-        assertEquals(0, PostReplyRules.withLike(PostReply("z", likes = 0, liked = true), false).likes)
-        assertEquals(x, PostReplyRules.withLike(x, false))
+        val heart = PostReplyRules.withMine(x, "❤️")
+        assertEquals(listOf(PostReply.Rx("❤️", 3)), heart.rx); assertEquals(3, heart.likes); assertTrue(heart.liked)
+        // Another emoji: the heart goes down, the new pill comes, still one person more.
+        val laugh = PostReplyRules.withMine(heart, "😂")
+        assertEquals(listOf(PostReply.Rx("❤️", 2), PostReply.Rx("😂", 1)), laugh.rx); assertEquals(3, laugh.likes)
+        // Taken back: the pill at 0 goes.
+        val off = PostReplyRules.withMine(laugh, "")
+        assertEquals(listOf(PostReply.Rx("❤️", 2)), off.rx); assertEquals(2, off.likes); assertFalse(off.liked)
+        assertEquals("", PostReplyRules.nextPick(laugh, "😂"))
+        assertEquals("👍", PostReplyRules.nextPick(laugh, "👍"))
     }
 
     @Test fun pendingRow() {

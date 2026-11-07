@@ -21,16 +21,22 @@ data class PostReply(
     val mine: Boolean = false,
     val canDelete: Boolean = false,
     val parentId: String = "",
+    /** How many people reacted (`lc`). */
     val likes: Int = 0,
-    /** I put a heart on it. */
+    /** I reacted to it ([my] is not ""). */
     val liked: Boolean = false,
     /** Answers in this thread (threads only). */
     val answers: Int = 0,
     /** Held after reports: only its author and moderators see it. */
     val held: Boolean = false,
     val send: Send = Send.SENT,
+    /** My emoji on it ("" = none); one per person per reply (server likeReply, owner 2026-11-07). */
+    val my: String = "",
+    /** Each emoji's count, biggest first (server `rx`; old hearts come as the heart). */
+    val rx: List<Rx> = emptyList(),
 ) {
     enum class Send { SENT, SENDING, FAILED }
+    data class Rx(val emoji: String, val count: Int)
 }
 
 /** What the server says I may do here (getReplies `may`): delete others' replies, ban, the switches. */
@@ -77,22 +83,50 @@ object PostReplyRules {
     fun repliesOn(channelOff: Boolean, postOff: Boolean): Boolean = !channelOff && !postOff
 
     /**
-     * The bar under a sent channel post: "3 Replies · 4 Quotes", "Reply" with neither yet. Off is
-     * read-only: replies already there stay in the bar ("3 Replies"); with none, only the quotes.
-     * Null = no bar (a post still sending or failed, deleted, or off with nothing to show).
+     * REPLIES ARE OFF BY DEFAULT IN A CHANNEL (server, owner 2026-11-07): the post's own switch
+     * (`messages/{mid}.repliesOff`, true or false) wins; with none written the channel's counts
+     * (missing there = off, ChannelInfo). [local] is a switch just changed on this phone, ahead of
+     * the post's doc (an older post is outside the live window and would not hear it).
+     */
+    fun postOff(postOff: Boolean?, channelOff: Boolean, local: Boolean? = null): Boolean = local ?: postOff ?: channelOff
+
+    /** The six of the chat's react bar, in the chat's order (a reply's long press shows them). */
+    val REACT_BAR: List<String> get() = MessageRules.QUICK_REACTIONS
+
+    /** What an old heart-only reply counts as. */
+    const val HEART = "❤️"
+
+    /**
+     * The bar under a sent channel post: "3 Replies · 4 Quotes", "Reply" with neither yet. Off hides
+     * the Reply part entirely (iOS, owner 2026-11-07: "in post don't show Reply"); the bar then stays
+     * only for quotes. Null = no bar (a post still sending or failed, deleted, or off and never quoted).
      */
     fun barLabel(replies: Int, quotes: Int, repliesOn: Boolean, sent: Boolean = true, deleted: Boolean = false): String? {
         if (!sent || deleted) return null
-        val showReplies = repliesOn || replies > 0
-        if (!showReplies && quotes <= 0) return null
+        if (!repliesOn && quotes <= 0) return null
         val parts = mutableListOf<String>()
-        if (showReplies) parts += if (replies <= 0) "Reply" else repliesWord(replies)
+        if (repliesOn) parts += if (replies <= 0) "Reply" else repliesWord(replies)
         if (quotes > 0) parts += PostQuoteRules.barLabel(quotes)
         return parts.joinToString(" · ")
     }
 
-    /** The tab the bar opens: Quotes (1) when it shows only quotes (off, none written), else Replies (0). */
-    fun startTab(replies: Int, repliesOn: Boolean): Int = if (!repliesOn && replies <= 0) 1 else 0
+    /** What the bar shows at its start: the comment icon, or up to three faces. */
+    sealed interface BarStart {
+        data object Icon : BarStart
+        data class Faces(val urls: List<String>, val people: Boolean) : BarStart
+    }
+
+    /**
+     * Replies on: the comment icon until someone replies, then the repliers' faces (iOS, owner
+     * 2026-11-07). Replies off: the quoting channels' faces once quoted, as before.
+     */
+    fun barStart(repliesOn: Boolean, replies: Int, replyFaces: List<String>, quotes: Int, quoteFaces: List<String>): BarStart =
+        if (repliesOn) {
+            if (replies > 0 && replyFaces.isNotEmpty()) BarStart.Faces(replyFaces.take(3), people = true) else BarStart.Icon
+        } else BarStart.Faces(if (showFaces(quotes, quoteFaces)) quoteFaces.take(3) else emptyList(), people = false)
+
+    /** The tab the bar opens: Quotes (1) with replies off (the sheet is Quotes only then), else Replies (0). */
+    fun startTab(repliesOn: Boolean): Int = if (!repliesOn) 1 else 0
 
     /** "1 Reply", "3 Replies", "1.2K Replies". */
     fun repliesWord(n: Int): String = com.fariin.app.channel.ChannelRules.compactCount(n) + if (n == 1) " Reply" else " Replies"
@@ -119,6 +153,19 @@ object PostReplyRules {
 
     private fun n(v: Any?): Int = maxOf(0, (v as? Number)?.toInt() ?: 0)
 
+    /**
+     * The server's `rx` {emoji: count} as pills, biggest first (then by emoji, so the order holds
+     * still); a server from before emoji reactions sends only `lc`: that many hearts.
+     */
+    fun parseRx(v: Any?, likes: Int): List<PostReply.Rx> {
+        val m = v as? Map<*, *> ?: return if (likes > 0) listOf(PostReply.Rx(HEART, likes)) else emptyList()
+        return m.entries.mapNotNull { (k, c) ->
+            val e = (k as? String)?.takeIf { it.isNotEmpty() && it.length <= 16 } ?: return@mapNotNull null
+            val count = n(c)
+            if (count > 0) PostReply.Rx(e, count) else null
+        }.sortedWith(compareByDescending<PostReply.Rx> { it.count }.thenBy { it.emoji })
+    }
+
     /** One reply or answer (server `out`); null without its id. [parent] = its thread for an answer. */
     fun parseReply(d: Map<*, *>?, parent: String = ""): PostReply? {
         if (d == null) return null
@@ -138,7 +185,9 @@ object PostReplyRules {
             liked = d["liked"] as? Boolean ?: false,
             answers = n(d["ac"]),
             held = d["held"] as? Boolean ?: false,
-        )
+            my = (d["my"] as? String)?.take(16) ?: if (d["liked"] == true) HEART else "",
+            rx = parseRx(d["rx"], n(d["lc"])),
+        ).let { it.copy(liked = it.my.isNotEmpty()) }
     }
 
     fun parseRights(d: Any?): ReplyRights {
@@ -150,12 +199,15 @@ object PostReplyRules {
     fun parsePage(d: Map<*, *>?): RepliesPage {
         val list = (d?.get("items") as? List<*>)?.mapNotNull { parseReply(it as? Map<*, *>) } ?: emptyList()
         val channelOff = d?.get("channelOff") as? Boolean ?: false
-        val postOff = d?.get("postOff") as? Boolean ?: false
+        // The server's `postOff` is the post's effective switch (its own true or false over the
+        // channel's): a post turned on in a channel that is off takes replies (owner 2026-11-07).
+        val effective = d?.get("postOff") as? Boolean
+        val postOff = effective ?: false
         return RepliesPage(
             items = list.sortedBy { it.at },
             next = d?.get("next") as? String ?: "",
             count = n(d?.get("count")),
-            off = (d?.get("off") as? Boolean ?: false) || channelOff || postOff,
+            off = effective ?: ((d?.get("off") as? Boolean ?: false) || channelOff),
             channelOff = channelOff,
             postOff = postOff,
             may = parseRights(d?.get("may")),
@@ -224,13 +276,30 @@ object PostReplyRules {
         return list
     }
 
-    /** A heart still on its way wins over what an earlier answer said. */
-    fun overlay(r: PostReply, want: Boolean?): PostReply =
-        if (want == null || want == r.liked) r else r.copy(liked = want, likes = maxOf(0, r.likes + if (want) 1 else -1))
+    /** A pick still on its way ([want], "" = none) wins over what an earlier answer said. */
+    fun overlay(r: PostReply, want: String?): PostReply = if (want == null) r else withMine(r, want)
 
-    /** The heart set to [want] on one row, its count moved with it (never below 0). */
-    fun withLike(r: PostReply, want: Boolean): PostReply =
-        if (r.liked == want) r else r.copy(liked = want, likes = maxOf(0, r.likes + if (want) 1 else -1))
+    /**
+     * Mine becomes [emoji] ("" takes mine back): its pill and the old one move with it, a pill at 0
+     * goes, and the people count changes only when I start or stop reacting.
+     */
+    fun withMine(r: PostReply, emoji: String): PostReply {
+        if (emoji == r.my) return r
+        val rx = r.rx.toMutableList()
+        if (r.my.isNotEmpty()) {
+            val i = rx.indexOfFirst { it.emoji == r.my }
+            if (i >= 0) { val left = rx[i].count - 1; if (left <= 0) rx.removeAt(i) else rx[i] = rx[i].copy(count = left) }
+        }
+        if (emoji.isNotEmpty()) {
+            val i = rx.indexOfFirst { it.emoji == emoji }
+            if (i >= 0) rx[i] = rx[i].copy(count = rx[i].count + 1) else rx += PostReply.Rx(emoji, 1)
+        }
+        val likes = maxOf(0, r.likes + (if (r.my.isEmpty()) 1 else 0) - (if (emoji.isEmpty()) 1 else 0))
+        return r.copy(my = emoji, liked = emoji.isNotEmpty(), rx = rx, likes = likes)
+    }
+
+    /** A pick on [emoji]: the same one again takes mine back, as in the chat. */
+    fun nextPick(r: PostReply, emoji: String): String = if (emoji == r.my) "" else emoji
 
     /** A reply of mine on its way, shown at once ("Sending…"). */
     fun pending(id: String, text: String, name: String, photoUrl: String, parent: String, now: Long): PostReply =
@@ -332,9 +401,14 @@ object PostReplies {
         n(call("deleteReply", mapOf("cid" to cid, "mid" to mid) + target(r))?.get("removed"))
     }.getOrNull()
 
-    /** A heart on or off; false when the server did not take it (the caller rolls back). */
-    suspend fun like(cid: String, mid: String, r: PostReply, on: Boolean): Boolean = runCatching {
-        call("likeReply", mapOf("cid" to cid, "mid" to mid, "on" to on) + target(r)); true
+    /**
+     * My reaction on a reply: [emoji] ("" = take mine off; the server's default is the heart). False
+     * when the server did not take it (the caller rolls back).
+     */
+    suspend fun react(cid: String, mid: String, r: PostReply, emoji: String): Boolean = runCatching {
+        val a = mutableMapOf<String, Any>("cid" to cid, "mid" to mid, "on" to emoji.isNotEmpty())
+        if (emoji.isNotEmpty()) a["emoji"] = emoji
+        call("likeReply", a + target(r)); true
     }.getOrDefault(false)
 
     suspend fun report(cid: String, mid: String, r: PostReply, reason: String): Boolean = runCatching {
