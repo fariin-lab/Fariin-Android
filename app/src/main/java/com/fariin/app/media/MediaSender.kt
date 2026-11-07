@@ -206,14 +206,18 @@ class MediaSender(
         val msgRef = convRef.collection("messages").document()
         val id = msgRef.id
         val fractions = ConcurrentHashMap<Int, Float>()
+        fun keyOf(i: Int) = clientId?.let { MediaSend.itemKey(it, i) }
+        // Each tile fills its own ring ("clientId#index"); the whole is kept for anything reading the message's.
         fun tileProgress(i: Int): ((Float) -> Unit)? = clientId?.let { cId ->
-            { f: Float -> fractions[i] = f; UploadProgress.set(cId, fractions.values.sum() / parts.size) }
+            { f: Float -> fractions[i] = f; UploadProgress.set(MediaSend.itemKey(cId, i), f); UploadProgress.set(cId, fractions.values.sum() / parts.size) }
         }
+        fun dropped(i: Int) = keyOf(i)?.let { MediaSend.isItemCancelled(it) } == true
         val gate = Semaphore(10)   // iOS maxAlbumUploadsInFlight
-        val tiles = coroutineScope {
-            parts.mapIndexed { i, p ->
+        val kept = coroutineScope {
+            val jobs = parts.mapIndexed { i, p ->
+                if (dropped(i)) return@mapIndexed null
                 async {
-                    gate.withPermit {
+                    val tile = gate.withPermit {
                         when (p) {
                             is AlbumPart.Photo -> {
                                 val (c, m) = sealBytes(p.prep.jpeg, members)
@@ -233,10 +237,23 @@ class MediaSender(
                             }
                         }
                     }
+                    keyOf(i)?.let { UploadProgress.done(it); MediaSend.itemEnded(it) }
+                    tile
+                }.also { d -> keyOf(i)?.let { MediaSend.registerItem(it, d) } }
+            }
+            jobs.mapIndexed { i, d ->
+                val tile = try { d?.await() } catch (e: kotlinx.coroutines.CancellationException) {
+                    // That tile's X (its own job was cancelled), not the whole send: it is left out.
+                    if (dropped(i) && kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) null else throw e
                 }
-            }.map { it.await() }
+                // X'd after its bytes were already up: still left out, as the tile has left the bubble.
+                if (tile == null || dropped(i)) null else i to tile
+            }.filterNotNull()
         }
-        val first = when (val p = parts.first()) { is AlbumPart.Photo -> p.prep; is AlbumPart.Video -> p.prep.poster }
+        // Every item X'd: nothing is sent at all (iOS).
+        if (kept.isEmpty()) throw kotlinx.coroutines.CancellationException("every album item was cancelled")
+        val tiles = kept.map { it.second }
+        val first = when (val p = parts[kept.first().first]) { is AlbumPart.Photo -> p.prep; is AlbumPart.Video -> p.prep.poster }
         val captionCipher = sealOrNull(caption.trim(), members) ?: ""
         val batch = db.batch()
         setMsg(batch, msgRef, members, MediaMessages.album(me, tiles, captionCipher, clientTs, clientId,

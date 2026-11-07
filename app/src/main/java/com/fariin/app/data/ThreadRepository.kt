@@ -749,6 +749,7 @@ class ThreadRepository(
             try {
                 work()
                 retryMedia.remove(clientId)
+                com.fariin.app.media.MediaSend.clearItems(clientId)
                 com.fariin.app.media.MediaSend.finish(clientId)
             } catch (e: Exception) {
                 if (mediaSendEnded(clientId, e)) return@launch
@@ -796,7 +797,23 @@ class ThreadRepository(
         if (announced != null) scope.launch(Dispatchers.IO) { cancelAnnounced(announced) }
         com.fariin.app.media.UploadProgress.done(clientId)
         retryMedia.remove(clientId); retryPhoto.remove(clientId)
+        send.clearItems(clientId)
         pending.remove(clientId)
+        rebuild()
+    }
+
+    /**
+     * The X on one tile of my album going up (iOS cancelItem, owner 2026-09-29): that item stops
+     * and leaves the bubble at once, the album goes without it. The last one left is the whole send.
+     */
+    fun cancelAlbumItem(m: Message, index: Int) {
+        val clientId = m.clientId ?: return
+        val send = com.fariin.app.media.MediaSend
+        val left = m.album.indices.filter { it != index && !send.isItemCancelled(send.itemKey(clientId, it)) }
+        if (left.isEmpty()) { cancelMediaSend(m); return }
+        send.cancelItem(send.itemKey(clientId, index))
+        // The echo will hold only the items left: its picked pictures must line up with them.
+        localUris[clientId]?.let { uris -> if (uris.size == m.album.size) localUris[clientId] = left.map { uris[it] } }
         rebuild()
     }
 

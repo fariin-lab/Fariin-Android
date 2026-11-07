@@ -53,7 +53,9 @@ import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
 
 /** Who I am and what Cancel does, for the upload ring's X (iOS onCancelUpload). */
-internal class UploadCancel(val me: String, val cancel: (Message) -> Unit)
+internal class UploadCancel(val me: String, val cancel: (Message) -> Unit,
+    /** The X on one album tile: that item is dropped (iOS cancelItem). */
+    val cancelItem: (Message, Int) -> Unit = { _, _ -> })
 internal val LocalUploadCancel = androidx.compose.runtime.staticCompositionLocalOf<UploadCancel?> { null }
 
 /**
@@ -66,6 +68,14 @@ internal fun uploadCancelFor(m: Message): (() -> Unit)? {
     if (m.authorId != u.me || m.clientId == null) return null
     if (m.sendState != Message.SendState.SENDING && !(m.uploading && m.sendState == null)) return null
     return { u.cancel(m) }
+}
+
+/** The X on tile [index] of my own album still going up, or null (somebody else's: no X). */
+@Composable
+internal fun itemCancelFor(m: Message, index: Int): (() -> Unit)? {
+    val u = LocalUploadCancel.current ?: return null
+    if (uploadCancelFor(m) == null) return null
+    return { u.cancelItem(m, index) }
 }
 
 /**
@@ -183,8 +193,13 @@ internal fun ViewOnceBody(m: Message, cid: String, isMe: Boolean, onView: (Viewi
 }
 
 /**
- * An album of up to ten (iOS album grid): rows from [MediaRules.albumRows], each row one height,
- * tiles split evenly; a video tile has the play disc and its length. Tap opens that tile.
+ * An album of up to ten (iOS album grid): tiles keep their real shape (AlbumMosaicLayout); a
+ * video tile has the play disc and its length. Tap opens that tile.
+ *
+ * My own album going up (iOS AlbumTileView + UploadRingView): every tile wears its own ring keyed
+ * "clientId#index" (a tile waiting its turn spins, the one going up fills), and its X drops that
+ * item: it leaves the bubble at once and the album goes without it. The tiles left keep their
+ * original index, so every other ring still matches its upload.
  */
 @Composable
 internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsule: @Composable () -> Unit,
@@ -193,16 +208,27 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
     val saveCtx = androidx.compose.ui.platform.LocalContext.current
     // iOS albumPlan: album width min(bubble, 300); tiles keep their real shape (AlbumMosaicLayout).
     val side = minOf(maxW.value, 300f)
-    val items = m.album.take(MediaRules.ALBUM_MAX_ITEMS)
+    val busy = m.sendState == Message.SendState.SENDING
+    val clientId = m.clientId
+    val dropped by com.fariin.app.media.MediaSend.cancelledItems.collectAsState()
+    // An X'd tile leaves at once while the album is still mine and going up (never all of them:
+    // the last X is the whole send).
+    val visible = androidx.compose.runtime.remember(m.album, busy, dropped) {
+        val all = m.album.indices.toList()
+        if (!busy || clientId == null) all
+        else all.filter { com.fariin.app.media.MediaSend.itemKey(clientId, it) !in dropped }.ifEmpty { all }
+    }
+    val shownIdx = visible.take(MediaRules.ALBUM_MAX_ITEMS)
+    val items = shownIdx.map { m.album[it] }
     val plan = androidx.compose.runtime.remember(items, side) {
         com.fariin.app.media.AlbumMosaicLayout.plan(items.map { a ->
             val w = a.width; val h = a.height
             if (w != null && h != null && w > 0 && h > 0) (w / h).toFloat() else 1f
         }, side)
     }
-    val busy = m.sendState == Message.SendState.SENDING
     Box(Modifier.size(plan.width.dp, plan.height.dp)) {
         plan.tiles.forEach { tile ->
+                        val at = shownIdx[tile.index]   // the item's own index in the album
                         val item = items[tile.index]
                         val w = tile.w
                         val h = tile.h
@@ -213,20 +239,19 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                         val picked = rememberLocalPreview(item.localUri, item.isVideo, com.fariin.app.media.LocalPreview.TILE_SIDE)
                         if (!item.isVideo) androidx.compose.runtime.LaunchedEffect(got.file, autoSaveId) {
                             val f = got.file ?: return@LaunchedEffect
-                            autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/${tile.index}", f, isVideo = false) }
+                            autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/$at", f, isVideo = false) }
                         }
                         val pendingFetch = got.state != Fetch.DONE
                         Box(
                             Modifier.offset(tile.x.dp, tile.y.dp).size(w.dp, h.dp)
                                 // The viewer zooms out of this tile and back into it (hero).
-                                .heroSource(MediaOrigins.keyOf(m, tile.index), 18.dp, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == MediaOrigins.keyOf(m, tile.index) }
+                                .heroSource(MediaOrigins.keyOf(m, at), 18.dp, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == MediaOrigins.keyOf(m, at) }
                                 .background(Fariin.colors.secondary.copy(alpha = 0.18f))
                                 .clickable(enabled = (bmp != null || pendingFetch) && !busy) {
                                     val v = item.videoUrl
                                     if (!item.isVideo && got.tap()) Unit
                                     else if (bmp == null) got.start()
                                     else {
-                                        val at = tile.index
                                         if (v != null) onView(Viewing.Video(v, item.videoEnc, msg = m, albumIndex = at))
                                         else onView(Viewing.Photo(item.imageUrl, item.enc, msg = m, albumIndex = at))
                                     }
@@ -234,7 +259,7 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                         ) {
                             if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             else if (picked != null) Image(picked, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                            else if (tile.index == 0) rememberPlaceholder(m.thumb, m.blurhash)?.let {
+                            else if (at == 0) rememberPlaceholder(m.thumb, m.blurhash)?.let {
                                 Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             }
                             // A photo tile's own download (iOS MediaDownloadOverlay per tile); a poster just loads.
@@ -250,9 +275,14 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                                             .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 5.dp, vertical = 1.dp))
                                 }
                             }
+                            if (busy) {
+                                // Same 52 as a single photo; smaller only on a small tile (half its short side).
+                                UploadRing(clientId?.let { com.fariin.app.media.MediaSend.itemKey(it, at) },
+                                    Modifier.align(Alignment.Center), onCancel = itemCancelFor(m, at),
+                                    side = MediaRules.tileRingSide(w, h).dp)
+                            }
                         }
         }
-        if (busy) UploadRing(m.clientId, Modifier.align(Alignment.Center), onCancel = uploadCancelFor(m))
         Box(Modifier.matchParentSize()) { capsule() }
     }
 }

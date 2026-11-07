@@ -34,6 +34,32 @@ object MediaSend {
     /** True when the failure just caught was the person pressing Cancel. */
     fun wasCancelled(clientId: String) = clientId in cancelled
 
+    // ---- one album item (iOS MediaSend.itemKey / cancelItem): the X on a tile drops that item and
+    // the album goes without it; every other tile keeps its own key (its original index).
+
+    private val itemJobs = ConcurrentHashMap<String, Job>()
+    private val _cancelledItems = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+    val cancelledItems: kotlinx.coroutines.flow.StateFlow<Set<String>> = _cancelledItems
+
+    fun itemKey(clientId: String, index: Int) = "$clientId#$index"
+
+    fun registerItem(key: String, job: Job) { itemJobs[key] = job }
+    fun itemEnded(key: String) { itemJobs.remove(key) }
+
+    fun isItemCancelled(key: String) = key in _cancelledItems.value
+
+    fun cancelItem(key: String) {
+        _cancelledItems.value = _cancelledItems.value + key
+        itemJobs.remove(key)?.cancel()
+        UploadProgress.done(key)
+    }
+
+    /** The album was sent or dropped: its item marks go (a failed one keeps them for its retry). */
+    fun clearItems(clientId: String) {
+        _cancelledItems.value = _cancelledItems.value.filterNot { it.startsWith("$clientId#") }.toSet()
+        itemJobs.keys.removeAll { it.startsWith("$clientId#") }
+    }
+
     /** The send finished, failed or was cancelled: forget everything filed under its id. */
     fun finish(clientId: String) {
         jobs.remove(clientId)

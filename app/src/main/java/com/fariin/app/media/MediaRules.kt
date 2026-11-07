@@ -208,6 +208,9 @@ object MediaRules {
         else -> RingPhase.FILL
     }
 
+    /** MessageRowLayout album ring: 52 like a single photo, half the tile's short side on a small tile. */
+    fun tileRingSide(w: Float, h: Float): Float = min(52f, min(w, h) * 0.5f)
+
     // ---- MessageRowLayout.photoBox: the bubble size for a photo, in dp.
     fun photoBox(pixelW: Double?, pixelH: Double?, maxBubbleWidth: Float, captionWidth: Float = 0f): Pair<Float, Float> {
         val boxMax = min(maxBubbleWidth, 350f)
