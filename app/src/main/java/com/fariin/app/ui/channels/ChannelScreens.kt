@@ -195,6 +195,11 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
             if (creating || name.isBlank()) return@Details
             creating = true; error = null
             scope.launch {
+                // The same "at most N owned" check a new group asks; a channel counts as one (iOS
+                // NewChannelView). Not when the group half is already made: it is counted already.
+                if (halfMade == null) com.fariin.app.data.AppLimits.ownedGroupsFull()?.let { max ->
+                    error = com.fariin.app.data.AppLimits.ownedChannelsSentence(max); creating = false; return@launch
+                }
                 try {
                     val my = FirebaseFirestore.getInstance().collection("users").document(me).get().await()
                     val id = halfMade ?: ChannelService.createGroupForChannel(name, my.getString("name") ?: "", my.getString("photoUrl")).also { halfMade = it }

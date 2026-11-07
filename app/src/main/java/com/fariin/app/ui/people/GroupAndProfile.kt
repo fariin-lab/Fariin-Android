@@ -462,6 +462,10 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                 TextAction("Create", title.isNotBlank() && !busy) {
                     busy = true
                     scope.launch {
+                        // At most N groups owned (iOS NewGroupView): the server counts, and says so here.
+                        com.fariin.app.data.AppLimits.ownedGroupsFull()?.let { max ->
+                            error = com.fariin.app.data.AppLimits.ownedGroupsSentence(max); busy = false; return@launch
+                        }
                         try {
                             val cid = api.createGroup(title, picked.toList(), photo)
                             // After "created the group", as iOS: the timer and its notice for everyone.
