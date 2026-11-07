@@ -749,23 +749,42 @@ private fun SmallLink(label: String, modifier: Modifier, center: Boolean = false
 /** "Report this reply?": the reasons the server takes, one picked, then Report. */
 @Composable
 private fun ReportSheet(onDismiss: () -> Unit, onReport: (String) -> Unit) {
-    var pick by remember { mutableStateOf("spam") }
-    CarefulSheet(onDismiss, listOf(CarefulStep(
-        title = "Report this reply?", options = PostReplyRules.REASONS, selected = pick, onSelect = { pick = it },
-        buttons = listOf(CarefulButton("Report", CarefulKind.MAIN) { onReport(pick) }),
-    )))
+    // A centred alert, as iOS's system alert (owner 2026-11-07): a tap on a reason reports at once.
+    val c = Fariin.colors
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Report this reply?") },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                for ((key, label) in PostReplyRules.REASONS) {
+                    TextButton(onClick = { onDismiss(); onReport(key) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(label, color = c.accent, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent, fontWeight = FontWeight.SemiBold) } },
+        containerColor = c.card,
+    )
 }
 
 /** "Remove this person?": delete this reply and ban, or ban and delete every reply they wrote here. */
 @Composable
 private fun BanSheet(onDismiss: () -> Unit, onBan: (Boolean) -> Unit) {
-    CarefulSheet(onDismiss, listOf(CarefulStep(
-        title = "Remove this person?", body = "They leave the channel and can't come back or reply.",
-        buttons = listOf(
-            CarefulButton("Delete and Ban", CarefulKind.DESTRUCTIVE) { onBan(false) },
-            CarefulButton("Ban and Delete All Their Replies", CarefulKind.DESTRUCTIVE) { onBan(true) },
-        ),
-    )))
+    val c = Fariin.colors
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remove this person?") },
+        text = { Text("They leave the channel and can't come back or reply.") },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(onClick = { onDismiss(); onBan(false) }) { Text("Delete and Ban", color = c.red) }
+                TextButton(onClick = { onDismiss(); onBan(true) }) { Text("Ban and Delete All Their Replies", color = c.red) }
+                TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent, fontWeight = FontWeight.SemiBold) }
+            }
+        },
+        containerColor = c.card,
+    )
 }
 
 /**
