@@ -905,7 +905,7 @@ private fun ThreadContent(
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
                                     .combinedClickableLong {
                                         val lc = coords[0]?.takeIf { it.isAttached }
-                                        menuSource = lc?.let { MenuSource(androidx.compose.ui.geometry.Rect(it.positionOnScreen(), it.size.toSize()), m.authorId == ui.me) }
+                                        menuSource = lc?.let { menuSourceOf(it, m.authorId == ui.me) }
                                         menuPreview = {
                                             CallBubble(m, ui.me, is24h, myFill(), receivedFill(), peerUid = null, title = ui.title, photoUrl = ui.photoUrl,
                                                 callerName = if (theirs) ui.names[m.callerUid ?: m.authorId] ?: "Someone" else null,
@@ -972,7 +972,7 @@ private fun ThreadContent(
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
                                     .then(if (selShown) Modifier.background(selLit) else flashLit).combinedClickableLong {
                                         val lc = coords[0]?.takeIf { it.isAttached }
-                                        menuSource = lc?.let { MenuSource(androidx.compose.ui.geometry.Rect(it.positionOnScreen(), it.size.toSize()), m.authorId == ui.me) }
+                                        menuSource = lc?.let { menuSourceOf(it, m.authorId == ui.me) }
                                         menuPreview = {
                                             Column(Modifier.fillMaxWidth()) {
                                                 MessageRow(ui, m, g, is24h, {}) {}

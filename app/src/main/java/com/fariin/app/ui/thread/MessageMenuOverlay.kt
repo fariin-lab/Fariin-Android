@@ -83,8 +83,19 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Where the pressed message sits on screen (px), and which side it hangs on. */
-internal data class MenuSource(val rect: Rect, val alignRight: Boolean)
+/**
+ * Where the pressed message sits on screen (px), and which side it hangs on. [live] reads where the
+ * row is NOW: the keyboard goes down under the menu and comes back on close, the chat moves with
+ * it, and the copy has to land on the row where it ends up, not where it was pressed.
+ */
+internal class MenuSource(val rect: Rect, val alignRight: Boolean, val live: () -> Rect? = { null })
+
+/** The pressed row's source, its live place read from the same coordinates while they last. */
+internal fun menuSourceOf(lc: androidx.compose.ui.layout.LayoutCoordinates, alignRight: Boolean): MenuSource {
+    fun rectOf(c: androidx.compose.ui.layout.LayoutCoordinates) =
+        Rect(c.positionOnScreen(), androidx.compose.ui.geometry.Size(c.size.width.toFloat(), c.size.height.toFloat()))
+    return MenuSource(rectOf(lc), alignRight) { if (lc.isAttached) rectOf(lc) else null }
+}
 
 /** One row of the overlay's card. */
 internal class MenuRow(val title: String, val icon: Painter, val destructive: Boolean, val countdown: String?, val run: () -> Unit)
@@ -109,7 +120,17 @@ private const val STRIP_COUNT = 15
  * back to 0.2, the bar fading over 0.2 s, the background over 0.4 s. Screen edges 8 (or the system
  * bars), card 250 wide with 45 rows and 33 corners, bar 56 tall (50 on a narrow phone).
  *
- * Android: a full-screen focusable popup, so system back closes it. The blur is the chat's own
+ * Android: a popup window stretched over the WHOLE display, under the status bar and the gesture
+ * bar. Left to itself the popup is only as tall as the chat's visible frame, which stops at the
+ * navigation bar and, with the keys up, at the keyboard: the composer strip stayed undimmed, and
+ * with the keys up the card was cut to the strip above them and lost its last rows (owner's
+ * Pixel 5 photos, 2026-11-07). The keyboard is a window above every window of ours, so it cannot
+ * be blurred over as on iOS: it goes down when the menu opens and comes back when the menu is
+ * dismissed (an action that wants it, Reply or Edit, raises it itself). The popup does not take
+ * focus, so the composer keeps it and the keys can come back; back closes the menu through the
+ * activity's back dispatcher instead.
+ *
+ * The blur is the chat's own
  * screen blurred in place (a RenderEffect on the activity's content, Android 12 and up; older
  * phones get the tint alone), always taken off when the menu goes. Not the window blur-behind:
  * on a real Pixel and the emulator that left the display showing stale frames after the menu.
@@ -142,16 +163,28 @@ internal fun MessageMenuOverlay(
     // The screen's edges, read from the chat's own window: the menu's window does not get them,
     // and the card ran under the gesture bar (owner's Pixel recording, 2026-11-03).
     // Raw from the view: the chat screen has already consumed the Compose insets on the way down.
-    val raw = androidx.core.view.ViewCompat.getRootWindowInsets(LocalView.current)
-        ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout()
-            or androidx.core.view.WindowInsetsCompat.Type.ime())
+    // Not the keyboard: it goes down as the menu opens (below), and the menu gets the whole screen.
+    val chatView = LocalView.current
+    val raw = androidx.core.view.ViewCompat.getRootWindowInsets(chatView)
+        ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
     val edgeTop = raw?.top ?: 0; val edgeBottom = raw?.bottom ?: 0
     val edgeLeft = raw?.left ?: 0; val edgeRight = raw?.right ?: 0
 
-    fun close(then: () -> Unit = {}) {
+    // The keys go down while the menu is up and come back on a plain dismiss (tap outside, back,
+    // a reaction).
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val keysWereUp = remember {
+        androidx.core.view.ViewCompat.getRootWindowInsets(chatView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+    }
+    LaunchedEffect(Unit) { if (keysWereUp) keyboard?.hide() }
+
+    fun close(keysBack: Boolean = true, then: () -> Unit = {}) {
         if (closing) return
         closing = true
         startScale = 1f
+        // First, so the chat rises with the keys while the copy springs home (it lands on the
+        // row's live place, see homeDy).
+        if (keysBack && keysWereUp) keyboard?.show()
         scope.launch { barAlpha.animateTo(0f, tween(200)) }
         scope.launch { scrim.animateTo(0f, tween(400, easing = EaseInOut)) }
         scope.launch {
@@ -185,6 +218,17 @@ internal fun MessageMenuOverlay(
         androidx.compose.runtime.DisposableEffect(content) { onDispose { content.setRenderEffect(null) } }
     }
 
+    androidx.activity.compose.BackHandler(enabled = !closing) { close() }
+
+    // How far the row has moved since the press, read on every frame of the close (the keyboard
+    // moves the chat under the menu). A row of another height is not ours any more (a recycled
+    // list slot): then home is where it was pressed.
+    fun homeDy(): Float {
+        if (!closing) return 0f
+        val now = source.live() ?: return 0f
+        return if (abs(now.height - source.rect.height) < 1f) now.top - source.rect.top else 0f
+    }
+
     LaunchedEffect(Unit) {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         launch { scrim.animateTo(1f, tween(200, easing = EaseInOut)) }
@@ -202,8 +246,13 @@ internal fun MessageMenuOverlay(
             }
         },
         onDismissRequest = { close() },
-        properties = androidx.compose.ui.window.PopupProperties(focusable = true, dismissOnClickOutside = false, clippingEnabled = false),
+        // usePlatformDefaultWidth: measured by its own window (the whole display, set below), not
+        // by the chat's visible frame. No gesture exclusion, so the back swipe still closes it.
+        properties = androidx.compose.ui.window.PopupProperties(focusable = false, dismissOnBackPress = false, dismissOnClickOutside = false,
+            excludeFromSystemGesture = false, clippingEnabled = false, usePlatformDefaultWidth = true),
     ) {
+        val popupRoot = LocalView.current.rootView
+        LaunchedEffect(popupRoot) { stretchOverDisplay(popupRoot) }
         var origin by remember { mutableStateOf<Offset?>(null) }
         val tint = if (c.dark) Color.Black.copy(alpha = 0.6f) else Color(0f, 0.039f, 0.149f, 0.2f)
         BoxWithConstraints(
@@ -253,7 +302,7 @@ internal fun MessageMenuOverlay(
             // The message: lifted in place, scaled only when nothing else would fit.
             val scale = startScale + (f.scale - startScale) * p
             Box(
-                Modifier.offset { IntOffset(src.left.roundToInt(), (src.top + travel * p).roundToInt()) }
+                Modifier.offset { IntOffset(src.left.roundToInt(), (src.top + homeDy() * (1 - p) + travel * p).roundToInt()) }
                     // A message taller than the screen: requiredSize alone centres the oversize copy
                     // on the screen-sized slot, which pushed its top far above the screen and the
                     // shrunk copy never showed (Pixel 2026-11-05). Pinned to the top-left instead.
@@ -274,7 +323,7 @@ internal fun MessageMenuOverlay(
 
             if (hasBar) {
                 val b = f.bar!!
-                Box(Modifier.offset { IntOffset(b.left.roundToInt(), (b.top - travel * (1 - p)).roundToInt()) }
+                Box(Modifier.offset { IntOffset(b.left.roundToInt(), (b.top + (homeDy() - travel) * (1 - p)).roundToInt()) }
                     .graphicsLayer { alpha = barAlpha.value }) {
                     ReactionBar(side, barH, mine, delayMs = if (abs(travel) > 0.5f) 100 else 0,
                         onPick = { e -> close { onReact(e) } },
@@ -284,7 +333,7 @@ internal fun MessageMenuOverlay(
 
             val m = f.menu
             Box(
-                Modifier.offset { IntOffset(m.left.roundToInt(), (m.top - travel * (1 - p)).roundToInt()) }
+                Modifier.offset { IntOffset(m.left.roundToInt(), (m.top + (homeDy() - travel) * (1 - p)).roundToInt()) }
                     .requiredSize(with(density) { m.width.toDp() }, with(density) { m.height.toDp() })
                     .graphicsLayer {
                         val s = 0.2f + 0.8f * p
@@ -292,10 +341,33 @@ internal fun MessageMenuOverlay(
                         alpha = p.coerceIn(0f, 1f)
                         transformOrigin = TransformOrigin(if (source.alignRight) 1f else 0f, 0f)
                     },
-            ) { ActionsCard(rows, onPick = { r -> close { r.run() } }) }
+            ) { ActionsCard(rows, onPick = { r -> close(keysBack = false) { r.run() } }) }
         }
     }
     if (picker) ReactionPickerSheet(mine, onDismiss = { picker = false }) { e -> picker = false; close { onReact(e) } }
+}
+
+/**
+ * The menu's popup window over the whole display: full size, laid out in screen space through the
+ * status bar, the navigation bar and the cutout, and never resized for the keyboard. The popup
+ * keeps this same params object and only moves it afterwards, so once is enough.
+ */
+private fun stretchOverDisplay(root: android.view.View) {
+    fun apply() {
+        val lp = root.layoutParams as? WindowManager.LayoutParams ?: return
+        lp.width = WindowManager.LayoutParams.MATCH_PARENT
+        lp.height = WindowManager.LayoutParams.MATCH_PARENT
+        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+        if (Build.VERSION.SDK_INT >= 30) {
+            lp.fitInsetsTypes = 0
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        } else if (Build.VERSION.SDK_INT >= 28) {
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        runCatching { (root.context.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager).updateViewLayout(root, lp) }
+    }
+    if (root.isAttachedToWindow) apply() else root.post { if (root.isAttachedToWindow) apply() }
 }
 
 /** iOS CMOverlay.computeFrames: bar above, card below, shifted to fit, the message shrunk last. */
