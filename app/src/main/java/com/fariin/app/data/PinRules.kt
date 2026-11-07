@@ -106,6 +106,19 @@ object SelectRules {
     /** Rows that take a tick: a person's message or a tombstone; never a notice, call or pin line. */
     fun selectable(m: Message): Boolean = !m.isSystem && !m.isCall && PinRules.notice(m.text) == null
 
+    /**
+     * ThreadView.canDeleteNotice (owner 2026-10-29): a group notice that I, holding "Delete messages",
+     * may remove for everyone; such a notice takes Select and Delete, and a tick in select mode.
+     * Not one the owner wrote unless I am the owner (canDeleteForEveryone).
+     */
+    fun canDeleteNotice(m: Message, groupDoc: Map<String, Any?>, me: String): Boolean {
+        if (!m.isSystem || m.deleted || (groupDoc["type"] as? String) != "group") return false
+        val t = GroupAdmins.Team.from(groupDoc)
+        if (!t.can(me, GroupAdmins.Right.DELETE_MESSAGES)) return false
+        return MessageRules.canDeleteForEveryone(m, me, adminMayDelete = true,
+            authorIsOwner = t.isOwner(m.authorId), iAmOwner = t.isOwner(me))
+    }
+
     data class Split(val everyone: Int, val onlyMe: Int)
 
     fun split(picked: List<Message>, me: String, adminMayDelete: Boolean): Split {

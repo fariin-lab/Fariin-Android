@@ -155,7 +155,12 @@ internal fun MessageMenu(
     val now = System.currentTimeMillis().toDouble()
     val menuCtx = androidx.compose.ui.platform.LocalContext.current
     val menuMedia = chatMedia()
-    val items = buildList {
+    // A notice opens a menu only for a group admin who may clear it (iOS canDeleteNotice): Select
+    // and Delete, nothing else.
+    val items = if (m.isSystem) listOf(
+        MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) },
+        MenuItem("Delete", Icons.Outlined.Delete, destructive = true) { onDelete(m) },
+    ) else buildList<MenuItem> {
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
         if (!m.deleted) {

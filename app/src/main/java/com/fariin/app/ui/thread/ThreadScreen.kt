@@ -889,6 +889,29 @@ private fun ThreadContent(
                                     NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${if (gone) "a message" else pinNote.label}")
                                 }
                             }
+                            // A notice a group admin may clear (iOS canDeleteNotice, owner 2026-10-29): a long
+                            // press offers Select and Delete, and it takes a tick in select mode.
+                            ch == null && com.fariin.app.data.SelectRules.canDeleteNotice(m, ui.groupDoc, ui.me) -> {
+                                val pill: @Composable () -> Unit = {
+                                    val secs = m.disappearSeconds
+                                    if (secs != null) NoticePill(com.fariin.app.data.Disappearing.noticeLine(
+                                        if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, secs), icon = true)
+                                    else NoticePill(noticeText(m))
+                                }
+                                if (selecting) Row(Modifier.fillMaxWidth().background(selLit).clickable { toggle(m) },
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    SelectTick(m.rowId in selected)
+                                    Box(Modifier.weight(1f)) { pill() }
+                                } else Box(Modifier.fillMaxWidth()
+                                    .onPlaced { coords[0] = it }
+                                    .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
+                                    .combinedClickableLong {
+                                        val lc = coords[0]?.takeIf { it.isAttached }
+                                        menuSource = lc?.let { menuSourceOf(it, false) }
+                                        menuPreview = { pill() }
+                                        menuFor = m
+                                    }) { pill() }
+                            }
                             m.isSystem && m.disappearSeconds != null -> NoticePill(
                                 com.fariin.app.data.Disappearing.noticeLine(
                                     if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, m.disappearSeconds),
