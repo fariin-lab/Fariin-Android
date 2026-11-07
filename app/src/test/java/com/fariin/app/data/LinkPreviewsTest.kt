@@ -1,6 +1,7 @@
 package com.fariin.app.data
 
 import com.fariin.app.crypto.EncMeta
+import com.fariin.app.data.TextStoryRules.LinkStyle as S
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -152,7 +153,6 @@ class LinkPreviewsTest {
     }
 
     @Test fun tallCardShapeAndDefault() {
-        val S = TextStoryRules.LinkStyle
         assertEquals(S.LARGE, S.COMPACT.next()); assertEquals(S.POSTER, S.LARGE.next()); assertEquals(S.COMPACT, S.POSTER.next())
         // 4:5 to 2:3, clamped; a video with no picture keeps a square; anything else none.
         assertEquals(375f, TextStoryRules.posterPictureHeight(300f, 1000, 1000, false), 0.01f)
