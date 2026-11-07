@@ -143,6 +143,7 @@ fun MainShell(
     val c = Fariin.colors
     val context = LocalContext.current
     remember { PowerSaving.init(context) }
+    remember { com.fariin.app.data.BubbleStyles.init(context) }
     val power = rememberPowerState()
     val glass = power.glass()
     var tab by rememberSaveable { mutableIntStateOf(TAB_CHATS) }

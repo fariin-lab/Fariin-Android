@@ -159,6 +159,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit) {
             lookRoute(page, push, pop) -> Unit
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
             page == PAGE_APP_ICON -> AppIconPage(pop)
+            page == PAGE_BUBBLE_STYLE -> BubbleStylePage(pop)
             page == PAGE_GLOW_PROFILE -> com.fariin.app.ui.glow.GlowProfilePage(me, profile,
                 onEdit = com.fariin.app.ui.people.LocalPeopleNav.current.editProfile, onBack = pop)
             page == PAGE_SCAN -> ScanQrPage(onMyCode = { pop(); myQrOpen.value = true }, onClose = pop, onDone = pop)
@@ -438,6 +439,11 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
                     Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape)
                         .background(myColor?.brush() ?: androidx.compose.ui.graphics.SolidColor(blue)))
                 }) { push(PAGE_CHAT_COLOR) }
+                if (com.fariin.app.data.BubbleStyles.SHOWN) {
+                    val bubbleV = com.fariin.app.data.BubbleStyles.version.intValue
+                    val bubbleName = remember(bubbleV) { com.fariin.app.data.BubbleStyles.init(ctx); com.fariin.app.data.BubbleStyles.name(com.fariin.app.data.BubbleStyles.current()) }
+                    SettingsRow("Bubble Style", value = bubbleName) { push(PAGE_BUBBLE_STYLE) }
+                }
                 SettingsRow("App Icon") { push(PAGE_APP_ICON) }
                 val quick = remember { ctx.getSharedPreferences(CHAT_PREFS, android.content.Context.MODE_PRIVATE).getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️" }
                 SettingsRow("Quick Reaction", value = quick, last = true) { push(PAGE_QUICK) }

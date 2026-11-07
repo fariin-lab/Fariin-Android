@@ -663,6 +663,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         return
     }
     if (DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
+    // Chat Bubble (SPEC 4): my one bubble style for every chat, the Settings picker itself.
+    var bubbleOpen by remember { mutableStateOf(false) }
+    if (bubbleOpen) { com.fariin.app.ui.settings.BubbleStylePage { bubbleOpen = false }; return }
     if (GroupPages(cid, me, pages, onOpenPerson, onAddMembers = { adding = true }, onTimer = {
             if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
             else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
@@ -751,6 +754,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // iOS settingsCard (owner 2026-10-18/20): Storage Used, then for the owner and admins one
                 // Group Settings row (the management lives on that page) and Join Requests while
                 // someone waits; a member's Disappearing Messages row stays here, read-only.
+                // Not in a channel (its posts are never styled) nor when the owner or an admin turned styles off.
+                if (com.fariin.app.data.BubbleStyles.SHOWN && conv["channel"] != true && conv["bubbleStylesOff"] != true)
+                    SettingsRow("Chat Bubble", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat)) { bubbleOpen = true }
                 SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats) {
                     pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))
                 }

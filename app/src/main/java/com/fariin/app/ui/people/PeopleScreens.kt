@@ -472,6 +472,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         LaunchedEffect(Unit) { myName.value = api.profile(me)?.shownName.orEmpty() }
         RestrictedChatPage(cid, me, name.ifEmpty { "They" }, { myName.value }, onBack = { restrictOpen = false }); return
     }
+    // Chat Bubble (SPEC 4): my one bubble style for every chat, the Settings picker itself.
+    var bubbleOpen by remember { mutableStateOf(false) }
+    if (bubbleOpen) { com.fariin.app.ui.settings.BubbleStylePage { bubbleOpen = false }; return }
     // The full Encryption page, as iOS VerifyEncryptionView (the old dialog wrapped the numbers).
     if (showSafety) {
         var myPhotoUrl by remember { mutableStateOf<String?>(null) }
@@ -623,6 +626,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 if (uid != me && chatNow != null) SettingsRow("Restricted Chat",
                     icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_restricted_chat),
                     value = if (chatNow.isRestricted) "On" else "Off") { restrictOpen = true }
+                if (com.fariin.app.data.BubbleStyles.SHOWN && uid != me) SettingsRow("Chat Bubble",
+                    icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat)) { bubbleOpen = true }
                 SettingsRow("Verify Encryption", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_verify_encryption), last = true) { scope.launch { safety = api.safetyNumber(uid); showSafety = true } }
             }
             // iOS: after the settings card, and only when the chat has photos or videos.
