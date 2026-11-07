@@ -1120,3 +1120,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   a frame every ~11 ms. Left: ours eases in, iOS eases out. Settings wallpaper reaches every chat (705824d).
   Send still has an 88 ms hitch + one-row snap: agent on it (emulator 5556).
   TO TEST LIVE: group arrival, fast fire (1/s), photos both ways (row grows when the image loads), first message.
+- 00:20 (11-07) Send agent 112896e (send-queue disk write off the main thread) + 557f802 (my send glides the list with
+  the bubble, composer no longer rebuilt per message). Pixel send: frames every ~10 ms, fast start soft stop, no snap.
+  Live conversation with the owner (kream iPhone <-> Pixel, auto-reply script, recorded): every send and every
+  arrival glided in 0.28-0.44 s, frames 10-30 ms apart, no jump, no freeze. Made group "test" (Roodo + kream) for
+  group tests; owner's messages there not received yet (iPhone account check). Still to test: group, photos both
+  ways, fast fire 1/s. kk has a stray "test" post (10:35 PM) from my send test: delete needs the owner's OK.
