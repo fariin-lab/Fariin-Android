@@ -113,6 +113,22 @@ object CallToneRules {
         }
     }
 
+    /**
+     * iOS noteRoomPeople: someone came into or went out of a running group call. The joined tone
+     * for an arrival, the left tone for a departure, one sound for several in one pass. Not in the
+     * first 1.5 s after I got in (that is the room I walked into), not past 20 people.
+     */
+    fun presenceTone(before: Set<String>, now: Set<String>, msSinceJoin: Long): CallTone? {
+        if (msSinceJoin <= PRESENCE_QUIET_MS || now.size + 1 > PRESENCE_MAX_PEOPLE) return null
+        return when {
+            (now - before).isNotEmpty() -> CallTone.GROUP_JOINED
+            (before - now).isNotEmpty() -> CallTone.GROUP_LEFT
+            else -> null
+        }
+    }
+    const val PRESENCE_QUIET_MS = 1500L
+    const val PRESENCE_MAX_PEOPLE = 20
+
     /** iOS finishCall's tone window: the busy tone's two cycles, or the short end tone. */
     fun endToneMs(t: CallTone) = if (t == CallTone.BUSY) 2000L else 600L
 
@@ -153,7 +169,12 @@ object CallTonePlayer {
     val ringbackPlaying get() = ringback != null
 
     fun startRingback() {
-        if (ringback != null) return
+        ringback?.let { t ->
+            // Started before the call took the phone's audio: that switch can stop the player
+            // (iOS updateRingback plays it again the same way).
+            if (t.playState != AudioTrack.PLAYSTATE_PLAYING) try { t.play() } catch (_: Exception) {}
+            return
+        }
         stopTone()
         ringback = build(CallTone.RINGBACK, -1)?.also { try { it.play() } catch (_: Exception) {} }
     }
@@ -172,5 +193,43 @@ object CallTonePlayer {
     fun stopTone() {
         oneShot?.let { try { it.stop() } catch (_: Exception) {}; it.release() }
         oneShot = null
+    }
+}
+
+/**
+ * The buzz under an incoming ring (iOS's system call screen vibrates by the phone's settings): on
+ * while the phone rings or is on vibrate, never on silent or under Do Not Disturb's "no
+ * interruptions" / "alarms only". The ring's own sound already follows the ringer and Do Not Disturb.
+ */
+object RingVibration {
+    /** About a second on, a second off, as a phone call's ring. */
+    private val PATTERN = longArrayOf(0, 1000, 1000)
+    private var on: android.os.Vibrator? = null
+
+    fun wanted(ringerMode: Int, filter: Int): Boolean =
+        ringerMode != android.media.AudioManager.RINGER_MODE_SILENT &&
+            filter != android.app.NotificationManager.INTERRUPTION_FILTER_NONE &&
+            filter != android.app.NotificationManager.INTERRUPTION_FILTER_ALARMS
+
+    fun start(c: android.content.Context) {
+        if (on != null) return
+        try {
+            val audio = c.getSystemService(android.media.AudioManager::class.java) ?: return
+            val nm = c.getSystemService(android.app.NotificationManager::class.java)
+            if (!wanted(audio.ringerMode, nm?.currentInterruptionFilter ?: android.app.NotificationManager.INTERRUPTION_FILTER_ALL)) return
+            val v = if (android.os.Build.VERSION.SDK_INT >= 31)
+                c.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+            else @Suppress("DEPRECATION") c.getSystemService(android.os.Vibrator::class.java)
+            if (v?.hasVibrator() != true) return
+            val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+            @Suppress("DEPRECATION") v.vibrate(android.os.VibrationEffect.createWaveform(PATTERN, 1), attrs)
+            on = v
+        } catch (x: Exception) { Log.w("CallTones", "ring vibration failed", x) }
+    }
+
+    fun stop() {
+        try { on?.cancel() } catch (_: Exception) {}
+        on = null
     }
 }

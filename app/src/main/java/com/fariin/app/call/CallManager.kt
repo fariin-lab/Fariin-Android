@@ -1137,6 +1137,7 @@ object CallManager {
             if (android.os.Build.VERSION.SDK_INT >= 28) r.isLooping = true else loopRingtone(r)
             r.play()
         } catch (_: Exception) {}
+        RingVibration.start(app)
     }
 
     /** Android 8 has no Ringtone looping: start it again each time it ends, while it is still ours. */
@@ -1157,7 +1158,7 @@ object CallManager {
         return info.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
     }
 
-    private fun stopRingtone() { try { ringtone?.stop() } catch (_: Exception) {}; ringtone = null }
+    private fun stopRingtone() { try { ringtone?.stop() } catch (_: Exception) {}; ringtone = null; RingVibration.stop() }
 
     // ================================================================== debug demo
 

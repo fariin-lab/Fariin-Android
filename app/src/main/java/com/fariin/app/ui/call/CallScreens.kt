@@ -996,6 +996,8 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                         focus = if ((focus ?: presenter) == id || id == meId || (remotes.size < 2 && presenter == null)) null else id
                     })
                 }
+                // iOS `notes`: who joined or left, and the call's short notes, under the header.
+                if (!pip) GroupCallNotes(g, Modifier.align(Alignment.TopCenter))
             }
             if (g.linkCreator && g.requests.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))

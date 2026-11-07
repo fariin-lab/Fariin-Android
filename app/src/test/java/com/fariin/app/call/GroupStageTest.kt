@@ -107,6 +107,9 @@ class GroupStageTest {
         assertEquals("3 in call", GroupCallWords.subtitle(false, false, false, true, false, 3))
         assertEquals("Waiting to be let in", GroupCallWords.subtitle(true, true, false, false, false, 0))
         assertEquals("Reconnecting…", GroupCallWords.subtitle(true, true, true, true, true, 3))
+        // From the Call button's tap: no "Connecting…" while the call already rings.
+        assertEquals("Ringing everyone…", GroupCallWords.subtitle(false, true, false, false, true, 0))
+        assertEquals("Connecting…", GroupCallWords.subtitle(false, true, false, false, false, 0))
         assertEquals("Video Chat · 2 participants", GroupCallWords.rowSubtitle(true, 2))
         assertEquals("Voice Chat", GroupCallWords.rowSubtitle(false, 0))
         assertEquals("Live now", GroupCallWords.barSubtitle(0))

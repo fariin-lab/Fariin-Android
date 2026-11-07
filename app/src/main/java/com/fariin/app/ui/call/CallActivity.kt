@@ -189,7 +189,11 @@ class CallActivity : ComponentActivity() {
                             finish()
                         }
                     }
-                    LaunchedEffect(g.toast) { g.toast?.let { Toast.makeText(this@CallActivity, it, Toast.LENGTH_SHORT).show(); GroupCall.clearToast() } }
+                    // In the call the note is the pill under the header (iOS GroupCallTopToast); the
+                    // system toast only where that pill is not drawn (the lobby, picture in picture).
+                    LaunchedEffect(g.toast, inLobby, inPip) {
+                        if (inLobby || inPip) g.toast?.let { Toast.makeText(this@CallActivity, it, Toast.LENGTH_SHORT).show(); GroupCall.clearToast() }
+                    }
                     if (inLobby) {
                         CallLobbyScreen(lobbyKey!!, lobbyVideo, g, onLeave = { GroupCall.leave(); finish() }, onJoin = { video, mic -> joinFromLobby(video, mic) })
                     } else GroupCallScreen(g, onMic = { micToggle() }, onCamera = { cameraToggle(GroupCall.ui.value.cameraOn) },

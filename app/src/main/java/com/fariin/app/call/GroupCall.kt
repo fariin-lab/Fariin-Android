@@ -222,6 +222,16 @@ object GroupCall {
     private var startedHere = false
     private var someoneCame = false
     private var startedAtMs: Long? = null
+    /**
+     * iOS `dialing`: the Call button (not Join) was tapped and nobody has come yet. The calling
+     * sound plays from the tap, through the token and the room's connect, not only once the call's
+     * doc is written (owner 2026-11-07: Android was silent first).
+     */
+    private var dialing = false
+    /** When I got into the room, for the come-and-go sounds' quiet start (iOS joinedAt). */
+    private var joinedAtMs = 0L
+    /** Who else was in the room at the last refresh (iOS lastRemoteUids). */
+    private var lastRemote: Set<String> = emptySet()
 
     /**
      * [requireLive] true is the Join bar (never starts a call); false is the call button, which
@@ -230,7 +240,10 @@ object GroupCall {
     fun join(context: Context, cid: String, title: String, video: Boolean, requireLive: Boolean = true, mic: Boolean = true) {
         if (_ui.value.cid != null || CallManager.ui.value.status.live) return
         recordId = null; startedHere = false; someoneCame = false; startedAtMs = null; micWish = mic; linkKey = null
-        _ui.value = GroupCallUi(cid = cid, title = title, connecting = true, cameraOn = video, micOn = mic)
+        dialing = !requireLive; joinedAtMs = 0L; lastRemote = emptySet()
+        _ui.value = GroupCallUi(cid = cid, title = title, connecting = true, cameraOn = video, micOn = mic, calling = dialing)
+        // iOS start: updateRingback() "the calling sound from the tap".
+        if (dialing) CallTonePlayer.startRingback()
         loadGroupFaces(cid)
         val app = context.applicationContext
         appContext = app
@@ -259,6 +272,7 @@ object GroupCall {
     fun joinLink(context: Context, key: CallLinkKey, video: Boolean, mic: Boolean = true) {
         if (_ui.value.cid != null || CallManager.ui.value.status.live) return
         recordId = null; startedHere = false; someoneCame = true; startedAtMs = null; micWish = mic
+        dialing = false; joinedAtMs = 0L; lastRemote = emptySet()
         faces = emptyMap(); asked.clear(); team = null; linkKey = key
         val roomId = key.roomId
         val tag = "link:$roomId"
@@ -355,11 +369,15 @@ object GroupCall {
                 _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = micOn, cameraOn = video && !pass.voiceOnly,
                     micLocked = pass.micBlocked, linkUrl = linkKey?.url(video = !pass.voiceOnly))
                 passRole = CallRole.of(pass.role)
+                joinedAtMs = System.currentTimeMillis()
                 startSpeakerTicks(r)
+                val starting = !requireLive && r.remoteParticipants.isEmpty() && _ui.value.linkRoom == null
+                // A call already running: the calling sound gives way to the joined tone.
+                if (!starting) dialing = false
                 refresh()
+                if (!starting) CallTonePlayer.play(CallTone.GROUP_JOINED)   // iOS: the sound when I get in
                 if (_ui.value.linkRoom != null) return@run
-                if (!requireLive && r.remoteParticipants.isEmpty()) start(cid, title, video, r)
-                else { CallTonePlayer.play(CallTone.GROUP_JOINED); noteJoined(cid) }   // iOS: the sound when I get in
+                if (starting) start(cid, title, video, r) else noteJoined(cid)
             } catch (e: Exception) {
                 Log.w(TAG, "join failed", e)
                 fail("Call failed")
@@ -384,8 +402,8 @@ object GroupCall {
             if (r.remoteParticipants.isEmpty()) { fail("Couldn't start the call"); return }
             noteJoined(cid); return   // they started at the same moment: their call
         }
-        recordId = id; startedHere = true; startedAtMs = System.currentTimeMillis()
-        refresh()   // the calling sound starts (iOS: from the tap until the first person joins)
+        recordId = id; startedHere = true; dialing = false; startedAtMs = System.currentTimeMillis()
+        refresh()   // the calling sound goes on (iOS: from the tap until the first person joins)
         val conv = db.collection("conversations").document(cid)
         try {
             conv.collection("messages").document(id).set(GroupCallWire.recordFields(me, video, FieldValue.serverTimestamp())).await()
@@ -446,7 +464,15 @@ object GroupCall {
     private fun refresh() {
         val r = room ?: return
         if (r.remoteParticipants.isNotEmpty()) someoneCame = true
-        if (startedHere && !someoneCame) CallTonePlayer.startRingback() else CallTonePlayer.stopRingback()
+        val ringing = (startedHere || dialing) && !someoneCame
+        if (ringing) CallTonePlayer.startRingback() else CallTonePlayer.stopRingback()
+        // iOS noteRoomPeople: a sound when someone comes or goes, only while connected (a reconnect
+        // empties and refills the room, which is nobody leaving).
+        if (_ui.value.joined && !_ui.value.reconnecting) {
+            val here = r.remoteParticipants.values.mapNotNull { it.identity?.value }.toSet()
+            CallToneRules.presenceTone(lastRemote, here, System.currentTimeMillis() - joinedAtMs)?.let { CallTonePlayer.play(it) }
+            lastRemote = here
+        }
         val all: List<Participant> = listOf<Participant>(r.localParticipant) + r.remoteParticipants.values
         val members = all.map { p ->
             val uid = p.identity?.value ?: ""
@@ -485,7 +511,7 @@ object GroupCall {
         val mine = r.localParticipant.getTrackPublication(Track.Source.SCREEN_SHARE)
         val sharing = mine?.track != null && mine.muted != true
         members.filter { !it.local && it.id.isNotEmpty() && it.id !in faces && it.id !in asked }.forEach { loadFace(it.id) }
-        _ui.value = _ui.value.copy(members = members, calling = startedHere && !someoneCame, sharing = sharing)
+        _ui.value = _ui.value.copy(members = members, calling = ringing, sharing = sharing)
         tickSpeaker()
     }
 
@@ -683,6 +709,7 @@ object GroupCall {
             }
         }
         events?.cancel(); events = null
+        dialing = false; lastRemote = emptySet()
         CallTonePlayer.stopRingback()
         if (_ui.value.joined) CallTonePlayer.play(CallTone.GROUP_LEFT)   // iOS: the sound when I leave or am removed
         room?.let { try { it.disconnect(); it.release() } catch (_: Exception) {} }

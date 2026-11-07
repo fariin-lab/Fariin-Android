@@ -169,6 +169,7 @@ object GroupRing {
         timer?.cancel(); timer = null
         try { ringtone?.stop() } catch (_: Exception) {}
         ringtone = null
+        RingVibration.stop()
         val i = _invite.value
         _invite.value = null
         val c = app
@@ -220,12 +221,25 @@ object GroupRing {
     }
 
     private fun startRingtone(c: Context) {
+        RingVibration.start(c)
         try {
             val r = RingtoneManager.getRingtone(c, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)) ?: return
-            if (android.os.Build.VERSION.SDK_INT >= 28) r.isLooping = true
+            if (android.os.Build.VERSION.SDK_INT >= 28) r.isLooping = true else loopRingtone(r)
             ringtone = r
             r.play()
         } catch (_: Exception) {}
+    }
+
+    /** Android 8 has no Ringtone looping: start it again each time it ends, while it is still ours (as CallManager). */
+    private fun loopRingtone(r: Ringtone) {
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        h.postDelayed(object : Runnable {
+            override fun run() {
+                if (ringtone !== r) return
+                if (!r.isPlaying) try { r.play() } catch (_: Exception) {}
+                h.postDelayed(this, 500)
+            }
+        }, 500)
     }
 
     private fun inFront(): Boolean {

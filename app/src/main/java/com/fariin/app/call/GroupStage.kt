@@ -168,9 +168,13 @@ object GroupCallWords {
         else -> null
     }
 
-    /** iOS GroupCallView: "Ringing everyone…" while a call I started rings, else the count. */
+    /**
+     * iOS GroupCallView: "Ringing everyone…" while a call I started rings, from the tap (iOS
+     * `dialing`: no "Connecting…" first), else the count.
+     */
     fun subtitle(waiting: Boolean, connecting: Boolean, reconnecting: Boolean, joined: Boolean, callingNow: Boolean, inCall: Int): String =
-        status(waiting, connecting, reconnecting)
+        (if (callingNow && !reconnecting && !waiting) "Ringing everyone…" else null)
+            ?: status(waiting, connecting, reconnecting)
             ?: if (callingNow) "Ringing everyone…"
             else if (joined && inCall <= 1) "No one else is here"
             else if (joined) "$inCall in call" else " "
