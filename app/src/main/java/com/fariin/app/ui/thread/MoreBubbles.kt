@@ -1,7 +1,5 @@
 package com.fariin.app.ui.thread
 
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
 import android.content.ActivityNotFoundException
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -48,7 +46,6 @@ import com.fariin.app.media.AutoDownload
 import com.fariin.app.media.FileOpener
 import com.fariin.app.media.MediaRules
 import com.fariin.app.media.UploadProgress
-import com.fariin.app.media.ViewedOnce
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
 
@@ -147,46 +144,6 @@ internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable ()
                     fontSize = 13.sp, color = sub,
                 )
             }
-        }
-        Box(Modifier.align(Alignment.End)) { meta() }
-    }
-}
-
-/**
- * A view-once photo (iOS viewOncePill): "Photo" with the 1 mark until it is opened, then "Viewed"
- * with the crossed mark, and never openable again on this phone. A photo the server burned
- * (`consumed`, no file) is "Viewed" too. My own copy opens once for me as well (owner, 2026-10-03).
- */
-@Composable
-internal fun ViewOnceBody(m: Message, cid: String, isMe: Boolean, onView: (Viewing) -> Unit, meta: @Composable () -> Unit) {
-    val c = Fariin.colors
-    val ctx = LocalContext.current
-    val epoch by ViewedOnce.epoch.collectAsState()
-    val spent = remember(m.id, epoch, m.consumed) { m.consumed || ViewedOnce.contains(ctx, m.id) }
-    val url = m.imageUrl
-    val canOpen = !spent && url != null && m.sendState == null
-    val ink = if (isMe) Color.White else c.label
-    Column {
-        Row(
-            Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = canOpen) {
-                url?.let { onView(Viewing.Photo(it, m.enc, once = cid to m.id, msg = m)) }
-            }.padding(vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier.size(30.dp).clip(CircleShape).background(if (spent) Color.Transparent else ink.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (spent) Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), null, tint = ink.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
-                else Text("1", color = ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(if (spent) "Viewed" else "Photo", fontSize = 17.sp, color = if (spent) ink.copy(alpha = 0.7f) else ink)
-            if (m.sendState == Message.SendState.SENDING) {
-                Spacer(Modifier.width(8.dp))
-                CircularProgressIndicator(color = ink, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-            }
-            Spacer(Modifier.width(10.dp))
         }
         Box(Modifier.align(Alignment.End)) { meta() }
     }
