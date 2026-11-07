@@ -62,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -429,8 +430,11 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
     }
     val play = autoplay()
     val changes by GifLists.changes.collectAsState()
-    LazyVerticalStaggeredGrid(StaggeredGridCells.Fixed(2), modifier = Modifier.fillMaxSize(), contentPadding = padding,
-        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalItemSpacing = 6.dp) {
+    // iOS grid (2026-11-07): 3 columns edge to edge (no side margin), 2 apart both ways, square
+    // corners; the top and bottom padding stay as they were.
+    val edge = androidx.compose.foundation.layout.PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
+    LazyVerticalStaggeredGrid(StaggeredGridCells.Fixed(3), modifier = Modifier.fillMaxSize(), contentPadding = edge,
+        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalItemSpacing = 2.dp) {
         val items = list ?: emptyList()
         items(items.size, key = { items[it].id }) { i ->
             val g = items[i]
@@ -438,7 +442,7 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
             var menu by remember { mutableStateOf(false) }
             Box {
                 AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()
                         .background(c.secondary.copy(alpha = 0.15f))
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
                 androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
