@@ -179,8 +179,12 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
 
     // Back from Settings (permission or location switched on): look again.
     @Suppress("DEPRECATION") val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    // Only while the screen is on and Fariin is in front: Home or the screen going off stops the GPS.
+    var onScreen by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(owner) {
         val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_START) onScreen = true
+            if (e == Lifecycle.Event.ON_STOP) onScreen = false
             if (e == Lifecycle.Event.ON_RESUME) {
                 val now = LocAccess.of(ctx)
                 if (now != access) access = now
@@ -192,9 +196,9 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
     }
 
     // The fix, kept up to date while the page is open, so the accuracy line improves as GPS locks on.
-    DisposableEffect(access, tries) {
+    DisposableEffect(access, tries, onScreen) {
         val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        if (access == LocAccess.NONE) return@DisposableEffect onDispose {}
+        if (access == LocAccess.NONE || !onScreen) return@DisposableEffect onDispose {}
         servicesOff = Build.VERSION.SDK_INT >= 28 && !lm.isLocationEnabled
         val listener = object : LocationListener {
             override fun onLocationChanged(l: Location) {
