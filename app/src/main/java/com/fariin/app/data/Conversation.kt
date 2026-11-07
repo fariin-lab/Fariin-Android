@@ -39,6 +39,8 @@ data class Conversation(
     val lastHeld: Boolean = false,
     /** Group admins and "Start group call: Admins only" (for the New Call page's group rows). */
     val admins: List<String> = emptyList(),
+    /** A group's owner (Firestore `createdBy`). */
+    val createdBy: String = "",
     val onlyAdminsCall: Boolean = false,
     /** This phone's own write to the chat doc (a send made offline) has not reached the server yet. */
     val localPending: Boolean = false,
@@ -236,6 +238,7 @@ data class Conversation(
                 delivered = doubleMap(data["delivered"]),
                 lastHeld = data["lastHeld"] as? Boolean ?: false,
                 admins = stringList(data["admins"]),
+                createdBy = data["createdBy"] as? String ?: "",
                 onlyAdminsCall = data["onlyAdminsCall"] as? Boolean ?: false,
                 convType = type,
                 title = data["title"] as? String ?: "",

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -32,7 +33,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
@@ -390,6 +393,8 @@ internal fun ViewersSheet(
     onSendMessage: (StoryViewer) -> Unit,
     onBlock: (StoryViewer) -> Unit,
     rowSwipe: RowSwipe? = null,
+    /** The chat list: a group story's Replies tab reads its group from it (names, who may delete). */
+    convs: List<com.fariin.app.data.Conversation> = emptyList(),
 ) {
     val storyId = story.id
     var people by remember(storyId) { mutableStateOf<List<StoryViewer>?>(null) }
@@ -415,11 +420,23 @@ internal fun ViewersSheet(
     var sheetH by remember { mutableFloatStateOf(1f) }
     var screenH by remember { mutableFloatStateOf(1f) }
     val focus = LocalFocusManager.current
-    // A group story's list is the poster's to read only; the tab is "All Viewers" and nothing else.
+    // A group story's list is the poster's to read only: "All Viewers", then Replies (iOS group
+    // stories v2), the story's shared thread, when replies are on and it is not a channel's.
     val readOnly = story.groupId != null
+    val repliesTab = readOnly && com.fariin.app.data.GroupStoryRules.hasRepliesTab(story, convs)
     val first = if (readOnly) "All Viewers" else customName ?: StoryRules.audienceTitle(story)
-    val bothTabs = !readOnly && story.audienceLabel == "everyone" && !story.oneTime
+    val bothTabs = if (readOnly) repliesTab else story.audienceLabel == "everyone" && !story.oneTime
     if (!bothTabs && tab != 0) tab = 0
+    var replies by remember(storyId) { mutableStateOf<List<com.fariin.app.data.GroupStoryReply>>(emptyList()) }
+    var userPickedTab by remember(storyId) { mutableStateOf(false) }
+    var autoPicked by remember(storyId) { mutableStateOf(false) }
+    DisposableEffect(storyId, repliesTab) {
+        val reg = if (repliesTab) com.fariin.app.data.GroupStoryReplies.listen(storyId) { replies = it } else null
+        onDispose { reg?.remove() }
+    }
+    // Opens on Replies when there are any, once, and never over a tab picked by hand (iOS).
+    if (repliesTab && replies.isNotEmpty() && !autoPicked && !userPickedTab && tab == 0) { autoPicked = true; tab = 1 }
+    val showingReplies = repliesTab && tab == 1
 
     // The list hands a pull to the sheet once it is at its top, and takes back an upward one first.
     val listPull = remember(sheet) {
@@ -485,8 +502,8 @@ internal fun ViewersSheet(
                     Box(Modifier.padding(top = 8.dp).align(Alignment.CenterHorizontally).size(38.dp, 5.dp)
                         .clip(RoundedCornerShape(2.5.dp)).background(Color.White.copy(alpha = 0.28f)))
                     Row(Modifier.padding(start = 18.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        SheetTab(first, selected = tab == 0, enabled = bothTabs) { tab = 0 }
-                        if (bothTabs) SheetTab("Friends", selected = tab == 1, enabled = true) { tab = 1 }
+                        SheetTab(first, selected = tab == 0, enabled = bothTabs) { userPickedTab = true; tab = 0 }
+                        if (bothTabs) SheetTab(if (readOnly) "Replies" else "Friends", selected = tab == 1, enabled = true) { userPickedTab = true; tab = 1 }
                     }
                     Row(
                         Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp).fillMaxWidth().height(38.dp)
@@ -510,6 +527,13 @@ internal fun ViewersSheet(
                 val list = people
                 val hidden by StoryPrivacyStore.hidden.collectAsState()
                 when {
+                    showingReplies -> RepliesList(story, me, replies, query, who, convs, Modifier.weight(1f).nestedScroll(listPull),
+                        onOpenPerson = onOpenPerson,
+                        onDelete = { r ->
+                            // Off the list at once; the listener confirms it, or brings it back on a refusal.
+                            replies = replies.filter { it.id != r.id }
+                            loadScope.launch { runCatching { com.fariin.app.data.GroupStoryReplies.delete(storyId, r.id) } }
+                        })
                     list == null && !failed -> ViewersSkeleton()
                     list == null || list.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 24.dp)) {
                         Text(
@@ -617,6 +641,116 @@ private fun ViewerRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * A group story's Replies tab (iOS StoryViewersPanelView replies): oldest at the top, landing on
+ * the newest; search matches the writer's name or the words; "No replies yet" when empty.
+ */
+@Composable
+private fun RepliesList(
+    story: Story, me: String, replies: List<com.fariin.app.data.GroupStoryReply>, query: String,
+    who: (String) -> Pair<String, String?>, convs: List<com.fariin.app.data.Conversation>, modifier: Modifier,
+    onOpenPerson: (String) -> Unit, onDelete: (com.fariin.app.data.GroupStoryReply) -> Unit,
+) {
+    val gid = story.groupId.orEmpty()
+    val group = convs.firstOrNull { it.id == gid }
+    // iOS replyPerson: me, then the group's own member maps, then a 1:1 chat.
+    val person: (String) -> Pair<String, String?> = { uid ->
+        val groupName = group?.names?.get(uid)
+        when {
+            uid == me -> "You" to group?.photos?.get(me)?.ifEmpty { null }
+            !groupName.isNullOrEmpty() -> groupName to group?.photos?.get(uid)?.ifEmpty { null }
+            else -> who(uid)
+        }
+    }
+    val q = query.trim()
+    val rows = if (q.isEmpty()) replies
+        else replies.filter { person(it.uid).first.contains(q, ignoreCase = true) || it.text.contains(q, ignoreCase = true) }
+    if (rows.isEmpty()) {
+        Box(modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+            Text("No replies yet", color = Color.White.copy(alpha = 0.55f), fontSize = 15.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 40.dp))
+        }
+        return
+    }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    androidx.compose.runtime.LaunchedEffect(rows.size) { listState.scrollToItem(rows.size - 1) }
+    LazyColumn(modifier.fillMaxWidth(), state = listState) {
+        items(rows.size, key = { rows[it].id }) { i ->
+            val r = rows[i]
+            val (name, photo) = person(r.uid)
+            ReplyRow(r, name, photo, canDelete = com.fariin.app.data.GroupStoryRules.canDelete(r, gid, me, convs),
+                onOpenProfile = { if (r.uid != me) onOpenPerson(r.uid) }, onDelete = { onDelete(r) })
+        }
+    }
+}
+
+/**
+ * One reply as a comment (iOS GroupStoryReplyRowContent): face, bold name and "5m", the words or
+ * "Reacted to the story" with the emoji large at the end. Long press: Copy for words, Delete for
+ * the writer and the group's owner or admins.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun ReplyRow(
+    r: com.fariin.app.data.GroupStoryReply, name: String, photoUrl: String?, canDelete: Boolean,
+    onOpenProfile: () -> Unit, onDelete: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val hasMenu = !r.isReaction || canDelete
+    Box {
+        Row(
+            Modifier.fillMaxWidth()
+                .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                    onLongClick = if (hasMenu) ({ menu = true }) else null, onClick = {})
+                .padding(horizontal = 16.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Box(Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpenProfile() }) {
+                Avatar(photoUrl, 40.dp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpenProfile() },
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(6.dp))
+                    Text(replyAgo(r.createdAtMs), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                }
+                if (r.isReaction) Text("Reacted to the story", color = Color.White.copy(alpha = 0.7f), fontSize = 17.sp)
+                else Text(r.text, color = Color.White, fontSize = 17.sp)
+            }
+            if (r.isReaction) {
+                Spacer(Modifier.width(8.dp))
+                Text(r.emoji, fontSize = 30.sp)
+            }
+        }
+        androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(
+            surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (!r.isReaction) DropdownMenuItem(text = { Text("Copy") },
+                    leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                    onClick = { menu = false; clipboard.setText(androidx.compose.ui.text.AnnotatedString(r.text)) })
+                if (canDelete) DropdownMenuItem(text = { Text("Delete", color = Fariin.colors.red) },
+                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fariin.colors.red) },
+                    onClick = { menu = false; onDelete() })
+            }
+        }
+    }
+}
+
+/** Number and one letter, as the story header writes its age (iOS GroupStoryReplyRowContent.ago). */
+internal fun replyAgo(atMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+    val s = maxOf(0L, (nowMs - atMs) / 1000)
+    return when {
+        s < 60 -> "${s}s"
+        s < 3600 -> "${s / 60}m"
+        s < 86_400 -> "${s / 3600}h"
+        else -> "${s / 86_400}d"
     }
 }
 

@@ -414,7 +414,8 @@ fun StoryViewer(
      */
     fun cardOf(g: StoryGroup?): Rect {
         val w = size.width.toFloat(); val h = size.height.toFloat()
-        val mine = g?.stories?.firstOrNull()?.authorUid == me
+        val first = g?.stories?.firstOrNull()
+        val mine = first != null && com.fariin.app.data.GroupStoryRules.canSeeViews(first, me, convs)
         val footer = if (mine) StorySheetGeometry.ownFooter(bottomInset, density) else StorySheetGeometry.replyFooter(bottomInset, density)
         return Rect(0f, topInset, w, topInset + StorySheetGeometry.cardHeight(w, h, topInset, footer))
     }
@@ -771,7 +772,14 @@ fun StoryViewer(
                     onReply = { s, text, reaction ->
                         toast = "Sent"
                         if (reaction) flying = text to System.nanoTime()
-                        storyScope.launch {
+                        // A group story (iOS group stories v2): into the story's shared thread that its
+                        // owner and admins read, not privately to the poster.
+                        if (s.groupId != null) storyScope.launch {
+                            val ok = runCatching {
+                                com.fariin.app.data.GroupStoryReplies.send(me, s.id, text = if (reaction) "" else text, emoji = if (reaction) text else "")
+                            }.isSuccess
+                            if (!ok) toast = "Couldn't send. Check your connection and try again."
+                        } else storyScope.launch {
                             val ok = runCatching {
                                 val cid = listOf(me, s.authorUid).sorted().joinToString("_")
                                 ThreadRepository(cid, me, CryptoHub.crypto, storyScope).sendStoryReply(
@@ -781,7 +789,11 @@ fun StoryViewer(
                             if (!ok) toast = "Couldn't send. Check your connection and try again."
                         }
                     },
-                    canReply = { s -> com.fariin.app.data.StoryPrivacyRules.canReply(s, contacts) },
+                    canReply = { s ->
+                        if (s.groupId != null) com.fariin.app.data.GroupStoryRules.memberCanReply(s, me, convs)
+                        else com.fariin.app.data.StoryPrivacyRules.canReply(s, contacts)
+                    },
+                    ownerBar = { s -> s.groupId != null && com.fariin.app.data.GroupStoryRules.canSeeViews(s, me, convs) },
                     receipts = receipts,
                     onShown = onShown,
                     onMediaLoaded = { pageLoaded[it] = true },
@@ -937,6 +949,7 @@ fun StoryViewer(
                 },
                 // iOS onBlock: straight away, no question (ChatService.setBlocked).
                 onBlock = { v -> storyScope.launch { runCatching { FirestorePeople(me, CryptoHub.crypto).setBlocked(v.uid, true) } } },
+                convs = convs,
             )
         }
         // A profile opened from the sheet sits over it; closing it leaves the sheet where it was.
@@ -1031,6 +1044,8 @@ private fun StoryPage(
     canReply: (Story) -> Boolean,
     receipts: Boolean,
     onShown: (Story) -> Unit,
+    /** The poster's bar and the viewers sheet: my story, or a group story of a group I own or run (iOS hasOwnerBar). */
+    ownerBar: (Story) -> Boolean = { false },
     onHide: (String) -> Unit,
     onNotify: (uid: String, name: String) -> Unit = { _, _ -> },
     /** The "..." menu's other rows (iOS UserView.moreItems): "save", "viewers", "share", "report". */
@@ -1054,6 +1069,7 @@ private fun StoryPage(
     }
     val story = stories[index]
     val mine = story.authorUid == me
+    val poster = mine || ownerBar(story)
     var holding by remember { mutableStateOf(false) }
     var loaded by remember(story.id) { mutableStateOf(false) }
     var progress by remember(story.id) { mutableFloatStateOf(0f) }
@@ -1095,7 +1111,7 @@ private fun StoryPage(
     }
 
     // My story: the owner bar's numbers for THIS story, live while it is on screen.
-    if (mine && active) {
+    if (poster && active) {
         DisposableEffect(story.id) {
             var job: kotlinx.coroutines.Job? = null
             fun refresh() {
@@ -1111,7 +1127,7 @@ private fun StoryPage(
     val slop = LocalViewConfiguration.current.touchSlop
     val focus = LocalFocusManager.current
     Box(
-        Modifier.fillMaxSize().pointerInput(story.id, mine) {
+        Modifier.fillMaxSize().pointerInput(story.id, poster) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
@@ -1139,7 +1155,7 @@ private fun StoryPage(
                             // My story: a drag that started UP and went 40dp or flicked 300dp/s up opens the
                             // viewers (iOS onSwipeUpEnded). A pull down never does, even if the finger
                             // flicks back up as it lifts (owner 2026-11-03: a short pull down opened them).
-                            if (mine && upward && dy < 0 && (dy < -StoryMotion.VIEWERS_DISTANCE * density || vy < -StoryMotion.VIEWERS_VELOCITY * density)) {
+                            if (poster && upward && dy < 0 && (dy < -StoryMotion.VIEWERS_DISTANCE * density || vy < -StoryMotion.VIEWERS_VELOCITY * density)) {
                                 onDragEnd(0f, 0f); onOpenViewers(story.id)
                             } else onDragEnd(dy, vy)
                         } else if (!held && ch.isConsumed.not()) {
@@ -1291,7 +1307,9 @@ private fun StoryPage(
                 .graphicsLayer { alpha = chrome() }
                 .navigationBarsPadding().imePadding(),
         ) {
-            if (mine) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) }, onDelete = { onDelete(story) })
+            // Only the author deletes (rules): a group's owner and admins get the bar without the bin.
+            if (poster) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) },
+                onDelete = if (mine) ({ onDelete(story) }) else null)
             else if (com.fariin.app.data.OfficialStories.isOfficial(story)) OfficialStoryButton(story, onLink)
             // A followed channel's story (iOS ChannelStoryFooter): nobody messages the channel from it;
             // views, reposts and likes for everyone, and Share.
@@ -1387,7 +1405,7 @@ private fun StoryMedia(
 
 /** iOS StoryOwnerStats + the trash: viewer faces, "N Views", reposts and hearts when there are any. */
 @Composable
-private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Unit, onDelete: () -> Unit) {
+private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Unit, onDelete: (() -> Unit)?) {
     val count = summary?.count ?: 0
     val faces = summary?.recent ?: emptyList()
     val full = StoryRules.oneTimeFull(story)
@@ -1425,7 +1443,7 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
             }
         }
         Spacer(Modifier.weight(1f))
-        Box(Modifier.size(44.dp).clickable { onDelete() }, contentAlignment = Alignment.Center) {
+        if (onDelete != null) Box(Modifier.size(44.dp).clickable { onDelete() }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Delete, contentDescription = "Delete story", tint = Color.White)
         }
     }
