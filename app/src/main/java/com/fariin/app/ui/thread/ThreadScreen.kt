@@ -453,6 +453,20 @@ private fun ThreadContent(
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { if (!it) stick = listState.firstVisibleItemIndex <= 1 }
     }
+    // A short chat (a new group: its card, "created the group" and a message or two) is topped up
+    // to the list's height by an empty row above everything (key FILL_KEY). Without it the rows did
+    // not fill the screen, so a new message could not wait under the composer: every row was laid
+    // out again one bubble higher in the same frame, the rows slid up on their own placement springs
+    // over the new bubble already drawn in its place (two day pills and two bubbles drawn on top of
+    // each other, owner's Pixel 2026-11-07), and the group's card, which has no such spring, jumped.
+    // Filled, a short chat takes a new message exactly as a long one: the rows stay, the new bubble
+    // waits below, and the stick-to-newest glide (above) carries everything up together.
+    // Measured only at rest at the newest, where a change above the top edge moves nothing on screen.
+    var shortFill by remember(ui.cid) { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(listState) {
+        snapshotFlow { shortFillFor(listState) }
+            .collect { if (it != null) shortFill = it }
+    }
     LaunchedEffect(ui.messages.lastOrNull()?.rowId) {
         if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) {
             // Someone else's message landing live: the list glides up to it (iOS), instead of every
@@ -917,6 +931,12 @@ private fun ThreadContent(
                         GroupWelcomeCard(ui, onStep = { peopleNav.groupStep(ui.cid, it) })
                     }
                 }
+                // A short chat's top-up to the list's height (shortFill, above): last, so above everything.
+                if (shortFill > 0 && ui.messages.isNotEmpty()) item(key = FILL_KEY) {
+                    // Exact pixels: a dp round trip could come out a pixel short, and a list a pixel
+                    // short of full pulls the waiting new row up (the very jump this row prevents).
+                    Spacer(Modifier.fillMaxWidth().layout { _, c -> layout(c.maxWidth, shortFill) {} })
+                }
             }
             }
             if (search.active && search.asList && search.matches.isNotEmpty()) {
@@ -1362,6 +1382,29 @@ private fun channelChipsInside(m: Message): Boolean =
 
 /** BubblePalette.senderColor: the sum of the uid's characters into a fixed palette. */
 private fun senderColor(uid: String): Color = senderPalette[uid.sumOf { it.code } % senderPalette.size]
+
+/** The list key of a short chat's top-up row (ThreadContent's shortFill). */
+private const val FILL_KEY = "shortFill"
+
+/**
+ * The empty height a short chat needs above its rows to fill the list, 0 when the rows already fill
+ * it, or null when it is not safe to read now: only at rest at the newest, so a change, which sits
+ * above everything, never moves a row on screen (and never mid-arrival, while the new row waits).
+ */
+private fun shortFillFor(state: androidx.compose.foundation.lazy.LazyListState): Int? {
+    if (state.isScrollInProgress || state.firstVisibleItemIndex != 0 || state.firstVisibleItemScrollOffset != 0) return null
+    val info = state.layoutInfo
+    val seen = info.visibleItemsInfo
+    if (seen.isEmpty()) return null
+    val fillIn = info.totalItemsCount > 0 && seen.lastOrNull()?.key == FILL_KEY
+    val rows = seen.filter { it.key != FILL_KEY }
+    // Some row out of sight (or the top-up there but not drawn): the rows alone overflow.
+    val count = info.totalItemsCount - (if (fillIn) 1 else 0)
+    if (rows.size < count || (!fillIn && seen.size < info.totalItemsCount)) return 0
+    val content = rows.sumOf { it.size } + info.mainAxisItemSpacing * (rows.size - 1).coerceAtLeast(0)
+    val usable = info.viewportSize.height - info.beforeContentPadding - info.afterContentPadding
+    return (usable - content).coerceAtLeast(0)
+}
 
 @Composable
 private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is24h: Boolean, onRetry: (Message) -> Unit,
