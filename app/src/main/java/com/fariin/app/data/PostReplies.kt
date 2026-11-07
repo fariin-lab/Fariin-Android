@@ -108,12 +108,15 @@ object PostReplyRules {
      * the Reply part entirely (iOS, owner 2026-11-07: "in post don't show Reply"); the bar then stays
      * only for quotes. Null = no bar (a post still sending or failed, deleted, or off and never quoted).
      */
-    fun barLabel(replies: Int, quotes: Int, repliesOn: Boolean, sent: Boolean = true, deleted: Boolean = false): String? {
+    fun barLabel(replies: Int, quotes: Int, repliesOn: Boolean, sent: Boolean = true, deleted: Boolean = false,
+                 /** The channel's Quotes switch (`quotesOff` false): off leaves out the "N Quotes" part. */
+                 quotesOn: Boolean = true): String? {
         if (!sent || deleted) return null
-        if (!repliesOn && quotes <= 0) return null
+        val showQuotes = quotesOn && quotes > 0
+        if (!repliesOn && !showQuotes) return null
         val parts = mutableListOf<String>()
         if (repliesOn) parts += if (replies <= 0) "Reply" else repliesWord(replies)
-        if (quotes > 0) parts += PostQuoteRules.barLabel(quotes)
+        if (showQuotes) parts += PostQuoteRules.barLabel(quotes)
         return parts.joinToString(" · ")
     }
 

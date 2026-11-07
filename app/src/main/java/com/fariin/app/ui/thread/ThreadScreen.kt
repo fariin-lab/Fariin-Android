@@ -715,7 +715,7 @@ private fun ThreadContent(
         com.fariin.app.ui.channels.PostQuotesSheet.open.value = post
     }
     // The Quotes sheet a post's "N Quotes" bar opens (PostQuotesUi.kt).
-    ui.channel?.let { ch -> com.fariin.app.ui.channels.PostQuotesHost(ui.cid, ui.title, ui.photoUrl, ch.info.verified) }
+    ui.channel?.let { ch -> com.fariin.app.ui.channels.PostQuotesHost(ui.cid, ui.title, ui.photoUrl, ch.info.verified, quotesOff = ch.info.quotesOff) }
     // In-chat search (InChatSearch.kt, iOS uiMode .search): opened from the info pages' Search circle.
     val search = remember(ui.cid) { InChatSearchState() }
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -997,7 +997,7 @@ private fun ThreadContent(
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
                                     // A picture, video or album post's pills sit inside its bubble (MediaRow).
-                                    if (!channelChipsInside(m)) { if (!mediaBarInside(m)) com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
+                                    if (!channelChipsInside(m)) { if (!mediaBarInside(m)) com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff, channelQuotesOff = ch.info.quotesOff) }
                                 }
                             }
                             selecting -> Row(
@@ -1764,7 +1764,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
             // "N Quotes" along the bubble's bottom (PostQuotesUi.kt).
-            if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff)
+            if (ch != null && channelChipsInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, channelQuotesOff = ch.info.quotesOff)
         }
         }
         }
@@ -1916,7 +1916,7 @@ private fun MediaRow(
         // A channel post's "Replies · Quotes" bar along the bubble's bottom, under a hairline, as a
         // text post has it (iOS: the bubble grows by the bar; a bare picture too).
         if (ch != null && mediaBarInside(m)) Box(Modifier.layoutId("bar"), propagateMinConstraints = true) {
-            com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, edge = 10.dp)
+            com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, edge = 10.dp, channelQuotesOff = ch.info.quotesOff)
         }
     }) { ms, cons ->
         val loose = cons.copy(minWidth = 0, minHeight = 0)

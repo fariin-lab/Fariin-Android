@@ -141,14 +141,16 @@ private fun QuoteFaces(urls: List<String>, people: Boolean = false) {
  * [inBubble] false: a media post, whose bubble is the picture, gets the same row under it.
  */
 @Composable
-fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = true, edge: Dp = 0.dp) {
+fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = true, edge: Dp = 0.dp,
+                  /** The channel's Quotes switch off: no "N Quotes" part (and no bar with replies off too). */
+                  channelQuotesOff: Boolean = false) {
     if (m.isSystem) return
     // The post's own switch wins over the channel's (off by default); one just changed here wins over both.
     val local = PostRepliesSwitch.of(m.id)
     if (local != null) androidx.compose.runtime.SideEffect { PostRepliesSwitch.settled(m.id, m.repliesOff) }
     val repliesOn = !PostReplyRules.postOff(m.repliesOff, channelRepliesOff, local)
     val label = PostReplyRules.barLabel(m.replyCount, m.quoteCount, repliesOn = repliesOn,
-        sent = m.sendState == null, deleted = m.deleted) ?: return
+        sent = m.sendState == null, deleted = m.deleted, quotesOn = !channelQuotesOff) ?: return
     val start = PostReplyRules.barStart(repliesOn, m.replyCount, m.replyFaces, m.quoteCount, m.quoteFaces)
     val c = Fariin.colors
     var parentW by remember { mutableIntStateOf(0) }
@@ -225,7 +227,9 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: Boolean) {
+fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: Boolean,
+                   /** The channel's Quotes switch off: the sheet has no Quotes tab, Replies alone (read-only if off). */
+                   quotesOff: Boolean = false) {
     val post by PostQuotesSheet.open.collectAsState()
     val m = post ?: return
     val channelNav = LocalChannelNav.current
@@ -239,7 +243,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     var loadingMore by remember(m.id) { mutableStateOf(false) }
     var thumb by remember(m.id) { mutableStateOf<ImageBitmap?>(null) }
     val startOff = remember(m.id) { PostQuotesSheet.startOff }
-    var tab by remember(m.id) { mutableIntStateOf(if (startOff) 1 else PostQuotesSheet.startTab) }
+    var tab by remember(m.id) { mutableIntStateOf(if (quotesOff) 0 else if (startOff) 1 else PostQuotesSheet.startTab) }
     // The Quotes page loads once it is first shown, and stays loaded when switching back.
     var quotesShown by remember(m.id) { mutableStateOf(tab == 1) }
     val scope = rememberCoroutineScope()
@@ -251,7 +255,8 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     }
     // Replies off (this post's or the channel's, as the bar said until the server answers): no
     // Replies tab, Quotes alone (iOS, owner 2026-11-07). The admin's ... still turns them back on.
-    val repliesShown = if (replies.answered) !replies.off else !startOff
+    // With Quotes off too, Replies stays (read-only when off) so the sheet is never empty.
+    val repliesShown = quotesOff || (if (replies.answered) !replies.off else !startOff)
     LaunchedEffect(repliesShown) {
         if (!repliesShown && tab == 0) { tab = 1; quotesShown = true; keyboard?.hide(); focus.clearFocus() }
     }
@@ -303,7 +308,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
         // The column below takes the navigation bar and the keyboard itself, so the field rides on the keyboard.
         contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) }) {
       Column(Modifier.fillMaxWidth().height(sheetH).navigationBarsPadding().imePadding()) {
-        RepliesSheetTop(tab, repliesShown, replies, onPick = {
+        RepliesSheetTop(tab, repliesShown, replies, showQuotes = !quotesOff, onPick = {
             tab = it
             if (it == 1) {
                 quotesShown = true
