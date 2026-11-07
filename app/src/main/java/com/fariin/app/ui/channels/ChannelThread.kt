@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -287,6 +288,8 @@ fun ChannelPostMenu(
     val mine = ch.mine(m.id)
     // The owner's quote mark (a speech bubble with two lines), as everywhere a quote shows.
     val quoteIcon = ImageVector.vectorResource(com.fariin.app.R.drawable.ic_quote)
+    // The owner's comment icon (iOS ic_reply_comment), on "Turn On Replies".
+    val replyIcon = ImageVector.vectorResource(com.fariin.app.R.drawable.ic_reply_comment)
     val items = buildList {
         if (!m.deleted) {
             // A contact or location card is no text to copy (as the chat menu, MessageActions).
@@ -305,6 +308,16 @@ fun ChannelPostMenu(
             if (onEdit != null) add(PostItem("Edit", Icons.Outlined.Edit) { onDismiss(); onEdit(m) })
             if (onEditHistory != null && m.edited) add(PostItem("Edit History", Icons.Outlined.History) { onDismiss(); onEditHistory(m) })
             if (pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", Icons.Outlined.PushPin) { onDismiss(); onPin(m) })
+            // Replies off or on for this post (iOS, owner 2026-11-06): the Change info right, which the
+            // server checks too. The post's own switch wins over the channel's; the post changes on
+            // screen at once (PostRepliesSwitch), older posts included.
+            if (ch.canEdit && m.sendState == null) {
+                val off = com.fariin.app.data.PostReplyRules.postOff(m.repliesOff, ch.info.repliesOff, PostRepliesSwitch.of(m.id))
+                add(PostItem(if (off) "Turn On Replies" else "Turn Off Replies",
+                    if (off) replyIcon else Icons.Outlined.Block) {
+                    onDismiss(); PostRepliesSwitch.set(ch.info.cid, m.id, !off, ch.notice)
+                })
+            }
         }
         if (ch.role == Role.ADMIN) add(PostItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
     }
