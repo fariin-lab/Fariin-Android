@@ -20,6 +20,8 @@ object StoryMedia {
                    val repostOf: StoryRepost? = null)
 
     class TooBig : Exception("This video is too large for a story.")
+    /** Past the 10-minute pick limit (iOS AddStorySheet "That video is too long"). */
+    class TooLong : Exception(StoryLimits.TOO_LONG_TEXT)
 
     fun isVideo(context: Context, uri: Uri): Boolean =
         context.contentResolver.getType(uri)?.startsWith("video/") == true
@@ -78,11 +80,14 @@ object StoryMedia {
         val bytes = context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getLong(0) else 0L
         } ?: 0L
-        if (bytes > StoryRules.VIDEO_MAX_BYTES) throw TooBig()
         val r = MediaMetadataRetriever()
         try {
             r.setDataSource(context, uri)
             val ms = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            // Longer than one story's 90 s: posted as several 540p pieces (StoryUploads), so only
+            // the 10-minute pick limit applies, not the file size of the original.
+            if (StoryLimits.pickTooLong(ms / 1000.0)) throw TooLong()
+            if (StoryLimits.segments(ms / 1000.0).isEmpty() && bytes > StoryRules.VIDEO_MAX_BYTES) throw TooBig()
             var w = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
             var h = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
             val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
@@ -92,6 +97,10 @@ object StoryMedia {
             val jpeg = jpeg(poster, 80)
             val blur = blurThumb(poster)
             return Prepared(jpeg, blur, Video(uri, StoryRules.VideoInfo(ms / 1000.0, w, h, bytes)), w, h)
+        } catch (e: TooLong) {
+            throw e
+        } catch (e: TooBig) {
+            throw e
         } catch (_: Exception) {
             return null
         } finally {

@@ -143,13 +143,16 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var composing by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
     var composingText by remember { mutableStateOf(false) }
     var pickError by remember { mutableStateOf<String?>(null) }
+    // iOS "That video is too long" (past the 10-minute pick) and "That's today's limit".
+    var tooLong by remember { mutableStateOf(false) }
+    var dayLimit by remember { mutableStateOf(false) }
     val upload by StoryUploads.state.collectAsState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             prepareStoryMedia(context, uri)
                 .onSuccess { composing = it; pickError = null }
-                .onFailure { pickError = it.message ?: "Couldn't open this file." }
+                .onFailure { if (it is StoryMedia.TooLong) tooLong = true else pickError = it.message ?: "Couldn't open this file." }
         }
     }
     // The story camera (StoryCamera.kt); its gallery button opens the picker, as iOS onLibrary.
@@ -157,7 +160,20 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val openLibrary: () -> Unit = {
         if (live) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
     }
-    val addStory: () -> Unit = { if (live) camera = true }
+    // The day's allowance is asked before the camera opens (iOS composeStory), from the counter read
+    // when the tab shows; it fails open, and the rules are what hold the line.
+    val limits = com.fariin.app.data.StoryLimits
+    LaunchedEffect(profile?.verified) { limits.verified = profile?.verified == true }
+    LaunchedEffect(me, live, active) { if (live && active) limits.refresh(me) }
+    val addStory: () -> Unit = {
+        if (live) {
+            if (limits.dailyReached()) {
+                dayLimit = true
+                // A window that rolled while the app sat open opens the camera on the next tap.
+                scope.launch { limits.refresh(me) }
+            } else camera = true
+        }
+    }
     // The chat list's camera button: open the camera once per press (not again on recomposition).
     // The count lives outside the tab: the tab's own saved state is dropped when another tab is
     // open, and coming back to Stories must not open the camera again. A smaller count = a new shell.
@@ -223,7 +239,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // whole tab went.
     LaunchedEffect(active) {
         if (!active) {
-            viewing = null; camera = false; composing = null; composingText = false; posted = false
+            viewing = null; camera = false; composing = null; composingText = false; posted = false; tooLong = false; dayLimit = false
             privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
         }
     }
@@ -437,6 +453,18 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             dismissButton = { androidx.compose.material3.TextButton(onClick = { hideTarget = null }) { Text("Cancel") } },
         )
     }
+    if (tooLong) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { tooLong = false },
+        title = { Text(com.fariin.app.data.StoryLimits.TOO_LONG_TITLE) },
+        text = { Text(com.fariin.app.data.StoryLimits.TOO_LONG_TEXT) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { tooLong = false }) { Text("OK") } },
+    )
+    if (dayLimit) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { dayLimit = false },
+        title = { Text(com.fariin.app.data.StoryLimits.DAY_TITLE) },
+        text = { Text(limits.dayAlertText()) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { dayLimit = false }) { Text("OK") } },
+    )
     composing?.let { m ->
         StoryComposerDialog(me, m, conversations, onClose = { composing = null; composingText = false },
             onPosted = { composing = null; composingText = false; camera = false }, textStory = composingText)

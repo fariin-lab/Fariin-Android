@@ -121,20 +121,69 @@ object StoryUploads {
         val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
         val app = context.applicationContext
         scope.launch {
-            // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start.
-            val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists)
-            state.value = try {
-                StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket)
+            val video = media.video
+            val pieces = video?.let { com.fariin.app.data.StoryLimits.segments(it.info.durationSec) }.orEmpty()
+            state.value = if (video == null || pieces.isEmpty()) {
+                postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists)
+            } else {
+                // iOS postVideo: a clip past 90 s goes as several stories in order, each its own
+                // 90 s piece; the caption and the tap areas ride the first, the one seen first.
+                var result: State? = null
+                for ((i, range) in pieces.withIndex()) {
+                    val file = java.io.File(app.cacheDir, "story-part-${System.nanoTime()}.mp4")
+                    try {
+                        val part = if (com.fariin.app.media.StoryVideoCut.cut(app, video.file, file, range))
+                            StoryMedia.prepareVideo(app, Uri.fromFile(file)) else null
+                        if (part == null) {
+                            result = State.Failed(if (i == 0) "Couldn't prepare this video for your story."
+                                else "Only the first $i parts of this video were posted. The rest couldn't be prepared.")
+                            break
+                        }
+                        val clip = part.video?.let { v -> StoryMedia.Video(v.file, v.info.copy(bytes = file.length())) }
+                        val one = StoryMedia.Prepared(part.jpeg, part.blurThumb, clip, part.width, part.height,
+                            if (i == 0) media.stickers else emptyList(), media.repostOf)
+                        result = postOne(app, me, one, if (i == 0) caption else "", choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists)
+                        if (result != null) break
+                    } finally {
+                        file.delete()   // the outbox keeps its own copy
+                    }
+                }
+                result
+            }
+            com.fariin.app.data.StoryLimits.refresh(me)
+        }
+    }
+
+    /** One story through the outbox; null when it is up, else what to say. */
+    private suspend fun postOne(app: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice,
+                                picked: Set<String>, hours: Int, convs: List<Conversation>, captureSwitch: Boolean,
+                                myFriends: com.fariin.app.data.StoryListDoc, hidden: Set<String>,
+                                lists: List<com.fariin.app.data.StoryListDoc>): State? {
+        // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start.
+        val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists)
+        return try {
+            StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket)
+            ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
+            null
+        } catch (e: StoryService.PostRefused) {
+            ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
+            State.Failed(e.message ?: "Couldn't post your story.")
+        } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+            // The rules said no (iOS isPermanentPostFailure): the day's or the hour's ceiling, and
+            // trying again at the next start would only be refused again.
+            if (e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
                 ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
-                null
-            } catch (e: StoryService.PostRefused) {
-                ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
-                State.Failed(e.message ?: "Couldn't post your story.")
-            } catch (e: Exception) {
+                com.fariin.app.data.StoryLimits.refresh(me)
+                State.Failed(com.fariin.app.data.StoryLimits.refusedText())
+            } else {
                 android.util.Log.w("StoryPost", "post failed", e)
                 ticket?.let { com.fariin.app.data.StoryOutbox.release(it) }
                 State.Failed("Couldn't post your story. Check your connection and try again.")
             }
+        } catch (e: Exception) {
+            android.util.Log.w("StoryPost", "post failed", e)
+            ticket?.let { com.fariin.app.data.StoryOutbox.release(it) }
+            State.Failed("Couldn't post your story. Check your connection and try again.")
         }
     }
 }
@@ -322,7 +371,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (caption.isEmpty()) Text("Add a caption…", color = Color.White.copy(alpha = 0.65f), fontSize = 17.sp)
-                    BasicTextField(caption, { caption = it.take(1000) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
+                    BasicTextField(caption, { caption = it.take(com.fariin.app.data.StoryLimits.CAPTION_CHARS) }, textStyle = TextStyle(color = Color.White, fontSize = 17.sp),
                         cursorBrush = SolidColor(Color.White), maxLines = 4,
                         modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed })
                 }
@@ -438,6 +487,8 @@ suspend fun prepareStoryMedia(context: android.content.Context, uri: Uri): Resul
         try {
             StoryMedia.prepare(context, uri)?.let { Result.success(it) } ?: Result.failure(IllegalStateException("Couldn't open this file."))
         } catch (e: StoryMedia.TooBig) {
+            Result.failure(e)
+        } catch (e: StoryMedia.TooLong) {
             Result.failure(e)
         }
     }

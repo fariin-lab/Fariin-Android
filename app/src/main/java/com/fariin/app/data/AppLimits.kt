@@ -25,6 +25,10 @@ object AppLimits {
         const val PINNED_CHATS_MAX = 5
         const val GROUPS_OWNED_MAX = 10    // groups_owned_max, functions-groups groupCreateCheck
         const val GROUP_DESC_MAX = 200     // group_desc_max
+        const val STORIES_PER_DAY_DEFAULT = 50    // stories_per_day_default, the rules' daily counter
+        const val STORIES_PER_DAY_VERIFIED = 100
+        const val STORIES_PER_HOUR_DEFAULT = 40   // stories_per_hour_default, the hourly one
+        const val STORIES_PER_HOUR_VERIFIED = 40
     }
 
     @Volatile private var values: Map<String, Any?> = emptyMap()
@@ -54,6 +58,19 @@ object AppLimits {
     val groupsOwnedMax: Int get() = number(read(), "groups_owned_max", Fallback.GROUPS_OWNED_MAX)
     /** How long a group description may be (`group_desc_max`). */
     val groupDescMax: Int get() = number(read(), "group_desc_max", Fallback.GROUP_DESC_MAX)
+    /** Stories a day: 50, or 100 with the badge (iOS AppLimits.storiesPerDay). */
+    fun storiesPerDay(verified: Boolean): Int = tiered(read(), "stories_per_day", Fallback.STORIES_PER_DAY_DEFAULT, Fallback.STORIES_PER_DAY_VERIFIED, verified)
+    /** Stories an hour, a brake on a runaway loop (iOS AppLimits.storiesPerHour). */
+    fun storiesPerHour(verified: Boolean): Int = tiered(read(), "stories_per_hour", Fallback.STORIES_PER_HOUR_DEFAULT, Fallback.STORIES_PER_HOUR_VERIFIED, verified)
+
+    /**
+     * iOS AppLimits.tiered: a `<base>_default` / `<base>_verified` pair for whoever is signed in. A
+     * verified account is never given less than an ordinary one, whatever the document says.
+     */
+    fun tiered(v: Map<String, Any?>, base: String, defaultFallback: Int, verifiedFallback: Int, verified: Boolean): Int {
+        val ordinary = number(v, "${base}_default", defaultFallback)
+        return if (!verified) ordinary else maxOf(ordinary, number(v, "${base}_verified", verifiedFallback))
+    }
 
     /**
      * iOS AppLimits.number: only a whole number above zero counts. The console types a new field as
