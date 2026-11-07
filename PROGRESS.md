@@ -1211,3 +1211,13 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   - Running: channel Reactions switch, Quotes switch, Share and Search buttons, reply arc lines, service-line
     menu; per-chat bubble style (top priority).
   - A GIF went to kream by mistake at 10:41 during a GIF-panel test; delete waits for the owner's word.
+- 2026-11-07 afternoon: on main:
+  - Checked on the Pixel: channel Reactions/Quotes settings and card order, Search in the channel
+    header (afc4246); per-chat bubble style with "Only this chat" + Reset (28bd758); Bubble Style
+    preview with real wallpaper and gliding height (9a2e0b7); replies send pill (bbc61ea).
+  - Also on main: HD attach button added then removed at the owner's word (772cc3c); quote loader
+    self-retry + sign-out reset (af77309); quote card compact only with media (4680bc5); quote post
+    name band text-only (3f6e93b); thread lines 12dp (ad958dc); channel wallpaper sheet Bubble Styles
+    greyed (dde0588; Android has no way into a channel's wallpaper sheet yet, asked iOS where).
+  - Running: replies sheet batch (top-4 pills, one-grapheme reactions, 250 chars, top photo, Reply
+    wrap, Report/Remove dialogs, open at top + new-replies pill, quotesOff tabs); boot/splash watchdog.
