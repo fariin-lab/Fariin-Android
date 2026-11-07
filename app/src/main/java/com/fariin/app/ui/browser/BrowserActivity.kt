@@ -108,7 +108,7 @@ class BrowserActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val start = intent.getStringExtra(EXTRA_URL) ?: run { finish(); return }
         setContent {
-            FariinTheme {
+            FariinTheme(bars = false) {   // the sheet keeps its white status icons (enableEdgeToEdge above)
                 BrowserSheet(onClosed = { finish(); @Suppress("DEPRECATION") overridePendingTransition(0, 0) }) { motion ->
                     Browser(start, motion)
                 }

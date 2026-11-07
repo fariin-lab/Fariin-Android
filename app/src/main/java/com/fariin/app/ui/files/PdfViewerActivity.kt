@@ -104,7 +104,7 @@ class PdfViewerActivity : ComponentActivity() {
         // A sheet over the chat (owner, 2026-11-06): it slides up, the chat stays dimmed at the top,
         // and it closes by X, Back, a tap on the dim, the bar dragged down, or the first page pulled down.
         setContent {
-            FariinTheme {
+            FariinTheme(bars = false) {   // the sheet keeps its white status icons (enableEdgeToEdge above)
                 val motion = rememberSheetMotion { finish(); @Suppress("DEPRECATION") overridePendingTransition(0, 0) }
                 BackHandler { motion.close() }
                 FariinSheet(motion) { PdfReader(File(path), name, motion) }
