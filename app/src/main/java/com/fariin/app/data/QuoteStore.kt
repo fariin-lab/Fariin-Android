@@ -107,6 +107,9 @@ object QuoteStore {
         // A call still out for the old account must not keep its ids "asked" (never asked again) or
         // write its answer into the next account's cards.
         inFlight.clear(); generation++
+        // Quotes this account was making, their pictures, and a draft or jump it left behind.
+        making.clear(); synchronized(pictures) { pictures.clear() }
+        pendingDraft.value = null; pendingJump.value = null
     }
 
     /** Bumped on sign-out; an answer from an older generation is dropped. */

@@ -86,5 +86,8 @@ object StoryLimits {
         }
     }
 
+    /** Sign-out: the next account starts with no count and no badge until its own read. */
+    fun reset() { dailyUsed = 0; dailyWindowStartMs = null; verified = false }
+
     private const val DAY_MS = 86_400_000L
 }

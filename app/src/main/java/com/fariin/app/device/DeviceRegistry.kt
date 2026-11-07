@@ -45,6 +45,9 @@ object DeviceRegistry {
     private val _revoked = MutableStateFlow<DeviceRecord.Reason?>(null)
     /** Set when the server removed this phone's record. MainActivity performs the sign-out. */
     val revoked: StateFlow<DeviceRecord.Reason?> = _revoked.asStateFlow()
+    /** The account [revoked] is about: MainActivity signs out only if it is still the signed-in one. */
+    @Volatile var revokedUid: String? = null
+        private set
 
     @Volatile private var registered = false
     @Volatile private var watcher: ListenerRegistration? = null
@@ -89,9 +92,20 @@ object DeviceRegistry {
 
     private fun hadRegistered(uid: String) = prefs().getBoolean(registeredKey(uid), false)
 
-    private suspend fun noteExists(uid: String, coll: String, id: String): Boolean = try {
-        db.collection("users").document(uid).collection(coll).document(id).get(Source.SERVER).await().exists()
-    } catch (_: Exception) { false }
+    private suspend fun noteExists(uid: String, coll: String, id: String): Boolean =
+        BootWatch.capped(BootWatch.SERVER_READ_MS) {
+            db.collection("users").document(uid).collection(coll).document(id).get(Source.SERVER).await().exists()
+        } ?: false
+
+    /** A late answer for an account that has since logged out must not end the next one's session. */
+    private fun stillSignedIn(uid: String) = this.uid == uid
+
+    private suspend fun revoke(uid: String, id: String) {
+        val reason = reasonFor(uid, id)
+        if (!stillSignedIn(uid)) { android.util.Log.w(BootWatch.TAG, "removed-device answer for an old session dropped"); return }
+        revokedUid = uid
+        _revoked.value = reason
+    }
 
     private suspend fun reasonFor(uid: String, id: String) = DeviceRecord.reason(
         replaced = noteExists(uid, "deviceReplaced", id),
@@ -121,8 +135,9 @@ object DeviceRegistry {
         var exists: Boolean? = null
         try {
             val server = ref.get(Source.SERVER).await()
+            if (!stillSignedIn(uid)) return
             when (DeviceRecord.check(server.exists(), hadRegistered(uid))) {
-                DeviceRecord.Check.REVOKED -> { _revoked.value = reasonFor(uid, id); return }
+                DeviceRecord.Check.REVOKED -> { revoke(uid, id); return }
                 DeviceRecord.Check.NEW_RECORD -> exists = false
                 DeviceRecord.Check.EXISTING -> exists = true
             }
@@ -143,6 +158,8 @@ object DeviceRegistry {
         synchronized(pendingTokens) { data.putAll(pendingTokens); pendingTokens.clear() }
         try {
             ref.set(data, SetOptions.merge()).await()
+            // Offline this write answers only when the phone is back, maybe after a log out.
+            if (!stillSignedIn(uid)) return
             prefs().edit().putBoolean(registeredKey(uid), true).apply()
             registered = true
             val late = synchronized(pendingTokens) { HashMap(pendingTokens).also { pendingTokens.clear() } }
@@ -197,7 +214,7 @@ object DeviceRegistry {
                 return@addSnapshotListener
             }
             if (snap == null || snap.metadata.isFromCache || snap.exists()) return@addSnapshotListener
-            scope.launch { _revoked.value = reasonFor(uid, id) }
+            scope.launch { revoke(uid, id) }
         }
     }
 
@@ -272,5 +289,5 @@ object DeviceRegistry {
         if (uid != null && ::app.isInitialized) prefs().edit().remove(registeredKey(uid)).apply()
     }
 
-    fun clearRevoked() { _revoked.value = null }
+    fun clearRevoked() { _revoked.value = null; revokedUid = null }
 }

@@ -49,8 +49,21 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
     // launch before the first frame). The same checks still run, in the background, and move the
     // page if their answer differs. A fresh sign-in has no mark, so it waits for them as before.
     val opened = remember(me) { GateMemory.wasReady(ctx, me) }
+    // True once the app is open for this account: a check that gets no answer then keeps the page.
+    var trusted by remember(me) { mutableStateOf(opened) }
     var phase by remember(me) { mutableStateOf<Phase>(if (opened) Phase.Ready else Phase.Loading) }
     var verified by remember(me) { mutableStateOf(!opened) }
+    val attempts = remember(me) { com.fariin.app.device.BootAttempts() }
+    // The watchdog: the logo page never stays past 8 s. The app opens and the check runs once more
+    // behind it (a stalled Firestore client after two account changes left iOS on the logo for good).
+    LaunchedEffect(me, phase == Phase.Loading) {
+        if (phase != Phase.Loading) return@LaunchedEffect
+        kotlinx.coroutines.delay(com.fariin.app.device.BootWatch.WATCHDOG_MS)
+        if (phase == Phase.Loading && auth.currentUser?.uid == me) {
+            android.util.Log.w(com.fariin.app.device.BootWatch.TAG, "account checks gave no answer in ${com.fariin.app.device.BootWatch.WATCHDOG_MS} ms, opening the app")
+            trusted = true; verified = false; phase = Phase.Ready
+        }
+    }
     var recheckTwoStep by remember(me) { mutableStateOf(false) }
     LaunchedEffect(me, recheckTwoStep, phase == Phase.Ready) {
         if (recheckTwoStep && phase == Phase.Ready && TwoStepGate.needsPassword(20_000) == true) { recheckTwoStep = false; phase = Phase.TwoStep }
@@ -59,6 +72,9 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
     LaunchedEffect(me, phase) {
         if (phase != Phase.Loading && verified) return@LaunchedEffect
         verified = true
+        // This attempt's answers count only while it is the newest one for the signed-in account.
+        val attempt = attempts.begin(me)
+        fun current() = attempts.isCurrent(attempt, me, auth.currentUser?.uid)
         // The email check runs on a Cloud Function, which the local test backend does not have:
         // there it could never finish, so fake accounts skip it. Real builds always ask.
         if (!isLocalBackend(ctx)) auth.unprovenEmailCached?.let { phase = Phase.ProveEmail(it); return@LaunchedEffect }
@@ -66,10 +82,20 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
         // password stops here (the rules refuse its token everything). A short local token read;
         // null = the token did not come in time, asked again below once the app is open.
         val twoStep = TwoStepGate.needsPassword()
+        if (!current()) return@LaunchedEffect
         if (twoStep == true) { phase = Phase.TwoStep; return@LaunchedEffect }
         if (twoStep == null) recheckTwoStep = true
-        val doc = try { FirebaseFirestore.getInstance().collection("users").document(me).get(Source.SERVER).await() }
-        catch (_: Exception) { try { FirebaseFirestore.getInstance().collection("users").document(me).get(Source.CACHE).await() } catch (_: Exception) { null } }
+        // Both reads have a limit: a stalled client must not hold the logo page.
+        val ref = FirebaseFirestore.getInstance().collection("users").document(me)
+        val doc = com.fariin.app.device.BootWatch.capped(com.fariin.app.device.BootWatch.SERVER_READ_MS) { ref.get(Source.SERVER).await() }
+            ?: com.fariin.app.device.BootWatch.capped(com.fariin.app.device.BootWatch.CACHE_READ_MS) { ref.get(Source.CACHE).await() }
+        if (!current()) { android.util.Log.w(com.fariin.app.device.BootWatch.TAG, "late account check dropped"); return@LaunchedEffect }
+        // No answer at all on a fresh sign-in: open the app and ask once more behind it (the same
+        // way out as the watchdog), never "Create your profile" for an account that has one.
+        if (doc == null && !trusted) {
+            android.util.Log.w(com.fariin.app.device.BootWatch.TAG, "profile read gave no answer, opening the app")
+            trusted = true; verified = false; phase = Phase.Ready; return@LaunchedEffect
+        }
         val p = doc?.data?.let { MyProfile.fromFirestore(me, it) } ?: MyProfile(me)
         // Scheduled for deletion: the restore page, never the app. No phone-clock test (iOS audit):
         // the profile still existing is the server's word that the purge has not run.
@@ -77,7 +103,7 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
             phase = Phase.Restore(p.handle, it.toDate().time); return@LaunchedEffect
         }
         // A background check that found nothing (offline, cache empty) keeps the page as it is.
-        if (opened && doc == null) return@LaunchedEffect
+        if (trusted && doc == null) return@LaunchedEffect
         phase = if (p.name.isNotBlank() && p.handle.isNotEmpty()) Phase.Ready else Phase.Onboarding(p.handle)
     }
     LaunchedEffect(me, phase) { if (phase == Phase.Ready) GateMemory.markReady(ctx, me) else if (phase != Phase.Loading) GateMemory.clear(ctx) }

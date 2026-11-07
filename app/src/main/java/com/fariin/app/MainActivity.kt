@@ -141,9 +141,9 @@ class MainActivity : ComponentActivity() {
                     var notice by remember { mutableStateOf<DeviceRecord.Reason?>(null) }
                     LaunchedEffect(revoked) {
                         val r = revoked ?: return@LaunchedEffect
-                        SessionEnd.revokedSignOut(applicationContext)
+                        val ended = SessionEnd.revokedSignOut(applicationContext)
                         DeviceRegistry.clearRevoked()
-                        notice = r
+                        if (ended) notice = r
                     }
                     if (me == null) { LaunchedEffect(Unit) { keepSplash = false }; SignInFlow(auth) } else com.fariin.app.ui.auth.AccountGate(me, auth, onOwnPage = { keepSplash = false }) { SignedIn(me) }
                     notice?.let { SignedOutNotice(it) { notice = null } }
