@@ -1437,22 +1437,10 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                 }
             }
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
-            // A channel I follow: its bell in a glass circle on the right (iOS "chbell"); a tap mutes
-            // or unmutes for good, as the bar's tap does.
-            ui.channel?.takeIf { it.role == com.fariin.app.channel.ChannelRules.Role.FOLLOWER }?.let { ch ->
-                com.fariin.app.ui.components.FloatingIcon(
-                    androidx.compose.ui.res.painterResource(if (ch.muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
-                    contentDescription = if (ch.muted) "Unmute channel" else "Mute channel",
-                    onClick = {
-                        ch.onMute(if (ch.muted) null else 0.0)
-                        ch.notice(if (ch.muted) "Notifications on for this channel" else "Channel muted")
-                    },
-                    circle = true,
-                )
-            }
-            // My own channel (owner or admin): Search there instead (iOS 93160b88, owner 2026-11-07:
-            // "the right side looks empty"); it opens the in-chat search.
-            ui.channel?.takeIf { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN }?.let {
+            // A channel I run or follow: Search in a glass circle on the right, opening the in-chat
+            // search (iOS 93160b88, owner 2026-11-07). No bell there: the bottom Mute bar mutes.
+            // A visitor gets neither (Search needs following).
+            ui.channel?.takeIf { it.role != com.fariin.app.channel.ChannelRules.Role.VISITOR }?.let {
                 com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search,
                     contentDescription = "Search", onClick = { InChatSearchLink.request(ui.cid) }, circle = true)
             }
