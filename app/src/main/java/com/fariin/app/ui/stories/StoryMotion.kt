@@ -46,12 +46,17 @@ internal object StoryMotion {
     /** The no-destination close: response 0.25, damping 1 (MediaDismiss), stiffness (2π/0.25)². */
     const val DRIFT_STIFFNESS = 631.65f
     const val DRIFT_SCALE = 0.72f
-    /** Backdrop (`heroDimMax`, `heroDimFloor`, `heroDimSolid`). */
+    /** Backdrop (`heroDimMax`, `heroDimFloor`, `heroDimSolid`). The wall turns solid over the last
+     *  30% of an open (owner's video 2026-11-07: at 15% the list still showed through a card that
+     *  already filled the screen, the spring's tail being that long). */
     const val DIM_MAX = 0.58f
     const val DIM_FLOOR = 0.36f
-    const val DIM_SOLID = 0.15f
-    /** Reply bar and footer arrive over the last 18% of an open (`heroChromeSpan`). */
-    const val CHROME_SPAN = 0.18f
+    const val DIM_SOLID = 0.3f
+    /** Header, bars and reply field: in over the last 30% of an open, out over the first 30% of a
+     *  close, on the card's own fraction, so they neither pop in late nor vanish before it moves. */
+    const val CHROME_SPAN = 0.3f
+    /** Bar icons go dark (over a light list) once the wall is under half its flight dim. */
+    const val BARS_FLIP = DIM_MAX / 2f
     /** Swipe up on my story opens the viewers past 40dp or 300dp/s. */
     const val VIEWERS_DISTANCE = 40f
     const val VIEWERS_VELOCITY = 300f
@@ -75,7 +80,7 @@ internal object StoryMotion {
         return floor + (DIM_MAX - floor) * (1f - travelled)
     }
 
-    /** Reply bar alpha on an arrival: nothing out in the room, all of it by the time it is home. */
+    /** Chrome alpha at fraction [f]: all of it at rest, none past [CHROME_SPAN], both ways. */
     fun chrome(f: Float): Float = ((CHROME_SPAN - f) / CHROME_SPAN).coerceIn(0f, 1f)
 
     /** Close: the slot's picture is fully on by 85% of the landing (`heroCoverIn`). */
@@ -83,6 +88,17 @@ internal object StoryMotion {
 
     /** Open: the slot's picture dissolves into the story between 20% and 55% (`heroCoverOut`, card). */
     fun coverOut(t: Float): Float = 1f - ((t - 0.2f) / 0.35f).coerceIn(0f, 1f)
+
+    /**
+     * Close into a chat row's round photo: the card is a circle (square and round) by 40% and the
+     * story dissolves into the photo between 10% and 55%, so the end of the flight is a shrinking
+     * photo, not a big rounded card over the row's name.
+     */
+    fun avatarCropIn(t: Float): Float = (t / 0.4f).coerceIn(0f, 1f)
+    fun avatarCoverIn(t: Float): Float = ((t - 0.1f) / 0.45f).coerceIn(0f, 1f)
+    /** The row's ring rides the flight too: gone in the first 15% of an open, back over the last 25% of a close. */
+    fun ringOut(t: Float): Float = 1f - (t / 0.15f).coerceIn(0f, 1f)
+    fun ringIn(t: Float): Float = ((t - 0.75f) / 0.25f).coerceIn(0f, 1f)
 
     /** Where a flight may call itself done: two pixels from home, between 0.4% and 5% (`heroSettle`). */
     fun settle(remainingPx: Float, density: Float): Float = minOf(0.05f, maxOf(0.004f, 2f * density / maxOf(1f, remainingPx)))

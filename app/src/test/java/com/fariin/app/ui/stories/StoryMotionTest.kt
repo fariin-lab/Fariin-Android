@@ -9,7 +9,7 @@ import kotlin.math.abs
 class StoryMotionTest {
     @Test fun wallIsSolidAtRestAndHeldAtItsFloorUnderTheFinger() {
         assertEquals(1f, StoryMotion.dim(0f, 1f), 1e-6f)
-        assertEquals(0.58f, StoryMotion.dim(0.15f, 1f), 1e-6f)
+        assertEquals(0.58f, StoryMotion.dim(0.3f, 1f), 1e-6f)
         assertEquals(0.36f, StoryMotion.dim(1f, 1f), 1e-6f)
         // A landing lets the floor go, so the slot end reaches a true zero.
         assertEquals(0f, StoryMotion.dim(1f, 0f), 1e-6f)
@@ -32,6 +32,17 @@ class StoryMotionTest {
         assertEquals(1f, StoryMotion.coverIn(0.85f), 1e-6f)
         assertEquals(1f, StoryMotion.coverOut(0.2f), 1e-6f)
         assertEquals(0f, StoryMotion.coverOut(0.55f), 1e-6f)
+        assertEquals(1f, StoryMotion.avatarCropIn(0.4f), 1e-6f)
+        assertEquals(0f, StoryMotion.avatarCoverIn(0.1f), 1e-6f)
+        assertEquals(1f, StoryMotion.avatarCoverIn(0.55f), 1e-6f)
+        assertEquals(0f, StoryMotion.ringIn(0.75f), 1e-6f)
+        assertEquals(1f, StoryMotion.ringOut(0f), 1e-6f)
+    }
+
+    @Test fun chromeLeavesAndArrivesWithTheCard() {
+        assertEquals(1f, StoryMotion.chrome(0f), 1e-6f)
+        assertEquals(0f, StoryMotion.chrome(0.3f), 1e-6f)
+        assertEquals(0.5f, StoryMotion.chrome(0.15f), 1e-6f)
     }
 
     @Test fun cubeFaceIsFlatAtRestAndMirrored() {

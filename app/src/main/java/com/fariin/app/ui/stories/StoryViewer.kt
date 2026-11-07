@@ -212,16 +212,17 @@ fun StoryViewerDialog(
             }
             onDispose { }
         }
-        // White bar icons over the story; the app's own the moment the card starts home, so the
-        // clock does not vanish on a light list and come back when the window goes.
-        var leaving by remember { mutableStateOf(false) }
+        // Bar icons follow the wall under them: white over the story, the app's own once the wall is
+        // under half its flight dim, both ways. A switch at the start of the close (and none on the
+        // open) left white icons on a light list for half of each flight (owner's video 2026-11-07).
+        var overList by remember { mutableStateOf(true) }
         val appDark = com.fariin.app.ui.theme.Fariin.colors.dark
         val view = androidx.compose.ui.platform.LocalView.current
-        DisposableEffect(window, leaving) {
+        DisposableEffect(window, overList, appDark) {
             window?.let { w ->
                 androidx.core.view.WindowCompat.getInsetsController(w, view).apply {
-                    isAppearanceLightStatusBars = leaving && !appDark
-                    isAppearanceLightNavigationBars = leaving && !appDark
+                    isAppearanceLightStatusBars = overList && !appDark
+                    isAppearanceLightNavigationBars = overList && !appDark
                 }
             }
             onDispose { }
@@ -244,7 +245,7 @@ fun StoryViewerDialog(
         }
         androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.people.LocalPeopleNav provides routed) {
             StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected },
-                onLeaving = { leaving = true }, backTick = backTick)
+                onBarsOverList = { overList = it }, backTick = backTick)
         }
     }
 }
@@ -257,7 +258,8 @@ fun StoryViewer(
     conversations: List<Conversation>,
     onClose: () -> Unit,
     onShown: (Story) -> Unit = {},
-    onLeaving: () -> Unit = {},
+    /** True while the wall is thin enough that the list behind owns the bar area. */
+    onBarsOverList: (Boolean) -> Unit = {},
     /** Bumped by the window's own back: close as the back gesture would. */
     backTick: Int = 0,
 ) {
@@ -419,6 +421,46 @@ fun StoryViewer(
     fun card() = cardOf(groups.getOrNull(pager.currentPage))
     fun rest() = card().center
 
+    /**
+     * What the slot shows, for the cover to wear: a chat row's ring holds the person's (or group's)
+     * round photo, a Stories card the newest story's picture. A chat row is told by its square,
+     * well-rounded slot (the Stories cards are 66 by 94 with 14 corners). Call after [HeroState.radius].
+     */
+    fun stageCover(a: Rect, key: String?) {
+        val g = groups.firstOrNull { it.key == key }
+        hero.avatar = g != null && abs(a.width - a.height) < 2f && hero.radius >= 0.25f * minOf(a.width, a.height)
+        if (hero.avatar && g != null) {
+            val conv = if (g.key.startsWith(StoryGroup.GROUP_PREFIX)) convs.firstOrNull { it.id == g.key.removePrefix(StoryGroup.GROUP_PREFIX) }
+                else convs.firstOrNull { !it.isGroup && it.otherUid(me) == g.key }
+            hero.coverUrl = conv?.displayPhoto(me) ?: g.photoUrl ?: ""
+            hero.avatarKind = if (conv == null) com.fariin.app.ui.components.AvatarKind.PERSON
+                else com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel)
+            hero.squircle = conv?.isChannel == true
+            hero.ringFlags = com.fariin.app.data.StoryRings.seenFlags(g.copy(lastViewedAtMs = watermarks[g.key] ?: g.lastViewedAtMs))
+        } else {
+            hero.coverUrl = g?.stories?.lastOrNull()?.listThumb
+        }
+    }
+
+    /** The card's corner at its size on screen now, in px: into a chat row's photo it is round once its crop is done. */
+    fun cornerFor(r: Rect): Float {
+        val restR = StorySheetGeometry.CARD_RADIUS * density
+        val base = restR + (hero.radius - restR) * hero.f
+        val a = hero.anchor
+        if (!hero.avatar || a == null) return base
+        val target = hero.radius / maxOf(1f, minOf(a.width, a.height)) * minOf(r.width, r.height)
+        return base + (target - base) * hero.crop
+    }
+
+    // The bar icons' side of the wall (see StoryViewerDialog): only the flips reach the window.
+    val barsTo by rememberUpdatedState(onBarsOverList)
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow {
+            val wall = if (hero.visible) StoryMotion.dim(hero.f, hero.dimFloor) * hero.rootAlpha else 0f
+            wall < StoryMotion.BARS_FLIP
+        }.collect { barsTo(it) }
+    }
+
     /** One flight on the iOS animator: critically damped, mass 1, every property on the same t. */
     fun runHero(
         toF: Float, toC: Offset, toA: Float, velocity: Float, stiffness: Float, settle: Float,
@@ -452,7 +494,8 @@ fun StoryViewer(
         hero.staged = true
         val a = anchorFor(currentKey())
         hero.center = rest()
-        if (a == null) {
+        // Power Saving's animations off: no flight, the same short fade as a story with no slot.
+        if (a == null || !com.fariin.app.ui.components.Motion.on) {
             // Nothing to fly from (Posted Stories): show the story, faded in like the pager's backstop.
             hero.rootAlpha = 0f
             hero.visible = true
@@ -461,9 +504,10 @@ fun StoryViewer(
         }
         hero.anchor = a
         hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
-        hero.coverUrl = groups.getOrNull(pager.currentPage)?.stories?.lastOrNull()?.listThumb
+        stageCover(a, currentKey())
         hero.f = 1f; hero.center = a.center; hero.crop = 1f; hero.cover = 1f; hero.dimFloor = 0f
-        hero.exiting = false; hero.live = true
+        hero.ring = if (hero.avatar) 1f else 0f
+        hero.live = true
         hero.visible = true
         // Seated first, flown after: the first frames go to building the page, not to the spring's clock.
         withFrameMillis { }; withFrameMillis { }
@@ -471,8 +515,11 @@ fun StoryViewer(
         runHero(0f, rest(), 1f, 0f, StoryMotion.OPEN_STIFFNESS, StoryMotion.OPEN_SETTLE,
             cover = StoryMotion::coverOut, crop = StoryMotion::coverOut, dimFloor = { it },
             // Aim at where the card is now, every frame, so the landing is where the page sits.
-            extra = { t -> hero.center = androidx.compose.ui.geometry.lerp(from, rest(), t) }) {
-            hero.live = false; hero.cover = 0f; hero.crop = 0f
+            extra = { t ->
+                hero.center = androidx.compose.ui.geometry.lerp(from, rest(), t)
+                if (hero.avatar) hero.ring = StoryMotion.ringOut(t)
+            }) {
+            hero.live = false; hero.cover = 0f; hero.crop = 0f; hero.ring = 0f
         }
     }
 
@@ -487,15 +534,16 @@ fun StoryViewer(
     /** Every way out: the swipe, the X, back, the last story ending. Same landing for all of them. */
     fun close(vy: Float = 0f) {
         if (hero.committing || hero.closed) return
-        onLeaving()
         if (!hero.staged || size == IntSize.Zero) { land(); return }
         heroJob[0]?.cancel()
         hero.committing = true
         if (!hero.live) { hero.center = rest(); hero.f = 0f }
         hero.live = true
-        hero.exiting = true
         val a = anchorFor(currentKey())
-        if (a == null) {
+        if (!com.fariin.app.ui.components.Motion.on) {
+            // Power Saving's animations off: a short fade where it stands.
+            heroJob[0] = scope.launch { Animatable(hero.rootAlpha).animateTo(0f, tween(150)) { hero.rootAlpha = value }; land() }
+        } else if (a == null) {
             // No card to fly to (scrolled away, or opened from Posted Stories): drift down by its own
             // height, shrink to 0.72 and fade, on the 0.25s critically damped spring (iOS MediaDismiss).
             val h = card().height * (1f + (((hero.anchor?.width ?: 0f) / size.width) - 1f) * hero.f)
@@ -504,11 +552,16 @@ fun StoryViewer(
         } else {
             hero.anchor = a
             hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
-            hero.coverUrl = groups.getOrNull(pager.currentPage)?.stories?.lastOrNull()?.listThumb
+            stageCover(a, currentKey())
             val remaining = maxOf(1f, (a.center - hero.center).getDistance())
+            // Into a chat row's photo the card turns round and wears the photo early, and the row's
+            // ring comes in at the end; a Stories card keeps the card's own timings.
+            val av = hero.avatar
             runHero(1f, a.center, 1f, minOf(6f, maxOf(0f, vy) / remaining), StoryMotion.CLOSE_STIFFNESS,
                 StoryMotion.settle(remaining, density),
-                cover = StoryMotion::coverIn, crop = StoryMotion::coverIn, dimFloor = { 1f - it }) { land() }
+                cover = if (av) StoryMotion::avatarCoverIn else StoryMotion::coverIn,
+                crop = if (av) StoryMotion::avatarCropIn else StoryMotion::coverIn, dimFloor = { 1f - it },
+                extra = if (av) ({ t -> hero.ring = StoryMotion.ringIn(t) }) else null) { land() }
         }
         // A flight that never lands must not trap anyone in the viewer: 1.2s is four times the flight.
         scope.launch { delay(1200); land() }
@@ -522,9 +575,7 @@ fun StoryViewer(
         hero.live = true
         hero.f = 0f; hero.center = rest(); hero.alpha = 1f
         // Nothing cross-fades under the finger, nothing is cropped, the floor is held.
-        hero.cover = 0f; hero.crop = 0f; hero.dimFloor = 1f
-        // A pull is an exit: the reply bar goes now.
-        hero.exiting = true
+        hero.cover = 0f; hero.crop = 0f; hero.dimFloor = 1f; hero.ring = 0f
     }
     /** Down only, measured from the touch: 1:1 while the card shrinks, then a short rubber band. */
     fun dragTo(dy: Float) {
@@ -545,8 +596,7 @@ fun StoryViewer(
     }
     fun springBack(vy: Float) {
         if (!hero.live || hero.committing) return
-        // An arrival: the reply bar fades back in over the last 18% with the card.
-        hero.exiting = false
+        // An arrival: the chrome fades back in over the last 30% with the card.
         val home = rest()
         val remaining = maxOf(1f, (home - hero.center).getDistance())
         runHero(0f, home, 1f, minOf(6f, maxOf(0f, -vy) / remaining), StoryMotion.CLOSE_STIFFNESS,
@@ -599,7 +649,10 @@ fun StoryViewer(
         // The crop converges the story to the slot's own shape on a flight; a drag keeps it whole.
         val th = h * aw / w + (ah - h * aw / w) * hero.crop
         val vw = (w + (aw - w) * hero.f) * hero.shrink
-        val vh = (h + (th - h) * hero.f) * hero.shrink
+        // Into a chat row's photo the crop drives the shape itself, so the card is already a circle
+        // at its crop's end, not a tall pill until the very last frame.
+        val vh = if (hero.avatar && aw > 0f) vw * (h / w + (ah / aw - h / w) * hero.crop)
+            else (h + (th - h) * hero.f) * hero.shrink
         // At rest the card is where the window puts it, whatever the window has done since.
         val c = if (hero.live) hero.center else card.center
         return Rect(c.x - vw / 2f, c.y - vh / 2f, c.x + vw / 2f, c.y + vh / 2f)
@@ -647,11 +700,10 @@ fun StoryViewer(
                 clip = moving
                 if (moving && s > 0f) {
                     // The card's own corner at full size, the slot's at home (iOS lands the mask on it).
-                    val restR = StorySheetGeometry.CARD_RADIUS * density
-                    val radius = restR + (hero.radius - restR) * hero.f
-                    // The bar under the card stays in the clip while it is showing (an arrival's last 18%).
+                    val radius = cornerFor(r)
+                    // The bar under the card stays in the clip while it is showing (the chrome span, both ways).
                     val bandBottom = c.center.y + r.height / s / 2f
-                    val bar = if (hero.exiting) 0f else StoryMotion.chrome(hero.f)
+                    val bar = StoryMotion.chrome(hero.f)
                     shape = CardShape(c.center.x, c.center.y, r.width / s, r.height / s, radius / s, maxOf(0f, h - bandBottom) * bar)
                 }
             },
@@ -689,7 +741,7 @@ fun StoryViewer(
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
                     paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null,
                     // The bars and caption go over the first third of the sheet's pull (iOS storySheetProgress).
-                    chrome = { if (hero.exiting) 0f else StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
+                    chrome = { StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
                     jumpTo = if (page == pager.currentPage) jumpTo else null,
                     summaries = summaries, service = service, who = who,
                     onSeen = { s ->
@@ -755,8 +807,10 @@ fun StoryViewer(
             }
         }
 
-        // The slot's own picture riding the flight: it dissolves into the story on the way out and
-        // is fully on by 85% of the way home, so the landing swaps two identical pictures.
+        // The slot's own picture riding the flight: it dissolves into the story on the way out and is
+        // fully on before the way home ends, so the landing swaps two identical pictures. From a chat
+        // row that is the row's photo and ring, never a story thumbnail: the newest story's thumb flew
+        // out and back and sat in the ring until the real photo snapped in (owner's video 2026-11-07).
         hero.coverUrl?.let { url ->
             Box(
                 Modifier.layout { m, c ->
@@ -766,11 +820,12 @@ fun StoryViewer(
                 }.graphicsLayer {
                     alpha = hero.cover * hero.rootAlpha
                     clip = true
-                    shape = RoundedCornerShape(androidx.compose.foundation.shape.CornerSize(hero.radius * hero.f))
+                    shape = RoundedCornerShape(androidx.compose.foundation.shape.CornerSize(
+                        if (size == IntSize.Zero) 0f else cornerFor(visibleRect())))
                 },
             ) {
                 val a = hero.anchor
-                if (a != null && hero.cover > 0f) {
+                if (a != null && (hero.cover > 0f || hero.avatar)) {
                     val aw = a.width; val ah = a.height
                     // Drawn at the slot's own size and scaled to fill, so the picture is never re-fetched mid-flight.
                     Box(
@@ -785,12 +840,40 @@ fun StoryViewer(
                                 scaleX = s; scaleY = s
                             },
                     ) {
-                        if (url.startsWith("demo:")) Box(Modifier.fillMaxSize().background(
+                        if (hero.avatar) {
+                            // The row's photo, uncut: the cover's clip is its shape, a circle at home.
+                            // No photo: the row's own empty avatar, its grey reaching the corners.
+                            Box(Modifier.fillMaxSize().background(com.fariin.app.ui.theme.Fariin.colors.placeholderFill)) {
+                                if (url.isEmpty()) Avatar(null, (aw / density).dp, squircle = hero.squircle, kind = hero.avatarKind)
+                                else AsyncImage(url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
+                        } else if (url.startsWith("demo:")) Box(Modifier.fillMaxSize().background(
                             runCatching { Color(android.graphics.Color.parseColor(url.removePrefix("demo:"))) }.getOrDefault(Color.Gray)))
                         else AsyncImage(url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     }
                 }
             }
+        }
+
+        // The chat row's story ring riding the flight round the photo (the row hides it with the photo),
+        // so the landing puts back exactly what is already drawn there.
+        val ringAnchor = hero.anchor
+        if (hero.avatar && ringAnchor != null && hero.ring > 0f) {
+            val ringPx = ringAnchor.width * 56f / 48f
+            Box(
+                Modifier.layout { m, c ->
+                    val p = m.measure(Constraints.fixed(maxOf(1, ringPx.roundToInt()), maxOf(1, ringPx.roundToInt())))
+                    layout(c.maxWidth, c.maxHeight) {
+                        val r = if (size == IntSize.Zero) Rect.Zero else visibleRect()
+                        p.place((r.center.x - p.width / 2f).roundToInt(), (r.center.y - p.height / 2f).roundToInt())
+                    }
+                }.graphicsLayer {
+                    val r = visibleRect()
+                    val s = maxOf(r.width, r.height) / maxOf(1f, ringAnchor.width)
+                    scaleX = s; scaleY = s
+                    alpha = hero.ring * hero.rootAlpha
+                },
+            ) { StoryRing(hero.ringFlags, Modifier.fillMaxSize(), squircle = hero.squircle) }
         }
 
         // The rest of my ring beside the shrunk story, with every card's count, and the touches above the sheet.
@@ -1489,7 +1572,12 @@ private class HeroState {
     var rootAlpha by mutableFloatStateOf(1f)
     var anchor by mutableStateOf<Rect?>(null)
     var radius by mutableFloatStateOf(0f)
-    var exiting by mutableStateOf(false)
+    /** The slot is a chat row's round photo (its ring and photo ride the flight), not a story card. */
+    var avatar by mutableStateOf(false)
+    var avatarKind by mutableStateOf(com.fariin.app.ui.components.AvatarKind.PERSON)
+    var squircle by mutableStateOf(false)
+    var ring by mutableFloatStateOf(0f)
+    var ringFlags by mutableStateOf(emptyList<Boolean>())
     var live by mutableStateOf(false)
     var visible by mutableStateOf(false)
     var committing = false
