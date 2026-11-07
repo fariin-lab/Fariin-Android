@@ -1759,7 +1759,8 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             quoteId?.let { q ->
                 if (body.isNotEmpty()) Spacer(Modifier.height(6.dp))
-                QuoteCardBubble(q, chromeMe, ui.cid, meta = if (chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null)
+                QuoteCardBubble(q, chromeMe, ui.cid, meta = if (chips.isEmpty()) ({ Meta(m, tick, isMe, is24h) }) else null,
+                    compact = m.mediaKind != null)
             }
             if (ch != null && chips.isNotEmpty()) com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips) { Meta(m, tick, isMe, is24h) }
             // "N Quotes" along the bubble's bottom (PostQuotesUi.kt).

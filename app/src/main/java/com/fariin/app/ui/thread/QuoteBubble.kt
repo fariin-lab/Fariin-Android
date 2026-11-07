@@ -50,7 +50,8 @@ import com.fariin.app.ui.theme.Fariin
  * scrolls to the post and lights it instead. A post this reader may not see gets a short notice.
  */
 @Composable
-internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta: (@Composable () -> Unit)? = null) {
+internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta: (@Composable () -> Unit)? = null,
+                              /** The quoting post has its own photo, video or album: the compact row. */ compact: Boolean = false) {
     val cards by QuoteStore.cards.collectAsState()
     // Every draw asks: a miss, or an answer older than two minutes, is fetched with the others on screen.
     SideEffect { QuoteStore.card(qid) }
@@ -99,7 +100,22 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 Text("Quote", fontSize = 12.sp, color = ink.copy(alpha = 0.55f), maxLines = 1)
             }
             val body = QuoteRules.body(card)
-            if (image != null) {
+            if (image != null && !compact) {
+                // A text-only quoting post (owner 2026-11-07): the quoted words full width, then the
+                // quoted picture across the card under them.
+                if (body.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(body, fontSize = 14.sp, color = ink.copy(alpha = if (quiet) 0.5f else 1f), maxLines = 8,
+                        overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
+                }
+                Spacer(Modifier.height(8.dp))
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    Box(Modifier.fillMaxWidth().height(min(220.dp, maxWidth * 0.75f)).clip(RoundedCornerShape(10.dp))
+                        .background(c.secondary.copy(alpha = 0.15f))) {
+                        coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    }
+                }
+            } else if (image != null) {
                 // Owner's mockup (2026-11-07, both apps): a quoted post with a picture is one compact
                 // row: the picture on the left (42% of the inner width, 0.72 as tall, corners 14), the
                 // words on the right, top-aligned, at most 4 lines.
