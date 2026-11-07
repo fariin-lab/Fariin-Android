@@ -104,7 +104,13 @@ object QuoteStore {
     /** Sign-out: nothing of this account's cards stays in memory (the disk copy goes with LocalCache.wipe). */
     fun reset() {
         _cards.value = emptyMap(); fetchedAt.clear(); lastUsed.clear(); queued.clear(); loadedFor = null
+        // A call still out for the old account must not keep its ids "asked" (never asked again) or
+        // write its answer into the next account's cards.
+        inFlight.clear(); generation++
     }
+
+    /** Bumped on sign-out; an answer from an older generation is dropped. */
+    @Volatile private var generation = 0
 
     private fun request(qid: String) {
         if (!QuoteRules.isQid(qid) || qid in inFlight) return
@@ -123,10 +129,12 @@ object QuoteStore {
             val batch = queued.take(QuoteRules.BATCH)
             queued.removeAll(batch.toSet())
             inFlight += batch
+            val gen = generation
             try {
                 val r = fn.getHttpsCallable("getQuotes").withTimeout(15, TimeUnit.SECONDS)
                     .call(mapOf("qids" to batch)).await().getData() as? Map<*, *>
                 val got = r?.get("quotes") as? Map<*, *> ?: emptyMap<String, Any>()
+                if (gen != generation) return
                 val now = System.currentTimeMillis()
                 var next = _cards.value
                 for (q in batch) {
@@ -139,7 +147,14 @@ object QuoteStore {
                 // Asked again on a later draw after a short pause, not in a loop.
                 val stamp = QuoteRules.retryStamp(System.currentTimeMillis())
                 for (q in batch) if ((fetchedAt[q] ?: 0L) < stamp) fetchedAt[q] = stamp
+                if (gen != generation) return
                 inFlight -= batch.toSet()
+                // Not only on a later draw: after 15 s the cards still missing are asked again by
+                // themselves (a card on screen would otherwise stay "Loading…" until the row redraws).
+                scope.launch {
+                    delay(15_000)
+                    if (gen == generation) for (q in batch) if (_cards.value[q] == null) request(q)
+                }
                 return
             }
             inFlight -= batch.toSet()
