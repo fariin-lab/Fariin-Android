@@ -64,7 +64,10 @@ import com.fariin.app.ui.components.rememberSheetMotion
 import com.fariin.app.ui.components.sheetDrag
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.theme.FariinTheme
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -129,23 +132,31 @@ private fun PdfReader(file: File, name: String, motion: SheetMotion) {
     val gate = remember { Mutex() }   // PdfRenderer has one open page at a time
 
     LaunchedEffect(file) {
-        opened = withContext(Dispatchers.IO) {
-            try {
-                val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                val r = PdfRenderer(fd)
-                // Each page's height for its width, read once, so the list knows every page's size
-                // before any is drawn (no jumping while scrolling).
-                val ratios = (0 until r.pageCount).map { i -> r.openPage(i).use { p -> p.height.toFloat() / p.width.coerceAtLeast(1) } }
-                Opened.Ready(r, fd, ratios)
-            } catch (_: SecurityException) {
-                Opened.Locked   // a password-protected file: the system renderer cannot open it
-            } catch (_: Exception) {
-                Opened.Broken
+        var made: Opened.Ready? = null
+        try {
+            opened = withContext(Dispatchers.IO) {
+                try {
+                    val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                    val r = try { PdfRenderer(fd) } catch (e: Exception) { runCatching { fd.close() }; throw e }
+                    // Each page's height for its width, read once, so the list knows every page's size
+                    // before any is drawn (no jumping while scrolling).
+                    val ratios = try {
+                        (0 until r.pageCount).map { i -> r.openPage(i).use { p -> p.height.toFloat() / p.width.coerceAtLeast(1) } }
+                    } catch (e: Exception) { runCatching { r.close(); fd.close() }; throw e }
+                    Opened.Ready(r, fd, ratios).also { made = it }
+                } catch (_: SecurityException) {
+                    Opened.Locked   // a password-protected file: the system renderer cannot open it
+                } catch (_: Exception) {
+                    Opened.Broken
+                }
             }
+        } finally {
+            // Closed before a long file finished opening: nothing shows it, so let it go here.
+            made?.let { m -> if (opened !== m) closeLater(m, gate) }
         }
     }
     DisposableEffect(Unit) {
-        onDispose { (opened as? Opened.Ready)?.let { runCatching { it.renderer.close(); it.fd.close() } } }
+        onDispose { (opened as? Opened.Ready)?.let { closeLater(it, gate) } }
     }
 
     fun openElsewhere() {
@@ -184,6 +195,18 @@ private fun PdfReader(file: File, name: String, motion: SheetMotion) {
                 runCatching { ctx.startActivity(Intent.createChooser(send, null)) }
             })
         }
+    }
+}
+
+/**
+ * Closes the renderer once no page is being drawn: a page still rendering on the background thread
+ * when the sheet goes would otherwise meet a renderer closed under it (a native crash) or make
+ * close() refuse, leaving the file open.
+ */
+@OptIn(DelicateCoroutinesApi::class)
+private fun closeLater(o: Opened.Ready, gate: Mutex) {
+    GlobalScope.launch(Dispatchers.IO) {
+        gate.withLock { runCatching { o.renderer.close() }; runCatching { o.fd.close() } }
     }
 }
 
