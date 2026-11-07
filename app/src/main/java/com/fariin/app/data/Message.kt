@@ -76,7 +76,10 @@ data class Message(
     val quoteFaces: List<String> = emptyList(),
     /** Replies under a channel post (server `addReply`), and the post's own "replies off" (`setReplies`). */
     val replyCount: Int = 0,
-    val repliesOff: Boolean = false,
+    /** Kept as written, false too: a post's own "on" beats the channel's "off"; null = the channel's (PostReplyRules.postOff). */
+    val repliesOff: Boolean? = null,
+    /** Up to 3 recent repliers' photos (server flushChannelCounts); "" = no photo. */
+    val replyFaces: List<String> = emptyList(),
     /** A channel post's reactions as counts only: who picked what is never on the post. */
     val reactionCounts: Map<String, Int> = emptyMap(),
     /** When the disappearing timer takes this message (server `expiresAt`, ms), or null. */
@@ -334,7 +337,8 @@ data class Message(
                 quoteCount = maxOf(0, (data["quoteCount"] as? Number)?.toInt() ?: 0),
                 quoteFaces = PostQuoteRules.faces(data["quoteFaces"]),
                 replyCount = maxOf(0, (data["replyCount"] as? Number)?.toInt() ?: 0),
-                repliesOff = data["repliesOff"] as? Boolean ?: false,
+                repliesOff = data["repliesOff"] as? Boolean,
+                replyFaces = PostQuoteRules.faces(data["replyFaces"]),
                 reactionCounts = (data["reactionCounts"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
                     val n = (v as? Number)?.toInt() ?: 0
                     if (k is String && n > 0) k to n else null
