@@ -4,6 +4,8 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import androidx.compose.foundation.text.contextmenu.builder.item
+import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
@@ -44,7 +46,7 @@ internal fun androidx.compose.ui.Modifier.boldMenuItem(
     hasSelection: () -> Boolean,
     onBold: () -> Unit,
 ): androidx.compose.ui.Modifier = if (!enabled) this else
-    androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents(this) {
+    appendTextContextMenuComponents {
         if (hasSelection()) {
             separator()
             item(BoldMenuKey, "Bold") { onBold(); close() }
