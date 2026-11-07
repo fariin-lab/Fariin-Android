@@ -50,16 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.data.BubbleArt
 import com.fariin.app.data.BubbleStyles
-import com.fariin.app.data.ChatColorSpec
-import com.fariin.app.data.ChatColors
 import com.fariin.app.data.ChatLookStore
 import com.fariin.app.ui.components.brush
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.thread.bubbles.BubbleArtCache
 import com.fariin.app.ui.thread.bubbles.artBubble
@@ -69,25 +61,14 @@ import com.fariin.app.ui.thread.bubbles.rememberBubbleThumb
 
 internal const val PAGE_BUBBLE_STYLE = "look:bubblestyle"
 
-/** The chips under the preview, in this order (owner 2026-11-07: colours last). */
+/** The chips under the preview, in this order (owner 2026-11-07: Colours first). */
 private const val COLOURS = "Colours"
-private val CATEGORIES: List<String> = BubbleArt.sections + COLOURS
-
-/** The chat colours' names (iOS ChatColors.presets comments), in [ChatColors.presets] order. */
-private val PRESET_NAMES = listOf(
-    "Ultramarine", "Crimson", "Vermilion", "Burlap", "Forest", "Wintergreen", "Teal", "Blue", "Indigo",
-    "Violet", "Plum", "Taupe", "Steel", "Ember", "Midnight", "Infrared", "Lagoon", "Fluorescent", "Basil",
-    "Sublime", "Sea", "Tangerine",
-)
-
-/** A chat colour's name for a Settings row; one I mixed myself is "Custom". */
-internal fun chatColorName(spec: ChatColorSpec): String =
-    PRESET_NAMES.getOrNull(ChatColors.presets.indexOf(spec)) ?: "Custom"
+private val CATEGORIES: List<String> = listOf(COLOURS) + BubbleArt.sections
 
 /**
  * Settings > Appearance > Bubble Style (SPEC 4, iOS BubbleStylesPage). Save at the top; the chat info
- * "Chat Bubble" row opens this same page. [startOnColours]: opened as the old "Chat Color" (search,
- * the new-account card), so the Colours chip shows first.
+ * "Chat Bubble" row opens this same page. [startOnColours]: opened as the old "Chat Color" (Settings
+ * search, the new-account card), so the Colours chip shows whatever is saved.
  */
 @Composable
 internal fun BubbleStylePage(startOnColours: Boolean = false, onClose: () -> Unit) {
@@ -109,11 +90,6 @@ internal fun BubbleStylePage(startOnColours: Boolean = false, onClose: () -> Uni
  * below; "Default" (no style) is the first tile of every grid. Nothing changes until Save, and only
  * the messages sent after it carry the style.
  *
- * The Colours chip holds the chat colours first (owner 2026-11-07: the Chat Color page merged here):
- * Auto, the palette, my own and +, exactly as that page had them. A chat colour is for all my chats
- * and only I see it; picking one also sets the sent style to Default, since a colour and a style
- * cannot both show. Under "Colours others see" are the sent colour styles. Save applies both.
- *
  * Tiles are the style pictures, small, in a lazy grid: only the tiles on screen decode, into their
  * own cache that is dropped when the picker closes.
  */
@@ -132,23 +108,14 @@ internal fun BubbleStyleChooser(
     val savedDecor = remember { BubbleStyles.decorations() }
     var decor by remember { mutableStateOf(savedDecor) }
     var plusNote by remember { mutableStateOf(false) }
-    val savedColor = remember { ChatLookStore.globalChosen(ctx) }
-    var chatColor by remember { mutableStateOf(savedColor) }
-    ChatLookStore.version.intValue
-    val customs = ChatLookStore.customColors(ctx)
-    var custom by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<ChatColorSpec?>(null) }
-    // The bubble a chat colour paints, live: Auto is the wallpaper's own colour, else blue.
-    val chatBrush: Brush = (chatColor ?: ChatLookStore.globalAuto(ctx))?.brush() ?: SolidColor(c.blue)
-    fun pickColour(spec: ChatColorSpec?) { chatColor = spec; selected = null }
     var category by remember {
-        mutableStateOf(when {
-            startOnColours -> COLOURS
-            else -> BubbleArt.find(saved)?.section ?: if (saved != null || savedColor != null) COLOURS else CATEGORIES.first()
-        })
+        mutableStateOf(if (startOnColours) COLOURS else BubbleArt.find(saved)?.section ?: COLOURS)
     }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
-    val dirty = selected != saved || decor != savedDecor || chatColor != savedColor
+    val dirty = selected != saved || decor != savedDecor
+    // "Default" is the plain bubble, which is drawn in my chat colour (the wallpaper's own on Auto).
+    ChatLookStore.version.intValue
+    val plain: Brush = ChatLookStore.globalColor(ctx)?.brush() ?: SolidColor(c.blue)
     val colourPicked = selected != null && BubbleArt.find(selected) == null
     val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
     val grid = rememberLazyGridState()
@@ -157,15 +124,11 @@ internal fun BubbleStyleChooser(
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         bar(dirty) {
             if (!BubbleStyles.mayUse(selected)) plusNote = true
-            else {
-                if (chatColor != savedColor) ChatLookStore.setDefaultColor(ctx, chatColor)
-                BubbleStyles.save(selected, decor)
-                onSaved()
-            }
+            else { BubbleStyles.save(selected, decor); onSaved() }
         }
         // Pinned: never scrolls away, redrawn at once when a tile is tapped.
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
-            Preview(selected, chatBrush)
+            Preview(selected, plain)
             Text("Applies to messages you send from now on.", fontSize = 13.sp, color = c.secondary,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp))
         }
@@ -187,49 +150,8 @@ internal fun BubbleStyleChooser(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            item(key = "default") { Tile("Default", selected == null, onTap = { selected = null }) { DefaultSwatch(plain) } }
             if (category == COLOURS) {
-                item(span = { GridItemSpan(maxLineSpan) }, key = "chatcolours") {
-                    val circles = buildList<@Composable (Modifier) -> Unit> {
-                        add { m ->
-                            ColorCircle(selected == null && chatColor == null, m, onTap = { pickColour(null) }) {
-                                Box(Modifier.fillMaxSize().clip(CircleShape).background(ChatLookStore.globalAuto(ctx)?.brush() ?: SolidColor(c.blue)),
-                                    contentAlignment = Alignment.Center) { Text("Auto", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White) }
-                            }
-                        }
-                        ChatColors.presets.forEach { p ->
-                            add { m -> ColorCircle(selected == null && chatColor == p, m, onTap = { pickColour(p) }) { Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush())) } }
-                        }
-                        customs.forEach { p ->
-                            add { m ->
-                                Box(m) {
-                                    ColorCircle(selected == null && chatColor == p, Modifier.fillMaxWidth(), onLong = { deleting = p }, onTap = { pickColour(p) }) {
-                                        Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush()))
-                                    }
-                                    DropdownMenu(expanded = deleting == p, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-                                        border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
-                                        DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = {
-                                            deleting = null
-                                            if (chatColor == p) chatColor = savedColor.takeIf { it != p }
-                                            ChatLookStore.removeCustom(ctx, p)
-                                        })
-                                    }
-                                }
-                            }
-                        }
-                        add { m ->
-                            ColorCircle(false, m, onTap = { custom = true }) {
-                                Box(Modifier.fillMaxSize().clip(CircleShape).background(systemGray5(c.dark)), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.Add, contentDescription = "Custom Color", tint = c.label, modifier = Modifier.size(24.dp))
-                                }
-                            }
-                        }
-                    }
-                    GridCard(5, 16, 18, circles)
-                }
-                item(span = { GridItemSpan(maxLineSpan) }, key = "others") {
-                    Text("Colours others see", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
-                        modifier = Modifier.padding(start = 4.dp, top = 8.dp))
-                }
                 items(BubbleStyles.colours, key = { "c:" + it.id }) { s ->
                     Tile(s.name, selected == s.id, plus = s.plus, onTap = { selected = s.id }) { ColourSwatch(s) }
                 }
@@ -242,7 +164,6 @@ internal fun BubbleStyleChooser(
                     }
                 }
             } else {
-                item(key = "default") { Tile("Default", selected == null, onTap = { selected = null }) { DefaultSwatch(chatBrush) } }
                 items(BubbleArt.all.filter { it.section == category }, key = { "p:" + it.id }) { s ->
                     Tile(s.name, selected == s.id, onTap = { selected = s.id }) { PictureSwatch(s, thumbPx) }
                 }
@@ -253,11 +174,6 @@ internal fun BubbleStyleChooser(
         title = { Text("Fariin Plus") },
         text = { Text("This style is part of Fariin Plus, coming soon. The free styles are ready to use now.") },
         confirmButton = { TextButton({ plusNote = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
-    // A mixed colour joins my colours at once (as before) and becomes the pick; Save applies it.
-    if (custom) CustomColorSheet(onClose = { custom = false }) { spec ->
-        ChatLookStore.addCustom(ctx, spec)
-        pickColour(spec)
-    }
 }
 
 /**
@@ -316,7 +232,7 @@ private fun Chip(title: String, on: Boolean, onTap: () -> Unit) {
 
 /** My bubble in the chosen style (as the chat draws it, the picture for a picture style), then a reply. */
 @Composable
-private fun Preview(selected: String?, chatBrush: Brush) {
+private fun Preview(selected: String?, plain: Brush) {
     val c = Fariin.colors
     val text = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
@@ -333,7 +249,7 @@ private fun Preview(selected: String?, chatBrush: Brush) {
                     val look = colour?.look(c.dark)
                     Text(mine, style = text, color = look?.let { Color(0xFF000000 or it.text) } ?: Color.White,
                         modifier = Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp))
-                            .background(look?.let { brushOf(it) } ?: chatBrush).padding(horizontal = 14.dp, vertical = 9.dp))
+                            .background(look?.let { brushOf(it) } ?: plain).padding(horizontal = 14.dp, vertical = 9.dp))
                 }
             }
         }
@@ -371,7 +287,7 @@ private fun Tile(name: String, on: Boolean, plus: Boolean = false, onTap: () -> 
     }
 }
 
-/** The plain bubble in my chat colour. */
+/** The plain bubble, in my chat colour. */
 @Composable
 private fun DefaultSwatch(fill: Brush) = Bar(fill, Color.White)
 

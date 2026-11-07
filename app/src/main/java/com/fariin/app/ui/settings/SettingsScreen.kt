@@ -438,14 +438,7 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
                 // No Chat Color row (owner 2026-11-07): the chat colours are on the Bubble Style page.
                 if (com.fariin.app.data.BubbleStyles.SHOWN) {
                     val bubbleV = com.fariin.app.data.BubbleStyles.version.intValue
-                    val lookV = com.fariin.app.data.ChatLookStore.version.intValue
-                    // The style's name; with no style, the chat colour's name when I chose one.
-                    val bubbleName = remember(bubbleV, lookV) {
-                        com.fariin.app.data.BubbleStyles.init(ctx)
-                        val id = com.fariin.app.data.BubbleStyles.current()
-                        val colour = com.fariin.app.data.ChatLookStore.globalChosen(ctx)
-                        if (id == null && colour != null) chatColorName(colour) else com.fariin.app.data.BubbleStyles.name(id)
-                    }
+                    val bubbleName = remember(bubbleV) { com.fariin.app.data.BubbleStyles.init(ctx); com.fariin.app.data.BubbleStyles.name(com.fariin.app.data.BubbleStyles.current()) }
                     SettingsRow("Bubble Style", value = bubbleName) { push(PAGE_BUBBLE_STYLE) }
                 }
                 SettingsRow("App Icon") { push(PAGE_APP_ICON) }

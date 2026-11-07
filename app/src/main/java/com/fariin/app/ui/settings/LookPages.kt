@@ -215,7 +215,7 @@ fun ChatWallpaperPicker(cid: String, shared: Boolean = false, onClose: () -> Uni
 
 /** A rounded white card holding a grid (iOS: secondarySystemGroupedBackground, corner 24, 14 inside). */
 @Composable
-internal fun GridCard(columns: Int, spacing: Int, inner: Int, items: List<@Composable (Modifier) -> Unit>) {
+private fun GridCard(columns: Int, spacing: Int, inner: Int, items: List<@Composable (Modifier) -> Unit>) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Fariin.colors.card).padding(inner.dp),
         verticalArrangement = Arrangement.spacedBy(spacing.dp)) {
         items.chunked(columns).forEach { row ->
@@ -548,104 +548,7 @@ private fun PreviewBubble(text: String, mine: Boolean, mineFill: Brush?, modifie
 }
 
 /** UIColor.systemGray5. */
-internal fun systemGray5(dark: Boolean) = if (dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-
-/** A 54 colour circle; the chosen one has a 3 ring 5 outside it. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun ColorCircle(selected: Boolean, modifier: Modifier, onLong: (() -> Unit)? = null, onTap: () -> Unit, content: @Composable () -> Unit) {
-    val c = Fariin.colors
-    Box(modifier.aspectRatio(1f), contentAlignment = Alignment.Center) {
-        Box(Modifier.requiredSize(64.dp).then(if (selected) Modifier.border(3.dp, c.label, CircleShape) else Modifier))
-        Box(Modifier.size(54.dp).clip(CircleShape).combinedClickable(onLongClick = onLong, onClick = onTap)) { content() }
-    }
-}
-
-/** iOS CustomColorView as a sheet: Solid / Gradient, the preview, the two ends, Hue and Saturation. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun CustomColorSheet(onClose: () -> Unit, onSet: (ChatColorSpec) -> Unit) {
-    val ctx = LocalContext.current
-    val c = Fariin.colors
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    var gradient by remember { mutableStateOf(false) }
-    var hue1 by remember { mutableFloatStateOf(0.62f) }
-    var sat1 by remember { mutableFloatStateOf(0.72f) }
-    var hue2 by remember { mutableFloatStateOf(0.78f) }
-    var sat2 by remember { mutableFloatStateOf(0.72f) }
-    var stop by remember { mutableStateOf(0) }
-    val spec = if (gradient) ChatColorSpec(listOf(ChatColorSpec.hsb(hue1.toDouble(), sat1.toDouble()), ChatColorSpec.hsb(hue2.toDouble(), sat2.toDouble())))
-    else ChatColorSpec(listOf(ChatColorSpec.hsb(hue1.toDouble(), sat1.toDouble())))
-    val second = gradient && stop == 1
-    val hue = if (second) hue2 else hue1
-    val sat = if (second) sat2 else sat1
-    fun close() { scope.launch { sheet.hide() }.invokeOnCompletion { onClose() } }
-    val wall = ChatLookStore.defaultWallpaper(ctx)
-    val pattern = WallpaperArt.pattern(ctx)
-    val photo = (wall as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
-    val wallMotion = com.fariin.app.ui.components.rememberWallpaperMotion(wall)
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = com.fariin.app.ui.components.sheetFill,
-        shape = com.fariin.app.ui.components.SheetShape) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Close", onClick = { close() }, modifier = Modifier.align(Alignment.CenterStart))
-                Text("Custom Color", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
-                com.fariin.app.ui.components.FloatingTextAction("Set", modifier = Modifier.align(Alignment.CenterEnd)) { onSet(spec); close() }
-            }
-            com.fariin.app.ui.components.FloatingSegments(listOf("Solid", "Gradient"), if (gradient) 1 else 0,
-                { gradient = it == 1; stop = 0 }, Modifier.align(Alignment.CenterHorizontally))
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(20.dp))
-                .then(wallMotion.isolate { Modifier.drawBehind { drawWallpaper(wall, c.dark, c.bg, pattern, photo, motion = wallMotion) } }).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Today", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.label,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).floating(CircleShape).padding(horizontal = 12.dp, vertical = 5.dp))
-                MockBubble("Here's a preview of the chat color.", false, null, Modifier.align(Alignment.Start), corner = 17)
-                MockBubble("The color is visible to only you.", true, spec.brush(), Modifier.align(Alignment.End), corner = 17)
-                MockBubble("Another bubble", false, null, Modifier.align(Alignment.Start), corner = 17)
-            }
-            if (gradient) Row(Modifier.align(Alignment.CenterHorizontally), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                for (i in 0..1) {
-                    val col = if (i == 0) ChatColorSpec.hsb(hue1.toDouble(), sat1.toDouble()) else ChatColorSpec.hsb(hue2.toDouble(), sat2.toDouble())
-                    Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF000000 or col))
-                        .then(if (stop == i) Modifier.border(3.dp, c.label, CircleShape) else Modifier).clickable { stop = i })
-                }
-            }
-            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                SliderBlock("Hue", hue, Brush.horizontalGradient((0..10).map { Color.hsv(it * 36f % 360f, 0.9f, 0.95f) })) {
-                    if (second) hue2 = it else hue1 = it
-                }
-                SliderBlock("Saturation", sat, Brush.horizontalGradient(listOf(Color.hsv(hue * 360f % 360f, 0f, 0.7f), Color.hsv(hue * 360f % 360f, 1f, 0.86f)))) {
-                    if (second) sat2 = it else sat1 = it
-                }
-            }
-        }
-    }
-}
-
-/** iOS GradientSlider: a 14 tall gradient capsule and a 28 white thumb. */
-@Composable
-private fun SliderBlock(title: String, value: Float, track: Brush, onChange: (Float) -> Unit) {
-    val c = Fariin.colors
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-        BoxWithConstraints(Modifier.fillMaxWidth().height(28.dp)) {
-            val wPx = constraints.maxWidth.toFloat()
-            val thumb = 28.dp
-            val thumbPx = with(androidx.compose.ui.platform.LocalDensity.current) { thumb.toPx() }
-            fun set(x: Float) = onChange(((x - thumbPx / 2) / (wPx - thumbPx)).coerceIn(0f, 1f))
-            Box(Modifier.fillMaxSize().pointerInput(wPx) {
-                detectTapGestures { set(it.x) }
-            }.pointerInput(wPx) {
-                detectDragGestures(onDragStart = { set(it.x) }) { ch, _ -> set(ch.position.x) }
-            }, contentAlignment = Alignment.CenterStart) {
-                Box(Modifier.fillMaxWidth().height(14.dp).clip(CircleShape).background(track))
-                Box(Modifier.offset(x = with(androidx.compose.ui.platform.LocalDensity.current) { (value * (wPx - thumbPx)).toDp() })
-                    .size(thumb).shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White))
-            }
-        }
-    }
-}
+private fun systemGray5(dark: Boolean) = if (dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
 
 /**
  * iOS Appearance "Chat Theme": a chat drawn as it looks now, over a strip of themes, one per
