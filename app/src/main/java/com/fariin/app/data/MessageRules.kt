@@ -71,6 +71,28 @@ object MessageRules {
         }.sortedWith(compareByDescending<Chip> { it.count }.thenByDescending { it.emoji })
     }
 
+    /**
+     * iOS ReactorsSheet tabs: (emoji, count), most picked first, ties by emoji descending (the
+     * pills' own order). "All" is drawn in front of them by the sheet.
+     */
+    fun reactorTabs(reactions: Map<String, String>): List<Pair<String, Int>> =
+        reactions.values.filter { it.isNotEmpty() }.groupingBy { it }.eachCount().toList()
+            .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenByDescending { it.first })
+
+    data class Reactor(val uid: String, val emoji: String, val name: String)
+
+    /**
+     * iOS ReactorsSheet rows: the reactors of [emoji] (null = all), sorted by shown name, case
+     * blind, ties by uid. A tab whose last reactor took theirs back reads as All ([activeTab]).
+     */
+    fun reactorRows(reactions: Map<String, String>, emoji: String?, name: (String) -> String): List<Reactor> =
+        reactions.filter { (_, e) -> e.isNotEmpty() && (emoji == null || e == emoji) }
+            .map { (uid, e) -> Reactor(uid, e, name(uid)) }
+            .sortedWith(compareBy<Reactor, String>(String.CASE_INSENSITIVE_ORDER) { it.name }.thenBy { it.uid })
+
+    fun activeTab(reactions: Map<String, String>, picked: String?): String? =
+        picked?.takeIf { it in reactions.values }
+
     /** Toggle: the same emoji again takes my reaction off (null), else it becomes mine. */
     fun nextReaction(current: String?, picked: String): String? = if (current == picked) null else picked
 

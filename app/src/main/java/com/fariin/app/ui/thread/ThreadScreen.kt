@@ -302,6 +302,7 @@ private fun ThreadContent(
     var postMenuFor by remember { mutableStateOf<Message?>(null) }
     var deleteFor by remember { mutableStateOf<Message?>(null) }
     var infoFor by remember { mutableStateOf<Message?>(null) }
+    var reactorsFor by remember { mutableStateOf<String?>(null) }   // "who reacted": the row's id
     var replyTo by remember { mutableStateOf<Message?>(null) }
     var editing by remember { mutableStateOf<Message?>(null) }
     var historyFor by remember { mutableStateOf<Message?>(null) }
@@ -411,6 +412,11 @@ private fun ThreadContent(
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
     infoFor?.let { m -> MessageInfoSheet(m, ui, is24h) { infoFor = null } }
+    reactorsFor?.let { rid ->
+        val m = ui.messages.firstOrNull { it.rowId == rid }
+        if (m == null || m.reactions.isEmpty()) LaunchedEffect(rid) { reactorsFor = null }   // the last one came off
+        else ReactorsSheet(m, ui, onRemoveMine = { if (m.reactions[ui.me] != null) actions.onReact(m, null) }) { reactorsFor = null }
+    }
     // The divider is placed once, from the unread count at open (iOS anchors it the same way).
     // Counted only on the server's first answer: the phone's saved copy can lack the very messages
     // that are unread, and counting back through it put the divider on old, read rows.
@@ -845,9 +851,8 @@ private fun ThreadContent(
                                         actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], quickReaction))
                                     }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
-                                    ReactionChips(m, ui, m.authorId == ui.me) { e ->
-                                        actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], e))
-                                    }
+                                    // iOS: a pill opens who reacted (channels keep their own chips).
+                                    ReactionChips(m, ui, m.authorId == ui.me) { reactorsFor = m.rowId }
                                 }
                             }
                         }
