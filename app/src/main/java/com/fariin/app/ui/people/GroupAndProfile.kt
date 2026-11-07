@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -419,6 +420,95 @@ private fun PickPeople(people: List<Person>, picked: Set<String>, onToggle: (Str
 }
 
 /**
+ * New Group's member picker (iOS NewGroupView.membersPage): "Members · N" (me included) over the
+ * picked faces, the contacts under A to Z letters ("#" last), and a typed name or username asks the
+ * server (the same lookup as New Chat's "Search by username"), so people I have not chatted with
+ * can be added too. Nobody to list says how to get someone here.
+ */
+@Composable
+private fun NewGroupPicker(api: PeopleApi, people: List<Person>, chosen: List<Person>, maxOthers: Int, onToggle: (Person) -> Unit) {
+    val c = Fariin.colors
+    var q by remember { mutableStateOf("") }
+    var found by remember { mutableStateOf(listOf<Person>()) }
+    var searching by remember { mutableStateOf(false) }
+    val needle = q.trim().removePrefix("@")
+    LaunchedEffect(needle) {
+        found = emptyList()
+        if (needle.isEmpty()) { searching = false; return@LaunchedEffect }
+        searching = true
+        delay(300)   // one ask per pause in typing, not per letter
+        // iOS search(): searchUsers, then the exact @handle when that finds nobody.
+        val r = runCatching { api.search(needle).ifEmpty { if (needle.length >= 3) listOfNotNull(api.byHandle(needle)) else emptyList() } }.getOrDefault(emptyList())
+        found = r.filter { it.uid != api.me }
+        searching = false
+    }
+    val picked = chosen.map { it.uid }.toSet()
+    if (chosen.isNotEmpty()) {
+        // +1 = me; at the cap the header says so, as the next tap does nothing (iOS).
+        Text(if (chosen.size >= maxOthers) "Members · ${chosen.size + 1} max" else "Members · ${chosen.size + 1}",
+            fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 32.dp, top = 4.dp))
+        LazyRow(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            items(chosen, key = { it.uid }) { p ->
+                Column(Modifier.width(64.dp).clickable { onToggle(p) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Avatar(p.photoUrl, 48.dp)
+                    Text(p.shownName, fontSize = 12.sp, color = c.label, maxLines = 1)
+                }
+            }
+        }
+    }
+    SearchField(q, "Name or username") { q = it }
+    @Composable
+    fun row(p: Person, first: Boolean, last: Boolean) {
+        val top = if (first) 20.dp else 0.dp
+        val bottom = if (last) 20.dp else 0.dp
+        Box(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(top, top, bottom, bottom)).background(c.card)) {
+            PersonRow(p.photoUrl, p.shownName, "", onClick = { onToggle(p) }) {
+                Icon(if (p.uid in picked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                    tint = if (p.uid in picked) c.blue else c.tertiary)
+            }
+        }
+    }
+    @Composable
+    fun card(content: @Composable () -> Unit) = Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth()
+        .clip(RoundedCornerShape(20.dp)).background(c.card)) { content() }
+    val lettered = remember(people) {
+        people.sortedBy { it.shownName.lowercase() }.groupBy { p ->
+            p.shownName.trim().take(1).uppercase().takeIf { it.length == 1 && it[0] in 'A'..'Z' } ?: "#"
+        }.toSortedMap(compareBy<String> { it == "#" }.thenBy { it })
+    }
+    LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp)) {
+        if (needle.isEmpty()) {
+            if (lettered.isEmpty()) item {
+                card { Text("Chat with someone first to add them here.", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(16.dp)) }
+            }
+            lettered.forEach { (letter, group) ->
+                item(key = "h_$letter") { Header(letter) }
+                itemsIndexed(group, key = { _, p -> "c_" + p.uid }) { i, p -> row(p, i == 0, i == group.lastIndex) }
+            }
+        } else {
+            // My own contacts by name first, then whoever the server finds by username (iOS "Results").
+            val local = people.filter { it.shownName.contains(needle, true) || it.handle.contains(needle, true) }
+            val rows = (local + found).distinctBy { it.uid }
+            item(key = "h_results") { Header("Results") }
+            if (rows.isEmpty()) item(key = "empty") {
+                if (searching) card {
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        repeat(3) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                com.fariin.app.ui.components.SkeletonCircle(44.dp)
+                                Spacer(Modifier.width(12.dp))
+                                com.fariin.app.ui.components.SkeletonBlock(140.dp, 14.dp)
+                            }
+                        }
+                    }
+                } else card { Text("No one found", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(16.dp)) }
+            }
+            itemsIndexed(rows, key = { _, p -> "r_" + p.uid }) { i, p -> row(p, i == 0, i == rows.lastIndex) }
+        }
+    }
+}
+
+/**
  * New Group (iOS NewGroupView): pick members, then Next to the name and photo, then Create.
  * The group is made plain (e2ee false) as iOS makes them, with "<me> created the group".
  */
@@ -428,8 +518,15 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val people = remember(chats) { contactsFrom(chats, api.me) }
-    var picked by remember { mutableStateOf(setOf<String>()) }
+    // In tap order (iOS `order`): a person found by username is not among [people], so the pick keeps the person.
+    var chosen by remember { mutableStateOf(listOf<Person>()) }
+    val picked = chosen.map { it.uid }.toSet()
     var step by remember { mutableStateOf(1) }
+    androidx.activity.compose.BackHandler(enabled = step > 1) { step -= 1 }
+    // The group's member switches, chosen before it exists (iOS NewGroupView), with the same defaults.
+    var canSend by remember { mutableStateOf(true) }
+    var canAdd by remember { mutableStateOf(false) }
+    var canCall by remember { mutableStateOf(true) }
     var title by remember { mutableStateOf("") }
     var photo by remember { mutableStateOf<ByteArray?>(null) }
     // The Settings default for new chats starts the choice (iOS NewGroupView).
@@ -454,8 +551,19 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
             // The create rule allows at most group_members_max people, me included (iOS
             // NewGroupView.maxOthersAtCreate): the picker stops one short, the other place is mine.
             val maxOthers = maxOf(1, com.fariin.app.data.AppLimits.groupMembersMax - 1)
-            Text("${picked.size} of $maxOthers selected", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp))
-            PickPeople(people, picked) { u -> picked = if (u in picked) picked - u else if (picked.size < maxOthers) picked + u else picked }
+            NewGroupPicker(api, people, chosen, maxOthers) { p ->
+                chosen = if (p.uid in picked) chosen.filter { it.uid != p.uid } else if (chosen.size < maxOthers) chosen + p else chosen
+            }
+        } else if (step == 3) {
+            // iOS NewGroupView.permissionsPage: Send messages, Add members, Start group calls.
+            com.fariin.app.ui.components.FloatingTopBar("Permissions", onBack = { step = 2 }, container = c.bgSecondary)
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                SettingsSection(header = "What members can do", footer = "Admins can always do these. Switch one off and only admins can.") {
+                    com.fariin.app.ui.channels.SwitchLine("Send messages", canSend) { canSend = it }
+                    com.fariin.app.ui.channels.SwitchLine("Add members", canAdd) { canAdd = it }
+                    com.fariin.app.ui.channels.SwitchLine("Start group calls", canCall, last = true) { canCall = it }
+                }
+            }
         } else {
             bar("New Group", { step = 1 }) {
                 TextAction("Create", title.isNotBlank() && !busy) {
@@ -466,7 +574,10 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                             error = com.fariin.app.data.AppLimits.ownedGroupsSentence(max); busy = false; return@launch
                         }
                         try {
-                            val cid = api.createGroup(title, picked.toList(), photo)
+                            // iOS NewGroupView `perms`: edit info and share link stay admins' only.
+                            val perms = mapOf("onlyAdminsSend" to !canSend, "membersCanAdd" to canAdd,
+                                "membersCanEditInfo" to false, "onlyAdminsCall" to !canCall, "membersCanShareLink" to false)
+                            val cid = api.createGroup(title, chosen.map { it.uid }, photo, perms)
                             // After "created the group", as iOS: the timer and its notice for everyone.
                             if (timer > 0) api.setDisappear(cid, timer)
                             // "New group" on the new-account card is done.
@@ -503,11 +614,14 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                 }
             }
             NewGroupTimerSection(timer) { timer = it }
-            val members = people.filter { it.uid in picked }
+            // iOS: the Permissions row with how many switches are on, and the "change this later" line.
+            SettingsSection(footer = "What members can do. You can change this later in the group's settings.") {
+                SettingsRow("Permissions", value = "${listOf(canSend, canAdd, canCall).count { it }}/3", last = true) { step = 3 }
+            }
             // No "Members · N" heading on this page (iOS, owner 2026-10-20): it counted me but listed
             // only the others, so two over one row read as a mistake.
-            SettingsSection {
-                members.forEach { p -> PersonRow(p.photoUrl, p.shownName, "", onClick = null) }
+            if (chosen.isNotEmpty()) SettingsSection {
+                chosen.forEach { p -> PersonRow(p.photoUrl, p.shownName, "", onClick = null) }
             }
         }
     }

@@ -55,7 +55,7 @@ object DemoPeople : PeopleApi {
     override suspend fun claimUsername(h: String) { myHandle = h }
     override suspend fun saveName(name: String) { myName = name.trim() }
     override suspend fun uploadPhoto(jpegOrAny: ByteArray) {}
-    override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?) = "d3"
+    override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean>) = "d3"
     override suspend fun addMembers(cid: String, uids: List<String>): String? = null
     override suspend fun leaveGroup(cid: String) {}
     override suspend fun renameGroup(cid: String, title: String) {}

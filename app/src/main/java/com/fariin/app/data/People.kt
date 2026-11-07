@@ -92,7 +92,8 @@ interface PeopleApi {
     suspend fun uploadPhoto(jpegOrAny: ByteArray)
     /** iOS ProfileStore.removePhoto: no picture, back to the letter. */
     suspend fun removePhoto() {}
-    suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?): String
+    /** [permissions]: the member switches chosen on New Group (iOS NewGroupView `perms`), written into the new group. */
+    suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean> = emptyMap()): String
     suspend fun addMembers(cid: String, uids: List<String>): String?
     suspend fun leaveGroup(cid: String)
     suspend fun renameGroup(cid: String, title: String)
@@ -319,7 +320,7 @@ class FirestorePeople(
         CryptoHub.listedConversation(Wire.directCid(me, uid))?.let { !it.isGroup && (it.startedBy.isEmpty() || it.accepted) } ?: false
 
     /** ChatService.createGroup (a plain group, e2ee false, as iOS makes them now). */
-    override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?): String {
+    override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?, permissions: Map<String, Boolean>): String {
         val people = members.filter { it != me }.mapNotNull { profile(it) }
         val allowed = people.filter { Person.allows(it.privacy, "groups", isContact(it.uid)) }
         // Their "Groups" privacy refused them: said, not dropped in silence (iOS ChatService.sayRefused).
@@ -336,6 +337,8 @@ class FirestorePeople(
             "unreadCount" to users.associateWith { 0 }, "typing" to users.associateWith { false },
             "updatedAt" to FieldValue.serverTimestamp(), "e2ee" to false,
         )
+        // iOS ChatService.createGroup: every switch goes in as given, never e2ee.
+        for ((k, v) in permissions) if (k != "e2ee") data[k] = v
         ref.set(data).await()
         CryptoHub.notePlainGroup(ref.id)
         systemMessage(ref.id, "${mine?.name?.ifEmpty { null } ?: "Someone"} created the group")
