@@ -478,6 +478,10 @@ private fun ThreadContent(
     val arrivalMotion = remember(ui.cid) { ArrivalMotion() }
     val sendMotion = remember(ui.cid) { SendMotion() }
     var stick by remember { mutableStateOf(true) }
+    // A reopened chat's restored reading place, held against the snap to the newest until the reader
+    // drags the list or sends (below), and whether the reader has dragged this visit.
+    var heldPlace by remember { mutableStateOf(false) }
+    var userDragged by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { if (!it) stick = listState.firstVisibleItemIndex <= 1 }
     }
@@ -496,6 +500,8 @@ private fun ThreadContent(
             .collect { if (it != null) shortFill = it }
     }
     LaunchedEffect(ui.messages.lastOrNull()?.rowId) {
+        // At a restored place only my own new send (still on its way) brings the list down.
+        if (heldPlace) { if (ui.messages.lastOrNull()?.let { it.authorId == ui.me && it.sendState != null } == true) heldPlace = false else return@LaunchedEffect }
         if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) {
             // Someone else's message landing live: the list glides up to it (iOS), instead of every
             // row jumping in one frame. My own sends, the open and history loads still snap.
@@ -552,24 +558,59 @@ private fun ThreadContent(
     // iOS ChatScrollStore: where this chat was being read, for this run of the app only. Unread
     // messages win (above); otherwise a chat left scrolled up opens where it was left, and one left
     // at the newest message opens at the newest. A relaunch starts every chat at the newest.
+    //
+    // Why it used to land somewhere else (owner 2026-11-07): the place was looked for only in the
+    // rows already loaded, so a place deep in the history (older pages, gone on reopen) was never
+    // found; the attempt was marked done before its frame wait, so a list update in that frame
+    // cancelled it for good; and a place that was found could be scrolled away again by the
+    // stick-to-newest effect when the newest message was mine. Now the place's page is fetched
+    // (the jump-to-message loader, bounded), the attempt is done only once it lands, and the place
+    // is held against the newest-message snap until the reader touches the list.
     var restoredPlace by remember { mutableStateOf(false) }
-    LaunchedEffect(ui.messages.size, dividerId) {
-        if (restoredPlace || dividerId != null || ui.messages.isEmpty()) return@LaunchedEffect
-        val (rowId, offset) = ChatReadingPositions.get(ui.cid) ?: run { restoredPlace = true; return@LaunchedEffect }
-        val i = ui.messages.indexOfFirst { it.rowId == rowId }
-        if (i < 0) return@LaunchedEffect
-        restoredPlace = true
+    LaunchedEffect(ui.cid) {
+        listState.interactionSource.interactions.collect {
+            if (it is androidx.compose.foundation.interaction.DragInteraction.Start) { userDragged = true; heldPlace = false }
+        }
+    }
+    LaunchedEffect(ui.cid, ui.loaded, ui.messages.isEmpty(), dividerId) {
+        if (restoredPlace) return@LaunchedEffect
+        val saved = ChatReadingPositions.get(ui.cid) ?: run { restoredPlace = true; return@LaunchedEffect }
+        // Unread messages win; the reader's own scroll wins too.
+        if (dividerId != null || userDragged) { restoredPlace = true; return@LaunchedEffect }
+        if (!ui.loaded || ui.messages.isEmpty()) return@LaunchedEffect
+        if (uiNow.value.messages.none { it.rowId == saved.rowId }) {
+            if (!actions.onEnsureLoaded(saved.messageId) || userDragged) {
+                restoredPlace = true
+                if (!userDragged) ChatReadingPositions.clear(ui.cid)
+                return@LaunchedEffect
+            }
+        }
         withFrameNanos { }
-        listState.scrollToItem(ui.messages.size - 1 - i, offset)
+        val list = uiNow.value.messages
+        val i = list.indexOfFirst { it.rowId == saved.rowId }
+        restoredPlace = true
+        if (i < 0 || userDragged) return@LaunchedEffect
+        listState.scrollToItem(list.size - 1 - i, saved.offset)
         stick = false
+        heldPlace = true
+    }
+    // The place is written when a scroll settles and again on leaving; at the newest it is cleared.
+    // Never before this visit's own place was restored (the open's snap to the newest would wipe it).
+    fun savePlace() {
+        if (!restoredPlace) return
+        val first = listState.layoutInfo.visibleItemsInfo.firstOrNull() ?: return
+        val msgs = uiNow.value.messages
+        if (msgs.isEmpty()) return
+        if (listState.firstVisibleItemIndex <= 1) { ChatReadingPositions.clear(ui.cid); return }
+        val key = first.key as? String ?: return
+        val m = msgs.getOrNull(msgs.size - 1 - first.index)?.takeIf { it.rowId == key } ?: msgs.firstOrNull { it.rowId == key } ?: return
+        ChatReadingPositions.save(ui.cid, key, m.id, listState.firstVisibleItemScrollOffset)
+    }
+    LaunchedEffect(ui.cid) {
+        snapshotFlow { listState.isScrollInProgress }.collect { if (!it) savePlace() }
     }
     DisposableEffect(ui.cid) {
-        onDispose {
-            val first = listState.layoutInfo.visibleItemsInfo.firstOrNull()
-            val key = first?.key as? String
-            if (listState.firstVisibleItemIndex <= 1 || key == null) ChatReadingPositions.clear(ui.cid)
-            else ChatReadingPositions.save(ui.cid, key, listState.firstVisibleItemScrollOffset)
-        }
+        onDispose { savePlace() }
     }
 
     val anim = com.fariin.app.ui.components.animationsOn()
@@ -2468,12 +2509,20 @@ internal fun RestrictedWindow(on: Boolean) {
     }
 }
 
-/** iOS ChatScrollStore: each chat's reading place (the row at the bottom edge and its offset), for this run only. */
+/**
+ * iOS ChatScrollStore: each chat's reading place (the row at the bottom edge, its message id for
+ * fetching its page again, and its offset), for this run only (owner: a relaunch opens every chat at
+ * the newest). Bounded: the 50 chats read most recently, a few bytes each; no messages are kept.
+ */
 internal object ChatReadingPositions {
-    private val byCid = HashMap<String, Pair<String, Int>>()
-    fun save(cid: String, rowId: String, offset: Int) { byCid[cid] = rowId to offset }
+    data class Place(val rowId: String, val messageId: String, val offset: Int)
+    private const val MAX = 50
+    private val byCid = object : LinkedHashMap<String, Place>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Place>?) = size > MAX
+    }
+    fun save(cid: String, rowId: String, messageId: String, offset: Int) { byCid[cid] = Place(rowId, messageId, offset) }
     fun clear(cid: String) { byCid.remove(cid) }
-    fun get(cid: String): Pair<String, Int>? = byCid[cid]
+    fun get(cid: String): Place? = byCid[cid]
 }
 
 /** A row's tint, fading from clear on its first frame (a ticked row fades in, as before). */
