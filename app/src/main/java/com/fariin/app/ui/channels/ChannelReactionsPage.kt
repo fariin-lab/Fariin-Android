@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -149,8 +151,11 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
         if (mode == "all" && list.isNotEmpty()) mode = "some"
     }
     if (picking) {
-        val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+        // Opens at 56% of the screen (owner 2026-11-07, as iOS), so the chosen bar and its caption stay
+        // visible above; Material's own half step is fixed at 50%, so the body sizes itself (GrowingSheetBody).
+        val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(onDismissRequest = { closePicker() }, sheetState = sheet, containerColor = c.bgSecondary) {
+          GrowingSheetBody(0.56f) {
             Box(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Text(ReactionPicks.title(list.size), fontSize = 17.sp, color = c.label, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().align(Alignment.Center))
@@ -168,8 +173,8 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp))
             }
             if (showsCustom && customTab) com.fariin.app.ui.thread.CustomEmojiGrid(onPick = { tapped(it) },
-                picked = { ReactionPicks.isPicked(list, it) }, onNote = { note = it })
-            else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 12.dp)) {
+                modifier = Modifier.weight(1f), picked = { ReactionPicks.isPicked(list, it) }, onNote = { note = it })
+            else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp)) {
                 items(ChannelRules.channelReactions) { e ->
                     Box(Modifier.size(52.dp).clip(CircleShape).clickable { tapped(e) }, contentAlignment = Alignment.Center) {
                         Text(e, fontSize = 30.sp)
@@ -177,6 +182,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                     }
                 }
             }
+          }
         }
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
@@ -230,5 +236,54 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
             }
             problem?.let { Text(it, fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)) }
         }
+    }
+}
+
+/**
+ * A sheet body that opens at [startFraction] of the screen and grows to the sheet's full height when
+ * its list is dragged up (and shrinks back first when dragged down, before the sheet itself moves).
+ * Material's own half step is fixed at 50% of the screen.
+ */
+@Composable
+private fun GrowingSheetBody(startFraction: Float, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val screenPx = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val maxPx = if (constraints.hasBoundedHeight) constraints.maxHeight.toFloat() else screenPx
+        val minPx = minOf(screenPx * startFraction, maxPx)
+        var h by remember { androidx.compose.runtime.mutableFloatStateOf(minPx) }
+        val conn = remember(minPx, maxPx) {
+            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                    // Finger up: the body grows first, then the list scrolls.
+                    if (available.y >= 0f || h >= maxPx) return androidx.compose.ui.geometry.Offset.Zero
+                    val grow = minOf(-available.y, maxPx - h)
+                    h += grow
+                    return androidx.compose.ui.geometry.Offset(0f, -grow)
+                }
+                override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset,
+                                          source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                    // Finger down with the list at its top: the body shrinks back before the sheet moves.
+                    if (available.y <= 0f || h <= minPx) return androidx.compose.ui.geometry.Offset.Zero
+                    val shrink = minOf(available.y, h - minPx)
+                    h -= shrink
+                    return androidx.compose.ui.geometry.Offset(0f, shrink)
+                }
+                override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                    // Let go between the two heights: settle on one of them.
+                    if (h <= minPx || h >= maxPx) return androidx.compose.ui.unit.Velocity.Zero
+                    val target = when {
+                        available.y < -300f -> maxPx
+                        available.y > 300f -> minPx
+                        h > (minPx + maxPx) / 2f -> maxPx
+                        else -> minPx
+                    }
+                    androidx.compose.animation.core.animate(h, target) { v, _ -> h = v }
+                    return available
+                }
+            }
+        }
+        Column(Modifier.fillMaxWidth().height(with(density) { h.toDp() })
+            .nestedScroll(conn), content = content)
     }
 }
