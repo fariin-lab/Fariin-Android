@@ -1062,3 +1062,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   and a handle; closes by X, Back, tap above, or swipe down (short drag springs back). Page fills the sheet,
   X and bottom row float over it (undid the 'stop above the bar' change, iOS overlays too). Muted autoplay on and
   the web-view tag dropped from the browser name; Facebook's video still shows black without login.
+- 20:05 Owner: sheet not smooth, wants iOS physics. SheetMotion: tracks the finger 1:1, rubber band above the
+  top, release by speed (flick or long pull closes, else a spring back from that speed), grabs mid-animation never
+  jump. The page itself pulls the sheet when scrolled to its top (velocity tracked), other touches stay the page's.
+  Pixel: slow short pull springs back, quick flick closes, page taps still work.

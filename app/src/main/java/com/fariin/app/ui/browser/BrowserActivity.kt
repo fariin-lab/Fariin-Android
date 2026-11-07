@@ -110,8 +110,8 @@ class BrowserActivity : ComponentActivity() {
         val start = intent.getStringExtra(EXTRA_URL) ?: run { finish(); return }
         setContent {
             FariinTheme {
-                BrowserSheet(onClosed = { finish(); @Suppress("DEPRECATION") overridePendingTransition(0, 0) }) { close ->
-                    Browser(start, onClose = close)
+                BrowserSheet(onClosed = { finish(); @Suppress("DEPRECATION") overridePendingTransition(0, 0) }) { motion ->
+                    Browser(start, motion)
                 }
             }
         }
@@ -125,51 +125,143 @@ class BrowserActivity : ComponentActivity() {
  * left the app.
  */
 @Composable
-private fun BrowserSheet(onClosed: () -> Unit, content: @Composable (close: () -> Unit) -> Unit) {
+private fun BrowserSheet(onClosed: () -> Unit, content: @Composable (SheetMotion) -> Unit) {
     val c = Fariin.colors
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val full = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp + 80).dp.toPx() }
-    val y = remember { androidx.compose.animation.core.Animatable(full) }
-    var closing by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { y.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f)) }
-    val close: () -> Unit = {
-        if (!closing) { closing = true; scope.launch { y.animateTo(full, tween(220)); onClosed() } }
+    val motion = remember {
+        SheetMotion(scope, full, dismissAt = with(density) { 160.dp.toPx() }, flingClose = with(density) { 900.dp.toPx() },
+            band = with(density) { 120.dp.toPx() }, onClosed = onClosed)
     }
-    val far = with(density) { 140.dp.toPx() }
+    LaunchedEffect(Unit) { motion.open() }
     Box(Modifier.fillMaxSize()
-        .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * (1f - y.value / full).coerceIn(0f, 1f))) }
-        .clickable(interactionSource = null, indication = null) { close() }) {
+        .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * (1f - motion.y / full).coerceIn(0f, 1f))) }
+        .clickable(interactionSource = null, indication = null) { motion.close() }) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp)
-            .offset { androidx.compose.ui.unit.IntOffset(0, y.value.toInt()) }
+            .offset { androidx.compose.ui.unit.IntOffset(0, motion.y.toInt()) }
             .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
             .drawBehind { drawRect(c.bg) }
             .clickable(interactionSource = null, indication = null) {}) {
-            // The handle: drag down to close; let go early and it springs back.
+            // The handle strip: the sheet follows the finger and is let go with its speed.
             Box(Modifier.fillMaxWidth().height(22.dp)
-                .sheetDrag(
-                    onDelta = { d -> scope.launch { y.snapTo((y.value + d).coerceAtLeast(0f)) } },
-                    onStop = { v -> if (y.value > far || v > 1800f) close() else scope.launch { y.animateTo(0f, tween(200)) } },
+                .draggable(
+                    orientation = androidx.compose.foundation.gestures.Orientation.Vertical,
+                    state = androidx.compose.foundation.gestures.rememberDraggableState { d -> motion.drag(d) },
+                    onDragStopped = { v -> motion.release(v) },
                 ), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(width = 36.dp, height = 5.dp).clip(CircleShape).drawBehind { drawRect(c.label.copy(alpha = 0.25f)) })
             }
-            Box(Modifier.weight(1f)) { content(close) }
+            Box(Modifier.weight(1f)) { content(motion) }
         }
     }
 }
 
-/** A vertical drag on a strip, its deltas and the release velocity. */
-@Composable
-private fun Modifier.sheetDrag(onDelta: (Float) -> Unit, onStop: (Float) -> Unit): Modifier =
-    this.draggable(
-        orientation = androidx.compose.foundation.gestures.Orientation.Vertical,
-        state = androidx.compose.foundation.gestures.rememberDraggableState(onDelta),
-        onDragStopped = { v -> onStop(v) },
-    )
+/**
+ * The sheet's movement, done the way iOS sheets feel: it tracks the finger 1:1; pulled above its top
+ * it gives with a rubber band; let go, the finger's speed decides: a flick or a long pull closes it,
+ * otherwise a spring carries it back from that same speed. Every animation starts from where the
+ * sheet is and how fast it moves, so a grab mid-animation never jumps.
+ */
+internal class SheetMotion(
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val full: Float,
+    private val dismissAt: Float,
+    private val flingClose: Float,
+    private val band: Float,
+    private val onClosed: () -> Unit,
+) {
+    var y by androidx.compose.runtime.mutableFloatStateOf(full)
+        private set
+    private var raw = 0f            // the finger's own travel; y is raw with the rubber band applied
+    private var job: kotlinx.coroutines.Job? = null
+    private var closing = false
+
+    private fun run(target: Float, velocity: Float, spec: androidx.compose.animation.core.AnimationSpec<Float>, end: () -> Unit = {}) {
+        job?.cancel()
+        job = scope.launch {
+            androidx.compose.animation.core.animate(y, target, velocity, spec) { v, _ -> y = v }
+            end()
+        }
+    }
+
+    fun open() = run(0f, 0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 320f))
+
+    fun close(velocity: Float = 0f) {
+        if (closing) return
+        closing = true
+        run(full, velocity.coerceAtLeast(0f), androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 260f,
+            visibilityThreshold = 4f)) { onClosed() }
+    }
+
+    fun drag(dy: Float) {
+        if (closing) return
+        if (job?.isActive == true) { job?.cancel(); raw = if (y >= 0f) y else 0f }
+        raw += dy
+        // Above the top it pulls back harder the further it goes (the rubber band iOS uses).
+        y = if (raw >= 0f) raw else -(1f - 1f / (-raw * 0.55f / band + 1f)) * band
+    }
+
+    fun release(velocity: Float) {
+        if (closing) return
+        val projected = y + velocity * 0.2f      // where the flick would carry it
+        if (y > dismissAt || velocity > flingClose || projected > full * 0.45f) close(velocity)
+        else { raw = 0f; run(0f, velocity, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 420f)) }
+    }
+}
+
+/**
+ * The page drives the sheet too: a pull down while the page is at its top moves the sheet instead of
+ * the page (iOS), with the speed measured for the release. Any other touch is the page's own.
+ */
+@SuppressLint("ClickableViewAccessibility")
+private fun WebView.pullsSheet(motion: SheetMotion) {
+    val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+    var startY = 0f
+    var lastY = 0f
+    var pulling = false
+    var tracker: android.view.VelocityTracker? = null
+    setOnTouchListener { v, e ->
+        val raw = android.view.MotionEvent.obtain(e).apply { setLocation(e.rawX, e.rawY) }
+        try {
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    startY = e.rawY; lastY = e.rawY; pulling = false
+                    tracker?.recycle(); tracker = android.view.VelocityTracker.obtain().also { it.addMovement(raw) }
+                    false
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    tracker?.addMovement(raw)
+                    if (!pulling && e.pointerCount == 1 && !v.canScrollVertically(-1) && e.rawY - startY > slop) {
+                        pulling = true
+                        lastY = e.rawY
+                        // The page lets go of this touch (no scroll, no tap).
+                        android.view.MotionEvent.obtain(e).apply { action = android.view.MotionEvent.ACTION_CANCEL }
+                            .also { v.onTouchEvent(it); it.recycle() }
+                    }
+                    if (pulling) { motion.drag(e.rawY - lastY); lastY = e.rawY; true } else false
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    tracker?.addMovement(raw)
+                    val was = pulling
+                    if (was) {
+                        tracker?.computeCurrentVelocity(1000)
+                        motion.release(tracker?.yVelocity ?: 0f)
+                    }
+                    pulling = false
+                    tracker?.recycle(); tracker = null
+                    was
+                }
+                else -> pulling
+            }
+        } finally { raw.recycle() }
+    }
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun Browser(start: String, onClose: () -> Unit) {
+private fun Browser(start: String, motion: SheetMotion) {
+    val onClose: () -> Unit = { motion.close() }
     val c = Fariin.colors
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var web by remember { mutableStateOf<WebView?>(null) }
@@ -231,6 +323,7 @@ private fun Browser(start: String, onClose: () -> Unit) {
                     setDownloadListener { dl, _, _, _, _ ->
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(dl))) }
                     }
+                    pullsSheet(motion)
                     loadUrl(start)
                     web = this
                 }
