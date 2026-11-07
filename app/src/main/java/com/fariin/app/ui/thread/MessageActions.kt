@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Palette
 import com.fariin.app.ui.components.floating
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
@@ -177,6 +178,12 @@ internal fun MessageMenu(
             val card = com.fariin.app.data.CardRules.isCard(m.text)
             if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) onCopy(m.text) })
+            // My own words: change the style my next messages carry, right from here (owner 2026-11-07).
+            // Not in a channel, nor in a group whose owner or admin turned styles off.
+            if (com.fariin.app.data.BubbleStyles.SHOWN && m.authorId == ui.me && !card && m.text.isNotEmpty() &&
+                m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem &&
+                !bubbleStylesOff(ui.channel != null, ui.groupDoc))
+                add(MenuItem("Bubble Style", Icons.Outlined.Palette) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
             if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit) { onStartEdit(m) })
             // In a channel only its owner and admins see a post's earlier versions (iOS 0ed7fa04);
             // groups and 1:1 chats unchanged.

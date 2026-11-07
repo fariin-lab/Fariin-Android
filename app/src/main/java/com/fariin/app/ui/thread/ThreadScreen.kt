@@ -375,6 +375,7 @@ private fun ThreadContent(
     bulkForward?.let { msgs ->
         ForwardSheet(ui.me, onDismiss = { bulkForward = null }) { targets -> actions.onForwardManyTo(msgs, targets); selected.clear() }
     }
+    com.fariin.app.ui.settings.BubbleStyleSheet.Host()   // the menu's "Bubble Style" (MessageActions.kt)
     menuFor?.let { m0 ->
         // The live copy: the long press keeps the row's first lambda, so a stamp, edit or
         // reaction that landed since (an expiresAt, say) would be missing from a held copy.
