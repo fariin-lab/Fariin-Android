@@ -271,7 +271,11 @@ fun rememberWallpaperMotion(
     val scale = a.scale(preview)
     // Doodles draws at full size with no shader, so it needs no layer of its own.
     val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && scale > 1f) rememberGraphicsLayer() else null
-    val moving = animates && AnimatedWallpapers.moves(com.fariin.app.ui.thread.systemAnimationsOn()) &&
+    // Also still on a low-end phone, under Battery Saver, or with Power Saving > Animations off
+    // (owner 2026-11-07: animations must not drain the battery or lag cheap phones). The still
+    // picture is the same wallpaper, so nothing looks missing.
+    val power = com.fariin.app.perf.rememberPowerState()
+    val moving = animates && power.animations && AnimatedWallpapers.moves(com.fariin.app.ui.thread.systemAnimationsOn()) &&
         AnimatedWallpapers.hasMotion(a.look, shaders = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
     val fps = a.fps(preview)
     @Suppress("DEPRECATION") val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current

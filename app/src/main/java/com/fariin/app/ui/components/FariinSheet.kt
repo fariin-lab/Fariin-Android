@@ -76,10 +76,13 @@ fun rememberSheetMotion(onClosed: () -> Unit): SheetMotion {
     val density = LocalDensity.current
     val full = with(density) { (LocalConfiguration.current.screenHeightDp + 80).dp.toPx() }
     val closed by rememberUpdatedState(onClosed)
+    // Animations off (Power Saving, Battery Saver, a low-end phone, or the system's Remove
+    // animations): the sheet appears and leaves at once; a finger still drags it.
+    val still = !(com.fariin.app.perf.rememberPowerState().animations && com.fariin.app.ui.thread.systemAnimationsOn())
     return remember {
         SheetMotion(scope, full, dismissAt = with(density) { 160.dp.toPx() }, flingClose = with(density) { 900.dp.toPx() },
             band = with(density) { 120.dp.toPx() }, onClosed = { closed() })
-    }
+    }.also { it.still = still }
 }
 
 /**
@@ -184,6 +187,8 @@ class SheetMotion internal constructor(
 ) {
     var y by mutableFloatStateOf(full)
         private set
+    /** No slide: open and close jump (animations off). */
+    internal var still = false
     private var raw = 0f            // the finger's own travel; y is raw with the rubber band applied
     private var job: Job? = null
     private var closing = false
@@ -199,14 +204,15 @@ class SheetMotion internal constructor(
     // Open and close by button follow the iOS sheet curve (the one the open-source "Vaul" drawer uses
     // to match it): a quick start, a soft stop, no crawl at the end. The old critically damped spring
     // spent its last ~0.25 s creeping the final pixels (frame by frame on the Pixel, 2026-11-06).
-    fun open() = run(0f, 0f, tween(500, easing = SheetEase))
+    fun open() = run(0f, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
 
     fun close(velocity: Float = 0f) {
         if (closing) return
         closing = true
         // A flick keeps its own speed (a spring started from it); a button or Back uses the curve.
         val spec: AnimationSpec<Float> =
-            if (velocity > 0f) spring(dampingRatio = 1f, stiffness = 700f, visibilityThreshold = 4f)
+            if (still) androidx.compose.animation.core.snap()
+            else if (velocity > 0f) spring(dampingRatio = 1f, stiffness = 700f, visibilityThreshold = 4f)
             else tween(380, easing = SheetEase)
         run(full, velocity.coerceAtLeast(0f), spec) { onClosed() }
     }
