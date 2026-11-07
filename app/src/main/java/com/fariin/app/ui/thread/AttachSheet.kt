@@ -8,13 +8,13 @@ import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import kotlinx.coroutines.launch
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.fariin.app.ui.components.sheetDrag
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import android.net.Uri
@@ -58,11 +58,8 @@ import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.filled.PhotoSizeSelectActual
 import androidx.compose.material.icons.outlined.Poll
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -101,7 +98,6 @@ import kotlinx.coroutines.withContext
  * something is chosen the bar is a caption field, a "View once" switch (one photo only, as iOS)
  * and Send.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AttachSheet(
     allowViewOnce: Boolean,
@@ -122,14 +118,18 @@ internal fun AttachSheet(
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val sheetScope = androidx.compose.runtime.rememberCoroutineScope()
-    // iOS detents: opens at half, the grid's upward scroll or a drag grows it to full, pulling the
-    // grid down from its top returns it to half, then closes it, following the finger.
+    // The iOS sheet's own motion (FariinSheet: its curve, the finger-tracked drag, the rubber band,
+    // the release by speed), with the iOS detents: it opens at half, the grid's upward scroll or a
+    // drag grows it to full, pulling the grid down from its top returns it to half, then closes it.
+    val motion = com.fariin.app.ui.components.rememberSheetMotion(onDismiss)
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
-    var boxH by remember { mutableStateOf(0) }
-    // The status bar's height: full height stops under it (see the box below).
-    val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(androidx.compose.ui.platform.LocalDensity.current)
+    // The sheet's top at full height sits 10 dp under the status bar (FariinSheet's frame); the
+    // half stop puts it at the middle of the screen.
+    val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
+    motion.mid = (windowH / 2f - statusTop - with(density) { 10.dp.toPx() }).coerceAtLeast(1f)
+    val sheetScroll = com.fariin.app.ui.components.rememberSheetScroll(motion)
     val picked = remember { mutableStateListOf<Uri>() }
     val videos = remember { mutableStateListOf<Uri>() }
     var caption by remember { mutableStateOf("") }
@@ -228,7 +228,7 @@ internal fun AttachSheet(
     }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         // Kept for the Files page's Recent list (iOS RecentFiles), then sent.
-        if (uri != null) { RecentFiles.record(context, uri); onSendFile(uri); onDismiss() }
+        if (uri != null) { RecentFiles.record(context, uri); onSendFile(uri); motion.close() }
     }
     val onePhoto = picked.size == 1 && picked[0] !in videos
     if (!onePhoto || !allowViewOnce) viewOnce = false
@@ -238,34 +238,22 @@ internal fun AttachSheet(
     // that bar becomes the caption and Send.
     val attachBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
     val attachLiquid = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, dragHandle = null,
-        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
+    // The sheet's own window (a Dialog), so the photos are its glass source; the photo grid starts
+    // right at the rounded top, nothing above it (iOS; the old sheet kept a status-bar band there).
+    com.fariin.app.ui.components.FariinSheetDialog(motion, fill = com.fariin.app.ui.components.sheetFill, typing = true) { _ ->
         // Lists other than the photos open the sheet fully, as iOS does.
-        androidx.compose.runtime.LaunchedEffect(page, folder) { if (page != SheetPage.PHOTOS || folder != null) runCatching { sheet.expand() } }
-        // Full height stops under the status bar (the clock stays clear; at 92% the chat showed in
-        // a dark band above). Where offset 0 sits on the screen is measured, not assumed.
-        // The sheet itself already keeps the gesture bar's strip free under its content (its
-        // window insets), so the box is the screen minus the status bar minus that strip, and
-        // the bars' "bottom" is the top of that strip (measured on the Pixel: 136 and 66 px).
-        val navBottom = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(androidx.compose.ui.platform.LocalDensity.current)
-        val usableBottom = windowH - navBottom
-        val sheetH = with(androidx.compose.ui.platform.LocalDensity.current) { (usableBottom - statusTop).coerceAtLeast(1).toDp() }
-        val zeroAt = remember { floatArrayOf(0f) }   // window y of the sheet's offset 0
-        Box(Modifier.fillMaxWidth().height(sheetH).onGloballyPositioned { lc ->
-            boxH = lc.size.height
-            runCatching { sheet.requireOffset() }.getOrNull()?.let { zeroAt[0] = lc.positionInWindow().y - it }
-        }.imePadding()) {
+        androidx.compose.runtime.LaunchedEffect(page, folder) { if (page != SheetPage.PHOTOS || folder != null) motion.expand() }
+        // The page runs to the screen's bottom edge; the gesture bar's strip is kept free by padding.
+        val navBottomDp = with(density) { androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density).toDp() }
+        // A drag anywhere the page does not scroll (the bars, a short list) moves the sheet too.
+        Box(Modifier.fillMaxSize().imePadding().nestedScroll(sheetScroll)
+            .sheetDrag(motion, yieldToChildren = true)) {
             // The part of the sheet below the screen while it sits at half: the bars move up by it,
-            // so the source bar and the caption stay on the screen's bottom edge.
-            val lift = Modifier.offset {
-                val top = runCatching { sheet.requireOffset() }.getOrDefault(0f)
-                // Pinned only between full and half: below half (closing) the bars go down with the
-                // sheet instead of hanging on the screen's edge over nothing (Pixel 2026-11-05).
-                val z = zeroAt[0]
-                val half = (windowH - z) / 2f                  // the half detent's offset (half the container)
-                val atHalf = half + z + boxH - usableBottom
-                IntOffset(0, -(top + z + boxH - usableBottom).coerceIn(0f, atHalf.coerceAtLeast(0f)).toInt())
-            }
+            // so the source bar and the caption stay on the screen's bottom edge. Pinned only
+            // between full and half: below half (closing) the bars go down with the sheet instead of
+            // hanging on the screen's edge over nothing (Pixel 2026-11-05).
+            val lift = Modifier.offset { IntOffset(0, -motion.y.coerceIn(0f, motion.mid).toInt()) }
+            val barsPad = Modifier.navigationBarsPadding()   // over the keyboard: the keyboard's inset already covers it
             val none = access == RecentMedia.Access.NONE
             // The photos are the glass source for the bar over them (iOS: liquid glass over the grid,
             // owner 2026-11-06); the sheet is its own window, so it carries its own source.
@@ -282,20 +270,20 @@ internal fun AttachSheet(
                     onBrowse = { files.launch(arrayOf("*/*")) },
                     onGallery = { files.launch(arrayOf("image/*", "video/*")) },
                     onAudio = { files.launch(arrayOf("audio/*")) },
-                    onSend = { u -> RecentFiles.record(context, u); onSendFile(u); onDismiss() })
+                    onSend = { u -> RecentFiles.record(context, u); onSendFile(u); motion.close() })
             } else if (page == SheetPage.GIFS && onGif != null) {
-                Box(Modifier.fillMaxSize().padding(bottom = 84.dp)) { GifTab { g -> onGif(g); onDismiss() } }
+                Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab { g -> onGif(g); motion.close() } }
             } else if (page == SheetPage.ALBUMS) {
                 androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().padding(top = 10.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)) {
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp + navBottomDp)) {
                     items(albums.size) { i ->
                         val a = albums[i]
                         AlbumRow(a) { folder = a; page = SheetPage.PHOTOS }
                     }
                 }
             } else {
-                LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize().padding(top = 10.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
+                LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp + navBottomDp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (none) item(key = "allow", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }) {
                         AllowTile(blocked = photosBlocked) {
@@ -329,7 +317,7 @@ internal fun AttachSheet(
                 val sourceGlass = if (attachLiquid) attachBackdrop else null
                 // iOS sourceBar: the round album button LEFT (a back arrow once a list is open), the
                 // sources in one capsule RIGHT: GIF, Files, Location, Poll (groups only).
-                Row(Modifier.align(Alignment.BottomCenter).then(lift).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(60.dp).sheetGlass(CircleShape, sourceGlass).clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
                         if (backShown) Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.label, modifier = Modifier.size(26.dp))
@@ -347,7 +335,7 @@ internal fun AttachSheet(
                     }
                 }
             } else {
-                Row(Modifier.align(Alignment.BottomCenter).then(lift).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onePhoto && allowViewOnce) {
                         Box(
                             Modifier.size(44.dp).floating(fill = if (viewOnce) c.accent else null)
@@ -365,12 +353,12 @@ internal fun AttachSheet(
                             cursorBrush = SolidColor(c.accent), maxLines = 5,
                             // Typing opens the sheet fully: at half height the caption sat under the
                             // keyboard (Pixel 2026-11-05).
-                            modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); if (sheet.currentValue != androidx.compose.material3.SheetValue.Expanded) runCatching { sheet.expand() } } } })
+                            modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.height(44.dp).floating(RoundedCornerShape(22.dp), fill = c.blue)
-                            .clickable { onSendMedia(picked.toList(), caption, viewOnce); onDismiss() }
+                            .clickable { onSendMedia(picked.toList(), caption, viewOnce); motion.close() }
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -390,14 +378,14 @@ internal fun AttachSheet(
     drawOn?.let { u ->
         if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false, onClose = { drawOn = null },
             allowViewOnce = allowViewOnce,
-            onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); onDismiss() })
+            onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); motion.close() })
         // One video chosen: the video editor (iOS VideoApprovalView), the trimmer and Send.
         else if (picked.size == 1 && u in videos) VideoEditor(u, caption, onCaption = { caption = it }, onClose = { drawOn = null },
-            onSend = { cap -> drawOn = null; onSendMedia(listOf(u), cap, false); onDismiss() })
+            onSend = { cap -> drawOn = null; onSendMedia(listOf(u), cap, false); motion.close() })
     }
     pagerAt?.let { at ->
         MediaPagerEditor(picked, videos, at, caption, onCaption = { caption = it }, onClose = { pagerAt = null },
-            onSend = { list, cap -> pagerAt = null; onSendMedia(list, cap, false); onDismiss() })
+            onSend = { list, cap -> pagerAt = null; onSendMedia(list, cap, false); motion.close() })
     }
 }
 

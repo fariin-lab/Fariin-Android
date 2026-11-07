@@ -36,6 +36,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -45,6 +47,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -91,8 +94,9 @@ fun rememberSheetMotion(onClosed: () -> Unit): SheetMotion {
  * a top strip drag the sheet, for pages whose own content takes every drag (a map).
  */
 @Composable
-fun FariinSheet(motion: SheetMotion, handle: Boolean = false, content: @Composable () -> Unit) {
+fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = null, content: @Composable () -> Unit) {
     val c = Fariin.colors
+    val bg = fill ?: c.bg
     LaunchedEffect(Unit) { motion.open() }
     Box(Modifier.fillMaxSize()
         .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * (1f - motion.y / motion.full).coerceIn(0f, 1f))) }
@@ -100,7 +104,7 @@ fun FariinSheet(motion: SheetMotion, handle: Boolean = false, content: @Composab
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp)
             .offset { IntOffset(0, motion.y.toInt()) }
             .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
-            .drawBehind { drawRect(c.bg) }
+            .drawBehind { drawRect(bg) }
             .clickable(interactionSource = null, indication = null) {}) {
             Box(Modifier.weight(1f)) {
                 content()
@@ -125,12 +129,21 @@ val SheetHandleStrip = 24.dp
  * same motion; [onDismiss] runs once it is gone. The window has no animation and no dim of its own.
  */
 @Composable
-fun FariinSheetDialog(onDismiss: () -> Unit, handle: Boolean = false, content: @Composable (SheetMotion) -> Unit) {
-    val motion = rememberSheetMotion(onDismiss)
+fun FariinSheetDialog(onDismiss: () -> Unit, handle: Boolean = false, content: @Composable (SheetMotion) -> Unit) =
+    FariinSheetDialog(rememberSheetMotion(onDismiss), handle, content = content)
+
+/**
+ * The same dialog around a [motion] the caller holds (to give it a [SheetMotion.mid] stop or to close
+ * it from inside). [fill] is the page colour; [typing] lets the keyboard's height reach the page
+ * (imePadding) for a page with a text field at its bottom.
+ */
+@Composable
+fun FariinSheetDialog(motion: SheetMotion, handle: Boolean = false, fill: Color? = null, typing: Boolean = false,
+    content: @Composable (SheetMotion) -> Unit) {
     Dialog(onDismissRequest = { motion.close() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnClickOutside = false)) {
-        SheetDialogWindow(Fariin.colors.dark)
-        FariinSheet(motion, handle) { content(motion) }
+        SheetDialogWindow(Fariin.colors.dark, typing)
+        FariinSheet(motion, handle, fill) { content(motion) }
     }
 }
 
@@ -139,14 +152,17 @@ fun FariinSheetDialog(onDismiss: () -> Unit, handle: Boolean = false, content: @
  * bars clear with icons that follow the theme; the keyboard lays over the page instead of squeezing it.
  */
 @Composable
-private fun SheetDialogWindow(dark: Boolean) {
+private fun SheetDialogWindow(dark: Boolean, typing: Boolean = false) {
     val view = LocalView.current
     SideEffect {
         (view.parent as? DialogWindowProvider)?.window?.let { w ->
             w.setWindowAnimations(0)
             w.setDimAmount(0f)
             w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
-            @Suppress("DEPRECATION") w.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+            // With a field at the bottom the keyboard's insets must reach the page (ADJUST_NOTHING hides
+            // them on older Android); edge to edge, the window itself still does not shrink.
+            @Suppress("DEPRECATION") w.setSoftInputMode(if (typing) android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                else android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
             WindowCompat.setDecorFitsSystemWindows(w, false)
             // A dialog window does not draw its own bar backgrounds by default, so the clear colour
             // below was ignored and the status bar stayed black (window dump on the Pixel, 2026-11-06).
@@ -189,6 +205,14 @@ class SheetMotion internal constructor(
         private set
     /** No slide: open and close jump (animations off). */
     internal var still = false
+    /**
+     * A middle stop (iOS medium detent), as an offset from the top; 0 = none. The sheet opens there,
+     * a drag or a scroll up carries it to full, and a release settles on whichever stop the finger's
+     * speed points at (full, middle, or closed).
+     */
+    var mid = 0f
+    /** Resting fully open (no drag or animation holding it lower). */
+    val atFull: Boolean get() = y <= 0.5f
     private var raw = 0f            // the finger's own travel; y is raw with the rubber band applied
     private var job: Job? = null
     private var closing = false
@@ -197,6 +221,7 @@ class SheetMotion internal constructor(
         job?.cancel()
         job = scope.launch {
             animate(y, target, velocity, spec) { v, _ -> y = v }
+            raw = target.coerceAtLeast(0f)   // the next drag starts from where it rests
             end()
         }
     }
@@ -204,7 +229,13 @@ class SheetMotion internal constructor(
     // Open and close by button follow the iOS sheet curve (the one the open-source "Vaul" drawer uses
     // to match it): a quick start, a soft stop, no crawl at the end. The old critically damped spring
     // spent its last ~0.25 s creeping the final pixels (frame by frame on the Pixel, 2026-11-06).
-    fun open() = run(0f, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
+    fun open() = run(mid, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
+
+    /** To full height on the same curve (a list opened, the keyboard coming up). */
+    fun expand() {
+        if (closing || (atFull && job?.isActive != true)) return
+        run(0f, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
+    }
 
     fun close(velocity: Float = 0f) {
         if (closing) return
@@ -231,6 +262,16 @@ class SheetMotion internal constructor(
 
     fun release(velocity: Float) {
         if (closing) return
+        if (mid > 0f) {
+            val projected = y + velocity * 0.2f
+            when {
+                // From the middle stop or below, a flick down or a pull well past it closes.
+                (velocity > flingClose && y >= mid - 1f) || projected > mid + (full - mid) * 0.3f -> close(velocity)
+                projected < mid / 2f -> run(0f, velocity, spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f))
+                else -> run(mid, velocity, spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f))
+            }
+            return
+        }
         val projected = y + velocity * 0.2f      // where the flick would carry it
         if (y > dismissAt || velocity > flingClose || projected > full * 0.45f) close(velocity)
         else { raw = 0f; run(0f, velocity, spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f)) }
@@ -249,7 +290,7 @@ class SheetMotion internal constructor(
  * taps on a pull.
  */
 @SuppressLint("ModifierFactoryUnreferencedReceiver")
-fun Modifier.sheetDrag(motion: SheetMotion, atTop: (() -> Boolean)? = null): Modifier = composed {
+fun Modifier.sheetDrag(motion: SheetMotion, atTop: (() -> Boolean)? = null, yieldToChildren: Boolean = false): Modifier = composed {
     val at = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val top by rememberUpdatedState(atTop)
     val pass = if (atTop == null) PointerEventPass.Main else PointerEventPass.Initial
@@ -273,6 +314,8 @@ fun Modifier.sheetDrag(motion: SheetMotion, atTop: (() -> Boolean)? = null): Mod
                     break
                 }
                 if (!pulling) {
+                    // Behind a scrolling page: a drag the page already took is the page's.
+                    if (yieldToChildren && ch.isConsumed) break
                     val gate = top
                     val starts = if (gate == null) abs(y - start) > slop
                         else event.changes.size == 1 && y - start > slop && gate()
@@ -281,6 +324,38 @@ fun Modifier.sheetDrag(motion: SheetMotion, atTop: (() -> Boolean)? = null): Mod
                 }
                 if (pulling) { motion.drag(y - last); last = y; ch.consume() }
             }
+        }
+    }
+}
+
+/**
+ * For a sheet with a [SheetMotion.mid] stop whose page scrolls (a grid of photos): a push up first
+ * carries the sheet to full height, then scrolls the page; a pull down with the page at its top moves
+ * the sheet, and the lift of the finger settles it (or closes it) by its speed. A fling the page
+ * throws to its own top never moves the sheet.
+ */
+@Composable
+fun rememberSheetScroll(motion: SheetMotion): NestedScrollConnection = remember(motion) {
+    object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            if (source != NestedScrollSource.UserInput) return Offset.Zero
+            if (available.y < 0f && motion.y > 0f) {
+                val dy = available.y.coerceAtLeast(-motion.y)
+                motion.drag(dy)
+                return Offset(0f, dy)
+            }
+            return Offset.Zero
+        }
+        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+            if (source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+            motion.drag(available.y)
+            return Offset(0f, available.y)
+        }
+        override suspend fun onPreFling(available: Velocity): Velocity {
+            // Off a stop: the sheet was moving under the finger, so the fling is the sheet's.
+            val y = motion.y
+            if (abs(y) > 0.5f && abs(y - motion.mid) > 0.5f) { motion.release(available.y); return available }
+            return Velocity.Zero
         }
     }
 }
