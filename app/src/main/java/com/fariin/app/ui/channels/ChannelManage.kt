@@ -340,7 +340,7 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                         removed += 1
                     } catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
                 }
-            }) { Text(if (ban) "Ban" else "Remove", color = c.red) } },
+            }) { Text(if (ban) "Ban" else "Remove", color = if (ban) banOrange() else c.red) } },
             dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = c.accent) } })
     }
 
@@ -639,6 +639,11 @@ internal fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = n
     }
 }
 
+/** Ban in orange, Remove in red (owner 2026-11-07), on the Followers row menu and its confirm button. */
+@Composable
+private fun banOrange(): androidx.compose.ui.graphics.Color =
+    if (Fariin.colors.dark) androidx.compose.ui.graphics.Color(0xFFFF9F0A) else androidx.compose.ui.graphics.Color(0xFFFF9500)
+
 @Composable
 private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
     val c = Fariin.colors
@@ -647,7 +652,7 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
         IconButton({ open = true }) { Icon(Icons.Filled.MoreVert, "More", tint = c.secondary) }
         DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             items.forEach { (label, act) ->
-                DropdownMenuItem(text = { Text(label, color = c.red) }, onClick = { open = false; act() })
+                DropdownMenuItem(text = { Text(label, color = if (label == "Ban") banOrange() else c.red) }, onClick = { open = false; act() })
             }
         }
     }

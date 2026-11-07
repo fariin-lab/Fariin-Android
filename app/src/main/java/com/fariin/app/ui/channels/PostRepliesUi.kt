@@ -57,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -701,12 +703,13 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                             Spacer(Modifier.width(4.dp))
                             Text("Pinned", fontSize = 12.sp, color = c.secondary)
                         }
-                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick) { author(row.r) }
-                        is ReplyItem.Answer -> Box(Modifier.padding(start = 46.dp)) { ReplyRow(s, row.r, small = true, now, quick) { author(row.r) } }
+                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick,
+                            line = if (maxOf(row.r.answers, s.answers[row.r.id].orEmpty().size) > 0) LINE_DOWN else LINE_NONE) { author(row.r) }
+                        is ReplyItem.Answer -> Box(Modifier.padding(start = AnswerIndent)) { ReplyRow(s, row.r, small = true, now, quick, line = LINE_BRANCH) { author(row.r) } }
                         is ReplyItem.Toggle -> ThreadToggle(
                             if (row.open && row.rid in s.answersLoading && s.answers[row.rid].isNullOrEmpty()) "Loading…" else PostReplyRules.threadToggle(row.n, row.open),
                         ) { s.toggleThread(row.rid) }
-                        is ReplyItem.More -> SmallLink("Show more replies", Modifier.padding(start = 108.dp, bottom = 8.dp)) {
+                        is ReplyItem.More -> SmallLink("Show more replies", Modifier.fillMaxWidth().threadLineThrough().padding(start = 108.dp, bottom = 8.dp)) {
                             scope.launch { s.loadAnswers(row.rid, more = true) }
                         }
                     }
@@ -759,15 +762,62 @@ private fun BanSheet(onDismiss: () -> Unit, onBan: (Boolean) -> Unit) {
     )))
 }
 
-/** "View 3 replies" / "Hide replies": a short line and the words, under the reply's bubble. */
+/**
+ * THREAD LINES (iOS, owner 2026-11-07): from the reply's photo a solid light-grey line runs down and
+ * bends into the "View N replies" line (and into each open answer's photo) with a quarter circle of
+ * [ThreadLineRadius], never a sharp elbow. Each row draws its own piece behind itself, at the list's
+ * x of the reply photo's centre ([ThreadLineX]), so no extra layouts.
+ */
+private const val LINE_NONE = 0
+private const val LINE_DOWN = 1
+private const val LINE_BRANCH = 2
+private val ThreadLineX = 16.dp + 20.dp
+private val ThreadLineRadius = 16.dp
+private val ThreadLineWidth = 1.5.dp
+/** Where an answer row starts in the list (its Box padding); the line sits left of it. */
+private val AnswerIndent = 46.dp
+
+@Composable
+private fun threadLineColor(): Color = if (Fariin.colors.dark) Color(0xFF48484A) else Color(0xFFC7C7CC)
+
+/** A vertical from the top at [x] that turns, with the quarter circle, into a horizontal at [y] up to [toX]. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.elbow(color: Color, x: Float, y: Float, toX: Float) {
+    val r = ThreadLineRadius.toPx()
+    val w = ThreadLineWidth.toPx()
+    if (y - r > 0f) drawLine(color, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, y - r), w)
+    val p = androidx.compose.ui.graphics.Path().apply {
+        moveTo(x, y - r)
+        arcTo(androidx.compose.ui.geometry.Rect(x, y - 2 * r, x + 2 * r, y), 180f, -90f, false)
+        lineTo(toX, y)
+    }
+    drawPath(p, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+}
+
+/** The straight piece through a whole row ("Show more replies" between the answers and the toggle). */
+@Composable
+private fun Modifier.threadLineThrough(): Modifier {
+    val color = threadLineColor()
+    return drawBehind {
+        drawLine(color, androidx.compose.ui.geometry.Offset(ThreadLineX.toPx(), 0f),
+            androidx.compose.ui.geometry.Offset(ThreadLineX.toPx(), size.height), ThreadLineWidth.toPx())
+    }
+}
+
+/** "View 3 replies" / "Hide replies": the thread line bends into it, then the words. */
 @Composable
 private fun ThreadToggle(label: String, onTap: () -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.padding(start = 62.dp, bottom = 10.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = onTap)
-        .padding(vertical = 4.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(20.dp).height(1.dp).background(c.secondary.copy(alpha = 0.35f)))
-        Spacer(Modifier.width(8.dp))
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
+    val color = threadLineColor()
+    val bottom = 10.dp
+    // The bend may start in the row above (its top is above this row), so the curve is never cut.
+    Box(Modifier.fillMaxWidth().drawBehind {
+        elbow(color, ThreadLineX.toPx(), (size.height - bottom.toPx()) / 2f, (62.dp + 2.dp + 20.dp).toPx())
+    }) {
+        Row(Modifier.padding(start = 62.dp, bottom = bottom).clip(RoundedCornerShape(6.dp)).clickable(onClick = onTap)
+            .padding(vertical = 4.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(28.dp))
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
+        }
     }
 }
 
@@ -779,13 +829,35 @@ private fun ThreadToggle(label: String, onTap: () -> Unit) {
  * (PostReplyRules.actions). Mine on its way reads "Sending…"; failed, "Not sent" with Retry.
  */
 @Composable
-private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Long, quick: String, onAuthor: () -> Unit) {
+private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Long, quick: String,
+                     /** The thread line: [LINE_DOWN] from my photo to the row's end, [LINE_BRANCH] (an answer) through the row and into my photo. */
+                     line: Int = LINE_NONE, onAuthor: () -> Unit) {
     val c = Fariin.colors
     val clipboard = LocalClipboardManager.current
     var menu by remember { mutableStateOf(false) }
     val dim = r.held || r.send != PostReply.Send.SENT
     val side = if (small) 28.dp else 40.dp
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    // The row's and the photo's places, read while drawing (no state, no recomposition).
+    val places = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(2) }
+    val lineColor = threadLineColor()
+    val lineModifier = if (line == LINE_NONE) Modifier else Modifier
+        .onPlaced { places[0] = it }
+        .drawBehind {
+            val row = places[0] ?: return@drawBehind
+            val photo = places[1]?.takeIf { it.isAttached && row.isAttached } ?: return@drawBehind
+            val at = row.localPositionOf(photo, androidx.compose.ui.geometry.Offset.Zero)
+            val w = ThreadLineWidth.toPx()
+            if (line == LINE_DOWN) {
+                val x = at.x + photo.size.width / 2f
+                drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, at.y + photo.size.height), androidx.compose.ui.geometry.Offset(x, size.height), w)
+            } else {
+                // An answer: the parent's line goes on through the row; a bend leaves it into my photo.
+                val x = (ThreadLineX - AnswerIndent).toPx()
+                drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, size.height), w)
+                elbow(lineColor, x, at.y + photo.size.height / 2f, at.x)
+            }
+        }
+    Column(Modifier.fillMaxWidth().then(lineModifier).padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(Modifier.padding(start = side + 24.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(r.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
@@ -807,7 +879,8 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
             // A Creator reply wears the channel's squircle photo.
             Avatar(r.photoUrl.ifEmpty { null }, side, squircle = r.creator,
                 kind = if (r.creator) AvatarKind.CHANNEL else AvatarKind.PERSON,
-                modifier = Modifier.clickable(enabled = !r.mine, interactionSource = null, indication = null, onClick = onAuthor))
+                modifier = Modifier.onPlaced { places[1] = it }
+                    .clickable(enabled = !r.mine, interactionSource = null, indication = null, onClick = onAuthor))
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f, fill = false).padding(end = 24.dp)) {
                 Text(r.text, fontSize = if (small) 15.sp else 17.sp, color = c.label,
