@@ -2,6 +2,7 @@ package com.fariin.app.ui.channels
 
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -32,7 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -90,6 +91,44 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 /**
+ * A POST'S REPLIES SWITCH CHANGED ON THIS PHONE (iOS setRepliesOffLocally, owner 2026-11-07): the
+ * post changes on screen at once, from the post menu or the sheet's ... menu. Older posts are outside
+ * the live listener's window and would never hear their own doc change. Kept by post id for this run;
+ * a post whose doc catches up drops its entry ([settled]).
+ */
+object PostRepliesSwitch {
+    private val local = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    /** The menu closes before the server answers, so the call outlives it. */
+    private val scope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+
+    fun of(mid: String): Boolean? = local[mid]
+
+    fun note(mid: String, off: Boolean) { local[mid] = off }
+
+    /** The post's doc says the same now: the entry is no longer needed. */
+    fun settled(mid: String, docOff: Boolean?) { if (docOff != null && local[mid] == docOff) local.remove(mid) }
+
+    /** The post menu's Turn Off / Turn On Replies (Change info right; the server checks it). */
+    fun set(cid: String, mid: String, off: Boolean, notice: (String) -> Unit) {
+        scope.launch {
+            val ok = PostReplies.setOff(cid, mid, off)
+            if (ok) note(mid, off)
+            notice(if (!ok) "Couldn't change replies" else if (off) "Replies turned off for this post" else "Replies turned on for this post")
+        }
+    }
+}
+
+/** The chat's Quick Reaction (Settings), a reply's double tap; the heart when none was picked. */
+@Composable
+internal fun rememberReplyQuickReaction(): String {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    return remember {
+        ctx.getSharedPreferences(com.fariin.app.ui.settings.CHAT_PREFS, android.content.Context.MODE_PRIVATE)
+            .getString(com.fariin.app.ui.settings.SettingsRules.QUICK_KEY, null)?.takeIf { it.isNotEmpty() } ?: PostReplyRules.HEART
+    }
+}
+
+/**
  * THE REPLIES OF ONE POST, KEPT BY ONE MODEL (owner 2026-11-06, as iOS RepliesModel). Threads come
  * newest first a page at a time (shown oldest at the top); a thread's answers are fetched when it is
  * opened. While the sheet is open it listens to ONE small doc (`messages/{mid}/rh/head`) and asks
@@ -116,6 +155,9 @@ class PostRepliesState(private val cid: String, private val mid: String, private
     var loaded by mutableStateOf(cache[cacheKey] != null)
         private set
     var failed by mutableStateOf(false)
+        private set
+    /** The server answered at least once while open (its off/on then counts over the bar's guess). */
+    var answered by mutableStateOf(false)
         private set
     var loadingOlder by mutableStateOf(false)
         private set
@@ -146,8 +188,17 @@ class PostRepliesState(private val cid: String, private val mid: String, private
     var toast by mutableStateOf<String?>(null)
     val field = FocusRequester()
 
-    private val pendingLikes = HashMap<String, Boolean>()
+    /** Reply id to the emoji wanted ("" = none) while a call is on its way. */
+    private val pendingLikes = HashMap<String, String>()
     private val likeInFlight = HashSet<String>()
+    /** What the server last agreed mine was, per reply, so a failed call puts it back. */
+    private val confirmedMine = HashMap<String, String>()
+    /**
+     * Threads whose answers came from the server at least once. A thread can hold only my own
+     * just-sent answer; "View N replies" then showed that one alone (owner 2026-11-07: "show me the
+     * first ones"). Opened, it loads from the first answer down.
+     */
+    private val answersLoaded = HashSet<String>()
     private val deletedIds = HashSet<String>()
     private val recentMine = HashMap<String, Long>()
     private var listener: ListenerRegistration? = null
@@ -204,6 +255,7 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         val p = PostReplies.page(cid, mid)
         if (p == null) { failed = true; loaded = true; return }
         applyFlags(p)
+        answered = true
         val page = rows(p.items)
         if (threads.isEmpty() || olderCursor.isEmpty()) olderCursor = p.next
         threads = PostReplyRules.mergeFirst(threads, page)
@@ -256,12 +308,13 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         val p = PostReplies.answers(cid, mid, rid, cursor) ?: return
         answers = answers + (rid to PostReplyRules.mergeAnswers(answers[rid].orEmpty(), rows(p.items), more))
         answerNext = answerNext + (rid to p.next)
+        answersLoaded += rid
     }
 
     fun toggleThread(rid: String) {
         if (rid in open) { open = open - rid; return }
         open = open + rid
-        if (answers[rid] == null) scope.launch { loadAnswers(rid, more = false) }
+        if (rid !in answersLoaded) scope.launch { loadAnswers(rid, more = false) }
     }
 
     /** Reply to [r]: its thread opens, so the answer is seen landing under it. */
@@ -290,6 +343,9 @@ class PostRepliesState(private val cid: String, private val mid: String, private
     private fun sendWith(text: String, thread: String, clientId: String?) {
         val id = clientId ?: PostReplyRules.clientId(UUID.randomUUID().toString())
         val row = PostReplyRules.pending(id, text, "You", "", thread, System.currentTimeMillis())
+        // A thread never opened: its other answers load too, or only this one would show and the
+        // thread would look fully loaded. mergeAnswers keeps this row while it is on its way.
+        if (thread.isNotEmpty() && thread !in answersLoaded) scope.launch { loadAnswers(thread, more = false) }
         edit(thread) { list ->
             if (list.any { it.id == id }) list.map { if (it.id == id) it.copy(send = PostReply.Send.SENDING) else it } else list + row
         }
@@ -318,22 +374,36 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         else answers = answers + (thread to change(answers[thread].orEmpty()))
     }
 
-    /** One call in flight per heart; taps meanwhile only change what is wanted, sent when it returns. */
-    fun toggleLike(r: PostReply) {
+    private fun current(r: PostReply): PostReply =
+        (if (r.parentId.isEmpty()) threads else answers[r.parentId].orEmpty()).firstOrNull { it.id == r.id } ?: r
+
+    /** Double tap: the Quick Reaction on, or mine off when I already reacted (iOS toggleLike). */
+    fun quickReact(r: PostReply, quick: String) {
+        val cur = current(r)
+        react(cur, cur.my.ifEmpty { quick })
+    }
+
+    /**
+     * Mine becomes [emoji]; the same emoji again takes it back, as in the chat. One call in flight
+     * per reply; picks meanwhile only change what is wanted, sent when it returns.
+     */
+    fun react(r: PostReply, emoji: String) {
         if (r.send != PostReply.Send.SENT) return
-        val cur = (if (r.parentId.isEmpty()) threads else answers[r.parentId].orEmpty()).firstOrNull { it.id == r.id } ?: r
-        val want = !cur.liked
-        edit(r.parentId) { list -> list.map { if (it.id == r.id) PostReplyRules.withLike(it, want) else it } }
+        val cur = current(r)
+        val want = PostReplyRules.nextPick(cur, emoji)
+        if (r.id !in confirmedMine) confirmedMine[r.id] = cur.my
+        edit(r.parentId) { list -> list.map { if (it.id == r.id) PostReplyRules.withMine(it, want) else it } }
         pendingLikes[r.id] = want
         if (!likeInFlight.add(r.id)) return
         scope.launch {
             while (true) {
                 val w = pendingLikes[r.id] ?: break
-                val ok = PostReplies.like(cid, mid, r, w)
+                val ok = PostReplies.react(cid, mid, r, w)
                 if (pendingLikes[r.id] == w) {
                     pendingLikes.remove(r.id)
-                    if (!ok) edit(r.parentId) { list -> list.map { if (it.id == r.id) PostReplyRules.withLike(it, !w) else it } }
-                }
+                    val back = confirmedMine.remove(r.id)
+                    if (!ok && back != null) edit(r.parentId) { list -> list.map { if (it.id == r.id) PostReplyRules.withMine(it, back) else it } }
+                } else if (ok) confirmedMine[r.id] = w
             }
             likeInFlight.remove(r.id)
         }
@@ -368,9 +438,13 @@ class PostRepliesState(private val cid: String, private val mid: String, private
         } else toast = "Couldn't do that."
     }
 
-    /** [post] true = this post only, false = the whole channel. */
-    fun setOff(post: Boolean, off: Boolean) = scope.launch {
-        if (PostReplies.setOff(cid, if (post) mid else null, off)) loadFirst() else toast = "Couldn't change replies."
+    /** This post's switch (the sheet's ... menu): the post on screen changes at once (PostRepliesSwitch). */
+    fun setPostOff(off: Boolean) = scope.launch {
+        if (PostReplies.setOff(cid, mid, off)) {
+            PostRepliesSwitch.note(mid, off)
+            toast = if (off) "Replies turned off for this post." else "Replies turned on for this post."
+            loadFirst()
+        } else toast = "Couldn't change replies."
     }
 
     fun setAlerts(on: Boolean) = scope.launch {
@@ -379,61 +453,68 @@ class PostRepliesState(private val cid: String, private val mid: String, private
 }
 
 /**
- * The sheet's header (owner's reference): the channel's photo, the tab's name and the post's opening
- * words in quotes; the admins' "..." menu at the right end.
+ * A COMMENTS SHEET'S TOP (iOS, owner 2026-11-07, his reference picture): no channel card, no
+ * segmented control. Two underlined word tabs on the left ("Replies" hidden while replies are off:
+ * Quotes only), the admins' ... and a round 40 dp X on the right.
  */
 @Composable
-internal fun RepliesSheetHeader(title: String, photoUrl: String?, postWords: String, s: PostRepliesState?) {
-    val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(photoUrl, 36.dp, squircle = true, kind = AvatarKind.CHANNEL)
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
-            if (postWords.isNotEmpty()) {
-                Text("“$postWords”", fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+internal fun RepliesSheetTop(tab: Int, showReplies: Boolean, s: PostRepliesState, onPick: (Int) -> Unit, onClose: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            if (showReplies) TabWord("Replies", tab == 0) { onPick(0) }
+            TabWord("Quotes", tab == 1) { onPick(1) }
         }
-        if (s != null && PostReplyRules.showsAdminMenu(s.may)) RepliesAdminMenu(s) else Spacer(Modifier.size(48.dp))
+        Spacer(Modifier.weight(1f))
+        if (PostReplyRules.showsAdminMenu(s.may)) {
+            RepliesAdminMenu(s)
+            Spacer(Modifier.width(10.dp))
+        }
+        RoundTopButton(Icons.Filled.Close, "Close", onClose)
     }
 }
 
-/** iOS segmented Picker: Replies | Quotes, the picked half raised. */
+/** One tab: its word (bold when open), a 2.5 dp line under the open one, as wide as the word. */
 @Composable
-internal fun RepliesQuotesTabs(tab: Int, onPick: (Int) -> Unit) {
+private fun TabWord(label: String, on: Boolean, onTap: () -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp).fillMaxWidth().height(32.dp)
-        .clip(RoundedCornerShape(9.dp)).background(c.label.copy(alpha = 0.08f)).padding(2.dp)) {
-        listOf("Replies", "Quotes").forEachIndexed { i, label ->
-            Box(Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(7.dp))
-                // The picked half raised: white in light mode, iOS's lifted grey in dark (the card colour
-                // there matched the track, so the pick could not be seen).
-                .background(if (i == tab) (if (c.dark) Color(0xFF636366) else c.card) else Color.Transparent)
-                .semantics { selected = i == tab }
-                .clickable { onPick(i) }, contentAlignment = Alignment.Center) {
-                Text(label, color = c.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
+    Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+        .clickable(interactionSource = null, indication = null, onClick = onTap)
+        .semantics { selected = on }) {
+        Text(label, fontSize = 17.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+            color = if (on) c.label else c.secondary, maxLines = 1)
+        Spacer(Modifier.height(6.dp))
+        Box(Modifier.fillMaxWidth().height(2.5.dp).clip(RoundedCornerShape(50))
+            .background(if (on) c.label else Color.Transparent))
+    }
+}
+
+/** A 40 dp round button in the soft fill (the X, the admins' ...). */
+@Composable
+private fun RoundTopButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onTap: () -> Unit) {
+    val c = Fariin.colors
+    Box(Modifier.size(40.dp).clip(CircleShape).background(c.label.copy(alpha = 0.08f)).clickable(onClick = onTap),
+        contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = label, tint = c.label, modifier = Modifier.size(20.dp))
     }
 }
 
 /**
- * The admins' "..." menu, by right: replies off or on for this post or the whole channel (Change
- * info); the summaries of new replies on or off (Delete messages, the admins they go to).
+ * The admins' "..." menu, by right (iOS): this post's replies off or on (Change info; the whole
+ * channel's switch lives in the channel's settings); the summaries of new replies on or off
+ * (Delete messages, the admins they go to).
  */
 @Composable
 private fun RepliesAdminMenu(s: PostRepliesState) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton({ open = true }) { Icon(Icons.Filled.MoreVert, "Reply settings", tint = c.label) }
+        RoundTopButton(Icons.Filled.MoreHoriz, "Reply settings") { open = true }
         DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             if (s.may.settings) {
                 DropdownMenuItem(text = { Text(PostReplyRules.postToggleLabel(s.postOff), color = c.label) },
-                    onClick = { open = false; s.setOff(post = true, off = !s.postOff) })
-                DropdownMenuItem(text = { Text(PostReplyRules.channelToggleLabel(s.channelOff), color = c.label) },
-                    onClick = { open = false; s.setOff(post = false, off = !s.channelOff) })
+                    onClick = { open = false; s.setPostOff(!s.postOff) })
             }
             if (s.may.del) {
                 DropdownMenuItem(text = { Text("Reply Alerts On", color = c.label) }, onClick = { open = false; s.setAlerts(true) })
@@ -493,6 +574,7 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
         if (i >= 0) list.animateScrollToItem(i)
     }
     val scope = rememberCoroutineScope()
+    val quick = rememberReplyQuickReaction()
     Box(modifier) {
         when {
             s.failed && s.threads.isEmpty() -> Column(Modifier.fillMaxWidth().padding(top = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -501,20 +583,22 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                 TextButton(onClick = { s.retry() }) { Text("Try Again", color = c.label) }
             }
             !s.loaded -> RepliesSkeleton()
-            s.threads.isEmpty() -> Column(Modifier.fillMaxWidth().padding(top = 36.dp, start = 24.dp, end = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (s.off) "Replies are off" else "No replies yet", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-                // When off, the reason is said once, at the bottom where the field was.
-                if (!s.off) Text("Be the first to reply.", fontSize = 14.sp,
-                    color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+            // The owner's comment icon (the Reply bar's) and small words (iOS, owner 2026-11-07).
+            s.threads.isEmpty() -> Column(Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_reply_comment), null,
+                    tint = c.secondary, modifier = Modifier.padding(bottom = 12.dp).size(40.dp))
+                Text(if (s.off) "Replies are off" else "No replies yet", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                Text(if (s.off) "The channel turned off replies for this post." else "Be the first to reply.", fontSize = 13.sp,
+                    color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
             }
             else -> LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp)) {
                 items(items.size, key = { items[it].key }) { i ->
                     when (val row = items[i]) {
                         ReplyItem.Older -> SmallLink(if (s.loadingOlder) "Loading…" else "Show earlier replies",
                             Modifier.fillMaxWidth().padding(vertical = 4.dp), center = true) { s.loadOlder() }
-                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now)
-                        is ReplyItem.Answer -> Box(Modifier.padding(start = 46.dp)) { ReplyRow(s, row.r, small = true, now) }
+                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick)
+                        is ReplyItem.Answer -> Box(Modifier.padding(start = 46.dp)) { ReplyRow(s, row.r, small = true, now, quick) }
                         is ReplyItem.Toggle -> ThreadToggle(PostReplyRules.threadToggle(row.n, row.open)) { s.toggleThread(row.rid) }
                         is ReplyItem.More -> SmallLink("Show more replies", Modifier.padding(start = 108.dp, bottom = 8.dp)) {
                             scope.launch { s.loadAnswers(row.rid, more = true) }
@@ -582,43 +666,61 @@ private fun ThreadToggle(label: String, onTap: () -> Unit) {
 }
 
 /**
- * One reply (the owner's reference): the photo beside the bubble (34 dp, an answer 26), the name,
- * seal and age above it, the words in a soft rounded bubble, and under it a heart and Reply.
- * Double-tap the bubble = heart; long-press = the menu the server's rights allow
+ * One reply (iOS, the owner's reference 2026-11-07): name, seal and age over the bubble, the photo
+ * beside the bubble's middle (40 dp, an answer 28), the words in a soft rounded bubble, and under it
+ * the chat's reaction pills and Reply. Double-tap the bubble = the Quick Reaction ([quick]); a
+ * long press = the chat's six-emoji bar (a pick closes it) over the menu the server's rights allow
  * (PostReplyRules.actions). Mine on its way reads "Sending…"; failed, "Not sent" with Retry.
  */
 @Composable
-private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Long) {
+private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Long, quick: String) {
     val c = Fariin.colors
     val clipboard = LocalClipboardManager.current
     var menu by remember { mutableStateOf(false) }
     val dim = r.held || r.send != PostReply.Send.SENT
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.padding(top = 20.dp)) { Avatar(r.photoUrl.ifEmpty { null }, if (small) 26.dp else 34.dp) }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(r.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (r.verified) {
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(12.dp))
-                }
+    val side = if (small) 28.dp else 40.dp
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(Modifier.padding(start = side + 24.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(r.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (r.verified) {
                 Spacer(Modifier.width(4.dp))
-                Text(PostReplyRules.age(r.at, now), fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(12.dp))
             }
-            Box(Modifier.padding(top = 4.dp, end = 24.dp)) {
+            Spacer(Modifier.width(4.dp))
+            Text(PostReplyRules.age(r.at, now), fontSize = 13.sp, color = c.secondary, maxLines = 1)
+        }
+        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Avatar(r.photoUrl.ifEmpty { null }, side)
+            Spacer(Modifier.width(10.dp))
+            Box(Modifier.weight(1f, fill = false).padding(end = 24.dp)) {
                 Text(r.text, fontSize = if (small) 15.sp else 17.sp, color = c.label,
-                    modifier = Modifier.alpha(if (dim) 0.55f else 1f).clip(RoundedCornerShape(18.dp)).background(c.fieldFill)
+                    modifier = Modifier.alpha(if (dim) 0.55f else 1f).clip(RoundedCornerShape(20.dp)).background(c.fieldFill)
                         .pointerInput(r.id, r.send) {
                             detectTapGestures(
-                                onDoubleTap = { s.toggleLike(r) },
+                                onDoubleTap = { if (r.send == PostReply.Send.SENT) s.quickReact(r, quick) },
                                 onLongPress = { menu = true },
                             )
                         }
-                        .padding(horizontal = 14.dp, vertical = 9.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp))
                 DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+                    // The chat's react bar (iOS): the same six, in the same order, mine marked; a pick
+                    // closes the menu, the same one again takes mine back.
+                    if (r.send == PostReply.Send.SENT) {
+                        Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            for (e in PostReplyRules.REACT_BAR) {
+                                Box(Modifier.size(40.dp).clip(CircleShape)
+                                    .background(if (e == r.my) c.secondary.copy(alpha = 0.22f) else Color.Transparent)
+                                    .clickable { menu = false; s.react(r, e) }
+                                    .semantics { contentDescription = if (e == r.my) "$e, yours" else e },
+                                    contentAlignment = Alignment.Center) {
+                                    Text(e, fontSize = 24.sp)
+                                }
+                            }
+                        }
+                        androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+                    }
                     for (a in PostReplyRules.actions(r, s.off, s.may)) {
                         val (label, red) = when (a) {
                             PostReplyRules.Action.REPLY -> "Reply" to false
@@ -642,7 +744,8 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                     }
                 }
             }
-            Row(Modifier.padding(start = 6.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        }
+        Row(Modifier.padding(start = side + 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 when (r.send) {
                     PostReply.Send.SENDING -> Text("Sending…", fontSize = 12.sp, color = c.secondary, modifier = Modifier.padding(vertical = 4.dp))
                     PostReply.Send.FAILED -> {
@@ -653,19 +756,24 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                         FooterWord("Delete") { s.discard(r) }
                     }
                     PostReply.Send.SENT -> {
-                        Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable { s.toggleLike(r) }
-                            .padding(vertical = 4.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (r.liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                                contentDescription = if (r.liked) "Unlike" else "Like",
-                                tint = if (r.liked) c.red else c.secondary, modifier = Modifier.size(15.dp))
-                            if (r.likes > 0) {
+                        // THE CHAT'S REACTION PILL, NOT A HEART BUTTON (iOS, owner 2026-11-07: "make it like
+                        // how bubble react works in my app"): no empty outline; a pill per emoji with its
+                        // count, mine the dark filled one; a tap on a pill takes mine back or adds it.
+                        r.rx.forEach { x ->
+                            val mine = x.emoji == r.my
+                            Row(Modifier.padding(end = 6.dp).clip(CircleShape)
+                                .background(if (mine) c.label else c.label.copy(alpha = 0.08f))
+                                .clickable { s.react(r, x.emoji) }
+                                .semantics { contentDescription = "${x.emoji} ${x.count}" + if (mine) ", yours" else "" }
+                                .padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(x.emoji, fontSize = 14.sp)
                                 Spacer(Modifier.width(4.dp))
-                                Text(com.fariin.app.channel.ChannelRules.compactCount(r.likes), fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold, color = c.secondary)
+                                Text(com.fariin.app.channel.ChannelRules.compactCount(x.count), fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold, color = if (mine) c.bg else c.label)
                             }
                         }
                         if (!s.off) {
-                            Spacer(Modifier.width(12.dp))
+                            if (r.rx.isNotEmpty()) Spacer(Modifier.width(2.dp))
                             FooterWord("Reply", bold = true) { s.startAnswer(r) }
                         }
                         if (r.held) {
@@ -674,7 +782,6 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                         }
                     }
                 }
-            }
         }
     }
 }
@@ -697,7 +804,7 @@ private fun RepliesSkeleton() {
     Column(Modifier.fillMaxWidth().graphicsLayer { alpha = pulse }) {
         repeat(3) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Box(Modifier.padding(top = 20.dp).size(34.dp).clip(CircleShape).background(grey))
+                Box(Modifier.padding(top = 20.dp).size(40.dp).clip(CircleShape).background(grey))
                 Spacer(Modifier.width(10.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     bar(110.dp, 8.dp)
