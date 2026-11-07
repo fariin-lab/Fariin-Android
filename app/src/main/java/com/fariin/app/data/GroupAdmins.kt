@@ -215,6 +215,7 @@ object GroupAdmins {
 
     const val ADMINS_FOOTER = "The owner decides what each admin can do. Tap an admin to see what they can do, including removing members."
     const val MAKE_ADMIN_BODY = "They will be able to manage the group with the usual admin rights. You can change or remove them any time."
+    const val DISMISS_BODY = "They stay in the group as a member. Their admin rights end at once."
     const val BAN_BODY = "They leave the group and can't rejoin, find it in search or open it until an admin unbans them."
     const val NO_ADD_ADMINS = "They won't be able to make other members admins."
     const val OWNER_NOTE = "You are the owner of this group, so you can do everything in it, including adding admins and transferring ownership."

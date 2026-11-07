@@ -187,10 +187,9 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
         val changed = me != null && (name != (me?.name ?: "").trim() || about.trim() != (me?.about ?: "").trim())
         val close = { if (changed) askDiscard = true else onBack() }
         androidx.activity.compose.BackHandler(onBack = close)
-        if (askDiscard) AlertDialog(onDismissRequest = { askDiscard = false }, containerColor = c.card,
-            title = { Text("Discard changes?") }, text = { Text("Your changes are not saved yet.") },
-            dismissButton = { TextButton({ askDiscard = false }) { Text("Keep Editing", color = c.accent) } },
-            confirmButton = { TextButton({ askDiscard = false; onBack() }) { Text("Discard Changes", color = c.red) } })
+        // The contact page's bottom sheet; Cancel is Keep Editing.
+        if (askDiscard) PersonConfirmSheet(me?.photoUrl, me?.name.orEmpty(), "Discard changes?", "Your changes are not saved yet.",
+            listOf(PersonAction("Discard Changes", plain = true) { onBack(); true }), onDismiss = { askDiscard = false })
         Box(Modifier.fillMaxWidth().statusBarsPadding().height(64.dp).padding(horizontal = 12.dp)) {
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { close() },
                 contentAlignment = Alignment.Center) { Icon(androidx.compose.material.icons.Icons.Filled.Close, null, tint = c.label) }
@@ -235,18 +234,14 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
                         leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = c.red) }, onClick = { photoMenu = false; askRemove = true })
                 }
             }
-            if (askRemove) AlertDialog(onDismissRequest = { askRemove = false }, containerColor = c.card,
-                title = { Text("Remove your photo?") },
-                text = { Text("People will see your initial instead.") },
-                dismissButton = { TextButton({ askRemove = false }) { Text("Cancel", color = c.accent) } },
-                confirmButton = { TextButton({
-                    askRemove = false
-                    scope.launch {
-                        busy = true
-                        try { api.removePhoto(); me = api.profile(api.me) } catch (_: Exception) { error = "Couldn't remove the photo. Try again." }
-                        busy = false
-                    }
-                }) { Text("Remove", color = c.red) } })
+            if (askRemove) PersonConfirmSheet(me?.photoUrl, me?.name.orEmpty(), "Remove your photo?", "People will see your initial instead.",
+                listOf(PersonAction("Remove") {
+                    busy = true
+                    val ok = try { api.removePhoto(); me = api.profile(api.me); true } catch (_: Exception) { error = "Couldn't remove the photo. Try again."; false }
+                    busy = false
+                    if (ok) com.fariin.app.ui.components.Snack.show("Photo removed")
+                    ok
+                }), onDismiss = { askRemove = false })
             if (history.isNotEmpty()) {
                 Text("Recents", fontSize = 13.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
                 androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
@@ -558,33 +553,37 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             com.fariin.app.ui.components.Snack.show(if (ok) done else "Could not do that. Check your connection and try again.")
         }
     }
-    if (askReport) AlertDialog(onDismissRequest = { askReport = false }, title = { Text("Report Spam?") },
-        confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton({
-                    askReport = false
-                    // iOS: report, then leave and block the group so it cannot add me back.
-                    exitScope.launch { api.report("", cid, "group") }
-                    com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
-                        api.leaveGroup(cid)
-                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
-                            .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
-                    }
-                    onLeft()
-                }) { Text("Report and Leave", color = c.red) }
-                TextButton({ askReport = false; exitScope.launch { api.report("", cid, "group") }
-                    com.fariin.app.ui.components.Snack.show("Thanks. Fariin's moderators will review this group.") }) { Text("Report", color = c.accent) }
-                TextButton({ askReport = false }) { Text("Cancel", color = c.accent) }
-            }
-        })
-    if (askEnd) AlertDialog(onDismissRequest = { askEnd = false }, title = { Text("End This Group?") },
-        text = { Text("Nobody will be able to send messages or start calls, and invite links stop working. Messages stay. This can't be undone.") },
-        confirmButton = { TextButton({ askEnd = false; callable("endGroup", "The group has ended.") }) { Text("End Group", color = c.red) } },
-        dismissButton = { TextButton({ askEnd = false }) { Text("Cancel", color = c.accent) } })
-    if (askDelete) AlertDialog(onDismissRequest = { askDelete = false }, title = { Text("Delete Group?") },
-        text = { Text("This permanently deletes the group and all its messages for everyone. This cannot be undone.") },
-        confirmButton = { TextButton({
-            askDelete = false
+    // Report, End and Delete: the contact page's bottom sheet with the group's photo and name on top.
+    val groupPhoto = (conv["avatarUrl"] as? String)?.ifEmpty { null }
+    val groupName = conv["title"] as? String ?: ""
+    val groupKind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true)
+    if (askReport) PersonConfirmSheet(groupPhoto, groupName, "Report Spam?",
+        "Fariin's moderators will review this group. Report and Leave also takes you out of it and stops it adding you again.",
+        listOf(
+            PersonAction("Report and Leave") {
+                // iOS: report, then leave and block the group so it cannot add me back.
+                exitScope.launch { api.report("", cid, "group") }
+                com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
+                    api.leaveGroup(cid)
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+                        .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
+                }
+                onLeft()
+                true
+            },
+            PersonAction("Report", tonal = true) {
+                exitScope.launch { api.report("", cid, "group") }
+                com.fariin.app.ui.components.Snack.show("Thanks. Fariin's moderators will review this group.")
+                true
+            },
+        ), onDismiss = { askReport = false }, kind = groupKind)
+    if (askEnd) PersonConfirmSheet(groupPhoto, groupName, "End This Group?",
+        "Nobody will be able to send messages or start calls, and invite links stop working. Messages stay. This can't be undone.",
+        listOf(PersonAction("End Group") { callable("endGroup", "The group has ended."); true }),
+        onDismiss = { askEnd = false }, kind = groupKind)
+    if (askDelete) PersonConfirmSheet(groupPhoto, groupName, "Delete Group?",
+        "This permanently deletes the group and all its messages for everyone. This cannot be undone.",
+        listOf(PersonAction("Delete for Everyone") {
             // iOS LeaveGroupUndo .deleteGroup: gone from the list at once, Undo for a few seconds, then the server deletes it.
             com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
                 com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
@@ -594,8 +593,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 com.fariin.app.data.LeaveUndo.undo()
             }
             onLeft()
-        }) { Text("Delete for Everyone", color = c.red) } },
-        dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } })
+            true
+        }), onDismiss = { askDelete = false }, kind = groupKind)
     var notice by remember { mutableStateOf<String?>(null) }
     var timerOpen by remember { mutableStateOf(false) }
     val timer = (conv["disappearSeconds"] as? Number)?.toInt() ?: 0
@@ -1028,9 +1027,10 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
     if (picker.pending != null) { picker.Host(w("Group photo"), w("Shown in chats and on the group page")); return }
     val descFocus = remember { FocusRequester() }
     LaunchedEffect(focusDescription) { if (focusDescription) { delay(350); runCatching { descFocus.requestFocus() } } }
-    if (confirmRemove) AlertDialog(onDismissRequest = { confirmRemove = false }, title = { Text(w("Remove group photo?")) },
-        confirmButton = { TextButton({ confirmRemove = false; newPhoto = null; removePhoto = true }) { Text("Remove", color = c.red) } },
-        dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
+    // Only marks the photo for removal; Save does the rest, as before.
+    if (confirmRemove) PersonConfirmSheet(photoUrl.takeIf { newPhoto == null }, title, w("Remove group photo?"), w("Members will see the group's initial instead. It goes when you tap Save."),
+        listOf(PersonAction("Remove") { newPhoto = null; removePhoto = true; true }),
+        onDismiss = { confirmRemove = false }, kind = com.fariin.app.ui.components.AvatarKind.of(true, channel))
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = {
             TextAction("Save", enabled = trimmed.isNotEmpty() && changed && !saving, busy = saving) {

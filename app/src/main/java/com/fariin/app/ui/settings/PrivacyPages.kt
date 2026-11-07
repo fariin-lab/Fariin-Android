@@ -412,10 +412,21 @@ private fun ChatKeyPage(pop: () -> Unit) {
         }
     }
     if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { pin = ChatKey.generate(); set = true } }
-    if (confirmReset) YesNo("Reset your Chat Key?", "You'll get a new key and the old one will stop working.", "Reset",
-        onYes = { confirmReset = false; run { pin = ChatKey.generate(); set = true } }, onNo = { confirmReset = false })
-    if (confirmRemove) YesNo("Remove your Chat Key?", "Nobody will be able to use it to message you. People who already did stay in your chats.", "Remove",
-        onYes = { confirmRemove = false; run { ChatKey.remove(); set = false; pin = null } }, onNo = { confirmRemove = false })
+    // The contact page's bottom sheet (no photo: it is my own key). Same work as run(), awaited so the
+    // button spins; a failure still shows on the page.
+    suspend fun runNow(done: String, work: suspend () -> Unit): Boolean {
+        if (busy) return false
+        busy = true; error = null
+        val ok = try { work(); true } catch (e: Exception) { error = e.message; false } finally { busy = false }
+        if (ok) com.fariin.app.ui.components.Snack.show(done)
+        return ok
+    }
+    if (confirmReset) com.fariin.app.ui.people.PersonConfirmSheet(null, "", "Reset your Chat Key?", "You'll get a new key and the old one will stop working.",
+        listOf(com.fariin.app.ui.people.PersonAction("Reset") { runNow("Your new Chat Key is ready") { pin = ChatKey.generate(); set = true } }),
+        onDismiss = { confirmReset = false }, face = false)
+    if (confirmRemove) com.fariin.app.ui.people.PersonConfirmSheet(null, "", "Remove your Chat Key?", "Nobody will be able to use it to message you. People who already did stay in your chats.",
+        listOf(com.fariin.app.ui.people.PersonAction("Remove") { runNow("Chat Key removed") { ChatKey.remove(); set = false; pin = null } }),
+        onDismiss = { confirmRemove = false }, face = false)
 }
 
 @Composable

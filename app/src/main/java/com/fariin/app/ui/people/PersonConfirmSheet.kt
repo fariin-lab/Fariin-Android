@@ -40,25 +40,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.ui.components.Avatar
+import com.fariin.app.ui.components.AvatarKind
 import com.fariin.app.ui.components.FariinSheetDialog
 import com.fariin.app.ui.components.FariinSpinner
 import com.fariin.app.ui.components.rememberSheetMotion
 import com.fariin.app.ui.components.sheetDrag
 import com.fariin.app.ui.theme.Fariin
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * One action of a [PersonConfirmSheet]. [run] does the work and answers true when it worked; the
  * button spins while it runs and the sheet slides away after. [tonal] = red words on a light red
- * (a second red choice, as Block and Report under Block).
+ * (a second red choice, as Block and Report under Block). [plain] = the accent colour, for a question
+ * that loses nothing (Make Admin, Discard Changes).
  */
-internal class PersonAction(val label: String, val tonal: Boolean = false, val run: suspend () -> Boolean)
+internal class PersonAction(val label: String, val tonal: Boolean = false, val plain: Boolean = false, val run: suspend () -> Boolean)
 
 /**
  * The contact page's careful questions (Report, Block, Unblock, Delete Chat, Clear my messages) as a
  * bottom sheet that fits its words (owner 2026-11-07: not a centred dialog): the person's photo and
  * name, the title, one line, full-width red buttons (a spinner while one works), then a plain Cancel.
- * Back, a tap on the dim or a swipe down leave everything as it was.
+ * Back, a tap on the dim or a swipe down leave everything as it was. The group pages use it too: a
+ * group question shows the group's photo and name ([kind] GROUP or CHANNEL), a member question the
+ * member's; [face] false leaves the photo out (my own Chat Key). Work that has started finishes even
+ * if the sheet is swiped away meanwhile.
  */
 @Composable
 internal fun PersonConfirmSheet(
@@ -68,6 +75,8 @@ internal fun PersonConfirmSheet(
     body: String,
     actions: List<PersonAction>,
     onDismiss: () -> Unit,
+    kind: AvatarKind = AvatarKind.PERSON,
+    face: Boolean = true,
 ) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
@@ -89,21 +98,25 @@ internal fun PersonConfirmSheet(
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).onSizeChanged { if (contentH == 0) contentH = it.height }
                 .padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Avatar(photo, 72.dp)
-                if (name.isNotEmpty()) Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                if (face) Avatar(photo, 72.dp, kind = kind)
+                if (face && name.isNotEmpty()) Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                     textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.padding(top = 10.dp))
                 Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp))
-                Text(body, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = if (face) 18.dp else 0.dp))
+                if (body.isNotEmpty()) Text(body, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                 Spacer(Modifier.height(22.dp))
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     actions.forEach { a ->
-                        val (fill, ink) = if (a.tonal) c.red.copy(alpha = 0.12f) to c.red else c.red to Color.White
+                        val (fill, ink) = when {
+                            a.plain -> c.accent to Color.White
+                            a.tonal -> c.red.copy(alpha = 0.12f) to c.red
+                            else -> c.red to Color.White
+                        }
                         SheetPill(a.label, fill, ink, enabled = busy == null, spinning = busy == a.label) {
                             busy = a.label
                             scope.launch {
-                                a.run()
+                                withContext(NonCancellable) { a.run() }
                                 busy = null
                                 motion.close()
                             }

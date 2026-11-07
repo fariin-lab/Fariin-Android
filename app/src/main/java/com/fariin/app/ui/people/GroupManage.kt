@@ -483,17 +483,17 @@ private fun AdminRightsPage(cid: String, me: String, uid: String, onBack: () -> 
         }
     }
     Problem(problem) { problem = null }
-    if (confirmDismiss) AlertDialog(onDismissRequest = { confirmDismiss = false }, containerColor = c.card,
-        title = { Text("Dismiss ${team.names[uid] ?: "them"} as admin?") },
-        confirmButton = { TextButton({
-            confirmDismiss = false; saving = true
-            scope.launch {
-                try { GroupManage.demote(cid, uid); Snack.show("${team.names[uid] ?: "They"} is no longer an admin"); leave() }
-                catch (e: Exception) { problem = failText(e) }
-                saving = false
-            }
-        }) { Text("Dismiss Admin", color = c.red) } },
-        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
+    // The contact page's bottom sheet, the admin's photo and name on top.
+    if (confirmDismiss) PersonConfirmSheet(team.photos[uid]?.ifEmpty { null }, team.names[uid].orEmpty(),
+        "Dismiss ${team.names[uid] ?: "them"} as admin?", GroupAdmins.DISMISS_BODY,
+        listOf(PersonAction("Dismiss Admin") {
+            saving = true
+            val ok = try { GroupManage.demote(cid, uid); Snack.show("${team.names[uid] ?: "They"} is no longer an admin"); true }
+                catch (e: Exception) { problem = failText(e); false }
+            saving = false
+            if (ok) leave()
+            ok
+        }), onDismiss = { confirmDismiss = false })
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar(if (editable) "Admin Rights" else if (uid == me) "My Admin Rights" else name, onBack, action = { if (saving) com.fariin.app.ui.components.BarBusyPill("Saving…") })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
@@ -554,30 +554,24 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
         }
     }
     Problem(problem) { problem = null; onClose() }
-    if (confirmPromote) AlertDialog(onDismissRequest = { confirmPromote = false }, containerColor = c.card,
-        title = { Text("Make $name an admin?") }, text = { Text(GroupAdmins.MAKE_ADMIN_BODY) },
-        confirmButton = { TextButton({
-            confirmPromote = false
-            run {
+    // The confirms: the contact page's bottom sheet, the member's photo and name on top. The button
+    // spins while the work runs; the card closes once it worked, a failure says why (as before).
+    suspend fun runNow(block: suspend () -> Unit): Boolean =
+        try { block(); onClose(); true } catch (e: Exception) { problem = failText(e); false }
+    val face = team.photos[uid]?.ifEmpty { null }
+    if (confirmPromote) PersonConfirmSheet(face, name, "Make $name an admin?", GroupAdmins.MAKE_ADMIN_BODY,
+        listOf(PersonAction("Make Admin", plain = true) {
+            runNow {
                 GroupManage.promote(cid, uid, GroupAdmins.startRights(team.grantable(me)).let { GroupAdmins.toWrite(it, team.grantable(me)) }, team)
                 Snack.show("$name is now an admin")
             }
-        }) { Text("Make Admin", color = c.accent) } },
-        dismissButton = { TextButton({ confirmPromote = false }) { Text("Cancel", color = c.accent) } })
-    if (confirmDismiss) AlertDialog(onDismissRequest = { confirmDismiss = false }, containerColor = c.card,
-        title = { Text("Dismiss $name as admin?") },
-        confirmButton = { TextButton({
-            confirmDismiss = false
-            run { GroupManage.demote(cid, uid); Snack.show("$name is no longer an admin") }
-        }) { Text("Dismiss Admin", color = c.red) } },
-        dismissButton = { TextButton({ confirmDismiss = false }) { Text("Cancel", color = c.accent) } })
-    if (confirmBan) AlertDialog(onDismissRequest = { confirmBan = false }, containerColor = c.card,
-        title = { Text("Ban $name?") }, text = { Text(GroupAdmins.BAN_BODY) },
-        confirmButton = { TextButton({
-            confirmBan = false
-            run { GroupManage.removeMember(cid, uid, name); Snack.show("$name was removed from the group.") }
-        }) { Text("Ban", color = c.red) } },
-        dismissButton = { TextButton({ confirmBan = false }) { Text("Cancel", color = c.accent) } })
+        }), onDismiss = { confirmPromote = false })
+    if (confirmDismiss) PersonConfirmSheet(face, name, "Dismiss $name as admin?", GroupAdmins.DISMISS_BODY,
+        listOf(PersonAction("Dismiss Admin") { runNow { GroupManage.demote(cid, uid); Snack.show("$name is no longer an admin") } }),
+        onDismiss = { confirmDismiss = false })
+    if (confirmBan) PersonConfirmSheet(face, name, "Ban $name?", GroupAdmins.BAN_BODY,
+        listOf(PersonAction("Ban") { runNow { GroupManage.removeMember(cid, uid, name); Snack.show("$name was removed from the group.") } }),
+        onDismiss = { confirmBan = false })
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = c.bgSecondary) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(team.photos[uid]?.ifEmpty { null }, 96.dp)
@@ -678,22 +672,24 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
     card?.let { u -> MemberCard(cid, me, u, doc, onClose = { card = null }, onProfile = onOpenPerson, open = push) }
     pendingRemove?.let { uids ->
         val one = uids.size == 1
-        AlertDialog(onDismissRequest = { pendingRemove = null }, containerColor = c.card,
-            title = { Text(if (one) "Remove ${nameOf(uids[0])} from the group?" else "Remove ${uids.size} members from the group?") },
-            confirmButton = { TextButton({
-                pendingRemove = null
+        // The contact page's bottom sheet: one member shows their photo and name, several the group's.
+        PersonConfirmSheet(
+            if (one) team.photos[uids[0]]?.ifEmpty { null } else (doc["avatarUrl"] as? String)?.ifEmpty { null },
+            if (one) team.names[uids[0]].orEmpty() else doc["title"] as? String ?: "",
+            if (one) "Remove ${nameOf(uids[0])} from the group?" else "Remove ${uids.size} members from the group?",
+            "They can't join again with a link until an admin adds them back.",
+            listOf(PersonAction("Remove") {
                 picked = emptySet()
-                scope.launch {
-                    var done = 0
-                    for (uid in uids) {
-                        try { GroupManage.removeMember(cid, uid, team.names[uid] ?: "User"); done++ }
-                        catch (e: Exception) { removeError = failText(e, "Couldn't remove. Try again."); break }
-                    }
-                    if (done == 1 && one) Snack.show("${team.names[uids[0]] ?: "User"} was removed from the group.")
-                    else if (done > 0) Snack.show("$done member${if (done == 1) " was" else "s were"} removed from the group.")
+                var done = 0
+                for (uid in uids) {
+                    try { GroupManage.removeMember(cid, uid, team.names[uid] ?: "User"); done++ }
+                    catch (e: Exception) { removeError = failText(e, "Couldn't remove. Try again."); break }
                 }
-            }) { Text("Remove", color = c.red) } },
-            dismissButton = { TextButton({ pendingRemove = null }) { Text("Cancel", color = c.accent) } })
+                if (done == 1 && one) Snack.show("${team.names[uids[0]] ?: "User"} was removed from the group.")
+                else if (done > 0) Snack.show("$done member${if (done == 1) " was" else "s were"} removed from the group.")
+                done > 0
+            }), onDismiss = { pendingRemove = null },
+            kind = if (one) com.fariin.app.ui.components.AvatarKind.PERSON else com.fariin.app.ui.components.AvatarKind.of(true, doc["channel"] == true))
     }
     removeError?.let { e ->
         AlertDialog(onDismissRequest = { removeError = null }, containerColor = c.card, title = { Text("Could not remove") }, text = { Text(e) },
@@ -1008,11 +1004,19 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
             saving = false
         }
     }
-    if (confirmPrivate) AlertDialog(onDismissRequest = { confirmPrivate = false }, containerColor = c.card,
-        title = { Text("Make this $noun private?") },
-        text = { Text("fariin.com/$current will stop working. The link stays reserved for this $noun for 30 days, then anyone can take it.") },
-        confirmButton = { TextButton({ confirmPrivate = false; save("") }) { Text("Make Private", color = c.red) } },
-        dismissButton = { TextButton({ confirmPrivate = false }) { Text("Cancel", color = c.accent) } })
+    // The contact page's bottom sheet with the group's photo and name; the same save("") work, awaited
+    // so the button spins.
+    if (confirmPrivate) PersonConfirmSheet((doc["avatarUrl"] as? String)?.ifEmpty { null }, doc["title"] as? String ?: "",
+        "Make this $noun private?",
+        "fariin.com/$current will stop working. The link stays reserved for this $noun for 30 days, then anyone can take it.",
+        listOf(PersonAction("Make Private") {
+            saving = true
+            val done = try { com.fariin.app.channel.ChannelService.setLink(cid, ""); true }
+                catch (e: Exception) { problem = com.fariin.app.channel.ChannelService.errorText(e, "Could not save the link. Try again."); false }
+            saving = false
+            if (done) { Snack.show("The $noun is now private"); onBack() }
+            done
+        }), onDismiss = { confirmPrivate = false }, kind = com.fariin.app.ui.components.AvatarKind.of(true, ch))
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not save") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     Column(Modifier.fillMaxSize().background(c.bgSecondary).imePadding()) {
@@ -1154,19 +1158,34 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
     }
     if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't change the link") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
-    if (confirmReset) AlertDialog(onDismissRequest = { confirmReset = false }, containerColor = c.card, title = { Text("Reset Link") },
-        text = { Text("A new link replaces this one, and the current link stops working for everyone who has it.") },
-        confirmButton = { TextButton({ confirmReset = false; change("The link was not reset. The old one still works. Try again.") { GroupManage.createPrimary(cid) } }) { Text("Reset Link", color = c.red) } },
-        dismissButton = { TextButton({ confirmReset = false }) { Text("Cancel", color = c.accent) } })
-    if (confirmDeleteAll) AlertDialog(onDismissRequest = { confirmDeleteAll = false }, containerColor = c.card, title = { Text("Delete All Revoked") },
-        text = { Text("Revoked links are removed from this list for good.") },
-        confirmButton = { TextButton({ confirmDeleteAll = false; change("The revoked links were not deleted. Try again.") { GroupManage.deleteAllRevoked(cid) } }) { Text("Delete All", color = c.red) } },
-        dismissButton = { TextButton({ confirmDeleteAll = false }) { Text("Cancel", color = c.accent) } })
+    // The confirms: the contact page's bottom sheet with the group's photo and name. Same work as
+    // change(), awaited so the button spins; a short note once it worked, the old message if not.
+    suspend fun changeNow(fallback: String, done: String, work: suspend () -> Unit): Boolean {
+        if (working) return false
+        working = true
+        val ok = try { work(); true } catch (e: Exception) { problem = GroupManage.errorText(e, fallback); false }
+        reload(); working = false; heldApproval = null
+        if (ok) Snack.show(done)
+        return ok
+    }
+    val linkFace = (doc["avatarUrl"] as? String)?.ifEmpty { null }
+    val linkName = doc["title"] as? String ?: ""
+    val linkKind = com.fariin.app.ui.components.AvatarKind.of(true, doc["channel"] == true)
+    if (confirmReset) PersonConfirmSheet(linkFace, linkName, "Reset Link",
+        "A new link replaces this one, and the current link stops working for everyone who has it.",
+        listOf(PersonAction("Reset Link") {
+            changeNow("The link was not reset. The old one still works. Try again.", "Link reset") { GroupManage.createPrimary(cid) }
+        }), onDismiss = { confirmReset = false }, kind = linkKind)
+    if (confirmDeleteAll) PersonConfirmSheet(linkFace, linkName, "Delete All Revoked",
+        "Revoked links are removed from this list for good.",
+        listOf(PersonAction("Delete All") {
+            changeNow("The revoked links were not deleted. Try again.", "Revoked links deleted") { GroupManage.deleteAllRevoked(cid) }
+        }), onDismiss = { confirmDeleteAll = false }, kind = linkKind)
     revokeTarget?.let { l ->
-        AlertDialog(onDismissRequest = { revokeTarget = null }, containerColor = c.card, title = { Text("Revoke Link") },
-            text = { Text("The link stops working at once. It moves to Revoked Links.") },
-            confirmButton = { TextButton({ revokeTarget = null; change("The link was not revoked. Try again.") { GroupManage.revokeLink(cid, l.code) } }) { Text("Revoke", color = c.red) } },
-            dismissButton = { TextButton({ revokeTarget = null }) { Text("Cancel", color = c.accent) } })
+        PersonConfirmSheet(linkFace, linkName, "Revoke Link", "The link stops working at once. It moves to Revoked Links.",
+            listOf(PersonAction("Revoke") {
+                changeNow("The link was not revoked. Try again.", "Link revoked") { GroupManage.revokeLink(cid, l.code) }
+            }), onDismiss = { revokeTarget = null }, kind = linkKind)
     }
     detail?.let { l ->
         val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)

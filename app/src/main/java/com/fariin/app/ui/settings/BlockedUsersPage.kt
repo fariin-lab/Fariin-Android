@@ -110,15 +110,17 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
             }
         }
     }
+    // The contact page's Unblock sheet: their photo and name, the red button spins until it is done.
     confirm?.let { u ->
-        YesNo("Unblock?", "They will be able to message and call you again. Messages sent while blocked stay hidden.", "Unblock", destructive = false,
-            onYes = {
-                confirm = null
-                scope.launch {
-                    val ok = FirestorePeople(FirebaseAuth.getInstance().currentUser!!.uid, CryptoHub.get(ctx)).setBlocked(u, false)
-                    if (!ok) toast(ctx, "Check your connection and try again.")
-                }
-            }, onNo = { confirm = null })
+        val p = people[u]
+        val name = p?.name?.ifEmpty { null } ?: p?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: ""
+        com.fariin.app.ui.people.PersonConfirmSheet(p?.photo, name, if (name.isEmpty()) "Unblock?" else "Unblock $name?",
+            "They will be able to message and call you again. Messages sent while blocked stay hidden.",
+            listOf(com.fariin.app.ui.people.PersonAction("Unblock") {
+                val ok = FirestorePeople(FirebaseAuth.getInstance().currentUser!!.uid, CryptoHub.get(ctx)).setBlocked(u, false)
+                if (!ok) toast(ctx, "Check your connection and try again.")
+                ok
+            }), onDismiss = { confirm = null })
     }
 }
 
@@ -168,16 +170,17 @@ private fun BlockPickerPage(onClose: () -> Unit, onFail: (String) -> Unit) {
         }
     }
     toBlock?.let { p ->
-        YesNo("Block ${p.name.ifEmpty { "this person" }}?", "They will not be able to call you, and nothing they send will reach you. They are not told.", "Block",
-            onYes = {
-                toBlock = null
+        // The contact page's Block sheet; the picker closes once the block is written (a failure is
+        // said on Blocked Users, as before).
+        com.fariin.app.ui.people.PersonConfirmSheet(p.photo, p.name, "Block ${p.name.ifEmpty { "this person" }}?",
+            "They will not be able to call you, and nothing they send will reach you. They are not told.",
+            listOf(com.fariin.app.ui.people.PersonAction("Block") {
                 val name = p.name.ifEmpty { "This person" }
-                scope.launch {
-                    val ok = FirestorePeople(me, CryptoHub.get(ctx)).setBlocked(p.uid, true)
-                    if (!ok) onFail("$name could not be blocked. Try again.")
-                }
+                val ok = FirestorePeople(me, CryptoHub.get(ctx)).setBlocked(p.uid, true)
+                if (!ok) onFail("$name could not be blocked. Try again.")
                 onClose()
-            }, onNo = { toBlock = null })
+                ok
+            }), onDismiss = { toBlock = null })
     }
 }
 
