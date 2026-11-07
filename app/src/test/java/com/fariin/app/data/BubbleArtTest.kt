@@ -141,16 +141,15 @@ class BubbleArtTest {
         assertTrue("worst $worst bytes", worst <= 900_000)
     }
 
-    @Test fun onlyTheLastBubbleOfARunShowsTheArt() {
-        assertEquals(BubbleArt.Look.ART, BubbleArt.look("camel", lastOfRun = true, stylesOff = false))
-        assertEquals(BubbleArt.Look.FILL, BubbleArt.look("camel", lastOfRun = false, stylesOff = false))
-        // Off in a group (bubbleStylesOff) or a channel: normal bubble either way.
-        assertEquals(BubbleArt.Look.NONE, BubbleArt.look("camel", lastOfRun = true, stylesOff = true))
-        assertEquals(BubbleArt.Look.NONE, BubbleArt.look("camel", lastOfRun = false, stylesOff = true))
+    @Test fun everyStyledMessageShowsTheArt() {
+        // Every message with a picture style draws its picture, wherever it sits in a run.
+        assertEquals(BubbleArt.Look.ART, BubbleArt.look("camel", stylesOff = false))
+        // Off in a group (bubbleStylesOff) or a channel: normal bubble.
+        assertEquals(BubbleArt.Look.NONE, BubbleArt.look("camel", stylesOff = true))
         // Unknown or missing id (an older or newer build): normal bubble.
-        assertEquals(BubbleArt.Look.NONE, BubbleArt.look("rainbow", true, false))
-        assertEquals(BubbleArt.Look.NONE, BubbleArt.look(null, true, false))
-        assertEquals(BubbleArt.Look.NONE, BubbleArt.look("", true, false))
+        assertEquals(BubbleArt.Look.NONE, BubbleArt.look("rainbow", false))
+        assertEquals(BubbleArt.Look.NONE, BubbleArt.look(null, false))
+        assertEquals(BubbleArt.Look.NONE, BubbleArt.look("", false))
     }
 
     @Test fun pictureWinsTheSharedIdAndThePickerListsEachOnce() {

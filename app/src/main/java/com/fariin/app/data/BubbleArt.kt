@@ -33,7 +33,7 @@ object BubbleArt {
         val ins: IntArray,
         /** Light words on a dark bubble. */
         val lightText: Boolean,
-        /** 0xRRGGBB: the bubble's flat colour, used for the earlier bubbles of a run. */
+        /** 0xRRGGBB: the bubble's flat colour, the picture's stand-in while it decodes. */
         val fill: Long,
     ) {
         val layout: Layout by lazy { layoutOf(this) }
@@ -127,17 +127,15 @@ object BubbleArt {
     fun textColor(s: Spec): Long = if (s.lightText) 0xFFFFFF else 0x2A1E18
 
     /**
-     * SPEC 3 and 5. What one bubble draws for a style: [Look.ART] only on the LAST bubble of a run,
-     * [Look.FILL] (the style's flat colour) on the earlier ones; [Look.NONE] when styles are off here
-     * (a channel, or a group whose owner or admin turned them off), or the id is unknown.
+     * SPEC 3 and 5. What one bubble draws for a style: [Look.ART] on EVERY message that carries it
+     * (owner 2026-11-07: with last-of-run only, a new message made the one before lose its picture),
+     * whatever comes before or after it; [Look.NONE] when styles are off here (a channel, or a group
+     * whose owner or admin turned them off), or the id is unknown.
      */
-    enum class Look { NONE, FILL, ART }
+    enum class Look { NONE, ART }
 
-    fun look(id: String?, lastOfRun: Boolean, stylesOff: Boolean): Look = when {
-        stylesOff || find(id) == null -> Look.NONE
-        lastOfRun -> Look.ART
-        else -> Look.FILL
-    }
+    fun look(id: String?, stylesOff: Boolean): Look =
+        if (stylesOff || find(id) == null) Look.NONE else Look.ART
 
     /** The asset path of a style's picture. */
     fun asset(id: String) = "bubbles/$id.webp"

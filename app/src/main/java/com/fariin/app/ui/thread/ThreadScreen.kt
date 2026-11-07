@@ -1574,7 +1574,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             return@Column
         }
         // The sender's bubble style (BubbleStyles.kt): its fill and text colour, on both sides.
-        val styled = styledBubble(m, g.last, bubbleStylesOff(ui.channel != null, ui.groupDoc))
+        val styled = styledBubble(m, bubbleStylesOff(ui.channel != null, ui.groupDoc))
         val art = styled?.art
         val chromeMe = isMe && styled == null
         androidx.compose.runtime.CompositionLocalProvider(LocalStyledInk provides styled?.ink) {
@@ -1582,7 +1582,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             // The style's corner decorations (BubbleStyles.kt), outside the clip so they hang over the edge.
             Modifier.bubbleDecor(bubbleDecorFor(m, styled, isMe, c.dark, g.first, g.last, failed, showSender))
                 .widthIn(max = maxW)
-                // A picture style's run-ending bubble: its 9-slice picture, unclipped (bubbles/BubbleArtDraw.kt).
+                // A picture style: its own 9-slice picture on every message, unclipped, no run shape (bubbles/BubbleArtDraw.kt).
                 .then(if (art != null) Modifier.artBubble(art, c.dark) else Modifier.clip(shape)
                 .then(if (styled != null) Modifier.styledFill(styled, shape, c.dark) else Modifier.background(if (isMe) myFill() else receivedFill()).then(receivedRim(isMe, shape)))
                 .padding(horizontal = if (kind == Message.MediaKind.VOICE) 13.dp else 14.dp, vertical = 7.dp)),

@@ -30,8 +30,8 @@ import com.fariin.app.ui.thread.bubbles.ink
 
 /**
  * A text bubble drawn in the sender's bubble style: its fill and its own text colour. [art]: a
- * picture style drawn as its picture (the LAST bubble of a run, SPEC 3); its earlier bubbles have
- * [art] null and draw the style's flat colour in the normal shape.
+ * picture style drawn as its picture, on every message sent with it (SPEC 3, owner 2026-11-07):
+ * it skips the run's corner rounding and plain fill entirely.
  */
 internal class StyledBubble(val fill: Brush, val ink: Color, val glass: Boolean, val art: BubbleArt.Spec? = null,
                             val rim: Boolean = false)
@@ -39,17 +39,16 @@ internal class StyledBubble(val fill: Brush, val ink: Color, val glass: Boolean,
 /**
  * The style a text bubble draws in, or null for the normal bubble: an unknown id, a deleted
  * message, or a bubble that is not plain words (media, poll, contact or location card).
- * [lastOfRun]: the run's last bubble, the only one a picture style draws as its picture.
  * [stylesOff]: a channel, or a group whose owner or admin turned bubble styles off (`bubbleStylesOff`).
  */
 @Composable
-internal fun styledBubble(m: Message, lastOfRun: Boolean, stylesOff: Boolean): StyledBubble? {
+internal fun styledBubble(m: Message, stylesOff: Boolean): StyledBubble? {
     if (!BubbleStyles.SHOWN || stylesOff) return null
     if (m.deleted || m.mediaKind != null || m.poll != null) return null
     if (CardRules.location(m.text) != null || CardRules.contact(m.text) != null) return null
     // A picture style (BubbleArt) wins over a colour style with the same id.
     BubbleArt.find(m.bubbleStyle)?.let { a ->
-        val look = BubbleArt.look(a.id, lastOfRun, stylesOff = false)
+        val look = BubbleArt.look(a.id, stylesOff = false)
         return StyledBubble(androidx.compose.ui.graphics.SolidColor(a.fillColor()), a.ink(), glass = false,
             art = if (look == BubbleArt.Look.ART) a else null, rim = a.lightText && Fariin.colors.dark)
     }
