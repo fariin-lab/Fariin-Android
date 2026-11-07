@@ -170,7 +170,8 @@ fun shareLink(context: Context, url: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupAddPeopleSheet(g: GroupCallUi, onClose: () -> Unit) {
-    val isLink = g.linkRoom != null
+    // A multi-person call with no group chat lists my 1:1 chats too, and adds them to its own list.
+    val isLink = g.linkRoom != null || com.fariin.app.call.GroupCallWire.isAdhoc(g.cid)
     val me = g.members.firstOrNull { it.local }?.id ?: ""
     var linkPeople by remember { mutableStateOf<List<CallPerson>?>(null) }
     var joined by remember { mutableStateOf(emptySet<String>()) }

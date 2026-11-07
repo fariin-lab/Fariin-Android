@@ -47,6 +47,9 @@ class CallActivity : ComponentActivity() {
         private const val EXTRA_VIDEO = "dial.video"
         private const val EXTRA_GROUP = "group.cid"
         private const val EXTRA_START = "group.start"
+        private const val EXTRA_ADHOC_UIDS = "adhoc.uids"
+        private const val EXTRA_ADHOC_NAMES = "adhoc.names"
+        private const val EXTRA_ADHOC_PHOTOS = "adhoc.photos"
         private const val EXTRA_LINK = "link.key"
         private const val EXTRA_LOBBY = "lobby.key"
         const val EXTRA_DEMO = "callScreen"
@@ -60,6 +63,15 @@ class CallActivity : ComponentActivity() {
         fun startGroup(c: Context, cid: String, title: String, video: Boolean, start: Boolean = false) {
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(EXTRA_GROUP, cid).putExtra(EXTRA_NAME, title).putExtra(EXTRA_VIDEO, video).putExtra(EXTRA_START, start))
+        }
+
+        /** New Call with two or more people picked: a multi-person call with them (GroupCall.startAdhoc). */
+        fun startAdhoc(c: Context, people: List<com.fariin.app.call.CallPerson>, video: Boolean) {
+            c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(EXTRA_ADHOC_UIDS, people.map { it.uid }.toTypedArray())
+                .putExtra(EXTRA_ADHOC_NAMES, people.map { it.name }.toTypedArray())
+                .putExtra(EXTRA_ADHOC_PHOTOS, people.map { it.photo ?: "" }.toTypedArray())
+                .putExtra(EXTRA_VIDEO, video))
         }
 
         /** A call link (its key in the text form): the pre-join screen (iOS CallLobbyView), then the call. */
@@ -368,6 +380,19 @@ class CallActivity : ComponentActivity() {
             val key = com.fariin.app.call.CallLinkKey.ofText(text)
             if (key == null) { Toast.makeText(this, "This call link is no longer valid", Toast.LENGTH_LONG).show(); finish(); return }
             withMic(video, { GroupCall.joinLink(this, key, video) }, { finish() })
+            return
+        }
+        i.getStringArrayExtra(EXTRA_ADHOC_UIDS)?.let { uids ->
+            groupMode = true
+            val video = i.getBooleanExtra(EXTRA_VIDEO, false)
+            val names = i.getStringArrayExtra(EXTRA_ADHOC_NAMES).orEmpty()
+            val photos = i.getStringArrayExtra(EXTRA_ADHOC_PHOTOS).orEmpty()
+            i.removeExtra(EXTRA_ADHOC_UIDS)
+            if (GroupCall.ui.value.cid != null) return   // already in a call: that call comes forward
+            val people = uids.mapIndexed { n, u ->
+                com.fariin.app.call.CallPerson(u, names.getOrNull(n)?.ifBlank { null } ?: "Member", photos.getOrNull(n)?.ifEmpty { null })
+            }
+            withMic(video, { GroupCall.startAdhoc(this, people, video) }, { finish() })
             return
         }
         i.getStringExtra(EXTRA_GROUP)?.let { cid ->

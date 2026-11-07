@@ -53,6 +53,7 @@ object GroupCallAdmin {
     /** `room` of a callAdmin request: a call link's room, else the group chat's id. */
     fun room(cid: String?, linkRoom: String?): Map<String, String>? = when {
         linkRoom != null -> mapOf("kind" to "link", "id" to linkRoom)
+        cid != null && cid.startsWith("adhoc_") -> mapOf("kind" to "adhoc", "id" to cid)
         cid != null && !cid.startsWith("link:") -> mapOf("kind" to "group", "id" to cid)
         else -> null
     }

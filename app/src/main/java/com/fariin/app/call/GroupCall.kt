@@ -107,6 +107,67 @@ object GroupCallWire {
         else -> mapOf("callOutcome" to "missed")
     }
 
+    // ---- A multi-person call with no group chat behind it (iOS startAdhoc, groupCalls/{adhoc_...}) ----
+
+    const val ADHOC_PREFIX = "adhoc_"
+    /** The rules' cap on `members` (me included). */
+    const val ADHOC_MAX_MEMBERS = 32
+
+    fun isAdhoc(id: String?) = id?.startsWith(ADHOC_PREFIX) == true
+
+    fun newAdhocId(uuid: String) = ADHOC_PREFIX + uuid.lowercase()
+
+    /** iOS GroupCallService.title(for:): "A", "A & B", "A, B & 1 other", "A, B & 3 others". */
+    fun adhocTitle(names: List<String>): String {
+        val n = names.map { it.trim() }.filter { it.isNotEmpty() }
+        return when (n.size) {
+            0 -> ""
+            1 -> n[0]
+            2 -> "${n[0]} & ${n[1]}"
+            else -> { val rest = n.size - 2; "${n[0]}, ${n[1]} & $rest ${if (rest == 1) "other" else "others"}" }
+        }
+    }
+
+    /** The others to ring: no duplicates, never me, at most what the rules' member cap leaves. */
+    fun adhocOthers(me: String, people: List<CallPerson>): List<CallPerson> =
+        people.filter { it.uid.isNotEmpty() && it.uid != me }.distinctBy { it.uid }.take(ADHOC_MAX_MEMBERS - 1)
+
+    /**
+     * The starter's doc, the keys the rules' adhoc create allows: me first in `members`, `joined`
+     * empty (I add myself once in the room), names and photos only for people on the list.
+     */
+    fun adhocStartDoc(me: CallPerson, others: List<CallPerson>, video: Boolean, stamp: Any): Map<String, Any> {
+        val everyone = listOf(me) + others
+        return mapOf(
+            "kind" to "adhoc", "active" to true, "startedBy" to me.uid, "video" to video,
+            "title" to adhocTitle(everyone.map { it.name }),
+            "members" to everyone.map { it.uid },
+            "names" to everyone.associate { it.uid to it.name },
+            "photos" to everyone.filter { !it.photo.isNullOrEmpty() }.associate { it.uid to it.photo!! },
+            "joined" to emptyList<String>(),
+            "startedAt" to stamp,
+        )
+    }
+
+    /** groupCallToken and groupCallClose name a multi-person call by `roomId`. */
+    fun adhocTokenRequest(roomId: String): Map<String, Any> = mapOf("roomId" to roomId, "servers" to listOf("own"))
+    fun adhocCloseBody(roomId: String): Map<String, Any> = mapOf("roomId" to roomId)
+
+    /**
+     * iOS invite: the people added to a running multi-person call, in ONE update (the rules allow an
+     * `invitedAt` entry only for someone that same write adds). [arrayUnion] and [stamp] are the
+     * Firestore sentinels.
+     */
+    fun adhocInviteFields(fresh: List<CallPerson>, title: String, arrayUnion: Any, stamp: Any): Map<String, Any> = buildMap {
+        put("members", arrayUnion)
+        put("title", title)
+        for (p in fresh) {
+            put("names.${p.uid}", p.name)
+            if (!p.photo.isNullOrEmpty()) put("photos.${p.uid}", p.photo)
+            put("invitedAt.${p.uid}", stamp)
+        }
+    }
+
     /** iOS joinNotice words for the server's refusals. */
     fun joinNotice(message: String?): String = when {
         message == null -> "Call failed"
@@ -199,8 +260,9 @@ data class CallReaction(val id: Long, val uid: String, val name: String, val emo
  *
  * Screen share is LiveKit's own: the system's consent dialog, then a screen share track (the source
  * an iPhone's share arrives on too). Host controls (mute, mute all, allow to speak, remove, block,
- * end for everyone) go through the server's `callAdmin` (GroupCallAdmin has the rules). Not on
- * Android yet: growing a 1:1 into an `adhoc_` room.
+ * end for everyone) go through the server's `callAdmin` (GroupCallAdmin has the rules). New Call
+ * starts a multi-person `adhoc_` room ([startAdhoc]). Not on Android yet: growing a 1:1 into one,
+ * and ringing for one somebody else started.
  */
 object GroupCall {
     private const val TAG = "GroupCall"
@@ -257,6 +319,79 @@ object GroupCall {
             }
             if (pass == null) { fail("Call failed"); return@launch }
             connectRoom(app, cid, title, video, requireLive, pass)
+        }
+    }
+
+    /** I wrote this multi-person call's doc: until I am in the room, a leave must stop its ringing. */
+    private var adhocWritten = false
+    /** The people on this multi-person call's list (me included), for Add People. */
+    private var adhocMembers: List<CallPerson> = emptyList()
+
+    /**
+     * A multi-person call with the people picked on New Call (iOS startAdhoc): the room's doc first
+     * (groupCalls/adhoc_..., which makes the server ring them and which the token checks), then the
+     * pass by `roomId`, then the room. No group chat and no chat bubble behind it.
+     */
+    fun startAdhoc(context: Context, people: List<CallPerson>, video: Boolean, mic: Boolean = true) {
+        if (_ui.value.cid != null || CallManager.ui.value.status.live) return
+        val meUid = FirebaseAuth.getInstance().currentUser?.uid ?: run { _ui.value = GroupCallUi(notice = "Call failed"); return }
+        val others = GroupCallWire.adhocOthers(meUid, people)
+        if (others.isEmpty()) { _ui.value = GroupCallUi(notice = "Call failed"); return }
+        val roomId = GroupCallWire.newAdhocId(UUID.randomUUID().toString())
+        val title = GroupCallWire.adhocTitle(others.map { it.name })
+        recordId = null; startedHere = false; someoneCame = false; startedAtMs = null; micWish = mic; linkKey = null
+        dialing = true; joinedAtMs = 0L; lastRemote = emptySet(); adhocWritten = false
+        groupReg?.remove(); groupReg = null
+        faces = others.associate { it.uid to (it.name to it.photo) }; asked.clear(); team = null
+        _ui.value = GroupCallUi(cid = roomId, title = title, connecting = true, cameraOn = video, micOn = mic, calling = true,
+            groupPhoto = others.first().photo)
+        CallTonePlayer.startRingback()
+        val app = context.applicationContext
+        appContext = app
+        scope.launch {
+            val mine = try { db.collection("users").document(meUid).get().await().data } catch (_: Exception) { null }
+            val me = CallPerson(meUid, (mine?.get("name") as? String)?.takeIf { it.isNotBlank() }
+                ?: FirebaseAuth.getInstance().currentUser?.displayName?.takeIf { it.isNotBlank() } ?: "Member",
+                (mine?.get("photoUrl") as? String)?.takeIf { it.isNotEmpty() })
+            if (_ui.value.cid != roomId) return@launch
+            faces = faces + (meUid to (me.name to me.photo))
+            adhocMembers = listOf(me) + others
+            val ref = db.collection("groupCalls").document(roomId)
+            // iOS: the start write gets 8 s (offline it would never answer). A late one may still
+            // land and ring everyone, so a timed-out write is followed by the end right behind it.
+            val wrote = kotlinx.coroutines.withTimeoutOrNull(8_000) {
+                try { ref.set(GroupCallWire.adhocStartDoc(me, others, video, FieldValue.serverTimestamp())).await(); true } catch (_: Exception) { false }
+            }
+            if (wrote == null) ref.update(mapOf("active" to false, "endedAt" to FieldValue.serverTimestamp()))
+            if (_ui.value.cid != roomId) { if (wrote == true) stopAdhocRing(roomId); return@launch }
+            if (wrote != true) { fail("Call failed"); return@launch }
+            adhocWritten = true
+            startedAtMs = System.currentTimeMillis()
+            val pass = try {
+                GroupCallWire.parsePass(functions.getHttpsCallable("groupCallToken").call(GroupCallWire.adhocTokenRequest(roomId)).await().data)
+            } catch (e: Exception) {
+                if (_ui.value.cid == roomId) fail(GroupCallWire.joinNotice(e.message))
+                return@launch
+            }
+            if (_ui.value.cid != roomId) return@launch
+            if (pass == null) { fail("Call failed"); return@launch }
+            connectRoom(app, roomId, title, video, requireLive = true, pass = pass)
+        }
+    }
+
+    /** The starter switches the multi-person call's doc off (the rules let only the starter). */
+    private fun stopAdhocRing(roomId: String) {
+        db.collection("groupCalls").document(roomId).update(mapOf("active" to false, "endedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /** In the room: me on `joined` (my other phones stop ringing), and the ring minute starts. */
+    private fun adhocInRoom(roomId: String, r: Room) {
+        startedHere = true
+        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        db.collection("groupCalls").document(roomId).update("joined", FieldValue.arrayUnion(me))
+        scope.launch {
+            delay(GroupCallWire.RING_WINDOW_MS)
+            if (room === r && !someoneCame && r.remoteParticipants.isEmpty()) leave()
         }
     }
 
@@ -371,6 +506,8 @@ object GroupCall {
                 passRole = CallRole.of(pass.role)
                 joinedAtMs = System.currentTimeMillis()
                 startSpeakerTicks(r)
+                // A multi-person call I started: the calling sound goes on until someone comes.
+                if (GroupCallWire.isAdhoc(cid)) { adhocInRoom(cid, r); refresh(); return@run }
                 val starting = !requireLive && r.remoteParticipants.isEmpty() && _ui.value.linkRoom == null
                 // A call already running: the calling sound gives way to the joined tone.
                 if (!starting) dialing = false
@@ -436,6 +573,16 @@ object GroupCall {
     /** The last one out: the server closes the call (room empty only), else the old transaction. */
     private fun closeIfLast(cid: String, wasAlone: Boolean) {
         if (!wasAlone) return
+        if (GroupCallWire.isAdhoc(cid)) {
+            // iOS closeCall(adhoc:): the server closes it when the room is really empty; unreachable,
+            // the starter's own switch-off (the rules allow only the starter).
+            val mine = startedHere
+            scope.launch {
+                val viaServer = try { functions.getHttpsCallable("groupCallClose").call(GroupCallWire.adhocCloseBody(cid)).await(); true } catch (_: Exception) { false }
+                if (!viaServer && mine) stopAdhocRing(cid)
+            }
+            return
+        }
         val rid = recordId
         val answered = someoneCame
         val started = startedAtMs
@@ -696,6 +843,9 @@ object GroupCall {
         val r = room
         val link = _ui.value.linkRoom
         if (cid != null && r != null && _ui.value.joined && link == null) closeIfLast(cid, wasAlone = r.remoteParticipants.isEmpty())
+        // Hung up (or failed) before the room was up: the doc already rings the others; stop it.
+        else if (cid != null && adhocWritten && GroupCallWire.isAdhoc(cid)) stopAdhocRing(cid)
+        adhocWritten = false; adhocMembers = emptyList()
         requestReg?.remove(); requestReg = null
         requestsReg?.remove(); requestsReg = null
         groupReg?.remove(); groupReg = null
@@ -1007,6 +1157,7 @@ object GroupCall {
     /** Add People on a call link (iOS invite): `linkCallInvite` {roomId, key, uids} rings each person. */
     fun invitePeople(people: List<CallPerson>) {
         val g = _ui.value
+        if (GroupCallWire.isAdhoc(g.cid)) { inviteAdhoc(g.cid!!, people); return }
         val roomId = g.linkRoom ?: return
         val key = linkKey ?: return
         val r = room ?: return
@@ -1032,6 +1183,32 @@ object GroupCall {
                 }
             }
             if (room === r) line?.let { say(it) }
+        }
+    }
+
+    /**
+     * Add People on a multi-person call (iOS invite): the new people go on the doc's `members` in
+     * one update and the server rings only them. Someone removed from the call is never added back.
+     */
+    private fun inviteAdhoc(roomId: String, people: List<CallPerson>) {
+        val r = room ?: return
+        val known = adhocMembers.map { it.uid }.toSet() + _ui.value.removedHere + _ui.value.members.map { it.id }
+        val fresh = people.filter { it.uid.isNotEmpty() && it.uid !in known }.distinctBy { it.uid }
+            .take(maxOf(0, GroupCallWire.ADHOC_MAX_MEMBERS - adhocMembers.size))
+        if (fresh.isEmpty()) return
+        val all = adhocMembers + fresh
+        adhocMembers = all
+        faces = faces + fresh.associate { it.uid to (it.name to it.photo) }
+        val fields = GroupCallWire.adhocInviteFields(fresh, GroupCallWire.adhocTitle(all.map { it.name }),
+            FieldValue.arrayUnion(*fresh.map { it.uid }.toTypedArray()), FieldValue.serverTimestamp())
+        scope.launch {
+            val ok = try { db.collection("groupCalls").document(roomId).update(fields).await(); true } catch (e: Exception) { Log.w(TAG, "adhoc add", e); false }
+            if (room !== r) return@launch
+            if (ok) say(if (fresh.size == 1) "Ringing ${fresh[0].name}" else "Ringing ${fresh.size} people")
+            else {
+                adhocMembers = adhocMembers.filter { m -> fresh.none { it.uid == m.uid } }
+                say("Couldn't add people. Check your connection and try again.")
+            }
         }
     }
 
