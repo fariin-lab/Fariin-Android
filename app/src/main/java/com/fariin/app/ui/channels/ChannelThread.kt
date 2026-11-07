@@ -316,7 +316,7 @@ fun ChannelPostMenu(
             if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) { sharePost(ctx, ch.info, m) })
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
             // Not when the channel turned Quotes off, except for its own owner/admins (iOS 1280e92d).
-            if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canForward(m) && ch.info.canQuote(ch.role == Role.ADMIN))
+            if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canQuote(m) && ch.info.canQuote(ch.role == Role.ADMIN))
                 add(PostItem("Quote", quoteIcon, badge = NewBadgeSpots.CHAT_MENU_QUOTE) { onDismiss(); onQuote(m) })
             // Tick several posts to forward, copy or (owner and admins) delete them together.
             if (onSelect != null) add(PostItem("Select", Icons.Outlined.CheckCircle) { onDismiss(); onSelect(m) })
@@ -331,7 +331,8 @@ fun ChannelPostMenu(
             // Replies off or on for this post (iOS, owner 2026-11-06): the Change info right, which the
             // server checks too. The post's own switch wins over the channel's; the post changes on
             // screen at once (PostRepliesSwitch), older posts included.
-            if (ch.canEdit && m.sendState == null) {
+            // Never on a service line (pin notice, system line): there is nothing to reply to.
+            if (ch.canEdit && m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m)) {
                 val off = com.fariin.app.data.PostReplyRules.postOff(m.repliesOff, ch.info.repliesOff, PostRepliesSwitch.of(m.id))
                 add(PostItem(if (off) "Turn On Replies" else "Turn Off Replies",
                     if (off) replyIcon else Icons.Outlined.Block, badge = NewBadgeSpots.CHAT_MENU_REPLIES) {

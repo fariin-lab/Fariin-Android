@@ -46,6 +46,12 @@ object MessageRules {
     fun canForward(m: Message): Boolean =
         m.sendState == null && !m.isCall && !m.isSystem && !m.deleted && !m.viewOnce && !unopened(m)
 
+    /** A service line in a channel: a pin notice ("fariin-pinned:…", shown as "You pinned …") or type "system". */
+    fun isServiceLine(m: Message): Boolean = m.isSystem || m.text.startsWith(PinRules.MARKER)
+
+    /** Quote: where Forward is, never on a service line (the server refuses them too). */
+    fun canQuote(m: Message): Boolean = canForward(m) && !isServiceLine(m)
+
     fun canCopy(m: Message): Boolean = !m.deleted && !m.viewOnce && m.text.isNotEmpty() && !unopened(m)
 
     /** Reply needs a server copy (a clientId-only send cannot be quoted yet). */
