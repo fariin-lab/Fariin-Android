@@ -1153,3 +1153,16 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   attach sheet checked (no top strip, rounded). Running: story flight fixes, limits like iOS, channel posts wide +
   glass Mute bar, wallpaper sync + Bubble Style page + menu action + every styled bubble keeps its art, channel delete
   sheet. Owner decisions: bubble art on every message, never open own view-once.
+- 03:45 b7d32ce channel/group delete sheet (Leave Channel / Delete Group, never only Cancel). Cap from now: 3 compiling
+  builders at once (6 at once took the PC to 2 GB free). BACKLOG, start 3 at a time:
+   A GIF Favorites/Recent/categories + GIF and sticker long-press Save to/Remove from Favorites; admins Select/Delete
+     system notices (chat queue 7, 8, 9)
+   B Blocked Users (Block User... picker, search, swipe-to-unblock, iOS empty text); blocked profile (Delete Chat,
+     no Report, no Chat Key row); mute 1 h/8 h/1 day/1 week/Always with end time ("Sounds & Notifications" row)
+   C Chat Key in the chat-list filter menu + Message Requests shown when requests are on; "What is a Chat Key?" intro
+     sheet; empty states with iOS wording (No groups yet + New Group, You're all caught up, Nothing archived)
+   D Channel Administrators "Waiting to Accept" (revoke pending admin invites); faint "2 members" header line over
+     light wallpapers; view-once bubble 22dp corner hook in ThreadScreen
+   E Message length 6400 cap + 2500 bubble split; story limits (90 s, daily/hourly caps, caption 700); tab switch
+     keeps visited tabs alive (~210 ms per switch now)
+  Owner questions open: Maps SDK yes?, delete kk "test" post?, Clear Media vs Clear Cache?, "and all group?" (call).
