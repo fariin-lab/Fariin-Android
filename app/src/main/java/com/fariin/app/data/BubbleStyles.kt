@@ -34,7 +34,8 @@ object BubbleStyles {
     }
 
     val all: List<Style> = listOf(
-        Style("strawberry", "Strawberry Pink", false,
+        // "pink" WAS "strawberry" until 2026-11-07 (iOS the same day): the picture set owns that id.
+        Style("pink", "Strawberry Pink", false,
             Look(listOf(0xFFC9D6), 0x4A1020), Look(listOf(0x7E2F49), 0xFFE3EA)),
         Style("lavender", "Dreamy Lavender", false,
             Look(listOf(0xE6D8FF, 0xCDB6FF), 0x2E1A55), Look(listOf(0x4B3577, 0x6A4BA3), 0xF1E9FF)),
@@ -55,9 +56,8 @@ object BubbleStyles {
     fun find(id: String?): Style? = if (id.isNullOrEmpty()) null else all.firstOrNull { it.id == id }
 
     /**
-     * The colour styles the picker lists. "strawberry" is also a picture style's id (bubbles/,
-     * SPEC 8: picture ids are the file names, fixed forever), and a picture style wins a shared id
-     * everywhere, so the colour one is not offered: nothing was ever sent with it (hidden until now).
+     * The colour styles the picker lists. A picture style wins a shared id everywhere (picture ids
+     * are the file names, fixed forever, SPEC 8); the pink colour moved to its own id for that.
      */
     val colours: List<Style> get() = all.filter { BubbleArt.find(it.id) == null }
 
@@ -134,7 +134,7 @@ object BubbleStyles {
 
     /** The style's set, copied from iOS (corners for MY bubble). */
     fun decor(styleId: String): List<Decor> = when (styleId) {
-        "strawberry" -> listOf(
+        "pink" -> listOf(
             Decor(Corner.BOTTOM_TRAILING, Glyph.STRAWBERRY, 22f, 0xE8364F, 0xFF5A72, rotation = 0.25f),
             Decor(Corner.TOP_LEADING, Glyph.HEART, 13f, 0xFF6F91, 0xFF8FAB, rotation = -0.3f))
         "lavender" -> listOf(

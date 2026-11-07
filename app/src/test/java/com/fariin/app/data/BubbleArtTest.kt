@@ -39,7 +39,12 @@ class BubbleArtTest {
 
     @Test fun spec6FixesGaveTheFourStylesMoreClearance() {
         // bubbles/*.json: doctor [0,0,0,155] (its cross at the bottom right reaches 73 px in: right 85), lawyer [0,120,0,87], security [0,154,0,79], manga [0,12,0,149].
-        assertEquals(listOf(0, 85, 0, 167), BubbleArt.find("doctor")!!.ins.toList())
+        assertEquals(listOf(0, 79, 0, 155), BubbleArt.find("doctor")!!.ins.toList())
+        // As iOS: the words clear 161 px on the left and 85 on the cross side.
+        val doc = BubbleArt.find("doctor")!!
+        val k = doc.layout.scale
+        assertEquals(161 * k, doc.layout.padLeft, 0.001f)
+        assertEquals((doc.width - doc.bubble[1]) * k + 85 * k, doc.layout.padRight, 0.001f)
         assertEquals(listOf(0, 132, 0, 99), BubbleArt.find("lawyer")!!.ins.toList())
         assertEquals(listOf(0, 166, 0, 91), BubbleArt.find("security")!!.ins.toList())
         assertEquals(listOf(0, 24, 0, 161), BubbleArt.find("manga")!!.ins.toList())
@@ -155,7 +160,9 @@ class BubbleArtTest {
     @Test fun pictureWinsTheSharedIdAndThePickerListsEachOnce() {
         assertNotNull(BubbleArt.find("strawberry"))
         assertFalse(BubbleStyles.colours.any { it.id == "strawberry" })
-        assertEquals(7, BubbleStyles.colours.size)
+        // The pink colour has its own id (iOS "pink") and is offered with the others.
+        assertTrue(BubbleStyles.colours.any { it.id == "pink" })
+        assertEquals(8, BubbleStyles.colours.size)
         assertEquals("Strawberry", BubbleStyles.name("strawberry"))
         assertEquals("Mint Cutie", BubbleStyles.name("mint"))
         assertEquals("Default", BubbleStyles.name(null))

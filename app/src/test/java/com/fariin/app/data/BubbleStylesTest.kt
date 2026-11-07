@@ -8,7 +8,7 @@ import org.junit.Test
 
 class BubbleStylesTest {
     @Test fun eightStylesFourFreeFourPlus() {
-        assertEquals(listOf("strawberry", "lavender", "peach", "mint", "cotton", "heart", "kawaii", "glass"),
+        assertEquals(listOf("pink", "lavender", "peach", "mint", "cotton", "heart", "kawaii", "glass"),
             BubbleStyles.all.map { it.id })
         assertEquals(listOf("cotton", "heart", "kawaii", "glass"), BubbleStyles.all.filter { it.plus }.map { it.id })
     }
@@ -58,7 +58,7 @@ class BubbleStylesTest {
     }
 
     @Test fun topCornersOnlyOnTheRunsFirstBubble() {
-        val mid = BubbleStyles.placed("strawberry", true, true, false, false, true, false, false)
+        val mid = BubbleStyles.placed("pink", true, true, false, false, true, false, false)
         assertEquals(listOf(BubbleStyles.Glyph.STRAWBERRY), mid.map { it.glyph })
     }
 
@@ -74,7 +74,7 @@ class BubbleStylesTest {
 
     @Test fun nothingBesideTheGroupAvatar() {
         // Theirs in a group: mine's bottom-trailing strawberry mirrors to bottom-leading, by the face.
-        val g = BubbleStyles.placed("strawberry", true, false, false, true, true, false, true)
+        val g = BubbleStyles.placed("pink", true, false, false, true, true, false, true)
         assertEquals(listOf(BubbleStyles.Corner.TOP_TRAILING), g.map { it.corner })
     }
 

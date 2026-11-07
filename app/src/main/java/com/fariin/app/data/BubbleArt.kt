@@ -12,7 +12,8 @@ import kotlin.math.min
  * Ids are the picture file names and stay the same forever (a removed style is never reused).
  * The table below is copied from bubbles/<id>.json; doctor, lawyer, security and manga have 12 px
  * more text clearance on their art's sides than the json (SPEC 6: their corner art touched the words);
- * the doctor's red cross reaches 73 px in at the bottom right, where its json said 0, so it gets 85 there.
+ * the doctor's red cross reaches 73 px in at the bottom right, where its json said 0: it clears 161 px
+ * on the left and 85 on the right, iOS's numbers.
  *
  * Everything here is plain numbers, so the layout is unit tested without a phone.
  */
@@ -180,7 +181,7 @@ object BubbleArt {
         Spec("glam", "Glam", "Cute", intArrayOf(189, 116, 159, 258), 892, 372,
             intArrayOf(41, 858, 360, 33), intArrayOf(0, 72, 0, 206), lightText = false, fill = 0xFFFFFF),
         Spec("doctor", "Doctor", "Careers", intArrayOf(184, 79, 75, 165), 890, 445,
-            intArrayOf(111, 884, 443, 0), intArrayOf(0, 85, 0, 167), lightText = false, fill = 0xD0F1EB),
+            intArrayOf(111, 884, 443, 0), intArrayOf(0, 79, 0, 155), lightText = false, fill = 0xD0F1EB),
         Spec("nurse", "Nurse", "Careers", intArrayOf(169, 135, 170, 130), 888, 444,
             intArrayOf(97, 886, 426, 1), intArrayOf(0, 123, 0, 0), lightText = false, fill = 0xD4EAFE),
         Spec("lawyer", "Lawyer", "Careers", intArrayOf(182, 131, 115, 123), 877, 437,
