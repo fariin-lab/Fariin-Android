@@ -531,10 +531,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val iAmMember = users.isEmpty() || me in users
     val iAmAdmin = iAmMember && (me in admins || me == owner)
     val canEdit = iAmMember && GroupRules.canEditInfo(me, conv)
-    var editing by remember { mutableStateOf(start == "edit") }
+    // Saveable, as the page stack below: a trip to a member's profile and back keeps where I was.
+    var editing by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(start == "edit") }
     var editAtDescription by remember { mutableStateOf(false) }
     val desc = GroupRules.description(conv)
-    var adding by remember { mutableStateOf(start == "add") }
+    var adding by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(start == "add") }
     var picked by remember { mutableStateOf(setOf<String>()) }
     var askLeave by remember { mutableStateOf(false) }
     var askReport by remember { mutableStateOf(false) }
@@ -592,13 +593,16 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var timerOpen by remember { mutableStateOf(false) }
     val timer = (conv["disappearSeconds"] as? Number)?.toInt() ?: 0
     // The management pages pushed over this one (Administrators, Permissions, Group Type, Invite Links).
-    val pages = remember(cid) { androidx.compose.runtime.mutableStateListOf<GroupPage>().apply { if (start == "link") add(GroupPage.Links) } }
-    // Opened at one step from the chat's welcome card (iOS: a sheet over the chat): closing that
-    // step goes back to the chat, not to this page.
-    var startOpen by remember { mutableStateOf(start != null) }
-    LaunchedEffect(adding, editing, pages.size) {
-        if (startOpen && !adding && !editing && pages.isEmpty()) { startOpen = false; onBack() }
-    }
+    val pages = androidx.compose.runtime.saveable.rememberSaveable(cid, saver = androidx.compose.runtime.saveable.Saver(
+        save = { s: androidx.compose.runtime.snapshots.SnapshotStateList<GroupPage> -> ArrayList(GroupPage.save(s)) },
+        restore = { w: ArrayList<String> -> androidx.compose.runtime.mutableStateListOf<GroupPage>().apply { addAll(GroupPage.restore(w)) } },
+    )) { androidx.compose.runtime.mutableStateListOf<GroupPage>().apply { if (start == "link") add(GroupPage.Links) } }
+    // Opened at one step from the chat's welcome card (iOS: a sheet over the chat): closing THAT
+    // step goes back to the chat, not to this page. Only that step: once this page itself is on
+    // screen, every page pushed from it backs out to it (GroupStepBack).
+    var startOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(start != null) }
+    val closing = startOpen && GroupStepBack.closesToChat(start, adding, editing, pages)
+    LaunchedEffect(closing) { if (closing) onBack() }
     var card by remember { mutableStateOf<String?>(null) }
     val team = com.fariin.app.data.GroupAdmins.Team.from(conv)
     // A Fariin admin sees Statistics at any size (iOS AdminStore: the rules let me read my own admins doc).
@@ -649,6 +653,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     }
     if (adding) {
         val people = remember(chats) { contactsFrom(chats, me).filter { it.uid !in users } }
+        // System Back closes Add Members to the page it was opened from (Group Info or Members). It had
+        // no handler of its own, so Back left the whole route and landed in the chat.
+        BackHandler { adding = false }
         Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
             PageBar("Add Members", onBack = { adding = false }, action = {
                 TextAction("Add", picked.isNotEmpty()) {
@@ -684,6 +691,17 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             onClose = { editing = false; editAtDescription = false }, description = desc, focusDescription = editAtDescription)
         return
     }
+    if (startOpen && start == "edit" && editing) {
+        // The welcome card's Edit before the group's doc has said I may edit: nothing yet (drawing this
+        // page here is what let a later page back out to the chat). Read and refused: back to the chat.
+        if (conv.isNotEmpty()) LaunchedEffect(Unit) { editing = false }
+        Box(Modifier.fillMaxSize().background(c.bgSecondary))
+        return
+    }
+    // The step from the welcome card has closed and the route is leaving: not this page for a frame.
+    if (closing) { Box(Modifier.fillMaxSize().background(c.bgSecondary)); return }
+    // On Group Info itself: from here on, Back from any page returns here.
+    if (startOpen) androidx.compose.runtime.SideEffect { startOpen = false }
     // iOS loadShareCode: the server's primary link code; null until it answers (or fails) keeps the doc's old code.
     val serverCode by androidx.compose.runtime.produceState<String?>(null, cid, iAmMember) {
         if (iAmMember) value = runCatching { com.fariin.app.data.GroupManage.shareCode(cid) }.getOrNull()
@@ -1097,4 +1115,24 @@ private fun forgetImage(ctx: android.content.Context, url: String?) {
         loader.memoryCache?.let { m -> m.keys.filter { it.key == url }.forEach { m.remove(it) } }
         loader.diskCache?.remove(url)
     }
+}
+
+/**
+ * Back from Group Info opened at one step of the chat's welcome card (Add Members, Group Link,
+ * Edit): closing THAT step returns to the chat; nothing else does. The step is still up while its
+ * own page is: Add Members, Edit Group, or the Invite Links page it opened at the bottom of the stack.
+ */
+internal object GroupStepBack {
+    fun stepOpen(start: String?, adding: Boolean, editing: Boolean, pages: List<GroupPage>): Boolean = when (start) {
+        "add" -> adding
+        "edit" -> editing
+        "link" -> pages.firstOrNull() == GroupPage.Links
+        else -> false
+    }
+
+    /** The route should leave for the chat now (only while the step is what this page was opened at). */
+    fun closesToChat(start: String?, adding: Boolean, editing: Boolean, pages: List<GroupPage>): Boolean =
+        start in STEPS && !stepOpen(start, adding, editing, pages)
+
+    private val STEPS = setOf("add", "edit", "link")
 }

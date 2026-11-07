@@ -149,6 +149,37 @@ sealed interface GroupPage {
     data class Storage(val title: String) : GroupPage
     /** iOS GroupSettingsView: the group's management on its own page, behind one row of the info page. */
     data object Settings : GroupPage
+
+    /**
+     * The stack as words, so it outlives a trip to another screen (a member's profile and back):
+     * without this, Back from there landed on Group Info instead of the page the person was on.
+     * An open link editor and Choose Another Owner are moments, not places: the saved stack stops
+     * just below them.
+     */
+    companion object {
+        fun save(stack: List<GroupPage>): List<String> {
+            val out = mutableListOf<String>()
+            for (p in stack) out += when (p) {
+                Admins -> "admins"; Choose -> "choose"; is AddAdmin -> "addAdmin:" + p.uid; is Rights -> "rights:" + p.uid
+                Permissions -> "permissions"; Type -> "type"; Links -> "links"; Members -> "members"; Banned -> "banned"
+                JoinRequests -> "joinRequests"; RecentActions -> "recentActions"; Settings -> "settings"
+                is Stats -> "stats:" + p.title; is Storage -> "storage:" + p.title
+                is LinkEdit, ChooseOwner -> return out
+            }
+            return out
+        }
+
+        fun restore(words: List<String>): List<GroupPage> = words.mapNotNull { w ->
+            val (kind, arg) = w.split(":", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+            when (kind) {
+                "admins" -> Admins; "choose" -> Choose; "addAdmin" -> AddAdmin(arg); "rights" -> Rights(arg)
+                "permissions" -> Permissions; "type" -> Type; "links" -> Links; "members" -> Members; "banned" -> Banned
+                "joinRequests" -> JoinRequests; "recentActions" -> RecentActions; "settings" -> Settings
+                "stats" -> Stats(arg); "storage" -> Storage(arg)
+                else -> null
+            }
+        }
+    }
 }
 
 private fun failText(e: Exception, fallback: String = "Couldn't save. Try again."): String =
