@@ -553,7 +553,10 @@ private fun ThreadContent(
         val row = info.visibleItemsInfo.firstOrNull { it.index == idx } ?: return@LaunchedEffect
         val usable = info.viewportSize.height - info.beforeContentPadding - info.afterContentPadding
         listState.scrollBy(-(usable - row.size).coerceAtLeast(0).toFloat())   // lift it to the top
+        // A landing the list clamped to the newest stays stuck there and follows what comes next;
+        // a place restored from the phone's copy before the server answered is no longer held.
         stick = listState.firstVisibleItemIndex <= 1
+        heldPlace = false
     }
 
     // iOS ChatScrollStore: where this chat was being read, for this run of the app only. Unread
@@ -568,6 +571,25 @@ private fun ThreadContent(
     // (the jump-to-message loader, bounded), the attempt is done only once it lands, and the place
     // is held against the newest-message snap until the reader touches the list.
     var restoredPlace by remember { mutableStateOf(false) }
+    // A tapped notification's message (iOS passes the push's mid the same way). The phone's copy
+    // usually lacks it, and a reading place restored from that copy left the chat on old, read rows
+    // while the message landed below the screen with nothing following it. So a push open skips the
+    // saved place and stays at the newest (stick), and the stick-to-newest effect takes the message
+    // in when the server's window brings it. The divider waits for that answer anyway (dividerId).
+    val firstPush = remember(ui.cid) {
+        com.fariin.app.push.PushRouter.pendingMid.value?.takeIf { it.midFor(ui.cid, android.os.SystemClock.elapsedRealtime()) != null }
+    }
+    val pushedMid = firstPush?.mid
+    LaunchedEffect(ui.cid) {
+        com.fariin.app.push.PushRouter.pendingMid.collect { p ->
+            if (p?.midFor(ui.cid, android.os.SystemClock.elapsedRealtime()) == null) return@collect
+            com.fariin.app.push.PushRouter.pendingMid.value = null
+            if (p === firstPush) return@collect   // this open itself
+            // Tapped while this chat was already open (behind the home screen): to the newest.
+            heldPlace = false; restoredPlace = true; stick = true
+            listState.scrollToItem(0)
+        }
+    }
     LaunchedEffect(ui.cid) {
         listState.interactionSource.interactions.collect {
             if (it is androidx.compose.foundation.interaction.DragInteraction.Start) { userDragged = true; heldPlace = false }
@@ -576,8 +598,12 @@ private fun ThreadContent(
     LaunchedEffect(ui.cid, ui.loaded, ui.messages.isEmpty(), dividerId) {
         if (restoredPlace) return@LaunchedEffect
         val saved = ChatReadingPositions.get(ui.cid) ?: run { restoredPlace = true; return@LaunchedEffect }
-        // Unread messages win; the reader's own scroll wins too.
-        if (dividerId != null || userDragged) { restoredPlace = true; return@LaunchedEffect }
+        // Unread messages win (known from the open's count, before the server answers and the
+        // divider is placed: restoring first showed read rows, then jumped); a tapped notification
+        // wins; the reader's own scroll wins too.
+        if (!ThreadOpenRules.restoresPlace(ui.unreadAtOpen, dividerId != null, pushedMid, userDragged)) {
+            restoredPlace = true; return@LaunchedEffect
+        }
         if (!ui.loaded || ui.messages.isEmpty()) return@LaunchedEffect
         if (uiNow.value.messages.none { it.rowId == saved.rowId }) {
             if (!actions.onEnsureLoaded(saved.messageId) || userDragged) {

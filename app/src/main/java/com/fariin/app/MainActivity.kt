@@ -388,6 +388,10 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)
             com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
         }
+        // The message the notification was about: the chat lands at the newest and follows it in.
+        val mid = intent.getStringExtra(PushRouter.EXTRA_OPEN_MID)?.takeIf { it.isNotEmpty() }
+        intent.removeExtra(PushRouter.EXTRA_OPEN_MID)
+        PushRouter.pendingMid.value = mid?.let { com.fariin.app.push.PushOpen(cid, it, android.os.SystemClock.elapsedRealtime()) }
         PushRouter.pendingOpen.value = cid
     }
 
