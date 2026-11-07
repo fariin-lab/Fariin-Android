@@ -430,49 +430,6 @@ internal fun YesNo(title: String, text: String, yes: String, destructive: Boolea
     )
 }
 
-/** iOS BlockedUsersView: newest block first, name and @username, Unblock. */
-@Composable
-private fun BlockedUsersPage(pop: () -> Unit) {
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val snap by BlockList.state.collectAsState()
-    var people by remember { mutableStateOf<Map<String, Triple<String, String, String?>>>(emptyMap()) }
-    var confirm by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(snap.entries.keys) {
-        val db = FirebaseFirestore.getInstance()
-        val out = HashMap(people)
-        for (u in snap.entries.keys) if (u !in out) {
-            val d = try { db.collection("users").document(u).get().await().data } catch (_: Exception) { null }
-            out[u] = Triple(d?.get("name") as? String ?: "", d?.get("handle") as? String ?: "", (d?.get("photoUrl") as? String)?.ifEmpty { null })
-        }
-        people = out
-    }
-    val rows = snap.entries.entries.sortedByDescending { it.value }.map { it.key }
-    ScrollPage("Blocked Users", pop) {
-        if (rows.isEmpty()) com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Blocked,
-            "No blocked users", "People you block can't message or call you. You can block someone from their profile.",
-            Modifier.padding(top = 40.dp))
-        else SettingsSection(footer = "Blocked people can't call you or send you messages, and you won't see their stories.") {
-            for ((i, u) in rows.withIndex()) {
-                val p = people[u]
-                val name = p?.first?.ifEmpty { null } ?: p?.second?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "An account you blocked"
-                PersonRow(name, p?.third, sub = p?.second?.takeIf { it.isNotEmpty() && p.first.isNotEmpty() }?.let { "@$it" }, last = i == rows.lastIndex,
-                    trailing = { TextButton(onClick = { confirm = u }) { Text("Unblock", color = Fariin.colors.accent) } }, onClick = null)
-            }
-        }
-    }
-    confirm?.let { u ->
-        YesNo("Unblock?", "They will be able to message and call you again. Messages sent while blocked stay hidden.", "Unblock", destructive = false,
-            onYes = {
-                confirm = null
-                scope.launch {
-                    val ok = com.fariin.app.data.FirestorePeople(FirebaseAuth.getInstance().currentUser!!.uid, CryptoHub.get(ctx)).setBlocked(u, false)
-                    if (!ok) toast(ctx, "Check your connection and try again.")
-                }
-            }, onNo = { confirm = null })
-    }
-}
-
 /** iOS AppLockPage: Require screen lock, Auto-Lock delay, Screen Security. */
 @Composable
 private fun AppLockPage(pop: () -> Unit) {
