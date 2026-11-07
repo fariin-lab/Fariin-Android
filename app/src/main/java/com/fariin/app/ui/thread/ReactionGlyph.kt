@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -53,6 +53,9 @@ fun rememberRetired(): (String) -> Boolean {
     return remember(items, known) { { key: String -> known && com.fariin.app.data.UploadedEmoji.retired(key, items) } }
 }
 
+/** How many times a custom reaction plays each time it is drawn anew. */
+private const val REACTION_PLAYS = 2
+
 /** A reaction as drawn on a chip or the reaction bar: the emoji, or a custom reaction playing. */
 @Composable
 fun ReactionGlyph(key: String, textSize: TextUnit, boxSize: Dp, modifier: Modifier = Modifier) {
@@ -74,7 +77,12 @@ fun ReactionGlyph(key: String, textSize: TextUnit, boxSize: Dp, modifier: Modifi
     }
     val j = json ?: run { Box(modifier.size(boxSize)); return }
     val comp by rememberLottieComposition(LottieCompositionSpec.JsonString(j), cacheKey = asset)
-    LottieAnimation(comp, iterations = LottieConstants.IterateForever,
+    // A few plays, then it rests on its last frame: played forever, every chip on screen (and every
+    // tile of the picker) kept the CPU drawing for as long as the chat stayed open. With Power
+    // Saving > Animations off it shows that frame from the start.
+    val anim = com.fariin.app.ui.components.animationsOn()
+    val progress by animateLottieCompositionAsState(comp, iterations = REACTION_PLAYS, isPlaying = anim)
+    LottieAnimation(comp, { if (anim) progress else 1f },
         modifier = modifier.size(boxSize).semantics { contentDescription = "Custom emoji" })
 }
 
