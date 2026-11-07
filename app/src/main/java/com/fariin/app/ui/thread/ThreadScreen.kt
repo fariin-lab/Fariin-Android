@@ -995,7 +995,8 @@ private fun ThreadContent(
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
-                                    if (!channelChipsInside(m)) { com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
+                                    // A bare picture's pills sit inside its bubble, over the bar (MediaRow, mediaPillsInside).
+                                    if (!channelChipsInside(m)) { if (!mediaPillsInside(ch, m)) com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
                                 }
                             }
                             selecting -> Row(
@@ -1550,6 +1551,15 @@ private fun SenderLine(ui: ThreadUi, uid: String) {
 private fun mediaBarInside(m: Message): Boolean = !m.deleted &&
     (m.mediaKind == Message.MediaKind.PHOTO || m.mediaKind == Message.MediaKind.VIDEO || m.mediaKind == Message.MediaKind.ALBUM)
 
+/**
+ * A channel picture, video or album with no caption that shows the bar (iOS, owner 2026-11-07): its
+ * reaction pills go INSIDE the bubble, in a strip between the picture and the bar, the text post's
+ * pills and colours (mine solid), not a badge hanging off the picture's corner over "Reply".
+ */
+@Composable
+private fun mediaPillsInside(ch: com.fariin.app.ui.channels.ChannelThreadUi, m: Message): Boolean =
+    m.text.isEmpty() && mediaBarInside(m) && com.fariin.app.ui.channels.postBarShown(m, ch.info.repliesOff)
+
 private fun channelChipsInside(m: Message): Boolean =
     !m.deleted && m.mediaKind == null && m.poll == null && !m.isSticker && !m.isGif && m.storyMention == null &&
         com.fariin.app.data.CardRules.location(m.text) == null && com.fariin.app.data.CardRules.contact(m.text) == null
@@ -1840,8 +1850,11 @@ private fun MediaRow(
     val busy = m.sendState == Message.SendState.SENDING
     // While its picture is up in the viewer, a bare photo bubble leaves no coloured block behind.
     val lifted = caption == null && !header && MediaOrigins.hiddenKey == MediaOrigins.keyOf(m)
+    // The bubble's width, so the pills strip wraps inside the picture's width and never widens it.
+    var bubbleW by remember { mutableStateOf(0) }
     Column(Modifier.widthIn(max = maxW).clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
-        .then(if (lifted) Modifier else receivedRim(isMe, shape))) {
+        .then(if (lifted) Modifier else receivedRim(isMe, shape))
+        .onSizeChanged { bubbleW = it.width }) {
         if (header) {
             Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
                 if (showSender && g.first) {
@@ -1888,9 +1901,24 @@ private fun MediaRow(
                 TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue) { Meta(m, tick, isMe, is24h) }
             }
         }
-        // A channel post's "Replies · Quotes" bar along the bubble's bottom, under a hairline, as a
-        // text post has it (iOS: the bubble grows by the bar; a bare picture too).
-        ui.channel?.let { ch -> if (mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, edge = 10.dp) }
+        ui.channel?.let { ch ->
+            // No caption: the pills between the picture and the bar, 12 dp in, 8 under the picture,
+            // 6 above the bar; the time stays on the picture (no meta here).
+            if (mediaPillsInside(ch, m)) {
+                val chips = com.fariin.app.ui.channels.rememberPostChips(ch, m)
+                if (chips.isNotEmpty()) {
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val inner = if (bubbleW > 0) with(density) { bubbleW.toDp() } - 24.dp else 0.dp
+                    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
+                        .then(if (bubbleW > 0) Modifier.widthIn(max = inner.coerceAtLeast(0.dp)) else Modifier.width(0.dp).height(0.dp))) {
+                        com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips, top = 0.dp) {}
+                    }
+                }
+            }
+            // A channel post's "Replies · Quotes" bar along the bubble's bottom, under a hairline, as a
+            // text post has it (iOS: the bubble grows by the bar; a bare picture too).
+            if (mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, edge = 10.dp)
+        }
     }
 }
 

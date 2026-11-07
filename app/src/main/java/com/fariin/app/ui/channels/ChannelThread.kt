@@ -224,7 +224,8 @@ fun rememberPostChips(ch: ChannelThreadUi, m: Message): List<ChannelRules.Chip> 
  * Mine is the solid text colour with the count in the page colour; the rest a faint wash.
  */
 @Composable
-fun ChannelChipsInBubble(ch: ChannelThreadUi, m: Message, chips: List<ChannelRules.Chip>, meta: @Composable () -> Unit) {
+fun ChannelChipsInBubble(ch: ChannelThreadUi, m: Message, chips: List<ChannelRules.Chip>, top: androidx.compose.ui.unit.Dp = 6.dp,
+    meta: @Composable () -> Unit) {
     val c = Fariin.colors
     androidx.compose.ui.layout.Layout(content = {
         chips.forEach { chip ->
@@ -243,7 +244,7 @@ fun ChannelChipsInBubble(ch: ChannelThreadUi, m: Message, chips: List<ChannelRul
         }
         // Exactly one node whatever meta() draws: the measure takes the last child as the time.
         Box { meta() }
-    }, modifier = Modifier.padding(top = 6.dp)) { measurables, constraints ->
+    }, modifier = Modifier.padding(top = top)) { measurables, constraints ->
         val maxW = constraints.maxWidth
         val gap = 6.dp.roundToPx()
         val metaGap = 8.dp.roundToPx()
