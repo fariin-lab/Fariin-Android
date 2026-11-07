@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,17 +59,42 @@ import com.fariin.app.ui.thread.bubbles.rememberBubbleThumb
 
 internal const val PAGE_BUBBLE_STYLE = "look:bubblestyle"
 
+/** The chips under the preview, in this order (owner 2026-11-07: colours last). */
+private const val COLOURS = "Colours"
+private val CATEGORIES: List<String> = BubbleArt.sections + COLOURS
+
 /**
- * Settings > Appearance > Bubble Style (SPEC 4, iOS BubbleStylesPage): a live preview of their bubble
- * and mine at the top, the styles below in sections (Default, Colours, then the picture styles),
- * Save at the top. Nothing changes until Save, and only the messages sent after it carry the style.
- * One style for every chat; the chat info "Chat Bubble" row opens this same page.
- *
- * Tiles are the style pictures, small, in a lazy grid: only the tiles on screen decode, into their
- * own cache that is dropped when the page closes.
+ * Settings > Appearance > Bubble Style (SPEC 4, iOS BubbleStylesPage). Save at the top; the chat info
+ * "Chat Bubble" row opens this same page.
  */
 @Composable
 internal fun BubbleStylePage(onClose: () -> Unit) {
+    BubbleStyleChooser(
+        bottomPad = 16.dp + com.fariin.app.ui.shell.bottomBarInset(),
+        onSaved = onClose,
+        bar = { dirty, save ->
+            PageBar("Bubble Style", onBack = onClose, action = {
+                com.fariin.app.ui.components.FloatingTextAction("Save", enabled = dirty) { save() }
+            })
+        },
+    )
+}
+
+/**
+ * The picker itself, shared by the Settings page and the chat's long-press sheet (owner 2026-11-07):
+ * the live preview stays pinned at the top while one row of category chips picks which grid shows
+ * below; "Default" (no style) is the first tile of every grid. Nothing changes until Save, and only
+ * the messages sent after it carry the style.
+ *
+ * Tiles are the style pictures, small, in a lazy grid: only the tiles on screen decode, into their
+ * own cache that is dropped when the picker closes.
+ */
+@Composable
+internal fun BubbleStyleChooser(
+    bottomPad: androidx.compose.ui.unit.Dp,
+    onSaved: () -> Unit,
+    bar: @Composable (dirty: Boolean, save: () -> Unit) -> Unit,
+) {
     val ctx = LocalContext.current
     remember { BubbleStyles.init(ctx) }
     val c = Fariin.colors
@@ -75,50 +103,60 @@ internal fun BubbleStylePage(onClose: () -> Unit) {
     val savedDecor = remember { BubbleStyles.decorations() }
     var decor by remember { mutableStateOf(savedDecor) }
     var plusNote by remember { mutableStateOf(false) }
+    var category by remember {
+        mutableStateOf(BubbleArt.find(saved)?.section ?: if (saved != null) COLOURS else CATEGORIES.first())
+    }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
     val dirty = selected != saved || decor != savedDecor
     val colourPicked = selected != null && BubbleArt.find(selected) == null
-    val thumbPx = with(LocalDensity.current) { 104.dp.roundToPx() }
+    val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
+    val grid = rememberLazyGridState()
+    LaunchedEffect(category) { grid.scrollToItem(0) }
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        PageBar("Bubble Style", onBack = onClose, action = {
-            com.fariin.app.ui.components.FloatingTextAction("Save", enabled = dirty) {
-                if (!BubbleStyles.mayUse(selected)) { plusNote = true; return@FloatingTextAction }
-                BubbleStyles.save(selected, decor)
-                onClose()
+        bar(dirty) {
+            if (!BubbleStyles.mayUse(selected)) plusNote = true
+            else { BubbleStyles.save(selected, decor); onSaved() }
+        }
+        // Pinned: never scrolls away, redrawn at once when a tile is tapped.
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
+            Preview(selected)
+            Text("Applies to messages you send from now on.", fontSize = 13.sp, color = c.secondary,
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+        }
+        LazyRow(
+            Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(CATEGORIES.size, key = { CATEGORIES[it] }) { i ->
+                val cat = CATEGORIES[i]
+                Chip(cat, cat == category) { category = cat }
             }
-        })
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp,
-                bottom = 24.dp + com.fariin.app.ui.shell.bottomBarInset()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            state = grid,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = bottomPad),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "preview") { Preview(selected) }
-            item(span = { GridItemSpan(maxLineSpan) }, key = "footer") {
-                Text("Your style goes with the messages you send from now on, so the people you write to see it too. " +
-                    "Messages you already sent keep their look.", fontSize = 13.sp, color = c.secondary,
-                    modifier = Modifier.padding(horizontal = 4.dp))
-            }
-            header("Default")
             item(key = "default") { Tile("Default", selected == null, onTap = { selected = null }) { DefaultSwatch() } }
-            header("Colours")
-            items(BubbleStyles.colours, key = { "c:" + it.id }) { s ->
-                Tile(s.name, selected == s.id, plus = s.plus, onTap = { selected = s.id }) { ColourSwatch(s) }
-            }
-            if (colourPicked) item(span = { GridItemSpan(maxLineSpan) }, key = "decor") {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card)
-                    .clickable { decor = !decor }.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("Decorations", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                    com.fariin.app.ui.components.FariinSwitch(checked = decor, onCheckedChange = { decor = it })
+            if (category == COLOURS) {
+                items(BubbleStyles.colours, key = { "c:" + it.id }) { s ->
+                    Tile(s.name, selected == s.id, plus = s.plus, onTap = { selected = s.id }) { ColourSwatch(s) }
                 }
-            }
-            for (section in BubbleArt.sections) {
-                header(section)
-                items(BubbleArt.all.filter { it.section == section }, key = { "p:" + it.id }) { s ->
+                if (colourPicked) item(span = { GridItemSpan(maxLineSpan) }, key = "decor") {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card)
+                        .clickable { decor = !decor }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("Decorations", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+                        com.fariin.app.ui.components.FariinSwitch(checked = decor, onCheckedChange = { decor = it })
+                    }
+                }
+            } else {
+                items(BubbleArt.all.filter { it.section == category }, key = { "p:" + it.id }) { s ->
                     Tile(s.name, selected == s.id, onTap = { selected = s.id }) { PictureSwatch(s, thumbPx) }
                 }
             }
@@ -130,22 +168,23 @@ internal fun BubbleStylePage(onClose: () -> Unit) {
         confirmButton = { TextButton({ plusNote = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
 }
 
-private fun LazyGridScope.header(title: String) = item(span = { GridItemSpan(maxLineSpan) }, key = "h:$title") {
-    Text(title, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Fariin.colors.secondary,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+/** One category in the row above the grid; the shown one filled. */
+@Composable
+private fun Chip(title: String, on: Boolean, onTap: () -> Unit) {
+    val c = Fariin.colors
+    Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (on) Color.White else c.label, maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.accent else c.card)
+            .clickable(onClick = onTap).padding(horizontal = 14.dp, vertical = 7.dp))
 }
 
-/** Their bubble, then mine in the chosen style (as the chat draws it, the picture for a picture style). */
+/** My bubble in the chosen style (as the chat draws it, the picture for a picture style), then a reply. */
 @Composable
 private fun Preview(selected: String?) {
     val c = Fariin.colors
     val text = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.bg).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Looks so cute! I'm changing mine.", style = text, color = c.label,
-            modifier = Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp))
-                .background(if (c.dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)).padding(horizontal = 14.dp, vertical = 9.dp))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.bg).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val mine = "Did you know you can change your bubble style? So cool!"
         val art = BubbleArt.find(selected)
         val colour = if (art == null) BubbleStyles.find(selected) else null
@@ -161,6 +200,9 @@ private fun Preview(selected: String?) {
                 }
             }
         }
+        Text("Looks so cute! I'm changing mine.", style = text, color = c.label,
+            modifier = Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp))
+                .background(if (c.dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)).padding(horizontal = 14.dp, vertical = 9.dp))
     }
 }
 
@@ -173,13 +215,13 @@ private fun brushOf(look: BubbleStyles.Look): Brush {
 @Composable
 private fun Tile(name: String, on: Boolean, plus: Boolean = false, onTap: () -> Unit, swatch: @Composable () -> Unit) {
     val c = Fariin.colors
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(14.dp)
     Column(Modifier.clip(shape).background(c.card)
         .border(2.5.dp, if (on) c.accent else Color.Transparent, shape)
-        .clickable(onClick = onTap).padding(8.dp),
+        .clickable(onClick = onTap).padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.fillMaxWidth().height(52.dp), contentAlignment = Alignment.Center) { swatch() }
-        Spacer(Modifier.height(6.dp))
+        Box(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) { swatch() }
+        Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false))
