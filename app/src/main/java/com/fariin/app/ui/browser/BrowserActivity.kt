@@ -20,7 +20,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.LaunchedEffect
@@ -140,18 +139,11 @@ private fun BrowserSheet(onClosed: () -> Unit, content: @Composable (SheetMotion
         .clickable(interactionSource = null, indication = null) { motion.close() }) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp)
             .offset { androidx.compose.ui.unit.IntOffset(0, motion.y.toInt()) }
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+            // The page itself carries the rounded top, as iOS: no strip above it (owner, 2026-11-06).
+            // The page pulls the sheet down (pullsSheet), so no separate handle is needed.
+            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
             .drawBehind { drawRect(c.bg) }
             .clickable(interactionSource = null, indication = null) {}) {
-            // The handle strip: the sheet follows the finger and is let go with its speed.
-            Box(Modifier.fillMaxWidth().height(22.dp)
-                .draggable(
-                    orientation = androidx.compose.foundation.gestures.Orientation.Vertical,
-                    state = androidx.compose.foundation.gestures.rememberDraggableState { d -> motion.drag(d) },
-                    onDragStopped = { v -> motion.release(v) },
-                ), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(width = 36.dp, height = 5.dp).clip(CircleShape).drawBehind { drawRect(c.label.copy(alpha = 0.25f)) })
-            }
             Box(Modifier.weight(1f)) { content(motion) }
         }
     }
@@ -332,7 +324,7 @@ private fun Browser(start: String, motion: SheetMotion) {
         )
 
         // Close, top-left.
-        Box(Modifier.padding(start = 16.dp, top = 4.dp).size(44.dp).floating(CircleShape)
+        Box(Modifier.padding(start = 18.dp, top = 14.dp).size(44.dp).floating(CircleShape)
             .clickable(onClickLabel = "Close") { onClose() }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, "Close", tint = c.label, modifier = Modifier.size(22.dp))
         }
