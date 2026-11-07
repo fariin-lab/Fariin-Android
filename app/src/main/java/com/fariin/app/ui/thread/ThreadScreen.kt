@@ -493,6 +493,17 @@ private fun ThreadContent(
     // Saving > Animations or the system's Remove animations.
     val sendMotion = remember(ui.cid) { SendMotion() }
     val sendAnim = anim && systemAnimationsOn()
+    // A message from someone else that lands live while I am at the newest rises into place
+    // (ArrivalMotion.kt). Noted here, before the list lays out the new rows, so "at the newest"
+    // and "scrolling" still describe what the reader saw; read without subscribing to scroll.
+    val arrivalMotion = remember(ui.cid) { ArrivalMotion() }
+    remember(ui.messages, ui.loaded && ui.synced) {
+        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+            arrivalMotion.note(ui.messages, live = ui.loaded && ui.synced, me = ui.me,
+                atBottom = stick || listState.firstVisibleItemIndex <= 1,
+                scrolling = listState.isScrollInProgress, enabled = sendAnim)
+        }
+    }
     // A jump to a pinned message (iOS pinned bar tap): page back until it is loaded, scroll it into
     // view and light it; then the bar moves on to the next pin.
     fun jumpTo(id: String, advance: Boolean) {
@@ -714,11 +725,14 @@ private fun ThreadContent(
                     val g = geometry[i]
                     // A message that arrives fades in and the rows above glide up to make room;
                     // with Power Saving > Animations off it just appears. The one I just sent
-                    // rises from the composer instead of fading (SendMotion.kt).
+                    // rises from the composer instead of fading (SendMotion.kt); one from someone else
+                    // that lands live at the newest rises a short way into place (ArrivalMotion.kt).
                     val flight = rememberSendFlight(sendMotion, m, ui.me, isNewest = i == ui.messages.lastIndex,
                         atBottom = { listState.firstVisibleItemIndex <= 1 })
-                    Column(Modifier.animateItem(fadeInSpec = if (flight != null) null else rowFade, placementSpec = rowPlace, fadeOutSpec = null)
+                    val glide = if (flight != null) null else rememberArrivalGlide(arrivalMotion, m)
+                    Column(Modifier.animateItem(fadeInSpec = if (flight != null || glide != null) null else rowFade, placementSpec = rowPlace, fadeOutSpec = null)
                         .sendFlight(flight)
+                        .arrivalGlide(glide)
                         .fillMaxWidth().padding(top = g.gapDp.dp)) {
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
                         if (m.rowId == dividerId) UnreadDivider()
