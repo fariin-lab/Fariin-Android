@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
@@ -108,14 +109,60 @@ fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
 private fun drawsPattern(w: ChatWallpaper): Boolean =
     w.theme?.pattern == true || (w as? ChatWallpaper.Animated)?.wallpaper?.look == com.fariin.app.data.AnimatedLook.DOODLES
 
-/** The colour scheme the chat header's words take over this chat's wallpaper (iOS headerBackdrop):
- *  dark over an animated wallpaper whose top is dark, else null (the app's own). */
+/**
+ * The colour scheme the chat header's words take over this chat's wallpaper (iOS
+ * WallpaperBlur.headerBackdrop): true = light words, false = dark words, null = no wallpaper (the
+ * app's own). An animated wallpaper says itself whether its top is dark; any other is measured: the
+ * mean luminance of the band the header sits on, light words below 0.179 (where white's and black's
+ * contrast are equal), dark words above. Before, only animated wallpapers were asked, so a bright
+ * photo or theme in dark mode kept light-grey words on a light picture.
+ */
 @Composable
 fun chatHeaderDark(cid: String): Boolean? {
     val ctx = LocalContext.current
     ChatLookStore.version.intValue
-    val a = (ChatLookStore.wallpaper(ctx, cid) as? com.fariin.app.data.ChatWallpaper.Animated)?.wallpaper ?: return null
-    return a.topIsDark(com.fariin.app.ui.theme.Fariin.colors.dark)
+    val dark = com.fariin.app.ui.theme.Fariin.colors.dark
+    val w = ChatLookStore.wallpaper(ctx, cid)
+    val photo = rememberWallpaperPhoto(ctx, (w as? ChatWallpaper.Photo)?.id)
+    return when (w) {
+        ChatWallpaper.None -> null
+        is ChatWallpaper.Animated -> w.wallpaper?.topIsDark(dark)
+        is ChatWallpaper.Solid -> HeaderBackdrop.luminance(w.hex) < HeaderBackdrop.SWITCH
+        is ChatWallpaper.Gradient, is ChatWallpaper.Preset -> w.theme?.let { g ->
+            remember(g.id, dark) { HeaderBackdrop.band(WallpaperArt.mesh(g, dark), 0f)?.let { it < HeaderBackdrop.SWITCH } }
+        }
+        // The photo darkened by 0.20 black in dark mode (drawWallpaper): 0.8 in sRGB, about 0.61 in light.
+        is ChatWallpaper.Photo -> photo?.let { p ->
+            remember(p, dark) { HeaderBackdrop.band(p, if (dark) 0.39f else 0f)?.let { it < HeaderBackdrop.SWITCH } }
+        }
+    }
+}
+
+/** The header's measured backdrop (iOS WallpaperBlur.averageLuminance). */
+internal object HeaderBackdrop {
+    const val SWITCH = 0.179f
+
+    private fun lin(v: Int): Float {
+        val c = v / 255f
+        return if (c <= 0.03928f) c / 12.92f else Math.pow(((c + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+    }
+
+    fun luminance(rgb: Long): Float {
+        val r = ((rgb shr 16) and 0xFF).toInt(); val g = ((rgb shr 8) and 0xFF).toInt(); val b = (rgb and 0xFF).toInt()
+        return 0.2126f * lin(r) + 0.7152f * lin(g) + 0.0722f * lin(b)
+    }
+
+    /** Mean luminance of the picture's top band (the status bar and header over a top-anchored
+     *  fill, about the top sixth), boxed down to 4 x 4 as iOS does; [dim] darkens it by that share.
+     *  Null when the picture cannot be read (the app's own scheme then stands). */
+    fun band(img: ImageBitmap, dim: Float): Float? = runCatching {
+        val bmp = img.asAndroidBitmap()
+        val h = (bmp.height / 6).coerceAtLeast(1)
+        val small = Bitmap.createScaledBitmap(Bitmap.createBitmap(bmp, 0, 0, bmp.width, h), 4, 4, true)
+        var total = 0f
+        for (y in 0 until 4) for (x in 0 until 4) total += luminance(small.getPixel(x, y).toLong() and 0xFFFFFF)
+        total / 16f * (1f - dim)
+    }.getOrNull()
 }
 
 /** Whether this chat draws a wallpaper (the thread's top and bottom fades step aside for it). */

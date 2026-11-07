@@ -1390,12 +1390,20 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                         if (ui.disappearSeconds > 0) {
                             Spacer(Modifier.width(5.dp))
                             Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing),
-                                contentDescription = "Disappearing messages on", tint = c.secondary, modifier = Modifier.size(16.dp))
+                                contentDescription = "Disappearing messages on", tint = if (c.dark) Color(0xFFD1D1D1) else Color(0xFF525252), modifier = Modifier.size(16.dp))
                         }
                     }
                     // The second line's room is kept even while it is empty, so the name never jumps when
                     // "online" or "typing…" arrives (owner 2026-11-04).
-                    Text(ui.subtitle.ifEmpty { " " }, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.secondary, maxLines = 1)
+                    // SOLID greys, not the 8E8E93 system grey (iOS ChatHeaderView.subtitleColor): over a light
+                    // wallpaper that grey all but vanished (owner: "test" and channel kk on Water). A group's or
+                    // channel's count is a step stronger, as on iOS (subtitleStrongColor).
+                    val strong = ui.isGroup || ui.channel != null
+                    val sub = when {
+                        strong -> if (c.dark) Color(0xFFE6E6E6) else Color(0xFF2E2E2E)
+                        else -> if (c.dark) Color(0xFFD1D1D1) else Color(0xFF525252)
+                    }
+                    Text(ui.subtitle.ifEmpty { " " }, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = sub, maxLines = 1)
                 }
             }
             if (ui.channel == null && !ui.notAMember) com.fariin.app.ui.call.ThreadCallButtons(ui.cid, ui.me, ui.isGroup, ui.title, ui.photoUrl)
