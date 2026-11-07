@@ -208,6 +208,9 @@ object MediaRules {
         else -> RingPhase.FILL
     }
 
+    /** MessageRowLayout play badge: at most 52 (owner 2026-10-28: a big video wore a huge disc), else 28% of the short side. */
+    fun playBadgeSide(w: Float, h: Float): Float = min(52f, min(w, h) * 0.28f)
+
     /** MessageRowLayout album ring: 52 like a single photo, half the tile's short side on a small tile. */
     fun tileRingSide(w: Float, h: Float): Float = min(52f, min(w, h) * 0.5f)
 

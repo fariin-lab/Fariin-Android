@@ -264,14 +264,13 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                             }
                             // A photo tile's own download (iOS MediaDownloadOverlay per tile); a poster just loads.
                             if (pendingFetch && !busy && !item.isVideo) DownloadBadge(got.url, got.state, isVideo = false)
-                            if (item.isVideo) {
-                                Box(Modifier.align(Alignment.Center).size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
-                                    contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.PlayArrow, "Play video", tint = Color.White, modifier = Modifier.size(22.dp))
-                                }
-                                item.duration?.let { d ->
+                            // iOS album tile: play disc min(52, 28% of the short side) and the length in
+                            // the bottom-left corner, neither while the album uploads (its ring is there).
+                            if (item.isVideo && !busy) {
+                                PlayBadge(MediaRules.playBadgeSide(w, h).dp, Modifier.align(Alignment.Center))
+                                item.duration?.takeIf { it > 0 }?.let { d ->
                                     Text(MediaRules.durationLabel(d), fontSize = 11.sp, color = Color.White,
-                                        modifier = Modifier.padding(5.dp).clip(RoundedCornerShape(50))
+                                        modifier = Modifier.align(Alignment.BottomStart).padding(5.dp).clip(RoundedCornerShape(50))
                                             .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 5.dp, vertical = 1.dp))
                                 }
                             }

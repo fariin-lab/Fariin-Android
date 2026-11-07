@@ -38,4 +38,14 @@ class MediaParityTest {
         assertEquals(MediaRules.RingPhase.GONE, MediaRules.ringPhase(1f, true))
         assertEquals(MediaRules.RingPhase.GONE, MediaRules.ringPhase(null, true))
     }
+
+    @Test fun thePlayDiscIsAtMost52AndElse28PercentOfTheShortSide() {
+        assertEquals(52f, MediaRules.playBadgeSide(300f, 250f), 0.001f)
+        assertEquals(28f, MediaRules.playBadgeSide(100f, 150f), 0.001f)
+    }
+
+    @Test fun anAlbumTileRingIs52OrHalfASmallTile() {
+        assertEquals(52f, MediaRules.tileRingSide(200f, 150f), 0.001f)
+        assertEquals(40f, MediaRules.tileRingSide(80f, 120f), 0.001f)
+    }
 }

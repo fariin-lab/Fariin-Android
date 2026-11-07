@@ -305,7 +305,7 @@ internal fun PictureBox(
 /** A video bubble: the poster, a play disc, the length in a pill (iOS durationPill). */
 @Composable
 internal fun VideoOverlay(m: Message, ready: Boolean, showDuration: Boolean = true) {
-    Box(Modifier.fillMaxSize()) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         // While the clip waits or comes down, the corner says its size instead (the download badge).
         if (showDuration) m.duration?.let { d ->
             Box(Modifier.padding(8.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f))
@@ -313,12 +313,16 @@ internal fun VideoOverlay(m: Message, ready: Boolean, showDuration: Boolean = tr
                 Text(MediaRules.durationLabel(d), fontSize = 12.sp, color = Color.White)
             }
         }
-        if (ready) {
-            Box(Modifier.align(Alignment.Center).size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
-                contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.PlayArrow, "Play video", tint = Color.White, modifier = Modifier.size(30.dp))
-            }
-        }
+        // Never while it uploads ("ready, tap it" is not true then; the ring sits there).
+        if (ready) PlayBadge(MediaRules.playBadgeSide(maxWidth.value, maxHeight.value).dp, Modifier.align(Alignment.Center))
+    }
+}
+
+/** iOS MediaPlayGlyph: a dark see-through disc with a solid white triangle, [side] across. */
+@Composable
+internal fun PlayBadge(side: Dp, modifier: Modifier = Modifier) {
+    Box(modifier.size(side).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+        Icon(Icons.Filled.PlayArrow, "Play video", tint = Color.White, modifier = Modifier.size(side * 0.62f))
     }
 }
 
