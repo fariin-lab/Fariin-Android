@@ -1166,3 +1166,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
    E Message length 6400 cap + 2500 bubble split; story limits (90 s, daily/hourly caps, caption 700); tab switch
      keeps visited tabs alive (~210 ms per switch now)
   Owner questions open: Maps SDK yes?, delete kk "test" post?, Clear Media vs Clear Cache?, "and all group?" (call).
+   F (owner photo 04:50) message long-press menu: the blur/dim stops above the bottom; the composer + gesture-bar
+     strip stays light and un-dimmed. The dim must cover the whole screen edge to edge (MessageMenuOverlay window /
+     navigation bar inset), as iOS.
