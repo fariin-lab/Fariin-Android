@@ -1182,3 +1182,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   on the second open. Merged: Blocked Users page, blocked profile, contact Sounds & Notifications with timed mute,
   contact Report/Block/Unblock/Delete as one bottom sheet with no "Block and Report" (8190de6..af6c8f2). Group pages
   still use centred dialogs for confirms.
+- 2026-11-07 7:30: checked on the Pixel: Blocked Users page, contact Block sheet (red Block + Cancel), Chat Color
+  merged into Bubble Style (Colours chip first, 70% sheet with grabber), Delete Account and Log out sheets. The X is
+  now removed from those two so Cancel is the only way out (b739144). New-account card renamed to Bubble style
+  (6dd13f9). Channel replies/quotes merged (2b5454b). Two bugs from VE3 went back to the replies agent: the media
+  post's reply bar is drawn outside the bubble, and quote cards show "This channel is private". Bold text in
+  channel posts is being built (iOS spec).
