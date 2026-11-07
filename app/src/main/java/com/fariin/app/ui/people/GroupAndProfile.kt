@@ -656,12 +656,35 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         // System Back closes Add Members to the page it was opened from (Group Info or Members). It had
         // no handler of its own, so Back left the whole route and landed in the chat.
         BackHandler { adding = false }
+        // iOS AddMembersSheet.add: the button turns into a spinner and stays off while the add runs;
+        // the page closes only on success (with a short "Added ..." here); an error, or a note about
+        // who could not be added, is said on this page. The note closes the page once anyone joined.
+        var addBusy by remember { mutableStateOf(false) }
+        var addNote by remember { mutableStateOf<String?>(null) }
+        var addError by remember { mutableStateOf<String?>(null) }
+        fun done() { adding = false; picked = emptySet() }
+        addError?.let { e -> AlertDialog(onDismissRequest = { addError = null }, containerColor = c.card,
+            title = { Text("Couldn't add members") }, text = { Text(e) },
+            confirmButton = { TextButton({ addError = null }) { Text("OK", color = c.accent) } }) }
+        addNote?.let { n -> AlertDialog(onDismissRequest = { addNote = null }, containerColor = c.card, text = { Text(n) },
+            confirmButton = { TextButton({ addNote = null; if (picked.any { it in users }) done() }) { Text("OK", color = c.accent) } }) }
         Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
             PageBar("Add Members", onBack = { adding = false }, action = {
-                TextAction("Add", picked.isNotEmpty()) {
+                TextAction("Add", picked.isNotEmpty() && !addBusy, busy = addBusy) {
+                    val names = people.filter { it.uid in picked }.map { it.shownName }
+                    addBusy = true
                     scope.launch {
-                        try { api.addMembers(cid, picked.toList())?.let { notice = it }; adding = false; picked = emptySet() }
-                        catch (_: Exception) { notice = "Couldn't add them. Try again." }
+                        try {
+                            val note = api.addMembers(cid, picked.toList())
+                            if (note == null) {
+                                done()
+                                com.fariin.app.ui.components.Snack.show(if (names.isEmpty()) "Members added" else "Added ${GroupRules.addedWho(names)}")
+                            } else addNote = note
+                        } catch (e: Exception) {
+                            addError = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.message?.takeIf { it.isNotBlank() }
+                                ?: "Check your connection and try again."
+                        }
+                        addBusy = false
                     }
                 }
             })
