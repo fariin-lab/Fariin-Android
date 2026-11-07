@@ -93,6 +93,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val admins = (s.conv["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
     val ctx = LocalContext.current
     val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+    val hostView = androidx.compose.ui.platform.LocalView.current
     var notice by remember { mutableStateOf<String?>(null) }
     notice?.let { n -> LaunchedEffect(n) { com.fariin.app.ui.components.Snack.show(n); notice = null } }
     val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, s.conv, s.messages) { notice = it }
@@ -214,7 +215,11 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                 }
             }
         },
-        onSave = { m -> vm.viewModelScope.launch { notice = com.fariin.app.media.GallerySaver.saveMessage(app, vm.repo.media, m) } },
+        onSave = { m -> vm.viewModelScope.launch {
+            val said = com.fariin.app.media.GallerySaver.saveMessage(app, vm.repo.media, m)
+            if (said.startsWith("Saved")) hostView.lightTap()   // iOS: a light tap once it is saved
+            notice = said
+        } },
         // Drafts kept per chat (iOS Drafts): the box comes back with what was left in it.
         draft = remember(cid) { Drafts.text(cid) },
         onDraft = { Drafts.set(cid, it) },

@@ -689,6 +689,7 @@ private fun PhotoPage(p: ViewerRules.Page, current: Boolean, onTap: () -> Unit, 
 @Composable
 private fun rememberSaver(media: ChatMedia): (List<ViewerRules.Page>) -> Unit {
     val ctx = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val scope = rememberCoroutineScope()
     var waiting by remember { mutableStateOf<List<ViewerRules.Page>>(emptyList()) }
     var blocked by remember { mutableStateOf(false) }
@@ -702,6 +703,7 @@ private fun rememberSaver(media: ChatMedia): (List<ViewerRules.Page>) -> Unit {
                 saved == pages.size -> "Saved to Photos"
                 else -> "Saved $saved of ${pages.size}"
             }
+            if (saved > 0) view.lightTap()   // iOS: a light tap once the photo is saved
             Toast.makeText(ctx, words, Toast.LENGTH_SHORT).show()
         }
     }

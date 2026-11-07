@@ -130,6 +130,7 @@ internal fun PollBody(m: Message, poll: PollCard, ctx: PollContext, isMe: Boolea
     val showResults = PollRules.showResults(mine, open)
     val hideFaces = poll.hideVoters || ctx.channel
     var results by remember { mutableStateOf(false) }
+    val tap = rememberLightTap()   // iOS: a light tap on each vote
 
     Column(Modifier.width(width).padding(top = 4.dp)) {
         Text(poll.question, fontSize = 19.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, color = ink)
@@ -145,6 +146,7 @@ internal fun PollBody(m: Message, poll: PollCard, ctx: PollContext, isMe: Boolea
                 enabled = canVote,
             ) {
                 val next = PollRules.toggle(poll, mine, i, canVote) ?: return@OptionRow
+                tap()
                 scope.launch {
                     try { PollVotes.setVote(ctx.cid, m.id, ctx.me, ctx.channel, next) }
                     catch (_: Exception) { Snack.show("Couldn't save your vote.") }

@@ -299,6 +299,7 @@ private fun ThreadContent(
     var menuPreview by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     var menuLifted by remember { mutableStateOf<String?>(null) }   // the row whose copy is up
     val quickReaction = rememberQuickReaction()
+    val rowView = androidx.compose.ui.platform.LocalView.current
     var postMenuFor by remember { mutableStateOf<Message?>(null) }
     var deleteFor by remember { mutableStateOf<Message?>(null) }
     var infoFor by remember { mutableStateOf<Message?>(null) }
@@ -848,6 +849,7 @@ private fun ThreadContent(
                                         menuFor = m
                                     }
                                     .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem, key = m.id + m.reactions[ui.me]) {
+                                        rowView.lightTap()   // iOS: a light tap with the quick reaction
                                         actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], quickReaction))
                                     }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
@@ -1897,6 +1899,7 @@ private fun Composer(
         runCatching { fieldFocus.requestFocus(); keyboard?.show() }
     }
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val lightTap = rememberLightTap()   // iOS: the + button and the sticker panel tap lightly
     // Where the row rests (iOS positionBottomBar): 8 above the keys; at rest, sunk 5 into the gesture
     // strip (8 + strip - 13), above a 3-button bar by 8. Measured in layout, never recomposed.
     val restInsets = rememberComposerRestInsets()
@@ -1941,7 +1944,7 @@ private fun Composer(
                     Spacer(Modifier.width(12.dp))
                 }
             } else {
-                Box(Modifier.size(COMPOSER_BUTTON).floating().clickable(onClick = onAttach), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(COMPOSER_BUTTON).floating().clickable { lightTap(); onAttach() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Add, contentDescription = "Attach", tint = c.label, modifier = Modifier.size(28.dp))
                 }
                 Spacer(Modifier.width(8.dp))
@@ -1984,6 +1987,7 @@ private fun Composer(
                 // The sticker mark opens the sticker panel, the keyboard mark brings the keys back.
                 FieldIcon(if (emojiOpen) com.fariin.app.R.drawable.ic_keyboard else com.fariin.app.R.drawable.ic_gif,
                     if (emojiOpen) "Keyboard" else "GIF") {
+                    lightTap()   // iOS: a light tap as the sticker panel opens or closes
                     emojiOpen = !emojiOpen
                     if (emojiOpen) keyboard?.hide() else keyboard?.show()
                 }
