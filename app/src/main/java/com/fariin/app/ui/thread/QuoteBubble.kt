@@ -99,19 +99,29 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 Text("Quote", fontSize = 12.sp, color = ink.copy(alpha = 0.55f), maxLines = 1)
             }
             val body = QuoteRules.body(card)
-            if (body.isNotEmpty()) {
+            if (image != null) {
+                // Owner's mockup (2026-11-07, both apps): a quoted post with a picture is one compact
+                // row: the picture on the left (42% of the inner width, 0.72 as tall, corners 14), the
+                // words on the right, top-aligned, at most 4 lines.
+                Spacer(Modifier.height(8.dp))
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val picW = maxWidth * 0.42f
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                        Box(Modifier.width(picW).height(picW * 0.72f).clip(RoundedCornerShape(14.dp))
+                            .background(c.secondary.copy(alpha = 0.15f))) {
+                            coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        }
+                        if (body.isNotEmpty()) {
+                            Spacer(Modifier.width(12.dp))
+                            Text(body, fontSize = 16.sp, color = ink.copy(alpha = if (quiet) 0.5f else 1f), maxLines = 4,
+                                overflow = TextOverflow.Ellipsis, lineHeight = 20.sp, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else if (body.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text(body, fontSize = 14.sp, color = ink.copy(alpha = if (quiet) 0.5f else 1f), maxLines = 8,
                     overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
-            }
-            if (image != null) {
-                Spacer(Modifier.height(8.dp))
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    Box(Modifier.fillMaxWidth().height(min(220.dp, maxWidth * 0.75f)).clip(RoundedCornerShape(10.dp))
-                        .background(c.secondary.copy(alpha = 0.15f))) {
-                        coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    }
-                }
             }
         }
         if (meta != null) Box(Modifier.align(Alignment.End)) { meta() }
