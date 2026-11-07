@@ -1147,3 +1147,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Calls page checked: matches the owner's iOS screenshot. Running: group call sounds, attach sheet + search compass +
   chat perf + per-chat scroll position (bounded LRU), view-once redesign; checkers: owner's UI-bug video, iOS limits
   and error wording.
+- 03:20 Merged: group call sounds + join/leave pill (3dcbb9a; server data-only ring for Android deployed by iOS session
+  Kulan 3a204da), attach sheet as iOS sheet (f62201d), search compass + face row (d3d082b), chat perf (0f4044c),
+  reopen where you left off, bounded LRU 50 (0972561), view-once redesign (ee76cf8). Installed 0972561 on the Pixel;
+  attach sheet checked (no top strip, rounded). Running: story flight fixes, limits like iOS, channel posts wide +
+  glass Mute bar, wallpaper sync + Bubble Style page + menu action + every styled bubble keeps its art, channel delete
+  sheet. Owner decisions: bubble art on every message, never open own view-once.
