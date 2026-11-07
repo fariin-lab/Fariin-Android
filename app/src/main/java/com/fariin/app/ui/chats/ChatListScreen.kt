@@ -147,6 +147,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.thread.LocalOpenChat
 import com.fariin.app.ui.theme.Fariin
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -803,12 +805,14 @@ fun ChatListScreen(
 
     if (confirmDelete || swipeDelete != null) {
         val targets = swipeDelete?.let { listOf(it) } ?: selectedConvs
-        val n = targets.size
-        val groups = targets.count { it.isGroup }
-        val list = targets.filter { !it.isGroup }
+        // iOS deleteChats: every kind gets its real action (a group or channel I am in is left, a
+        // channel I follow is unfollowed, the rest leave my list). Never a sheet with only Cancel.
+        val plan = ChatListActions.deletePlan(me, targets)
+        val single = targets.singleOrNull()
+        val singleKind = single?.let { ChatListActions.deleteKind(me, it) }
         // One person-to-person chat may also take my own sent messages off the server (the same
         // clearMyMessages as "Clear your messages" on the person's page).
-        val one = list.singleOrNull()?.takeIf { n == 1 && !it.isFollower(me) && me != com.fariin.app.ui.debug.DemoChats.ME }
+        val one = single?.takeIf { singleKind == DeleteKind.HIDE && !it.isGroup && me != com.fariin.app.ui.debug.DemoChats.ME }
         fun done() {
             confirmDelete = false
             if (swipeDelete == null) selected = emptySet()
@@ -816,20 +820,30 @@ fun ChatListScreen(
         }
         com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmDelete = false; swipeDelete = null }, steps = listOf(
             com.fariin.app.ui.components.CarefulStep(
-                title = if (n == 1) "Delete this chat?" else "Delete $n chats?",
-                body = when {
-                    groups > 0 -> "Groups stay in your list: leave a group from its info page. The other chats are removed from this phone's list."
-                    one != null -> "Delete for Me removes the chat from your list. The other person keeps their copy, unless you also delete your messages for everyone."
-                    else -> "The chat is removed from your list. The other person keeps their copy."
-                },
+                title = plan.title,
+                body = plan.body,
                 buttons = listOfNotNull(
-                    if (list.isNotEmpty()) com.fariin.app.ui.components.CarefulButton("Delete for Me", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
+                    com.fariin.app.ui.components.CarefulButton(plan.button, com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
                         done()
-                        scope.launch {
-                            val ok = list.map { ChatListActions.deleteForMe(me, it) }.all { it }
-                            Snack.show(if (ok) (if (list.size == 1) "Chat deleted" else "${list.size} chats deleted") else "Couldn't delete. Try again.")
+                        when {
+                            // iOS LeaveGroupAlert: one group (or a channel I am in) leaves the list at
+                            // once, Undo for a few seconds, then the real leave.
+                            single != null && (singleKind == DeleteKind.LEAVE_GROUP || singleKind == DeleteKind.LEAVE_CHANNEL) -> {
+                                val title = single.displayName(me)
+                                com.fariin.app.data.LeaveUndo.start(single.id, title) { ChatListActions.leave(me, single.id) }
+                                Snack.show(if (singleKind == DeleteKind.LEAVE_CHANNEL) "You left the channel." else "You left the group.", "Undo",
+                                    durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+                            }
+                            single != null && singleKind == DeleteKind.UNFOLLOW -> scope.launch {
+                                val ok = ChatListActions.deleteByKind(me, single)
+                                Snack.show(if (ok) "You left the channel." else "Couldn't leave the channel. Try again.")
+                            }
+                            else -> scope.launch {
+                                val ok = targets.map { async { ChatListActions.deleteByKind(me, it) } }.awaitAll().all { it }
+                                Snack.show(if (ok) (if (targets.size == 1) "Chat deleted" else "${targets.size} chats deleted") else "Couldn't delete them all. Try again.")
+                            }
                         }
-                    } else null,
+                    },
                     if (one != null) com.fariin.app.ui.components.CarefulButton("Delete My Messages for Everyone", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
                         done()
                         scope.launch {

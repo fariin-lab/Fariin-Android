@@ -87,7 +87,74 @@ object ChatListActions {
         Snack.show("You can pin up to $PINNED_MAX chats. Unpin one to pin this chat.")
         return true
     }
+
+    /**
+     * What Delete does to one chat, as iOS ChatService.deleteChats: a group or channel I am IN is
+     * left (an owner hands it on, [com.fariin.app.data.GroupRules.leavePlan]); a channel I only
+     * follow is unfollowed; anything else (a 1:1, a group I was already removed from) leaves my
+     * list until something new arrives.
+     */
+    fun deleteKind(me: String, c: Conversation): DeleteKind = when {
+        c.isFollower(me) -> DeleteKind.UNFOLLOW
+        c.isGroup && c.users.contains(me) -> if (c.isChannel) DeleteKind.LEAVE_CHANNEL else DeleteKind.LEAVE_GROUP
+        else -> DeleteKind.HIDE
+    }
+
+    /**
+     * The confirm sheet's words for [targets]. Always one real action: iOS asks a single group
+     * "Delete Group" / a single channel "Leave Channel" (LeaveGroupAlert), a single chat "Delete
+     * Chat", and a mixed pick "Delete N chats?" with one Delete that handles each by its kind.
+     */
+    fun deletePlan(me: String, targets: List<Conversation>): DeletePlan {
+        val kinds = targets.map { deleteKind(me, it) }
+        val one = targets.singleOrNull()
+        if (one != null) {
+            val name = one.displayName(me)
+            return when (kinds.single()) {
+                DeleteKind.UNFOLLOW, DeleteKind.LEAVE_CHANNEL ->
+                    DeletePlan("Leave Channel?", "Are you sure you want to leave $name?", "Leave Channel")
+                DeleteKind.LEAVE_GROUP ->
+                    DeletePlan("Delete Group?", "Are you sure you want to leave $name?", "Delete Group")
+                DeleteKind.HIDE ->
+                    if (one.isGroup) DeletePlan("Delete this chat?", "This removes the chat from your list. It comes back if you get a new message.", "Delete Chat")
+                    else DeletePlan("Delete this chat?", "Delete for Me removes the chat from your list. The other person keeps their copy, unless you also delete your messages for everyone.", "Delete for Me")
+            }
+        }
+        val groups = kinds.count { it == DeleteKind.LEAVE_GROUP }
+        val channels = kinds.count { it == DeleteKind.LEAVE_CHANNEL || it == DeleteKind.UNFOLLOW }
+        fun count(n: Int, word: String) = if (n == 1) "the $word" else "the $n ${word}s"
+        val leave = listOfNotNull(
+            if (groups > 0) count(groups, "group") else null,
+            if (channels > 0) count(channels, "channel") else null,
+        )
+        val body = if (leave.isEmpty()) "The chats are removed from your list. They come back if you get a new message."
+            else "You will leave ${leave.joinToString(" and ")} you selected." +
+                when (kinds.count { it == DeleteKind.HIDE }) {
+                    0 -> ""
+                    1 -> " The other chat is removed from your list."
+                    else -> " The other chats are removed from your list."
+                }
+        return DeletePlan("Delete ${targets.size} chats?", body, "Delete")
+    }
+
+    /** Leave a group, or a channel I am a member of (owner or admin), with ChatService.leaveGroup. */
+    suspend fun leave(me: String, cid: String) {
+        if (me == DemoChats.ME) return
+        com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.crypto).leaveGroup(cid)
+    }
+
+    /** Delete [c] by its [deleteKind] at once (the multi-select path, as iOS deleteChats: no Undo). */
+    suspend fun deleteByKind(me: String, c: Conversation): Boolean = when (deleteKind(me, c)) {
+        DeleteKind.HIDE -> deleteForMe(me, c)
+        DeleteKind.UNFOLLOW -> me == DemoChats.ME || runCatching { com.fariin.app.channel.ChannelService.unfollow(c.id) }.isSuccess
+        DeleteKind.LEAVE_GROUP, DeleteKind.LEAVE_CHANNEL -> runCatching { leave(me, c.id) }.isSuccess
+    }
 }
+
+enum class DeleteKind { HIDE, UNFOLLOW, LEAVE_GROUP, LEAVE_CHANNEL }
+
+/** The delete sheet's title, sentence and its one action button (Cancel comes with the sheet). */
+data class DeletePlan(val title: String, val body: String, val button: String)
 
 /** A tab's title, or the connection's words while it is down (iOS connectionTitle on the Chats,
  *  Stories and Settings bars): "Waiting for network" / "Connecting". */
