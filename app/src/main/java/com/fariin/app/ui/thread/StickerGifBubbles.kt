@@ -34,6 +34,17 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Celebration
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.SentimentSatisfied
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.outlined.Whatshot
+import androidx.compose.foundation.combinedClickable
+import com.fariin.app.data.GifFavorites
+import com.fariin.app.data.GifLists
+import com.fariin.app.data.GifRecents
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -221,8 +232,10 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
     val c = Fariin.colors
     var gifs by remember { mutableStateOf(StickerCatalog.lastTabGifs(ctx)) }
     var searchOpen by remember { mutableStateOf(false) }
+    // A GIF sent from the search sheet goes to the Recent tab too (iOS pick).
+    val sendGif: (StickerGifRules.Gif) -> Unit = { g -> GifRecents.note(ctx, me, g); onGif(g) }
     Box(Modifier.fillMaxWidth().height(320.dp).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-        if (gifs) GifTab(onGif) else StickerTab(me, onSticker)
+        if (gifs) GifTab(me, onGif) else StickerTab(me, onSticker)
         // Top row: Search (GIFs only), the switch in the middle.
         Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
             if (gifs) {
@@ -245,7 +258,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
             }
         }
     }
-    if (searchOpen) GifSearchSheet(onDismiss = { searchOpen = false }) { g -> searchOpen = false; onGif(g) }
+    if (searchOpen) GifSearchSheet(me, onDismiss = { searchOpen = false }) { g -> searchOpen = false; sendGif(g) }
 }
 
 private const val TOP_BAND = 48
@@ -323,34 +336,126 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
 private fun isTgs(ctx: android.content.Context, s: StickerRef): Boolean =
     StickerCatalog.assetPath(ctx, s.packId, s.stickerId)?.endsWith(".tgs") == true
 
-@Composable
-internal fun GifTab(onGif: (StickerGifRules.Gif) -> Unit) {
-    val ctx = LocalContext.current
-    val list by produceState<List<StickerGifRules.Gif>?>(null) { value = Giphy.search(ctx, "") }
-    GifGrid(list, PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 8.dp), onGif = onGif)
+/**
+ * GifPickerView's mood row: Favorites and Recent answer from the phone (instant, offline), Trending
+ * is the browse default, the rest are ready-made searches.
+ */
+private enum class GifCategory(val term: String, val label: String) {
+    FAVORITES("", "Favorites"), RECENT("", "Recent"), TRENDING("", "Trending"), HAPPY("happy", "Happy"),
+    LOVE("love", "Love"), SAD("sad", "Sad"), PARTY("party", "Party"), THUMBS_UP("thumbs up", "Thumbs up");
+
+    val local: Boolean get() = this == FAVORITES || this == RECENT
+
+    val icon: androidx.compose.ui.graphics.vector.ImageVector get() = when (this) {
+        FAVORITES -> Icons.Filled.Star
+        RECENT -> Icons.Filled.Schedule
+        TRENDING -> Icons.Outlined.Whatshot
+        HAPPY -> Icons.Outlined.SentimentSatisfied
+        LOVE -> Icons.Outlined.FavoriteBorder
+        SAD -> Icons.Outlined.Cloud
+        PARTY -> Icons.Outlined.Celebration
+        THUMBS_UP -> Icons.Outlined.ThumbUp
+    }
 }
 
-/** GifPickerView's masonry: two columns, each GIF at its own aspect, 6 apart, corners 8. */
 @Composable
-private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, query: String = "", onGif: (StickerGifRules.Gif) -> Unit) {
+internal fun GifTab(
+    me: String = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
+    onGif: (StickerGifRules.Gif) -> Unit,
+) {
+    val ctx = LocalContext.current
+    // Every GIF sent from here (the panel or the attach sheet) goes to the Recent tab first (iOS pick).
+    val send: (StickerGifRules.Gif) -> Unit = { g -> GifRecents.note(ctx, me, g); onGif(g) }
     val c = Fariin.colors
+    var category by remember { mutableStateOf(GifCategory.TRENDING) }
+    val changes by GifLists.changes.collectAsState()
+    val local = remember(category, changes) {
+        when (category) {
+            GifCategory.FAVORITES -> GifFavorites.all(ctx, me)
+            GifCategory.RECENT -> GifRecents.all(ctx, me)
+            else -> null
+        }
+    }
+    val fetched by produceState<List<StickerGifRules.Gif>?>(null, category) {
+        value = null
+        if (!category.local) value = Giphy.search(ctx, category.term)
+    }
+    Box(Modifier.fillMaxSize()) {
+        val pad = PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 52.dp)
+        when (category) {
+            GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send,
+                emptyTitle = "No favourites yet", emptyText = "Hold a GIF and choose Add to Favourites.")
+            GifCategory.RECENT -> GifGrid(local, pad, me = me, onRecentTab = true, onGif = send,
+                emptyTitle = "No recent GIFs", emptyText = "GIFs you send will appear here.")
+            else -> GifGrid(fetched, pad, me = me, onGif = send)
+        }
+        // The row floats at the foot, the media tabs' look: the chosen one on a capsule fill.
+        Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp, start = 10.dp, end = 10.dp)
+            .fillMaxWidth().height(34.dp).floating(RoundedCornerShape(17.dp)).padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            for (cat in GifCategory.entries) {
+                val on = cat == category
+                Box(Modifier.weight(1f).height(28.dp).clip(RoundedCornerShape(14.dp))
+                    .background(if (on) c.label.copy(alpha = 0.12f) else Color.Transparent)
+                    .clickable { category = cat }, contentAlignment = Alignment.Center) {
+                    Icon(cat.icon, contentDescription = cat.label, tint = if (on) c.label else c.secondary, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * GifPickerView's masonry: two columns, each GIF at its own aspect, 6 apart, corners 8. A long
+ * press offers Add to / Remove from Favourites, and Remove from Recent on the Recent tab only.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, query: String = "", me: String,
+                    onRecentTab: Boolean = false, emptyTitle: String? = null, emptyText: String? = null,
+                    onGif: (StickerGifRules.Gif) -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
     if (list != null && list.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-            // GifPickerView: nothing for words = the system search wording; nothing at all = Could not load.
-            Text(if (query.isBlank()) "Could not load" else "No Results for “${query.trim()}”", fontSize = 15.sp, color = c.secondary)
+            // GifPickerView: a local tab says what fills it; nothing for words = the system search
+            // wording; nothing at all = Could not load.
+            if (emptyTitle != null) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(emptyTitle, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                if (emptyText != null) Text(emptyText, fontSize = 14.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp))
+            } else Text(if (query.isBlank()) "Could not load" else "No Results for “${query.trim()}”", fontSize = 15.sp, color = c.secondary)
         }
         return
     }
     val play = autoplay()
+    val changes by GifLists.changes.collectAsState()
     LazyVerticalStaggeredGrid(StaggeredGridCells.Fixed(2), modifier = Modifier.fillMaxSize(), contentPadding = padding,
         horizontalArrangement = Arrangement.spacedBy(6.dp), verticalItemSpacing = 6.dp) {
         val items = list ?: emptyList()
         items(items.size, key = { items[it].id }) { i ->
             val g = items[i]
             val ratio = if (g.height > 0) (g.width / g.height).toFloat().coerceIn(0.4f, 3f) else 1f
-            AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp))
-                    .background(c.secondary.copy(alpha = 0.15f)).clickable { onGif(g) })
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp))
+                        .background(c.secondary.copy(alpha = 0.15f))
+                        .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
+                androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(if (favourite) "Remove from Favourites" else "Add to Favourites") },
+                        leadingIcon = { Icon(if (favourite) Icons.Filled.Star else Icons.Outlined.StarOutline, null) },
+                        onClick = {
+                            menu = false
+                            if (favourite) GifFavorites.remove(ctx, me, g.url) else GifFavorites.add(ctx, me, g)
+                        })
+                    if (onRecentTab) androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Remove from Recent", color = c.red) },
+                        leadingIcon = { Icon(Icons.Filled.Schedule, null, tint = c.red) },
+                        onClick = { menu = false; GifRecents.forget(ctx, me, g.url) })
+                }
+            }
         }
     }
 }
@@ -358,7 +463,7 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
 /** The tall GIF sheet (GifPickerView): "Search GIFs" field, trending until words, "Powered by GIPHY". */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-internal fun GifSearchSheet(onDismiss: () -> Unit, onPick: (StickerGifRules.Gif) -> Unit) {
+internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerGifRules.Gif) -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -382,7 +487,7 @@ internal fun GifSearchSheet(onDismiss: () -> Unit, onPick: (StickerGifRules.Gif)
                         modifier = Modifier.fillMaxWidth().focusRequester(focus))
                 }
             }
-            Box(Modifier.weight(1f)) { GifGrid(results, PaddingValues(6.dp), query, onPick) }
+            Box(Modifier.weight(1f)) { GifGrid(results, PaddingValues(6.dp), query, me = me, onGif = onPick) }
             Text("Powered by GIPHY", fontSize = 11.sp, color = c.secondary,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
         }
