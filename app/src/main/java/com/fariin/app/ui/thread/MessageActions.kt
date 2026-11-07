@@ -153,6 +153,8 @@ internal fun MessageMenu(
 ) {
     val c = Fariin.colors
     val now = System.currentTimeMillis().toDouble()
+    val menuCtx = androidx.compose.ui.platform.LocalContext.current
+    val menuMedia = chatMedia()
     val items = buildList {
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
@@ -189,6 +191,16 @@ internal fun MessageMenu(
             // groups and 1:1 chats unchanged.
             val historyAllowed = ui.channel?.let { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN } ?: true
             if (m.edited && historyAllowed) add(MenuItem("Edit History", Icons.Outlined.History) { onEditHistory(m) })
+            // Keep a sticker or a GIF from the chat, mine or theirs (iOS, owner 2026-10-17 / 10-18);
+            // not in a restricted chat, where nothing is saved.
+            if (!restricted) FavoriteToggles.stickerTitle(m)?.let { t ->
+                add(MenuItem(t, null, iconRes = com.fariin.app.R.drawable.ic_star_outline) {
+                    FavoriteToggles.toggleSticker(m, menuMedia, actions.onNotice) })
+            }
+            if (!restricted) FavoriteToggles.gifTitle(menuCtx, ui.me, m)?.let { t ->
+                add(MenuItem(t, null, iconRes = com.fariin.app.R.drawable.ic_star_outline) {
+                    FavoriteToggles.toggleGif(menuCtx, ui.me, m, actions.onNotice) })
+            }
         }
         // iOS: a photo, video, album or GIF still going up can be stopped from its menu, not only its ring.
         if (m.sendState == Message.SendState.SENDING && (m.mediaKind != null || m.isGif)) uploadCancelFor(m)?.let { cancel ->
