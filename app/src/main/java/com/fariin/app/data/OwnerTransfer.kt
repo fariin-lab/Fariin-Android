@@ -174,8 +174,9 @@ object JoinRequests {
 
 /**
  * Channel Settings > Reactions (iOS ChannelReactionsSettingsView, ChannelService.setReactions,
- * functions-groups setChannelReactions + channels.normReactSet): any emoji, only the ones picked (up
- * to 12), or none. The server keeps `reactSet {mode, list}` on the channel.
+ * functions-groups setChannelReactions + channels.normReactSet): one switch, on = only the ones
+ * picked (up to 12), off = none. The server keeps `reactSet {mode, list}` on the channel; an old "all"
+ * (or no reactSet) becomes the default set when the owner opens the page.
  */
 object ChannelReactions {
     /** Server REACT_LIST_MAX. */
@@ -189,6 +190,17 @@ object ChannelReactions {
         "👎", "😡", "🤝", "💪", "✅", "⭐️", "🌙", "☀️", "⚽️", "📌", "💡", "🙌")
 
     const val FOOTER = "Nobody sees who reacted, only how many."
+    const val FOOTER_OFF = "Followers can't react to posts."
+
+    /** ONE SWITCH (iOS 2dc585e8, owner 2026-11-07): on = the picks, off = none; "Any Emoji" is gone. */
+    fun footer(mode: String) = if (mode == "off") FOOTER_OFF else FOOTER
+
+    /** What a new channel starts with, and the switch's ON when nothing was picked before. */
+    val defaultSet: List<String> get() = palette.take(START)
+
+    /** The switch turned on: the earlier picks, else the default set. */
+    fun onList(current: List<String>, lastPicks: List<String>): List<String> =
+        current.ifEmpty { lastPicks.ifEmpty { defaultSet } }
 
     /** The Channel Settings row's value: Off or Any (Selected shows the emoji themselves). */
     fun value(mode: String) = if (mode == "off") "Off" else "Any"

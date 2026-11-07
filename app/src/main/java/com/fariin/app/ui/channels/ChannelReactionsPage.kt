@@ -60,8 +60,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Channel Settings > Reactions (iOS ChannelReactionsSettingsView): Any Emoji, Selected Emoji (up to
- * twelve, six per row in one rounded bar: tap one to replace it, its x removes it, + adds), No Reactions. Saves
+ * Channel Settings > Reactions (iOS ChannelReactionsSettingsView): one Reactions switch; on shows the
+ * picks (up to twelve, six per row in one rounded bar: a tap opens the sheet, + adds), off = none. Saves
  * run in the background after a short pause, so six taps are one write; a refusal puts back what
  * the server last kept.
  */
@@ -82,6 +82,8 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
     /** A refused tap in the sheet ("Keep at least one", "Up to 12"), said inside it. */
     var note by remember { mutableStateOf<String?>(null) }
     var saveJob by remember { mutableStateOf<Job?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var saveTicket by remember { mutableStateOf(0) }
     val showsCustom = remember { com.fariin.app.ui.thread.canChooseCustom() }
     var customTab by remember { mutableStateOf(false) }
     // The channel's real setting, once; no write before it is known (iOS).
@@ -100,9 +102,11 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
         if (l.isNotEmpty()) lastPicks = l
         problem = null
         saveJob?.cancel()
+        val ticket = ++saveTicket
+        saving = true
         saveJob = scope.launch {
-            delay(350)
             try {
+                delay(350)
                 val (km, kl) = ChannelReactions.save(cid, m, l)
                 savedMode = km; savedList = kl
                 if (mode == m && list == l) { mode = km; list = kl }
@@ -110,8 +114,27 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 problem = com.fariin.app.channel.ChannelService.errorText(e, "Couldn't save. Try again.")
                 mode = savedMode; list = savedList
+            } finally {
+                // Only the newest save clears the spinner (a cancelled one was replaced, not finished).
+                if (ticket == saveTicket) saving = false
             }
         }
+    }
+    /** The switch: on brings back the earlier picks (or the default set), off turns reactions off. */
+    fun setOn(on: Boolean) {
+        if (!loaded || on == (mode != "off")) return
+        if (on) { mode = "some"; list = ChannelReactions.onList(list, lastPicks) } else mode = "off"
+        save()
+    }
+    // A channel still on the old "all" (or with no reactSet, read as "all") becomes the switch's ON with
+    // the default set, saved, so what the owner sees is what followers get (iOS 2dc585e8). Owner only.
+    LaunchedEffect(loaded) {
+        if (!loaded || mode != "all") return@LaunchedEffect
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (me == null || doc["createdBy"] as? String != me) return@LaunchedEffect
+        mode = "some"
+        if (list.isEmpty()) list = ChannelReactions.defaultSet
+        save()
     }
     // Many at once, saved once (iOS 148c67ef, owner 2026-11-06): the sheet stays open while emoji are
     // turned on and off in `list` (the bar above follows live); closing it saves once if anything changed.
@@ -122,6 +145,8 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
     fun tapped(e: String) {
         val t = ReactionPicks.toggle(list, e)
         list = t.list; note = t.note
+        // An old "all" channel opened by an admin (not converted): picking makes it the picks.
+        if (mode == "all" && list.isNotEmpty()) mode = "some"
     }
     if (picking) {
         val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -157,23 +182,11 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         PageBar("Reactions", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-            SettingsSection(footer = ChannelReactions.FOOTER) {
-                listOf("all" to "Any Emoji", "some" to "Selected Emoji", "off" to "No Reactions").forEachIndexed { i, (value, title) ->
-                    Row(Modifier.fillMaxWidth().alpha(if (loaded) 1f else 0.4f).clickable(enabled = loaded && mode != value) {
-                        mode = value
-                        if (value == "some") list = ChannelReactions.startList(list, lastPicks)
-                        save()
-                    }.heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // A radio at the start, as every other single choice in the app (PrivacyPages.CheckRow).
-                        androidx.compose.material3.RadioButton(selected = mode == value, onClick = null,
-                            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.accent))
-                        Spacer(Modifier.width(16.dp))
-                        Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                    }
-                    if (i < 2) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
-                }
+            // ONE SWITCH (iOS 2dc585e8, owner 2026-11-07): on = the picks below, off = no reactions.
+            SettingsSection(footer = ChannelReactions.footer(mode)) {
+                com.fariin.app.ui.settings.SwitchRow("Reactions", checked = mode != "off", enabled = loaded, last = true) { setOn(it) }
             }
-            if (mode == "some") {
+            if (mode != "off") {
                 // Six per row; the + slot follows the last one while there are fewer than 12.
                 val slots: List<Int> = list.indices.toList() + (if (list.size < ChannelReactions.MAX) listOf(-1) else emptyList())
                 val rows = slots.chunked(ChannelReactions.PER_ROW)
@@ -208,6 +221,12 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                 }
                 Text(ReactionPicks.footer(list), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
+            }
+            if (saving) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = c.secondary, strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("Saving…", fontSize = 13.sp, color = c.secondary)
             }
             problem?.let { Text(it, fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)) }
         }

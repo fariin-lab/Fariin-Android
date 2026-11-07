@@ -209,11 +209,14 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
                     // The rest is best-effort: the channel stands without it, but the user is told what is missing.
                     val missed = mutableListOf<String>()
                     try { ChannelService.setDescription(id, about) } catch (_: Exception) { if (about.isNotBlank()) missed += "description" }
+                    // Reactions start ON with the default set (iOS 2dc585e8, owner 2026-11-07), the page's switch.
+                    try { com.fariin.app.data.ChannelReactions.save(id, "some", com.fariin.app.data.ChannelReactions.defaultSet) }
+                    catch (e: Exception) { android.util.Log.w("NewChannel", "default reactions not saved", e); missed += "reactions" }
                     try { ChannelService.createPrimaryLink(id) } catch (_: Exception) { missed += "invite link" }
                     photo?.let { ph -> try { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(appCtx)).setGroupPhoto(id, ph) } catch (_: Exception) { missed += "photo" } }
                     cid = id; creating = false; step = 2
                     if (missed.isNotEmpty()) {
-                        val what = when (missed.size) { 1 -> "the ${missed[0]}"; 2 -> "the ${missed[0]} and ${missed[1]}"; else -> "the ${missed[0]}, ${missed[1]} and ${missed[2]}" }
+                        val what = when (missed.size) { 1 -> "the ${missed[0]}"; 2 -> "the ${missed[0]} and ${missed[1]}"; else -> "the " + missed.dropLast(1).joinToString(", ") + " and ${missed.last()}" }
                         val them = if (missed.size == 1) "it" else "them"
                         com.fariin.app.ui.components.Snack.show("Channel created, but $what couldn't be saved. Add $them in channel settings.", long = true)
                     }
