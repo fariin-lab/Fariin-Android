@@ -127,7 +127,10 @@ private fun Browser(start: String, onClose: () -> Unit) {
 
     Box(Modifier.fillMaxSize().drawBehind { drawRect(c.bg) }) {
         AndroidView(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 56.dp).graphicsLayer { alpha = pageAlpha },
+            // The page stops above the bottom row: a site's own bottom buttons (Log in, Accept) sat
+            // under it, out of reach (Pixel, 2026-11-06).
+            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 56.dp)
+                .navigationBarsPadding().padding(bottom = 64.dp).graphicsLayer { alpha = pageAlpha },
             factory = { context ->
                 WebView(context).apply {
                     settings.javaScriptEnabled = true
@@ -142,7 +145,11 @@ private fun Browser(start: String, onClose: () -> Unit) {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val s = request.url.scheme?.lowercase()
                             if (s == "http" || s == "https") return false
-                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
+                            // A page's own jump to an app link (fb://, intent://) happened without a
+                            // tap and threw people out to another browser (owner, 2026-11-06): only a
+                            // tap leaves, only to a real app, else the page's web fallback loads here.
+                            val fallback = BrowserLinks.leave(context, request.url.toString(), request.hasGesture())
+                            if (fallback != null) view.loadUrl(fallback)
                             return true
                         }
                         override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) { loading = true; refresh(view) }

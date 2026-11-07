@@ -1052,3 +1052,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 18:36 Stories tab, Viewed fold, Story privacy page + New menu fine (dimmed items as iOS). Fixed: the status
   bar's clock/battery were white on the light Story privacy page; every light full-screen dialog page (Story
   privacy, Glow stories/notifications, Posted stories, Custom Story, poll voters) now sets its icons by theme.
+- 19:34 Owner: a facebook.com link left our browser for another one. Cause: BrowserActivity sent every non-web
+  link the page asked for (fb://, intent://) straight to Android, with no tap. Now BrowserLinks: only a tap leaves,
+  only to a real app (REQUIRE_NON_BROWSER), intent:// parsed BROWSABLE with no component, web fallback loads here.
+  Also the page now stops above our bottom bar (site's Open app / Log in buttons were under it). Pixel: stays in.
