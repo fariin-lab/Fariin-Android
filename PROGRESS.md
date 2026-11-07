@@ -1090,3 +1090,15 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   10 no Reply (menu or swipe) where I cannot send (admins-only group) or on a story-reaction message
   11 emoji-only messages (1-5) drawn big and bare (3.5x down to 2.25x)
   12 unknown fariin-<x>: marker -> "sent using a newer version" notice
+  QUEUE from rest-of-app gap hunt (both sides checked in code):
+  13 Blocked Users: red "Block User..." row with a picker, search, swipe-to-unblock, iOS empty text + footer
+  14 blocked person's profile: red "Delete Chat" then "Unblock X"; no Report, no Chat Key row while blocked
+  15 channel Administrators: "Waiting to Accept" section, rows "Invited as admin", tap revokes the invite
+  16 contact page: "Sounds & Notifications" row (Muted/On; mute 1 h / 8 h / 1 day / 1 week / Always, end time
+     shown); read-only "Used your Chat Key to reach you" row
+  17 chat-list filter menu: Chat Key entry; Message Requests shown whenever requests are on, not only when > 0
+  18 "What is a Chat Key?" intro sheet before Set a Chat Key and before choosing that privacy mode
+  19 empty states with iOS wording + description (No groups yet + New Group button, No channels yet, You're all
+     caught up, Nothing archived incl. hidden stories); iOS has no Start a Chat button on the main empty list
+  20 Calls tab: swipe to Delete; long-press menu Voice Call / Video Call / Chats / Select
+  (low confidence, ask owner: Media storage page split Clear Media vs Clear Cache as iOS)
