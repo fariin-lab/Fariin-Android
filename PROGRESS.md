@@ -1188,3 +1188,13 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   (6dd13f9). Channel replies/quotes merged (2b5454b). Two bugs from VE3 went back to the replies agent: the media
   post's reply bar is drawn outside the bubble, and quote cards show "This channel is private". Bold text in
   channel posts is being built (iOS spec).
+- 2026-11-07 8:35: on main and checked on the Pixel:
+  - Bold text in channel posts: the Bold item had to move to Compose 1.9's text context menu
+    (appendTextContextMenuComponents), because 1.9 ignores LocalTextToolbar (2448d20).
+  - Log out and Delete Account sheets now fit their measured content (395b2b4).
+  - Media posts have the reply bar inside the bubble, and the share button is iOS style (c5aac62, 9b5ca24).
+  - Bubble Color is back as its own row, and Bubble Style has a Color chip first with circles (9f1c922).
+  - The VE3 "This channel is private" quote cards are correct: they quote a private channel the Roodo account can't see.
+  Merged, not yet exercised on the phone: group confirm sheets (e2c57b9), feedback states (d2d071a, ba1cc0e),
+  and reply Creator/Pin/tap-to-profile (0ed4ecf), plus the Creator reply now opening the channel for everyone.
+  Running: New badges on the 115 catalog spots.
