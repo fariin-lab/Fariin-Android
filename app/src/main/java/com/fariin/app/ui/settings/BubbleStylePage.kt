@@ -213,7 +213,7 @@ internal fun BubbleStylesStrip() {
     // Every picture style hidden: no strip at all.
     if (picks.isEmpty()) return
     var all by remember { mutableStateOf(false) }
-    val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
+    val thumbPx = with(LocalDensity.current) { 92.dp.roundToPx() }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -221,11 +221,12 @@ internal fun BubbleStylesStrip() {
             Text("See all", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.accent,
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable { all = true }.padding(horizontal = 8.dp, vertical = 4.dp))
         }
-        LazyRow(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Cards about as wide as the wallpaper tiles below: a 92x58 picture inside 5dp padding.
+        LazyRow(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(picks.size, key = { picks[it].id }) { i ->
                 val s = picks[i]
-                Box(Modifier.width(96.dp)) {
-                    Tile(s.name, current == s.id, onTap = {
+                Box(Modifier.width(102.dp)) {
+                    Tile(s.name, current == s.id, pad = 5.dp, swatchHeight = 58.dp, onTap = {
                         if (current != s.id) {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                             BubbleStyles.save(s.id, BubbleStyles.decorations())
@@ -290,14 +291,15 @@ private fun brushOf(look: BubbleStyles.Look): Brush {
 
 /** One style in the grid: its swatch on a card, the name under it; the chosen one ringed. */
 @Composable
-private fun Tile(name: String, on: Boolean, plus: Boolean = false, onTap: () -> Unit, swatch: @Composable () -> Unit) {
+private fun Tile(name: String, on: Boolean, plus: Boolean = false, pad: androidx.compose.ui.unit.Dp = 6.dp,
+                 swatchHeight: androidx.compose.ui.unit.Dp = 44.dp, onTap: () -> Unit, swatch: @Composable () -> Unit) {
     val c = Fariin.colors
     val shape = RoundedCornerShape(14.dp)
     Column(Modifier.clip(shape).background(c.card)
         .border(2.5.dp, if (on) c.accent else Color.Transparent, shape)
-        .clickable(onClick = onTap).padding(6.dp),
+        .clickable(onClick = onTap).padding(pad),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) { swatch() }
+        Box(Modifier.fillMaxWidth().height(swatchHeight), contentAlignment = Alignment.Center) { swatch() }
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
