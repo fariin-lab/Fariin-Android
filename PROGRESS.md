@@ -1131,3 +1131,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Today/Yesterday overlap and "Roodo created the group" is drawn over the new bubble for a few frames; (2) when the
   same sender sends again the previous bubble re-lays out (name/avatar/tail move) and snaps, its time drawn twice
   for frames; (3) 86 ms frame gap on the 2nd message, then a one-step jump. Agent on it.
+- 00:45 Owner: animations must not drain battery or lag cheap phones. Low-end class already starts with animations,
+  blur, autoplay off; Battery Saver turns all off. Gaps fixed d94ced3 (moving wallpaper + sheet slides obey Power
+  Saving/Battery Saver/low-end). fariin_lowend emulator (1 GB, Android 8.1): 62 MB, idle CPU 0, glass off; chat
+  list scroll 92% janky, Slow UI thread 125/227 (Pixel: 2.3%, 8). Agent on low-end scroll cost (emu 5560); group
+  arrival agent (emu 5556) still running.
