@@ -1562,7 +1562,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         else screenW * 0.72f).dp
     val big = 18.dp
     val small = 6.dp
-    val shape = if (isMe) RoundedCornerShape(topStart = big, topEnd = if (g.first) big else small,
+    // An unopened view-once card is rounder, 22 on every corner (OnceBubble.kt); opened, the run shape.
+    val shape = if (isUnopenedOnce(m, isMe)) OnceCardShape
+    else if (isMe) RoundedCornerShape(topStart = big, topEnd = if (g.first) big else small,
         bottomEnd = if (g.last) big else small, bottomStart = big)
     else RoundedCornerShape(topStart = if (g.first) big else small, topEnd = big,
         bottomEnd = big, bottomStart = if (g.last) big else small)

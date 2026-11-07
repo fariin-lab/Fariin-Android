@@ -40,6 +40,20 @@ import com.fariin.app.ui.theme.Fariin
 /** The accent of an incoming view-once still waiting to be opened (iOS systemGreen). */
 internal val OnceGreen = Color(0xFF34C759)
 
+/** The unopened view-once card's bubble (iOS redesign): 22 dp on every corner, not the run shape. */
+internal val OnceCardShape = RoundedCornerShape(22.dp)
+
+/** This row is a view-once photo or voice note still unopened: its bubble takes [OnceCardShape].
+ *  Opened, it goes back to the normal bubble. Same answer as [ViewOnceBody] / OneTimeVoicePill. */
+@Composable
+internal fun isUnopenedOnce(m: Message, isMe: Boolean): Boolean {
+    val kind = m.mediaKind
+    if (m.deleted || !(kind == Message.MediaKind.VIEW_ONCE || (kind == Message.MediaKind.VOICE && m.viewOnce))) return false
+    val ctx = LocalContext.current
+    val epoch by ViewedOnce.epoch.collectAsState()
+    return remember(m.id, epoch, m.consumed, isMe) { !OnceRules.opened(isMe, m.consumed, ViewedOnce.contains(ctx, m.id)) }
+}
+
 /**
  * The view-once mark: a dashed ring, with a 1 inside until it is opened. Drawn in one Canvas
  * pass; nothing in it moves, so a scrolling list only redraws it.
