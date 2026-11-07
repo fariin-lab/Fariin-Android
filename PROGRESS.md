@@ -1136,3 +1136,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Saving/Battery Saver/low-end). fariin_lowend emulator (1 GB, Android 8.1): 62 MB, idle CPU 0, glass off; chat
   list scroll 92% janky, Slow UI thread 125/227 (Pixel: 2.3%, 8). Agent on low-end scroll cost (emu 5560); group
   arrival agent (emu 5556) still running.
+- 01:35 Group agent f2ebb9e (short chat gets a spacer so arrivals glide like long chats; cause of the overlapping pills,
+  doubled time and card jump) + 41b7893 (card on the first frame from a remembered complete-history flag, fade on a
+  true first open). Pixel: kk opens with its card already there mid-transition. Live group test pending (owner).
+  Media gap hunt (12 differences) -> media agent; bubble styles: owner OK'd showing them (01:00), agent building from
+  fariin-bubbles/SPEC.md, iOS session told. Running: media, low-end scroll, bubble styles.
