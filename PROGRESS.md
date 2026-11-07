@@ -1058,3 +1058,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Also the page now stops above our bottom bar (site's Open app / Log in buttons were under it). Pixel: stays in.
 - 19:36 kream voice notes: newer sent ones draw bars; the 3:13 AM one is flat because it is a silent recording
   (plays, progress + 1x button fine). No change.
+- 19:52 Owner: in-app browser as a sheet like iOS. Now slides up over the dimmed chat with rounded top corners
+  and a handle; closes by X, Back, tap above, or swipe down (short drag springs back). Page fills the sheet,
+  X and bottom row float over it (undid the 'stop above the bar' change, iOS overlays too). Muted autoplay on and
+  the web-view tag dropped from the browser name; Facebook's video still shows black without login.

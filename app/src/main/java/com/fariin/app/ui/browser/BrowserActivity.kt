@@ -20,6 +20,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -102,9 +108,64 @@ class BrowserActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val start = intent.getStringExtra(EXTRA_URL) ?: run { finish(); return }
-        setContent { FariinTheme { Browser(start, onClose = { finish() }) } }
+        setContent {
+            FariinTheme {
+                BrowserSheet(onClosed = { finish(); @Suppress("DEPRECATION") overridePendingTransition(0, 0) }) { close ->
+                    Browser(start, onClose = close)
+                }
+            }
+        }
     }
 }
+
+/**
+ * The browser as a sheet over the chat, as iOS presents it (owner, 2026-11-06): it slides up from the
+ * bottom with rounded top corners, the chat stays dimmed behind it at the top, and it closes by its X,
+ * by Back, by a tap on the dimmed chat, or by swiping down on its handle. People can see they never
+ * left the app.
+ */
+@Composable
+private fun BrowserSheet(onClosed: () -> Unit, content: @Composable (close: () -> Unit) -> Unit) {
+    val c = Fariin.colors
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val full = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp + 80).dp.toPx() }
+    val y = remember { androidx.compose.animation.core.Animatable(full) }
+    var closing by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { y.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f)) }
+    val close: () -> Unit = {
+        if (!closing) { closing = true; scope.launch { y.animateTo(full, tween(220)); onClosed() } }
+    }
+    val far = with(density) { 140.dp.toPx() }
+    Box(Modifier.fillMaxSize()
+        .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * (1f - y.value / full).coerceIn(0f, 1f))) }
+        .clickable(interactionSource = null, indication = null) { close() }) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp)
+            .offset { androidx.compose.ui.unit.IntOffset(0, y.value.toInt()) }
+            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+            .drawBehind { drawRect(c.bg) }
+            .clickable(interactionSource = null, indication = null) {}) {
+            // The handle: drag down to close; let go early and it springs back.
+            Box(Modifier.fillMaxWidth().height(22.dp)
+                .sheetDrag(
+                    onDelta = { d -> scope.launch { y.snapTo((y.value + d).coerceAtLeast(0f)) } },
+                    onStop = { v -> if (y.value > far || v > 1800f) close() else scope.launch { y.animateTo(0f, tween(200)) } },
+                ), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(width = 36.dp, height = 5.dp).clip(CircleShape).drawBehind { drawRect(c.label.copy(alpha = 0.25f)) })
+            }
+            Box(Modifier.weight(1f)) { content(close) }
+        }
+    }
+}
+
+/** A vertical drag on a strip, its deltas and the release velocity. */
+@Composable
+private fun Modifier.sheetDrag(onDelta: (Float) -> Unit, onStop: (Float) -> Unit): Modifier =
+    this.draggable(
+        orientation = androidx.compose.foundation.gestures.Orientation.Vertical,
+        state = androidx.compose.foundation.gestures.rememberDraggableState(onDelta),
+        onDragStopped = { v -> onStop(v) },
+    )
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -127,10 +188,9 @@ private fun Browser(start: String, onClose: () -> Unit) {
 
     Box(Modifier.fillMaxSize().drawBehind { drawRect(c.bg) }) {
         AndroidView(
-            // The page stops above the bottom row: a site's own bottom buttons (Log in, Accept) sat
-            // under it, out of reach (Pixel, 2026-11-06).
-            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 56.dp)
-                .navigationBarsPadding().padding(bottom = 64.dp).graphicsLayer { alpha = pageAlpha },
+            // As iOS InAppBrowser (owner, 2026-11-06): the page fills the screen under the status bar;
+            // the close circle and the bottom row float over it.
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = pageAlpha },
             factory = { context ->
                 WebView(context).apply {
                     settings.javaScriptEnabled = true
@@ -139,6 +199,12 @@ private fun Browser(start: String, onClose: () -> Unit) {
                     settings.allowContentAccess = false
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     settings.setSupportMultipleWindows(false)   // a "new window" opens in this one
+                    // Muted autoplay, as the iOS browser: a video page otherwise stays black.
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    // The phone's Chrome name without the "; wv" web-view tag: some sites serve a
+                    // web view a cut-down page with no video (iOS's browser reads as plain Safari).
+                    settings.userAgentString = settings.userAgentString
+                        .replace("; wv)", ")").replace(Regex("""Version/\S+\s"""), "")
                     settings.builtInZoomControls = true
                     settings.displayZoomControls = false
                     webViewClient = object : WebViewClient() {
@@ -173,7 +239,7 @@ private fun Browser(start: String, onClose: () -> Unit) {
         )
 
         // Close, top-left.
-        Box(Modifier.statusBarsPadding().padding(start = 16.dp, top = 6.dp).size(44.dp).floating(CircleShape)
+        Box(Modifier.padding(start = 16.dp, top = 4.dp).size(44.dp).floating(CircleShape)
             .clickable(onClickLabel = "Close") { onClose() }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, "Close", tint = c.label, modifier = Modifier.size(22.dp))
         }

@@ -284,7 +284,7 @@
         <!-- Fariin's own browser for links (ui/browser/BrowserActivity.kt). -->
         <activity android:name=".ui.browser.BrowserActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
-            android:theme="@style/Theme.Fariin" />
+            android:theme="@style/Theme.Fariin.Sheet" />
         <!-- Fariin's own PDF reader for received PDFs (ui/files/PdfViewerActivity.kt, iOS PDFViewerSheet). -->
         <activity android:name=".ui.files.PdfViewerActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"

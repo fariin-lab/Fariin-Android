@@ -1,6 +1,15 @@
 <resources>
     <style name="Theme.Fariin" parent="android:Theme.Material.Light.NoActionBar" />
 
+    <!-- A sheet over the app (the in-app browser): the chat stays visible behind it; the sheet draws
+         its own slide-up, so no window animation. -->
+    <style name="Theme.Fariin.Sheet" parent="Theme.Fariin">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+
     <!-- The launch screen (AndroidX SplashScreen): the Fariin mark on the phone's light or dark
          ground, kept until the first frame is ready (MainActivity). -->
     <style name="Theme.Fariin.Starting" parent="Theme.SplashScreen">
