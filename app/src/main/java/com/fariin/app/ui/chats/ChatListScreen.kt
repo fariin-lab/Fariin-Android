@@ -186,6 +186,12 @@ fun ChatListScreen(
     val channels = com.fariin.app.ui.channels.LocalChannelNav.current
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    // Read once here and handed to every row: a collector in each row was two coroutines for
+    // every chat a scroll brings in. A row reads only its own draft, so one draft changing still
+    // redraws only that row.
+    val draftsAll = com.fariin.app.local.Drafts.map.collectAsState()
+    val keysAll = CryptoHub.keysEpoch.collectAsState()
+    val cheapDrawing = com.fariin.app.perf.rememberPowerState().cheapDrawing
     var filter by rememberSaveable { mutableIntStateOf(FILTER_ALL) }
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -614,7 +620,7 @@ fun ChatListScreen(
                         // on long-press (select mode), where Android people look for them.
                         SwipeToActRow(conv.id, enabled = !selecting && !searching,
                             label = if (showArchive) "Unarchive" else "Archive",
-                            icon = androidx.compose.ui.res.painterResource(R.drawable.ic_archive_fill),
+                            icon = R.drawable.ic_archive_fill,
                             fill = c.blue,
                             onAction = {
                                 val on = !showArchive
@@ -628,6 +634,7 @@ fun ChatListScreen(
                                 }
                             }) {
                         ChatRow(conv, me, decryptor,
+                            draftsState = draftsAll, keysState = keysAll, cheap = cheapDrawing,
                             selected = conv.id in selected,
                             ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
                             onStoryTap = if (ring == null || selecting) null else ({ storyOpen = ring }),
@@ -1041,13 +1048,18 @@ fun ChatRow(
     onStoryTap: (() -> Unit)? = null,
     /** The story group this photo opens: the viewer zooms out of it and back into it (hero). */
     storyKey: String? = null,
+    /** The drafts and key-epoch states, collected once by the list (null: this row collects its own). */
+    draftsState: androidx.compose.runtime.State<Map<String, String>>? = null,
+    keysState: androidx.compose.runtime.State<Int>? = null,
+    /** A LOW phone (perf/PowerState.cheapDrawing): the story ring is kept as a picture. */
+    cheap: Boolean = false,
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
     val unread = if (conv.isBlockedByMe(me)) 0 else conv.unread(me)
     val now = System.currentTimeMillis().toDouble()
     val muted = conv.isMuted(me, now)
-    val keys by CryptoHub.keysEpoch.collectAsState()
+    val keys = (keysState ?: CryptoHub.keysEpoch.collectAsState()).value
     // Battery/lag audit 2026-11-06: no box is opened during composition. A line opened before
     // shows at once; a new one opens on a background thread, the old words staying until then.
     val photoLabel: (String) -> String = { raw ->
@@ -1055,16 +1067,17 @@ fun ChatRow(
         if (!conv.lastImageUrl.isNullOrEmpty()) listOf("📷 ", "🎥 ", "🎬 ").firstOrNull { raw.startsWith(it) }?.let { raw.removePrefix(it) } ?: raw else raw
     }
     val cachedPreview = remember(conv, me, keys) { ChatList.cachedPreviewLine(conv, me, decryptor) { null }?.let(photoLabel) }
-    val openedPreview by androidx.compose.runtime.produceState<String?>(null, conv, me, keys) {
-        if (cachedPreview == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+    // Only a line not opened before starts a background job (most rows have theirs cached).
+    val openedPreview = if (cachedPreview != null) null else androidx.compose.runtime.produceState<String?>(null, conv, me, keys) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             photoLabel(ChatList.previewLine(conv, me, decryptor) { null })
         }
-    }
+    }.value
     val preview = cachedPreview ?: openedPreview ?: ""
     // iOS: a chat with unsent words in its box says "Draft:" (red) and the words, not the last line.
     // Only this chat's draft: reading the whole map redrew every row whenever any chat's draft
     // changed, which leaving a chat does (it saves or clears that chat's draft).
-    val drafts = com.fariin.app.local.Drafts.map.collectAsState()
+    val drafts = draftsState ?: com.fariin.app.local.Drafts.map.collectAsState()
     val draftState = remember(conv.id) { derivedStateOf { drafts.value[conv.id] } }
     val draft = draftState.value
     // iOS previewRow: a small grey glyph before a pin notice, a contact or a location.
@@ -1107,7 +1120,10 @@ fun ChatRow(
                 contentAlignment = Alignment.Center) {
                 Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel,
                     kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
-                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp), squircle = conv.isChannel)
+                // LOW: the ring's arcs are drawn once into a picture, not traced again on every scroll frame.
+                if (ring.isNotEmpty()) com.fariin.app.ui.stories.StoryRing(ring, Modifier.requiredSize(56.dp)
+                    .then(if (cheap) Modifier.graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen) else Modifier),
+                    squircle = conv.isChannel)
             }
             // Disappearing messages on: the timer badge on the photo's lower right, hanging 5 past
             // it (iOS DisappearingAvatarBadge: 24 glass disc, grey timer).
@@ -1184,22 +1200,23 @@ fun ChatRow(
                     // Never beside a call: it is a record, not a message with a sent / read state (iOS).
                     if (conv.lastIsMine(me) && !conv.isChannel && !(preview.startsWith("↗ ") || preview.startsWith("📞 ") || preview.startsWith("📹 "))) Ticks(conv, me)
                     if (conv.hasUnreadReply(me)) {
-                        Box(Modifier.size(20.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(20.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Someone replied to you",
                                 tint = c.onAccent, modifier = Modifier.size(12.dp))
                         }
                     }
                     if (unread > 0) {
                         Box(
-                            Modifier.height(20.dp).defaultMinSize(minWidth = 20.dp).clip(CircleShape)
-                                .background(if (muted) c.secondary else c.accent).padding(horizontal = 5.dp),
+                            // A drawn capsule, not a clip: no extra layer per badge.
+                            Modifier.height(20.dp).defaultMinSize(minWidth = 20.dp)
+                                .background(if (muted) c.secondary else c.accent, CircleShape).padding(horizontal = 5.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(if (unread > 99) "99+" else "$unread", fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold, color = c.onAccent, maxLines = 1)
                         }
                     } else if (conv.manuallyUnread(me)) {
-                        Box(Modifier.size(12.dp).clip(CircleShape).background(c.accent))
+                        Box(Modifier.size(12.dp).background(c.accent, CircleShape))
                     }
                 }
             }
@@ -1239,12 +1256,22 @@ fun timeLabel(ms: Double, is24h: Boolean, nowMs: Long = System.currentTimeMillis
     val loc = Locale.getDefault()
     return when {
         d.time >= startOfToday.timeInMillis ->
-            SimpleDateFormat(if (is24h) "HH:mm" else "h:mm a", loc).format(d)
+            formatDate(if (is24h) "HH:mm" else "h:mm a", loc, d)
         d.time >= startOfToday.timeInMillis - dayMs -> "Yesterday"
-        nowMs - d.time < 7 * dayMs -> SimpleDateFormat("EEE", loc).format(d)
-        then.get(Calendar.YEAR) != now.get(Calendar.YEAR) -> SimpleDateFormat("MMM d, yyyy", loc).format(d)
-        else -> SimpleDateFormat("MMM d", loc).format(d)
+        nowMs - d.time < 7 * dayMs -> formatDate("EEE", loc, d)
+        then.get(Calendar.YEAR) != now.get(Calendar.YEAR) -> formatDate("MMM d, yyyy", loc, d)
+        else -> formatDate("MMM d", loc, d)
     }
+}
+
+/**
+ * The few date patterns the list uses, made once (building one cost every row a scroll brings in).
+ * Keyed by language and time zone too, so a change in Settings still shows at once.
+ */
+private val dateFormats = HashMap<String, SimpleDateFormat>()
+private fun formatDate(pattern: String, loc: Locale, d: Date): String = synchronized(dateFormats) {
+    val zone = java.util.TimeZone.getDefault()
+    dateFormats.getOrPut(pattern + "|" + loc.toLanguageTag() + "|" + zone.id) { SimpleDateFormat(pattern, loc).apply { timeZone = zone } }.format(d)
 }
 
 /** Pure rules for the chat list row, kept here for the tests. */

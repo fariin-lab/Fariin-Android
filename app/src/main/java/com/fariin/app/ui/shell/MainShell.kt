@@ -308,6 +308,7 @@ private fun FloatingTabBar(
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(BarHeight / 2)
     val surface = scheme.surfaceContainer
+    val cheap = com.fariin.app.perf.rememberPowerState().cheapDrawing
     // The shine: a white rim, brightest along the top edge, as frosted glass catches the light.
     val border = androidx.compose.ui.graphics.Brush.verticalGradient(
         if (c.dark) listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))
@@ -341,7 +342,11 @@ private fun FloatingTabBar(
     Row(
         modifier
             .widthIn(max = 420.dp).fillMaxWidth().height(BarHeight)
-            .shadow(if (c.dark) 0.dp else 16.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.28f))
+            // No shadow on a LOW phone: it is worked out again on every frame the list moves under it.
+            .shadow(if (c.dark || cheap) 0.dp else 16.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.28f))
+            // LOW: the bar kept as one picture (its rims are not drawn again on every scroll frame);
+            // it is redrawn only when a tab or a badge changes.
+            .then(if (cheap) Modifier.graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen) else Modifier)
             .clip(shape)
             .then(fill)
             // A glass edge you can see (owner 2026-11-03, "ours is invisible"): a thin grey outer

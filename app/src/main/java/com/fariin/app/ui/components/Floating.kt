@@ -101,6 +101,14 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
             }
             .border(0.5.dp, c.label.copy(alpha = if (c.dark) 0.10f else 0.08f), shape)
     }
+    if (com.fariin.app.perf.rememberPowerState().cheapDrawing) {
+        // A LOW phone: no soft shadow (it is worked out again on every frame while the list moves
+        // under the button); a firmer rim keeps a white circle visible on a white page instead.
+        return this
+            .background(fill ?: c.card, shape)
+            .border(1.dp, c.label.copy(alpha = if (fill == null) 0.12f else 0.07f), shape)
+            .clip(shape)
+    }
     return this
         .shadow(12.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.10f))
         .clip(shape)

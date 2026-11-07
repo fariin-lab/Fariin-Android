@@ -158,7 +158,7 @@ internal fun SwipeToActRow(
     id: String,
     enabled: Boolean,
     label: String,
-    icon: Painter,
+    @androidx.annotation.DrawableRes icon: Int,
     fill: Color,
     onAction: () -> Unit,
     content: @Composable () -> Unit,
@@ -169,10 +169,11 @@ internal fun SwipeToActRow(
     var x by remember(id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var widthPx by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     val armed by remember(id) { androidx.compose.runtime.derivedStateOf { -x > widthPx / 3f } }
+    // Whether the row is pulled at all. At rest (nearly always, and every row a scroll brings in)
+    // the action capsule is not built: its words, mark and two springs cost each new row for nothing.
+    val pulled by remember(id) { androidx.compose.runtime.derivedStateOf { x < 0f } }
     val scope = rememberCoroutineScope()
-    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     var settleJob by remember(id) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    LaunchedEffect(armed) { if (armed) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
     LaunchedEffect(enabled) { if (!enabled) { settleJob?.cancel(); x = 0f } }
     fun settle(to: Float, velocity: Float, then: (suspend () -> Unit)? = null) {
         settleJob?.cancel()
@@ -191,14 +192,16 @@ internal fun SwipeToActRow(
     // that lifts a little, and the action is its own capsule growing out of the right edge, 8 dp from
     // the row. Short of the mark it is tonal (pale blue, blue mark: "this will spring back"); past it,
     // solid blue with a white mark that pops, and the phone ticks ("let go and it is archived").
-    val tone by androidx.compose.animation.core.animateFloatAsState(if (armed) 1f else 0f,
-        spring(dampingRatio = 0.8f, stiffness = 700f), label = "swipeTone")
-    val pop by androidx.compose.animation.core.animateFloatAsState(if (armed) 1.12f else 1f,
-        spring(dampingRatio = 0.45f, stiffness = 600f), label = "swipePop")
     Box(Modifier.fillMaxWidth().onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }.clipToBounds()) {
         // The capsule: as wide as the uncovered space less the gap, laid out and drawn from x only.
         // 4 dp above and below (owner 2026-11-06: "ours looks thin"; fuller, still not the full row).
-        Box(Modifier.matchParentSize().padding(vertical = 4.dp, horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+        if (pulled) Box(Modifier.matchParentSize().padding(vertical = 4.dp, horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+            val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+            LaunchedEffect(armed) { if (armed) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
+            val tone by androidx.compose.animation.core.animateFloatAsState(if (armed) 1f else 0f,
+                spring(dampingRatio = 0.8f, stiffness = 700f), label = "swipeTone")
+            val pop by androidx.compose.animation.core.animateFloatAsState(if (armed) 1.12f else 1f,
+                spring(dampingRatio = 0.45f, stiffness = 600f), label = "swipePop")
             Box(
                 Modifier.fillMaxHeight()
                     .layout { m, k ->
@@ -221,7 +224,7 @@ internal fun SwipeToActRow(
                     alpha = ((-x - with(density) { 56.dp.toPx() }) / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
                 }, horizontalAlignment = Alignment.CenterHorizontally) {
                     val ink = androidx.compose.ui.graphics.lerp(c.blue, Color.White, tone)
-                    Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(24.dp))
+                    Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = null, tint = ink, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.height(3.dp))
                     Text(label, color = ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
@@ -237,8 +240,9 @@ internal fun SwipeToActRow(
                     clip = x < 0f
                     shadowElevation = liftPx * t
                 }
-                // Opaque, so only the part the finger uncovers shows the action.
-                .background(c.bg)
+                // Opaque while pulled, so only the part the finger uncovers shows the action. At rest
+                // the page under it is the same colour: no second fill of every row on every frame.
+                .drawBehind { if (x < 0f) drawRect(c.bg) }
                 .then(if (!enabled) Modifier else Modifier.pointerInput(id) {
                     // Never steals a scroll (owner 2026-11-06): the row only takes the finger once it has
                     // moved past the touch slop clearly to the LEFT, at least twice as far sideways as up

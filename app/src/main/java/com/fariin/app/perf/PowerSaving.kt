@@ -38,6 +38,12 @@ data class PowerState(
     val autoplayGifs get() = choices.autoplayGifs && !saving
     /** Real glass (background blur) only on Android 12+, a phone that is not LOW, and blur allowed. */
     fun glass(sdk: Int = Build.VERSION.SDK_INT) = PowerRules.glass(sdk, deviceClass, blur)
+    /**
+     * A LOW phone draws the cheap way: no soft shadows under floating buttons and bars (the phone
+     * recomputes each one on every frame while a list moves under it), and drawings that never
+     * change kept as a picture. Every other phone keeps the full look.
+     */
+    val cheapDrawing get() = deviceClass == PerfClass.LOW
 }
 
 /** Pure rules, unit tested. */
@@ -109,6 +115,11 @@ object PowerSaving {
 /** The Power Saving state for a composable; recomposes when a switch or Battery Saver changes. */
 @Composable
 fun rememberPowerState(): PowerState {
+    // Measured here too, not only by the tab shell: a screen shown before the shell (a chat opened
+    // straight away) read the defaults for an average phone, so a LOW phone drew everything.
+    // A no-op once started.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.remember { PowerSaving.init(context) }
     val s by PowerSaving.state.collectAsState()
     return s
 }
