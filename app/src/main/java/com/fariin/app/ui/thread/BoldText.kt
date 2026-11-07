@@ -31,6 +31,26 @@ internal data class BoldRunsTransformation(val spans: List<TextFormat.Span>) : V
     }
 }
 
+private object BoldMenuKey
+
+/**
+ * "Bold" in the text field's own menu, after Cut/Copy/Paste. Compose 1.9 (the version this app
+ * resolves) draws the field's menu itself and no longer asks LocalTextToolbar, so the toolbar
+ * below alone never showed Bold on the phone (2026-11-07). Shown only over a selection.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+internal fun androidx.compose.ui.Modifier.boldMenuItem(
+    enabled: Boolean,
+    hasSelection: () -> Boolean,
+    onBold: () -> Unit,
+): androidx.compose.ui.Modifier = if (!enabled) this else
+    androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents(this) {
+        if (hasSelection()) {
+            separator()
+            item(BoldMenuKey, "Bold") { onBold(); close() }
+        }
+    }
+
 /**
  * The composer's selection toolbar with "Bold" after the usual items (iOS: Format > Bold in the
  * text menu). Android's floating action mode, as Compose's own toolbar uses, with one more item;
