@@ -115,7 +115,8 @@ class PostReplyRulesTest {
             "next" to "3.old", "count" to 7, "off" to false, "channelOff" to false, "postOff" to true,
             "may" to mapOf("del" to true, "ban" to false, "settings" to true), "staff" to true, "rev" to 12,
         ))
-        assertEquals(listOf("old", "new"), p.items.map { it.id })
+        // Kept in the server's order (the sort decides it), not re-sorted by time.
+        assertEquals(listOf("new", "old"), p.items.map { it.id })
         assertEquals("3.old", p.next); assertEquals(7, p.count); assertTrue(p.off); assertTrue(p.postOff)
         assertEquals(ReplyRights(del = true, ban = false, settings = true), p.may); assertEquals(12, p.rev)
         val empty = PostReplyRules.parsePage(null)
@@ -193,6 +194,41 @@ class PostReplyRulesTest {
         assertEquals("😂", x.my); assertTrue(x.liked); assertEquals(3, x.likes)
         val none = PostReplyRules.parseReply(mapOf("id" to "n", "lc" to 0, "my" to ""))!!
         assertEquals("", none.my); assertFalse(none.liked); assertTrue(none.rx.isEmpty())
+    }
+
+    @Test fun answersToAnswersAndEdits() {
+        val a = PostReplyRules.parseReply(mapOf("id" to "a1", "t" to "yes", "to" to mapOf("id" to "a0", "name" to "Amina"), "edited" to true), "t1")!!
+        assertEquals(ReplyTo("a0", "Amina"), a.to); assertTrue(a.edited)
+        assertEquals("@Amina ", PostReplyRules.mentionPrefix(a))
+        assertEquals("5m · edited", PostReplyRules.ageLine(a.copy(at = 0), 5 * 60_000L))
+        assertNull(PostReplyRules.parseReply(mapOf("id" to "b", "to" to mapOf("name" to "x")))!!.to)
+        // Edit: mine, sent, within 15 minutes, replies on.
+        val mine = PostReply("m", mine = true, at = 1_000)
+        assertTrue(PostReplyRules.canEdit(mine, off = false, now = 1_000 + PostReplyRules.EDIT_MS))
+        assertFalse(PostReplyRules.canEdit(mine, off = false, now = 1_001 + PostReplyRules.EDIT_MS))
+        assertFalse(PostReplyRules.canEdit(mine, off = true, now = 2_000))
+        assertFalse(PostReplyRules.canEdit(mine.copy(mine = false), off = false, now = 2_000))
+        assertEquals(listOf(Action.REPLY, Action.COPY, Action.EDIT, Action.DELETE),
+            PostReplyRules.actions(mine.copy(canDelete = true), false, ReplyRights(), editable = true))
+        assertEquals("View 1 more reply", PostReplyRules.moreAnswers(1)); assertEquals("View 4 more replies", PostReplyRules.moreAnswers(4))
+    }
+
+    @Test fun pageOneMergeKeepsLaterPagesAndMine() {
+        val shown = listOf(r("p1", 1), r("p2", 2), r("l1", 3), r("mine", 9, mine = true, send = PostReply.Send.SENDING), r("gone", 4))
+        val m = PostReplyRules.mergePageOne(shown, listOf(r("new", 10), r("p1", 1)),
+            prevFirst = setOf("p1", "p2", "gone"), later = setOf("l1"), recentMine = emptySet())
+        // p2 and gone fell off page one and no later page holds them; l1 (later page) and mine stay.
+        assertEquals(setOf("p1", "l1", "mine", "new"), m.list.map { it.id }.toSet())
+        assertEquals(listOf("new"), m.added)
+        // Drawn: mine not yet in a page on top, then the pages' order; the pinned one apart.
+        val order = PostReplyRules.displayOrder(m.list, listOf("new", "p1", "l1"), pinnedId = "p1")
+        assertEquals(listOf("mine", "new", "l1"), order.map { it.id })
+    }
+
+    @Test fun pushFocus() {
+        assertEquals(ReplyFocus("m", "r1", "a1"), PostReplyRules.focusOf("m", "r1", "a1"))
+        assertEquals(ReplyFocus("m", "r1", ""), PostReplyRules.focusOf("m", "r1", null))
+        assertNull(PostReplyRules.focusOf("m", "", "a1"))
     }
 
     @Test fun fourPillsMineAlwaysShown() {
