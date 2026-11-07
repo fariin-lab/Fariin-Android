@@ -455,8 +455,11 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding()) {
         if (step == 1) {
             bar("Add Members", onBack) { TextAction("Next", picked.isNotEmpty()) { step = 2 } }
-            Text("${picked.size} of 1024 selected", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp))
-            PickPeople(people, picked) { u -> picked = if (u in picked) picked - u else picked + u }
+            // The create rule allows at most group_members_max people, me included (iOS
+            // NewGroupView.maxOthersAtCreate): the picker stops one short, the other place is mine.
+            val maxOthers = maxOf(1, com.fariin.app.data.AppLimits.groupMembersMax - 1)
+            Text("${picked.size} of $maxOthers selected", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp))
+            PickPeople(people, picked) { u -> picked = if (u in picked) picked - u else if (picked.size < maxOthers) picked + u else picked }
         } else {
             bar("New Group", { step = 1 }) {
                 TextAction("Create", title.isNotBlank() && !busy) {

@@ -88,7 +88,12 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
                 else -> LazyColumn(Modifier.fillMaxWidth()) {
                     items(list, key = { it.first.id }) { (g, doc) ->
                         val already = g.users.contains(uid)
-                        val blocked = if (already || GroupWelcome.canAdd(me, doc)) null else "Only admins can add members"
+                        val blocked = when {
+                            already -> null
+                            !GroupWelcome.canAdd(me, doc) -> "Only admins can add members"
+                            com.fariin.app.data.AppLimits.groupIsFull(g.isChannel, g.users.size) -> "Group is full"
+                            else -> null
+                        }
                         val off = already || blocked != null
                         Row(Modifier.fillMaxWidth().clickable(enabled = !off && working == null) { pending = g }
                             .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
