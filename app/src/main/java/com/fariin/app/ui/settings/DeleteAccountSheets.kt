@@ -241,6 +241,8 @@ internal fun SheetPill(label: String, fill: Color, modifier: Modifier = Modifier
 internal fun SheetCancel(label: String = "Cancel", enabled: Boolean = true, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(48.dp).padding(top = 4.dp).clip(CircleShape).clickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center) {
-        Text(label, fontSize = 17.sp, color = if (enabled) Fariin.colors.blue else Fariin.colors.tertiary)
+        // Same Cancel as the contact and group sheets (PersonConfirmSheet): label colour, semibold.
+        Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            color = if (enabled) Fariin.colors.label else Fariin.colors.tertiary)
     }
 }
