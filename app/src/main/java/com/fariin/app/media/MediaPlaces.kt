@@ -16,12 +16,28 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
 
-/** Upload progress by clientId (iOS MediaSend progress), 0..1, for the ring on my own bubble. */
+/**
+ * Upload progress (iOS UploadProgress + MediaSend done), 0..1, for the ring on my own bubble, by
+ * key: a photo's or video's clientId, an album tile's "clientId#index". [settled] holds the keys
+ * that are finished (the server has the message, or the send failed or was cancelled), so a ring
+ * leaves at once instead of spinning again while the row waits for its echo.
+ */
 object UploadProgress {
     private val _map = MutableStateFlow<Map<String, Float>>(emptyMap())
     val map: StateFlow<Map<String, Float>> = _map.asStateFlow()
-    fun set(clientId: String, f: Float) = _map.update { it + (clientId to f.coerceIn(0f, 1f)) }
-    fun done(clientId: String) = _map.update { it - clientId }
+    private val _settled = MutableStateFlow<Set<String>>(emptySet())
+    val settled: StateFlow<Set<String>> = _settled.asStateFlow()
+    fun set(key: String, f: Float) = _map.update { it + (key to f.coerceIn(0f, 1f)) }
+    fun done(key: String) {
+        _map.update { it - key }
+        _settled.update { s -> (if (s.size >= 400) s.drop(100).toSet() else s) + key }
+    }
+    /** A send (again) under [clientId]: its rings and its tiles' start over. */
+    fun reset(clientId: String) {
+        fun mine(k: String) = k == clientId || k.startsWith("$clientId#")
+        _map.update { m -> m.filterKeys { !mine(it) } }
+        _settled.update { s -> s.filterNot { mine(it) }.toSet() }
+    }
 }
 
 /**

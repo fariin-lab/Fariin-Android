@@ -196,6 +196,18 @@ object MediaRules {
     fun nextRate(r: Float): Float = when (r) { 1f -> 1.5f; 1.5f -> 2f; 2f -> 0.5f; else -> 1f }
     fun rateLabel(r: Float): String = when (r) { 1.5f -> "1.5×"; 2f -> "2×"; 0.5f -> "0.5×"; else -> "1×" }
 
+    // ---- UploadRingView.paint: what the upload ring draws.
+    enum class RingPhase { SPIN, FILL, FINISH, GONE }
+
+    /** No byte yet (waiting its turn is not zero) = spin; bytes = fill; all bytes up but the
+     *  server not done = the turning "finishing" arc; done, failed or X'd = gone. */
+    fun ringPhase(fraction: Float?, settled: Boolean): RingPhase = when {
+        settled -> RingPhase.GONE
+        fraction == null || fraction <= 0f -> RingPhase.SPIN
+        fraction >= 0.999f -> RingPhase.FINISH
+        else -> RingPhase.FILL
+    }
+
     // ---- MessageRowLayout.photoBox: the bubble size for a photo, in dp.
     fun photoBox(pixelW: Double?, pixelH: Double?, maxBubbleWidth: Float, captionWidth: Float = 0f): Pair<Float, Float> {
         val boxMax = min(maxBubbleWidth, 350f)

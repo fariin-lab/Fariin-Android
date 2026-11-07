@@ -69,26 +69,6 @@ internal fun uploadCancelFor(m: Message): (() -> Unit)? {
 }
 
 /**
- * The ring on my own media while it goes up (iOS UploadRingView): a filling arc once the upload
- * reports bytes, a spinner before that. With [onCancel], an X in the middle and a tap cancels the
- * send (iOS rowCellDidTapCancelUpload).
- */
-@Composable
-internal fun UploadRing(clientId: String?, modifier: Modifier = Modifier, onCancel: (() -> Unit)? = null) {
-    val all by UploadProgress.map.collectAsState()
-    val f = clientId?.let { all[it] }
-    Box(modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f))
-        .then(if (onCancel != null) Modifier.clickable(onClickLabel = "Cancel upload", onClick = onCancel) else Modifier),
-        contentAlignment = Alignment.Center) {
-        if (f != null && f > 0f) CircularProgressIndicator(progress = { f }, color = Color.White, strokeWidth = 2.5.dp,
-            trackColor = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(30.dp))
-        else CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-        if (onCancel != null) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Close,
-            contentDescription = "Cancel upload", tint = Color.White, modifier = Modifier.size(15.dp))
-    }
-}
-
-/**
  * A document (iOS file bubble): the type badge (or the PDF's first page), the name on up to two
  * lines, the size, and "Uploading" while it goes. Tap opens it in another app after the bytes are
  * opened into the cache; a document over the auto-download rule waits for a tap.

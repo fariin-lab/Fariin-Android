@@ -29,4 +29,13 @@ class MediaParityTest {
         assertEquals("15 MB", MediaDownloads.pillLabel(null, 15L * 1_048_576))
         assertEquals("1.2 MB / 15 MB", MediaDownloads.pillLabel(1_258_291, 15L * 1_048_576))
     }
+
+    @Test fun theRingSpinsUntilBytesMoveThenFillsThenTurnsUntilDone() {
+        assertEquals(MediaRules.RingPhase.SPIN, MediaRules.ringPhase(null, false))
+        assertEquals(MediaRules.RingPhase.SPIN, MediaRules.ringPhase(0f, false))
+        assertEquals(MediaRules.RingPhase.FILL, MediaRules.ringPhase(0.4f, false))
+        assertEquals(MediaRules.RingPhase.FINISH, MediaRules.ringPhase(1f, false))
+        assertEquals(MediaRules.RingPhase.GONE, MediaRules.ringPhase(1f, true))
+        assertEquals(MediaRules.RingPhase.GONE, MediaRules.ringPhase(null, true))
+    }
 }

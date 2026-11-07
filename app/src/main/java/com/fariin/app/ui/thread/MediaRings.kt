@@ -66,6 +66,68 @@ private fun rememberTurn(on: Boolean): State<Float> {
 }
 
 /**
+ * The ring on my own photo, video or album tile while it goes up (iOS UploadRingView, 52 pt, disc
+ * at 0.35): it spins while no byte has moved (waiting its turn is not zero), fills by bytes with a
+ * short ease once they move, turns as a nearly closed "finishing" arc once every byte is up until
+ * the server has the message, and is gone once the item is done, X'd or the send failed.
+ *
+ * [key] is a photo's or video's clientId, an album tile's "clientId#index"; null (somebody else's
+ * upload) only spins. The progress is read in the draw step and the phase in this small composable,
+ * so a progress tick never recomposes the row.
+ */
+@Composable
+internal fun UploadRing(key: String?, modifier: Modifier = Modifier, onCancel: (() -> Unit)? = null,
+    side: Dp = 52.dp, failed: Boolean = false) {
+    // The first frame already draws what the upload is at (a row scrolled back mid-upload).
+    val now = key?.let { UploadProgress.map.value[it] }
+    val first = if (key == null) MediaRules.RingPhase.SPIN else MediaRules.ringPhase(now, key in UploadProgress.settled.value)
+    val phase by produceState(first, key) {
+        if (key == null) return@produceState
+        kotlinx.coroutines.flow.combine(UploadProgress.map, UploadProgress.settled) { m, s ->
+            MediaRules.ringPhase(m[key], key in s)
+        }.distinctUntilChanged().collect { value = it }
+    }
+    if (failed || phase == MediaRules.RingPhase.GONE) return
+    val motion = ringMotionOn()
+    val fill = remember(key) { Animatable(maxOf(0.03f, now?.takeIf { it < 0.999f } ?: 0f)) }
+    LaunchedEffect(key, motion) {
+        if (key == null) return@LaunchedEffect
+        UploadProgress.map.map { it[key] }.distinctUntilChanged().collect { f ->
+            if (f == null || f <= 0f || f >= 0.999f) return@collect
+            val to = maxOf(0.03f, f)
+            if (motion) fill.animateTo(to, tween(200, easing = FastOutSlowInEasing)) else fill.snapTo(to)
+        }
+    }
+    val turning = phase != MediaRules.RingPhase.FILL
+    val turn = rememberTurn(motion && turning)
+    // The spinner's stroke opens from nothing to half a circle over its first second (iOS "open").
+    val open = remember(key, phase) { Animatable(if (motion && phase == MediaRules.RingPhase.SPIN) 0f else 0.5f) }
+    LaunchedEffect(key, phase, motion) {
+        if (motion && phase == MediaRules.RingPhase.SPIN) open.animateTo(0.5f, tween(1000, easing = androidx.compose.animation.core.EaseIn))
+    }
+    Box(modifier.size(side).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
+        .then(if (onCancel != null) Modifier.clickable(onClickLabel = "Cancel upload", onClick = onCancel) else Modifier),
+        contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val s = size.minDimension
+            val w = maxOf(2.dp.toPx(), s * 0.058f)
+            val r = s * 0.4225f
+            val sweep = 360f * when (phase) {
+                MediaRules.RingPhase.SPIN -> if (motion) open.value else 0.25f
+                MediaRules.RingPhase.FINISH -> 0.9f
+                else -> fill.value
+            }
+            rotate(if (turning) turn.value else 0f) {
+                drawArc(Color.White, -90f, sweep, useCenter = false,
+                    topLeft = Offset(center.x - r, center.y - r), size = Size(r * 2, r * 2),
+                    style = Stroke(width = w, cap = StrokeCap.Round))
+            }
+        }
+        if (onCancel != null) Icon(Icons.Filled.Close, "Cancel upload", tint = Color.White, modifier = Modifier.size(side * 0.34f))
+    }
+}
+
+/**
  * The receive side's disc (iOS MediaDownloadBadge, 48 pt at 0.45): an arrow while it waits for a
  * tap (auto-download off for this network), a ring filled by bytes with an X while it comes down
  * (the tap cancels), a turn arrow after a failure (the tap tries again). The size pill in the top

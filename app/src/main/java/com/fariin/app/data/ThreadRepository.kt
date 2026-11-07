@@ -744,6 +744,8 @@ class ThreadRepository(
     /** Runs one media send; a failure leaves a red bubble whose tap runs the same work again. */
     private fun runMediaSend(clientId: String, work: suspend () -> Unit) {
         val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            // A try again starts its rings over (a failed send's were settled).
+            com.fariin.app.media.UploadProgress.reset(clientId)
             try {
                 work()
                 retryMedia.remove(clientId)
