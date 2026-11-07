@@ -23,11 +23,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.fariin.app.ui.theme.Fariin
 
-/** iOS's green when on, whatever the accent (KulanApp SystemGreenSwitch). */
-private val SwitchGreen = Color(0xFF34C759)
-
 /**
- * The iOS switch (owner: the iOS look everywhere): 51 x 31, green track when on, grey when off, a
+ * The iOS-shaped switch: 51 x 31, black track when on (white in dark mode), grey when off, a
  * white knob with a soft shadow, no outline. Takes the same arguments as Material's Switch so a
  * call site only changes its name; `colors` is accepted and ignored. A null onCheckedChange makes
  * it a picture of the state, the row around it taking the tap.
@@ -41,7 +38,10 @@ fun FariinSwitch(
     @Suppress("UNUSED_PARAMETER") colors: SwitchColors? = null,
 ) {
     val c = Fariin.colors
-    val track by animateColorAsState(if (checked) SwitchGreen else c.label.copy(alpha = 0.16f), label = "switchTrack")
+    // On: black in light mode, white in dark mode (owner 2026-11-06, was green). On white the knob
+    // turns dark so it still reads.
+    val track by animateColorAsState(if (checked) (if (c.dark) Color.White else Color.Black) else c.label.copy(alpha = 0.16f), label = "switchTrack")
+    val knob by animateColorAsState(if (checked && c.dark) Color(0xFF1C1C1E) else Color.White, label = "switchKnob")
     val x by animateDpAsState(if (checked) 22.dp else 2.dp, spring(dampingRatio = 0.75f, stiffness = 600f), label = "switchKnob")
     val tap = if (onCheckedChange != null)
         Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange,
@@ -49,6 +49,6 @@ fun FariinSwitch(
             interactionSource = null, indication = null) else Modifier
     Box(modifier.then(tap).padding(4.dp).alpha(if (enabled) 1f else 0.45f), contentAlignment = Alignment.CenterStart) {
         Box(Modifier.size(width = 51.dp, height = 31.dp).clip(CircleShape).background(track))
-        Box(Modifier.offset(x = x).size(27.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(Color.White))
+        Box(Modifier.offset(x = x).size(27.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(knob))
     }
 }

@@ -1042,3 +1042,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   leaves chat search open after a cold start (script bug, not the app).
 - 16:50 Picker search finds places (Pizza Ranch picked, card says "Place chosen from the list"). Search mode
   had three X buttons (page, search, clear); the search one is now a "Cancel" pill.
+- 18:01 Switches: on = black in light mode, white with a dark knob in dark mode (owner, was green). Recent
+  Actions' plain Material switch moved onto FariinSwitch. Checked both modes on the Pixel; Night Mode back to System.
+  Location agent 4ea4d94: Google Maps SDK in place of MapLibre, APK 134.47 -> 84.56 MB; waits for Maps SDK to be
+  enabled on the project (owner's yes).

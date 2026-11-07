@@ -451,7 +451,7 @@ private fun SwitchRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onChange(!on) }.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-        Switch(on, onChange, colors = SwitchDefaults.colors(checkedTrackColor = c.accent))
+        com.fariin.app.ui.components.FariinSwitch(on, onChange)
     }
     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
 }
