@@ -368,6 +368,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             onDismissRequest = { privacyPages.removeAt(privacyPages.lastIndex) },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) {
+            com.fariin.app.ui.components.AppPageDialogWindow()
             Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
                 com.fariin.app.ui.settings.moreRoute(privacyPages.last(), push = { privacyPages.add(it) },
                     pop = { if (privacyPages.isNotEmpty()) privacyPages.removeAt(privacyPages.lastIndex) })
@@ -379,7 +380,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { glowPage = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-        ) { com.fariin.app.ui.glow.GlowStoriesPage(me, conversations, glowSeen, onBack = { glowPage = false }) }
+        ) {
+            com.fariin.app.ui.components.AppPageDialogWindow()
+            com.fariin.app.ui.glow.GlowStoriesPage(me, conversations, glowSeen, onBack = { glowPage = false })
+        }
     }
     if (glowNotifs) {
         val people = com.fariin.app.ui.people.LocalPeopleNav.current
@@ -387,6 +391,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             onDismissRequest = { glowNotifs = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) {
+            com.fariin.app.ui.components.AppPageDialogWindow()
             com.fariin.app.ui.glow.GlowNotificationsPage(me, state.mine?.stories ?: emptyList(), conversations,
                 onOpenPerson = { uid -> glowNotifs = false; people.contact(uid) },
                 onOpenMyStory = { state.mine?.let { g -> viewing = listOf(g) to 0 } },
@@ -398,6 +403,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             onDismissRequest = { posted = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) {
+            com.fariin.app.ui.components.AppPageDialogWindow()
             PostedStoriesPage(me, state.mine?.stories ?: emptyList(), profile?.photoUrl,
                 onOpen = { s ->
                     // Start the viewer on the tapped story: a watermark just before it.

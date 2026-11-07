@@ -112,6 +112,7 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
         onDismissRequest = { creating = false },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        com.fariin.app.ui.components.AppPageDialogWindow()
         Box(Modifier.fillMaxSize()) {
             val people = remember { com.fariin.app.ui.stories.storyPeople(me, CryptoHub.listedAll()) }
             com.fariin.app.ui.stories.CreateCustomStoryFlow(people, onCreated = { creating = false }, onCancel = { creating = false })

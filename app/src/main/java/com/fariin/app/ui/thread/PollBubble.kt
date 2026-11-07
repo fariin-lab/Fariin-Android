@@ -363,6 +363,7 @@ internal fun PollComposer(onDismiss: () -> Unit, onSend: (String) -> Unit) {
     }.ifEmpty { listOf("Anyone in the chat can vote and see who voted.") }.joinToString(" ")
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        com.fariin.app.ui.components.AppPageDialogWindow()
         Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close", tint = c.label) }

@@ -1049,3 +1049,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 18:10 Location denied: Open Settings notice + draggable map fine (map blank until Maps SDK on). Fixed: it
   said "Finding your location…" with location off, and Send said "Finding place…" though nothing was looked up;
   now no fix line and "Choose a spot on the map".
+- 18:36 Stories tab, Viewed fold, Story privacy page + New menu fine (dimmed items as iOS). Fixed: the status
+  bar's clock/battery were white on the light Story privacy page; every light full-screen dialog page (Story
+  privacy, Glow stories/notifications, Posted stories, Custom Story, poll voters) now sets its icons by theme.
