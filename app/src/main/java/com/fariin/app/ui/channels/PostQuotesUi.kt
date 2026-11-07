@@ -131,6 +131,14 @@ private fun QuoteFaces(urls: List<String>, people: Boolean = false) {
     }
 }
 
+/** The post draws a Replies / Quotes bar at all (the same test [PostQuotesBar] makes). */
+@Composable
+fun postBarShown(m: Message, channelRepliesOff: Boolean): Boolean {
+    if (m.isSystem) return false
+    val repliesOn = !PostReplyRules.postOff(m.repliesOff, channelRepliesOff, PostRepliesSwitch.of(m.id))
+    return PostReplyRules.barLabel(m.replyCount, m.quoteCount, repliesOn = repliesOn, sent = m.sendState == null, deleted = m.deleted) != null
+}
+
 /**
  * "3 Replies · 4 Quotes" along a sent channel post's bottom, inside its bubble, under the reactions
  * and time (iOS QuoteBarView, owner 2026-11-06): a hairline across the bubble, the quoting channels'
@@ -140,15 +148,6 @@ private fun QuoteFaces(urls: List<String>, people: Boolean = false) {
  * (it takes the parent's width on the next pass), so a short post's bubble does not grow to full width.
  * [inBubble] false: a media post, whose bubble is the picture, gets the same row under it.
  */
-@Composable
-/** The post draws a Replies / Quotes bar at all (the same test [PostQuotesBar] makes). */
-@Composable
-fun postBarShown(m: Message, channelRepliesOff: Boolean): Boolean {
-    if (m.isSystem) return false
-    val repliesOn = !PostReplyRules.postOff(m.repliesOff, channelRepliesOff, PostRepliesSwitch.of(m.id))
-    return PostReplyRules.barLabel(m.replyCount, m.quoteCount, repliesOn = repliesOn, sent = m.sendState == null, deleted = m.deleted) != null
-}
-
 @Composable
 fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boolean = true, edge: Dp = 0.dp) {
     if (m.isSystem) return
