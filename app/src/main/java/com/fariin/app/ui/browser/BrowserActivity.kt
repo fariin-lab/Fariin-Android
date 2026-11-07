@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -50,6 +51,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +68,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.fariin.app.ui.components.FariinSheet
 import com.fariin.app.ui.components.SheetMotion
 import com.fariin.app.ui.components.floating
@@ -197,6 +201,22 @@ private fun Browser(start: String, motion: SheetMotion) {
 
     BackHandler { val w = web; if (w != null && w.canGoBack()) w.goBack() else onClose() }
 
+    // Fariin behind another app or the screen off: the page stops (its video, sound, scripts and
+    // timers), and carries on when it is back in front.
+    @Suppress("DEPRECATION") val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(owner, web) {
+        val w = web ?: return@DisposableEffect onDispose {}
+        val obs = LifecycleEventObserver { _, e ->
+            when (e) {
+                Lifecycle.Event.ON_RESUME -> { w.resumeTimers(); w.onResume() }
+                Lifecycle.Event.ON_PAUSE -> { w.onPause(); w.pauseTimers() }
+                else -> {}
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+
     Box(Modifier.fillMaxSize().drawBehind { drawRect(c.bg) }) {
         AndroidView(
             // As iOS InAppBrowser (owner, 2026-11-06): the page fills the screen under the status bar;
@@ -237,6 +257,14 @@ private fun Browser(start: String, motion: SheetMotion) {
                         override fun onPageStarted(view: WebView, u: String?, favicon: Bitmap?) { loading = true; refresh(view) }
                         override fun onPageFinished(view: WebView, u: String?) { loading = false; shown = true; refresh(view) }
                         override fun doUpdateVisitedHistory(view: WebView, u: String?, isReload: Boolean) { refresh(view) }
+                        // The phone ended the page's process (short of memory, or it crashed). Left
+                        // unhandled, Android ends all of Fariin with it; the sheet closes instead.
+                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                            if (web === view) web = null
+                            view.tag = RENDERER_GONE   // not used again; destroyed as the sheet goes
+                            onClose()
+                            return true
+                        }
                     }
                     webChromeClient = object : WebChromeClient() {
                         override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -252,7 +280,7 @@ private fun Browser(start: String, motion: SheetMotion) {
                     web = this
                 }
             },
-            onRelease = { it.stopLoading(); it.destroy() },
+            onRelease = { if (it.tag !== RENDERER_GONE) it.stopLoading(); it.destroy() },
         )
 
         // Close, top-left.
@@ -317,6 +345,9 @@ private fun Browser(start: String, motion: SheetMotion) {
         }
     }
 }
+
+/** Marks a WebView whose page process ended: only destroy() may be called on it now. */
+private val RENDERER_GONE = Any()
 
 /** The site's name for the capsule: the host without "www.". */
 private fun hostOf(url: String): String =
