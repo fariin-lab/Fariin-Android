@@ -137,15 +137,6 @@ internal fun AttachSheet(
     val videos = remember { mutableStateListOf<Uri>() }
     var caption by remember { mutableStateOf("") }
     var viewOnce by remember { mutableStateOf(false) }
-    // iOS attach-sheet HD: starts as Settings > Sent Media Quality says, back to it after each send.
-    var hd by remember { mutableStateOf(com.fariin.app.media.SentQuality.high(context)) }
-    val sendPicked = {
-        val list = picked.toList()
-        list.forEach { com.fariin.app.media.SentQuality.choose(it, hd) }   // videos too: 1080p or 540p
-        onSendMedia(list, caption, viewOnce)
-        hd = com.fariin.app.media.SentQuality.high(context)
-        motion.close()
-    }
     // A chosen photo open in the editor. One photo chosen: the whole editor page (iOS
     // ChatImageEditor: crop, pen, HD, its own caption and Send, which sends and closes the sheet).
     var drawOn by remember { mutableStateOf<Uri?>(null) }
@@ -370,7 +361,7 @@ internal fun AttachSheet(
                     Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.height(44.dp).floating(RoundedCornerShape(22.dp), fill = c.blue)
-                            .clickable { sendPicked() }
+                            .clickable { onSendMedia(picked.toList(), caption, viewOnce); motion.close() }
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -383,16 +374,6 @@ internal fun AttachSheet(
                         }
                     }
                 }
-                // HD for every chosen photo and video (as the editors' HD button): its own round glass
-                // button over the grid, 8dp above Send, the bar's side margin (owner 2026-11-07).
-                Box(Modifier.align(Alignment.BottomEnd).then(lift).then(barsPad).padding(end = 12.dp, bottom = 72.dp)
-                    .size(40.dp).floating().clickable { hd = !hd }
-                    .semantics { contentDescription = if (hd) "HD on" else "HD off" },
-                    contentAlignment = Alignment.Center) {
-                    Text("HD", color = if (hd) c.accent else c.label, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                // The editors' "HD" / "Standard" words after a tap, above the HD button's row.
-                Box(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).padding(bottom = 82.dp)) { QualityHint(hd) }
             }
             }
         }
