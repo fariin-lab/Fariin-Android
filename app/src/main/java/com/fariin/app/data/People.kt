@@ -538,8 +538,8 @@ object GroupRules {
         return !(until > nowMs && "changeInfo" in flags)
     }
 
-    /** AppLimits.groupDescMax: the iOS fallback (the panel's `group_desc_max`, 200 since 2026-10-27). */
-    const val DESC_MAX = 200
+    /** AppLimits.groupDescMax: the panel's `group_desc_max`, 200 when it has none (as iOS). */
+    val DESC_MAX: Int get() = AppLimits.groupDescMax
 
     /**
      * Limits.oneParagraph, as the Description field types it: every whitespace (newlines too) is one
