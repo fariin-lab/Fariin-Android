@@ -122,7 +122,8 @@ internal fun lookRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
     when (page) {
         PAGE_WALLPAPER -> ChatWallpaperPage(push, pop)
         PAGE_WALL_COLOR -> WallpaperColorPage(pop)
-        PAGE_CHAT_COLOR -> ChatColorPage(pop)
+        // The old colour page link (new-account card) opens Bubble Style, on its Color chip when no style is saved.
+        PAGE_CHAT_COLOR -> BubbleStylePage(onClose = pop)
         else -> return false
     }
     return true

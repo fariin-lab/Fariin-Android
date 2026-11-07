@@ -410,14 +410,8 @@ private fun AppearancePage(push: (String) -> Unit, pop: () -> Unit) {
             SettingsSection(header = "Chat Theme") { ChatThemeBlock() }
             SettingsSection {
                 SettingsRow("Chat Wallpaper", badge = NewBadgeSpots.APPEARANCE_CHAT_WALLPAPER) { push(PAGE_WALLPAPER) }
-                // "Bubble Color" (owner 2026-11-07: renamed from Chat Color, its own card again).
-                val lookV = com.fariin.app.data.ChatLookStore.version.intValue
-                val myColor = remember(lookV) { com.fariin.app.data.ChatLookStore.globalColor(ctx) }
-                val blue = com.fariin.app.ui.theme.Fariin.colors.blue
-                SettingsRow("Bubble Color", badge = NewBadgeSpots.APPEARANCE_CHAT_COLOR, accessory = {
-                    Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(myColor?.brush() ?: androidx.compose.ui.graphics.SolidColor(blue)))
-                }) { push(PAGE_CHAT_COLOR) }
+                // No Bubble Color row (owner 2026-11-07, as iOS): colours are picked on Bubble Style's
+                // Color chip and in the chat's wallpaper sheet.
                 if (com.fariin.app.data.BubbleStyles.SHOWN) {
                     val bubbleV = com.fariin.app.data.BubbleStyles.version.intValue
                     val bubbleName = remember(bubbleV) { com.fariin.app.data.BubbleStyles.init(ctx); com.fariin.app.data.BubbleStyles.name(com.fariin.app.data.BubbleStyles.current()) }
