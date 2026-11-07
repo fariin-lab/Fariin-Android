@@ -1393,6 +1393,20 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         val story = m.replyTo?.takeIf { it.isStatus && !m.deleted }
         Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
         if (story != null) StoryReplyHeader(ui, m, story, isMe)
+        // Emoji only, one to five (iOS jumbomoji): drawn big with no bubble, the time in a capsule
+        // under it. Not for a reply (the quote shares the box), a link card or a quoted post; a
+        // story reply keeps it, its card sits above.
+        val jumbo = if (m.deleted || ui.channel != null || kind != null || m.linkPreview != null || m.quoteId != null ||
+            m.replyTo?.isStatus == false) 0 else MessageRules.jumbomojiCount(m.bodyText)
+        if (jumbo > 0) {
+            if (showSender && g.first) SenderLine(ui, m.authorId)
+            if (m.forwarded) ForwardedTag(m, false, false)
+            Text(m.bodyText.trim(), fontSize = (17f * MessageRules.jumbomojiScale(jumbo)).sp,
+                lineHeight = (17f * MessageRules.jumbomojiScale(jumbo) * 1.15f).sp, color = c.label)
+            Spacer(Modifier.height(2.dp))
+            MetaCapsule { Meta(m, tick, isMe, is24h, onMedia = true) }
+            return@Column
+        }
         // The sender's bubble style (BubbleStyles.kt): its fill and text colour, on both sides.
         val styled = styledBubble(m)
         val chromeMe = isMe && styled == null

@@ -102,6 +102,53 @@ object MessageRules {
     fun activeTab(reactions: Map<String, String>, picked: String?): String? =
         picked?.takeIf { it in reactions.values }
 
+    /**
+     * iOS jumbomojiCount: words made of emoji only (spaces ignored) count their emoji, 1 to 5;
+     * anything else, or six or more, is 0 and keeps its bubble. A joined family, a flag, a skin
+     * tone or a keycap counts as one.
+     */
+    fun jumbomojiCount(text: String): Int {
+        var count = 0
+        var afterJoiner = false
+        var flagOpen = false
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            i += Character.charCount(cp)
+            val next = if (i < text.length) text.codePointAt(i) else -1
+            when {
+                Character.isWhitespace(cp) -> { afterJoiner = false; flagOpen = false }
+                cp == 0x200D -> afterJoiner = true
+                cp in 0xFE00..0xFE0F || cp == 0x20E3 || cp in 0x1F3FB..0x1F3FF || cp in 0xE0020..0xE007F -> {}
+                cp in 0x1F1E6..0x1F1FF -> {   // two regional letters make one flag
+                    if (flagOpen) flagOpen = false else { count++; flagOpen = true }
+                    afterJoiner = false
+                }
+                isEmojiBase(cp) || (cp.toChar() in "0123456789#*" && (next == 0xFE0F || next == 0x20E3)) -> {
+                    if (!afterJoiner) count++
+                    afterJoiner = false; flagOpen = false
+                }
+                else -> return 0
+            }
+            if (count > 5) return 0
+        }
+        return count
+    }
+
+    private fun isEmojiBase(cp: Int): Boolean =
+        cp in 0x1F000..0x1FAFF || cp in 0x2600..0x27BF ||
+            cp in 0x2194..0x2199 || cp == 0x21A9 || cp == 0x21AA || cp == 0x231A || cp == 0x231B || cp == 0x2328 ||
+            cp == 0x23CF || cp in 0x23E9..0x23F3 || cp in 0x23F8..0x23FA || cp == 0x25AA || cp == 0x25AB ||
+            cp == 0x25B6 || cp == 0x25C0 || cp in 0x25FB..0x25FE || cp == 0x2934 || cp == 0x2935 ||
+            cp in 0x2B05..0x2B07 || cp == 0x2B1B || cp == 0x2B1C || cp == 0x2B50 || cp == 0x2B55 ||
+            cp == 0x00A9 || cp == 0x00AE || cp == 0x203C || cp == 0x2049 || cp == 0x2122 || cp == 0x2139 ||
+            cp == 0x24C2 || cp == 0x3030 || cp == 0x303D || cp == 0x3297 || cp == 0x3299
+
+    /** iOS jumbomojiPointSize: the body's 17 times 3.5, 3, 2.75, 2.5, 2.25 for 1 to 5 emoji. */
+    fun jumbomojiScale(count: Int): Float = when (count) {
+        1 -> 3.5f; 2 -> 3.0f; 3 -> 2.75f; 4 -> 2.5f; else -> 2.25f
+    }
+
     /** Toggle: the same emoji again takes my reaction off (null), else it becomes mine. */
     fun nextReaction(current: String?, picked: String): String? = if (current == picked) null else picked
 
