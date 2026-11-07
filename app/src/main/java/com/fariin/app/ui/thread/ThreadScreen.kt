@@ -547,6 +547,9 @@ private fun ThreadContent(
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(220, delayMillis = 40) else null }
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
+    // A group's or channel's card that has to wait for the server's word on the history fades in
+    // instead of popping in one frame; a card known from the first frame is simply there (HistoryStart).
+    val cardFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(260) else null }
     // My own send rises out of the composer (iOS send flight, SendMotion.kt); off with Power
     // Saving > Animations or the system's Remove animations. (sendMotion is declared above, with
     // arrivalMotion: the stick-to-newest effect asks both.)
@@ -919,7 +922,8 @@ private fun ThreadContent(
                 // history is here (or the channel is too small to have more), never between pages.
                 if (ch != null && ui.loaded && ui.messages.isNotEmpty() && (!ui.canLoadOlder || (ui.messages.size < 20 && ch.info.postCount < 20)))
                     item(key = "channelIntro") {
-                        Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.animateItem(fadeInSpec = cardFade, placementSpec = null, fadeOutSpec = null)
+                            .fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                             com.fariin.app.ui.channels.ChannelIntroCard(ch)
                         }
                     }
@@ -927,7 +931,8 @@ private fun ThreadContent(
                 // oldest message (never between pages); scrolling up to the start shows it.
                 if (ui.loaded && ui.isGroup && ui.channel == null && !ui.notAMember && !ui.canLoadOlder &&
                     ui.messages.isNotEmpty() && ui.groupDoc.isNotEmpty()) item(key = "groupWelcome") {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.animateItem(fadeInSpec = cardFade, placementSpec = null, fadeOutSpec = null)
+                        .fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
                         GroupWelcomeCard(ui, onStep = { peopleNav.groupStep(ui.cid, it) })
                     }
                 }

@@ -94,6 +94,13 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     var notice by remember { mutableStateOf<String?>(null) }
     notice?.let { n -> LaunchedEffect(n) { com.fariin.app.ui.components.Snack.show(n); notice = null } }
     val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, s.conv, s.messages) { notice = it }
+    // Whether this chat's history began on its first page the last time the server said so.
+    val startKnown = remember(cid) { HistoryStart.known(app, me, cid) }
+    LaunchedEffect(s.synced, s.canLoadOlder) {
+        if (!s.synced) return@LaunchedEffect
+        if (!s.canLoadOlder && s.messages.size < ThreadRepository.PAGE_SIZE) HistoryStart.mark(app, me, cid, true)
+        else if (s.canLoadOlder) HistoryStart.mark(app, me, cid, false)
+    }
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val ui = ThreadUi(
         title = channel?.info?.title?.ifEmpty { null } ?: conv?.displayName(me) ?: "",
@@ -110,7 +117,9 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         loaded = s.loaded,
         synced = s.synced,
         loadingOlder = s.loadingOlder,
-        canLoadOlder = s.canLoadOlder,
+        // Until the server answers, a chat whose whole history fitted on its first page last time is
+        // taken as still complete, so its welcome card is there from the first frame (HistoryStart).
+        canLoadOlder = s.canLoadOlder && !(startKnown && !s.synced && s.messages.size < ThreadRepository.PAGE_SIZE),
         sendBlocked = (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupAdmins.announcementBlock(s.conv, me) else null)
             ?: vm.repo.sendBlockedReason(listed ?: conv),
         cid = cid,
@@ -292,3 +301,22 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
 }
 
+
+/**
+ * The chats whose whole history fitted on the first page the last time the server answered, per
+ * account, kept across launches. Opening such a chat draws its group or channel card from the first
+ * frame instead of after the server's answer (it popped in ~0.2 s late on the Pixel, 2026-11-07).
+ */
+internal object HistoryStart {
+    private const val PREFS = "fariin_history_start"
+
+    fun known(c: Context, me: String, cid: String): Boolean =
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(me, null)?.contains(cid) == true
+
+    fun mark(c: Context, me: String, cid: String, complete: Boolean) {
+        val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = p.getStringSet(me, null).orEmpty()
+        if ((cid in now) == complete) return
+        p.edit().putStringSet(me, if (complete) now + cid else now - cid).apply()
+    }
+}
