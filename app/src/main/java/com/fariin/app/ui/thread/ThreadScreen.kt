@@ -114,6 +114,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.AlignmentLine
@@ -455,6 +456,8 @@ private fun ThreadContent(
     // at the first unread, the divider row at the top of the screen, the unread run below it. Once
     // per open; few unread simply stays at the newest, where the clamp leaves it.
     var landedOnUnread by remember { mutableStateOf(false) }
+    var unreadJumpUsed by remember { mutableStateOf(false) }   // the arrow's first-unread stop, once a visit
+    var voiceRecording by remember { mutableStateOf(false) }
     LaunchedEffect(dividerId) {
         val id = dividerId ?: return@LaunchedEffect
         if (landedOnUnread) return@LaunchedEffect
@@ -894,9 +897,24 @@ private fun ThreadContent(
                     goToMatch()
                 }
             }
-            if (!atBottom && !search.active) {
+            // iOS: hidden while a voice note is being recorded.
+            if (!atBottom && !search.active && !voiceRecording) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {
-                    scope.launch { listState.animateScrollToItem(0) }
+                    // iOS two-stage arrow: the first tap goes to the first unread message, once, and
+                    // only when the "Unread Messages" divider is still below everything on screen;
+                    // otherwise (and every tap after) to the newest.
+                    val i = if (unreadJumpUsed || dividerId == null) -1 else ui.messages.indexOfFirst { it.rowId == dividerId }
+                    val idx = if (i < 0) -1 else ui.messages.size - 1 - i   // the list is reversed
+                    if (idx >= 0 && listState.firstVisibleItemIndex >= idx) {
+                        unreadJumpUsed = true
+                        scope.launch {
+                            listState.animateScrollToItem(idx)
+                            val info = listState.layoutInfo
+                            val row = info.visibleItemsInfo.firstOrNull { it.index == idx } ?: return@launch
+                            val usable = info.viewportSize.height - info.beforeContentPadding - info.afterContentPadding
+                            listState.animateScrollBy(-(usable - row.size).coerceAtLeast(0).toFloat())   // the divider to the top
+                        }
+                    } else scope.launch { listState.animateScrollToItem(0) }
                 // iOS: at the composer's side margin, 10 above it, over the edge glass.
                 }, modifier = Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp))
             }
@@ -1074,6 +1092,7 @@ private fun ThreadContent(
                             onSendVoice(r)
                         }
                     }, prefill = editing?.let { it.id to it.text }, onTyping = actions.onTyping,
+                    onRecording = { voiceRecording = it },
                     onRowPlaced = { sendMotion.composerRow = it },
                     onCamera = {
                         val stop = held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
@@ -1795,6 +1814,8 @@ private fun Composer(
     sendsWithoutText: Boolean = false,
     /** Changes when the field should take the keyboard (a quote just placed above it). */
     focusKey: Any? = null,
+    /** The mic is live, held or locked (the jump arrow hides meanwhile, as iOS). */
+    onRecording: (Boolean) -> Unit = {},
 ) {
     val c = Fariin.colors
     val context = LocalContext.current
@@ -1835,6 +1856,8 @@ private fun Composer(
     // recording: the mic is live (held or locked). locked: it goes on with the finger off (iOS
     // recordLocked). reviewing: a locked recording paused to listen back (iOS reviewingNote).
     var recording by remember { mutableStateOf(false) }
+    LaunchedEffect(recording) { onRecording(recording) }
+    DisposableEffect(Unit) { onDispose { onRecording(false) } }
     var locked by remember { mutableStateOf(false) }
     var reviewing by remember { mutableStateOf(false) }
     var review by remember { mutableStateOf<VoiceRecorder.Review?>(null) }
