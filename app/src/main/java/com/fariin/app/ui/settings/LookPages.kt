@@ -126,7 +126,8 @@ private fun ResetMenu(wallpaperPage: Boolean) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
-    fun resetWallpaper() = ChatLookStore.setDefaultWallpaper(ctx, ChatWallpaper.None)
+    // Reset in Settings is "plain look everywhere": every chat's own pick goes too (iOS 9ab7d41c).
+    fun resetWallpaper() = ChatLookStore.resetAllWallpapers(ctx, ChatWallpaper.None)
     fun resetColor() = ChatLookStore.setDefaultColor(ctx, null)
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Reset options", tint = c.label) }
@@ -387,7 +388,10 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
         }
         // From a chat (iOS): Apply Wallpaper is this chat's; Apply For All Chats sets the Settings one
         // and this chat follows it again.
-        if (cid == null) ChatLookStore.setDefaultWallpaper(ctx, final)
+        // From Settings it reaches EVERY chat (owner, 2026-11-06): a chat's own earlier pick, or a
+        // per-chat Reset's stored "none", no longer keeps the old look. A group's admin-set shared
+        // wallpaper stays (resetAllWallpapers keeps "wallpaper.group.*"), as iOS 9ab7d41c.
+        if (cid == null) ChatLookStore.resetAllWallpapers(ctx, final)
         // A group's: everyone's wallpaper, written by the server (iOS publishGroupWallpaper).
         else if (shared) com.fariin.app.data.GroupWallpaper.publish(ctx, cid, final) { groupWallpaperFailed(ctx, it) }
         else if (allChats) ChatLookStore.applyToAllChats(ctx, final, alsoFor = cid)
