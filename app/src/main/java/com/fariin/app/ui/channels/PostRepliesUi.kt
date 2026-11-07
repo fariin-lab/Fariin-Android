@@ -451,11 +451,13 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
 
     /**
      * A tap on a reply's photo or name: [open] gets the author's uid, or null for a Creator reply
-     * (it speaks as the channel: the channel's page). Moderators have the uid on the row already;
-     * everyone else asks `replyAuthor` for this one reply. My own reply does nothing.
+     * (it speaks as the channel: the channel's page, for everyone, moderators too, as iOS).
+     * Moderators have the uid on the row already; everyone else asks `replyAuthor` for this one
+     * reply. My own reply does nothing.
      */
     fun openAuthor(r: PostReply, open: (String?) -> Unit) {
         if (r.mine || r.send != PostReply.Send.SENT) return
+        if (r.creator) { open(null); return }
         if (r.uid.isNotEmpty()) { open(r.uid); return }
         scope.launch {
             PostReplies.author(cid, mid, r)
