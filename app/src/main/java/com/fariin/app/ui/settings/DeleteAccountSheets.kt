@@ -123,9 +123,9 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
     val go = remember { booleanArrayOf(false) }
     // Continue opens the next sheet only after this one has gone, so it never opens under it.
     val motion = rememberSheetMotion { if (go[0]) onContinue() else onClosed() }
-    restAt(motion, if (code == AccountDeletion.OTHER) 640.dp else 560.dp)
+    sheetRestAt(motion, if (code == AccountDeletion.OTHER) 640.dp else 560.dp)
     FariinSheetDialog(motion, fill = c.bgSecondary, typing = true) { _ ->
-        SheetFrame(motion, closeEnabled = true) {
+        AccountSheetFrame(motion, closeEnabled = true) {
             Title("Why are you leaving?")
             Text("Optional. Only the reason is kept, not who gave it.", fontSize = 15.sp, color = c.secondary,
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -146,8 +146,8 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
                     supportingText = { Text("${text.length}/${AccountDeletion.REASON_TEXT_MAX}", color = c.secondary) },
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             }
-            PillButton("Continue", c.blue, modifier = Modifier.padding(top = 24.dp)) { go[0] = true; motion.close() }
-            CancelButton { motion.close() }
+            SheetPill("Continue", c.blue, modifier = Modifier.padding(top = 24.dp)) { go[0] = true; motion.close() }
+            SheetCancel { motion.close() }
         }
     }
 }
@@ -157,9 +157,9 @@ private fun ConfirmSheet(handle: String, dueText: String, busy: Boolean, error: 
                          onDownload: () -> Unit, onDelete: () -> Unit, onClosed: () -> Unit) {
     val c = Fariin.colors
     val motion = rememberSheetMotion(onClosed)
-    restAt(motion, if (error != null) 520.dp else 480.dp)
+    sheetRestAt(motion, if (error != null) 520.dp else 480.dp)
     FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
-        SheetFrame(motion, closeEnabled = !busy) {
+        AccountSheetFrame(motion, closeEnabled = !busy) {
             Title(if (handle.isEmpty()) "Delete your account?" else "Delete @$handle?")
             Column(Modifier.padding(top = 20.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Line("Your account will be deleted on $dueText. Sign in before then to cancel.")
@@ -170,15 +170,15 @@ private fun ConfirmSheet(handle: String, dueText: String, busy: Boolean, error: 
                 modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = !busy) { onDownload() }.padding(vertical = 6.dp))
             if (error != null) Text(error, fontSize = 15.sp, color = c.red, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
-            PillButton("Delete Account", c.red, busy = busy, modifier = Modifier.padding(top = 20.dp)) { onDelete() }
-            CancelButton(enabled = !busy) { motion.close() }
+            SheetPill("Delete Account", c.red, busy = busy, modifier = Modifier.padding(top = 20.dp)) { onDelete() }
+            SheetCancel(enabled = !busy) { motion.close() }
         }
     }
 }
 
 /** Rests the sheet with about [height] showing, as tall as its content; a drag up gives the rest. */
 @Composable
-private fun restAt(motion: SheetMotion, height: Dp) {
+internal fun sheetRestAt(motion: SheetMotion, height: Dp) {
     val density = LocalDensity.current
     val windowH = LocalWindowInfo.current.containerSize.height
     val statusTop = WindowInsets.statusBars.getTop(density)
@@ -188,7 +188,7 @@ private fun restAt(motion: SheetMotion, height: Dp) {
 
 /** The drag strip and the round X in the corner, as the app's other sheets. */
 @Composable
-private fun SheetFrame(motion: SheetMotion, closeEnabled: Boolean, content: @Composable () -> Unit) {
+internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(top = 56.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) { content() }
@@ -210,7 +210,7 @@ private fun Line(s: String) {
 }
 
 @Composable
-private fun PillButton(label: String, fill: Color, modifier: Modifier = Modifier, busy: Boolean = false, onClick: () -> Unit) {
+internal fun SheetPill(label: String, fill: Color, modifier: Modifier = Modifier, busy: Boolean = false, onClick: () -> Unit) {
     Box(modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(fill)
         .clickable(enabled = !busy, onClickLabel = label) { onClick() }, contentAlignment = Alignment.Center) {
         if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
@@ -219,9 +219,9 @@ private fun PillButton(label: String, fill: Color, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun CancelButton(enabled: Boolean = true, onClick: () -> Unit) {
+internal fun SheetCancel(label: String = "Cancel", enabled: Boolean = true, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(48.dp).padding(top = 4.dp).clip(CircleShape).clickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center) {
-        Text("Cancel", fontSize = 17.sp, color = if (enabled) Fariin.colors.blue else Fariin.colors.tertiary)
+        Text(label, fontSize = 17.sp, color = if (enabled) Fariin.colors.blue else Fariin.colors.tertiary)
     }
 }

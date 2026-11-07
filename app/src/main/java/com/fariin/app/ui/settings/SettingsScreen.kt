@@ -374,44 +374,24 @@ private fun AccountPage(
                 header = "Account",
                 footer = "Saves your profile, devices and privacy settings to a text file you can share or keep. Messages are not included.",
             ) {
-                SettingsRow("Your Account Data", trailing = Trailing.NONE) {
+                SettingsRow("Your Account Data", trailing = Trailing.NONE, last = true) {
                     exportScope.launch {
                         try { AccountReport.share(ctx) } catch (e: Exception) { toast(ctx, e.message ?: "Could not load everything. Check your connection and try again.") }
                     }
                 }
-                SettingsRow("Log out", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirm = true }
             }
             // Owner 2026-11-07: a plain red row opening two sheets (DeleteAccountSheets.kt), as on iOS.
             if (!demo) SettingsSection {
                 SettingsRow("Delete Account", trailing = Trailing.NONE, titleColor = c.red, last = true) { deleting = true }
             }
+            // Alone at the bottom, no note under it; the note above belongs to Your Account Data only.
+            SettingsSection {
+                SettingsRow("Log out", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirm = true }
+            }
         }
     }
     if (deleting) DeleteAccountFlow(profile, onDone = { deleting = false }, onSignOut = onSignOut)
-    if (confirm) {
-        // Unsent texts are wiped with the account: say how many, and offer to wait (a send is tried now).
-        val unsent = remember { com.fariin.app.device.SessionEnd.unsentCount() }
-        val warning = com.fariin.app.device.SessionEnd.unsentLine(unsent, afterRevoke = false)
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text("Log out?") },
-            text = { Text(warning ?: "You'll need to log in again to use Fariin on this device.") },
-            confirmButton = {
-                TextButton(onClick = { confirm = false; onSignOut() }) {
-                    Text(if (warning != null) "Log Out Anyway" else "Log Out", color = c.red)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    confirm = false
-                    if (warning != null) com.fariin.app.AppLifecycle.reconnect()
-                }) { Text(if (warning != null) "Wait" else "Cancel", color = c.label) }
-            },
-            containerColor = c.card,
-            titleContentColor = c.label,
-            textContentColor = c.label,
-        )
-    }
+    if (confirm) LogOutSheet(profile, onDismiss = { confirm = false }, onSignOut = onSignOut)
 }
 
 /**
