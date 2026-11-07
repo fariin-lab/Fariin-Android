@@ -344,8 +344,13 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
             }
             GridCard(3, 10, 14, tiles)
             if (cid != null) {
-                ChatBubbleColorRow(cid)
-                if (com.fariin.app.data.BubbleStyles.SHOWN) BubbleStylesStrip(cid)
+                // A group's or channel's shared sheet (owner 2026-11-07): no Bubble Styles, and Bubble Color
+                // shown but greyed and out of use; a 1:1 chat keeps both.
+                if (shared) Box(Modifier.disabledLook("Bubble color, not used here")) { ChatBubbleColorRow(cid) }
+                else {
+                    ChatBubbleColorRow(cid)
+                    if (com.fariin.app.data.BubbleStyles.SHOWN) BubbleStylesStrip(cid)
+                }
                 photoRows()
             }
             Spacer(Modifier.height(com.fariin.app.ui.shell.bottomBarInset()))

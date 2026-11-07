@@ -242,23 +242,10 @@ internal fun BubbleStylesStrip(cid: String) {
     var all by remember { mutableStateOf(false) }
     val thumbPx = with(LocalDensity.current) { 92.dp.roundToPx() }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
-    // A channel never draws bubble styles (iOS 2026-11-07): the strip stays, greyed (35%, no colour),
-    // with no See all and no taps, and says why.
-    val channel = com.fariin.app.data.ChatsNow.find(cid)?.isChannel == true
-    val grey = remember { androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) } }
     Column(Modifier.fillMaxWidth()) {
-        Column(if (!channel) Modifier else Modifier.alpha(0.35f)
-            .drawWithContent {
-                val paint = androidx.compose.ui.graphics.Paint().apply { colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(grey) }
-                drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset.Zero, size), paint)
-                drawContent()
-                drawContext.canvas.restore()
-            }
-            .clearAndSetSemantics { contentDescription = "Bubble styles, not used in channels" }
-            .pointerInput(Unit) { awaitPointerEventScope { while (true) { awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() } } } }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Bubble Styles", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.weight(1f))
-            if (!channel) Text("See all", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.accent,
+            Text("See all", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.accent,
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable { all = true }.padding(horizontal = 8.dp, vertical = 4.dp))
         }
         // Cards about as wide as the wallpaper tiles below: a 92x58 picture inside 5dp padding.
@@ -275,9 +262,7 @@ internal fun BubbleStylesStrip(cid: String) {
                 }
             }
         }
-        }
-        Text(if (channel) "Bubble styles aren't used in channels" else "Only this chat", fontSize = 13.sp, color = c.secondary,
-            modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+        Text("Only this chat", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
     }
     if (all) BubbleStyleSheet.Show(cid, onDismiss = { all = false })
 }
@@ -435,4 +420,26 @@ internal fun resetGlobalBubble(ctx: android.content.Context) {
     BubbleStyles.init(ctx)
     BubbleStyles.save(null, BubbleStyles.decorations())
     ChatLookStore.setDefaultColor(ctx, null)
+}
+
+/**
+ * Shown but out of use (owner 2026-11-07): 35% and without colour, every touch swallowed, read out as
+ * [why]. A group's or channel's shared wallpaper sheet greys its Bubble Color row with this.
+ */
+@Composable
+internal fun Modifier.disabledLook(why: String): Modifier {
+    val grey = remember { androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) } }
+    return this.alpha(0.35f)
+        .drawWithContent {
+            val paint = androidx.compose.ui.graphics.Paint().apply { colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(grey) }
+            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset.Zero, size), paint)
+            drawContent()
+            drawContext.canvas.restore()
+        }
+        .clearAndSetSemantics { contentDescription = why }
+        .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() }
+            }
+        }
 }
