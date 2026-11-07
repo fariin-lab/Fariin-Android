@@ -430,7 +430,8 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     /** Double tap: the Quick Reaction on, or mine off when I already reacted (iOS toggleLike). */
     fun quickReact(r: PostReply, quick: String) {
         val cur = current(r)
-        react(cur, cur.my.ifEmpty { quick })
+        // A Quick Reaction that is not one plain emoji (a custom one) reacts with the heart here.
+        react(cur, cur.my.ifEmpty { PostReplyRules.cleanEmoji(quick) ?: PostReplyRules.HEART })
     }
 
     /**
@@ -438,9 +439,11 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
      * per reply; picks meanwhile only change what is wanted, sent when it returns.
      */
     fun react(r: PostReply, emoji: String) {
-        if (r.send != PostReply.Send.SENT) return
+        // Replies off for this post closes reactions too (server likeReply refuses).
+        if (r.send != PostReply.Send.SENT || off) return
+        val clean = PostReplyRules.cleanEmoji(emoji) ?: return
         val cur = current(r)
-        val want = PostReplyRules.nextPick(cur, emoji)
+        val want = PostReplyRules.nextPick(cur, clean)
         if (r.id !in confirmedMine) confirmedMine[r.id] = cur.my
         edit(r.parentId) { list -> list.map { if (it.id == r.id) PostReplyRules.withMine(it, want) else it } }
         pendingLikes[r.id] = want
@@ -448,11 +451,13 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         scope.launch {
             while (true) {
                 val w = pendingLikes[r.id] ?: break
-                val ok = PostReplies.react(cid, mid, r, w)
+                val why = PostReplies.reactOrWhy(cid, mid, r, w)
+                val ok = why == null
                 if (pendingLikes[r.id] == w) {
                     pendingLikes.remove(r.id)
                     val back = confirmedMine.remove(r.id)
                     if (!ok && back != null) edit(r.parentId) { list -> list.map { if (it.id == r.id) PostReplyRules.withMine(it, back) else it } }
+                    if (!ok) toast = why
                 } else if (ok) confirmedMine[r.id] = w
             }
             likeInFlight.remove(r.id)
@@ -889,7 +894,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                     modifier = Modifier.alpha(if (dim) 0.55f else 1f).clip(RoundedCornerShape(20.dp)).background(c.fieldFill)
                         .pointerInput(r.id, r.send) {
                             detectTapGestures(
-                                onDoubleTap = { if (r.send == PostReply.Send.SENT) s.quickReact(r, quick) },
+                                onDoubleTap = { if (r.send == PostReply.Send.SENT && !s.off) s.quickReact(r, quick) },
                                 onLongPress = { menu = true },
                             )
                         }
@@ -898,7 +903,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     // The chat's react bar (iOS): the same six, in the same order, mine marked; a pick
                     // closes the menu, the same one again takes mine back.
-                    if (r.send == PostReply.Send.SENT) {
+                    if (r.send == PostReply.Send.SENT && !s.off) {
                         Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             for (e in PostReplyRules.REACT_BAR) {
                                 Box(Modifier.size(40.dp).clip(CircleShape)
@@ -954,11 +959,12 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                         // THE CHAT'S REACTION PILL, NOT A HEART BUTTON (iOS, owner 2026-11-07: "make it like
                         // how bubble react works in my app"): no empty outline; a pill per emoji with its
                         // count, mine the dark filled one; a tap on a pill takes mine back or adds it.
-                        r.rx.forEach { x ->
+                        // At most 4, most used first, mine always among them (PostReplyRules.shownPills).
+                        PostReplyRules.shownPills(r.rx, r.my).forEach { x ->
                             val mine = x.emoji == r.my
                             Row(Modifier.padding(end = 6.dp).clip(CircleShape)
                                 .background(if (mine) c.label else c.label.copy(alpha = 0.08f))
-                                .clickable { s.react(r, x.emoji) }
+                                .clickable(enabled = !s.off) { s.react(r, x.emoji) }
                                 .semantics { contentDescription = "${x.emoji} ${x.count}" + if (mine) ", yours" else "" }
                                 .padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(x.emoji, fontSize = 14.sp)

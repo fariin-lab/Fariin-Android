@@ -188,6 +188,34 @@ class PostReplyRulesTest {
         assertEquals("", none.my); assertFalse(none.liked); assertTrue(none.rx.isEmpty())
     }
 
+    @Test fun fourPillsMineAlwaysShown() {
+        fun rx(vararg p: Pair<String, Int>) = p.map { PostReply.Rx(it.first, it.second) }
+        val six = rx("👍" to 1, "❤️" to 9, "😂" to 5, "😮" to 4, "😢" to 3, "🙏" to 2)
+        // The 4 most used, biggest first.
+        assertEquals(listOf("❤️", "😂", "😮", "😢"), PostReplyRules.shownPills(six, "").map { it.emoji })
+        // Mine already in the top 4: unchanged.
+        assertEquals(listOf("❤️", "😂", "😮", "😢"), PostReplyRules.shownPills(six, "😂").map { it.emoji })
+        // Mine outside it: takes the 4th place.
+        assertEquals(listOf("❤️", "😂", "😮", "👍"), PostReplyRules.shownPills(six, "👍").map { it.emoji })
+        // Fewer than 4: all of them; mine not on the reply at all: just the top.
+        assertEquals(listOf("❤️", "😂"), PostReplyRules.shownPills(rx("😂" to 1, "❤️" to 2), "🙏").map { it.emoji })
+    }
+
+    @Test fun oneCleanEmoji() {
+        assertEquals("❤️", PostReplyRules.cleanEmoji("❤️"))
+        assertEquals("👍", PostReplyRules.cleanEmoji(" ​👍​ "))
+        assertEquals("👍🏽", PostReplyRules.cleanEmoji("👍🏽"))
+        assertEquals("👨‍👩‍👧", PostReplyRules.cleanEmoji("⁠👨‍👩‍👧﻿"))
+        assertEquals("🇸🇴", PostReplyRules.cleanEmoji("🇸🇴"))
+        assertEquals("😂", PostReplyRules.cleanEmoji("‍😂"))
+        assertNull(PostReplyRules.cleanEmoji("👍👍"))
+        assertNull(PostReplyRules.cleanEmoji("ok👍"))
+        assertNull(PostReplyRules.cleanEmoji("ce_12"))
+        assertNull(PostReplyRules.cleanEmoji(""))
+        assertNull(PostReplyRules.cleanEmoji("​"))
+        for (e in PostReplyRules.REACT_BAR) assertEquals(e, PostReplyRules.cleanEmoji(e))
+    }
+
     @Test fun mineMovesBetweenPills() {
         val x = PostReply("a", likes = 2, rx = listOf(PostReply.Rx("❤️", 2)))
         assertEquals(x, PostReplyRules.overlay(x, null))

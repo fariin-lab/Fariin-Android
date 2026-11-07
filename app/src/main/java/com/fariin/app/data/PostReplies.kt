@@ -307,6 +307,53 @@ object PostReplyRules {
         return r.copy(my = emoji, liked = emoji.isNotEmpty(), rx = rx, likes = likes)
     }
 
+    /** At most this many pills under a reply (iOS). */
+    const val MAX_PILLS = 4
+
+    /**
+     * The pills a reply shows: the 4 most used (the list comes biggest first); when mine is not
+     * among them it takes the 4th place, so my own reaction always stays in sight.
+     */
+    fun shownPills(rx: List<PostReply.Rx>, my: String): List<PostReply.Rx> {
+        val sorted = rx.sortedWith(compareByDescending<PostReply.Rx> { it.count }.thenBy { it.emoji })
+        val top = sorted.take(MAX_PILLS)
+        if (my.isEmpty() || top.any { it.emoji == my }) return top
+        val mine = sorted.firstOrNull { it.emoji == my } ?: return top
+        return top.take(MAX_PILLS - 1) + mine
+    }
+
+    /**
+     * EXACTLY ONE EMOJI, NOTHING AROUND IT (server okEmoji, owner 2026-11-07): spaces and invisible
+     * marks that are no part of an emoji (zero-width spaces and joiners outside a sequence, word
+     * joiners, BOM, soft hyphens, bidi marks) are dropped; what is left must be a single emoji (a
+     * pictograph, with only the joiners, variation selectors, skin tones, tag characters or flag
+     * letters an emoji is built from). Null when it is not one emoji (several, text, a custom key).
+     */
+    fun cleanEmoji(raw: String): String? {
+        val cps = raw.codePoints().toArray().filterNot { cp ->
+            Character.isWhitespace(cp) || cp == 0x200B || cp == 0x200C || cp == 0x2060 || cp == 0xFEFF || cp == 0x00AD ||
+                cp == 0x200E || cp == 0x200F || cp in 0x202A..0x202E || cp in 0x2066..0x2069
+        }.toMutableList()
+        // A joiner or selector left hanging at either end is not part of the emoji.
+        while (cps.isNotEmpty() && (cps.first() == 0x200D || cps.first() == 0xFE0F || cps.first() == 0xFE0E)) cps.removeAt(0)
+        while (cps.isNotEmpty() && cps.last() == 0x200D) cps.removeAt(cps.lastIndex)
+        if (cps.isEmpty() || cps.size > 16) return null
+        fun part(cp: Int) = cp == 0x200D || cp == 0xFE0E || cp == 0xFE0F || cp in 0x1F3FB..0x1F3FF || cp in 0xE0020..0xE007F || cp == 0x20E3
+        fun flag(cp: Int) = cp in 0x1F1E6..0x1F1FF
+        fun picto(cp: Int) = cp in 0x1F000..0x1FAFF || cp in 0x2600..0x27BF || cp in 0x2300..0x23FF || cp in 0x2B00..0x2BFF ||
+            cp == 0x00A9 || cp == 0x00AE || cp == 0x203C || cp == 0x2049 || cp == 0x2122 || cp == 0x2139 || cp in 0x2194..0x21AA ||
+            cp == 0x24C2 || cp in 0x25AA..0x25FE || cp == 0x3030 || cp == 0x303D || cp == 0x3297 || cp == 0x3299
+        if (cps.any { !part(it) && !flag(it) && !picto(it) }) return null
+        // One emoji: flags come as exactly one pair; otherwise every pictograph after the first
+        // must follow a joiner (a ZWJ sequence such as a family is still one emoji).
+        val flags = cps.count(::flag)
+        if (flags > 0) return if (flags == 2 && cps.size == 2) String(cps.toIntArray(), 0, 2) else null
+        val pictos = cps.withIndex().filter { picto(it.value) }
+        if (pictos.isEmpty()) return null
+        for (p in pictos.drop(1)) if (p.index == 0 || cps[p.index - 1] != 0x200D) return null
+        return String(cps.toIntArray(), 0, cps.size)
+    }
+
     /** A pick on [emoji]: the same one again takes mine back, as in the chat. */
     fun nextPick(r: PostReply, emoji: String): String = if (emoji == r.my) "" else emoji
 
@@ -416,11 +463,28 @@ object PostReplies {
      * My reaction on a reply: [emoji] ("" = take mine off; the server's default is the heart). False
      * when the server did not take it (the caller rolls back).
      */
-    suspend fun react(cid: String, mid: String, r: PostReply, emoji: String): Boolean = runCatching {
-        val a = mutableMapOf<String, Any>("cid" to cid, "mid" to mid, "on" to emoji.isNotEmpty())
-        if (emoji.isNotEmpty()) a["emoji"] = emoji
-        call("likeReply", a + target(r)); true
-    }.getOrDefault(false)
+    suspend fun react(cid: String, mid: String, r: PostReply, emoji: String): Boolean = reactOrWhy(cid, mid, r, emoji) == null
+
+    /**
+     * The same, with the server's reason when it refuses (replies turned off for the post, too
+     * fast), or a short line of our own; null = taken. Only one clean emoji ever goes out.
+     */
+    suspend fun reactOrWhy(cid: String, mid: String, r: PostReply, emoji: String): String? {
+        val e = if (emoji.isEmpty()) "" else PostReplyRules.cleanEmoji(emoji) ?: return "Pick an emoji."
+        return runCatching {
+            val a = mutableMapOf<String, Any>("cid" to cid, "mid" to mid, "on" to e.isNotEmpty())
+            if (e.isNotEmpty()) a["emoji"] = e
+            call("likeReply", a + target(r)); null
+        }.getOrElse { ex ->
+            val fe = ex as? FirebaseFunctionsException
+            when (fe?.code) {
+                FirebaseFunctionsException.Code.FAILED_PRECONDITION, FirebaseFunctionsException.Code.PERMISSION_DENIED,
+                FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED, FirebaseFunctionsException.Code.INVALID_ARGUMENT ->
+                    fe.message ?: "Couldn't react. Try again."
+                else -> "Couldn't react. Try again."
+            }
+        }
+    }
 
     suspend fun report(cid: String, mid: String, r: PostReply, reason: String): Boolean = runCatching {
         call("reportReply", mapOf("cid" to cid, "mid" to mid, "reason" to reason) + target(r)); true
