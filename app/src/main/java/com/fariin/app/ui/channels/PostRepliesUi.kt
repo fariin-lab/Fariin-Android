@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Verified
@@ -144,8 +145,31 @@ internal fun rememberReplyQuickReaction(): String {
 class PostRepliesState(val cid: String, private val mid: String, private val scope: CoroutineScope) {
     private val cacheKey = (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "") + "/$cid/$mid"
 
-    var threads by mutableStateOf(cache[cacheKey] ?: emptyList())
+    /** Top (the default) or Newest: the order the server pages come in; switching reloads from page one. */
+    var sort by mutableStateOf(PostReplyRules.Sort.TOP)
         private set
+    private fun key() = "$cacheKey/${sort.wire}"
+    var threads by mutableStateOf(cache["$cacheKey/top"] ?: emptyList())
+        private set
+    /** The pages' thread ids in the server's order (PostReplyRules.displayOrder draws by it). */
+    var order by mutableStateOf(cache["$cacheKey/top"]?.map { it.id } ?: emptyList())
+        private set
+    /** Ids page one held last time, and ids only later pages brought (mergePageOne). */
+    private var firstIds: Set<String> = order.toSet()
+    private val laterIds = HashSet<String>()
+    /** Bumped by a sort switch: an answer for the old sort is dropped. */
+    private var loadGen = 0
+    /** Open threads showing all their answers, not only the first three ("View N more replies"). */
+    var expanded by mutableStateOf<Set<String>>(emptySet())
+        private set
+    /** The row lit for a moment (a jump to an "@name", a push's comment). */
+    var flashId by mutableStateOf<String?>(null)
+        private set
+    /** My reply whose words the field is changing (editReply), or null. */
+    var editing by mutableStateOf<PostReply?>(null)
+        private set
+    /** A comment to open on once it is loaded (a push tap), or null. */
+    private var focusWanted: com.fariin.app.data.ReplyFocus? = null
     /** Thread id to its answers, oldest first. */
     var answers by mutableStateOf<Map<String, List<PostReply>>>(emptyMap())
         private set
@@ -156,7 +180,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         private set
     var olderCursor by mutableStateOf("")
         private set
-    var loaded by mutableStateOf(cache[cacheKey] != null)
+    var loaded by mutableStateOf(cache["$cacheKey/top"] != null)
         private set
     /**
      * The pinned thread (one per post, owner 2026-11-07): "" = none. Its row is kept in [threads]
@@ -183,12 +207,14 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         private set
     var count by mutableIntStateOf(0)
         private set
-    /** Replies by others that landed while I was reading further up ("N new replies"). */
+    /** Replies by others that landed out of sight while I was reading further down ("N new replies"). */
     var unseenNew by mutableIntStateOf(0)
-    /** The row the list should bring into view next (my own new reply). */
+    /** The first of them, where the pill takes me. */
+    var firstNewId: String? = null
+    /** The row the list should bring into view next (my own new reply, a jump, a push's comment). */
     var scrollTarget by mutableStateOf<String?>(null)
-    /** The end of the list is on screen: new replies then scroll in instead of counting in the pill. */
-    var atEnd = true
+    /** The top of the list is on screen: new replies then simply appear instead of counting in the pill. */
+    var atTop = true
     var draft by mutableStateOf("")
     /** The server's reason a reply was not taken (off, too fast), shown over the field. */
     var problem by mutableStateOf<String?>(null)
@@ -282,19 +308,53 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         return if (pin == null) list else list.filterNot { it.id == pin.id } + pin
     }
 
-    suspend fun loadFirst() {
-        val p = PostReplies.page(cid, mid)
-        if (p == null) { failed = true; loaded = true; return }
+    /** Page one in the current sort merged in (PostReplyRules.mergePageOne); null when the call failed. */
+    private suspend fun takePageOne(): PostReplyRules.PageOne? {
+        val gen = loadGen
+        val p = PostReplies.page(cid, mid, sort = sort) ?: return null
+        if (gen != loadGen) return PostReplyRules.PageOne(threads, emptyList())
         applyFlags(p)
         answered = true
         val page = rows(p.items)
-        if (threads.isEmpty() || olderCursor.isEmpty()) olderCursor = p.next
-        threads = withPin(p, PostReplyRules.mergeFirst(threads, page))
+        val ids = page.map { it.id }
+        val now = System.currentTimeMillis()
+        recentMine.entries.removeAll { now - it.value > PostReplyRules.RECENT_MINE_MS }
+        val m = PostReplyRules.mergePageOne(threads, page, firstIds, laterIds, recentMine.keys)
+        threads = withPin(p, m.list)
+        val idSet = ids.toSet()
+        order = ids + order.filter { it !in idSet && it in laterIds }
+        firstIds = idSet
+        // The "more" cursor is page one's until a later page has been read.
+        if (laterIds.isEmpty()) olderCursor = p.next
         if (lastRev < 0) lastRev = p.rev
         loaded = true
         failed = false
-        cache[cacheKey] = page + listOfNotNull(threads.firstOrNull { it.id == pinnedId })
-        prefetchAnswers(page)
+        cache[key()] = page + listOfNotNull(threads.firstOrNull { it.id == pinnedId })
+        return m
+    }
+
+    suspend fun loadFirst() {
+        if (takePageOne() == null) { failed = true; loaded = true; return }
+        prefetchAnswers(threads.filter { it.id in firstIds })
+        tryFocus()
+    }
+
+    /** Top or Newest: the list starts again from page one in that order. */
+    fun pickSort(s: PostReplyRules.Sort) {
+        if (s == sort) return
+        sort = s
+        loadGen++
+        val mine = threads.filter { it.send != PostReply.Send.SENT }
+        threads = (cache[key()] ?: emptyList()) + mine
+        order = cache[key()]?.map { it.id } ?: emptyList()
+        firstIds = order.toSet()
+        laterIds.clear()
+        olderCursor = ""
+        unseenNew = 0
+        firstNewId = null
+        loaded = cache[key()] != null
+        scrollTarget = null
+        scope.launch { loadFirst() }
     }
 
     /**
@@ -313,43 +373,92 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
 
     fun retry() { failed = false; scope.launch { loadFirst() } }
 
-    /** The newest page again, merged by id (PostReplyRules.mergeNewest); open threads whose answers moved, too. */
+    /** Page one again (the change marker moved), merged by id; open threads whose answers moved, too. */
     suspend fun refreshNewest() {
         val gen = ++refreshGen
-        val p = PostReplies.page(cid, mid) ?: return
+        val m = takePageOne() ?: return
         if (gen != refreshGen) return
-        applyFlags(p)
-        val page = rows(p.items)
-        val now = System.currentTimeMillis()
-        recentMine.entries.removeAll { now - it.value > PostReplyRules.RECENT_MINE_MS }
-        val m = PostReplyRules.mergeNewest(threads, page, p.next, recentMine.keys)
-        threads = withPin(p, m.list)
-        m.resetCursor?.let { olderCursor = it }
-        if (m.added > 0) {
-            // Others' new replies never pull the list down: below the reader they are counted in the
-            // "N new replies" pill, which takes them there; at the end they simply appear.
-            if (!atEnd) unseenNew += m.added
+        if (m.added.isNotEmpty()) {
+            // Others' new replies never pull the list: out of sight they count in the "N new replies"
+            // pill, which takes the reader to the first of them; in sight they simply appear.
+            if (!atTop) { if (unseenNew == 0) firstNewId = m.added.first(); unseenNew += m.added.size }
         }
-        val pinRow = threads.firstOrNull { it.id == pinnedId }
-        cache[cacheKey] = page + listOfNotNull(pinRow)
         val changed = open.filter { t ->
-            val r = (page + listOfNotNull(pinRow)).firstOrNull { it.id == t } ?: return@filter false
+            val r = threads.firstOrNull { it.id == t } ?: return@filter false
             r.answers != (answers[t]?.count { it.send == PostReply.Send.SENT } ?: -1)
         }
         changed.take(5).forEach { t -> scope.launch { loadAnswers(t, more = false) } }
     }
 
+    /** The next page in the sort's order, put under what is shown. */
     fun loadOlder() {
         if (olderCursor.isEmpty() || loadingOlder) return
         loadingOlder = true
+        val gen = loadGen
         scope.launch {
-            val p = PostReplies.page(cid, mid, olderCursor)
-            if (p != null) {
+            val p = PostReplies.page(cid, mid, olderCursor, sort)
+            if (p != null && gen == loadGen) {
                 olderCursor = p.next
-                threads = PostReplyRules.mergeOlder(threads, rows(p.items))
+                val page = rows(p.items)
+                val byId = page.associateBy { it.id }
+                threads = threads.map { byId[it.id] ?: it } + page.filter { r -> threads.none { it.id == r.id } }
+                order = order + page.map { it.id }.filter { it !in order }
+                laterIds += page.map { it.id }
+                tryFocus()
             }
             loadingOlder = false
         }
+    }
+
+    /** The row lit for a moment. */
+    fun flash(id: String) {
+        flashId = id
+        scope.launch { delay(1_600); if (flashId == id) flashId = null }
+    }
+
+    /**
+     * A tap on an answer's "@name": that reply comes into view and lights up, its thread open and
+     * showing all its answers (the next pages of answers fetched while it is not among them yet).
+     */
+    fun jumpTo(r: PostReply) {
+        val to = r.to ?: return
+        val thread = r.parentId.ifEmpty { r.id }
+        show(thread, if (to.id == thread) "" else to.id)
+    }
+
+    /** A "replied to your comment" push: the sheet opens on that comment once it is loaded. */
+    fun focus(f: com.fariin.app.data.ReplyFocus) { focusWanted = f; tryFocus() }
+
+    private fun tryFocus() {
+        val f = focusWanted ?: return
+        if (threads.none { it.id == f.rid }) {
+            // Not on the pages read so far: a few more pages are looked through, then it is let go.
+            if (olderCursor.isNotEmpty() && laterIds.size < 4 * 30) loadOlder() else if (loaded) focusWanted = null
+            return
+        }
+        focusWanted = null
+        show(f.rid, f.aid)
+    }
+
+    private fun show(thread: String, answer: String) {
+        if (answer.isEmpty()) { scrollTarget = thread; flash(thread); return }
+        open = open + thread
+        expanded = expanded + thread
+        scope.launch {
+            var tries = 0
+            if (thread !in answersLoaded) loadAnswers(thread, more = false)
+            while (answers[thread].orEmpty().none { it.id == answer } && answerNext[thread].orEmpty().isNotEmpty() && tries++ < 5)
+                loadAnswers(thread, more = true)
+            if (answers[thread].orEmpty().any { it.id == answer }) { scrollTarget = answer; flash(answer) }
+            else { scrollTarget = thread; flash(thread) }
+        }
+    }
+
+    /** "View N more replies": the rest of an open thread's answers (the next page fetched if needed). */
+    fun showAllAnswers(rid: String) {
+        expanded = expanded + rid
+        if (answerNext[rid].orEmpty().isNotEmpty() && answers[rid].orEmpty().size <= PostReplyRules.ANSWERS_FIRST)
+            scope.launch { loadAnswers(rid, more = true) }
     }
 
     suspend fun loadAnswers(rid: String, more: Boolean) {
@@ -371,6 +480,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
 
     /** Reply to [r]: its thread opens, so the answer is seen landing under it. */
     fun startAnswer(r: PostReply) {
+        if (editing != null) cancelEdit()
         answering = r
         val t = r.parentId.ifEmpty { r.id }
         if (t !in open) toggleThread(t)
@@ -380,21 +490,58 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     // ---- Actions ----
 
     fun send() {
+        if (editing != null) { saveEdit(); return }
         val text = PostReplyRules.cleanDraft(draft) ?: return
-        val thread = answering?.let { it.parentId.ifEmpty { it.id } }.orEmpty()
+        val a = answering
+        val thread = a?.let { it.parentId.ifEmpty { it.id } }.orEmpty()
+        // Reply on an answer answers that answer ("@name"); on a thread, the thread itself.
+        val to = a?.takeIf { it.parentId.isNotEmpty() }?.let { com.fariin.app.data.ReplyTo(it.id, it.name) }
         draft = ""
         answering = null
         problem = null
-        sendWith(text, thread, clientId = null)
+        sendWith(text, thread, clientId = null, to = to)
     }
 
-    fun retry(r: PostReply) = sendWith(r.text, r.parentId, r.id)
+    fun retry(r: PostReply) = sendWith(r.text, r.parentId, r.id, r.to)
+
+    /** Edit on my reply: the field takes its words, an "Editing" bar over it. */
+    fun startEdit(r: PostReply) {
+        answering = null
+        editing = r
+        draft = r.text
+        problem = null
+        runCatching { field.requestFocus() }
+    }
+
+    fun cancelEdit() { editing = null; draft = ""; problem = null }
+
+    /** The edit shown at once; put back with the server's words if refused (too late, replies off). */
+    private fun saveEdit() {
+        val r = editing ?: return
+        val text = PostReplyRules.cleanDraft(draft) ?: return
+        editing = null
+        draft = ""
+        problem = null
+        val before = current(r)
+        if (text == before.text) return
+        edit(r.parentId) { list -> list.map { if (it.id == r.id) it.copy(text = text, edited = true) else it } }
+        scope.launch {
+            PostReplies.edit(cid, mid, before, text)
+                .onSuccess { saved -> edit(r.parentId) { list -> list.map { if (it.id == r.id) PostReplyRules.overlay(saved, pendingLikes[r.id]) else it } } }
+                .onFailure { e ->
+                    edit(r.parentId) { list -> list.map { if (it.id == r.id) it.copy(text = before.text, edited = before.edited) else it } }
+                    toast = e.message ?: "Couldn't save your edit."
+                }
+        }
+    }
 
     fun discard(r: PostReply) = edit(r.parentId) { list -> list.filterNot { it.id == r.id } }
 
-    private fun sendWith(text: String, thread: String, clientId: String?) {
+    private fun sendWith(text: String, thread: String, clientId: String?, to: com.fariin.app.data.ReplyTo? = null) {
         val id = clientId ?: PostReplyRules.clientId(UUID.randomUUID().toString())
-        val row = PostReplyRules.pending(id, text, "You", "", thread, System.currentTimeMillis())
+        val row = PostReplyRules.pending(id, text, "You", "", thread, System.currentTimeMillis(), to)
+        // My answer lands at the thread's end: the whole thread shows, so it is seen.
+        if (thread.isNotEmpty()) expanded = expanded + thread
         // A thread never opened: its other answers load too, or only this one would show and the
         // thread would look fully loaded. mergeAnswers keeps this row while it is on its way.
         if (thread.isNotEmpty() && thread !in answersLoaded) scope.launch { loadAnswers(thread, more = false) }
@@ -404,7 +551,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         if (thread.isNotEmpty()) open = open + thread
         scrollTarget = id
         scope.launch {
-            PostReplies.add(cid, mid, id, text, thread)
+            PostReplies.add(cid, mid, id, text, thread, to)
                 .onSuccess { saved ->
                     edit(thread) { list -> list.map { if (it.id == id) saved else it } }
                     recentMine[id] = System.currentTimeMillis()
@@ -627,6 +774,7 @@ private sealed interface ReplyItem {
     data class Answer(val r: PostReply) : ReplyItem { override val key = "a-" + r.id }
     data class Toggle(val rid: String, val n: Int, val open: Boolean) : ReplyItem { override val key = "g-$rid" }
     data class More(val rid: String) : ReplyItem { override val key = "m-$rid" }
+    data class MoreCount(val rid: String, val n: Int) : ReplyItem { override val key = "n-$rid" }
 }
 
 private fun replyItems(s: PostRepliesState): List<ReplyItem> = buildList {
@@ -637,16 +785,36 @@ private fun replyItems(s: PostRepliesState): List<ReplyItem> = buildList {
         if (total <= 0) return
         val isOpen = r.id in s.open
         if (isOpen) {
-            got.forEach { add(ReplyItem.Answer(it)) }
-            if (s.answerNext[r.id].orEmpty().isNotEmpty()) add(ReplyItem.More(r.id))
+            // The first three answers, then "View N more replies" (iOS); all of them once asked for.
+            val all = r.id in s.expanded || total <= PostReplyRules.ANSWERS_FIRST
+            (if (all) got else got.take(PostReplyRules.ANSWERS_FIRST)).forEach { add(ReplyItem.Answer(it)) }
+            if (!all) add(ReplyItem.MoreCount(r.id, total - minOf(got.size, PostReplyRules.ANSWERS_FIRST)))
+            else if (s.answerNext[r.id].orEmpty().isNotEmpty()) add(ReplyItem.More(r.id))
         }
         add(ReplyItem.Toggle(r.id, total, isOpen))
     }
-    // The pinned thread first, under a small "Pinned" line, then the rest oldest first.
+    // The pinned thread first, under a small "Pinned" line, then the rest in the sort's order, the
+    // next page's link at the end.
     val pin = s.pinnedId.takeIf { it.isNotEmpty() }?.let { id -> s.threads.firstOrNull { it.id == id } }
     if (pin != null) { add(ReplyItem.PinLabel); thread(pin) }
+    for (r in PostReplyRules.displayOrder(s.threads, s.order, s.pinnedId)) thread(r)
     if (s.olderCursor.isNotEmpty()) add(ReplyItem.Older)
-    for (r in s.threads) if (r.id != pin?.id) thread(r)
+}
+
+/** Top | Newest over the Replies list (Top by default); a pick reloads from the first page. */
+@Composable
+private fun SortSwitch(s: PostRepliesState) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (o in PostReplyRules.Sort.entries) {
+            val on = s.sort == o
+            Text(o.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) c.bg else c.label,
+                modifier = Modifier.clip(CircleShape).background(if (on) c.label else c.label.copy(alpha = 0.08f))
+                    .semantics { selected = on }
+                    .clickable { s.pickSort(o) }.padding(horizontal = 14.dp, vertical = 6.dp))
+        }
+    }
 }
 
 /** The Replies tab's list: skeleton while loading, a failed page with Retry, the empty words, or the threads. */
@@ -656,17 +824,21 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
     val list = rememberLazyListState()
     val items = replyItems(s)
     val now = remember(s.threads, s.answers) { System.currentTimeMillis() }
-    // ⛔ OPENS AT THE TOP, on the first replies (iOS, owner 2026-11-07), never jumped to the newest.
+    // ⛔ OPENS AT THE TOP, on the first replies of the sort (iOS, owner 2026-11-07).
     LaunchedEffect(list) {
-        snapshotFlow { !list.canScrollForward }.collect { end -> s.atEnd = end; if (end) s.unseenNew = 0 }
+        snapshotFlow { !list.canScrollBackward }.collect { top -> s.atTop = top; if (top) s.unseenNew = 0 }
     }
-    // My new reply (or others' while at the end) brought into view once it is laid out.
-    LaunchedEffect(s.scrollTarget) {
+    // A sort switch starts at the top again.
+    LaunchedEffect(s.sort) { if (items.isNotEmpty()) list.scrollToItem(0) }
+    // My new reply, a jump to an "@name" or a push's comment, brought into view once it is laid out
+    // (waiting while its thread's answers are still coming).
+    LaunchedEffect(s.scrollTarget, items.size) {
         val id = s.scrollTarget ?: return@LaunchedEffect
         withFrameNanos { }
         val i = replyItems(s).indexOfFirst { it.key == "t-$id" || it.key == "a-$id" }
+        if (i < 0) return@LaunchedEffect
         s.scrollTarget = null
-        if (i >= 0) list.animateScrollToItem(i)
+        list.animateScrollToItem(i)
     }
     val scope = rememberCoroutineScope()
     val quick = rememberReplyQuickReaction()
@@ -681,7 +853,9 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
             if (uid == null) channelNav.page(s.cid) else peopleNav.contact(uid)
         }
     }
-    Box(modifier) {
+    Column(modifier) {
+    if (s.loaded && s.threads.isNotEmpty() || s.sort != PostReplyRules.Sort.TOP) SortSwitch(s)
+    Box(Modifier.fillMaxWidth().weight(1f)) {
         when {
             s.failed && s.threads.isEmpty() -> Column(Modifier.fillMaxWidth().padding(top = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Couldn't load replies", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
@@ -701,8 +875,14 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
             else -> LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = 4.dp, bottom = 8.dp)) {
                 items(items.size, key = { items[it].key }) { i ->
                     when (val row = items[i]) {
-                        ReplyItem.Older -> SmallLink(if (s.loadingOlder) "Loading…" else "Show earlier replies",
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp), center = true) { s.loadOlder() }
+                        ReplyItem.Older -> {
+                            // The next page comes in by itself when the end comes into view.
+                            LaunchedEffect(s.olderCursor) { s.loadOlder() }
+                            SmallLink(if (s.loadingOlder) "Loading…" else "Show more replies",
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp), center = true) { s.loadOlder() }
+                        }
+                        is ReplyItem.MoreCount -> SmallLink(PostReplyRules.moreAnswers(row.n),
+                            Modifier.fillMaxWidth().threadLineThrough().padding(start = 108.dp, bottom = 8.dp)) { s.showAllAnswers(row.rid) }
                         ReplyItem.PinLabel -> Row(Modifier.padding(start = 16.dp + 40.dp + 24.dp, top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.PushPin, null, tint = c.secondary, modifier = Modifier.size(12.dp))
@@ -723,14 +903,22 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
             }
         }
         if (s.unseenNew > 0) {
-            Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).clip(RoundedCornerShape(50)).background(c.card)
-                .clickable { s.unseenNew = 0; scope.launch { if (items.isNotEmpty()) list.animateScrollToItem(items.size - 1) } }
+            Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).clip(RoundedCornerShape(50)).background(c.card)
+                .clickable {
+                    val to = s.firstNewId
+                    s.unseenNew = 0
+                    scope.launch {
+                        val i = to?.let { id -> items.indexOfFirst { it.key == "t-$id" } } ?: -1
+                        list.animateScrollToItem(if (i >= 0) i else 0)
+                    }
+                }
                 .padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.label, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.KeyboardArrowUp, null, tint = c.label, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(PostReplyRules.newPill(s.unseenNew), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label)
             }
         }
+    }
     }
     s.reporting?.let { r -> ReportSheet(onDismiss = { s.reporting = null }) { reason -> s.report(r, reason) } }
     s.banning?.let { r -> BanSheet(onDismiss = { s.banning = null }) { all -> s.ban(r, all) } }
@@ -883,7 +1071,11 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                 elbow(lineColor, x, at.y + photo.size.height / 2f, at.x)
             }
         }
-    Column(Modifier.fillMaxWidth().then(lineModifier).padding(horizontal = 16.dp, vertical = 8.dp)) {
+    // A jump to it or a push's comment lights the row for a moment.
+    val lit by androidx.compose.animation.animateColorAsState(
+        if (s.flashId == r.id) c.accent.copy(alpha = 0.14f) else Color.Transparent,
+        androidx.compose.animation.core.tween(300), label = "replyFlash")
+    Column(Modifier.fillMaxWidth().then(lineModifier).background(lit).padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(Modifier.padding(start = side + 24.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(r.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
@@ -899,7 +1091,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                     modifier = Modifier.clip(CircleShape).background(c.label.copy(alpha = 0.08f)).padding(horizontal = 6.dp, vertical = 1.5.dp))
             }
             Spacer(Modifier.width(4.dp))
-            Text(PostReplyRules.age(r.at, now), fontSize = 13.sp, color = c.secondary, maxLines = 1)
+            Text(PostReplyRules.ageLine(r, now), fontSize = 13.sp, color = c.secondary, maxLines = 1)
         }
         // The photo level with the bubble's top, not its middle (iOS): a long reply keeps it up top.
         Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.Top) {
@@ -910,7 +1102,22 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                     .clickable(enabled = !r.mine, interactionSource = null, indication = null, onClick = onAuthor))
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f, fill = false).padding(end = 24.dp)) {
-                Text(r.text, fontSize = if (small) 15.sp else 17.sp, color = c.label,
+                // An answer to an answer starts with "@name " in the accent colour; a tap on it brings
+                // that reply into view and lights it.
+                val accent = c.accent
+                val words = remember(r.text, r.to, accent) {
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        r.to?.let { to ->
+                            val start = length
+                            append("@" + to.name)
+                            addStyle(androidx.compose.ui.text.SpanStyle(color = accent, fontWeight = FontWeight.SemiBold), start, length)
+                            addLink(androidx.compose.ui.text.LinkAnnotation.Clickable("to") { s.jumpTo(r) }, start, length)
+                            append(" ")
+                        }
+                        append(r.text)
+                    }
+                }
+                Text(words, fontSize = if (small) 15.sp else 17.sp, color = c.label,
                     modifier = Modifier.alpha(if (dim) 0.55f else 1f).clip(RoundedCornerShape(20.dp)).background(c.fieldFill)
                         .pointerInput(r.id, r.send) {
                             detectTapGestures(
@@ -937,10 +1144,12 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                         }
                         androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                     }
-                    for (a in PostReplyRules.actions(r, s.off, s.may, s.pinnedId)) {
+                    for (a in PostReplyRules.actions(r, s.off, s.may, s.pinnedId,
+                        editable = PostReplyRules.canEdit(r, s.off, System.currentTimeMillis()))) {
                         val (label, red) = when (a) {
                             PostReplyRules.Action.REPLY -> "Reply" to false
                             PostReplyRules.Action.COPY -> "Copy" to false
+                            PostReplyRules.Action.EDIT -> "Edit" to false
                             PostReplyRules.Action.REPORT -> "Report" to false
                             PostReplyRules.Action.DELETE -> "Delete" to true
                             PostReplyRules.Action.BAN -> "Delete and Ban" to true
@@ -953,6 +1162,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                             when (a) {
                                 PostReplyRules.Action.REPLY -> s.startAnswer(r)
                                 PostReplyRules.Action.COPY -> clipboard.setText(AnnotatedString(r.text))
+                                PostReplyRules.Action.EDIT -> s.startEdit(r)
                                 PostReplyRules.Action.REPORT -> s.reporting = r
                                 PostReplyRules.Action.DELETE -> if (r.send == PostReply.Send.FAILED) s.discard(r) else s.delete(r)
                                 PostReplyRules.Action.BAN -> s.banning = r
@@ -1072,6 +1282,15 @@ internal fun RepliesComposer(s: PostRepliesState) {
         s.loaded && (!s.failed || s.threads.isNotEmpty()) -> Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             s.problem?.let {
                 Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
+            }
+            s.editing?.let {
+                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Editing", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.accent, maxLines = 1,
+                        modifier = Modifier.weight(1f))
+                    IconButton({ s.cancelEdit() }, Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Close, "Stop editing", tint = c.secondary, modifier = Modifier.size(14.dp))
+                    }
+                }
             }
             s.answering?.let { a ->
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {

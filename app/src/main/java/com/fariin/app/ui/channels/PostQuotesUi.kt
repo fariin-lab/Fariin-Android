@@ -108,6 +108,8 @@ object PostQuotesSheet {
     @Volatile var startOff = false
     /** A reply alert tapped (cid to post id): the chat opens that post's Replies once it is on screen. */
     val pendingReplies = MutableStateFlow<Pair<String, String>?>(null)
+    /** The comment such an alert is about ("X replied to your comment"): the sheet opens on it. */
+    val pendingFocus = MutableStateFlow<com.fariin.app.data.ReplyFocus?>(null)
 }
 
 /** The bar's start, 24 dp (iOS, owner 2026-11-07 "a little bigger"). */
@@ -248,6 +250,14 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     var quotesShown by remember(m.id) { mutableStateOf(tab == 1) }
     val scope = rememberCoroutineScope()
     val replies = remember(openCid, m.id) { PostRepliesState(openCid, m.id, scope) }
+    // A push's comment: its thread opens and the row lights once it is loaded.
+    val focusAsk by PostQuotesSheet.pendingFocus.collectAsState()
+    LaunchedEffect(focusAsk, replies) {
+        val f = focusAsk?.takeIf { it.mid == m.id } ?: return@LaunchedEffect
+        PostQuotesSheet.pendingFocus.value = null
+        tab = 0
+        replies.focus(f)
+    }
     // The post's change marker is listened to only while the sheet is open (never the replies).
     DisposableEffect(replies) {
         replies.start()

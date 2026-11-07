@@ -39,6 +39,10 @@ data class PostReply(
      * and [verified] are then the channel's; the row shows the channel's squircle and "Creator".
      */
     val creator: Boolean = false,
+    /** An answer to one answer (or to the thread itself): whom it answers, as the server keeps it. */
+    val to: ReplyTo? = null,
+    /** Changed by its author after sending (editReply); the row says "· edited". */
+    val edited: Boolean = false,
 ) {
     enum class Send { SENT, SENDING, FAILED }
     data class Rx(val emoji: String, val count: Int)
@@ -51,7 +55,14 @@ data class ReplyRights(val del: Boolean = false, val ban: Boolean = false, val s
  * One page of `getReplies` (newest first on the wire, turned oldest first here). [next] = the
  * cursor for the page before it ("" = no more). [rev] = the change marker when the page was read.
  */
+/** Whom an answer answers: that reply's id and its author's name at the time ("@name"). */
+data class ReplyTo(val id: String, val name: String)
+
+/** A comment to open the replies sheet on: post [mid], thread [rid], answer [aid] ("" = the thread itself). */
+data class ReplyFocus(val mid: String, val rid: String, val aid: String)
+
 data class RepliesPage(
+    /** In the server's order for the page's sort (Top: most replied and liked first; Newest: newest first). */
     val items: List<PostReply>,
     val next: String,
     val count: Int,
@@ -198,6 +209,10 @@ object PostReplyRules {
             my = (d["my"] as? String)?.take(16) ?: if (d["liked"] == true) HEART else "",
             rx = parseRx(d["rx"], n(d["lc"])),
             creator = d["cr"] == true,
+            to = (d["to"] as? Map<*, *>)?.let { t ->
+                (t["id"] as? String)?.takeIf { it.isNotEmpty() }?.let { ReplyTo(it, (t["name"] as? String)?.takeIf { n -> n.isNotBlank() } ?: "Someone") }
+            },
+            edited = d["edited"] == true,
         ).let { it.copy(liked = it.my.isNotEmpty()) }
     }
 
@@ -215,7 +230,7 @@ object PostReplyRules {
         val effective = d?.get("postOff") as? Boolean
         val postOff = effective ?: false
         return RepliesPage(
-            items = list.sortedBy { it.at },
+            items = list,
             next = d?.get("next") as? String ?: "",
             count = n(d?.get("count")),
             off = effective ?: ((d?.get("off") as? Boolean ?: false) || channelOff),
@@ -362,12 +377,65 @@ object PostReplyRules {
     fun nextPick(r: PostReply, emoji: String): String = if (emoji == r.my) "" else emoji
 
     /** A reply of mine on its way, shown at once ("Sending…"). */
-    fun pending(id: String, text: String, name: String, photoUrl: String, parent: String, now: Long): PostReply =
+    fun pending(id: String, text: String, name: String, photoUrl: String, parent: String, now: Long, to: ReplyTo? = null): PostReply =
         PostReply(id = id, name = name.ifBlank { "You" }, photoUrl = photoUrl, text = text, at = now, mine = true,
-            canDelete = true, parentId = parent, send = PostReply.Send.SENDING)
+            canDelete = true, parentId = parent, send = PostReply.Send.SENDING, to = to)
+
+    // ---- Replies v2 (server 2026-11-07): sort, answers to answers, edit ----
+
+    /** The two orders of the Replies tab; Top is the default. The server takes them as `sort`. */
+    enum class Sort(val wire: String, val label: String) { TOP("top", "Top"), NEW("new", "Newest") }
+
+    /** My reply may be edited this long after it was sent (server EDIT_MS). */
+    const val EDIT_MS = 15 * 60 * 1000L
+
+    /** Edit is offered on my own sent reply, within 15 minutes of sending, while replies are on. */
+    fun canEdit(r: PostReply, off: Boolean, now: Long): Boolean =
+        r.mine && r.send == PostReply.Send.SENT && !off && r.at > 0 && now - r.at <= EDIT_MS
+
+    /** Answers an open thread shows before "View N more replies". */
+    const val ANSWERS_FIRST = 3
+
+    /** "View 1 more reply", "View 4 more replies". */
+    fun moreAnswers(n: Int): String = "View $n more " + if (n == 1) "reply" else "replies"
+
+    /** Under the name: "5m", "5m · edited". */
+    fun ageLine(r: PostReply, nowMs: Long): String = age(r.at, nowMs) + if (r.edited) " · edited" else ""
+
+    /** A reply's words with its "@name " in front when it answers an answer; the name's length for the accent. */
+    fun mentionPrefix(r: PostReply): String = r.to?.let { "@${it.name} " } ?: ""
+
+    /**
+     * Page one again (a refresh or a first load), merged by id in the sort's order: the page's rows
+     * replace their copies; a row that was on page one before and is gone from it now (deleted,
+     * held, or fallen to a later page) goes unless a later page holds it; my own still sending,
+     * failed or just saved stay. Rows never seen on page one (later pages, mine) stay. [added] =
+     * others' rows new to the list.
+     */
+    data class PageOne(val list: List<PostReply>, val added: List<String>)
+
+    fun mergePageOne(shown: List<PostReply>, page: List<PostReply>, prevFirst: Set<String>, later: Set<String>,
+                     recentMine: Set<String>): PageOne {
+        val ids = page.mapTo(HashSet()) { it.id }
+        val known = shown.mapTo(HashSet()) { it.id }
+        val kept = shown.filter { r -> r.id !in ids &&
+            (r.send != PostReply.Send.SENT || r.id in recentMine || r.id in later || r.id !in prevFirst) }
+        return PageOne(kept + page, page.filter { it.id !in known && !it.mine }.map { it.id })
+    }
+
+    /**
+     * The threads as drawn (the pinned one goes first separately): my own new ones not yet in any
+     * page at the top, newest first; then the pages' rows in the server's order.
+     */
+    fun displayOrder(threads: List<PostReply>, order: List<String>, pinnedId: String): List<PostReply> {
+        val byId = threads.associateBy { it.id }
+        val inOrder = LinkedHashSet(order)
+        val rest = threads.filter { it.id !in inOrder && it.id != pinnedId }.sortedByDescending { it.at }
+        return rest + inOrder.mapNotNull { id -> byId[id]?.takeIf { it.id != pinnedId } }
+    }
 
     /** A row's long-press menu, in order. */
-    enum class Action { REPLY, COPY, REPORT, DELETE, BAN, RETRY, PIN, UNPIN }
+    enum class Action { REPLY, COPY, EDIT, REPORT, DELETE, BAN, RETRY, PIN, UNPIN }
 
     /**
      * What the long-press offers, gated by the server's answer: Reply while replies are on; Copy;
@@ -376,13 +444,14 @@ object PostReplyRules {
      * Retry and Delete only; one still sending, Copy only. Pin / Unpin with the switches' right
      * (owner, or Change info), on a top-level reply only, never an answer or a held one.
      */
-    fun actions(r: PostReply, off: Boolean, may: ReplyRights, pinnedId: String = ""): List<Action> = when (r.send) {
+    fun actions(r: PostReply, off: Boolean, may: ReplyRights, pinnedId: String = "", editable: Boolean = false): List<Action> = when (r.send) {
         PostReply.Send.SENDING -> listOf(Action.COPY)
         PostReply.Send.FAILED -> listOf(Action.RETRY, Action.COPY, Action.DELETE)
         PostReply.Send.SENT -> buildList {
             if (!off) add(Action.REPLY)
             if (may.settings && r.parentId.isEmpty() && !r.held) add(if (r.id == pinnedId) Action.UNPIN else Action.PIN)
             add(Action.COPY)
+            if (editable) add(Action.EDIT)
             if (!r.mine) add(Action.REPORT)
             if (r.canDelete) add(Action.DELETE)
             if (may.ban && !r.mine) add(Action.BAN)
@@ -401,6 +470,16 @@ object PostReplyRules {
         if (cid.isNullOrEmpty() || mid.isNullOrEmpty()) return null
         if (!com.fariin.app.channel.ChannelRules.safeId(cid) || !com.fariin.app.channel.ChannelRules.safeId(mid)) return null
         return cid to mid
+    }
+
+    /**
+     * The comment a "replied to your comment" push is about (data `rid`, and `aid` for an answer):
+     * the sheet opens on it, its thread open and the row lit. Null without a usable thread id.
+     */
+    fun focusOf(mid: String, rid: String?, aid: String?): ReplyFocus? {
+        if (rid.isNullOrEmpty() || !com.fariin.app.channel.ChannelRules.safeId(rid)) return null
+        val a = aid?.takeIf { it.isNotEmpty() && com.fariin.app.channel.ChannelRules.safeId(it) } ?: ""
+        return ReplyFocus(mid, rid, a)
     }
 
     /** Under a reply with answers: "View 1 reply", "View 3 replies", or "Hide replies" when open. */
@@ -434,9 +513,12 @@ object PostReplies {
     private fun target(r: PostReply): Map<String, Any> =
         if (r.parentId.isNotEmpty()) mapOf("rid" to r.parentId, "aid" to r.id) else mapOf("rid" to r.id)
 
-    /** A page of threads ([cursor] "" = the newest). Null when the call failed. */
-    suspend fun page(cid: String, mid: String, cursor: String = ""): RepliesPage? = runCatching {
-        val a = mutableMapOf<String, Any>("cid" to cid, "mid" to mid)
+    /**
+     * A page of threads in [sort]'s order ([cursor] "" = page one; the server's cursor goes back as
+     * it came). The sort is always sent: the server reads a missing one as Newest. Null when the call failed.
+     */
+    suspend fun page(cid: String, mid: String, cursor: String = "", sort: PostReplyRules.Sort = PostReplyRules.Sort.TOP): RepliesPage? = runCatching {
+        val a = mutableMapOf<String, Any>("cid" to cid, "mid" to mid, "sort" to sort.wire)
         if (cursor.isNotEmpty()) a["cursor"] = cursor
         PostReplyRules.parsePage(call("getReplies", a))
     }.getOrNull()
@@ -452,11 +534,23 @@ object PostReplies {
      * Sends a reply, or an answer in thread [rid]. [clientId] becomes the reply's id: a resend
      * with the same id after a lost answer gets the same reply back, counted once.
      */
-    suspend fun add(cid: String, mid: String, clientId: String, text: String, rid: String): Result<PostReply> = runCatching {
+    suspend fun add(cid: String, mid: String, clientId: String, text: String, rid: String, to: ReplyTo? = null): Result<PostReply> = runCatching {
         val a = mutableMapOf<String, Any>("cid" to cid, "mid" to mid, "text" to text, "clientId" to clientId)
         if (rid.isNotEmpty()) a["rid"] = rid
+        // Whom an answer answers (the server puts that reply's own author name on it).
+        if (rid.isNotEmpty() && to != null) a["to"] = mapOf("id" to to.id, "name" to to.name)
         PostReplyRules.parseReply(call("addReply", a)?.get("reply") as? Map<*, *>, rid) ?: error("Couldn't send your reply.")
     }.recoverCatching { e -> throw IllegalStateException(sentence(e)) }
+
+    /** My reply's new words (author only, within 15 minutes). The saved row, or the server's reason. */
+    suspend fun edit(cid: String, mid: String, r: PostReply, text: String): Result<PostReply> = runCatching {
+        PostReplyRules.parseReply(call("editReply", mapOf("cid" to cid, "mid" to mid, "text" to text) + target(r))?.get("reply") as? Map<*, *>,
+            r.parentId) ?: error("Couldn't save your edit.")
+    }.recoverCatching { e ->
+        val fe = e as? FirebaseFunctionsException
+        throw IllegalStateException(if (fe != null && fe.code != FirebaseFunctionsException.Code.INTERNAL &&
+            fe.code != FirebaseFunctionsException.Code.UNAVAILABLE) fe.message ?: "Couldn't save your edit." else "Couldn't save your edit. Try again.")
+    }
 
     /** How many replies went (a thread takes its answers); null when the server refused. */
     suspend fun delete(cid: String, mid: String, r: PostReply): Int? = runCatching {
