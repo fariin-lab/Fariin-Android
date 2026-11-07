@@ -279,9 +279,7 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                             } else if (item.isVideo && !busy) {
                                 PlayBadge(MediaRules.playBadgeSide(w, h).dp, Modifier.align(Alignment.Center))
                                 item.duration?.takeIf { it > 0 }?.let { d ->
-                                    Text(MediaRules.durationLabel(d), fontSize = 11.sp, color = Color.White,
-                                        modifier = Modifier.align(Alignment.BottomStart).padding(5.dp).clip(RoundedCornerShape(50))
-                                            .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 5.dp, vertical = 1.dp))
+                                    DurationPill(d, Modifier.align(Alignment.BottomStart).padding(5.dp))
                                 }
                             }
                             if (busy && !plus) {

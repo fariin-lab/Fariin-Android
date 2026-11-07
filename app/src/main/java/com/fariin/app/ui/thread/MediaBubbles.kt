@@ -231,7 +231,7 @@ private fun makePlaceholder(thumb: String?, blurhash: String?): ImageBitmap? =
 /** The time and ticks floating on a picture with no caption: a dark capsule (iOS metaCapsule). */
 @Composable
 internal fun MetaCapsule(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f))
+    Box(modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.35f))
         .padding(horizontal = 7.dp, vertical = 2.dp)) { content() }
 }
 
@@ -308,13 +308,20 @@ internal fun VideoOverlay(m: Message, ready: Boolean, showDuration: Boolean = tr
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         // While the clip waits or comes down, the corner says its size instead (the download badge).
         if (showDuration) m.duration?.let { d ->
-            Box(Modifier.padding(8.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f))
-                .padding(horizontal = 7.dp, vertical = 2.dp)) {
-                Text(MediaRules.durationLabel(d), fontSize = 12.sp, color = Color.White)
-            }
+            // iOS durationPill: 5 in from the corner, 0.5 dark, 11 semibold, 6 either side.
+            DurationPill(d, Modifier.padding(5.dp))
         }
         // Never while it uploads ("ready, tap it" is not true then; the ring sits there).
         if (ready) PlayBadge(MediaRules.playBadgeSide(maxWidth.value, maxHeight.value).dp, Modifier.align(Alignment.Center))
+    }
+}
+
+/** A video's length on its picture (iOS durationPill / album tile duration). */
+@Composable
+internal fun DurationPill(seconds: Double, modifier: Modifier = Modifier) {
+    Box(modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+        Text(MediaRules.durationLabel(seconds), style = TextStyle(fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = Color.White, fontFeatureSettings = "tnum"))
     }
 }
 
