@@ -109,12 +109,15 @@ internal fun BubbleStylePage(onClose: () -> Unit) {
 internal fun BubbleStyleChooser(
     bottomPad: androidx.compose.ui.unit.Dp,
     onSaved: () -> Unit,
+    /** Opened from a chat: the style and colour picked here are that chat's own; null = the Settings ones. */
+    cid: String? = null,
     bar: @Composable (dirty: Boolean, save: () -> Unit) -> Unit,
 ) {
     val ctx = LocalContext.current
     remember { BubbleStyles.init(ctx) }
     val c = Fariin.colors
-    val saved = remember { BubbleStyles.current()?.takeIf { BubbleStyles.known(it) } }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var saved by remember { mutableStateOf(BubbleStyles.forChat(cid)?.takeIf { BubbleStyles.known(it) }) }
     var selected by remember { mutableStateOf(saved) }
     val savedDecor = remember { BubbleStyles.decorations() }
     var decor by remember { mutableStateOf(savedDecor) }
@@ -124,7 +127,7 @@ internal fun BubbleStyleChooser(
     }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
     // My chat colour as picked here, null = Auto; applied on Save.
-    val savedColor = remember { ChatLookStore.globalChosen(ctx) }
+    var savedColor by remember { mutableStateOf(if (cid != null) ChatLookStore.ownColor(ctx, cid) else ChatLookStore.globalChosen(ctx)) }
     var chatColor by remember { mutableStateOf(savedColor) }
     val dirty = selected != saved || decor != savedDecor || chatColor != savedColor
     // "Default" is the plain bubble, drawn in my chat colour (the wallpaper's own on Auto).
@@ -144,16 +147,31 @@ internal fun BubbleStyleChooser(
             if (!BubbleStyles.mayUse(selected)) plusNote = true
             else {
                 // A colour applies only with no picture style; saving null clears a saved style.
-                if (selected == null && chatColor != savedColor) ChatLookStore.setDefaultColor(ctx, chatColor)
-                BubbleStyles.save(selected, decor)
+                if (selected == null && chatColor != savedColor) {
+                    if (cid != null) ChatLookStore.setColor(ctx, cid, chatColor) else ChatLookStore.setDefaultColor(ctx, chatColor)
+                }
+                if (cid != null) {
+                    // This chat only: the Settings style stays; decorations are one switch for all.
+                    BubbleStyles.saveForChat(cid, selected)
+                    if (decor != savedDecor) BubbleStyles.save(BubbleStyles.current(), decor)
+                } else BubbleStyles.save(selected, decor)
                 onSaved()
             }
         }
         // Pinned: never scrolls away, redrawn at once when a tile is tapped.
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
             Preview(selected, plain)
-            Text("Applies to messages you send from now on.", fontSize = 13.sp, color = c.secondary,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (cid != null) "Only this chat" else "Applies to messages you send from now on.", fontSize = 13.sp,
+                    color = c.secondary, modifier = Modifier.weight(1f).padding(start = 4.dp))
+                // Back to the app's default bubble at once (no style, default colour), as the chat
+                // wallpaper sheet's Reset does. Only while this page's scope has a style or colour.
+                if (saved != null || savedColor != null) com.fariin.app.ui.components.FloatingTextAction("Reset") {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    if (cid != null) resetChatBubble(ctx, cid) else resetGlobalBubble(ctx)
+                    saved = null; selected = null; savedColor = null; chatColor = null
+                }
+            }
         }
         LazyRow(
             Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
@@ -197,13 +215,13 @@ internal fun BubbleStyleChooser(
  * style at once with a light tick; the style is mine for every chat, so the caption says so.
  */
 @Composable
-internal fun BubbleStylesStrip() {
+internal fun BubbleStylesStrip(cid: String) {
     val ctx = LocalContext.current
     remember { BubbleStyles.init(ctx) }
     val c = Fariin.colors
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val v = BubbleStyles.version.intValue
-    val current = remember(v) { BubbleStyles.current() }
+    val current = remember(v, cid) { BubbleStyles.forChat(cid) }
     val pictures = offeredPictures()
     val picks = remember(current, pictures) {
         val first = pictures.take(6)
@@ -229,15 +247,15 @@ internal fun BubbleStylesStrip() {
                     Tile(s.name, current == s.id, pad = 5.dp, swatchHeight = 58.dp, onTap = {
                         if (current != s.id) {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                            BubbleStyles.save(s.id, BubbleStyles.decorations())
+                            BubbleStyles.saveForChat(cid, s.id)
                         }
                     }) { PictureSwatch(s, thumbPx) }
                 }
             }
         }
-        Text("Applies to all your chats", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+        Text("Only this chat", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
     }
-    if (all) BubbleStyleSheet.Show(onDismiss = { all = false })
+    if (all) BubbleStyleSheet.Show(cid, onDismiss = { all = false })
 }
 
 /** One category in the row above the grid; the shown one filled. */
@@ -336,3 +354,18 @@ private fun PictureSwatch(s: BubbleArt.Spec, widthPx: Int) {
 
 /** The preview's own-bubble row: tall enough for the tallest picture style's art around one line. */
 private val PREVIEW_MINE_HEIGHT = 120.dp
+
+/** One chat back to the app's default bubble: no style here (an explicit none over the Settings
+ *  one) and the chat's own colour cleared. The Bubble Style page's Reset and the chat sheet's Reset. */
+internal fun resetChatBubble(ctx: android.content.Context, cid: String) {
+    BubbleStyles.init(ctx)
+    BubbleStyles.saveForChat(cid, null)
+    ChatLookStore.setColor(ctx, cid, null)
+}
+
+/** The Settings bubble back to the default: no style, the Auto colour. Chats' own picks stay. */
+internal fun resetGlobalBubble(ctx: android.content.Context) {
+    BubbleStyles.init(ctx)
+    BubbleStyles.save(null, BubbleStyles.decorations())
+    ChatLookStore.setDefaultColor(ctx, null)
+}

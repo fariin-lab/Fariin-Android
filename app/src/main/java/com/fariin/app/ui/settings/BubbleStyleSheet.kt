@@ -31,19 +31,19 @@ object BubbleStyleSheet {
     val open = mutableStateOf(false)
 
     @Composable
-    fun Host() {
+    fun Host(cid: String?) {
         // Leaving the chat with the sheet up must not reopen it in the next chat.
         androidx.compose.runtime.DisposableEffect(Unit) { onDispose { open.value = false } }
-        if (open.value) Sheet(onDismiss = { open.value = false })
+        if (open.value) Sheet(cid, onDismiss = { open.value = false })
     }
 
     /** The same sheet opened from elsewhere (the chat wallpaper picker's "See all"). */
     @Composable
-    fun Show(onDismiss: () -> Unit) = Sheet(onDismiss)
+    fun Show(cid: String?, onDismiss: () -> Unit) = Sheet(cid, onDismiss)
 }
 
 @Composable
-private fun Sheet(onDismiss: () -> Unit) {
+private fun Sheet(cid: String?, onDismiss: () -> Unit) {
     val c = Fariin.colors
     val motion = rememberSheetMotion(onDismiss)
     // Opens at 70% of the screen with the chat above it (owner 2026-11-07); the grabber or the top
@@ -59,6 +59,7 @@ private fun Sheet(onDismiss: () -> Unit) {
         BubbleStyleChooser(
             bottomPad = 16.dp + hidden + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
             onSaved = { motion.close() },
+            cid = cid,
             bar = { dirty, save ->
                 // Under the grabber (FariinSheet draws it in the top strip).
                 Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 10.dp)) {

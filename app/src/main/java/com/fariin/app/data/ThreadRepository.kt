@@ -552,7 +552,7 @@ class ThreadRepository(
         val ref = e.replyId?.let { Message.ReplyRef(it, e.replyAuthor ?: "", e.replyText ?: "") }
         // My bubble style read ONCE, at the tap: the bubble on screen and the message sent carry the
         // same one even if the style is changed while this one is still going up.
-        val style = styleAtSend.getOrPut(e.clientId) { BubbleStyles.forSending().let { it to BubbleStyles.decorForSending(it) } }
+        val style = styleAtSend.getOrPut(e.clientId) { BubbleStyles.forSending(cid).let { it to BubbleStyles.decorForSending(it) } }
         pending[e.clientId] = Message(
             id = e.clientId, authorId = me, text = e.text, createdAtMillis = e.ts, hasServerTime = false,
             clientTs = e.ts, clientId = e.clientId, sendState = Message.SendState.SENDING, replyTo = ref,
@@ -1190,7 +1190,7 @@ class ThreadRepository(
      * decorations. The one read at the tap when there is one, else the current one.
      */
     private fun putBubbleStyle(msg: HashMap<String, Any>, clientId: String) {
-        val (bs, bsd) = styleAtSend[clientId] ?: BubbleStyles.forSending().let { it to BubbleStyles.decorForSending(it) }
+        val (bs, bsd) = styleAtSend[clientId] ?: BubbleStyles.forSending(cid).let { it to BubbleStyles.decorForSending(it) }
         if (bs == null) return
         msg["bs"] = bs
         if (bsd) msg["bsd"] = true

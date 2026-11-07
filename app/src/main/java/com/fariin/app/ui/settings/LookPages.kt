@@ -160,36 +160,49 @@ private fun ResetMenu(wallpaperPage: Boolean) {
 }
 
 /**
- * iOS WallpaperPickerSheet's Reset menu, for one chat: Reset Bubble Color (back to the default blue)
- * while the chat has a colour of its own, Reset Wallpaper (plain, not the Settings one) while it has
- * a wallpaper of its own. Nothing to reset, no button. Each closes the picker, as iOS does.
+ * One chat's sheet Reset (iOS WallpaperPickerSheet): the chat back to the app's default bubble (no
+ * style here, its own colour cleared) and to a plain wallpaper (a group's for the whole group). The
+ * sheet stays open, the strip then showing nothing picked. Nothing to reset, no button.
  */
 @Composable
-private fun ChatResetMenu(cid: String, shared: Boolean, onDone: () -> Unit) {
+private fun ChatResetButton(cid: String, shared: Boolean) {
+    val ctx = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    ChatLookStore.version.intValue
+    com.fariin.app.data.BubbleStyles.version.intValue
+    com.fariin.app.data.BubbleStyles.init(ctx)
+    val canBubble = ChatLookStore.ownColor(ctx, cid) != null || com.fariin.app.data.BubbleStyles.forChat(cid) != null
+    // A group's (shared): a plain wallpaper for the whole group (iOS resetWallpaperOnly).
+    val canWall = (shared || ChatLookStore.hasOwnWallpaper(ctx, cid)) && ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None
+    if (!canBubble && !canWall) return
+    com.fariin.app.ui.components.FloatingTextAction("Reset") {
+        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+        resetChatBubble(ctx, cid)
+        if (canWall) {
+            if (shared) com.fariin.app.data.GroupWallpaper.publish(ctx, cid, ChatWallpaper.None) { groupWallpaperFailed(ctx, it) }
+            else ChatLookStore.setWallpaper(ctx, cid, ChatWallpaper.None)
+        }
+    }
+}
+
+/**
+ * One chat's "Bubble Color" on its wallpaper sheet (as iOS): Auto and the palette as circles, for
+ * this chat only. A colour also clears this chat's picture style, so its bubbles show that colour;
+ * Auto is not a colour pick and leaves a style alone (as Settings > Bubble Color).
+ */
+@Composable
+private fun ChatBubbleColorRow(cid: String) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     ChatLookStore.version.intValue
-    val blue = ChatColors.presets.first()
+    com.fariin.app.data.BubbleStyles.version.intValue
+    com.fariin.app.data.BubbleStyles.init(ctx)
     val own = ChatLookStore.ownColor(ctx, cid)
-    val canColor = own != null && own != blue
-    // A group's (shared): Reset Wallpaper makes it plain for the whole group (iOS resetWallpaperOnly).
-    val canWall = (shared || ChatLookStore.hasOwnWallpaper(ctx, cid)) && ChatLookStore.wallpaper(ctx, cid) != ChatWallpaper.None
-    if (!canColor && !canWall) return
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Reset options", tint = c.label) }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
-            if (canColor) DropdownMenuItem(text = { Text("Reset Bubble Color") },
-                onClick = { open = false; ChatLookStore.setColor(ctx, cid, blue); onDone() })
-            if (canWall) DropdownMenuItem(text = { Text("Reset Wallpaper") },
-                onClick = {
-                    open = false
-                    if (shared) com.fariin.app.data.GroupWallpaper.publish(ctx, cid, ChatWallpaper.None) { groupWallpaperFailed(ctx, it) }
-                    else ChatLookStore.setWallpaper(ctx, cid, ChatWallpaper.None)
-                    onDone()
-                })
-        }
+    val styled = com.fariin.app.data.BubbleStyles.forChat(cid) != null
+    Text("Bubble Color", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.padding(horizontal = 4.dp))
+    ChatColorGrid(own, ring = !styled) { spec ->
+        ChatLookStore.setColor(ctx, cid, spec)
+        if (spec != null) com.fariin.app.data.BubbleStyles.saveForChat(cid, null)
     }
 }
 
@@ -298,16 +311,19 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
     }
     Column(Modifier.fillMaxSize()) {
         PageBar(if (cid != null) "Chat Wallpaper" else "Set Wallpaper", onBack = pop,
-            action = { if (cid != null) ChatResetMenu(cid, shared, pop) else ResetMenu(wallpaperPage = true) })
+            action = { if (cid != null) ChatResetButton(cid, shared) else ResetMenu(wallpaperPage = true) })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            // One chat's picker: a strip of picture bubble styles above the photo row (owner 2026-11-07).
-            if (cid != null && com.fariin.app.data.BubbleStyles.SHOWN) BubbleStylesStrip()
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.card)) {
-                SettingsRow("Choose from Photos") {
-                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            val photoRows: @Composable () -> Unit = {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.card)) {
+                    SettingsRow(if (cid != null) "Choose Wallpaper from Photos" else "Choose from Photos") {
+                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                    SettingsRow("Wallpaper Color", last = true) { push(PAGE_WALL_COLOR) }
                 }
-                SettingsRow("Wallpaper Color", last = true) { push(PAGE_WALL_COLOR) }
             }
+            // Settings: the photo rows first. One chat's sheet (as iOS): tiles, Bubble Color,
+            // Bubble Styles, then the photo rows, all for this chat only.
+            if (cid == null) photoRows()
             Text("Presets", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.padding(horizontal = 4.dp))
             val tiles = buildList<@Composable (Modifier) -> Unit> {
                 add { m -> WallTile(ChatWallpaper.None, current, m) { previewing = ChatWallpaper.None } }
@@ -327,6 +343,11 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
                 gradients.forEach { g -> add { m -> WallTile(ChatWallpaper.Gradient(g.id), current, m) { previewing = ChatWallpaper.Gradient(g.id) } } }
             }
             GridCard(3, 10, 14, tiles)
+            if (cid != null) {
+                ChatBubbleColorRow(cid)
+                if (com.fariin.app.data.BubbleStyles.SHOWN) BubbleStylesStrip(cid)
+                photoRows()
+            }
             Spacer(Modifier.height(com.fariin.app.ui.shell.bottomBarInset()))
         }
     }

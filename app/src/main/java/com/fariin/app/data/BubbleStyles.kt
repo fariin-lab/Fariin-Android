@@ -95,8 +95,38 @@ object BubbleStyles {
     /** May I pick it: every picture style; a colour style unless it is Plus (not on sale yet). */
     fun mayUse(id: String?): Boolean = id == null || BubbleArt.find(id) != null || find(id)?.plus == false
 
-    /** What a text I send now carries as `bs` (null = nothing). */
-    fun forSending(): String? = if (!SHOWN) null else current()?.takeIf { known(it) && mayUse(it) }
+    // ---- One chat's own style (owner 2026-11-07), as the per-chat wallpaper ----
+    // `bubbleStyle.chat.<cid>`: a style id, or [NONE] for "this chat has no style" (opts out of the
+    // Settings one). No key = the chat follows the Settings style.
+
+    const val NONE = "__none__"
+    fun chatKey(cid: String) = "bubbleStyle.chat.$cid"
+
+    /** Pure: this chat's stored value (null = no key) over the Settings style. */
+    fun resolve(chatRaw: String?, global: String?): String? = when {
+        chatRaw == null -> global?.takeIf { it.isNotEmpty() }
+        chatRaw == NONE || chatRaw.isEmpty() -> null
+        else -> chatRaw
+    }
+
+    /** The value to store for a pick in one chat: a style, or [NONE] for the plain bubble. */
+    fun chatValue(id: String?): String = id?.takeIf { it.isNotEmpty() } ?: NONE
+
+    private fun chatRaw(cid: String): String? =
+        app?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)?.getString(chatKey(cid), null)
+
+    /** The style this chat's bubbles of mine use: its own, else the Settings one, else none. */
+    fun forChat(cid: String?): String? = if (cid.isNullOrEmpty()) current() else resolve(chatRaw(cid), current())
+
+    /** This chat's own pick; null = plain bubble here (an explicit none, never the Settings one). */
+    fun saveForChat(cid: String, id: String?) {
+        val p = app?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE) ?: return
+        p.edit().putString(chatKey(cid), chatValue(id)).apply()
+        version.intValue++
+    }
+
+    /** What a text I send now in [cid] carries as `bs` (null = nothing). */
+    fun forSending(cid: String?): String? = if (!SHOWN) null else forChat(cid)?.takeIf { known(it) && mayUse(it) }
 
     /** `bsd` beside it: a colour style's decorations chosen (iOS sends it with any style). */
     fun decorForSending(id: String?): Boolean = id != null && decorations()
