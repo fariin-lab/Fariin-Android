@@ -152,11 +152,21 @@ class FirestorePeople(
         call("chatKeyExists", mapOf("uid" to uid), 8)?.get("exists") as? Boolean
     } catch (_: Exception) { null }
 
-    override suspend fun verifyChatKey(uid: String, pin: String): Result<String> = try {
-        val r = call("verifyChatPin", mapOf("uid" to uid, "pin" to pin), 10)
-        val cid = r?.get("cid") as? String
-        if (r?.get("ok") == true && !cid.isNullOrEmpty()) Result.success(cid) else Result.failure(Exception(ChatKey.GENERIC_FAILURE))
-    } catch (e: Exception) { Result.failure(Exception(ChatKey.sentence(e))) }
+    override suspend fun verifyChatKey(uid: String, pin: String): Result<String> {
+        if (!ChatKey.isValid(pin)) return Result.failure(Exception(ChatKey.GENERIC_FAILURE))
+        // A lockout this phone already knows of is refused here, in the server's words (iOS ChatPin.verify).
+        ChatKey.lockedNow()?.let { return Result.failure(Exception(it)) }
+        return try {
+            val r = call("verifyChatPin", mapOf("uid" to uid, "pin" to pin), 10)
+            val cid = r?.get("cid") as? String
+            if (r?.get("ok") == true && !cid.isNullOrEmpty()) { ChatKey.lockedUntilMs = 0L; Result.success(cid) }
+            else Result.failure(Exception(ChatKey.GENERIC_FAILURE))
+        } catch (e: Exception) {
+            val fe = e as? com.google.firebase.functions.FirebaseFunctionsException
+            ChatKey.lockDeadline(fe?.code, fe?.details)?.let { ChatKey.lockedUntilMs = it }
+            Result.failure(Exception(ChatKey.sentence(e)))
+        }
+    }
 
     /** ChatService.openConversation: the 1:1 seed, a request (startedBy, accepted false) when new. */
     override suspend fun openChat(p: Person): String {
@@ -457,11 +467,42 @@ object ChatKey {
     fun isValid(pin: String) = pin.length in MIN..MAX && pin.all { it.isDigit() }
     /** Paste keeps the digits only, at most six. */
     fun fromPaste(text: String) = text.filter { it.isDigit() }.take(MAX)
+    /**
+     * iOS ChatPin.lockedUntil: the server's lockout deadline (ms), latched from its refusal so the
+     * next try is refused here in the same words without spending an attempt. A key that opened
+     * something clears it.
+     */
+    @Volatile var lockedUntilMs: Long = 0L
+
+    /** iOS ChatPin.lockSentence: minutes, rounded up, never zero. */
+    fun lockSentence(untilMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+        val mins = maxOf(1L, (untilMs - nowMs + 59_999) / 60_000)
+        return "Too many attempts. Try again in $mins minute${if (mins == 1L) "" else "s"}."
+    }
+
+    /** The live local lock's sentence, or null when there is none. */
+    fun lockedNow(nowMs: Long = System.currentTimeMillis()): String? =
+        lockedUntilMs.takeIf { it > nowMs }?.let { lockSentence(it, nowMs) }
+
+    /** iOS ChatPin.lockDeadline: `{ lockedUntil: <ms> }` in a RESOURCE_EXHAUSTED refusal's details. */
+    fun lockDeadline(code: com.google.firebase.functions.FirebaseFunctionsException.Code?, details: Any?): Long? {
+        if (code != com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED) return null
+        val ms = ((details as? Map<*, *>)?.get("lockedUntil") as? Number)?.toLong() ?: return null
+        return ms.takeIf { it > 0 }
+    }
+
+    /**
+     * iOS ChatPin.sentence: the server's words where they are about the caller (the lockout, "4 to
+     * 6 digits", ALREADY_EXISTS "That Chat Key is taken"), "Try again in a moment." offline. Every
+     * other refusal, PERMISSION_DENIED included, is the generic line on purpose: it must never say
+     * whether somebody's key was right.
+     */
     fun sentence(e: Exception): String {
         val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
         return when (code) {
             com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED,
-            com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT -> e.message ?: GENERIC_FAILURE
+            com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT,
+            com.google.firebase.functions.FirebaseFunctionsException.Code.ALREADY_EXISTS -> e.message ?: GENERIC_FAILURE
             com.google.firebase.functions.FirebaseFunctionsException.Code.UNAVAILABLE,
             com.google.firebase.functions.FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> "Try again in a moment."
             else -> GENERIC_FAILURE
