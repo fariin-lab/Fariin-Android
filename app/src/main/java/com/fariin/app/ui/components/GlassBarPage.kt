@@ -76,6 +76,14 @@ fun GlassBarPage(
             CompositionLocalProvider(LocalLiquidBackdrop provides null) {
                 content(with(density) { barPx.toDp() })
             }
+            // The glass must see what the eye sees: the bar's solid page colour and its fade, not the
+            // rows hidden under them (the back circle showed ghost letters from under the bar,
+            // Pixel 2026-11-06).
+            Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
+                Box(Modifier.fillMaxWidth().height(with(density) { barPx.toDp() }).background(page))
+                Box(Modifier.fillMaxWidth().height(20.dp).graphicsLayer { alpha = fade.value }
+                    .background(Brush.verticalGradient(listOf(page, page.copy(alpha = 0f)))))
+            }
         }
         Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
             Box(Modifier.fillMaxWidth().onSizeChanged { barPx = it.height }) {
