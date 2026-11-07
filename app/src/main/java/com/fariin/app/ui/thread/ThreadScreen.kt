@@ -1037,13 +1037,16 @@ private fun ThreadContent(
                                         }
                                         menuFor = m
                                     }
-                                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem, key = m.id + m.reactions[ui.me]) {
+                                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem, key = m.id + ReactNow.mine(m, ui.me)) {
                                         rowView.lightTap()   // iOS: a light tap with the quick reaction
-                                        actions.onReact(m, MessageRules.nextReaction(m.reactions[ui.me], quickReaction))
+                                        // The pill shows now, not when the sealed write comes back (ReactNow).
+                                        val next = MessageRules.nextReaction(ReactNow.mine(m, ui.me), quickReaction)
+                                        ReactNow.set(m, next)
+                                        actions.onReact(m, next)
                                     }) {
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     // iOS: a pill opens who reacted (channels keep their own chips).
-                                    ReactionChips(m, ui, m.authorId == ui.me) { reactorsFor = m.rowId }
+                                    ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { reactorsFor = m.rowId }
                                 }
                             }
                         }
@@ -1664,6 +1667,14 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
         ) {
             if (showSender && g.first) {
                 SenderLine(ui, m.authorId)
+                Spacer(Modifier.height(1.dp))
+            }
+            // A QUOTE POST SAYS WHOSE IT IS (iOS, owner 2026-11-07, "show my channel name in quote
+            // posts"): the channel's name at the top of the bubble, over its words and the quoted card,
+            // in the bubble's text colour; no photo, and a tap does nothing. Quote posts only.
+            ui.channel?.info?.title?.takeIf { it.isNotEmpty() && m.quoteId != null && !m.deleted }?.let { name ->
+                Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = styled?.ink ?: if (isMe) Color.White else c.label,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(1.dp))
             }
             if (m.forwarded && !m.deleted) {
