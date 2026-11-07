@@ -65,6 +65,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -279,6 +280,10 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
     val current = cid?.let { ChatLookStore.wallpaper(ctx, it) } ?: ChatLookStore.defaultWallpaper(ctx)
     val library = ChatLookStore.libraryIds(ctx)
     var previewing by remember { mutableStateOf<ChatWallpaper?>(null) }
+    // Built-in ones the admin panel hid are not offered (one already in use stays applied).
+    val hiddenWalls by com.fariin.app.data.HiddenLooks.wallpapers.collectAsState()
+    val animated = com.fariin.app.data.HiddenLooks.visible(AnimatedWallpapers.all, hiddenWalls) { it.id }
+    val gradients = com.fariin.app.data.HiddenLooks.visible(ChatWallpapers.all, hiddenWalls) { it.id }
     // The photo just picked: the only one that opens alone with pinch and drag framing.
     var justPicked by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<String?>(null) }
@@ -306,7 +311,7 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
             val tiles = buildList<@Composable (Modifier) -> Unit> {
                 add { m -> WallTile(ChatWallpaper.None, current, m) { previewing = ChatWallpaper.None } }
                 // Moving wallpapers, playing in their tiles; in a group too (an admin sets it for everyone).
-                AnimatedWallpapers.all.forEach { a -> add { m -> WallTile(ChatWallpaper.Animated(a.id), current, m) { previewing = ChatWallpaper.Animated(a.id) } } }
+                animated.forEach { a -> add { m -> WallTile(ChatWallpaper.Animated(a.id), current, m) { previewing = ChatWallpaper.Animated(a.id) } } }
                 library.forEach { id ->
                     add { m ->
                         Box(m) {
@@ -318,7 +323,7 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
                         }
                     }
                 }
-                ChatWallpapers.all.forEach { g -> add { m -> WallTile(ChatWallpaper.Gradient(g.id), current, m) { previewing = ChatWallpaper.Gradient(g.id) } } }
+                gradients.forEach { g -> add { m -> WallTile(ChatWallpaper.Gradient(g.id), current, m) { previewing = ChatWallpaper.Gradient(g.id) } } }
             }
             GridCard(3, 10, 14, tiles)
             Spacer(Modifier.height(com.fariin.app.ui.shell.bottomBarInset()))
@@ -326,8 +331,8 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
     }
     previewing?.let { w ->
         val alone = w is ChatWallpaper.Photo && w.id == justPicked
-        WallpaperPreview(w, siblings = if (alone) emptyList() else AnimatedWallpapers.all.map { ChatWallpaper.Animated(it.id) } +
-            library.map { ChatWallpaper.Photo(it) } + ChatWallpapers.all.map { ChatWallpaper.Gradient(it.id) },
+        WallpaperPreview(w, siblings = if (alone) emptyList() else animated.map { ChatWallpaper.Animated(it.id) } +
+            library.map { ChatWallpaper.Photo(it) } + gradients.map { ChatWallpaper.Gradient(it.id) },
             cid = cid, shared = shared, onApplied = pop,
             onClose = {
                 // Not kept unless applied (iOS): a picked photo closed without Apply leaves the library.
@@ -825,6 +830,8 @@ internal fun ChatThemeBlock() {
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (current as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
     val motion = com.fariin.app.ui.components.rememberWallpaperMotion(current)
+    val hiddenWalls by com.fariin.app.data.HiddenLooks.wallpapers.collectAsState()
+    val gradients = com.fariin.app.data.HiddenLooks.visible(ChatWallpapers.all, hiddenWalls) { it.id }
     Column(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().then(motion.isolate { Modifier.drawBehind { drawWallpaper(current, c.dark, c.bg, pattern, photo, motion = motion) } })
             .padding(horizontal = 14.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -836,9 +843,9 @@ internal fun ChatThemeBlock() {
             else MockBubble("Here's a preview of the bubble color.", mine = false, mineFill = null, modifier = Modifier.align(Alignment.Start))
             MockBubble("The color is visible to only you.", mine = true, mineFill = mine?.brush(), modifier = Modifier.align(Alignment.End))
         }
-        androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(ChatWallpapers.all.size) { i ->
-                val g = ChatWallpapers.all[i]
+        if (gradients.isNotEmpty()) androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(gradients.size, key = { gradients[it].id }) { i ->
+                val g = gradients[i]
                 val w = ChatWallpaper.Gradient(g.id)
                 val selected = current == w && chosen == null
                 Column(Modifier.size(104.dp, 172.dp).clip(RoundedCornerShape(18.dp))

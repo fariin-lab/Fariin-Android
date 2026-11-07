@@ -28,6 +28,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,7 +67,13 @@ internal const val PAGE_BUBBLE_STYLE = "look:bubblestyle"
  * as circles, the Bubble Color page's own grid), then the picture sections. Title Case like them.
  */
 private const val COLOR = "Color"
-private val CATEGORIES: List<String> = listOf(COLOR) + BubbleArt.sections
+
+/** The picture styles the admin panel has not hidden (config/features.bubblesHidden), live. */
+@Composable
+private fun offeredPictures(): List<BubbleArt.Spec> {
+    val hidden by com.fariin.app.data.HiddenLooks.bubbles.collectAsState()
+    return remember(hidden) { com.fariin.app.data.HiddenLooks.visible(BubbleArt.all, hidden) { it.id } }
+}
 
 /**
  * Settings > Appearance > Bubble Style (SPEC 4, iOS BubbleStylesPage). Save at the top; the chat info
@@ -127,6 +134,10 @@ internal fun BubbleStyleChooser(
     val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
     val grid = rememberLazyGridState()
     LaunchedEffect(category) { grid.scrollToItem(0) }
+    // A section whose styles are all hidden loses its chip; if it was showing, Color shows instead.
+    val pictures = offeredPictures()
+    val categories = remember(pictures) { listOf(COLOR) + BubbleArt.sections.filter { sec -> pictures.any { it.section == sec } } }
+    LaunchedEffect(categories) { if (category !in categories) category = COLOR }
 
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         bar(dirty) {
@@ -149,8 +160,8 @@ internal fun BubbleStyleChooser(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(CATEGORIES.size, key = { CATEGORIES[it] }) { i ->
-                val cat = CATEGORIES[i]
+            items(categories.size, key = { categories[it] }) { i ->
+                val cat = categories[i]
                 Chip(cat, cat == category) { category = cat }
             }
         }
@@ -168,7 +179,7 @@ internal fun BubbleStyleChooser(
                 }
             } else {
                 item(key = "default") { Tile("Default", selected == null, onTap = { pickStyle(null) }) { DefaultSwatch(plain) } }
-                items(BubbleArt.all.filter { it.section == category }, key = { "p:" + it.id }) { s ->
+                items(pictures.filter { it.section == category }, key = { "p:" + it.id }) { s ->
                     Tile(s.name, selected == s.id, onTap = { pickStyle(s.id) }) { PictureSwatch(s, thumbPx) }
                 }
             }
@@ -193,11 +204,14 @@ internal fun BubbleStylesStrip() {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val v = BubbleStyles.version.intValue
     val current = remember(v) { BubbleStyles.current() }
-    val picks = remember(current) {
-        val first = BubbleArt.all.take(6)
-        val cur = BubbleArt.find(current)
+    val pictures = offeredPictures()
+    val picks = remember(current, pictures) {
+        val first = pictures.take(6)
+        val cur = BubbleArt.find(current)?.takeIf { it in pictures }
         if (cur != null && cur !in first) listOf(cur) + first.take(5) else first
     }
+    // Every picture style hidden: no strip at all.
+    if (picks.isEmpty()) return
     var all by remember { mutableStateOf(false) }
     val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }

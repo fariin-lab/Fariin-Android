@@ -3,6 +3,8 @@ package com.fariin.app.data
 import android.content.Context
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Built-but-hidden features and their switches (iOS AppFeatures + RemoteFeatures). The admin panel
@@ -36,6 +38,7 @@ object AppFeatures {
         prefs = p
         snapshot = p.all.mapNotNull { (k, v) -> (v as? Boolean)?.let { k to it } }.toMap()
         UploadedEmoji.init(c)
+        HiddenLooks.init(c)
     }
 
     /** Saves the server's switches for the next open. A missing document or an error leaves the
@@ -52,6 +55,8 @@ object AppFeatures {
                 UploadedEmoji.update(snap.get("customEmoji"))
                 // Built-in ones the panel hid leave the picker, live (owner 2026-11-06).
                 UploadedEmoji.updateHidden(snap.get("customEmojiHidden"))
+                // Built-in wallpapers and bubble styles the panel hid leave the pickers, live.
+                HiddenLooks.update(snap.get("wallpapersHidden"), snap.get("bubblesHidden"))
                 val e = prefs?.edit() ?: return@addSnapshotListener
                 e.clear()
                 snap.data.orEmpty().forEach { (k, v) -> if (v is Boolean) e.putBoolean(k, v) }
@@ -60,4 +65,47 @@ object AppFeatures {
     }
 
     fun stop() { reg?.remove(); reg = null }
+}
+
+/**
+ * Built-in wallpapers and bubble styles the admin panel hid (`config/features.wallpapersHidden` and
+ * `bubblesHidden`, the same ids the apps save: "g-blaze", "water", "pink", "sakura"...). Hidden ones
+ * leave the pickers at once; a chat or user already using one keeps it and keeps drawing it. Ids the
+ * build does not know are ignored by [visible], which only ever removes.
+ */
+object HiddenLooks {
+    private const val FILE = "hidden_looks"
+    private const val WALLS = "walls.v1"
+    private const val BUBBLES = "bubbles.v1"
+    private var prefs: android.content.SharedPreferences? = null
+    private val _wallpapers = MutableStateFlow<Set<String>>(emptySet())
+    private val _bubbles = MutableStateFlow<Set<String>>(emptySet())
+    val wallpapers: StateFlow<Set<String>> = _wallpapers
+    val bubbles: StateFlow<Set<String>> = _bubbles
+
+    /** The panel's list: non-empty strings of a sane length; anything else is dropped. */
+    fun parse(raw: Any?): Set<String> = (raw as? List<*>).orEmpty()
+        .mapNotNull { (it as? String)?.takeIf { s -> s.isNotEmpty() && s.length <= 64 } }
+        .toSet()
+
+    /** [all] minus the hidden ones, in their order. */
+    fun <T> visible(all: List<T>, hidden: Set<String>, id: (T) -> String): List<T> =
+        if (hidden.isEmpty()) all else all.filter { id(it) !in hidden }
+
+    fun init(c: Context) {
+        val p = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        prefs = p
+        _wallpapers.value = p.getStringSet(WALLS, null)?.toSet() ?: emptySet()
+        _bubbles.value = p.getStringSet(BUBBLES, null)?.toSet() ?: emptySet()
+    }
+
+    /** From the config/features listener. A missing field means nothing is hidden. */
+    fun update(rawWalls: Any?, rawBubbles: Any?) {
+        val w = parse(rawWalls)
+        val b = parse(rawBubbles)
+        if (w == _wallpapers.value && b == _bubbles.value) return
+        _wallpapers.value = w
+        _bubbles.value = b
+        prefs?.edit()?.putStringSet(WALLS, w)?.putStringSet(BUBBLES, b)?.apply()
+    }
 }
