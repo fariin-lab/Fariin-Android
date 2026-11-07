@@ -142,3 +142,8 @@ fun Modifier.arrivalGlide(g: ArrivalMotion.Glide?): Modifier {
         transformOrigin = pivot
     }
 }
+
+/** Slows the list's own scroll spring for an arrival glide to iOS's ~0.25 s (see ThreadScreen). */
+internal object GlideTiming : androidx.compose.ui.MotionDurationScale {
+    override val scaleFactor: Float = 2.2f
+}

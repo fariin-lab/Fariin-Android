@@ -456,7 +456,15 @@ private fun ThreadContent(
         if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) {
             // Someone else's message landing live: the list glides up to it (iOS), instead of every
             // row jumping in one frame. My own sends, the open and history loads still snap.
-            if (arrivalMotion.takeListGlide() && listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
+            // The default scroll spring took ~0.1 s on the Pixel; iOS's glide is ~0.25 s (owner's
+            // recordings, frame by frame), so its clock runs 2.2x slower here.
+            // The frame that builds the new row ran ~57 ms on the Pixel; a glide started in it lost
+            // that time and its first visible step was a jump. Two quiet frames first, then the glide.
+            if (arrivalMotion.takeListGlide() && listState.firstVisibleItemIndex <= 1) {
+                androidx.compose.runtime.withFrameNanos { }
+                androidx.compose.runtime.withFrameNanos { }
+                kotlinx.coroutines.withContext(GlideTiming) { listState.animateScrollToItem(0) }
+            }
             else listState.scrollToItem(0)
         }
     }
