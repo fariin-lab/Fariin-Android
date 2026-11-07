@@ -295,11 +295,12 @@ data class ChannelInfo(
      * DEFAULT (server, owner 2026-11-07): missing = off; only an explicit false turns them on.
      */
     val repliesOff: Boolean = true,
-    /** The Quotes switch off (`quotesOff`, set by `setChannelQuotes`): followers can't quote posts. Missing = on. */
+    /**
+     * The Quotes switch off (`quotesOff`, set by `setChannelQuotes`): nobody can quote its posts, owner
+     * and admins included (createQuote refuses everyone). Missing = on.
+     */
     val quotesOff: Boolean = false,
 ) {
-    /** Quote in a post's menu: unless the channel turned Quotes off; its own admins always (the server's rule). */
-    fun canQuote(isAdmin: Boolean): Boolean = !quotesOff || isAdmin
 
     val shownCount: Int get() = ChannelRules.subscriberCount(followerCount, users.size)
 
