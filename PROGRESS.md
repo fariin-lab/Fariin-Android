@@ -1046,3 +1046,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Actions' plain Material switch moved onto FariinSwitch. Checked both modes on the Pixel; Night Mode back to System.
   Location agent 4ea4d94: Google Maps SDK in place of MapLibre, APK 134.47 -> 84.56 MB; waits for Maps SDK to be
   enabled on the project (owner's yes).
+- 18:10 Location denied: Open Settings notice + draggable map fine (map blank until Maps SDK on). Fixed: it
+  said "Finding your location…" with location off, and Send said "Finding place…" though nothing was looked up;
+  now no fix line and "Choose a spot on the map".

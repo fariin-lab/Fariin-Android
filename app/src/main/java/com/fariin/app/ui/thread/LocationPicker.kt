@@ -516,7 +516,9 @@ private fun BottomPanel(
             val acc = fix?.takeIf { it.hasAccuracy() }?.accuracy
             val good = source == Source.MY_FIX && !coarseOnly && acc != null && acc <= 50f
             // "Within 6 m" under a 1 km area reads as a contradiction: only Exact shows how sure the fix is.
-            if (sendExact || locked) Text(LocationShare.pinNote(source, acc, coarseOnly, fix != null), fontSize = 13.sp,
+            // With location off there is no fix coming: no "Finding your location…" under "Drag the map".
+            val noFixComing = access == LocAccess.NONE && fix == null && source == Source.MY_FIX
+            if ((sendExact || locked) && !noFixComing) Text(LocationShare.pinNote(source, acc, coarseOnly, fix != null), fontSize = 13.sp,
                 color = if (good && sendExact) c.blue else c.secondary, maxLines = 1)
             Spacer(Modifier.height(12.dp))
             FloatingSegments(listOf("Exact", "Approximate"), if (sendExact) 0 else 1, { i -> if (!locked) onExact(i == 0) })
@@ -535,6 +537,8 @@ private fun BottomPanel(
         ) {
             Text(sendWord, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
             val sub = when {
+                // Location off and no spot yet: nothing is being found, the person must drag.
+                spot == null && access == LocAccess.NONE -> "Choose a spot on the map"
                 spot == null -> "Finding place…"
                 !sendExact -> LocationShare.areaLabel(area)
                 name != null -> name
