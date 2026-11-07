@@ -142,8 +142,8 @@ fun ChannelSettingsScreen(cid: String, me: String, onBack: () -> Unit, nav: Chan
 
 /**
  * iOS GroupSettingsView for a channel (owner screenshot 2026-11-04), card by card: Channel Type,
- * Invite Link, Follow Requests | Followers, Administrators, Banned Users | Reactions |
- * Disappearing Messages, Recent Actions. Edit is the info page's Edit; Protect Content sits on
+ * Invite Link, Follow Requests | Followers, Administrators, Banned Users | Disappearing Messages,
+ * Recent Actions | Reactions, Replies, Quotes (owner's mockup 2026-11-07). Edit is the info page's Edit; Protect Content sits on
  * the Channel Type page.
  */
 @Composable
@@ -180,19 +180,19 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
             nav.banned(info.cid)
         }
     }
-    // What followers may react with (iOS channelPostsSection): the picks themselves, else Any / Off.
-    if (team.can(me, Right.CHANGE_INFO)) {
-        Card {
-            SettingsRow("Reactions", value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
-                else com.fariin.app.data.ChannelReactions.value(info.reactMode), last = true,
-                badge = NewBadgeSpots.CHANNEL_SETTINGS_REACTIONS) { nav.reactions(info.cid) }
-        }
-        RepliesSwitch(info)
-    }
     Card {
         com.fariin.app.ui.people.DisappearingRow(timer, short = false, badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)
         SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.History), last = true,
             badge = NewBadgeSpots.GROUP_SETTINGS_RECENT_ACTIONS, onClick = onRecent)
+    }
+    // LAST (owner's mockup 2026-11-07): Reactions (the picks themselves, else Any / Off), Replies,
+    // Quotes, in one card with one footer.
+    if (team.can(me, Right.CHANGE_INFO)) {
+        RepliesSwitch(info) {
+            SettingsRow("Reactions", value = if (info.reactMode == "some") info.reactList.take(6).joinToString(" ") + (if (info.reactList.size > 6) " +${info.reactList.size - 6}" else "")
+                else com.fariin.app.data.ChannelReactions.value(info.reactMode),
+                badge = NewBadgeSpots.CHANNEL_SETTINGS_REACTIONS) { nav.reactions(info.cid) }
+        }
     }
 }
 
@@ -202,12 +202,13 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
  * the server answers (the Change info right, checked there); a refusal puts it back.
  */
 @Composable
-private fun RepliesSwitch(info: ChannelInfo) {
+private fun RepliesSwitch(info: ChannelInfo, top: @Composable () -> Unit = {}) {
     val c = Fariin.colors
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var wanted by androidx.compose.runtime.remember(info.repliesOff) { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
     Column {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
+            top()
             SwitchLine("Replies", on = wanted ?: !info.repliesOff, badge = NewBadgeSpots.CHANNEL_SETTINGS_REPLIES) { on ->
                 wanted = on
                 scope.launch {
