@@ -251,8 +251,11 @@ internal fun PictureBox(
     originRadius: Dp = 18.dp,
     /** A video's clip (iOS MediaDownloadOverlay): its download is drawn and tapped here, the poster's is not. */
     clip: GatedFile? = null,
+    /** A channel post (iOS `wide`): the picture fills [maxW] at its own shape ([MediaRules.wideMediaBox]). */
+    wide: Boolean = false,
 ) {
-    val (wDp, hDp) = MediaRules.photoBox(m.width, m.height, maxW.value, captionWidth)
+    val (wDp, hDp) = if (wide) MediaRules.wideMediaBox(m.width, m.height, maxW.value)
+        else MediaRules.photoBox(m.width, m.height, maxW.value, captionWidth)
     val px = with(LocalDensity.current) { minOf(wDp, hDp).dp.roundToPx() }
     val placeholder = rememberPlaceholder(m.thumb, m.blurhash)
     // A video's poster is small and always comes down; the photo itself follows auto-download.

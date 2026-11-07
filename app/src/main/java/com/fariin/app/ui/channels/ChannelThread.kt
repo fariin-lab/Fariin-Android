@@ -5,7 +5,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.material.icons.filled.Close
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
+import com.fariin.app.ui.components.floating
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -390,7 +390,8 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
     val joined = ch.role != Role.VISITOR || ch.joining
     var menu by remember { mutableStateOf(false) }
     val banned = ch.info.bannedUids.isNotEmpty() && ch.role == Role.VISITOR && ch.info.bannedUids.contains(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid)
-    Column(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+    // No strip behind it (iOS systemBarChrome): the capsule floats over the chat's background.
+    Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         (ch.problem ?: notice)?.let {
             Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 8.dp))
@@ -402,10 +403,11 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(c.card).padding(14.dp))
             return@Column
         }
-        val fill by animateColorAsState(if (joined) (if (c.dark) Color(0xFF26262B) else Color(0xFFEDEDEF)) else c.blue, label = "bar")
+        // Follow: a blue capsule. Following: the chat's glass (iOS liquidGlass, tinted blue only for Follow).
+        val capsule = RoundedCornerShape(25.dp)
         Box {
             Box(
-                Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(25.dp)).background(fill)
+                Modifier.fillMaxWidth().height(50.dp).floating(capsule, fill = if (joined) null else c.blue).clip(capsule)
                     .combinedClickable(
                         onClick = {
                             if (!joined) { SimilarChannelsStore.followed(ch.info.cid); ch.onFollow() }

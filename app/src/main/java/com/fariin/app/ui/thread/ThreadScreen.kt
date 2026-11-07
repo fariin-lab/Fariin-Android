@@ -1085,7 +1085,7 @@ private fun ThreadContent(
                     },
                 )
             } else if (ch != null && ch.role != com.fariin.app.channel.ChannelRules.Role.ADMIN) {
-                HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+                // No rule above it: the follower's capsule floats over the chat (iOS).
                 com.fariin.app.ui.channels.ChannelBottomBar(ch, ui.sendBlocked)
             } else if (ui.receipts.iBlocked && !ui.isGroup) {
                 // iOS blockedBar: the action alone, in the text colour.
@@ -1497,7 +1497,12 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
     val c = Fariin.colors
     // In a channel nobody's post is "mine" on screen: every post is the channel speaking.
     val isMe = m.authorId == ui.me && ui.channel == null
-    val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
+    val tick = ThreadLogic.tick(m, ui.me, ui.receipts)
+    val failed = tick == Tick.FAILED
+    // A channel post is wide (iOS MessageRowLayout `wide`): the row less 44 for the share arrow.
+    val screenW = LocalConfiguration.current.screenWidthDp.toFloat()
+    val maxW = (if (ui.channel != null && !m.deleted) com.fariin.app.media.MediaRules.channelPostWidth(screenW, failed)
+        else screenW * 0.72f).dp
     val big = 18.dp
     val small = 6.dp
     val shape = if (isMe) RoundedCornerShape(topStart = big, topEnd = if (g.first) big else small,
@@ -1505,8 +1510,6 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
     else RoundedCornerShape(topStart = if (g.first) big else small, topEnd = big,
         bottomEnd = big, bottomStart = if (g.last) big else small)
     val showSender = ui.isGroup && !isMe && ui.channel == null
-    val tick = ThreadLogic.tick(m, ui.me, ui.receipts)
-    val failed = tick == Tick.FAILED
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
     Row(
@@ -1757,7 +1760,7 @@ private fun MediaRow(
                 PictureBox(m, url, m.enc, maxW, RectangleShape, captionW, busy, onOpen = {
                     url?.let { onView(Viewing.Photo(it, if (m.localPath != null) null else m.enc, msg = m)) }
                 }, overlay = capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null,
-                    originKey = MediaOrigins.keyOf(m))
+                    originKey = MediaOrigins.keyOf(m), wide = ui.channel != null)
             }
             Message.MediaKind.VIDEO -> {
                 val ready = m.videoUrl != null
@@ -1770,7 +1773,7 @@ private fun MediaRow(
                 PictureBox(m, local ?: m.thumbUrl, if (local != null) null else m.thumbEnc, maxW, RectangleShape, captionW, busy || !ready, onOpen = {
                     m.videoUrl?.let { onView(Viewing.Video(it, m.enc, msg = m)) }
                 }, overlay = { VideoOverlay(m, here && !busy, showDuration = here || busy || !ready || clip.state == Fetch.FAILED); capsule() },
-                    originKey = MediaOrigins.keyOf(m), clip = clip.takeIf { ready && !busy })
+                    originKey = MediaOrigins.keyOf(m), clip = clip.takeIf { ready && !busy }, wide = ui.channel != null)
             }
             else -> {
                 val threadCid = LocalThreadCid.current

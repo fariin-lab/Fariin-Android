@@ -131,6 +131,20 @@ class MediaTest {
         assertEquals(150f to 150f, MediaRules.photoBox(40.0, 40.0, 272f))
     }
 
+    @Test fun channelPostIsWideLikeIos() {
+        // A 393 phone: 393 - 24 margins - 44 for the share arrow = 325 (83 %), vs 283 for a chat bubble.
+        assertEquals(325f, MediaRules.channelPostWidth(393f))
+        assertEquals(293f, MediaRules.channelPostWidth(393f, failed = true))
+        assertEquals(1f, MediaRules.channelPostWidth(40f))
+        // The photo fills the post width at its own shape; tall capped at 1.25 x, wide at 2.5 : 1.
+        assertEquals(325f to 244f, MediaRules.wideMediaBox(1280.0, 960.0, 325f))
+        assertEquals(325f to 406f, MediaRules.wideMediaBox(720.0, 1280.0, 325f))
+        assertEquals(325f to 130f, MediaRules.wideMediaBox(3000.0, 600.0, 325f))
+        assertEquals(325f to 325f, MediaRules.wideMediaBox(null, null, 325f))
+        // A tiny original still fills the width (iOS has no anti-upscale here).
+        assertEquals(325f to 325f, MediaRules.wideMediaBox(40.0, 40.0, 325f))
+    }
+
     @Test fun labelsAndWaveform() {
         assertEquals("0:53", MediaRules.durationLabel(52.6))
         assertEquals("1:05", MediaRules.durationLabel(65.0))

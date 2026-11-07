@@ -240,4 +240,18 @@ object MediaRules {
         }
         return w.roundToInt().toFloat() to h.roundToInt().toFloat()
     }
+
+    // ---- MessageRowLayout `wide` (a channel post): wider than a chat bubble, left-aligned, with a
+    // 44 gap on the right for the share arrow. The row keeps its 12 margins and the failed badge's
+    // 24 + 8 when it shows. Groups and 1:1 keep 72 % of the row.
+    fun channelPostWidth(rowWidth: Float, failed: Boolean = false): Float =
+        max(1f, rowWidth - 12f * 2 - (if (failed) 32f else 0f) - 44f)
+
+    // ---- MessageRowLayout.wideMediaBox: a channel post's photo or video takes the post's full
+    // width at its own shape, a tall one at most 1.25 x the width (aspect 0.8), a wide one 2.5 : 1.
+    fun wideMediaBox(pixelW: Double?, pixelH: Double?, width: Float): Pair<Float, Float> {
+        val aspect = if (pixelW != null && pixelH != null && pixelW > 0 && pixelH > 0)
+            (pixelW / pixelH).toFloat().coerceIn(0.8f, 2.5f) else 1f
+        return width.roundToInt().toFloat() to (width / aspect).roundToInt().toFloat()
+    }
 }
