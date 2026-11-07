@@ -208,6 +208,9 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
      * first ones"). Opened, it loads from the first answer down.
      */
     private val answersLoaded = HashSet<String>()
+    /** Threads whose first answers are on their way: an open one reads "Loading…", not "Hide replies". */
+    var answersLoading by mutableStateOf<Set<String>>(emptySet())
+        private set
     private val deletedIds = HashSet<String>()
     private val recentMine = HashMap<String, Long>()
     private var listener: ListenerRegistration? = null
@@ -288,6 +291,21 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         loaded = true
         failed = false
         cache[cacheKey] = page + listOfNotNull(threads.firstOrNull { it.id == pinnedId })
+        prefetchAnswers(page)
+    }
+
+    /**
+     * Owner 2026-11-07 ("View 1 reply opens late"), as iOS: once the first page is in, the first
+     * answers of the pinned thread and the newest threads with answers, five at most, load in the
+     * background, so "View N replies" opens on them at once. A thread loaded or loading is skipped.
+     */
+    private fun prefetchAnswers(page: List<PostReply>) {
+        val pin = threads.firstOrNull { it.id == pinnedId && it.answers > 0 }
+        val picks = (listOfNotNull(pin) + page.filter { it.answers > 0 })
+            .map { it.id }.distinct()
+            .filter { it !in answersLoaded && it !in answersLoading }
+            .take(5)
+        for (rid in picks) scope.launch { loadAnswers(rid, more = false) }
     }
 
     fun retry() { failed = false; scope.launch { loadFirst() } }
@@ -330,8 +348,11 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     }
 
     suspend fun loadAnswers(rid: String, more: Boolean) {
+        // One first-page fetch per thread at a time (the background fetch and a tap meet here).
+        if (!more && rid in answersLoading) return
+        if (!more) answersLoading = answersLoading + rid
         val cursor = if (more) answerNext[rid].orEmpty() else ""
-        val p = PostReplies.answers(cid, mid, rid, cursor) ?: return
+        val p = try { PostReplies.answers(cid, mid, rid, cursor) } finally { if (!more) answersLoading = answersLoading - rid } ?: return
         answers = answers + (rid to PostReplyRules.mergeAnswers(answers[rid].orEmpty(), rows(p.items), more))
         answerNext = answerNext + (rid to p.next)
         answersLoaded += rid
@@ -682,7 +703,9 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                         }
                         is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick) { author(row.r) }
                         is ReplyItem.Answer -> Box(Modifier.padding(start = 46.dp)) { ReplyRow(s, row.r, small = true, now, quick) { author(row.r) } }
-                        is ReplyItem.Toggle -> ThreadToggle(PostReplyRules.threadToggle(row.n, row.open)) { s.toggleThread(row.rid) }
+                        is ReplyItem.Toggle -> ThreadToggle(
+                            if (row.open && row.rid in s.answersLoading && s.answers[row.rid].isNullOrEmpty()) "Loading…" else PostReplyRules.threadToggle(row.n, row.open),
+                        ) { s.toggleThread(row.rid) }
                         is ReplyItem.More -> SmallLink("Show more replies", Modifier.padding(start = 108.dp, bottom = 8.dp)) {
                             scope.launch { s.loadAnswers(row.rid, more = true) }
                         }
