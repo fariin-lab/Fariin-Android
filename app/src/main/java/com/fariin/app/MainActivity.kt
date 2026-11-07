@@ -378,6 +378,9 @@ class MainActivity : ComponentActivity() {
         com.fariin.app.data.PostReplyRules.alertTarget(intent?.getStringExtra("kind"), intent?.getStringExtra("cid"),
             intent?.getStringExtra("mid"))?.let { (cid, mid) ->
             intent?.removeExtra("kind")
+            // "Replied to your comment" (the push's own `rid` / `aid`): the sheet opens on it.
+            com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value =
+                com.fariin.app.data.PostReplyRules.focusOf(mid, intent?.getStringExtra("rid"), intent?.getStringExtra("aid"))
             com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
             PushRouter.pendingOpen.value = cid
             return
@@ -386,6 +389,9 @@ class MainActivity : ComponentActivity() {
         intent.removeExtra(PushRouter.EXTRA_OPEN_CID)
         intent.getStringExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)?.takeIf { it.isNotEmpty() }?.let { mid ->
             intent.removeExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID)
+            com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.PostReplyRules.focusOf(mid,
+                intent.getStringExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_RID),
+                intent.getStringExtra(com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_AID))
             com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
         }
         // The message the notification was about: the chat lands at the newest and follows it in.
