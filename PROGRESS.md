@@ -1102,3 +1102,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
      caught up, Nothing archived incl. hidden stories); iOS has no Start a Chat button on the main empty list
   20 Calls tab: swipe to Delete; long-press menu Voice Call / Video Call / Chats / Select
   (low confidence, ask owner: Media storage page split Clear Media vs Clear Cache as iOS)
+- 21:30 Checked the team's work on the Pixel: attach bar liquid glass (d22eccb) matches iOS, photos show through.
+  Sheets (0b21c1f, 4575f9f): location sheet had a black status bar band (dialog lacked FLAG_DRAWS_SYSTEM_BAR_
+  BACKGROUNDS and cutout mode) and dark icons on the dim; fixed, white icons on every sheet. Handle drag closes.
+  Receive animation (ad5adda) still needs a live incoming message to watch.

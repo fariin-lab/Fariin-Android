@@ -103,7 +103,8 @@ class BrowserActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // White status icons over the dimmed screen behind the sheet, as iOS while a sheet is up.
+        enableEdgeToEdge(statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         val start = intent.getStringExtra(EXTRA_URL) ?: run { finish(); return }
         setContent {

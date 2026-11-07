@@ -145,13 +145,23 @@ private fun SheetDialogWindow(dark: Boolean) {
             w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
             @Suppress("DEPRECATION") w.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
             WindowCompat.setDecorFitsSystemWindows(w, false)
+            // A dialog window does not draw its own bar backgrounds by default, so the clear colour
+            // below was ignored and the status bar stayed black (window dump on the Pixel, 2026-11-06).
+            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
             @Suppress("DEPRECATION") run {
                 w.statusBarColor = android.graphics.Color.TRANSPARENT
                 w.navigationBarColor = android.graphics.Color.TRANSPARENT
             }
             if (android.os.Build.VERSION.SDK_INT >= 29) { w.isStatusBarContrastEnforced = false; w.isNavigationBarContrastEnforced = false }
+            // Into the camera-cutout strip too: without it the status bar stayed a black band above the
+            // sheet on the Pixel 5 (its punch hole sits in that strip), where the dimmed chat should show.
+            if (android.os.Build.VERSION.SDK_INT >= 28) w.attributes = w.attributes.apply {
+                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
             WindowCompat.getInsetsController(w, view).apply {
-                isAppearanceLightStatusBars = !dark
+                // The status bar sits over the dimmed screen behind the sheet: white icons, as iOS
+                // turns them while a sheet is up (dark ones vanished on the dim, Pixel 2026-11-06).
+                isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = !dark
             }
         }

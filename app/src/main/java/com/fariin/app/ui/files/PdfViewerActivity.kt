@@ -96,7 +96,8 @@ class PdfViewerActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // White status icons over the dimmed screen behind the sheet, as iOS while a sheet is up.
+        enableEdgeToEdge(statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         val path = intent.getStringExtra(EXTRA_PATH) ?: run { finish(); return }
         val name = intent.getStringExtra(EXTRA_NAME) ?: File(path).name
