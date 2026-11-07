@@ -79,7 +79,19 @@ fun Modifier.chatWallpaper(cid: String): Modifier = composed {
     val photo = rememberWallpaperPhoto(ctx, (w as? ChatWallpaper.Photo)?.id)
     // This one runs the chat's clock; the header and list slices only read it, so they move together.
     val motion = rememberWallpaperMotion(w, preview = false, clock = ChatWallpaperClock.phase, drive = true)
-    motion.isolate { Modifier.drawBehind { drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true, motion = motion) } }
+    val dim = ChatLookStore.wallpaperDim(ctx)
+    motion.isolate { Modifier.drawBehind {
+        drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true, motion = motion)
+        if (w != ChatWallpaper.None) drawWallpaperDim(dim.floatValue)
+    } }
+}
+
+/**
+ * The owner's wallpaper brightness ([ChatLookStore.wallpaperDim]) over a drawn wallpaper, on top of
+ * the dark-mode photo scrim. Callers skip it for the plain no-wallpaper background.
+ */
+fun DrawScope.drawWallpaperDim(amount: Float) {
+    if (amount > 0f) drawRect(Color.Black.copy(alpha = amount.coerceAtMost(ChatLookStore.DIM_MAX)))
 }
 
 /**
@@ -95,6 +107,7 @@ fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
     val pattern = if (drawsPattern(w)) WallpaperArt.pattern(ctx) else null
     val photo = rememberWallpaperPhoto(ctx, (w as? ChatWallpaper.Photo)?.id)
     val motion = rememberWallpaperMotion(w, preview = false, clock = ChatWallpaperClock.phase, drive = false)
+    val dim = ChatLookStore.wallpaperDim(ctx)
     motion.isolate { Modifier.drawBehind {
         val own = size
         val full = androidx.compose.ui.geometry.Size(own.width, maxOf(rootH, own.height))
@@ -102,6 +115,8 @@ fun chatWallpaperStripOf(cid: String): Modifier = Modifier.composed {
             drawContext.size = full
             try { drawWallpaper(w, c.dark, c.bg, pattern, photo, topAnchored = true, motion = motion) } finally { drawContext.size = own }
         }
+        // The same dimness as the chat under it, so the strip shows no seam.
+        if (w != ChatWallpaper.None) drawWallpaperDim(dim.floatValue)
     } }
 }
 

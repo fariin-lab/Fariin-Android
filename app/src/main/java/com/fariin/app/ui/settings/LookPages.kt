@@ -11,7 +11,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -88,6 +96,7 @@ import com.fariin.app.data.ChatWallpapers
 import com.fariin.app.ui.components.WallpaperArt
 import com.fariin.app.ui.components.brush
 import com.fariin.app.ui.components.drawWallpaper
+import com.fariin.app.ui.components.drawWallpaperDim
 import com.fariin.app.data.AnimatedWallpapers
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
@@ -426,6 +435,11 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                     val motion = com.fariin.app.ui.components.rememberWallpaperMotion(first, preview = false)
                     Box(Modifier.fillMaxSize().drawBehind { drawWallpaper(first, dark, c.bg, pattern, photo, motion = motion) })
                 }
+                // The brightness the slider sets, the same amount the chats lay over it (live while
+                // dragging: read in the draw phase only). Not over the plain no-wallpaper ground.
+                val dimState = ChatLookStore.wallpaperDim(ctx)
+                val dimsShown = shown != ChatWallpaper.None
+                Box(Modifier.fillMaxSize().drawBehind { if (dimsShown) drawWallpaperDim(dimState.floatValue) })
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 14.dp)) {
                         com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Close", onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onClose() } },
@@ -439,6 +453,9 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                             if (dark) "Show in light mode" else "Show in dark mode", onClick = { previewDark = !dark },
                             modifier = Modifier.align(Alignment.CenterEnd), circle = true)
                     }
+                    // BRIGHTNESS, UNDER THE SUN BUTTON (owner 2026-11-07, as iOS 92f7e296): up = the
+                    // wallpaper as it is, down = darker, for every chat's wallpaper on this phone.
+                    WallpaperDimSlider(Modifier.align(Alignment.End).padding(end = 16.dp, top = 10.dp))
                     Spacer(Modifier.weight(1f))
                     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         MockBubble(if (pages) "Swipe to preview more wallpapers." else "This is how the wallpaper looks", mine = false,
@@ -476,6 +493,61 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
 }
 
 /** The just-picked photo: fills the sheet, pinch 1x to 5x, drag within its edges, Blurred on demand. */
+/**
+ * The preview's vertical brightness slider (iOS 92f7e296): a glass capsule, 150 dp tall. Top = the
+ * wallpaper as it is, bottom = [ChatLookStore.DIM_MAX] black over it. Dragging changes the shared
+ * amount live (the track and every wallpaper read it in their draw phase); release saves it. Screen
+ * readers get a "Wallpaper brightness" slider in 10 % steps.
+ */
+@Composable
+private fun WallpaperDimSlider(modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val c = Fariin.colors
+    val dim = ChatLookStore.wallpaperDim(ctx)
+    // Brightness 0..1 from the stored dimness; read here only for the screen reader's words.
+    val pct = ((1f - dim.floatValue / ChatLookStore.DIM_MAX) * 100f).let { kotlin.math.round(it).toInt() }
+    fun setTo(brightness: Float, save: Boolean) =
+        ChatLookStore.setWallpaperDim(ctx, (1f - brightness.coerceIn(0f, 1f)) * ChatLookStore.DIM_MAX, save)
+    val pad = 14.dp
+    Box(modifier.size(44.dp, 150.dp).floating(RoundedCornerShape(22.dp))
+        .semantics {
+            contentDescription = "Wallpaper brightness"
+            stateDescription = "$pct%"
+            progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(pct / 100f, 0f..1f, steps = 9)
+            setProgress { v -> setTo(kotlin.math.round(v * 10f) / 10f, save = true); true }
+        }
+        .pointerInput(Unit) {
+            val padPx = pad.toPx()
+            fun at(y: Float) = 1f - ((y - padPx) / (size.height - 2 * padPx).coerceAtLeast(1f)).coerceIn(0f, 1f)
+            awaitEachGesture {
+                // Every move is taken here, so neither the sheet's drag-to-close nor the pager moves.
+                val down = awaitFirstDown(requireUnconsumed = false)
+                down.consume()
+                setTo(at(down.position.y), save = false)
+                while (true) {
+                    val ch = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                    if (!ch.pressed) { ch.consume(); break }
+                    setTo(at(ch.position.y), save = false)
+                    ch.consume()
+                }
+                ChatLookStore.setWallpaperDim(ctx, dim.floatValue, save = true)
+            }
+        }
+        .drawBehind {
+            val padPx = pad.toPx()
+            val b = 1f - dim.floatValue / ChatLookStore.DIM_MAX
+            val x = size.width / 2f
+            val top = padPx; val bottom = size.height - padPx
+            val y = bottom - (bottom - top) * b
+            val track = 4.dp.toPx()
+            drawLine(c.label.copy(alpha = 0.22f), Offset(x, top), Offset(x, bottom), track, StrokeCap.Round)
+            drawLine(c.label, Offset(x, y), Offset(x, bottom), track, StrokeCap.Round)
+            val r = 11.dp.toPx()
+            drawCircle(Color.Black.copy(alpha = 0.16f), r + 1.dp.toPx(), Offset(x, y + 1.dp.toPx()))
+            drawCircle(Color.White, r, Offset(x, y))
+        })
+}
+
 @Composable
 private fun EditablePhoto(img: Bitmap, canvas: IntSize, zoom: Float, pan: Offset, blurred: Boolean, dark: Boolean, onChange: (Float, Offset) -> Unit) {
     val shownImg = remember(img, blurred) { (if (blurred) WallpaperBake.blur(img) else img).asImageBitmap() }

@@ -31,6 +31,32 @@ object ChatLookStore {
     private fun reader(c: Context): (String) -> String? { val p = prefs(c); return { p.getString(it, null) } }
     private fun bump() { version.intValue++ }
 
+    // Wallpaper brightness (iOS WallpaperDim, owner 2026-11-07): ONE amount for every chat's
+    // wallpaper on this phone, set from the wallpaper preview's slider. 0 = as it is, up to
+    // [DIM_MAX] = black laid over it at that opacity. Read in the draw phase only, so a drag redraws
+    // the wallpaper and never recomposes a message row.
+
+    const val DIM_MAX = 0.7f
+    private const val DIM = "wallpaperDim.v1"
+    private val dim = androidx.compose.runtime.mutableFloatStateOf(0f)
+    @Volatile private var dimLoaded = false
+
+    /** The shared dim state (loaded from the prefs once); read `.floatValue` inside a draw block. */
+    fun wallpaperDim(c: Context): androidx.compose.runtime.FloatState {
+        if (!dimLoaded) {
+            dim.floatValue = prefs(c).getFloat(DIM, 0f).coerceIn(0f, DIM_MAX)
+            dimLoaded = true
+        }
+        return dim
+    }
+
+    /** Live while dragging; [save] writes it to the prefs (on release / accessibility step). */
+    fun setWallpaperDim(c: Context, value: Float, save: Boolean) {
+        wallpaperDim(c)
+        dim.floatValue = value.coerceIn(0f, DIM_MAX)
+        if (save) prefs(c).edit().putFloat(DIM, dim.floatValue).apply()
+    }
+
     // Wallpaper
 
     fun wallpaper(c: Context, cid: String): ChatWallpaper = ChatLookRules.wallpaper(cid, reader(c), groupWallpaper(c, cid))
