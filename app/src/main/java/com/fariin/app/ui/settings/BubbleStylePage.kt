@@ -62,10 +62,11 @@ import com.fariin.app.ui.thread.bubbles.rememberBubbleThumb
 internal const val PAGE_BUBBLE_STYLE = "look:bubblestyle"
 
 /**
- * The chips under the preview: the picture sections only. Colours are not offered here (owner
- * 2026-11-07); my bubble's colour is the Bubble Color page's (LookPages.kt).
+ * The chips under the preview: "Color" first (owner 2026-11-07, his mockup: the chat colour palette
+ * as circles, the Bubble Color page's own grid), then the picture sections. Title Case like them.
  */
-private val CATEGORIES: List<String> = BubbleArt.sections
+private const val COLOR = "Color"
+private val CATEGORIES: List<String> = listOf(COLOR) + BubbleArt.sections
 
 /**
  * Settings > Appearance > Bubble Style (SPEC 4, iOS BubbleStylesPage). Save at the top; the chat info
@@ -90,6 +91,10 @@ internal fun BubbleStylePage(onClose: () -> Unit) {
  * below; "Default" (no style) is the first tile of every grid. Nothing changes until Save, and only
  * the messages sent after it carry the style.
  *
+ * The Color chip shows the chat colour circles (Auto, the palette, my own, +). Picking one shows it
+ * on the preview's bubble at once; Save makes it the colour of all my chats and clears a picture
+ * style, so one or the other applies. Picking a picture style drops a colour picked here.
+ *
  * Tiles are the style pictures, small, in a lazy grid: only the tiles on screen decode, into their
  * own cache that is dropped when the picker closes.
  */
@@ -108,13 +113,17 @@ internal fun BubbleStyleChooser(
     var decor by remember { mutableStateOf(savedDecor) }
     var plusNote by remember { mutableStateOf(false) }
     var category by remember {
-        mutableStateOf(BubbleArt.find(saved)?.section ?: CATEGORIES.first())
+        mutableStateOf(BubbleArt.find(saved)?.section ?: COLOR)
     }
     DisposableEffect(Unit) { onDispose { BubbleArtCache.dropThumbs() } }
-    val dirty = selected != saved || decor != savedDecor
-    // "Default" is the plain bubble, which is drawn in my chat colour (the wallpaper's own on Auto).
+    // My chat colour as picked here, null = Auto; applied on Save.
+    val savedColor = remember { ChatLookStore.globalChosen(ctx) }
+    var chatColor by remember { mutableStateOf(savedColor) }
+    val dirty = selected != saved || decor != savedDecor || chatColor != savedColor
+    // "Default" is the plain bubble, drawn in my chat colour (the wallpaper's own on Auto).
     ChatLookStore.version.intValue
-    val plain: Brush = ChatLookStore.globalColor(ctx)?.brush() ?: SolidColor(c.blue)
+    val plain: Brush = (chatColor ?: ChatLookStore.globalAuto(ctx))?.brush() ?: SolidColor(c.blue)
+    fun pickStyle(id: String?) { selected = id; if (id != null) chatColor = savedColor }
     val thumbPx = with(LocalDensity.current) { 96.dp.roundToPx() }
     val grid = rememberLazyGridState()
     LaunchedEffect(category) { grid.scrollToItem(0) }
@@ -122,7 +131,12 @@ internal fun BubbleStyleChooser(
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         bar(dirty) {
             if (!BubbleStyles.mayUse(selected)) plusNote = true
-            else { BubbleStyles.save(selected, decor); onSaved() }
+            else {
+                // A colour applies only with no picture style; saving null clears a saved style.
+                if (selected == null && chatColor != savedColor) ChatLookStore.setDefaultColor(ctx, chatColor)
+                BubbleStyles.save(selected, decor)
+                onSaved()
+            }
         }
         // Pinned: never scrolls away, redrawn at once when a tile is tapped.
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
@@ -148,9 +162,15 @@ internal fun BubbleStyleChooser(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item(key = "default") { Tile("Default", selected == null, onTap = { selected = null }) { DefaultSwatch(plain) } }
-            items(BubbleArt.all.filter { it.section == category }, key = { "p:" + it.id }) { s ->
-                Tile(s.name, selected == s.id, onTap = { selected = s.id }) { PictureSwatch(s, thumbPx) }
+            if (category == COLOR) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "colors") {
+                    ChatColorGrid(chatColor, ring = selected == null) { spec -> chatColor = spec; selected = null }
+                }
+            } else {
+                item(key = "default") { Tile("Default", selected == null, onTap = { pickStyle(null) }) { DefaultSwatch(plain) } }
+                items(BubbleArt.all.filter { it.section == category }, key = { "p:" + it.id }) { s ->
+                    Tile(s.name, selected == s.id, onTap = { pickStyle(s.id) }) { PictureSwatch(s, thumbPx) }
+                }
             }
         }
     }

@@ -556,9 +556,6 @@ private fun ChatColorPage(pop: () -> Unit) {
     val c = Fariin.colors
     ChatLookStore.version.intValue
     val selected = ChatLookStore.globalChosen(ctx)
-    val customs = ChatLookStore.customColors(ctx)
-    var custom by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<ChatColorSpec?>(null) }
     val wall = ChatLookStore.defaultWallpaper(ctx)
     val pattern = WallpaperArt.pattern(ctx)
     val photo = (wall as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
@@ -572,44 +569,61 @@ private fun ChatColorPage(pop: () -> Unit) {
                 PreviewBubble("Here's a preview of the bubble color.", false, null, Modifier.padding(end = 36.dp).align(Alignment.Start))
                 PreviewBubble("The color is visible to only you.", true, ChatLookStore.globalColor(ctx)?.brush(), Modifier.padding(start = 36.dp).align(Alignment.End))
             }
-            val circles = buildList<@Composable (Modifier) -> Unit> {
-                add { m ->
-                    ColorCircle(selected == null, m, onTap = { ChatLookStore.setDefaultColor(ctx, null) }) {
-                        Box(Modifier.fillMaxSize().clip(CircleShape).background(ChatLookStore.globalAuto(ctx)?.brush() ?: androidx.compose.ui.graphics.SolidColor(c.blue)),
-                            contentAlignment = Alignment.Center) { Text("Auto", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White) }
-                    }
-                }
-                ChatColors.presets.forEach { p ->
-                    add { m -> ColorCircle(selected == p, m, onTap = { pickBubbleColor(ctx, p) }) { Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush())) } }
-                }
-                customs.forEach { p ->
-                    add { m ->
-                        Box(m) {
-                            ColorCircle(selected == p, Modifier.fillMaxWidth(), onLong = { deleting = p }, onTap = { pickBubbleColor(ctx, p) }) {
-                                Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush()))
-                            }
-                            DropdownMenu(expanded = deleting == p, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-                                border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
-                                DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { deleting = null; ChatLookStore.removeCustom(ctx, p) })
-                            }
-                        }
-                    }
-                }
-                add { m ->
-                    ColorCircle(false, m, onTap = { custom = true }) {
-                        Box(Modifier.fillMaxSize().clip(CircleShape).background(systemGray5(c.dark)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Add, contentDescription = "Custom Color", tint = c.label, modifier = Modifier.size(24.dp))
-                        }
-                    }
-                }
-            }
-            GridCard(5, 16, 18, circles)
+            ChatColorGrid(selected) { spec -> if (spec == null) ChatLookStore.setDefaultColor(ctx, null) else pickBubbleColor(ctx, spec) }
             Spacer(Modifier.height(com.fariin.app.ui.shell.bottomBarInset()))
         }
     }
+}
+
+/**
+ * The chat colour palette as round circles, five a row: Auto, the presets, my own (long-press to
+ * delete) and + for the Custom Color editor (a new colour joins my own and is picked). Shared by the
+ * Bubble Color page and the Bubble Style page's Color chip. [chosen] is ringed when [ring]; null = Auto.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun ChatColorGrid(chosen: ChatColorSpec?, ring: Boolean = true, onPick: (ChatColorSpec?) -> Unit) {
+    val ctx = LocalContext.current
+    val c = Fariin.colors
+    ChatLookStore.version.intValue
+    val customs = ChatLookStore.customColors(ctx)
+    var custom by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<ChatColorSpec?>(null) }
+    val circles = buildList<@Composable (Modifier) -> Unit> {
+        add { m ->
+            ColorCircle(ring && chosen == null, m, onTap = { onPick(null) }) {
+                Box(Modifier.fillMaxSize().clip(CircleShape).background(ChatLookStore.globalAuto(ctx)?.brush() ?: androidx.compose.ui.graphics.SolidColor(c.blue)),
+                    contentAlignment = Alignment.Center) { Text("Auto", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White) }
+            }
+        }
+        ChatColors.presets.forEach { p ->
+            add { m -> ColorCircle(ring && chosen == p, m, onTap = { onPick(p) }) { Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush())) } }
+        }
+        customs.forEach { p ->
+            add { m ->
+                Box(m) {
+                    ColorCircle(ring && chosen == p, Modifier.fillMaxWidth(), onLong = { deleting = p }, onTap = { onPick(p) }) {
+                        Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush()))
+                    }
+                    DropdownMenu(expanded = deleting == p, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                        border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
+                        DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { deleting = null; ChatLookStore.removeCustom(ctx, p) })
+                    }
+                }
+            }
+        }
+        add { m ->
+            ColorCircle(false, m, onTap = { custom = true }) {
+                Box(Modifier.fillMaxSize().clip(CircleShape).background(systemGray5(c.dark)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Add, contentDescription = "Custom Color", tint = c.label, modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+    }
+    GridCard(5, 16, 18, circles)
     if (custom) CustomColorSheet(onClose = { custom = false }) { spec ->
         ChatLookStore.addCustom(ctx, spec)
-        pickBubbleColor(ctx, spec)
+        onPick(spec)
     }
 }
 
