@@ -212,6 +212,24 @@ object ChannelService {
     /** makeChannelAdmin {cid, uid}: a follower becomes an admin at once, with the default rights. */
     suspend fun makeAdmin(cid: String, uid: String) { call("makeChannelAdmin", mapOf("cid" to cid, "uid" to uid)) }
 
+    /** An admin invite still waiting for its answer (iOS ChannelAdminInvites.Pending). */
+    data class PendingAdmin(val code: String, val uid: String, val name: String, val photoUrl: String?)
+
+    /** listAdminInvites {cid} -> {invites:[{code, uid, name, photoUrl, expiresAt}]} (iOS ChannelAdminInvites.pending). */
+    suspend fun pendingAdmins(cid: String): List<PendingAdmin> {
+        val d = call("listAdminInvites", mapOf("cid" to cid))
+        return (d?.get("invites") as? List<*>)?.mapNotNull { r ->
+            val m = r as? Map<*, *> ?: return@mapNotNull null
+            val code = m["code"] as? String ?: return@mapNotNull null
+            val uid = m["uid"] as? String ?: return@mapNotNull null
+            if (m["expiresAt"] !is Number) return@mapNotNull null
+            PendingAdmin(code, uid, m["name"] as? String ?: "Fariin user", (m["photoUrl"] as? String)?.takeIf { it.isNotEmpty() })
+        } ?: emptyList()
+    }
+
+    /** revokeAdminInvite {code}: the invite can no longer be used (iOS ChannelAdminInvites.revoke). */
+    suspend fun revokeAdminInvite(code: String) { call("revokeAdminInvite", mapOf("code" to code)) }
+
     /** dismissChannelAdmin {cid, uid}: they stop being an admin and follow the channel again. */
     suspend fun dismissAdmin(cid: String, uid: String) { call("dismissChannelAdmin", mapOf("cid" to cid, "uid" to uid)) }
 

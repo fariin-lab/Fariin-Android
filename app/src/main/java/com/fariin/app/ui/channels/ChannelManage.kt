@@ -379,9 +379,31 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
     val c = Fariin.colors
     val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
     val team = Team.from(doc)
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
+    // Admin invites still waiting (iOS ChannelPendingAdminsSection + Loader): only for those who may add admins.
+    val mayAdd = team.can(me, Right.ADD_ADMINS)
+    var pending by remember(cid) { mutableStateOf<List<ChannelService.PendingAdmin>>(emptyList()) }
+    var revoking by remember { mutableStateOf<ChannelService.PendingAdmin?>(null) }
+    suspend fun reload() { runCatching { ChannelService.pendingAdmins(cid) }.onSuccess { pending = it } }
+    LaunchedEffect(cid, mayAdd) { if (mayAdd) reload() }
+    revoking?.let { p ->
+        AlertDialog(onDismissRequest = { revoking = null }, containerColor = c.card,
+            title = { Text("Revoke admin invite for ${p.name}?") },
+            text = { Text("If you revoke it, ${p.name} can no longer use it to become an admin of this channel.") },
+            confirmButton = { TextButton({
+                revoking = null
+                scope.launch {
+                    try { ChannelService.revokeAdminInvite(p.code) }
+                    catch (e: Exception) { toast(ctx, ChannelService.errorText(e)) }
+                    reload()
+                }
+            }) { Text("Revoke", color = c.red) } },
+            dismissButton = { TextButton({ revoking = null }) { Text("Cancel", color = c.accent) } })
+    }
     if (picking) {
-        ChannelAdminPicker(cid, exclude = team.sorted().toSet(), onClose = { picking = false })
+        ChannelAdminPicker(cid, exclude = team.sorted().toSet() + pending.map { it.uid }, onClose = { picking = false })
         return
     }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
@@ -396,6 +418,14 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
                     // Tap an admin for what they can do (and Dismiss Admin, where I may).
                     PersonLine(team.photos[uid], if (uid == me) "You" else team.names[uid] ?: "Admin", onClick = { onOpen(uid) }) {
                         Text(if (uid == team.owner) "Owner" else "Admin", fontSize = 14.sp, color = c.secondary)
+                    }
+                }
+            }
+            // Waiting to Accept (iOS ChannelPendingAdminsSection): tap a row to revoke its invite.
+            if (mayAdd && pending.isNotEmpty()) SettingsSection(header = "Waiting to Accept") {
+                pending.forEach { p ->
+                    PersonLine(p.photoUrl, p.name, onClick = { revoking = p }) {
+                        Text("Invited as admin", fontSize = 14.sp, color = c.secondary)
                     }
                 }
             }
