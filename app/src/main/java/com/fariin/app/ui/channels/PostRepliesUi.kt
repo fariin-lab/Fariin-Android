@@ -326,7 +326,9 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         threads = withPin(p, m.list)
         m.resetCursor?.let { olderCursor = it }
         if (m.added > 0) {
-            if (atEnd) scrollTarget = m.list.lastOrNull()?.id else unseenNew += m.added
+            // Others' new replies never pull the list down: below the reader they are counted in the
+            // "N new replies" pill, which takes them there; at the end they simply appear.
+            if (!atEnd) unseenNew += m.added
         }
         val pinRow = threads.firstOrNull { it.id == pinnedId }
         cache[cacheKey] = page + listOfNotNull(pinRow)
@@ -652,11 +654,7 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
     val list = rememberLazyListState()
     val items = replyItems(s)
     val now = remember(s.threads, s.answers) { System.currentTimeMillis() }
-    // Opens at the newest replies, next to the field (iOS anchors the list at its end).
-    var placed by remember { mutableStateOf(false) }
-    LaunchedEffect(s.loaded, items.size) {
-        if (!placed && s.loaded && items.isNotEmpty()) { placed = true; list.scrollToItem(items.size - 1) }
-    }
+    // ⛔ OPENS AT THE TOP, on the first replies (iOS, owner 2026-11-07), never jumped to the newest.
     LaunchedEffect(list) {
         snapshotFlow { !list.canScrollForward }.collect { end -> s.atEnd = end; if (end) s.unseenNew = 0 }
     }
