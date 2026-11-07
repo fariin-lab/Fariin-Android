@@ -98,6 +98,8 @@ internal fun BlockedUsersPage(pop: () -> Unit) {
             val unblockIcon = painterResource(com.fariin.app.R.drawable.ic_block)
             for ((i, u) in rows.withIndex()) {
                 val p = people[u]
+                // Not read yet: a grey circle and bar, not "An account you blocked" (that is for a read that found nothing).
+                if (p == null) { PlaceholderPersonRow(last = i == rows.lastIndex); continue }
                 val name = p?.name?.ifEmpty { null } ?: p?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "An account you blocked"
                 // Swipe left to Unblock, as iOS; the confirm stands behind it, so nothing is undone by accident.
                 SwipeActionsRow(id = "blocked:$u", enabled = true, leading = emptyList(),

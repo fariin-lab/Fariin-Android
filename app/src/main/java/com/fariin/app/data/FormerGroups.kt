@@ -94,14 +94,17 @@ object LeaveUndo {
     val hidden: StateFlow<Set<String>> = _hidden.asStateFlow()
     private var pending: Pair<String, suspend () -> Unit>? = null
     private var title: String = ""
+    private var failText: String? = null
     private var timer: Job? = null
     /** A leave that failed when it ran, shown so it is never silent. */
     var onFailure: (String) -> Unit = {}
 
-    fun start(cid: String, groupTitle: String, leave: suspend () -> Unit) {
+    /** [failed]: what to say if the work fails when it runs (Delete Group says delete, not leave). */
+    fun start(cid: String, groupTitle: String, failed: String? = null, leave: suspend () -> Unit) {
         if (pending != null) commit()
         pending = cid to leave
         title = groupTitle
+        failText = failed
         _hidden.value = _hidden.value + cid
         timer?.cancel()
         timer = scope.launch { delay(WINDOW_MS); commit() }
@@ -120,6 +123,8 @@ object LeaveUndo {
         val p = pending ?: return
         pending = null
         val t = title
+        val f = failText
+        failText = null
         scope.launch {
             try {
                 p.second()
@@ -128,7 +133,7 @@ object LeaveUndo {
                 _hidden.value = _hidden.value - p.first
             } catch (_: Exception) {
                 _hidden.value = _hidden.value - p.first
-                onFailure(leaveFailed(t))
+                onFailure(f ?: leaveFailed(t))
             }
         }
     }

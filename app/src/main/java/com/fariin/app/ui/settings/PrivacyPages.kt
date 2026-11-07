@@ -4,6 +4,10 @@ import com.fariin.app.ui.components.listPress
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -228,23 +232,50 @@ private fun HideFromPage(pop: () -> Unit) {
     var hidden by remember { mutableStateOf<Set<String>?>(null) }
     LaunchedEffect(Unit) { hidden = PhotoHideFrom.load().toSet() }
     val people = remember { myChatPeople() }
+    // A row whose write is on its way: no second tap, a spinner where the tick goes.
+    var working by remember { mutableStateOf(setOf<String>()) }
     ScrollPage("Hide From", pop) {
         SettingsSection(footer = "Checked people will not see your profile photo.") {
-            if (people.isEmpty()) Text("No chats yet.", color = Fariin.colors.secondary, modifier = Modifier.padding(16.dp))
-            for ((i, p) in people.withIndex()) {
+            // Until the hidden list has loaded: placeholder rows, not "No chats yet." or wrong ticks.
+            val waitRows = people.size.coerceIn(1, 6)
+            if (hidden == null) repeat(waitRows) { i -> PlaceholderPersonRow(last = i == waitRows - 1) }
+            else if (people.isEmpty()) Text("No chats yet.", color = Fariin.colors.secondary, modifier = Modifier.padding(16.dp))
+            else for ((i, p) in people.withIndex()) {
                 val on = hidden?.contains(p.first) == true
-                PersonRow(p.second, p.third, last = i == people.lastIndex, selected = on) {
-                    val h = hidden ?: return@PersonRow
-                    scope.launch {
-                        val ok = if (on) PhotoHideFrom.remove(p.first) else PhotoHideFrom.add(p.first)
-                        if (ok) hidden = if (on) h - p.first else h + p.first else toast(ctx, "Check your connection and try again.")
-                    }
-                }
+                val busy = p.first in working
+                PersonRow(p.second, p.third, last = i == people.lastIndex, selected = on && !busy,
+                    trailing = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null,
+                    onClick = if (busy) null else ({
+                        if (hidden != null) {
+                            working = working + p.first
+                            scope.launch {
+                                val ok = if (on) PhotoHideFrom.remove(p.first) else PhotoHideFrom.add(p.first)
+                                // Against the newest set, so two rows changing at once both stay.
+                                if (ok) hidden = hidden?.let { if (on) it - p.first else it + p.first } else toast(ctx, "Check your connection and try again.")
+                                working = working - p.first
+                            }
+                        }
+                    }))
             }
         }
     }
 }
 
+@Composable
+internal fun PlaceholderPersonRow(last: Boolean) {
+    val c = Fariin.colors
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.placeholderFill))
+            Spacer(Modifier.width(12.dp))
+            Box(Modifier.width(140.dp).height(12.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).background(c.placeholderFill))
+        }
+        if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
+    }
+}
+
+/** A person's row in the privacy lists; [PlaceholderPersonRow] stands in while the names load. */
 @Composable
 internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: Boolean, selected: Boolean = false, trailing: (@Composable () -> Unit)? = null, onClick: (() -> Unit)?) {
     val c = Fariin.colors

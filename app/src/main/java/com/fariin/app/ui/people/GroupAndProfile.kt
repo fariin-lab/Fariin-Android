@@ -544,15 +544,16 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var askEnd by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
     val exitScope = rememberCoroutineScope()
-    fun callable(name: String, done: String) {
-        exitScope.launch {
-            val ok = runCatching {
-                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-                    .getHttpsCallable(name).call(mapOf("cid" to cid)).await()
-            }.isSuccess
-            com.fariin.app.ui.components.Snack.show(if (ok) done else "Could not do that. Check your connection and try again.")
-        }
+    // Awaited, so the sheet's button spins until the server answers; then the sheet closes and the note shows.
+    suspend fun callable(name: String, done: String): Boolean {
+        val ok = runCatching {
+            com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                .getHttpsCallable(name).call(mapOf("cid" to cid)).await()
+        }.isSuccess
+        com.fariin.app.ui.components.Snack.show(if (ok) done else "Could not do that. Check your connection and try again.")
+        return ok
     }
+    val reportFailed = "Couldn't send the report. Check your connection and try again."
     // Report, End and Delete: the contact page's bottom sheet with the group's photo and name on top.
     val groupPhoto = (conv["avatarUrl"] as? String)?.ifEmpty { null }
     val groupName = conv["title"] as? String ?: ""
@@ -561,31 +562,39 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         "Fariin's moderators will review this group. Report and Leave also takes you out of it and stops it adding you again.",
         listOf(
             PersonAction("Report and Leave") {
-                // iOS: report, then leave and block the group so it cannot add me back.
-                exitScope.launch { api.report("", cid, "group") }
-                com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
-                    api.leaveGroup(cid)
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
-                        .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
+                // iOS: report, then leave and block the group so it cannot add me back. The report is
+                // awaited (the button spins); if it did not go, I stay in the group and can try again.
+                val sent = api.report("", cid, "group")
+                if (!sent) com.fariin.app.ui.components.Snack.show(reportFailed)
+                else {
+                    com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
+                        api.leaveGroup(cid)
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+                            .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
+                    }
+                    com.fariin.app.ui.components.Snack.show("Thanks for reporting. You left the group.", "Undo",
+                        durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+                    onLeft()
                 }
-                onLeft()
-                true
+                sent
             },
             PersonAction("Report", tonal = true) {
-                exitScope.launch { api.report("", cid, "group") }
-                com.fariin.app.ui.components.Snack.show("Thanks. Fariin's moderators will review this group.")
-                true
+                val ok = api.report("", cid, "group")
+                com.fariin.app.ui.components.Snack.show(if (ok) "Thanks. Fariin's moderators will review this group." else reportFailed)
+                ok
             },
         ), onDismiss = { askReport = false }, kind = groupKind)
     if (askEnd) PersonConfirmSheet(groupPhoto, groupName, "End This Group?",
         "Nobody will be able to send messages or start calls, and invite links stop working. Messages stay. This can't be undone.",
-        listOf(PersonAction("End Group") { callable("endGroup", "The group has ended."); true }),
+        listOf(PersonAction("End Group") { callable("endGroup", "The group has ended.") }),
         onDismiss = { askEnd = false }, kind = groupKind)
     if (askDelete) PersonConfirmSheet(groupPhoto, groupName, "Delete Group?",
         "This permanently deletes the group and all its messages for everyone. This cannot be undone.",
         listOf(PersonAction("Delete for Everyone") {
             // iOS LeaveGroupUndo .deleteGroup: gone from the list at once, Undo for a few seconds, then the server deletes it.
-            com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
+            // A server failure after the Undo window gives the group back and says so (LeaveUndo.commit).
+            val t = conv["title"] as? String ?: "the group"
+            com.fariin.app.data.LeaveUndo.start(cid, t, failed = "Couldn't delete \"$t\". Check your connection and try again.") {
                 com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
                     .getHttpsCallable("deleteGroup").call(mapOf("cid" to cid)).await()
             }
