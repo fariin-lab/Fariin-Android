@@ -7,6 +7,7 @@ import com.fariin.app.crypto.FariinCrypto
 import com.fariin.app.media.ChatMedia
 import com.fariin.app.media.MediaMessages
 import com.fariin.app.media.MediaRules
+import com.fariin.app.media.LocalPreview
 import com.fariin.app.media.PhotoPrep
 import com.fariin.app.media.FilePrep
 import com.fariin.app.media.MediaSender
@@ -34,6 +35,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
@@ -108,6 +111,9 @@ class ThreadRepository(
     private val pending = ConcurrentHashMap<String, Message>()
     /** My own media files by clientId: drawn and played locally until the server copy has its URL. */
     private val localFiles = ConcurrentHashMap<String, String>()
+    /** The picked files of my photo, video or album sends by clientId, in tile order: the bubble
+     *  draws them from its first frame and its server echo keeps drawing them while its own opens. */
+    private val localUris = ConcurrentHashMap<String, List<String>>()
     /** What a failed media send needs to go again, by clientId. */
     private val retryPhoto = ConcurrentHashMap<String, PhotoPrep>()
     private val retryVoice = ConcurrentHashMap<String, VoiceRecorder.Result>()
@@ -376,6 +382,7 @@ class ThreadRepository(
             // My note or photo whose file is still going up: the copy on this phone draws it.
             val local = m.clientId?.let { localFiles[it] }
             if (local != null && m.audioUrl == null && m.imageUrl == null) m = m.copy(localPath = local)
+            m.clientId?.let { k -> localUris[k] }?.let { picked -> m = withPicked(m, picked) }
             m.clientId?.let { k -> localCards[k]?.let { card ->
                 if (m.linkPreview == null && !m.deleted) m = m.copy(linkPreview = card) else localCards.remove(k)
             } }
@@ -610,73 +617,101 @@ class ThreadRepository(
         val m = media ?: return
         if (uris.isEmpty()) return
         val tap = System.currentTimeMillis().toDouble()
-        val chunks = MediaRules.albumChunks(uris.take(MediaRules.MEDIA_PER_PICK))
-        chunks.forEachIndexed { n, chunk ->
-            val clientId = UUID.randomUUID().toString().uppercase()
-            val words = if (n == 0) caption.trim() else ""
-            val ts = tap + n
-            val once = viewOnce && chunk.size == 1
-            // A lone video is a video bubble from the first frame (owner 2026-11-04: it showed as a
-            // photo, then turned into a video while sending).
-            val loneVideo = chunk.size == 1 && isVideoUri(context, chunk[0])
-            pending[clientId] = Message(
-                id = clientId, authorId = me, text = words, type = if (loneVideo) "video" else if (chunk.size == 1) "image" else "album",
-                createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
-                sendState = Message.SendState.SENDING, viewOnce = once,
-            )
-            rebuild()
-            runMediaSend(clientId) {
-                val kinds = chunk.map { isVideoUri(context, it) }
-                if (chunk.size == 1 && kinds[0]) {
-                    // The first frame and length straight from the file, before the slower prep.
-                    quickVideoFrame(context, chunk[0], File(m.localDir(), "poster-$clientId.jpg"))?.let { (f, w, h, d) ->
+        val picked = uris.take(MediaRules.MEDIA_PER_PICK)
+        // iOS adds the pending photo, video or album with its local pictures at once. The shapes
+        // are read here, off the main thread, BEFORE the bubbles go in: each bubble is inserted at
+        // its final size (the send glide measures it then) and never jumps when the prep is done.
+        scope.launch(Dispatchers.IO) {
+            val kinds = picked.map { isVideoUri(context, it) }
+            val shapes = picked.mapIndexed { i, u ->
+                async { if (kinds[i]) LocalPreview.videoShape(context, u) else LocalPreview.photoShape(context, u) }
+            }.awaitAll()
+            val chunks = MediaRules.albumChunks(picked.indices.toList())
+            // The pictures themselves, decoded small in the background; the bubbles wait a moment
+            // for them so the first frame already shows the photo, never longer than that.
+            val lone = chunks.size == 1 && chunks[0].size == 1
+            val warm = chunks.flatMap { c -> c.map { i ->
+                async {
+                    if (viewOnce && c.size == 1) return@async null
+                    LocalPreview.load(context, picked[i].toString(), kinds[i],
+                        if (c.size == 1) LocalPreview.LONE_SIDE else LocalPreview.TILE_SIDE)
+                }
+            } }
+            kotlinx.coroutines.withTimeoutOrNull(if (lone) 400L else 250L) { warm.awaitAll() }
+            chunks.forEachIndexed { n, idx ->
+                val chunk = idx.map { picked[it] }
+                val clientId = UUID.randomUUID().toString().uppercase()
+                val words = if (n == 0) caption.trim() else ""
+                val ts = tap + n
+                val once = viewOnce && chunk.size == 1
+                val first = shapes[idx[0]]
+                // A lone video is a video bubble from the first frame (owner 2026-11-04: it showed as a
+                // photo, then turned into a video while sending).
+                pending[clientId] = if (chunk.size == 1) Message(
+                    id = clientId, authorId = me, text = words, type = if (kinds[idx[0]]) "video" else "image",
+                    createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
+                    sendState = Message.SendState.SENDING, viewOnce = once,
+                    width = first?.width?.toDouble(), height = first?.height?.toDouble(), duration = first?.duration,
+                    localUri = if (once) null else chunk[0].toString(),
+                ) else Message(
+                    id = clientId, authorId = me, text = words, type = "album",
+                    createdAtMillis = ts, hasServerTime = false, clientTs = ts, clientId = clientId,
+                    sendState = Message.SendState.SENDING,
+                    album = idx.map { i ->
+                        Message.AlbumItem("", null, shapes[i]?.width?.toDouble(), shapes[i]?.height?.toDouble(),
+                            duration = shapes[i]?.duration, localUri = picked[i].toString(), localVideo = kinds[i])
+                    },
+                )
+                if (!once) localUris[clientId] = chunk.map { it.toString() }
+                rebuild()
+                val chunkKinds = idx.map { kinds[it] }
+                runMediaSend(clientId) {
+                    if (chunk.size == 1 && chunkKinds[0]) {
+                        val v = VideoPrep.fromUri(context, chunk[0], m.localDir(), clientId) ?: error("video not readable or over 64 MB")
+                        val poster = File(m.localDir(), "poster-$clientId.jpg").also { it.writeBytes(v.poster.jpeg) }
+                        // The server's copy keeps drawing this poster until its own has loaded (no blur step).
+                        localFiles[clientId] = poster.absolutePath
                         pending[clientId]?.let { p ->
-                            pending[clientId] = p.copy(localPath = f.absolutePath, width = w, height = h, duration = d)
+                            pending[clientId] = p.copy(type = "video", localPath = poster.absolutePath, width = v.width.toDouble(),
+                                height = v.height.toDouble(), duration = v.duration, thumb = v.poster.thumbB64)
                         }
                         rebuild()
+                        val work: suspend () -> Unit = { sender.video(v, words, false, clientId, ts) }
+                        retryMedia[clientId] = work
+                        work()
+                    } else if (chunk.size == 1) {
+                        val prep = PhotoPrep.fromUri(context, chunk[0], com.fariin.app.media.SentQuality.photo(context, chunk[0])) ?: error("photo not readable")
+                        val local = File(m.localDir(), "send-$clientId.jpg").also { it.writeBytes(prep.jpeg) }
+                        pending[clientId]?.let { p ->
+                            pending[clientId] = p.copy(localPath = local.absolutePath, width = prep.width.toDouble(),
+                                height = prep.height.toDouble(), thumb = if (once) null else prep.thumbB64)
+                        }
+                        rebuild()
+                        val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts) }
+                        retryMedia[clientId] = work
+                        work()
+                    } else {
+                        val parts = chunk.mapIndexed { i, u ->
+                            if (chunkKinds[i]) MediaSender.AlbumPart.Video(VideoPrep.fromUri(context, u, m.localDir(), "$clientId-$i")
+                                ?: error("video not readable or over 64 MB"))
+                            else MediaSender.AlbumPart.Photo(PhotoPrep.fromUri(context, u, com.fariin.app.media.SentQuality.photo(context, u)) ?: error("photo not readable"))
+                        }
+                        pending[clientId]?.let { p ->
+                            pending[clientId] = p.copy(album = parts.mapIndexed { i, part ->
+                                val pp = when (part) { is MediaSender.AlbumPart.Photo -> part.prep; is MediaSender.AlbumPart.Video -> part.prep.poster }
+                                val f = File(m.localDir(), "tile-$clientId-$i.jpg").also { it.writeBytes(pp.jpeg) }
+                                val vid = (part as? MediaSender.AlbumPart.Video)?.prep
+                                // The tile keeps drawing its picked picture (no swap to the prepared copy).
+                                Message.AlbumItem(f.absolutePath, null, pp.width.toDouble(), pp.height.toDouble(),
+                                    videoUrl = vid?.file?.absolutePath, duration = vid?.duration,
+                                    localUri = p.album.getOrNull(i)?.localUri, localVideo = chunkKinds[i])
+                            })
+                        }
+                        rebuild()
+                        val work: suspend () -> Unit = { sender.album(parts, words, false, clientId, ts) }
+                        retryMedia[clientId] = work
+                        work()
                     }
-                    val v = VideoPrep.fromUri(context, chunk[0], m.localDir(), clientId) ?: error("video not readable or over 64 MB")
-                    val poster = File(m.localDir(), "poster-$clientId.jpg").also { it.writeBytes(v.poster.jpeg) }
-                    // The server's copy keeps drawing this poster until its own has loaded (no blur step).
-                    localFiles[clientId] = poster.absolutePath
-                    pending[clientId]?.let { p ->
-                        pending[clientId] = p.copy(type = "video", localPath = poster.absolutePath, width = v.width.toDouble(),
-                            height = v.height.toDouble(), duration = v.duration, thumb = v.poster.thumbB64)
-                    }
-                    rebuild()
-                    val work: suspend () -> Unit = { sender.video(v, words, false, clientId, ts) }
-                    retryMedia[clientId] = work
-                    work()
-                } else if (chunk.size == 1) {
-                    val prep = PhotoPrep.fromUri(context, chunk[0], com.fariin.app.media.SentQuality.photo(context, chunk[0])) ?: error("photo not readable")
-                    val local = File(m.localDir(), "send-$clientId.jpg").also { it.writeBytes(prep.jpeg) }
-                    pending[clientId]?.let { p ->
-                        pending[clientId] = p.copy(localPath = local.absolutePath, width = prep.width.toDouble(),
-                            height = prep.height.toDouble(), thumb = if (once) null else prep.thumbB64)
-                    }
-                    rebuild()
-                    val work: suspend () -> Unit = { sender.image(prep, words, once, false, clientId, ts) }
-                    retryMedia[clientId] = work
-                    work()
-                } else {
-                    val parts = chunk.mapIndexed { i, u ->
-                        if (kinds[i]) MediaSender.AlbumPart.Video(VideoPrep.fromUri(context, u, m.localDir(), "$clientId-$i")
-                            ?: error("video not readable or over 64 MB"))
-                        else MediaSender.AlbumPart.Photo(PhotoPrep.fromUri(context, u, com.fariin.app.media.SentQuality.photo(context, u)) ?: error("photo not readable"))
-                    }
-                    pending[clientId]?.let { p ->
-                        pending[clientId] = p.copy(album = parts.mapIndexed { i, part ->
-                            val pp = when (part) { is MediaSender.AlbumPart.Photo -> part.prep; is MediaSender.AlbumPart.Video -> part.prep.poster }
-                            val f = File(m.localDir(), "tile-$clientId-$i.jpg").also { it.writeBytes(pp.jpeg) }
-                            val vid = (part as? MediaSender.AlbumPart.Video)?.prep
-                            Message.AlbumItem(f.absolutePath, null, pp.width.toDouble(), pp.height.toDouble(),
-                                videoUrl = vid?.file?.absolutePath, duration = vid?.duration)
-                        })
-                    }
-                    rebuild()
-                    val work: suspend () -> Unit = { sender.album(parts, words, false, clientId, ts) }
-                    retryMedia[clientId] = work
-                    work()
                 }
             }
         }
@@ -769,21 +804,14 @@ class ThreadRepository(
         rewriteSummaryAfterDelete()
     }
 
-    private data class QuickFrame(val file: File, val w: Double, val h: Double, val duration: Double?)
-
-    /** A video's first frame as a JPEG on this phone, with its size and length; null when unreadable. */
-    private fun quickVideoFrame(context: Context, uri: Uri, out: File): QuickFrame? = runCatching {
-        val r = android.media.MediaMetadataRetriever()
-        try {
-            r.setDataSource(context, uri)
-            val bmp = r.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return null
-            val scale = minOf(1f, 720f / maxOf(bmp.width, bmp.height))
-            val small = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true) else bmp
-            out.outputStream().use { small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, it) }
-            val ms = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toDoubleOrNull()
-            QuickFrame(out, small.width.toDouble(), small.height.toDouble(), ms?.let { it / 1000.0 })
-        } finally { r.release() }
-    }.getOrNull()
+    /** The server's copy of my own photo, video or album, still drawing the picked pictures. */
+    private fun withPicked(m: Message, picked: List<String>): Message = when {
+        m.deleted || m.viewOnce -> m
+        m.type == "album" && m.album.size == picked.size ->
+            m.copy(album = m.album.mapIndexed { i, a -> a.copy(localUri = picked[i]) })
+        (m.type == "image" || m.type == "video") && picked.size == 1 -> m.copy(localUri = picked[0])
+        else -> m
+    }
 
     private fun isVideoUri(context: Context, uri: Uri): Boolean =
         (context.contentResolver.getType(uri) ?: "").startsWith("video/")

@@ -227,8 +227,10 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                         val w = tile.w
                         val h = tile.h
                         // A tile's picture follows auto-download (a video tile's poster always comes down).
-                        val got = rememberGatedFile(item.imageUrl, item.enc, if (item.isVideo) null else AutoDownload.Kind.PHOTOS)
+                        val got = rememberGatedFile(item.imageUrl.ifEmpty { null }, item.enc, if (item.isVideo) null else AutoDownload.Kind.PHOTOS)
                         val bmp = rememberBitmap(got.file, 400)
+                        // My own album: the picked picture from the first frame (iOS localAlbum).
+                        val picked = rememberLocalPreview(item.localUri, item.isVideo, com.fariin.app.media.LocalPreview.TILE_SIDE)
                         if (!item.isVideo) androidx.compose.runtime.LaunchedEffect(got.file, autoSaveId) {
                             val f = got.file ?: return@LaunchedEffect
                             autoSaveId?.let { com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$it/${tile.index}", f, isVideo = false) }
@@ -250,6 +252,7 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                                 },
                         ) {
                             if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            else if (picked != null) Image(picked, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             else if (tile.index == 0) rememberPlaceholder(m.thumb, m.blurhash)?.let {
                                 Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             }
@@ -329,7 +332,7 @@ internal fun ReplyThumb(o: Message, side: Dp, modifier: Modifier = Modifier) {
     val local = remember(o.localPath) { o.localPath?.let { java.io.File(it) }?.takeIf { it.exists() } }
     val (url, enc) = when (o.mediaKind) {
         Message.MediaKind.PHOTO -> o.imageUrl to o.enc
-        Message.MediaKind.ALBUM -> o.album.firstOrNull()?.let { it.imageUrl to it.enc } ?: (null to null)
+        Message.MediaKind.ALBUM -> o.album.firstOrNull()?.let { it.imageUrl.ifEmpty { null } to it.enc } ?: (null to null)
         Message.MediaKind.VIDEO -> o.thumbUrl to o.thumbEnc
         else -> null to null
     }

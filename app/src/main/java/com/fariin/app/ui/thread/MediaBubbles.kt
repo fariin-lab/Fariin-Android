@@ -180,6 +180,22 @@ internal fun decodeSampled(f: File, targetPx: Int, maxLongPx: Int = 0, lowRam: B
     })?.asImageBitmap()
 }.getOrNull()
 
+/**
+ * The picked photo or video's first frame of my own send ([Message.localUri]), drawn from the
+ * bubble's first frame: usually already decoded by the send (LocalPreview), else decoded here off
+ * the main thread.
+ */
+@Composable
+internal fun rememberLocalPreview(uri: String?, isVideo: Boolean, side: Int): ImageBitmap? {
+    val ctx = LocalContext.current
+    val first = remember(uri, side) { uri?.let { com.fariin.app.media.LocalPreview.cached(ctx, it, side)?.asImageBitmap() } }
+    val v by produceState(initialValue = first, uri, side) {
+        if (value != null || uri == null) return@produceState
+        value = withContext(Dispatchers.IO) { com.fariin.app.media.LocalPreview.load(ctx.applicationContext, uri, isVideo, side)?.asImageBitmap() }
+    }
+    return v
+}
+
 /** Placeholders already made, so a bubble opened again (or scrolled back) draws one at once. */
 private val Placeholders = android.util.LruCache<String, ImageBitmap>(96)
 
@@ -234,6 +250,8 @@ internal fun PictureBox(
     val kind = if (m.mediaKind == Message.MediaKind.PHOTO) AutoDownload.Kind.PHOTOS else null
     val got = rememberGatedFile(url, enc, kind)
     val bmp = rememberBitmap(got.file, px)
+    // My own send: the picked picture from the first frame, until a prepared or server copy is open.
+    val picked = rememberLocalPreview(m.localUri, m.mediaKind == Message.MediaKind.VIDEO, com.fariin.app.media.LocalPreview.LONE_SIDE)
     val saveCtx = LocalContext.current
     LaunchedEffect(got.file, autoSaveId) {
         val f = got.file ?: return@LaunchedEffect
@@ -250,6 +268,8 @@ internal fun PictureBox(
     ) {
         if (bmp != null) {
             Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else if (picked != null) {
+            Image(picked, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else if (placeholder != null) {
             Image(placeholder, null, contentScale = ContentScale.Crop, filterQuality = FilterQuality.High, modifier = Modifier.fillMaxSize())
         }

@@ -120,6 +120,9 @@ data class Message(
     val isRestrictRequest: Boolean = false,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
     val localPath: String? = null,
+    /** Local only: the picked photo or video (a content Uri) my own bubble draws from its first
+     *  frame, before the prepared copy exists and on until the server's copy has opened. */
+    val localUri: String? = null,
     /** Local only: a send of mine that has not reached the server, or failed. */
     val sendState: SendState? = null,
 ) {
@@ -155,8 +158,12 @@ data class Message(
     data class AlbumItem(
         val imageUrl: String, val enc: EncMeta?, val width: Double?, val height: Double?,
         val videoUrl: String? = null, val videoEnc: EncMeta? = null, val duration: Double? = null,
+        /** Local only: the picked file this tile of my own album draws until its upload is in. */
+        val localUri: String? = null,
+        /** Local only: the picked file is a video (before it has a [videoUrl]). */
+        val localVideo: Boolean = false,
     ) {
-        val isVideo: Boolean get() = videoUrl != null
+        val isVideo: Boolean get() = videoUrl != null || localVideo
     }
 
     enum class MediaKind { PHOTO, VIDEO, VOICE, ALBUM, FILE, VIEW_ONCE }
