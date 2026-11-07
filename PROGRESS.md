@@ -1111,3 +1111,12 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   crash today 11:00 (layout index, fixed 11:05/11:10); CPU idle 0% on chat list, in a chat, in kk (moving
   background) and in background; no wake locks, alarms or jobs held. Chat gaps batch 9251984..47abb25 merged;
   glass pages 4b3af57 + 56bec33 (back circle showed rows hidden under the bar).
+- 23:05 Reviewers merged: GPS stops in background (f9eb6d1), browser pauses + survives a lost renderer (4a77436),
+  PDF renderer close race (21119e3), "recording..." stops in background (b4ec1f8), wallpaper clock only where it
+  moves (3456292), custom reactions play twice then rest (4c60bdf). Data/pages reviewer: nothing to fix.
+- 23:10 Live tests with the owner (his iPhone as kream <-> Pixel as Roodo, screen recorded, frame by frame):
+  receive jumped every row in one frame then faded the bubble in. 8f46be7 list glides; 789a4db 2.2x slower spring
+  (iOS ~0.25 s) and two quiet frames before it (the row-building frame took 57 ms). Four arrivals after: smooth,
+  a frame every ~11 ms. Left: ours eases in, iOS eases out. Settings wallpaper reaches every chat (705824d).
+  Send still has an 88 ms hitch + one-row snap: agent on it (emulator 5556).
+  TO TEST LIVE: group arrival, fast fire (1/s), photos both ways (row grows when the image loads), first message.
