@@ -536,6 +536,18 @@ internal object WallpaperBake {
     }
 }
 
+/**
+ * A colour picked on Bubble Color (owner 2026-11-07): it also clears my bubble style, as Default
+ * on Bubble Style does, so my sent bubbles show that colour; one or the other applies, never both.
+ * Auto is not a colour pick and leaves a style alone.
+ */
+private fun pickBubbleColor(ctx: android.content.Context, spec: ChatColorSpec) {
+    ChatLookStore.setDefaultColor(ctx, spec)
+    com.fariin.app.data.BubbleStyles.init(ctx)
+    if (com.fariin.app.data.BubbleStyles.current() != null)
+        com.fariin.app.data.BubbleStyles.save(null, com.fariin.app.data.BubbleStyles.decorations())
+}
+
 /** iOS ChatColorPage: the preview on the Settings wallpaper, then Auto, the palette, my colours and +. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -568,12 +580,12 @@ private fun ChatColorPage(pop: () -> Unit) {
                     }
                 }
                 ChatColors.presets.forEach { p ->
-                    add { m -> ColorCircle(selected == p, m, onTap = { ChatLookStore.setDefaultColor(ctx, p) }) { Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush())) } }
+                    add { m -> ColorCircle(selected == p, m, onTap = { pickBubbleColor(ctx, p) }) { Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush())) } }
                 }
                 customs.forEach { p ->
                     add { m ->
                         Box(m) {
-                            ColorCircle(selected == p, Modifier.fillMaxWidth(), onLong = { deleting = p }, onTap = { ChatLookStore.setDefaultColor(ctx, p) }) {
+                            ColorCircle(selected == p, Modifier.fillMaxWidth(), onLong = { deleting = p }, onTap = { pickBubbleColor(ctx, p) }) {
                                 Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush()))
                             }
                             DropdownMenu(expanded = deleting == p, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
@@ -597,7 +609,7 @@ private fun ChatColorPage(pop: () -> Unit) {
     }
     if (custom) CustomColorSheet(onClose = { custom = false }) { spec ->
         ChatLookStore.addCustom(ctx, spec)
-        ChatLookStore.setDefaultColor(ctx, spec)
+        pickBubbleColor(ctx, spec)
     }
 }
 
