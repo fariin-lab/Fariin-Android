@@ -73,8 +73,8 @@ internal fun Modifier.artBubble(spec: BubbleArt.Spec, image: ImageBitmap?, dark:
             }
         }
         .layout { measurable, constraints ->
-            // The words get the room inside both clearances; BubbleArt.place centres a short line
-            // between the bubble's edges and keeps long ones where they always were.
+            // The whole block (quote or link card, words, time) is measured in the widest room a side
+            // can need; BubbleArt.place then gives each side only its own clearance at the block's rows.
             val d = density
             val padH = ((l.padLeft + l.padRight) * d).roundToInt()
             val padV = ((l.padTop + l.padBottom) * d).roundToInt()

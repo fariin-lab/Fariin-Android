@@ -1,5 +1,6 @@
 package com.fariin.app.data
 
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -75,10 +76,15 @@ object BubbleArt {
     /** The words keep at least 40 px and 11 dp from the bubble's side (the round corners), and 10 dp from its top and bottom. */
     const val SIDE_PX = 40
     const val SIDE_DP = 11f
-    /** Beside art that reaches in: [Spec.ins] + 6 px from the edge, and never nearer the art than 4 dp. */
-    const val ART_GAP_PX = 6
+    /** Beside art that reaches in: 4 dp past the art, nothing more (the json's whole-height `ins` is not used). */
     const val ART_TEXT_DP = 4f
     const val VERTICAL_DP = 10f
+    /**
+     * Art wholly in a top (or bottom) cap that ends within 12 dp of that edge (hands resting on it):
+     * the words move down (or up) to 4 dp past it, at most this far from the edge, instead of
+     * taking room beside it.
+     */
+    const val LIFT_MAX_DP = 16f
 
     fun layoutOf(s: Spec): Layout {
         val (t, r, b, l) = s.slice.toList()
@@ -87,18 +93,27 @@ object BubbleArt {
         val k = min(MAX_SCALE, INSIDE_DP / max(insideTb, 1))
         val belowEdge = (s.height - bb) * k
         val rightOut = (s.width - br) * k
-        val base = max(SIDE_PX * k, SIDE_DP)
-        // Art that can meet the words at some height: not paws resting just under the top edge,
-        // wholly above the words' top (or wholly under their bottom) whatever the box's size.
-        fun canMeet(a: Art) = !(a.bottom <= t && a.bottom * k <= bt * k + VERTICAL_DP - ART_TEXT_DP) &&
-            !(a.top >= s.height - b && (s.height - a.top) * k <= belowEdge + VERTICAL_DP - ART_TEXT_DP)
-        fun widest(right: Boolean) = s.art.filter { it.right == right && canMeet(it) }.maxOfOrNull { artClear(s, it, k) } ?: 0f
+        val base = ceil(max(SIDE_PX * k, SIDE_DP))
+        // The words' distance from the top and bottom edges: 10 dp, or 4 dp past shallow corner art.
+        var liftT = VERTICAL_DP
+        var liftB = VERTICAL_DP
+        for (a in s.art) {
+            val e = edgeDepth(s, a, k) ?: continue
+            if (e + ART_TEXT_DP > LIFT_MAX_DP) continue
+            if (a.bottom <= t) liftT = max(liftT, ceil(e + ART_TEXT_DP)) else liftB = max(liftB, ceil(e + ART_TEXT_DP))
+        }
+        // Art that can meet the words at some height: not corner art that ends before the words begin.
+        fun canMeet(a: Art): Boolean {
+            val e = edgeDepth(s, a, k) ?: return true
+            return e + ART_TEXT_DP > (if (a.bottom <= t) liftT else liftB)
+        }
+        fun widest(right: Boolean) = s.art.filter { it.right == right && canMeet(it) }.maxOfOrNull { ceil(artClear(it, k) - 1e-4f) } ?: 0f
         return Layout(
             scale = k,
             capTop = t * k, capRight = r * k, capBottom = b * k, capLeft = l * k,
-            padTop = bt * k + VERTICAL_DP,
+            padTop = bt * k + liftT,
             padRight = rightOut + max(base, widest(true)),
-            padBottom = belowEdge + VERTICAL_DP,
+            padBottom = belowEdge + liftB,
             padLeft = bl * k + max(base, widest(false)),
             sideLeft = bl * k + base, sideRight = rightOut + base,
             minWidth = (l + r) * k, minHeight = (t + b) * k,
@@ -107,9 +122,18 @@ object BubbleArt {
         )
     }
 
-    /** How far from the bubble's edge (dp) the words stay when [a] is beside them: past [Spec.ins] + 6 px, and 4 dp past the art. */
-    private fun artClear(s: Spec, a: Art, k: Float): Float =
-        max((s.ins[if (a.right) 1 else 3] + ART_GAP_PX) * k, a.reach * k + ART_TEXT_DP)
+    /** How far from the bubble's edge (dp) the words stay when [a] is beside them: 4 dp past the art. */
+    private fun artClear(a: Art, k: Float): Float = a.reach * k + ART_TEXT_DP
+
+    /**
+     * How far (dp) art wholly in the top cap reaches down from the bubble's top edge, or art wholly
+     * in the bottom cap up from its bottom edge; null for art that stretches with the middle.
+     */
+    private fun edgeDepth(s: Spec, a: Art, k: Float): Float? = when {
+        a.bottom <= s.slice[0] -> (a.bottom - s.bubble[0]) * k
+        a.top >= s.height - s.slice[2] -> (s.bubble[2] - a.top) * k
+        else -> null
+    }
 
     /**
      * Where picture row [row] lands in a box [boxH] dp tall: rows in the top or bottom cap keep their
@@ -127,21 +151,22 @@ object BubbleArt {
 
     /**
      * The words' clearance on one side, from the box's edge, in dp, for words from [textTop] to
-     * [textBottom] (dp, box coordinates) in a box [boxH] tall. The art clearance ([Spec.ins], 4 dp
-     * past the art) counts only for art whose rows come within 4 dp of the words (owner 2026-11-07:
-     * Security's peeker sits above the bubble, so a one-liner gets no extra room on that side).
+     * [textBottom] (dp, box coordinates) in a box [boxH] tall: 11 dp from the bubble's outline, or
+     * 4 dp past art whose rows come within 4 dp of the words (owner 2026-11-07: Security's peeker
+     * sits above the bubble, so a one-liner gets no extra room on that side). The room from the
+     * outline is a whole number of dp, as iOS (PictureStyle.sideRoom).
      */
     fun sideClearance(s: Spec, right: Boolean, textTop: Float, textBottom: Float, boxH: Float): Float {
         val l = s.layout
-        var c = if (right) l.sideRight else l.sideLeft
         val edge = if (right) l.edgeRight else l.edgeLeft
+        var room = (if (right) l.sideRight else l.sideLeft) - edge
         for (a in s.art) {
             if (a.right != right) continue
             val top = rowAt(s, a.top, boxH)
             val bottom = rowAt(s, a.bottom, boxH)
-            if (top < textBottom + ART_TEXT_DP && bottom > textTop - ART_TEXT_DP) c = max(c, edge + artClear(s, a, l.scale))
+            if (top < textBottom + ART_TEXT_DP && bottom > textTop - ART_TEXT_DP) room = max(room, artClear(a, l.scale))
         }
-        return c
+        return edge + ceil(room - 1e-4f)
     }
 
     /**
@@ -152,21 +177,17 @@ object BubbleArt {
                     val padLeft: Float = 0f, val padRight: Float = 0f)
 
     /**
-     * The box and the words' spot for words measured [contentW] by [contentH] (measured with at most
-     * `maxW - padLeft - padRight` of room), all in one unit: [d] units per dp (1 for dp, density for px).
+     * The box and the words' spot for content measured [contentW] by [contentH] (measured with at
+     * most `maxW - padLeft - padRight` of room), all in one unit: [d] units per dp (1 for dp, density
+     * for px). The content is the whole block (sender, quote or link card, words, time): one block
+     * with the same room on each row.
      *
-     * Short words sit in the middle between the bubble's own edges, with the same gap on both sides:
-     * the larger of the two art clearances, so they never enter either one (owner 2026-11-07: a
-     * short "test" had a lopsided empty gap beside it, left on manga, right on bunny). The same
-     * rule as iOS: the box widens until the smaller side's gap equals the larger clearance, up to
-     * [maxW]; past that the words go as near the middle as they can without entering either
-     * clearance, so words that fill the width keep the old layout. The box is never under the
-     * left + right slices. Vertically the words are centred between the bubble's top and bottom
-     * edges, so a one-line bubble that the caps make taller than its words keeps them in the middle.
-     * The content is the whole block (sender, quote, words, time): it is centred as one.
-     * Side clearances come from [sideClearance] at the words' final height, so art that does not
-     * meet the words (above the bubble, or below a one-liner) takes no room from them.
-     * [centre] false (a link-card bubble): the old snug layout, words at the left and top clearances.
+     * NO MIRRORED ROOM (owner 2026-11-07: short words 40-50 dp in from the left on bunny, sakura,
+     * skull, and an empty band after the time): each side keeps only its own clearance, from
+     * [sideClearance] at the content's final rows, so the box is the content plus those two. Only a
+     * box the corners make wider than that (the left + right slices) centres the content in the
+     * spare width. Vertically it is centred between the bubble's edges, inside the top and bottom
+     * clearances. [centre] false (a link-card bubble): the content at the left and top clearances.
      */
     fun place(s: Spec, contentW: Float, contentH: Float, maxW: Float = Float.MAX_VALUE, d: Float = 1f,
               centre: Boolean = true): Placement {
@@ -177,13 +198,9 @@ object BubbleArt {
         val y = if (!centre) padT else ((edgeT + edgeB - contentH) / 2f).coerceIn(padT, max(padT, h - padB - contentH))
         val padL = sideClearance(s, false, y / d, (y + contentH) / d, h / d) * d
         val padR = sideClearance(s, true, y / d, (y + contentH) / d, h / d) * d
-        val outL = l.edgeLeft * d; val outR = l.edgeRight * d
-        val snug = contentW + padL + padR
-        if (!centre) return Placement(max(l.minWidth * d, snug), h, padL, y, padL, padR)
-        val gap = max(padL - outL, padR - outR)
-        val even = contentW + outL + outR + 2 * gap
-        val w = max(l.minWidth * d, max(snug, min(even, maxW)))
-        val edgeL = outL; val edgeR = w - outR
+        val w = max(l.minWidth * d, contentW + padL + padR)
+        if (!centre) return Placement(w, h, padL, y, padL, padR)
+        val edgeL = l.edgeLeft * d; val edgeR = w - l.edgeRight * d
         val x = ((edgeL + edgeR - contentW) / 2f).coerceIn(padL, max(padL, w - padR - contentW))
         return Placement(w, h, x, y, padL, padR)
     }

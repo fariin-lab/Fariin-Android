@@ -60,59 +60,62 @@ class BubbleArtTest {
         }
     }
 
-    /** Doctor, one line: the red cross (bottom right, 75 px in) is beside the words; the head is above the bubble. */
-    @Test fun doctorOneLiner() {
-        val s = BubbleArt.find("doctor")!!
-        val k = 0.24f   // (188 - 111) + (77 - 1) = 153 px inside: 44 / 153 is over the 0.24 cap
-        assertEquals(k, s.layout.scale, 1e-6f)
+    /** Room (dp) from the bubble's outline to a short one-line message ("test" + time), left and right. */
+    private fun oneLineGaps(id: String): Pair<Float, Float> {
+        val s = BubbleArt.find(id)!!
         val p = BubbleArt.place(s, 70f, 22f, 300f)
-        // Right: 6 px outside the edge, then max((40 + 6) px, 75 px + 4 dp).
-        assertEquals(6 * k + maxOf(46 * k, 75 * k + 4f), p.padRight, 1e-3f)
-        // Left: nothing beside the words (ins 155 was for the head above): the plain 11 dp.
-        assertEquals(11f, p.padLeft, 1e-3f)
-        assertTrue(p.padLeft < 155 * k)
+        return (p.padLeft - s.layout.edgeLeft) to (p.padRight - s.layout.edgeRight)
     }
 
-    /** Security, one line: the peeker sits ABOVE the bubble, so no extra room on the right; the shield (bottom left) is beside the words. */
-    @Test fun securityOneLiner() {
-        val s = BubbleArt.find("security")!!
-        val k = 0.24f   // (209 - 132) + (97 - 1) = 173 px: 44 / 173 > 0.24
-        val p = BubbleArt.place(s, 70f, 22f, 300f)
-        assertEquals(1 * k + 11f, p.padRight, 1e-3f)
-        assertTrue("json ins 154 not applied", p.padRight < (154 + 6) * k)
-        assertEquals(maxOf((79 + 6) * k, 78 * k + 4f), p.padLeft, 1e-3f)
-        // Short line: centred with the larger clearance on both sides.
-        val gapL = p.x - s.layout.edgeLeft
-        val gapR = p.width - s.layout.edgeRight - (p.x + 70f)
-        assertEquals(gapL, gapR, 0.01f)
+    /**
+     * The same one-line gaps as iOS (Kulan-iOS 6633d043): 11 dp from the outline unless art really
+     * meets the words, then 4 dp past the art, rounded up to whole dp. No mirrored room.
+     */
+    @Test fun oneLineGapsMatchIos() {
+        val want = mapOf(
+            "bunny" to (11f to 11f), "baddie" to (11f to 11f), "sakura" to (11f to 23f), "skull" to (11f to 19f),
+            "doctor" to (11f to 22f), "security" to (23f to 11f), "football" to (11f to 27f),
+        )
+        for ((id, lr) in want) {
+            val (l, r) = oneLineGaps(id)
+            assertEquals("$id left", lr.first, l, 1e-3f)
+            assertEquals("$id right", lr.second, r, 1e-3f)
+        }
     }
 
-    @Test fun lawyerOneLiner() {
-        val s = BubbleArt.find("lawyer")!!
-        val k = 44f / ((192 - 110) + (115 - 1))
-        assertEquals(k, s.layout.scale, 1e-6f)
-        val p = BubbleArt.place(s, 70f, 22f, 300f)
-        // Scales bottom left (rows 331..409, 90 px in) beside the words; bubble edge 26 px in from the box.
-        assertEquals(26 * k + maxOf((87 + 6) * k, 90 * k + 4f), p.padLeft, 1e-3f)
-        assertEquals(1 * k + 11f, p.padRight, 1e-3f)
+    /** Worked from the json: doctor's cross reaches 75 px in at 0.24 dp/px: 75 x 0.24 + 4 = 22. */
+    @Test fun gapsWorkedFromTheJson() {
+        val k = 0.24f   // doctor: (188 - 111) + (77 - 1) = 153 px inside: 44 / 153 is over the 0.24 cap
+        assertEquals(k, BubbleArt.find("doctor")!!.layout.scale, 1e-6f)
+        assertEquals(kotlin.math.ceil(75 * k + 4f), oneLineGaps("doctor").second, 1e-3f)
+        // Security: shield 78 px in on the left (78 x 0.24 + 4 = 22.72, so 23); the peeker sits above the bubble.
+        assertEquals(kotlin.math.ceil(78 * 0.24f + 4f), oneLineGaps("security").first, 1e-3f)
+        // Lawyer: scales 90 px in at 44 / 196 dp/px.
+        assertEquals(kotlin.math.ceil(90 * (44f / 196f) + 4f), oneLineGaps("lawyer").first, 1e-3f)
+        assertEquals(11f, oneLineGaps("lawyer").second, 1e-3f)
+        // Trophy: confetti 80 px in on the right at 44 / 184; the cup base rests on the top edge.
+        assertEquals(kotlin.math.ceil(80 * (44f / 184f) + 4f), oneLineGaps("trophy").second, 1e-3f)
+        // Manga: speed lines 94 px in at 44 / 245; the head above the left side takes nothing.
+        assertEquals(kotlin.math.ceil(94 * (44f / 245f) + 4f), oneLineGaps("manga").second, 1e-3f)
+        assertEquals(11f, oneLineGaps("manga").first, 1e-3f)
     }
 
-    @Test fun trophyOneLiner() {
+    /**
+     * Art wholly in a top corner that ends within 12 dp of the edge (trophy's cup base: rows 84..114,
+     * the outline's top at row 69, 45 px = 10.8 dp) moves the words down to 4 dp past it (15 dp
+     * from the edge) instead of taking room beside them.
+     */
+    @Test fun handsOnTheEdgeMoveTheWordsDown() {
         val s = BubbleArt.find("trophy")!!
+        val l = s.layout
         val k = 44f / ((146 - 69) + (108 - 1))
-        val p = BubbleArt.place(s, 70f, 22f, 300f)
-        // Cup base over the top left (rows 84..114, 89 px in), confetti bottom right (rows 233..287, 80 px in).
-        assertEquals(5 * k + maxOf((85 + 6) * k, 89 * k + 4f), p.padLeft, 1e-3f)
-        assertEquals(1 * k + maxOf((44 + 6) * k, 80 * k + 4f), p.padRight, 1e-3f)
-    }
-
-    @Test fun mangaOneLiner() {
-        val s = BubbleArt.find("manga")!!
-        val k = 44f / ((240 - 127) + (133 - 1))
-        val p = BubbleArt.place(s, 70f, 22f, 300f)
-        // Speed lines bottom right (rows 337..379, 94 px in); the head above the left side takes nothing.
-        assertEquals(2 * k + maxOf((55 + 6) * k, 94 * k + 4f), p.padRight, 1e-3f)
-        assertEquals(11f, p.padLeft, 1e-3f)
+        val depth = (114 - 69) * k
+        assertTrue(depth <= 12f)
+        assertEquals(l.edgeTop + kotlin.math.ceil(depth + 4f), l.padTop, 1e-3f)
+        assertEquals(11f, oneLineGaps("trophy").first, 1e-3f)
+        // Art in the stretching middle (doctor's cross) never moves the words: the plain 10 dp.
+        val d = BubbleArt.find("doctor")!!.layout
+        assertEquals(d.edgeBottom + 10f, d.padBottom, 1e-3f)
     }
 
     /** Art rows map onto the box like the 9-slice draws them: top cap from the top, bottom cap from the bottom. */
@@ -142,7 +145,7 @@ class BubbleArtTest {
 
     /**
      * Every style, one to five lines: wherever art comes within 4 dp of the words vertically, the
-     * words stay 4 dp clear of it sideways (and past ins + 6 px); the words stay inside the bubble.
+     * words stay 4 dp clear of it sideways; the words stay inside the bubble.
      */
     @Test fun wordsKeepFourDpFromArtInEveryStyle() {
         for (s in BubbleArt.all) for ((cw, ch) in listOf(4f to 22f, 70f to 22f, 160f to 44f, 200f to 66f, 210f to 110f)) {
@@ -161,11 +164,9 @@ class BubbleArtTest {
                 if (a.right) {
                     val artLeft = p.width - l.edgeRight - a.reach * k
                     assertTrue("${s.id} right art", p.x + w0 <= artLeft - BubbleArt.ART_TEXT_DP + 1e-3f)
-                    assertTrue("${s.id} right ins", p.x + w0 <= p.width - l.edgeRight - (s.ins[1] + BubbleArt.ART_GAP_PX) * k + 1e-3f)
                 } else {
                     val artRight = l.edgeLeft + a.reach * k
                     assertTrue("${s.id} left art", p.x >= artRight + BubbleArt.ART_TEXT_DP - 1e-3f)
-                    assertTrue("${s.id} left ins", p.x >= l.edgeLeft + (s.ins[3] + BubbleArt.ART_GAP_PX) * k - 1e-3f)
                 }
             }
         }
@@ -218,83 +219,50 @@ class BubbleArtTest {
     }
 
     /**
-     * A short line ("test" + time + ticks, about 70 dp by 22 dp) sits in the middle between the
-     * bubble's own edges, both ways, and outside both art clearances; the box is never under the slices.
+     * No mirrored room: the box is the content plus each side's own clearance (or the slices'
+     * minimum, then centred in the spare width), never widened to give one side the other's gap.
      */
-    @Test fun shortLineIsCentredBetweenTheBubbleEdgesAndClearOfTheArt() {
-        for (s in BubbleArt.all) for ((cw, ch) in listOf(70f to 22f, 4f to 22f, 160f to 22f)) {
+    @Test fun eachSideKeepsOnlyItsOwnRoom() {
+        for (s in BubbleArt.all) for ((cw, ch) in listOf(70f to 22f, 4f to 22f, 160f to 22f, 150f to 70f)) {
             val l = s.layout
             val p = BubbleArt.place(s, cw, ch, maxW = 300f)
-            val edgeL = l.edgeLeft
-            val edgeR = p.width - l.edgeRight
-            val gapL = p.x - edgeL
-            val gapR = edgeR - (p.x + cw)
-            // Same rule as iOS: left and right within 1 unit (1 dp; iOS 1 pt).
-            assertEquals("${s.id} $cw centred", gapL, gapR, 1f)
-            assertEquals("${s.id} $cw centred exactly", gapL, gapR, 0.01f)
+            val tight = cw + p.padLeft + p.padRight
+            assertEquals("${s.id} $cw width", maxOf(l.minWidth, tight), p.width, 1e-3f)
             assertTrue("${s.id} $cw left clearance", p.x >= p.padLeft - 1e-3f)
             assertTrue("${s.id} $cw right clearance", p.x + cw <= p.width - p.padRight + 1e-3f)
-            assertTrue("${s.id} min width", p.width >= l.minWidth - 1e-3f)
-            assertTrue("${s.id} not wider than needed", p.width <= maxOf(l.minWidth,
-                cw + l.edgeLeft + l.edgeRight + 2 * maxOf(p.padLeft - l.edgeLeft, p.padRight - l.edgeRight)) + 1e-3f)
-            val gapT = p.y - l.edgeTop
-            val gapB = (p.height - l.edgeBottom) - (p.y + ch)
-            assertEquals("${s.id} vertical", gapT, gapB, 0.01f)
+            if (tight >= l.minWidth) assertEquals("${s.id} $cw snug", p.padLeft, p.x, 1e-3f)
+            else assertEquals("${s.id} $cw centred in the slices' width",
+                p.x - l.edgeLeft, p.width - l.edgeRight - (p.x + cw), 0.01f)
             assertTrue("${s.id} top", p.y >= l.padTop - 1e-3f && p.y + ch <= p.height - l.padBottom + 1e-3f)
         }
     }
 
-    /**
-     * Long words (measured in the widest room, the box at its widest): inside the side clearances
-     * used; where all the art is beside them, the old layout at the left clearance.
-     */
-    @Test fun longWordsKeepTheOldSnugLayout() {
+    /** Words and time are one block: a tall block gets the same room on every row, no band after the time. */
+    @Test fun wordsAndTimeAreOneBlock() {
+        for (s in BubbleArt.all) {
+            val l = s.layout
+            val p = BubbleArt.place(s, 150f, 70f, 300f)
+            assertEquals(s.id, maxOf(l.minWidth, 150f + p.padLeft + p.padRight), p.width, 1e-3f)
+            assertEquals(s.id, p.y - l.edgeTop - (l.padTop - l.edgeTop), p.height - l.edgeBottom - (p.y + 70f) - (l.padBottom - l.edgeBottom), 0.01f)
+        }
+    }
+
+    /** Long words measured in the widest room fit the max width. */
+    @Test fun longWordsFitTheMaxWidth() {
         for (s in BubbleArt.all) {
             val l = s.layout
             val maxW = 300f
             val cw = maxW - l.padLeft - l.padRight
             val p = BubbleArt.place(s, cw, 66f, maxW)
-            assertEquals(s.id, maxW, p.width, 1e-3f)
-            assertTrue(s.id, p.x >= p.padLeft - 1e-3f && p.x + cw <= maxW - p.padRight + 1e-3f)
-            if (kotlin.math.abs(p.padLeft - l.padLeft) < 1e-4f && kotlin.math.abs(p.padRight - l.padRight) < 1e-4f) assertEquals(s.id, l.padLeft, p.x, 1e-3f)
+            assertTrue(s.id, p.width <= maxW + 1e-3f)
+            assertEquals(s.id, p.padLeft, p.x, 1e-3f)
             assertEquals(s.id, l.padTop, p.y, 1e-3f)
             assertEquals(s.id, l.padTop + 66f + l.padBottom, p.height, 1e-3f)
         }
     }
 
-    /** A whole block (words, time, a row under them, about 150 by 70 dp) is centred as one, both ways, inside the bubble. */
-    @Test fun wholeBlockIsCentred() {
-        for (s in BubbleArt.all) {
-            val l = s.layout
-            val p = BubbleArt.place(s, 150f, 70f, 300f)
-            assertEquals(s.id, p.x - l.edgeLeft, p.width - l.edgeRight - (p.x + 150f), 0.01f)
-            assertEquals(s.id, p.y - l.edgeTop, p.height - l.edgeBottom - (p.y + 70f), 0.01f)
-            assertTrue(s.id, p.x >= p.padLeft - 1e-3f && p.x + 150f <= p.width - p.padRight + 1e-3f)
-        }
-    }
-
-    /** Too wide to centre fully: the box takes the max width and the words go as near the middle as the clearances allow. */
-    @Test fun nearlyFullLineCentresAsFarAsItCan() {
-        for (s in BubbleArt.all) {
-            val l = s.layout
-            val maxW = 300f
-            val room = maxW - l.padLeft - l.padRight
-            val cw = room - 0.5f * kotlin.math.abs((l.padLeft - l.edgeLeft) - (l.padRight - l.edgeRight))
-            val p = BubbleArt.place(s, cw, 22f, maxW)
-            val gap = maxOf(p.padLeft - l.edgeLeft, p.padRight - l.edgeRight)
-            assertTrue(s.id, p.width <= maxW + 1e-3f)
-            assertTrue(s.id, p.x >= p.padLeft - 1e-3f && p.x + cw <= p.width - p.padRight + 1e-3f)
-            val gapL = p.x - l.edgeLeft
-            val gapR = p.width - l.edgeRight - (p.x + cw)
-            // Less lopsided than the old snug layout (which was off by the clearances' difference).
-            val oldDiff = kotlin.math.abs((p.padLeft - l.edgeLeft) - (p.padRight - l.edgeRight))
-            assertTrue("${s.id} ${gapL - gapR} vs $oldDiff", kotlin.math.abs(gapL - gapR) <= oldDiff * 0.5f + 1e-3f)
-            assertTrue(s.id, minOf(gapL, gapR) <= gap + 1e-3f)
-        }
-    }
-
-    /** A link-card bubble keeps the old layout. */
-    @Test fun linkCardBubbleUnchanged() {
+    /** A link or quote card bubble uses the same insets, at the left and top clearances. */
+    @Test fun linkCardBubbleSameInsets() {
         for (s in BubbleArt.all) {
             val l = s.layout
             val p = BubbleArt.place(s, 70f, 22f, 300f, centre = false)
@@ -302,6 +270,10 @@ class BubbleArtTest {
             assertEquals(s.id, l.padTop, p.y, 1e-3f)
             assertEquals(s.id, maxOf(l.minWidth, 70f + p.padLeft + p.padRight), p.width, 1e-3f)
         }
+        // Football's quote card: 11 dp on the left (was about 43 with the mirrored room).
+        val f = BubbleArt.find("football")!!
+        val p = BubbleArt.place(f, 200f, 90f, 300f, centre = false)
+        assertEquals(11f, p.padLeft - f.layout.edgeLeft, 1e-3f)
     }
 
     @Test fun nineSliceTilesTheBoxAndThePicture() {
