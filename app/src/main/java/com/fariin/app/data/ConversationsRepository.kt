@@ -37,7 +37,8 @@ class ConversationsRepository(
         // once, offline too. Its previews are still sealed; the rows open them as they draw.
         val saved = if (useDiskCache) withContext(Dispatchers.IO) { LocalCache.loadChats(uid) } else emptyList()
         if (saved.isEmpty()) trySend(State.Loading)
-        else trySend(State.Loaded(saved.map { (id, d) -> Conversation.fromFirestore(id, d) }, fromCache = true))
+        // Seeded too, so a chat opened from the saved list draws as itself (a channel as a channel) at once.
+        else trySend(State.Loaded(saved.map { (id, d) -> ThreadSeed.noteConv(id, d); Conversation.fromFirestore(id, d) }, fromCache = true))
         // The cache generation at attach: a snapshot parsed on the background thread while a sign-out
         // wipes the cache must not write that account's chats (or seeds) back (review 2026-11-06).
         val gen = LocalCache.currentGeneration

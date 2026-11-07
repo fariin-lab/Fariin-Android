@@ -32,16 +32,78 @@ object QuoteStore {
     private val inFlight = HashSet<String>()
     private var flushScheduled = false
 
+    /**
+     * THE CARDS ARE KEPT ON DISK (iOS QuoteStore; owner 2026-11-07: a channel's quotes read
+     * "Loading…" and then grew on every open after a restart). The last answers draw on the first
+     * frame; no `fetchedAt` is restored, so each is still asked again at once and access lost since
+     * then hides it within a moment. Sealed in LocalCache, per account, wiped at sign-out.
+     */
+    private var loadedFor: String? = null
+    private val lastUsed = HashMap<String, Long>()
+    private const val KEEP = 500
+
+    private fun uid(): String? = runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }.getOrNull()
+
+    /** The saved cards into memory before a chat draws (ThreadRoute), so its first frame has them. */
+    fun warm() = loadSaved()
+
+    private fun loadSaved() {
+        val uid = uid() ?: return
+        if (loadedFor == uid) return
+        loadedFor = uid
+        val text = com.fariin.app.local.LocalCache.loadQuotes(uid) ?: return
+        val saved = runCatching {
+            val o = org.json.JSONObject(text)
+            o.keys().asSequence().mapNotNull { k ->
+                val d = o.optJSONObject(k) ?: return@mapNotNull null
+                val m = d.keys().asSequence().associateWith { d.opt(it) }
+                QuoteRules.parse(m)?.let { k to it }
+            }.toMap()
+        }.getOrNull() ?: return
+        // A live answer already here wins over the saved one.
+        if (saved.isNotEmpty()) _cards.value = saved + _cards.value
+    }
+
+    private fun save() {
+        val uid = uid() ?: return
+        val all = _cards.value
+        val keep = all.keys.sortedByDescending { lastUsed[it] ?: 0L }.take(KEEP)
+        val o = org.json.JSONObject()
+        for (k in keep) {
+            val c = all[k] ?: continue
+            o.put(k, org.json.JSONObject().apply {
+                put("state", when (c.state) {
+                    QuoteCard.State.OK -> "ok"; QuoteCard.State.DELETED -> "deleted"
+                    QuoteCard.State.HIDDEN -> "private"; QuoteCard.State.GONE -> "gone"
+                })
+                put("cid", c.cid); put("mid", c.mid); put("title", c.title); put("photoUrl", c.photoUrl)
+                put("username", c.username); put("text", c.text); put("kind", c.kind); put("image", c.image)
+            })
+        }
+        com.fariin.app.local.LocalCache.saveQuotes(uid, o.toString())
+    }
+
     /** The card for [qid], or null while its first answer is on its way. Asks again when old. */
     fun card(qid: String): QuoteCard? {
+        loadSaved()
         if (QuoteRules.isStale(fetchedAt[qid], System.currentTimeMillis())) request(qid)
-        return _cards.value[qid]
+        val c = _cards.value[qid]
+        if (c != null) lastUsed[qid] = System.currentTimeMillis()
+        return c
     }
 
     /** What createQuote gave the quoting phone: shown at once, no second request. */
     fun seed(qid: String, card: QuoteCard) {
+        loadSaved()
         fetchedAt[qid] = System.currentTimeMillis()
+        lastUsed[qid] = System.currentTimeMillis()
         _cards.value = _cards.value + (qid to card)
+        save()
+    }
+
+    /** Sign-out: nothing of this account's cards stays in memory (the disk copy goes with LocalCache.wipe). */
+    fun reset() {
+        _cards.value = emptyMap(); fetchedAt.clear(); lastUsed.clear(); queued.clear(); loadedFor = null
     }
 
     private fun request(qid: String) {
@@ -72,7 +134,7 @@ object QuoteStore {
                     val c = QuoteRules.parse(got[q] as? Map<*, *>) ?: continue
                     if (next[q] != c) next = next + (q to c)
                 }
-                if (next !== _cards.value) _cards.value = next
+                if (next !== _cards.value) { _cards.value = next; save() }
             } catch (_: Exception) {
                 // Asked again on a later draw after a short pause, not in a loop.
                 val stamp = QuoteRules.retryStamp(System.currentTimeMillis())

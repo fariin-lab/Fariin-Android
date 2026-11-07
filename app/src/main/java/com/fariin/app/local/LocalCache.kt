@@ -119,6 +119,16 @@ object LocalCache {
         dir(uid)?.let { File(File(it, "threads"), safe(cid) + ".bin").delete() }
     }
 
+    // ------------------------------------------------------------------ quote cards
+
+    /** The last quote-card answers (QuoteStore), as a JSON text; null when none were kept. */
+    fun loadQuotes(uid: String): String? = dir(uid)?.let { readSealed(File(it, "quotes.bin")) }
+
+    fun saveQuotes(uid: String, json: String) {
+        val f = dir(uid)?.let { File(it, "quotes.bin") } ?: return
+        schedule("q:$uid", f, json.hashCode()) { json }
+    }
+
     /** Sign-out: these are opened messages, so they never outlive the session (iOS removeAll). */
     fun wipe() {
         synchronized(lock) {

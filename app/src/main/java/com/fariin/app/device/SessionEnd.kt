@@ -98,6 +98,7 @@ object SessionEnd {
         com.fariin.app.data.OfficialStories.reset(c)
         com.fariin.app.data.ChannelStories.stop()
         com.fariin.app.data.ThreadSeed.clear()
+        com.fariin.app.data.QuoteStore.reset()   // the quote cards this account was shown
         com.fariin.app.media.VoicePlayer.stop()
         java.io.File(c.filesDir, "story-outbox").deleteRecursively()  // unfinished story posts are this account's  // the next account must not inherit this one's feed
         com.fariin.app.data.ProfilePhotoHistory.wipe(c)  // my past profile photos

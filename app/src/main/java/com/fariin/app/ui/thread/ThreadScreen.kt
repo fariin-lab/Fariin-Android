@@ -642,7 +642,14 @@ private fun ThreadContent(
 
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(220, delayMillis = 40) else null }
-    val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
+    // Rows glide only once the open has settled: while the first answers land (the server's page
+    // replacing the phone's copy, quote cards filling in) they are simply placed, so rows never
+    // cross on the way in (owner 2026-11-07, channel open on the Pixel). Live arrivals still glide.
+    var placeSettled by remember(ui.cid) { mutableStateOf(false) }
+    LaunchedEffect(ui.cid, ui.loaded && ui.synced) {
+        if (ui.loaded && ui.synced && !placeSettled) { kotlinx.coroutines.delay(700); placeSettled = true }
+    }
+    val rowPlace = remember(anim, placeSettled) { if (placeSettled) com.fariin.app.ui.components.Motion.itemOffset else null }
     // A group's or channel's card that has to wait for the server's word on the history fades in
     // instead of popping in one frame; a card known from the first frame is simply there (HistoryStart).
     val cardFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(260) else null }

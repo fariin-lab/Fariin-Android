@@ -93,7 +93,15 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val hostView = androidx.compose.ui.platform.LocalView.current
     var notice by remember { mutableStateOf<String?>(null) }
     notice?.let { n -> LaunchedEffect(n) { com.fariin.app.ui.components.Snack.show(n); notice = null } }
-    val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, s.conv, s.messages) { notice = it }
+    // Channel or not is known on the FIRST frame (iOS: the list's conversation says so). A channel I
+    // follow is not in my chats query, so the thread has no seeded doc until its listener answers;
+    // the follow list's copy of the channel doc stands in. Without it the first frames drew a group
+    // chat (white, "1 member", sender names, a message field) and then jumped (owner 2026-11-07).
+    // Quote cards kept from earlier answers, in memory before the first row draws (QuoteStore).
+    remember(cid) { com.fariin.app.data.QuoteStore.warm() }
+    val followedDocs by com.fariin.app.channel.ChannelFollows.docs.collectAsState()
+    val channelDoc = s.conv.ifEmpty { followedDocs[cid] ?: com.fariin.app.data.ThreadSeed.conv(cid).orEmpty() }
+    val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, channelDoc, s.messages) { notice = it }
     // Whether this chat's history began on its first page the last time the server said so.
     val startKnown = remember(cid) { HistoryStart.known(app, me, cid) }
     LaunchedEffect(s.synced, s.canLoadOlder) {
@@ -133,7 +141,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         myPhoto = conv?.photos?.get(me),
         unreadAtOpen = unreadAtOpen,
         channel = channel,
-        channelWaiting = channel == null && com.fariin.app.ui.channels.ChannelGuestPreviews.waiting(cid, me, s.conv),
+        channelWaiting = channel == null && com.fariin.app.ui.channels.ChannelGuestPreviews.waiting(cid, me, channelDoc),
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),
         pinned = pinnedMsgs,
         canPin = com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),   // channels too: their owner and admins pin (iOS adminCan pinMessages)
