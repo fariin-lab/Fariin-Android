@@ -16,6 +16,7 @@ import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.toSize
@@ -295,9 +296,9 @@ private fun ThreadContent(
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
     var callBackFor by remember { mutableStateOf<Message?>(null) }
     var menuFor by remember { mutableStateOf<Message?>(null) }
-    // Where each row sits, read only at the long press, and the pressed row's own copy for the
-    // lifted message (MessageMenuOverlay); the real row hides while its copy is up.
-    val rowCoords = remember { HashMap<String, androidx.compose.ui.layout.LayoutCoordinates>() }
+    // Where the pressed row sits is read from its own coordinates at the long press (each row keeps
+    // a handle, set once it is placed; no per-frame position callback), and the pressed row's own copy
+    // for the lifted message (MessageMenuOverlay); the real row hides while its copy is up.
     var menuSource by remember { mutableStateOf<MenuSource?>(null) }
     var menuPreview by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     var menuLifted by remember { mutableStateOf<String?>(null) }   // the row whose copy is up
@@ -320,6 +321,27 @@ private fun ThreadContent(
     fun toggle(m: Message) { if (m.rowId in selected) selected.remove(m.rowId) else selected.add(m.rowId) }
     // The row a jump landed on, lit for a moment (iOS flashAndScroll).
     var flashId by remember { mutableStateOf<String?>(null) }
+    // Select mode and the half second after it: the rows keep a colour animation for the tick fade.
+    var selectFading by remember { mutableStateOf(false) }
+    LaunchedEffect(selecting) {
+        if (selecting) selectFading = true
+        else if (selectFading) { kotlinx.coroutines.delay(600); selectFading = false }
+    }
+    // One fade for the lit row, shared by the list (a colour animation in every row cost each row a
+    // state and an animation even when nothing flashed). It fades in on a jump and out after it,
+    // with the colour animation's own spring.
+    var flashShown by remember { mutableStateOf<String?>(null) }
+    val flashFade = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(flashId) {
+        val id = flashId
+        if (id != null) {
+            if (flashShown != id) { flashFade.snapTo(0f); flashShown = id }
+            flashFade.animateTo(1f, androidx.compose.animation.core.spring(visibilityThreshold = 0.01f))
+        } else {
+            flashFade.animateTo(0f, androidx.compose.animation.core.spring(visibilityThreshold = 0.01f))
+            flashShown = null
+        }
+    }
     var pinIndex by remember { mutableStateOf(0) }
     // Read only inside OpenWhen below: opening the sheet must not redraw the whole thread (a
     // cheap phone took 90-150 ms frames for it).
@@ -336,6 +358,11 @@ private fun ThreadContent(
     val geometry = remember(ui.messages) { ThreadLogic.geometry(ui.messages) }
     // Newest at the bottom: the list is reversed, so index 0 is the newest message.
     val reversed = remember(ui.messages) { ui.messages.indices.reversed().toList() }
+    // Pin notices ask whether the pinned message was deleted since: one look-up table per list,
+    // built only once a notice asks (each notice used to search the whole list on every rebuild).
+    val deletedById = remember(ui.messages) { lazy {
+        HashMap<String, Boolean>(ui.messages.size * 2).also { map -> ui.messages.forEach { if (it.id !in map) map[it.id] = it.deleted } }
+    } }
     val listState = rememberLazyListState()
     val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
     // Forward picker (media worker: ForwardSheet.kt).
@@ -781,7 +808,9 @@ private fun ThreadContent(
                     .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier) else Modifier), state = listState, reverseLayout = true,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
             ) {
-                itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId }) { _, i ->
+                itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId },
+                    // Notices, call records, posts and bubbles are different trees: a row is reused only by its own kind.
+                    contentType = { _, i -> rowKind(ui.messages[i], ch != null) }) { _, i ->
                     val m = ui.messages[i]
                     val g = geometry[i]
                     // A message that arrives fades in and the rows above glide up to make room;
@@ -798,14 +827,22 @@ private fun ThreadContent(
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
                         if (m.rowId == dividerId) UnreadDivider()
                         val pinNote = com.fariin.app.data.PinRules.notice(m.text)
-                        val lit by androidx.compose.animation.animateColorAsState(
-                            if (m.rowId == flashId || (selecting && m.rowId in selected)) c.blue.copy(alpha = 0.14f) else Color.Transparent,
-                            label = "flash")
+                        // This row's coordinates, read only at a long press.
+                        val coords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                        val flashLit = Modifier.drawBehind {
+                            if (flashShown == m.rowId) drawRect(c.blue.copy(alpha = 0.14f * flashFade.value))
+                        }
+                        // Ticked rows fade in and out: a colour animation only while select mode is on
+                        // and for its fade-out after (selectFading), not in every row all the time.
+                        val selShown = selecting || selectFading
+                        val selLit = if (selShown) litColor(
+                            if (m.rowId == flashId || (selecting && m.rowId in selected)) c.blue.copy(alpha = 0.14f) else Color.Transparent)
+                            else Color.Transparent
                         when {
                             pinNote != null && !m.deleted -> {
                                 // The notice keeps the words from the moment of the pin; once that message is
                                 // deleted its words must not stay readable here, and there is nothing to jump to.
-                                val gone = ui.messages.firstOrNull { it.id == pinNote.messageId }?.deleted == true
+                                val gone = deletedById.value[pinNote.messageId] == true
                                 Box(Modifier.fillMaxWidth().clickable(enabled = !selecting && !gone) { jumpTo(pinNote.messageId, advance = false) }) {
                                     NoticePill("${if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title} pinned ${if (gone) "a message" else pinNote.label}")
                                 }
@@ -822,10 +859,10 @@ private fun ThreadContent(
                                 // A swipe replies, as on every other bubble (iOS allows Reply on a call).
                                 SwipeRow(enabled = MessageRules.canReplyHere(m, mayReply), onReply = { replyTo = m; editing = null }) {
                                 Box(Modifier.fillMaxWidth()
-                                    .onGloballyPositioned { rowCoords[m.rowId] = it }
+                                    .onPlaced { coords[0] = it }
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
                                     .combinedClickableLong {
-                                        val lc = rowCoords[m.rowId]?.takeIf { it.isAttached }
+                                        val lc = coords[0]?.takeIf { it.isAttached }
                                         menuSource = lc?.let { MenuSource(androidx.compose.ui.geometry.Rect(it.positionOnScreen(), it.size.toSize()), m.authorId == ui.me) }
                                         menuPreview = {
                                             CallBubble(m, ui.me, is24h, myFill(), receivedFill(), peerUid = null, title = ui.title, photoUrl = ui.photoUrl,
@@ -863,7 +900,7 @@ private fun ThreadContent(
                                 }
                             }
                             selecting -> Row(
-                                Modifier.fillMaxWidth().background(lit),
+                                Modifier.fillMaxWidth().background(selLit),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 SelectTick(m.rowId in selected)
@@ -889,10 +926,10 @@ private fun ThreadContent(
                             }
                             else -> SwipeRow(enabled = MessageRules.canReplyHere(m, mayReply), onReply = { replyTo = m; editing = null }) {
                                 Column(Modifier.fillMaxWidth()
-                                    .onGloballyPositioned { rowCoords[m.rowId] = it }
+                                    .onPlaced { coords[0] = it }
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
-                                    .background(lit).combinedClickableLong {
-                                        val lc = rowCoords[m.rowId]?.takeIf { it.isAttached }
+                                    .then(if (selShown) Modifier.background(selLit) else flashLit).combinedClickableLong {
+                                        val lc = coords[0]?.takeIf { it.isAttached }
                                         menuSource = lc?.let { MenuSource(androidx.compose.ui.geometry.Rect(it.positionOnScreen(), it.size.toSize()), m.authorId == ui.me) }
                                         menuPreview = {
                                             Column(Modifier.fillMaxWidth()) {
@@ -2437,4 +2474,22 @@ internal object ChatReadingPositions {
     fun save(cid: String, rowId: String, offset: Int) { byCid[cid] = rowId to offset }
     fun clear(cid: String) { byCid.remove(cid) }
     fun get(cid: String): Pair<String, Int>? = byCid[cid]
+}
+
+/** A row's tint, fading from clear on its first frame (a ticked row fades in, as before). */
+@Composable
+private fun litColor(target: Color): Color {
+    val a = remember { androidx.compose.animation.Animatable(Color.Transparent) }
+    LaunchedEffect(target) { a.animateTo(target, androidx.compose.animation.core.spring()) }
+    return a.value
+}
+
+/** The list row's kind for reuse (LazyColumn contentType): rows of one kind share a tree. */
+private fun rowKind(m: Message, channel: Boolean): Int = when {
+    com.fariin.app.data.PinRules.notice(m.text) != null && !m.deleted -> 1
+    m.isSystem -> 1
+    m.isCall && !channel -> 2
+    m.isCall -> 1
+    channel -> 3
+    else -> 4
 }
