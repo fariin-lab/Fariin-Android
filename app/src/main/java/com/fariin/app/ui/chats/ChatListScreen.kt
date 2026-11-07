@@ -563,7 +563,7 @@ fun ChatListScreen(
                 shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() && showArchive && query.isBlank() ->
                     Box(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentAlignment = Alignment.Center) {
                         com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Archive,
-                            "No archived chats", "Chats you archive will show here.", Modifier.padding(bottom = 60.dp))
+                            "Nothing archived", "Chats you archive and stories you hide will show here.", Modifier.padding(bottom = 60.dp))
                     }
                 // A search with nothing found: in the middle of what the keyboard leaves, worded as the
                 // Settings search (and iOS) say it.
@@ -583,20 +583,18 @@ fun ChatListScreen(
                             }, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp).clickable { query = suggestion })
                         }
                     }
-                shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { Centered(when {
-                    query.isNotBlank() -> "No results"
-                    showArchive -> "No archived chats"
-                    filter == FILTER_UNREAD -> "No unread chats"
-                    filter == FILTER_GROUPS -> "No groups yet"
-                    filter == FILTER_CHANNELS -> "No channels yet"
-                    else -> "No chats yet"
-                }, action = when {
-                    query.isNotBlank() -> null
-                    filter == FILTER_CHANNELS -> "Find Channels" to channels.find
-                    // One next step on an empty list: the same new-chat page as the pencil button.
-                    filter == FILTER_ALL && !showArchive -> "Start a Chat" to people.newChat
-                    else -> null
-                }) }
+                // iOS wording, each with its line under it. The main list has no button (iOS: nothing
+                // else on a fresh account); Groups offers New Group, Channels Find Channels.
+                shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { when {
+                    query.isNotBlank() -> Centered(null, "No results", null)
+                    showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
+                    filter == FILTER_UNREAD -> Centered(Icons.Outlined.CheckCircle, "No unread chats", "You're all caught up.")
+                    filter == FILTER_GROUPS -> Centered(fi(R.drawable.ic_gs_group_type), "No groups yet", "Groups you join will appear here.",
+                        "New Group" to people.newGroup)
+                    filter == FILTER_CHANNELS -> Centered(Icons.Outlined.Campaign, "No channels yet", "Channels you follow or run will appear here.",
+                        "Find Channels" to channels.find)
+                    else -> Centered(fi(R.drawable.ic_chat), "No chats yet", "Find a friend by username to start talking.")
+                } }
                 else -> LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
                     .then(if (glassLayer != null) Modifier.layerBackdrop(glassLayer) else Modifier), state = listState,
                     contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = com.fariin.app.ui.shell.bottomBarInset() + 72.dp)) {
@@ -1040,9 +1038,20 @@ private fun ListRow(title: String, icon: ImageVector, trailing: String?, subtitl
 }
 
 @Composable
-private fun Centered(text: String, action: Pair<String, () -> Unit>? = null) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(text, style = MaterialTheme.typography.bodyLarge, color = Fariin.colors.secondary)
+private fun Centered(icon: ImageVector?, title: String, body: String?, action: Pair<String, () -> Unit>? = null) {
+    val c = Fariin.colors
+    // iOS ContentUnavailableView: a grey glyph, the title, a line under it, then one next step.
+    Column(Modifier.fillMaxSize().padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = c.secondary, modifier = Modifier.size(48.dp))
+            Spacer(Modifier.height(14.dp))
+        }
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        if (body != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(body, fontSize = 15.sp, color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
         // The action as a floating capsule, not a bare text link.
         if (action != null) {
             Spacer(Modifier.height(16.dp))
