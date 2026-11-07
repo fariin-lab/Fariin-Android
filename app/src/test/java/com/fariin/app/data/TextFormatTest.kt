@@ -1,5 +1,6 @@
 package com.fariin.app.data
 
+import com.fariin.app.crypto.Wire
 import com.fariin.app.data.TextFormat.Span
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
