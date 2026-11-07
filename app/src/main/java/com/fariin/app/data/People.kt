@@ -312,6 +312,9 @@ class FirestorePeople(
     override suspend fun createGroup(title: String, members: List<String>, photo: ByteArray?): String {
         val people = members.filter { it != me }.mapNotNull { profile(it) }
         val allowed = people.filter { Person.allows(it.privacy, "groups", isContact(it.uid)) }
+        // Their "Groups" privacy refused them: said, not dropped in silence (iOS ChatService.sayRefused).
+        val refused = people - allowed.toSet()
+        if (refused.isNotEmpty()) com.fariin.app.ui.components.Snack.show(GroupRules.refusedSentence(refused.map { it.shownName }), long = true)
         val users = (allowed.map { it.uid } + me).distinct()
         val mine = profile(me)
         val names = HashMap<String, String>(); val photos = HashMap<String, String>()
