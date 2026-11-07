@@ -219,7 +219,10 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
         else all.filter { com.fariin.app.media.MediaSend.itemKey(clientId, it) !in dropped }.ifEmpty { all }
     }
     val shownIdx = visible.take(MediaRules.ALBUM_MAX_ITEMS)
+    // Over ten (an album from another app): the rest ride a "+N" on the last tile (iOS albumBody).
+    val extra = MediaRules.albumExtra(visible.size)
     val items = shownIdx.map { m.album[it] }
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val plan = androidx.compose.runtime.remember(items, side) {
         com.fariin.app.media.AlbumMosaicLayout.plan(items.map { a ->
             val w = a.width; val h = a.height
@@ -232,8 +235,10 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                         val item = items[tile.index]
                         val w = tile.w
                         val h = tile.h
-                        // A tile's picture follows auto-download (a video tile's poster always comes down).
-                        val got = rememberGatedFile(item.imageUrl.ifEmpty { null }, item.enc, if (item.isVideo) null else AutoDownload.Kind.PHOTOS)
+                        val plus = extra > 0 && tile === plan.tiles.last()
+                        // A tile's picture follows auto-download (a video tile's poster always comes down,
+                        // and so does the "+N" tile's: it has no Download button to lift a hold).
+                        val got = rememberGatedFile(item.imageUrl.ifEmpty { null }, item.enc, if (item.isVideo || plus) null else AutoDownload.Kind.PHOTOS)
                         val bmp = rememberBitmap(got.file, 400)
                         // My own album: the picked picture from the first frame (iOS localAlbum).
                         val picked = rememberLocalPreview(item.localUri, item.isVideo, com.fariin.app.media.LocalPreview.TILE_SIDE)
@@ -263,10 +268,15 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                                 Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             }
                             // A photo tile's own download (iOS MediaDownloadOverlay per tile); a poster just loads.
-                            if (pendingFetch && !busy && !item.isVideo) DownloadBadge(got.url, got.state, isVideo = false)
+                            if (pendingFetch && !busy && !item.isVideo && !plus) DownloadBadge(got.url, got.state, isVideo = false)
                             // iOS album tile: play disc min(52, 28% of the short side) and the length in
                             // the bottom-left corner, neither while the album uploads (its ring is there).
-                            if (item.isVideo && !busy) {
+                            if (plus) {
+                                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                                    Text("+$extra", color = Color.White, fontWeight = FontWeight.SemiBold,
+                                        fontSize = with(density) { (minOf(w, h) * 0.22f).dp.toSp() })
+                                }
+                            } else if (item.isVideo && !busy) {
                                 PlayBadge(MediaRules.playBadgeSide(w, h).dp, Modifier.align(Alignment.Center))
                                 item.duration?.takeIf { it > 0 }?.let { d ->
                                     Text(MediaRules.durationLabel(d), fontSize = 11.sp, color = Color.White,
@@ -274,7 +284,7 @@ internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsul
                                             .background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 5.dp, vertical = 1.dp))
                                 }
                             }
-                            if (busy) {
+                            if (busy && !plus) {
                                 // Same 52 as a single photo; smaller only on a small tile (half its short side).
                                 UploadRing(clientId?.let { com.fariin.app.media.MediaSend.itemKey(it, at) },
                                     Modifier.align(Alignment.Center), onCancel = itemCancelFor(m, at),

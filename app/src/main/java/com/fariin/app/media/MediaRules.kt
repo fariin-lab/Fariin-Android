@@ -208,6 +208,9 @@ object MediaRules {
         else -> RingPhase.FILL
     }
 
+    /** iOS albumBody: how many items ride the "+N" on the last tile (an album holds ten). */
+    fun albumExtra(count: Int): Int = maxOf(0, count - ALBUM_MAX_ITEMS)
+
     /** MessageRowLayout play badge: at most 52 (owner 2026-10-28: a big video wore a huge disc), else 28% of the short side. */
     fun playBadgeSide(w: Float, h: Float): Float = min(52f, min(w, h) * 0.28f)
 

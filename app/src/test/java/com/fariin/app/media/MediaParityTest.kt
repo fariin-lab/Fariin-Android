@@ -48,4 +48,10 @@ class MediaParityTest {
         assertEquals(52f, MediaRules.tileRingSide(200f, 150f), 0.001f)
         assertEquals(40f, MediaRules.tileRingSide(80f, 120f), 0.001f)
     }
+
+    @Test fun overTenTheRestRideAPlusOnTheLastTile() {
+        assertEquals(0, MediaRules.albumExtra(3))
+        assertEquals(0, MediaRules.albumExtra(10))
+        assertEquals(4, MediaRules.albumExtra(14))
+    }
 }
