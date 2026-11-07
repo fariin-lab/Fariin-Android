@@ -504,6 +504,11 @@ fun ChatListScreen(
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
                                     onRequests = people.requests,
+                                    // The Chat Key page lives in Settings; the same link the Get Started card uses.
+                                    onChatKey = {
+                                        com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_KEY)
+                                        onSettings()
+                                    },
                                     onArchive = { showArchive = true; filter = FILTER_ALL },
                                     onMarkAllRead = {
                                         val list = state.chats.filter { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
@@ -969,7 +974,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
  *  New Group / New Channel / Find Channels and a Settings shortcut, as an Android overflow menu. */
 @Composable
 private fun OverflowMenu(
-    filter: Int, onFilter: (Int) -> Unit, requests: Int, onRequests: () -> Unit, onArchive: () -> Unit,
+    filter: Int, onFilter: (Int) -> Unit, requests: Int, onRequests: () -> Unit, onChatKey: () -> Unit, onArchive: () -> Unit,
     onMarkAllRead: () -> Unit, onNewGroup: () -> Unit, onNewChannel: () -> Unit, onFindChannels: () -> Unit, onSettings: () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -989,7 +994,10 @@ private fun OverflowMenu(
             item("Groups", fi(R.drawable.ic_gs_group_type), filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) }
             item("Channels", Icons.Outlined.Campaign, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) }
             HorizontalDivider()
-            if (requests > 0) item("Message Requests ($requests)", fi(R.drawable.ic_message_request), false, onRequests)
+            // iOS shows the entry whenever requests are switched on, not only with one waiting. This app
+            // has no admin switch for them (always on), so the entry is always here; the count only when > 0.
+            item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", fi(R.drawable.ic_message_request), false, onRequests)
+            item("Chat Key", fi(R.drawable.ic_chat_key), false, onChatKey)
             item("Archive", fi(R.drawable.ic_archive), false, onArchive)
             // New Group / New Channel / Find Channels live under the pen, Settings is a tab: the menu
             // keeps iOS's own set (owner 2026-11-03, "a lot of things in there").
