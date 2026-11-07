@@ -95,8 +95,11 @@ class BubbleArtTest {
         assertEquals(11f, oneLineGaps("lawyer").second, 1e-3f)
         // Trophy: confetti 80 px in on the right at 44 / 184; the cup base rests on the top edge.
         assertEquals(kotlin.math.ceil(80 * (44f / 184f) + 4f), oneLineGaps("trophy").second, 1e-3f)
-        // Manga: speed lines 94 px in at 44 / 245; the head above the left side takes nothing.
-        assertEquals(kotlin.math.ceil(94 * (44f / 245f) + 4f), oneLineGaps("manga").second, 1e-3f)
+        // Manga: the speed lines (rows 337..379) end 59 px = 10.6 dp over the bottom edge, so the words
+        // move up past them (bottom 15 dp) and take no room beside them; the head above the left takes nothing.
+        val manga = BubbleArt.find("manga")!!.layout
+        assertEquals(manga.edgeBottom + kotlin.math.ceil(59 * (44f / 245f) + 4f), manga.padBottom, 1e-3f)
+        assertEquals(11f, oneLineGaps("manga").second, 1e-3f)
         assertEquals(11f, oneLineGaps("manga").first, 1e-3f)
     }
 
@@ -231,8 +234,8 @@ class BubbleArtTest {
             assertTrue("${s.id} $cw left clearance", p.x >= p.padLeft - 1e-3f)
             assertTrue("${s.id} $cw right clearance", p.x + cw <= p.width - p.padRight + 1e-3f)
             if (tight >= l.minWidth) assertEquals("${s.id} $cw snug", p.padLeft, p.x, 1e-3f)
-            else assertEquals("${s.id} $cw centred in the slices' width",
-                p.x - l.edgeLeft, p.width - l.edgeRight - (p.x + cw), 0.01f)
+            else assertEquals("${s.id} $cw centred in the slices' width as far as the clearances allow",
+                ((l.edgeLeft + p.width - l.edgeRight - cw) / 2f).coerceIn(p.padLeft, p.width - p.padRight - cw), p.x, 1e-3f)
             assertTrue("${s.id} top", p.y >= l.padTop - 1e-3f && p.y + ch <= p.height - l.padBottom + 1e-3f)
         }
     }
