@@ -99,8 +99,9 @@ import kotlinx.coroutines.withContext
 import kotlin.math.max
 
 /*
- * Settings > Appearance > Chat Wallpaper, Wallpaper Color and Chat Color (iOS AppearancePages.swift:
- * ChatWallpaperPage, WallpaperColorPage, WallpaperPreviewScreen, ChatColorPage, CustomColorView). The
+ * Settings > Appearance > Chat Wallpaper and Wallpaper Color (iOS AppearancePages.swift:
+ * ChatWallpaperPage, WallpaperColorPage, WallpaperPreviewScreen, CustomColorView). The chat colours
+ * live on the Bubble Style page (BubbleStylePage.kt) since 2026-11-07. The
  * same grids, values, words and order; the reset menu sits behind the three-dot button (Android).
  */
 
@@ -113,7 +114,8 @@ internal fun lookRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
     when (page) {
         PAGE_WALLPAPER -> ChatWallpaperPage(push, pop)
         PAGE_WALL_COLOR -> WallpaperColorPage(pop)
-        PAGE_CHAT_COLOR -> ChatColorPage(pop)
+        // The Chat Color page is gone (owner 2026-11-07): its colours are the Bubble Style page's first chip.
+        PAGE_CHAT_COLOR -> BubbleStylePage(pop, startOnColours = true)
         else -> return false
     }
     return true
@@ -213,7 +215,7 @@ fun ChatWallpaperPicker(cid: String, shared: Boolean = false, onClose: () -> Uni
 
 /** A rounded white card holding a grid (iOS: secondarySystemGroupedBackground, corner 24, 14 inside). */
 @Composable
-private fun GridCard(columns: Int, spacing: Int, inner: Int, items: List<@Composable (Modifier) -> Unit>) {
+internal fun GridCard(columns: Int, spacing: Int, inner: Int, items: List<@Composable (Modifier) -> Unit>) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Fariin.colors.card).padding(inner.dp),
         verticalArrangement = Arrangement.spacedBy(spacing.dp)) {
         items.chunked(columns).forEach { row ->
@@ -534,71 +536,6 @@ internal object WallpaperBake {
     }
 }
 
-/** iOS ChatColorPage: the preview on the Settings wallpaper, then Auto, the palette, my colours and +. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun ChatColorPage(pop: () -> Unit) {
-    val ctx = LocalContext.current
-    val c = Fariin.colors
-    ChatLookStore.version.intValue
-    val selected = ChatLookStore.globalChosen(ctx)
-    val customs = ChatLookStore.customColors(ctx)
-    var custom by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<ChatColorSpec?>(null) }
-    val wall = ChatLookStore.defaultWallpaper(ctx)
-    val pattern = WallpaperArt.pattern(ctx)
-    val photo = (wall as? ChatWallpaper.Photo)?.let { ChatLookStore.libraryImage(ctx, it.id)?.asImageBitmap() }
-    val wallMotion = com.fariin.app.ui.components.rememberWallpaperMotion(wall)
-    Column(Modifier.fillMaxSize()) {
-        PageBar("Chat Color", onBack = pop, action = { ResetMenu(wallpaperPage = false) })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                .then(wallMotion.isolate { Modifier.drawBehind { drawWallpaper(wall, c.dark, c.card, pattern, photo, motion = wallMotion) } }).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PreviewBubble("Here's a preview of the chat color.", false, null, Modifier.padding(end = 36.dp).align(Alignment.Start))
-                PreviewBubble("The color is visible to only you.", true, ChatLookStore.globalColor(ctx)?.brush(), Modifier.padding(start = 36.dp).align(Alignment.End))
-            }
-            val circles = buildList<@Composable (Modifier) -> Unit> {
-                add { m ->
-                    ColorCircle(selected == null, m, onTap = { ChatLookStore.setDefaultColor(ctx, null) }) {
-                        Box(Modifier.fillMaxSize().clip(CircleShape).background(ChatLookStore.globalAuto(ctx)?.brush() ?: androidx.compose.ui.graphics.SolidColor(c.blue)),
-                            contentAlignment = Alignment.Center) { Text("Auto", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White) }
-                    }
-                }
-                ChatColors.presets.forEach { p ->
-                    add { m -> ColorCircle(selected == p, m, onTap = { ChatLookStore.setDefaultColor(ctx, p) }) { Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush())) } }
-                }
-                customs.forEach { p ->
-                    add { m ->
-                        Box(m) {
-                            ColorCircle(selected == p, Modifier.fillMaxWidth(), onLong = { deleting = p }, onTap = { ChatLookStore.setDefaultColor(ctx, p) }) {
-                                Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush()))
-                            }
-                            DropdownMenu(expanded = deleting == p, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-                                border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
-                                DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { deleting = null; ChatLookStore.removeCustom(ctx, p) })
-                            }
-                        }
-                    }
-                }
-                add { m ->
-                    ColorCircle(false, m, onTap = { custom = true }) {
-                        Box(Modifier.fillMaxSize().clip(CircleShape).background(systemGray5(c.dark)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Add, contentDescription = "Custom Color", tint = c.label, modifier = Modifier.size(24.dp))
-                        }
-                    }
-                }
-            }
-            GridCard(5, 16, 18, circles)
-            Spacer(Modifier.height(com.fariin.app.ui.shell.bottomBarInset()))
-        }
-    }
-    if (custom) CustomColorSheet(onClose = { custom = false }) { spec ->
-        ChatLookStore.addCustom(ctx, spec)
-        ChatLookStore.setDefaultColor(ctx, spec)
-    }
-}
-
 @Composable
 private fun PreviewBubble(text: String, mine: Boolean, mineFill: Brush?, modifier: Modifier) {
     val c = Fariin.colors
@@ -609,12 +546,12 @@ private fun PreviewBubble(text: String, mine: Boolean, mineFill: Brush?, modifie
 }
 
 /** UIColor.systemGray5. */
-private fun systemGray5(dark: Boolean) = if (dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+internal fun systemGray5(dark: Boolean) = if (dark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
 
 /** A 54 colour circle; the chosen one has a 3 ring 5 outside it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ColorCircle(selected: Boolean, modifier: Modifier, onLong: (() -> Unit)? = null, onTap: () -> Unit, content: @Composable () -> Unit) {
+internal fun ColorCircle(selected: Boolean, modifier: Modifier, onLong: (() -> Unit)? = null, onTap: () -> Unit, content: @Composable () -> Unit) {
     val c = Fariin.colors
     Box(modifier.aspectRatio(1f), contentAlignment = Alignment.Center) {
         Box(Modifier.requiredSize(64.dp).then(if (selected) Modifier.border(3.dp, c.label, CircleShape) else Modifier))
@@ -625,7 +562,7 @@ private fun ColorCircle(selected: Boolean, modifier: Modifier, onLong: (() -> Un
 /** iOS CustomColorView as a sheet: Solid / Gradient, the preview, the two ends, Hue and Saturation. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CustomColorSheet(onClose: () -> Unit, onSet: (ChatColorSpec) -> Unit) {
+internal fun CustomColorSheet(onClose: () -> Unit, onSet: (ChatColorSpec) -> Unit) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)

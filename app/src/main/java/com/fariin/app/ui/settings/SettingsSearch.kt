@@ -69,6 +69,9 @@ internal object SettingsIndex {
         Entry("Stories", "stories", "stories status view receipts", PAGE_STORIES),
         Entry("Privacy & Security", "privacy", "privacy security read receipts typing last seen app lock screen", PAGE_PRIVACY),
         Entry("Storage and Data", "storage", "storage data cache download network usage", PAGE_STORAGE),
+        // "Chat Color" is the Bubble Style page on its Colours chip (the two pages merged, 2026-11-07).
+        Entry("Chat Color", null, "chat color colour bubble theme", PAGE_CHAT_COLOR, parent = "Appearance"),
+        Entry("Bubble Style", null, "bubble style styles colours picture", PAGE_BUBBLE_STYLE, parent = "Appearance"),
         Entry("Chat Key", null, "chat key pin number code private", PAGE_CHAT_KEY, parent = "Chats"),
         Entry("Email address", null, "email address change mail", PAGE_EMAIL, parent = "Account"),
         Entry("Passkeys", null, "passkeys passkey face id sign in key", PAGE_PASSKEYS, parent = "Account"),
