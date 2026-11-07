@@ -89,6 +89,14 @@ object AnimatedWallpapers {
      */
     fun moves(systemAnimations: Boolean): Boolean = systemAnimations
 
+    /**
+     * Whether [look] draws a different picture from frame to frame on this phone: Doodles everywhere
+     * (one bitmap moved about), the shader looks only where shaders run ([shaders]: Android 13+).
+     * Below that they draw one still frame, and a running clock only redrew that same picture (and
+     * the glass over it) 15 times a second.
+     */
+    fun hasMotion(look: AnimatedLook, shaders: Boolean): Boolean = shaders || look == AnimatedLook.DOODLES
+
     /** The phase after [seconds] more of a [period]-second loop, kept in 0..2 pi. */
     fun advance(phase: Float, seconds: Float, period: Float): Float {
         if (period <= 0f || seconds <= 0f) return phase

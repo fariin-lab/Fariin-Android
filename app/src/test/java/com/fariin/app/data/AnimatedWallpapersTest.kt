@@ -124,6 +124,15 @@ class AnimatedWallpapersTest {
         assertFalse(AnimatedWallpapers.moves(systemAnimations = false))
     }
 
+    @Test fun stillFrameLooksRunNoClockWithoutShaders() {
+        // Below Android 13 a shader look is one still picture: no frame loop for it. Doodles still moves.
+        assertFalse(AnimatedWallpapers.hasMotion(AnimatedLook.WATER, shaders = false))
+        assertFalse(AnimatedWallpapers.hasMotion(AnimatedLook.STARS, shaders = false))
+        assertTrue(AnimatedWallpapers.hasMotion(AnimatedLook.DOODLES, shaders = false))
+        assertTrue(AnimatedWallpapers.hasMotion(AnimatedLook.WATER, shaders = true))
+        assertTrue(AnimatedWallpapers.hasMotion(AnimatedLook.DOODLES, shaders = true))
+    }
+
     @Test fun phaseGoesRoundOncePerLoop() {
         val twoPi = (2 * Math.PI).toFloat()
         assertEquals(twoPi / 4, AnimatedWallpapers.advance(0f, 15f, 60f), 1e-4f)

@@ -271,7 +271,8 @@ fun rememberWallpaperMotion(
     val scale = a.scale(preview)
     // Doodles draws at full size with no shader, so it needs no layer of its own.
     val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && scale > 1f) rememberGraphicsLayer() else null
-    val moving = animates && AnimatedWallpapers.moves(com.fariin.app.ui.thread.systemAnimationsOn())
+    val moving = animates && AnimatedWallpapers.moves(com.fariin.app.ui.thread.systemAnimationsOn()) &&
+        AnimatedWallpapers.hasMotion(a.look, shaders = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
     val fps = a.fps(preview)
     @Suppress("DEPRECATION") val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     if (drive) LaunchedEffect(a.id, moving, fps, owner) {
