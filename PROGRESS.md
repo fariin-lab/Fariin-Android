@@ -1126,3 +1126,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   arrival glided in 0.28-0.44 s, frames 10-30 ms apart, no jump, no freeze. Made group "test" (Roodo + kream) for
   group tests; owner's messages there not received yet (iPhone account check). Still to test: group, photos both
   ways, fast fire 1/s. kk has a stray "test" post (10:35 PM) from my send test: delete needs the owner's OK.
+- 00:30 Group live test (group "test", kream iPhone -> Pixel, recorded): photo arrival glides, blurred preview then
+  sharp, no second jump; quick messages glide. GROUP BUGS: (1) first message in a fresh group: day pills
+  Today/Yesterday overlap and "Roodo created the group" is drawn over the new bubble for a few frames; (2) when the
+  same sender sends again the previous bubble re-lays out (name/avatar/tail move) and snaps, its time drawn twice
+  for frames; (3) 86 ms frame gap on the 2nd message, then a one-step jump. Agent on it.
