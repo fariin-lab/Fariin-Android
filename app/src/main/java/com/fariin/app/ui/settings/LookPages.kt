@@ -38,7 +38,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -245,8 +244,10 @@ private fun WallTile(w: ChatWallpaper, current: ChatWallpaper, modifier: Modifie
         .combinedClickable(onLongClick = onLong, onClick = onTap),
         contentAlignment = Alignment.Center) {
         if (w is ChatWallpaper.Animated) {
-            Icon(Icons.Filled.AutoAwesome, contentDescription = "${w.wallpaper?.name ?: "Animated"}, animated", tint = Color.White,
-                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(22.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            // The app's wallpaper icon (as the "Change Wallpaper" menu item), about 13, white on a 35% dark circle (iOS).
+            Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_wallpaper),
+                contentDescription = "${w.wallpaper?.name ?: "Animated"}, animated", tint = Color.White,
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(23.dp).clip(androidx.compose.foundation.shape.CircleShape)
                     .background(Color.Black.copy(alpha = 0.35f)).padding(5.dp))
         }
         if (current == w) {
