@@ -157,6 +157,26 @@ object StoryUploads {
         }
     }
 
+    const val NETWORK_FAILED = "Couldn't post your story. Check your connection and try again."
+
+    /**
+     * Try Again, and the connection coming back (iOS StoryOutbox.retry): a failed post goes again
+     * from its ticket on disk. [quiet] (the reconnect) shows no "Uploading…", and only clears the
+     * failure once nothing is left waiting.
+     */
+    fun retry(context: android.content.Context, me: String, convs: List<Conversation>, quiet: Boolean = false) {
+        val app = context.applicationContext
+        if (state.value == State.Uploading || !com.fariin.app.data.StoryOutbox.hasWaiting(app, me)) return
+        if (!quiet) state.value = State.Uploading
+        scope.launch {
+            com.fariin.app.data.StoryOutbox.resume(app, me, convs)
+            val waiting = com.fariin.app.data.StoryOutbox.hasWaiting(app, me)
+            if (!quiet && state.value == State.Uploading) state.value = if (waiting) State.Failed(NETWORK_FAILED) else null
+            else if (quiet && !waiting && state.value is State.Failed) state.value = null
+            com.fariin.app.data.StoryLimits.refresh(me)
+        }
+    }
+
     /** One story through the outbox; null when it is up, else what to say. */
     private suspend fun postOne(app: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice,
                                 picked: Set<String>, hours: Int, convs: List<Conversation>, captureSwitch: Boolean,
@@ -181,12 +201,12 @@ object StoryUploads {
             } else {
                 android.util.Log.w("StoryPost", "post failed", e)
                 ticket?.let { com.fariin.app.data.StoryOutbox.release(it) }
-                State.Failed("Couldn't post your story. Check your connection and try again.")
+                State.Failed(NETWORK_FAILED)
             }
         } catch (e: Exception) {
             android.util.Log.w("StoryPost", "post failed", e)
             ticket?.let { com.fariin.app.data.StoryOutbox.release(it) }
-            State.Failed("Couldn't post your story. Check your connection and try again.")
+            State.Failed(NETWORK_FAILED)
         }
     }
 }

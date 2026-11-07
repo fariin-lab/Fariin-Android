@@ -3,6 +3,7 @@ package com.fariin.app.data
 import android.content.Context
 import android.net.Uri
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
@@ -52,8 +53,27 @@ object StoryOutbox {
     /** A failed post of this run stays on disk for the next start, and stops counting as running. */
     fun release(id: String) { active -= id }
 
-    /** Posts left over from an earlier run of [me]; others' and stale ones are thrown away. */
-    suspend fun resume(c: Context, me: String, convs: List<Conversation>) {
+    /**
+     * A failed post of [me]'s still on disk and not running (iOS hasWaiting): the failure alert
+     * offers Try Again only then.
+     */
+    fun hasWaiting(c: Context, me: String): Boolean = me.isNotEmpty() && root(c).listFiles().orEmpty().any { dir ->
+        dir.isDirectory && dir.name !in active && runCatching {
+            val o = JSONObject(File(dir, "ticket.json").readText())
+            o.optString("owner") == me && System.currentTimeMillis() - o.optLong("first") <= MAX_AGE_MS
+        }.getOrDefault(false)
+    }
+
+    /** One pass at a time: the start, Try Again and a reconnect can all ask at once. */
+    private val pass = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Posts left over from an earlier run of [me], or failed in this one; others' and stale ones are
+     * thrown away. Also run by Try Again and when the connection comes back (iOS retry).
+     */
+    suspend fun resume(c: Context, me: String, convs: List<Conversation>) = pass.withLock { resumeOnce(c, me, convs) }
+
+    private suspend fun resumeOnce(c: Context, me: String, convs: List<Conversation>) {
         val dirs = root(c).listFiles().orEmpty().filter { it.isDirectory && it.name !in active }
         for (dir in dirs) {
             val o = runCatching { JSONObject(File(dir, "ticket.json").readText()) }.getOrNull()
@@ -72,6 +92,7 @@ object StoryOutbox {
             val picked = o.optJSONArray("picked")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }.orEmpty()
             val listIds = o.optJSONArray("lists")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
             val lists = StoryPrivacyStore.custom.value.filter { it.id in listIds }
+            active += id   // running: not "waiting" to the alert while it goes
             try {
                 StoryService(me).post(media, o.optString("caption"), choice, picked, o.optInt("hours", 24), convs, o.optBoolean("capture"),
                     StoryPrivacyStore.myFriends.value, StoryPrivacyStore.hidden.value, lists, fixedId = id)
@@ -80,6 +101,8 @@ object StoryOutbox {
                 dir.deleteRecursively()
             } catch (e: Exception) {
                 android.util.Log.w("StoryOutbox", "resume failed, kept for later", e)
+            } finally {
+                active -= id
             }
         }
     }

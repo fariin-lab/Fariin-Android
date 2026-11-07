@@ -202,6 +202,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val recent = shown.filter { it.hasUnseen }
     val viewed = shown.filter { !it.hasUnseen }
     val ordered = recent + viewed
+    // iOS .searchable "Search": typing replaces the page with name matches (StoriesTabView.searchResults).
+    var search by rememberSaveable { mutableStateOf("") }
+    val query = search.trim()
+    val matches = if (query.isEmpty()) emptyList() else shown.filter { it.name.contains(query, ignoreCase = true) }
     val openRing: (StoryGroup) -> Unit = { g -> viewing = ordered to ordered.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
     // A hidden person's story walks the Hidden Stories list, not the page above it (iOS).
     val openHidden: (StoryGroup) -> Unit = { g -> viewing = hidden to hidden.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
@@ -276,6 +280,18 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             }
         })
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+            item(key = "search", contentType = "search") { com.fariin.app.ui.calls.SearchField(search, { search = it }, "Search") }
+            // The field replaces the page rather than filtering it in place (iOS): one list of
+            // matches in the list's own rows under "Friends", or "No Results".
+            if (query.isNotEmpty()) {
+                if (matches.isEmpty()) item(key = "noResults") { NoResults(query) }
+                else {
+                    item(key = "searchHeading") { Heading("Friends") }
+                    items(matches, key = { "s" + it.key }) { g ->
+                        FriendRow(g, now, friendMenu(g)) { viewing = matches to matches.indexOfFirst { it.key == g.key }.coerceAtLeast(0) }
+                    }
+                }
+            } else {
             item {
                 Row(
                     Modifier.clickable { posted = true }.padding(start = 20.dp, end = 20.dp, top = 8.dp)
@@ -367,6 +383,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     com.fariin.app.ui.glow.GlowCardRow(me, pair, glowSeen, glowOpener)
                 }
             }
+            }
             item { Spacer(Modifier.height(24.dp)) }
         }
     }
@@ -453,6 +470,24 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             dismissButton = { androidx.compose.material3.TextButton(onClick = { hideTarget = null }) { Text("Cancel") } },
         )
     }
+    // A failed post says so (iOS "Couldn't post story"): Try Again while its ticket waits on disk,
+    // which is also retried by itself when the connection comes back (MainShell).
+    (upload as? StoryUploads.State.Failed)?.takeIf { live && active }?.let { f ->
+        val waiting = remember(f) { com.fariin.app.data.StoryOutbox.hasWaiting(context, me) }
+        val dismiss = { StoryUploads.state.value = null }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = dismiss,
+            title = { Text("Couldn't post story") },
+            text = { Text(if (waiting) f.message + "\n\nIt will be tried again automatically when you're back online." else f.message) },
+            confirmButton = {
+                if (waiting) androidx.compose.material3.TextButton(onClick = {
+                    dismiss(); StoryUploads.retry(context, me, storyConvs(conversations))
+                }) { Text("Try Again") }
+                else androidx.compose.material3.TextButton(onClick = dismiss) { Text("OK") }
+            },
+            dismissButton = if (waiting) ({ androidx.compose.material3.TextButton(onClick = dismiss) { Text("OK") } }) else null,
+        )
+    }
     if (tooLong) androidx.compose.material3.AlertDialog(
         onDismissRequest = { tooLong = false },
         title = { Text(com.fariin.app.data.StoryLimits.TOO_LONG_TITLE) },
@@ -468,6 +503,18 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     composing?.let { m ->
         StoryComposerDialog(me, m, conversations, onClose = { composing = null; composingText = false },
             onPosted = { composing = null; composingText = false; camera = false }, textStory = composingText)
+    }
+}
+
+/** iOS ContentUnavailableView.search, in the words the app's other searches use. */
+@Composable
+private fun NoResults(query: String) {
+    val c = Fariin.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp).padding(top = 72.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("No Results", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+        Spacer(Modifier.height(6.dp))
+        Text("There were no results for \"$query\".\nTry a new search.", fontSize = 15.sp, color = c.secondary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 

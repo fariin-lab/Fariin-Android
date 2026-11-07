@@ -202,6 +202,21 @@ fun MainShell(
             }
         }
     }
+    // The connection back after a spell without one: a failed story post goes again (iOS
+    // StoryOutbox networkCameBack), as the failure alert promises.
+    val connection by com.fariin.app.data.ConnectionStatus.state.collectAsState()
+    var wasOffline by remember(me) { mutableStateOf(false) }
+    LaunchedEffect(connection) {
+        when (connection) {
+            com.fariin.app.data.ConnectionStatus.State.WAITING_FOR_NETWORK -> wasOffline = true
+            com.fariin.app.data.ConnectionStatus.State.ONLINE -> if (wasOffline) {
+                wasOffline = false
+                if (!demo && outboxRan) com.fariin.app.ui.stories.StoryUploads.retry(context, me,
+                    com.fariin.app.ui.stories.storyConvs(chats.chats), quiet = true)
+            }
+            else -> {}
+        }
+    }
 
     // The chat list's camera button opens the Stories tab straight into its photo picker.
     var storyRequest by rememberSaveable { mutableIntStateOf(0) }
