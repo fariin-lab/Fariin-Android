@@ -131,14 +131,6 @@ private fun QuoteFaces(urls: List<String>, people: Boolean = false) {
     }
 }
 
-/** The post draws a Replies / Quotes bar at all (the same test [PostQuotesBar] makes). */
-@Composable
-fun postBarShown(m: Message, channelRepliesOff: Boolean): Boolean {
-    if (m.isSystem) return false
-    val repliesOn = !PostReplyRules.postOff(m.repliesOff, channelRepliesOff, PostRepliesSwitch.of(m.id))
-    return PostReplyRules.barLabel(m.replyCount, m.quoteCount, repliesOn = repliesOn, sent = m.sendState == null, deleted = m.deleted) != null
-}
-
 /**
  * "3 Replies · 4 Quotes" along a sent channel post's bottom, inside its bubble, under the reactions
  * and time (iOS QuoteBarView, owner 2026-11-06): a hairline across the bubble, the quoting channels'
@@ -206,7 +198,8 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
         val facesW = if (faces.width > 0) faces.width + gap else 0
         val text = ms[1].measure(loose.copy(maxWidth = maxOf(0, cons.maxWidth - 2 * side - facesW - gap - chev.width)))
         val own = 2 * side + facesW + text.width + gap + chev.width
-        val w = if (inBubble) maxOf(own, parentW - selfX).coerceAtMost(cons.maxWidth) else own.coerceAtMost(cons.maxWidth)
+        // A bubble that knows its width passes it as the minimum (a media post): the bar takes it at once.
+        val w = if (inBubble) maxOf(own, parentW - selfX, cons.minWidth).coerceAtMost(cons.maxWidth) else own.coerceAtMost(cons.maxWidth)
         val h = maxOf(44.dp.roundToPx(), text.height)
         layout(w, h) {
             faces.place(side, (h - faces.height) / 2)

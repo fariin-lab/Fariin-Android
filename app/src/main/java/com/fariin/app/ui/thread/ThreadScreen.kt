@@ -123,6 +123,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextLayoutResult
@@ -995,8 +996,8 @@ private fun ThreadContent(
                                     MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
-                                    // A bare picture's pills sit inside its bubble, over the bar (MediaRow, mediaPillsInside).
-                                    if (!channelChipsInside(m)) { if (!mediaPillsInside(ch, m)) com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
+                                    // A picture, video or album post's pills sit inside its bubble (MediaRow).
+                                    if (!channelChipsInside(m)) { if (!mediaBarInside(m)) com.fariin.app.ui.channels.ChannelChips(ch, m); if (!mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, inBubble = false, channelRepliesOff = ch.info.repliesOff) }
                                 }
                             }
                             selecting -> Row(
@@ -1551,15 +1552,6 @@ private fun SenderLine(ui: ThreadUi, uid: String) {
 private fun mediaBarInside(m: Message): Boolean = !m.deleted &&
     (m.mediaKind == Message.MediaKind.PHOTO || m.mediaKind == Message.MediaKind.VIDEO || m.mediaKind == Message.MediaKind.ALBUM)
 
-/**
- * A channel picture, video or album with no caption that shows the bar (iOS, owner 2026-11-07): its
- * reaction pills go INSIDE the bubble, in a strip between the picture and the bar, the text post's
- * pills and colours (mine solid), not a badge hanging off the picture's corner over "Reply".
- */
-@Composable
-private fun mediaPillsInside(ch: com.fariin.app.ui.channels.ChannelThreadUi, m: Message): Boolean =
-    m.text.isEmpty() && mediaBarInside(m) && com.fariin.app.ui.channels.postBarShown(m, ch.info.repliesOff)
-
 private fun channelChipsInside(m: Message): Boolean =
     !m.deleted && m.mediaKind == null && m.poll == null && !m.isSticker && !m.isGif && m.storyMention == null &&
         com.fariin.app.data.CardRules.location(m.text) == null && com.fariin.app.data.CardRules.contact(m.text) == null
@@ -1850,13 +1842,20 @@ private fun MediaRow(
     val busy = m.sendState == Message.SendState.SENDING
     // While its picture is up in the viewer, a bare photo bubble leaves no coloured block behind.
     val lifted = caption == null && !header && MediaOrigins.hiddenKey == MediaOrigins.keyOf(m)
-    // The bubble's width, so the pills strip wraps inside the picture's width and never widens it.
-    var bubbleW by remember { mutableStateOf(0) }
-    Column(Modifier.widthIn(max = maxW).clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
-        .then(if (lifted) Modifier else receivedRim(isMe, shape))
-        .onSizeChanged { bubbleW = it.width }) {
+    // A channel picture, video or album post carries its reactions INSIDE the bubble (iOS, owner
+    // 2026-11-07): under the caption with the time joining the last pill row, or (no caption) in a
+    // strip between the picture and the bar, the time staying on the picture.
+    val ch = ui.channel
+    val chips = if (ch != null && mediaBarInside(m)) com.fariin.app.ui.channels.rememberPostChips(ch, m) else emptyList()
+    // ⛔ NO LAYOUT JUMP: the bubble is as wide as its picture (or a wider header), known when the
+    // picture is measured; everything under it is measured to that width in the same pass, so the
+    // first frame is final (no measuring after layout).
+    Layout(
+        modifier = Modifier.widthIn(max = maxW).clip(shape).background(if (lifted) Color.Transparent else if (isMe) myFill() else receivedFill())
+            .then(if (lifted) Modifier else receivedRim(isMe, shape)),
+        content = {
         if (header) {
-            Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
+            Column(Modifier.layoutId("head").padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) {
                 if (showSender && g.first) {
                     SenderLine(ui, m.authorId)
                 }
@@ -1869,6 +1868,7 @@ private fun MediaRow(
                 MetaCapsule { Meta(m, tick, isMe, is24h, onMedia = true) }
             }
         }
+        Box(Modifier.layoutId("pic")) {
         when (kind) {
             Message.MediaKind.PHOTO -> {
                 val url = m.localPath ?: m.imageUrl
@@ -1896,28 +1896,48 @@ private fun MediaRow(
                 AlbumMosaic(m, maxW, onView, capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null)
             }
         }
+        }
         if (caption != null) {
             Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue) { Meta(m, tick, isMe, is24h) }
-            }
-        }
-        ui.channel?.let { ch ->
-            // No caption: the pills between the picture and the bar, 12 dp in, 8 under the picture,
-            // 6 above the bar; the time stays on the picture (no meta here).
-            if (mediaPillsInside(ch, m)) {
-                val chips = com.fariin.app.ui.channels.rememberPostChips(ch, m)
-                if (chips.isNotEmpty()) {
-                    val density = androidx.compose.ui.platform.LocalDensity.current
-                    val inner = if (bubbleW > 0) with(density) { bubbleW.toDp() } - 24.dp else 0.dp
-                    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)
-                        .then(if (bubbleW > 0) Modifier.widthIn(max = inner.coerceAtLeast(0.dp)) else Modifier.width(0.dp).height(0.dp))) {
-                        com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips, top = 0.dp) {}
-                    }
+                // With pills, the time goes with them (it joins their last row), as a text post's.
+                TextWithMeta(caption, LocalBubbleText.current.copy(color = ink), linkInk = if (isMe) Color.White else c.blue) {
+                    if (chips.isEmpty()) Meta(m, tick, isMe, is24h) else Spacer(Modifier)
                 }
             }
-            // A channel post's "Replies · Quotes" bar along the bubble's bottom, under a hairline, as a
-            // text post has it (iOS: the bubble grows by the bar; a bare picture too).
-            if (mediaBarInside(m)) com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, edge = 10.dp)
+        }
+        if (ch != null && chips.isNotEmpty()) {
+            if (caption != null) {
+                Box(Modifier.padding(start = 10.dp, end = 10.dp, bottom = if (mediaBarInside(m)) 6.dp else 7.dp)) {
+                    com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips, top = 0.dp) { Meta(m, tick, isMe, is24h) }
+                }
+            } else {
+                // 12 dp in, 8 under the picture, 6 above the bar; the time stays on the picture.
+                Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
+                    com.fariin.app.ui.channels.ChannelChipsInBubble(ch, m, chips, top = 0.dp) {}
+                }
+            }
+        }
+        // A channel post's "Replies · Quotes" bar along the bubble's bottom, under a hairline, as a
+        // text post has it (iOS: the bubble grows by the bar; a bare picture too).
+        if (ch != null && mediaBarInside(m)) Box(Modifier.layoutId("bar"), propagateMinConstraints = true) {
+            com.fariin.app.ui.channels.PostQuotesBar(m, channelRepliesOff = ch.info.repliesOff, edge = 10.dp)
+        }
+    }) { ms, cons ->
+        val loose = cons.copy(minWidth = 0, minHeight = 0)
+        val pic = ms.first { it.layoutId == "pic" }.measure(loose)
+        val head = ms.firstOrNull { it.layoutId == "head" }?.measure(loose)
+        val w = maxOf(pic.width, head?.width ?: 0).coerceAtMost(cons.maxWidth)
+        // Caption and pills: up to the bubble's width, never wider; the bar exactly that width (its
+        // chevron at the right edge from the first frame).
+        val rest = ms.filter { it.layoutId == null || it.layoutId == "bar" }.map {
+            it.measure(if (it.layoutId == "bar") loose.copy(minWidth = w, maxWidth = w) else loose.copy(maxWidth = w))
+        }
+        val h = (head?.height ?: 0) + pic.height + rest.sumOf { it.height }
+        layout(w, h) {
+            var y = 0
+            head?.let { it.place(0, y); y += it.height }
+            pic.place(0, y); y += pic.height
+            rest.forEach { it.place(0, y); y += it.height }
         }
     }
 }
