@@ -56,8 +56,8 @@ object AccountDeletion {
     /** Schedules the deletion; returns the delete date (epoch ms). Throws on failure. */
     suspend fun schedule(code: String?, text: String): Long {
         val fns = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
-        // Sent first as before (the old Delete Account page did the same); its failure never blocks the delete.
-        runCatching { fns.getHttpsCallable("notifyAccountDeleted").call(emptyMap<String, Any>()).await() }
+        // The confirmation email now comes from the server after scheduling (a trigger, 2026-11-07),
+        // so the old notifyAccountDeleted call before it is gone; the answer comes back at once.
         val answer = fns.getHttpsCallable(Fields.CALLABLE).call(payload(code, text)).await().getData()
         return dueFrom(answer, defaultDue())
     }
