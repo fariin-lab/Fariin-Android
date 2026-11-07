@@ -1141,3 +1141,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   true first open). Pixel: kk opens with its card already there mid-transition. Live group test pending (owner).
   Media gap hunt (12 differences) -> media agent; bubble styles: owner OK'd showing them (01:00), agent building from
   fariin-bubbles/SPEC.md, iOS session told. Running: media, low-end scroll, bubble styles.
+- 02:40 Merged: media like iOS (520204f..5bd544f), bubble styles shown (344c417, 1d4338c, 98d8b03), low-end scroll (31a8815),
+  Calls page as iOS + Return (3a0fc2f), Group Info back (93796e6), Add Members feedback (40394be), bubble styles admin
+  switch (33b762e). Installed on the Pixel (install check read the ringer mode as a call: fixed to Actual mode).
+  Calls page checked: matches the owner's iOS screenshot. Running: group call sounds, attach sheet + search compass +
+  chat perf + per-chat scroll position (bounded LRU), view-once redesign; checkers: owner's UI-bug video, iOS limits
+  and error wording.
