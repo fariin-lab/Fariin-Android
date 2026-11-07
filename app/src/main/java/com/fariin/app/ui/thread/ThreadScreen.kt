@@ -446,12 +446,19 @@ private fun ThreadContent(
     // bottom of a reversed, keyed list keeps the old row in place and shifts the index past 1
     // before this effect runs, so reading the index here let new arrivals push the chat upward
     // (the open showed old rows with the unread ones under the arrow; iOS opens at the newest).
+    // Declared before the stick-to-newest effect, which asks it whether to glide (ArrivalMotion.kt).
+    val arrivalMotion = remember(ui.cid) { ArrivalMotion() }
     var stick by remember { mutableStateOf(true) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { if (!it) stick = listState.firstVisibleItemIndex <= 1 }
     }
     LaunchedEffect(ui.messages.lastOrNull()?.rowId) {
-        if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) listState.scrollToItem(0)
+        if (stick || listState.firstVisibleItemIndex <= 1 || ui.messages.lastOrNull()?.authorId == ui.me) {
+            // Someone else's message landing live: the list glides up to it (iOS), instead of every
+            // row jumping in one frame. My own sends, the open and history loads still snap.
+            if (arrivalMotion.takeListGlide() && listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
+            else listState.scrollToItem(0)
+        }
     }
     // iOS initialScrollId (owner-approved 2026-07-13): with unread messages the FIRST open lands
     // at the first unread, the divider row at the top of the screen, the unread run below it. Once
@@ -508,7 +515,6 @@ private fun ThreadContent(
     // A message from someone else that lands live while I am at the newest rises into place
     // (ArrivalMotion.kt). Noted here, before the list lays out the new rows, so "at the newest"
     // and "scrolling" still describe what the reader saw; read without subscribing to scroll.
-    val arrivalMotion = remember(ui.cid) { ArrivalMotion() }
     remember(ui.messages, ui.loaded && ui.synced) {
         androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
             arrivalMotion.note(ui.messages, live = ui.loaded && ui.synced, me = ui.me,

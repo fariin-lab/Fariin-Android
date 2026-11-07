@@ -48,11 +48,22 @@ class ArrivalMotion {
         if (enabled && ids.isNotEmpty()) {
             val now = SystemClock.uptimeMillis()
             ids.forEach { pending[it] = now }
+            listGlide = true
         }
         prevIds = messages.mapTo(HashSet(messages.size)) { it.rowId }
         prevLast = messages.lastOrNull()?.rowId
         prevLive = live
     }
+
+    private var listGlide = false
+
+    /**
+     * True once after a live arrival: the list should glide up to the newest instead of jumping.
+     * The owner's screen recordings (2026-11-06): on iOS the whole list scrolls up together in about
+     * a quarter second and the new bubble slides out from under the composer, solid; Android jumped
+     * every row up in one frame, then faded the new bubble in.
+     */
+    fun takeListGlide(): Boolean = listGlide.also { listGlide = false }
 
     /** The glide for [rowId], or null. Once per row, and only soon after it arrived. */
     fun claim(rowId: String): Glide? {
@@ -100,6 +111,9 @@ object ArrivalRules {
     }
 }
 
+/** The per-row rise/grow/fade; off while the list glide carries the arrival (see takeListGlide). */
+private const val ROW_EFFECT = false
+
 /** The glide for row [m], decided once per row. Reads nothing that scrolling changes. */
 @Composable
 fun rememberArrivalGlide(motion: ArrivalMotion, m: Message): ArrivalMotion.Glide? {
@@ -112,6 +126,9 @@ fun rememberArrivalGlide(motion: ArrivalMotion, m: Message): ArrivalMotion.Glide
 @Composable
 fun Modifier.arrivalGlide(g: ArrivalMotion.Glide?): Modifier {
     if (g == null) return this
+    // The list's own glide carries the new bubble up from under the composer, solid, as iOS
+    // (owner's recordings, 2026-11-06): no separate rise, grow or fade on the row.
+    if (!ROW_EFFECT) return this
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     // Their bubbles sit at the start side, so the growth comes out of that bottom corner (the tail).
     val pivot = if (rtl) TransformOrigin(1f, 1f) else TransformOrigin(0f, 1f)
