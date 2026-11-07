@@ -301,16 +301,11 @@ private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
             SwitchRow("Typing Indicators", PrivacyRules.flag(map, "typingIndicators"), last = true) { on -> scope.launch { error = PrivacySettings.setFlag("typingIndicators", on) } }
         }
     }
-    if (explain) {
-        val c = Fariin.colors
-        AlertDialog(
-            onDismissRequest = { explain = false },
-            title = { Text("Set a Chat Key first") },
-            text = { Text("Only people who know your Chat Key will be able to message you. Make your key now, then choose this again.") },
-            confirmButton = { TextButton(onClick = { explain = false; push(PAGE_CHAT_KEY) }) { Text("Set Chat Key", color = c.accent) } },
-            dismissButton = { TextButton(onClick = { explain = false }) { Text("Cancel", color = c.label) } },
-            containerColor = c.card, titleContentColor = c.label, textContentColor = c.label,
-        )
+    // iOS: choosing "People who know my key" with no key shows what a Chat Key is; Got it opens the
+    // Chat Key page, which makes the key and then switches this setting. Back or a failure leaves it.
+    if (explain) ChatKeyIntroSheet(onDismiss = { explain = false }) {
+        ChatKey.makeThenKeyOnly = true
+        push(PAGE_CHAT_KEY)
     }
 }
 
@@ -325,6 +320,9 @@ internal object ChatKey {
     private var app: Context? = null
     private fun prefs() = app?.getSharedPreferences("fariin_chatkey", Context.MODE_PRIVATE)
     fun bind(c: Context) { app = c.applicationContext }
+    /** Set by the Messages page's intro sheet: the Chat Key page makes a key at once, then sets
+     *  messages to "People who know my key" (iOS ChatPinPage autoCreate). Read once on entry. */
+    var makeThenKeyOnly = false
     fun cachedSet(): Boolean? = prefs()?.let { if (it.contains("set.${uid()}")) it.getBoolean("set.${uid()}", false) else null }
     fun mine(): String? = prefs()?.getString("pin.${uid()}", null)
     private fun save(set: Boolean, pin: String?) {
@@ -367,11 +365,22 @@ private fun ChatKeyPage(pop: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { ChatKey.status()?.let { set = it; if (!it) pin = null } }
+    var intro by remember { mutableStateOf(false) }
+    // Taken once, so coming back to this page later does not make another key.
+    val autoMake = remember { ChatKey.makeThenKeyOnly.also { ChatKey.makeThenKeyOnly = false } }
     fun run(work: suspend () -> Unit) {
         if (busy) return
         busy = true; error = null
         scope.launch { try { work() } catch (e: Exception) { error = e.message } finally { busy = false } }
+    }
+    LaunchedEffect(Unit) {
+        val s = ChatKey.status()
+        s?.let { set = it; if (!it) pin = null }
+        // From the Messages page's intro sheet: make the key, then the mode follows the key that exists.
+        if (autoMake) run {
+            if (set != true) { pin = ChatKey.generate(); set = true }
+            PrivacySettings.setAudience("messages", Audience.CONTACTS)?.let { throw IllegalStateException(it) }
+        }
     }
     val c = Fariin.colors
     ScrollPage("Chat Key", pop) {
@@ -396,11 +405,13 @@ private fun ChatKeyPage(pop: () -> Unit) {
             SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
                 SettingsRow(if (busy) "Making your key…" else "Make My Chat Key", trailing = Trailing.NONE, titleColor = c.accent, last = true,
                     accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) {
-                    run { pin = ChatKey.generate(); set = true }
+                    // What a Chat Key is, first (iOS); Got it makes the key.
+                    if (!busy) intro = true
                 }
             }
         }
     }
+    if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { pin = ChatKey.generate(); set = true } }
     if (confirmReset) YesNo("Reset your Chat Key?", "You'll get a new key and the old one will stop working.", "Reset",
         onYes = { confirmReset = false; run { pin = ChatKey.generate(); set = true } }, onNo = { confirmReset = false })
     if (confirmRemove) YesNo("Remove your Chat Key?", "Nobody will be able to use it to message you. People who already did stay in your chats.", "Remove",
