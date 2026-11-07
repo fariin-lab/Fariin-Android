@@ -69,7 +69,8 @@ class FariinMessagingService : FirebaseMessagingService() {
         // Not while that channel is open: its sheet refreshes there on its own.
         com.fariin.app.data.PostReplyRules.alertTarget(message.data["kind"], message.data["cid"], message.data["mid"])?.let { (cid, mid) ->
             if (Push.pushOn(applicationContext) && PushRouter.activeChatId != cid) NotificationPoster.postReplyAlert(applicationContext,
-                message.notification?.title ?: "Fariin", message.notification?.body ?: "New reply", cid, mid)
+                message.notification?.title ?: "Fariin", message.notification?.body ?: "New reply", cid, mid,
+                message.data["rid"].orEmpty(), message.data["aid"].orEmpty())
             return
         }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)

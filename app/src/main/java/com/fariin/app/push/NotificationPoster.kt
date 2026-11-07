@@ -227,6 +227,8 @@ object NotificationPoster {
 
     /** The extra a reply alert's tap carries beside [PushRouter.EXTRA_OPEN_CID]: the post whose Replies open. */
     const val EXTRA_REPLIES_MID = "fariin.repliesMid"
+    const val EXTRA_REPLIES_RID = "fariin.repliesRid"
+    const val EXTRA_REPLIES_AID = "fariin.repliesAid"
 
     /**
      * A reply alert with the app open (server replyPushJob): one per post (tag), a tap opens the
@@ -234,7 +236,7 @@ object NotificationPoster {
      * the tap brings the same `cid`, `mid` and `kind` (MainActivity).
      */
     @SuppressLint("MissingPermission")
-    fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String) {
+    fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String, rid: String = "", aid: String = "") {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
@@ -242,8 +244,11 @@ object NotificationPoster {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(PushRouter.EXTRA_OPEN_CID, cid)
             putExtra(EXTRA_REPLIES_MID, mid)
+            // "Replied to your comment": the comment it opens on.
+            if (rid.isNotEmpty()) putExtra(EXTRA_REPLIES_RID, rid)
+            if (aid.isNotEmpty()) putExtra(EXTRA_REPLIES_AID, aid)
         }
-        val tap = PendingIntent.getActivity(c, ("r$cid/$mid").hashCode(), open,
+        val tap = PendingIntent.getActivity(c, ("r$cid/$mid/$rid").hashCode(), open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(c, NotifChannel.MESSAGES.id)
             .setSmallIcon(R.drawable.ic_stat_fariin)
@@ -253,7 +258,9 @@ object NotificationPoster {
             .setContentIntent(tap)
             .setAutoCancel(true)
             .build()
-        nmc.notify("replies-$cid/$mid", ID, n)
+        // One notification per comment (the server sends one push, then "N new replies to your
+        // comment" in its place), one per post for an admin's summary.
+        nmc.notify(if (rid.isNotEmpty()) "replies-$cid/$mid/$rid" else "replies-$cid/$mid", ID, n)
     }
 
     /** "Posted a new story" with the app open: one per author (tag), a tap opens the Stories tab. */
