@@ -7,7 +7,7 @@ import org.junit.Test
 class SettingsIndexTest {
     @Test fun emptyQueryListsEveryPage() {
         assertEquals(SettingsIndex.entries, SettingsIndex.matching("   "))
-        assertEquals(17, SettingsIndex.entries.size)
+        assertEquals(19, SettingsIndex.entries.size)
     }
 
     @Test fun matchesTitleOrKeywords() {
