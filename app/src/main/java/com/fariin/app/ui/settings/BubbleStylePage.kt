@@ -288,21 +288,43 @@ private fun Preview(selected: String?, plain: Brush, cid: String?) {
     val dim = ChatLookStore.wallpaperDim(ctx)
     val text = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, lineHeight = 22.sp)
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.72f).dp
-    // Owner 2026-11-07: changing style must not resize the card (the chips and grid jumped). A
-    // FIXED height that holds the tallest picture style, one-line samples, the same width cap for
-    // every style, and the new style faded in where the old one was.
+    // Owner 2026-11-07: changing style must not resize the card (the chips and grid jumped), and
+    // no dead space either. Theirs on top, mine under it (iOS order); my row is EXACTLY as tall as
+    // the tallest offered style draws around the one-line sample, so nothing moves between styles.
+    val mine = "My new bubble style!"
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = LocalDensity.current
+    val pictures = offeredPictures()
+    val inUse = BubbleArt.find(selected)?.takeIf { it !in pictures }
+    // Measured as Text draws it: the theme's text style under this one.
+    val textAsDrawn = androidx.compose.material3.LocalTextStyle.current.merge(text)
+    val mineH = remember(pictures, inUse, density, maxW, textAsDrawn) {
+        val maxWpx = with(density) { maxW.toPx() }
+        fun m(w: Int) = measurer.measure(mine, textAsDrawn, maxLines = 1,
+            constraints = androidx.compose.ui.unit.Constraints(maxWidth = w))
+        val styles = if (inUse != null) pictures + inUse else pictures
+        with(density) { tallestMine(styles, m(maxWpx.toInt()), ::m, maxWpx, density.density).toDp() }
+    }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
         .then(motion.isolate { Modifier.drawBehind {
             drawWallpaper(wall, c.dark, c.bg, pattern, photo, motion = motion)
             if (onWall) drawWallpaperDim(dim.floatValue)
-        } }).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val mine = "My new bubble style!"
+        } }).padding(14.dp)) {
+        // The chat's own incoming bubble: frosted with a hairline rim on a wallpaper, solid without.
+        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.thread.LocalOnWallpaper provides onWall) {
+            val shape = RoundedCornerShape(18.dp)
+            Text("Looks so cute!", style = text, color = c.label, maxLines = 1,
+                modifier = Modifier.widthIn(max = maxW).clip(shape).background(com.fariin.app.ui.thread.receivedFill())
+                    .then(com.fariin.app.ui.thread.receivedRim(isMe = false, shape)).padding(horizontal = 14.dp, vertical = 9.dp))
+        }
+        // 6 dp to the top of my box: a picture style's box starts at its art, so only the room
+        // its art needs sits above the bubble.
+        Spacer(Modifier.height(6.dp))
         androidx.compose.animation.Crossfade(selected, animationSpec = androidx.compose.animation.core.tween(180),
-            label = "bubble preview", modifier = Modifier.fillMaxWidth().height(PREVIEW_MINE_HEIGHT)) { sel ->
+            label = "bubble preview", modifier = Modifier.fillMaxWidth().height(mineH)) { sel ->
             val art = BubbleArt.find(sel)
             val colour = if (art == null) BubbleStyles.find(sel) else null
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
                 when {
                     art != null -> Text(mine, style = text, color = art.ink(), maxLines = 1,
                         modifier = Modifier.widthIn(max = maxW).artBubble(art, c.dark))
@@ -314,13 +336,6 @@ private fun Preview(selected: String?, plain: Brush, cid: String?) {
                     }
                 }
             }
-        }
-        // The chat's own incoming bubble: frosted with a hairline rim on a wallpaper, solid without.
-        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.thread.LocalOnWallpaper provides onWall) {
-            val shape = RoundedCornerShape(18.dp)
-            Text("Looks so cute!", style = text, color = c.label, maxLines = 1,
-                modifier = Modifier.widthIn(max = maxW).clip(shape).background(com.fariin.app.ui.thread.receivedFill())
-                    .then(com.fariin.app.ui.thread.receivedRim(isMe = false, shape)).padding(horizontal = 14.dp, vertical = 9.dp))
         }
     }
 }
@@ -375,8 +390,20 @@ private fun PictureSwatch(s: BubbleArt.Spec, widthPx: Int) {
     else Box(Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(10.dp)).background(s.fillColor()))
 }
 
-/** The preview's own-bubble row: tall enough for the tallest picture style's art around one line. */
-private val PREVIEW_MINE_HEIGHT = 120.dp
+/**
+ * The exact height of my sample's row: the tallest box any of [styles] (the offered ones, plus one
+ * in use though hidden) draws around one line of [sample], art above and below included (BubbleArt.place,
+ * as the chat lays it out), or the plain bubble's when that is taller. In px.
+ */
+private fun tallestMine(styles: List<BubbleArt.Spec>, sample: androidx.compose.ui.text.TextLayoutResult?,
+                        measure: (Int) -> androidx.compose.ui.text.TextLayoutResult, maxWpx: Float, d: Float): Float {
+    val plain = (sample?.size?.height ?: 0) + 18f * d
+    return styles.fold(plain) { best, s ->
+        val l = s.layout
+        val r = measure((maxWpx - (l.padLeft + l.padRight) * d).toInt().coerceAtLeast(1))
+        maxOf(best, kotlin.math.ceil(BubbleArt.place(s, r.size.width.toFloat(), r.size.height.toFloat(), maxWpx, d).height))
+    }
+}
 
 /** One chat back to the app's default bubble: no style here (an explicit none over the Settings
  *  one) and the chat's own colour cleared. The Bubble Style page's Reset and the chat sheet's Reset. */
