@@ -137,6 +137,15 @@ internal fun AttachSheet(
     val videos = remember { mutableStateListOf<Uri>() }
     var caption by remember { mutableStateOf("") }
     var viewOnce by remember { mutableStateOf(false) }
+    // iOS attach-sheet HD: starts as Settings > Sent Media Quality says, back to it after each send.
+    var hd by remember { mutableStateOf(com.fariin.app.media.SentQuality.high(context)) }
+    val sendPicked = {
+        val list = picked.toList()
+        list.forEach { com.fariin.app.media.SentQuality.choose(it, hd) }   // videos too: 1080p or 540p
+        onSendMedia(list, caption, viewOnce)
+        hd = com.fariin.app.media.SentQuality.high(context)
+        motion.close()
+    }
     // A chosen photo open in the editor. One photo chosen: the whole editor page (iOS
     // ChatImageEditor: crop, pen, HD, its own caption and Send, which sends and closes the sheet).
     var drawOn by remember { mutableStateOf<Uri?>(null) }
@@ -348,20 +357,30 @@ internal fun AttachSheet(
                         Spacer(Modifier.width(8.dp))
                     }
                     Box(
-                        Modifier.weight(1f).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
+                        Modifier.weight(1f).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp)).padding(start = 16.dp, end = 6.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
-                        if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
-                        BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                            cursorBrush = SolidColor(c.accent), maxLines = 5,
-                            // Typing opens the sheet fully: at half height the caption sat under the
-                            // keyboard (Pixel 2026-11-05).
-                            modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f).padding(vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
+                                if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
+                                BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                                    cursorBrush = SolidColor(c.accent), maxLines = 5,
+                                    // Typing opens the sheet fully: at half height the caption sat under the
+                                    // keyboard (Pixel 2026-11-05).
+                                    modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
+                            }
+                            // HD for every chosen photo and video, as the editors' HD button.
+                            Box(Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(16.dp)).clickable { hd = !hd }.padding(horizontal = 10.dp)
+                                .semantics { contentDescription = if (hd) "HD on" else "HD off" },
+                                contentAlignment = Alignment.Center) {
+                                Text("HD", color = if (hd) c.accent else c.secondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.height(44.dp).floating(RoundedCornerShape(22.dp), fill = c.blue)
-                            .clickable { onSendMedia(picked.toList(), caption, viewOnce); motion.close() }
+                            .clickable { sendPicked() }
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -374,6 +393,8 @@ internal fun AttachSheet(
                         }
                     }
                 }
+                // The editors' "HD" / "Standard" words after a tap, just above the bar.
+                Box(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).padding(bottom = 30.dp)) { QualityHint(hd) }
             }
             }
         }
