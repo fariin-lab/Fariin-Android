@@ -20,11 +20,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.offset
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -70,7 +66,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.fariin.app.ui.components.FariinSheet
+import com.fariin.app.ui.components.SheetMotion
 import com.fariin.app.ui.components.floating
+import com.fariin.app.ui.components.rememberSheetMotion
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.theme.FariinTheme
 
@@ -120,96 +119,13 @@ class BrowserActivity : ComponentActivity() {
 /**
  * The browser as a sheet over the chat, as iOS presents it (owner, 2026-11-06): it slides up from the
  * bottom with rounded top corners, the chat stays dimmed behind it at the top, and it closes by its X,
- * by Back, by a tap on the dimmed chat, or by swiping down on its handle. People can see they never
- * left the app.
+ * by Back, by a tap on the dimmed chat, or by pulling the page down at its top. People can see they
+ * never left the app. The page pulls the sheet down (pullsSheet), so no separate handle is needed.
  */
 @Composable
 private fun BrowserSheet(onClosed: () -> Unit, content: @Composable (SheetMotion) -> Unit) {
-    val c = Fariin.colors
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val full = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp + 80).dp.toPx() }
-    val motion = remember {
-        SheetMotion(scope, full, dismissAt = with(density) { 160.dp.toPx() }, flingClose = with(density) { 900.dp.toPx() },
-            band = with(density) { 120.dp.toPx() }, onClosed = onClosed)
-    }
-    LaunchedEffect(Unit) { motion.open() }
-    Box(Modifier.fillMaxSize()
-        .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * (1f - motion.y / full).coerceIn(0f, 1f))) }
-        .clickable(interactionSource = null, indication = null) { motion.close() }) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp)
-            .offset { androidx.compose.ui.unit.IntOffset(0, motion.y.toInt()) }
-            // The page itself carries the rounded top, as iOS: no strip above it (owner, 2026-11-06).
-            // The page pulls the sheet down (pullsSheet), so no separate handle is needed.
-            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-            .drawBehind { drawRect(c.bg) }
-            .clickable(interactionSource = null, indication = null) {}) {
-            Box(Modifier.weight(1f)) { content(motion) }
-        }
-    }
-}
-
-/**
- * The sheet's movement, done the way iOS sheets feel: it tracks the finger 1:1; pulled above its top
- * it gives with a rubber band; let go, the finger's speed decides: a flick or a long pull closes it,
- * otherwise a spring carries it back from that same speed. Every animation starts from where the
- * sheet is and how fast it moves, so a grab mid-animation never jumps.
- */
-internal class SheetMotion(
-    private val scope: kotlinx.coroutines.CoroutineScope,
-    private val full: Float,
-    private val dismissAt: Float,
-    private val flingClose: Float,
-    private val band: Float,
-    private val onClosed: () -> Unit,
-) {
-    var y by androidx.compose.runtime.mutableFloatStateOf(full)
-        private set
-    private var raw = 0f            // the finger's own travel; y is raw with the rubber band applied
-    private var job: kotlinx.coroutines.Job? = null
-    private var closing = false
-
-    private fun run(target: Float, velocity: Float, spec: androidx.compose.animation.core.AnimationSpec<Float>, end: () -> Unit = {}) {
-        job?.cancel()
-        job = scope.launch {
-            androidx.compose.animation.core.animate(y, target, velocity, spec) { v, _ -> y = v }
-            end()
-        }
-    }
-
-    // Open and close by button follow the iOS sheet curve (the one the open-source "Vaul" drawer uses
-    // to match it): a quick start, a soft stop, no crawl at the end. The old critically damped spring
-    // spent its last ~0.25 s creeping the final pixels (frame by frame on the Pixel, 2026-11-06).
-    fun open() = run(0f, 0f, tween(500, easing = SheetEase))
-
-    fun close(velocity: Float = 0f) {
-        if (closing) return
-        closing = true
-        // A flick keeps its own speed (a spring started from it); a button or Back uses the curve.
-        val spec: androidx.compose.animation.core.AnimationSpec<Float> =
-            if (velocity > 0f) androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 700f, visibilityThreshold = 4f)
-            else tween(380, easing = SheetEase)
-        run(full, velocity.coerceAtLeast(0f), spec) { onClosed() }
-    }
-
-    private companion object {
-        val SheetEase = androidx.compose.animation.core.CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
-    }
-
-    fun drag(dy: Float) {
-        if (closing) return
-        if (job?.isActive == true) { job?.cancel(); raw = if (y >= 0f) y else 0f }
-        raw += dy
-        // Above the top it pulls back harder the further it goes (the rubber band iOS uses).
-        y = if (raw >= 0f) raw else -(1f - 1f / (-raw * 0.55f / band + 1f)) * band
-    }
-
-    fun release(velocity: Float) {
-        if (closing) return
-        val projected = y + velocity * 0.2f      // where the flick would carry it
-        if (y > dismissAt || velocity > flingClose || projected > full * 0.45f) close(velocity)
-        else { raw = 0f; run(0f, velocity, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f)) }
-    }
+    val motion = rememberSheetMotion(onClosed)
+    FariinSheet(motion) { content(motion) }
 }
 
 /**
