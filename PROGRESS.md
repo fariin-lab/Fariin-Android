@@ -1169,3 +1169,11 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
    F (owner photo 04:50) message long-press menu: the blur/dim stops above the bottom; the composer + gesture-bar
      strip stays light and un-dimmed. The dim must cover the whole screen edge to edge (MessageMenuOverlay window /
      navigation bar inset), as iOS.
+- 12:40 GitHub CI: private repo fariin-lab/Fariin-Android, workflow builds benchmark APK + unit tests per push (one 4 GB
+  JVM, in-process Kotlin; main runs never cancelled). First green main 4c54544 (16 min). Builders now compile on CI,
+  PC stays free. CI APK is signed with GitHub's debug key, so it won't install over the PC-built app: local build per
+  install until the owner OKs storing the debug keystore as a repo secret. Merged since 04:00: bubble styles fixes +
+  page + menu + every bubble keeps art (9f2667c..71bf074), stories flight (d98fa41), long-press menu full screen
+  (2596f4e), channel posts wide + glass Mute (4c54544), channel delete sheet (b7d32ce). Installed 7140d88 on the Pixel.
+  Running on CI: limits, backlog A, B, C, Chat Color merge (+ wallpaper-sheet styles row, round X), push-tap open,
+  short styled bubble centring. Owner asked: back up C:\Users\abdik\.fariin\upload-test.jks safely.
