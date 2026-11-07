@@ -258,6 +258,8 @@ private fun StoryCamera(
     var storyText by rememberSaveable { mutableStateOf("") }
     var styleIndex by rememberSaveable { mutableIntStateOf(0) }
     var fontIndex by rememberSaveable { mutableIntStateOf(0) }
+    // Which card the story's link wears (a tap on the card cycles it); the posted picture draws the same.
+    var linkStyle by remember { mutableStateOf(com.fariin.app.data.TextStoryRules.LinkStyle.COMPACT) }
     var typing by remember { mutableStateOf(false) }
     var rendering by remember { mutableStateOf(false) }
     // iOS syncDetectedLink: the link in the words is fetched 400 ms after typing stops, so the card is
@@ -266,7 +268,7 @@ private fun StoryCamera(
         if (!textMode) return@LaunchedEffect
         val url = com.fariin.app.data.TextStoryRules.firstLink(storyText) ?: return@LaunchedEffect
         delay(400)
-        com.fariin.app.data.LinkPreviews.draft(url)
+        com.fariin.app.data.LinkPreviews.storyDraft(url)
     }
     // The text page slides in over the picture (iOS .snappy 0.25). The preview itself never moves;
     // the camera is let go once the card covers it (iOS stops the session in text mode).
@@ -587,6 +589,7 @@ private fun StoryCamera(
                 storyText, { storyText = it }, styleIndex, { styleIndex++ }, fontIndex, { fontIndex++ },
                 onTyping = { typing = it }, bottomReserve = BAR_HEIGHT + navBottom, active = textMode,
                 onClose = { onClose() },
+                linkStyle = linkStyle, onLinkStyle = { linkStyle = it },
                 modifier = Modifier
                     .graphicsLayer { translationX = (1f - textIn) * size.width }
                     .pointerInput(Unit) {
@@ -695,10 +698,10 @@ private fun StoryCamera(
                                     // The first address in the words gets the page's card, as on iOS: only
                                     // when the page answered (usually already fetched while typing, below).
                                     val link = com.fariin.app.data.TextStoryRules.firstLink(storyText)?.let {
-                                        com.fariin.app.data.LinkPreviews.draftWithin(it, 4_000)
+                                        com.fariin.app.data.LinkPreviews.storyDraftWithin(it, 4_000)
                                     }
                                     val out = withContext(Dispatchers.Default) {
-                                        runCatching { renderTextStory(storyText, styleIndex, fontIndex, link) }.getOrNull()
+                                        runCatching { renderTextStory(storyText, styleIndex, fontIndex, link, linkStyle) }.getOrNull()
                                     }
                                     rendering = false
                                     out?.let { onTextStory(it) }

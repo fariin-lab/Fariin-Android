@@ -55,12 +55,26 @@ object LinkPreviews {
         app?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getBoolean(PREF_KEY, true) ?: true
 
     /** A composer draft: everything the card needs, still plaintext, still on this phone. */
-    class Draft(val url: String, val title: String, val desc: String, val jpeg: ByteArray?) {
+    class Draft(
+        val url: String, val title: String, val desc: String, val jpeg: ByteArray?,
+        /** The page is a video or a reel (og:type / og:video, or a known reel address). The story
+         *  card draws its own play button; YouTube's cover has one baked in, so its draft stays false. */
+        val isVideo: Boolean = false,
+        /** The site's small icon (PNG), for the story card's host row. Only [storyDraft] fills it. */
+        val icon: ByteArray? = null,
+    ) {
         val host: String get() = StickerGifRules.host(url)
+        /** The picture's own size, read once from its header; 0 x 0 without one. */
+        val picSize: Pair<Int, Int> by lazy {
+            val b = jpeg ?: return@lazy 0 to 0
+            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(b, 0, b.size, o)
+            maxOf(0, o.outWidth) to maxOf(0, o.outHeight)
+        }
     }
 
-    /** What a page's head says about itself. */
-    data class Meta(val title: String, val desc: String, val image: String?)
+    /** What a page's head says about itself. [video] = og:type video or an og:video tag. */
+    data class Meta(val title: String, val desc: String, val image: String?, val video: Boolean = false)
 
     // ------------------------------------------------------------------ the X (one link per chat)
 
@@ -186,7 +200,37 @@ object LinkPreviews {
         val image = (metaContent(html, "og:image") ?: metaContent(html, "twitter:image"))?.let(::decodeEntities)
             ?.let { raw -> runCatching { URI(pageUrl).resolve(raw.trim()).toString() }.getOrNull() }
             ?.takeIf { it.startsWith("https://") && !isPrivateHost(it) }
-        return Meta(decodeEntities(title), decodeEntities(desc), image)
+        val ogType = metaContent(html, "og:type")?.lowercase() ?: ""
+        val video = ogType.startsWith("video") || metaContent(html, "og:video") != null ||
+            metaContent(html, "og:video:url") != null || isVideoLink(pageUrl)
+        return Meta(decodeEntities(title), decodeEntities(desc), image, video)
+    }
+
+    // ------------------------------------------------------------------ reels and short videos
+
+    fun isTikTok(url: String): Boolean = hostOf(url)?.let { it == "tiktok.com" || it.endsWith(".tiktok.com") } == true
+
+    fun isInstagram(url: String): Boolean = hostOf(url)?.let { it == "instagram.com" || it.endsWith(".instagram.com") } == true
+
+    /**
+     * An address that is a reel or a short video by its shape alone (iOS isVideoLink):
+     * instagram.com/reel/…, /reels/…, /tv/…, a TikTok /video/ page or its vm. / vt. short link.
+     */
+    fun isVideoLink(url: String): Boolean {
+        val parts = runCatching { URI(url).path }.getOrNull().orEmpty()
+            .split('/').filter { it.isNotEmpty() }.map { it.lowercase() }
+        if (isInstagram(url)) return parts.firstOrNull() in setOf("reel", "reels", "tv")
+        if (isTikTok(url)) {
+            val host = hostOf(url).orEmpty()
+            return "video" in parts || host.startsWith("vm.") || host.startsWith("vt.")
+        }
+        return false
+    }
+
+    /** The sign-in page's own title ("Instagram", "TikTok - Make Your Day") says nothing about the post. */
+    fun isBrandTitle(url: String, title: String): Boolean {
+        val t = title.lowercase()
+        return (isInstagram(url) && t == "instagram") || (isTikTok(url) && (t == "tiktok" || t.startsWith("tiktok - ")))
     }
 
     /** <meta property="og:title" content="...">, either attribute order, property= or name=. */
@@ -287,7 +331,79 @@ object LinkPreviews {
     private suspend fun build(url: String): Draft? {
         GroupLinkCards.target(url)?.let { return groupDraft(url, it) }
         youtubeId(url)?.let { id -> youtube(url, id)?.let { return it } }
+        // TikTok: its page often answers without tags; its public oEmbed then has the title and cover.
+        if (isTikTok(url)) {
+            val og = fetchPage(url)
+            if (og?.jpeg != null) return og
+            return tiktok(url) ?: og
+        }
         return fetchPage(url)
+    }
+
+    // ------------------------------------------------------------------ the story link card (iOS d2cbac93)
+
+    private val storyCache = ConcurrentHashMap<String, Draft>()
+    private val iconCache = ConcurrentHashMap<String, ByteArray>()
+    private val iconMissAt = ConcurrentHashMap<String, Long>()
+
+    /**
+     * The text story's card for [url]: [draft], plus what only the story card shows. A reel or video
+     * page that would not answer (Instagram often refuses without sign-in) still gets a host-only card
+     * with nothing made up; a sign-in page's brand title is dropped; the site's icon is fetched.
+     * Kept for the session, like the chat cards.
+     */
+    suspend fun storyDraft(url: String): Draft? {
+        storyCache[url]?.let { return it }
+        val video = isVideoLink(url)
+        val d = draft(url) ?: if (video) Draft(url, "", "", null, isVideo = true) else return null
+        val brand = isBrandTitle(url, d.title)
+        val icon = withContext(Dispatchers.IO) { siteIcon(url) }
+        val out = Draft(url, if (brand) "" else d.title, if (brand) "" else d.desc, d.jpeg,
+            isVideo = d.isVideo || video, icon = icon)
+        storyCache[url] = out
+        return out
+    }
+
+    /** [storyDraft], given up on after [millis]. */
+    suspend fun storyDraftWithin(url: String, millis: Long): Draft? = withTimeoutOrNull(millis) { storyDraft(url) }
+
+    /** TikTok's public oEmbed: title and cover, no sign-in. Null when it has nothing. */
+    private fun tiktok(url: String): Draft? {
+        val o = "https://www.tiktok.com/oembed?url=" + URLEncoder.encode(url, "UTF-8")
+        val json = download(o, url, "application/json", 256 * 1024)?.toString(Charsets.UTF_8) ?: return null
+        val j = runCatching { org.json.JSONObject(json) }.getOrNull() ?: return null
+        val title = j.optString("title", "").trim()
+        val cover = j.optString("thumbnail_url", "").takeIf { it.startsWith("https://") && !isPrivateHost(it) }
+            ?.let { fetchImage(it, url) }
+        if (title.isEmpty() && cover == null) return null
+        return Draft(url, title, j.optString("author_name", ""), cover, isVideo = true)
+    }
+
+    /**
+     * The site's small icon (iOS siteIcon): its apple-touch-icon, else favicon.ico, at most 512 KB and
+     * 16 px wide, as a 96 px PNG. Null when neither answers (the card draws a link glyph). Per host;
+     * a miss is kept ten minutes.
+     */
+    private fun siteIcon(url: String): ByteArray? {
+        if (!url.startsWith("https://") || isPrivateHost(url)) return null
+        val host = hostOf(url) ?: return null
+        iconCache[host]?.let { return it }
+        iconMissAt[host]?.let { if (System.currentTimeMillis() - it < 600_000) return null }
+        for (path in listOf("/apple-touch-icon.png", "/favicon.ico")) {
+            val bytes = download("https://$host$path", url, "image/*", 512 * 1024) ?: continue
+            val raw = runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }.getOrNull() ?: continue
+            if (raw.width < 16) continue
+            val side = 96
+            val bmp = if (raw.width > side || raw.height > side) {
+                val s = side.toFloat() / maxOf(raw.width, raw.height)
+                Bitmap.createScaledBitmap(raw, (raw.width * s).toInt().coerceAtLeast(1), (raw.height * s).toInt().coerceAtLeast(1), true)
+            } else raw
+            val out = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            return out.toByteArray().also { iconCache[host] = it; iconMissAt.remove(host) }
+        }
+        iconMissAt[host] = System.currentTimeMillis()
+        return null
     }
 
     /**
@@ -344,7 +460,7 @@ object LinkPreviews {
             val html = String(buf, 0, n, Charsets.UTF_8)
             val meta = parse(html, url) ?: return null
             val jpeg = meta.image?.let { fetchImage(it, url) }
-            return Draft(url, meta.title, meta.desc, jpeg)
+            return Draft(url, meta.title, meta.desc, jpeg, isVideo = meta.video)
         } catch (_: Exception) {
             return null
         } finally {

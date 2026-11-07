@@ -122,6 +122,72 @@ object TextStoryRules {
     fun linkCardHeight(cardWidth: Float): Float = LINK_BLOCK_H * cardWidth / LINK_REF_W
 
     /**
+     * iOS StoryTextLinkStyle: which card the link wears. A tap on the card moves to the next one.
+     * COMPACT = a square of the picture beside the words; LARGE = the picture across the top;
+     * POSTER = the tall card for reels and short videos, with the link in a capsule under it.
+     */
+    enum class LinkStyle {
+        COMPACT, LARGE, POSTER;
+        fun next(): LinkStyle = entries[(ordinal + 1) % entries.size]
+    }
+
+    /** iOS bannerHeight: the LARGE card's picture across the top, at the reference width. */
+    const val LINK_BANNER_H = 120f
+    // The tall card's numbers, at the 300 reference (iOS posterTextHeight & co).
+    const val POSTER_TEXT_H = 92f        // 12 + two 21 title lines + 6 + 20 + 12
+    const val POSTER_HOST_ONLY_H = 44f   // 12 + 20 + 12
+    const val POSTER_GAP = 10f
+    const val POSTER_CAPSULE_H = 30f
+
+    /**
+     * iOS posterPictureHeight: portrait, between 4:5 and 2:3, following the picture's own shape. A
+     * video with no picture keeps a square plain area for its play button; any other link with no
+     * picture has none.
+     */
+    fun posterPictureHeight(width: Float, picW: Int, picH: Int, isVideo: Boolean): Float {
+        if (picW <= 0 || picH <= 0) return if (isVideo) width else 0f
+        return width * (picH.toFloat() / picW).coerceIn(1.25f, 1.5f)
+    }
+
+    /**
+     * iOS StoryTextLinkPreview.height for every style. [hasPicture] is the classic cards' picture (a
+     * page that gave only its host shows none); the poster reads the picture's own size.
+     */
+    fun linkCardHeight(cardWidth: Float, style: LinkStyle, hasPicture: Boolean, picW: Int, picH: Int,
+                       isVideo: Boolean, hasTitle: Boolean): Float {
+        val k = cardWidth / LINK_REF_W
+        return when (style) {
+            LinkStyle.COMPACT -> LINK_BLOCK_H * k
+            LinkStyle.LARGE -> ((if (hasPicture) LINK_BANNER_H else 0f) + LINK_BLOCK_H) * k
+            LinkStyle.POSTER -> posterPictureHeight(cardWidth, picW, picH, isVideo) +
+                ((if (hasTitle) POSTER_TEXT_H else POSTER_HOST_ONLY_H) + POSTER_GAP + POSTER_CAPSULE_H) * k
+        }
+    }
+
+    /**
+     * iOS StoryTextLinkStyle.preferred: the tall card for a video or a portrait picture, the row for
+     * everything else. Our own links keep the row, which carries their Join/Chat pill.
+     */
+    fun preferredLinkStyle(ownLink: Boolean, isVideo: Boolean, picW: Int, picH: Int): LinkStyle = when {
+        ownLink -> LinkStyle.COMPACT
+        isVideo -> LinkStyle.POSTER
+        picW > 0 && picH > picW * 1.1f -> LinkStyle.POSTER
+        else -> LinkStyle.COMPACT
+    }
+
+    /**
+     * iOS StoryText.isBareLink: the words are nothing but the one link. The tall card then shows the
+     * link in its own capsule, so the words are not drawn a second time.
+     */
+    fun isBareLink(text: String): Boolean {
+        val t = text.trim()
+        if (t.isEmpty() || t.any { it.isWhitespace() }) return false
+        val url = firstLink(t) ?: return false
+        val span = TextLinks.find(t).firstOrNull { it.kind == TextLinks.Kind.WEB } ?: return false
+        return span.start == 0 && span.end == t.length && span.target == url
+    }
+
+    /**
      * iOS StoryTextLinkLayout.place: the card on top, the gap, the words, centred as one group. The
      * words never push the card off the bottom. Returns the words' height and the card's centre as a
      * fraction of [boxH].

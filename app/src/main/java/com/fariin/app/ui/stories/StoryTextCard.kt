@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -107,7 +108,8 @@ internal fun fittedTextStorySize(text: String, boxWidthPx: Float, fontIndex: Int
  * its tap area, so a viewer on either phone can open it.
  */
 internal fun renderTextStory(text: String, styleIndex: Int, fontIndex: Int,
-                             link: com.fariin.app.data.LinkPreviews.Draft? = null): StoryMedia.Prepared? {
+                             link: com.fariin.app.data.LinkPreviews.Draft? = null,
+                             linkStyle: TextStoryRules.LinkStyle = TextStoryRules.LinkStyle.COMPACT): StoryMedia.Prepared? {
     val t = TextStoryRules.shortenedUrls(text).trim()
     if (t.isEmpty()) return null
     val k = TextStoryRules.RENDER_SCALE
@@ -129,19 +131,25 @@ internal fun renderTextStory(text: String, styleIndex: Int, fontIndex: Int,
     }
     // In the picture's own points (1080 x 2700), as iOS lays it out; drawn at k.
     val cardW = TextStoryRules.RENDER_W * TextStoryRules.LINK_CARD_WIDTH
-    val cardH = TextStoryRules.linkCardHeight(cardW)
-    val (wordsH, centreY) = TextStoryRules.placeLink(layout.height / k * 1.06f, cardH,
+    val cardH = storyLinkCardHeight(link, linkStyle, cardW)
+    // The tall card already shows the link in its capsule: words that are only the link are not
+    // drawn a second time (iOS isBareLink).
+    val hideWords = linkStyle == TextStoryRules.LinkStyle.POSTER && TextStoryRules.isBareLink(text)
+    val (wordsH, centreY) = TextStoryRules.placeLink(if (hideWords) 0f else layout.height / k * 1.06f, cardH,
         TextStoryRules.RENDER_W, TextStoryRules.RENDER_H)
     val cardTop = centreY * h - cardH * k / 2
     val cardLeft = (w - cardW * k) / 2
-    drawStoryLinkCard(c, link, cardLeft, cardTop, cardW * k, cardH * k)
-    // The words centred in what the layout gave them, under the card and the gap.
-    val wordsTop = cardTop + cardH * k + TextStoryRules.RENDER_W * TextStoryRules.LINK_GAP * k
-    c.save()
-    c.clipRect(0f, wordsTop, w.toFloat(), wordsTop + wordsH * k)
-    c.translate(pad, wordsTop + (wordsH * k - layout.height) / 2f)
-    layout.draw(c)
-    c.restore()
+    drawStoryLinkCard(c, link, linkStyle, cardLeft, cardTop, cardW * k, cardH * k)
+    if (!hideWords) {
+        // The words centred in what the layout gave them, under the card and the gap.
+        val wordsTop = cardTop + cardH * k + TextStoryRules.RENDER_W * TextStoryRules.LINK_GAP * k
+        c.save()
+        c.clipRect(0f, wordsTop, w.toFloat(), wordsTop + wordsH * k)
+        c.translate(pad, wordsTop + (wordsH * k - layout.height) / 2f)
+        layout.draw(c)
+        c.restore()
+    }
+    // The tap area is the whole card, the tall card's capsule included.
     val tap = TextStoryRules.linkTap(link.url, centreY, cardH)
     return StoryMedia.fromRendered(bmp, TextStoryRules.RENDER_QUALITY, listOf(tap))
 }
@@ -152,9 +160,15 @@ internal fun renderTextStory(text: String, styleIndex: Int, fontIndex: Int,
  * semibold, two lines), the description (12.5, two lines) and the host (12.5, grey), 2 apart, 12 in
  * from the sides, centred top to bottom. Black on it whatever the story's colour. Our channel, group
  * and person links add a Join or Chat pill on the right (StoryLinkCardRules).
+ *
+ * LARGE puts the picture across the top (120 at the reference) with the same words under it;
+ * POSTER is the tall card ([drawPosterCard]).
  */
 private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data.LinkPreviews.Draft,
+                              style: TextStoryRules.LinkStyle,
                               left: Float, top: Float, cw: Float, ch: Float) {
+    if (style == TextStoryRules.LinkStyle.POSTER) { drawPosterCard(c, d, left, top, cw); return }
+    val large = style == TextStoryRules.LinkStyle.LARGE
     val u = cw / TextStoryRules.LINK_REF_W
     val bare = d.title.isEmpty() && d.desc.isEmpty()
     val pic = if (bare) null else d.jpeg?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
@@ -166,15 +180,21 @@ private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data
     c.clipPath(shape)
     c.drawColor(android.graphics.Color.rgb(247, 247, 247))
     var textLeft = left
+    // The words' block: the whole card on COMPACT, the part under the banner on LARGE.
+    var blockTop = top
+    var blockH = ch
     if (pic != null) {
-        // The square, filled: the picture's middle, cropped to the card's height on each side.
-        val side = minOf(pic.width, pic.height)
-        val src = android.graphics.Rect((pic.width - side) / 2, (pic.height - side) / 2,
-            (pic.width - side) / 2 + side, (pic.height - side) / 2 + side)
-        c.drawBitmap(pic, src, android.graphics.RectF(left, top, left + ch, top + ch),
-            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        if (large) {
+            val bannerH = TextStoryRules.LINK_BANNER_H * u
+            drawFilled(c, pic, android.graphics.RectF(left, top, left + cw, top + bannerH))
+            blockTop = top + bannerH
+            blockH = ch - bannerH
+        } else {
+            // The square, filled: the picture's middle, cropped to the card's height on each side.
+            drawFilled(c, pic, android.graphics.RectF(left, top, left + ch, top + ch))
+            textLeft = left + ch
+        }
         pic.recycle()
-        textLeft = left + ch
     }
     fun paint(sizePt: Float, bold: Boolean, color: Int) = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = sizePt * u; this.color = color
@@ -199,16 +219,141 @@ private fun drawStoryLinkCard(c: android.graphics.Canvas, d: com.fariin.app.data
     // The words CENTRED in the card's fixed height (owner 2026-11-06: they sat at the top, beside a
     // picture centred on the whole card). The card's size does not change.
     val wordsH = lines.sumOf { it.height.toDouble() }.toFloat() + 2f * u * (lines.size - 1)
-    var y = top + maxOf(7f * u, (ch - wordsH) / 2f)
+    var y = blockTop + maxOf(7f * u, (blockH - wordsH) / 2f)
     lines.forEach { l -> c.save(); c.translate(textLeft + 12f * u, y); l.draw(c); c.restore(); y += l.height + 2f * u }
     if (pill != null) {
         val fm = pillPaint.fontMetrics
         val pillH = (fm.descent - fm.ascent) + 14f * u
-        val pr = android.graphics.RectF(left + cw - 12f * u - pillW, top + (ch - pillH) / 2f, left + cw - 12f * u, top + (ch + pillH) / 2f)
+        val pr = android.graphics.RectF(left + cw - 12f * u - pillW, blockTop + (blockH - pillH) / 2f,
+            left + cw - 12f * u, blockTop + (blockH + pillH) / 2f)
         c.drawRoundRect(pr, pillH / 2f, pillH / 2f,
             Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(0, 122, 255) })
         c.drawText(pill, pr.left + 14f * u, pr.centerY() - (fm.ascent + fm.descent) / 2f, pillPaint)
     }
+    c.restore()
+}
+
+/** The card's height for [style], from the same numbers the drawing uses (iOS StoryTextLinkPreview.height). */
+internal fun storyLinkCardHeight(d: com.fariin.app.data.LinkPreviews.Draft, style: TextStoryRules.LinkStyle, cardW: Float): Float {
+    val bare = d.title.isEmpty() && d.desc.isEmpty()
+    val (pw, ph) = d.picSize
+    return TextStoryRules.linkCardHeight(cardW, style, d.jpeg != null && !bare, pw, ph, d.isVideo, d.title.isNotEmpty())
+}
+
+/** The style a fresh link starts in: the tall card for a video or a portrait picture. */
+internal fun preferredStoryLinkStyle(d: com.fariin.app.data.LinkPreviews.Draft): TextStoryRules.LinkStyle {
+    val own = com.fariin.app.data.StoryLinkCardRules.opensInApp(d.url) || com.fariin.app.data.LinkPreviews.isOwnLink(d.url)
+    val (pw, ph) = d.picSize
+    return TextStoryRules.preferredLinkStyle(own, d.isVideo, pw, ph)
+}
+
+/** [pic] filling [dst], its middle kept (aspect fill). */
+private fun drawFilled(c: android.graphics.Canvas, pic: Bitmap, dst: android.graphics.RectF) {
+    val want = dst.width() / dst.height()
+    var sw = pic.width.toFloat()
+    var sh = sw / want
+    if (sh > pic.height) { sh = pic.height.toFloat(); sw = sh * want }
+    val sx = ((pic.width - sw) / 2).toInt()
+    val sy = ((pic.height - sh) / 2).toInt()
+    c.drawBitmap(pic, android.graphics.Rect(sx, sy, sx + sw.toInt(), sy + sh.toInt()), dst,
+        Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+}
+
+/**
+ * iOS StoryTextLinkPreview poster: THE TALL CARD FOR REELS AND SHORT VIDEOS. A white card with 22
+ * corners at the 300 reference; the picture across it at its own portrait shape (4:5 to 2:3), a
+ * dark round play button in the middle on a video; then the title (17 semibold, two lines) and the
+ * full host (14, grey) with the site's icon on the right (a link glyph without one), 14 in from the
+ * sides. Under the card, 10 apart, the link itself in a 30 tall light capsule.
+ */
+private fun drawPosterCard(c: android.graphics.Canvas, d: com.fariin.app.data.LinkPreviews.Draft,
+                           left: Float, top: Float, cw: Float) {
+    val u = cw / TextStoryRules.LINK_REF_W
+    val (pw, ph) = d.picSize
+    val picH = TextStoryRules.posterPictureHeight(cw, pw, ph, d.isVideo)
+    val hasTitle = d.title.isNotEmpty()
+    val textH = (if (hasTitle) TextStoryRules.POSTER_TEXT_H else TextStoryRules.POSTER_HOST_ONLY_H) * u
+    val cardBottom = top + picH + textH
+    val anti = Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG
+    c.save()
+    c.clipPath(android.graphics.Path().apply {
+        addRoundRect(android.graphics.RectF(left, top, left + cw, cardBottom), 22f * u, 22f * u, android.graphics.Path.Direction.CW)
+    })
+    c.drawColor(android.graphics.Color.WHITE)
+    if (picH > 0f) {
+        val area = android.graphics.RectF(left, top, left + cw, top + picH)
+        val pic = d.jpeg?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+        if (pic != null) { drawFilled(c, pic, area); pic.recycle() }
+        else c.drawRect(area, Paint().apply { color = android.graphics.Color.rgb(235, 235, 235) })
+        if (d.isVideo) {
+            val cx = area.centerX(); val cy = area.centerY()
+            c.drawCircle(cx, cy, 29f * u, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.argb(115, 0, 0, 0) })
+            val t = 22f * u
+            val ox = 2f * u
+            c.drawPath(android.graphics.Path().apply {
+                moveTo(cx - t * 0.38f + ox, cy - t / 2)
+                lineTo(cx - t * 0.38f + ox, cy + t / 2)
+                lineTo(cx + t * 0.55f + ox, cy)
+                close()
+            }, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE })
+        }
+    }
+    fun paint(sizePt: Float, weight: Int, color: Int) = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = sizePt * u; this.color = color
+        typeface = if (Build.VERSION.SDK_INT >= 28) Typeface.create(Typeface.DEFAULT, weight, false)
+            else if (weight >= 600) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+    }
+    val side = 14f * u
+    val iconS = 20f * u
+    val innerW = cw - side * 2
+    val title = if (hasTitle) StaticLayout.Builder.obtain(d.title, 0, d.title.length, paint(17f, 600, android.graphics.Color.BLACK),
+        innerW.toInt().coerceAtLeast(1)).setMaxLines(2).setEllipsize(android.text.TextUtils.TruncateAt.END)
+        .setIncludePad(false).build() else null
+    // Title, 6, the 20 tall host row: centred in the text block.
+    val contentH = (title?.height?.toFloat()?.plus(6f * u) ?: 0f) + iconS
+    var y = top + picH + (textH - contentH) / 2f
+    title?.let { c.save(); c.translate(left + side, y); it.draw(c); c.restore(); y += it.height + 6f * u }
+    // The host row: the FULL host on the left, the site's icon on the right.
+    val grey = android.graphics.Color.rgb(115, 115, 115)
+    val hostPaint = paint(14f, 400, grey)
+    val host = runCatching { java.net.URI(d.url).host }.getOrNull() ?: d.host
+    val hostText = android.text.TextUtils.ellipsize(host, hostPaint, innerW - iconS - 8f * u, android.text.TextUtils.TruncateAt.END).toString()
+    val fm = hostPaint.fontMetrics
+    c.drawText(hostText, left + side, y + iconS / 2f - (fm.ascent + fm.descent) / 2f, hostPaint)
+    val iconRect = android.graphics.RectF(left + cw - side - iconS, y, left + cw - side, y + iconS)
+    val icon = d.icon?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+    if (icon != null) {
+        c.save()
+        c.clipPath(android.graphics.Path().apply { addRoundRect(iconRect, 5f * u, 5f * u, android.graphics.Path.Direction.CW) })
+        drawFilled(c, icon, iconRect)
+        c.restore()
+        icon.recycle()
+    } else drawLinkGlyph(c, iconRect, grey, u)
+    c.restore()
+
+    // The link in its capsule under the card.
+    val capH = TextStoryRules.POSTER_CAPSULE_H * u
+    val capTop = cardBottom + TextStoryRules.POSTER_GAP * u
+    val capPaint = paint(14f, 500, android.graphics.Color.argb(204, 0, 0, 0))
+    val pad = 12f * u
+    val label = android.text.TextUtils.ellipsize(TextStoryRules.shortened(d.url), capPaint, cw - pad * 2,
+        android.text.TextUtils.TruncateAt.END).toString()
+    val capW = capPaint.measureText(label) + pad * 2
+    val cap = android.graphics.RectF(left + (cw - capW) / 2f, capTop, left + (cw + capW) / 2f, capTop + capH)
+    c.drawRoundRect(cap, capH / 2f, capH / 2f, Paint(anti).apply { color = android.graphics.Color.argb(153, 255, 255, 255) })
+    val cfm = capPaint.fontMetrics
+    c.drawText(label, cap.left + pad, cap.centerY() - (cfm.ascent + cfm.descent) / 2f, capPaint)
+}
+
+/** Two linked rounded links, turned 45 degrees: the stand-in when a site has no icon. */
+private fun drawLinkGlyph(c: android.graphics.Canvas, r: android.graphics.RectF, color: Int, u: Float) {
+    val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.8f * u; this.color = color }
+    val cx = r.centerX(); val cy = r.centerY()
+    val lw = 9f * u; val lh = 5f * u
+    c.save()
+    c.rotate(-45f, cx, cy)
+    c.drawRoundRect(android.graphics.RectF(cx - lw + 1.5f * u, cy - lh / 2, cx + 1.5f * u, cy + lh / 2), lh / 2, lh / 2, p)
+    c.drawRoundRect(android.graphics.RectF(cx - 1.5f * u, cy - lh / 2, cx + lw - 1.5f * u, cy + lh / 2), lh / 2, lh / 2, p)
     c.restore()
 }
 
@@ -231,6 +376,8 @@ internal fun StoryTextCard(
     bottomReserve: Dp,
     active: Boolean,
     onClose: () -> Unit,
+    linkStyle: TextStoryRules.LinkStyle,
+    onLinkStyle: (TextStoryRules.LinkStyle) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -265,8 +412,13 @@ internal fun StoryTextCard(
     LaunchedEffect(linkUrl) {
         if (linkUrl == null) { linkDraft = null; return@LaunchedEffect }
         kotlinx.coroutines.delay(400)
-        linkDraft = com.fariin.app.data.LinkPreviews.draftWithin(linkUrl, 8_000)
+        val d = com.fariin.app.data.LinkPreviews.storyDraftWithin(linkUrl, 8_000)
+        // A fresh link starts in its preferred style: the tall card for a video or a portrait picture.
+        if (d != null && linkDraft?.url != d.url) onLinkStyle(preferredStoryLinkStyle(d))
+        linkDraft = d
     }
+    val hideWords = linkDraft?.takeIf { it.url == linkUrl } != null &&
+        linkStyle == TextStoryRules.LinkStyle.POSTER && TextStoryRules.isBareLink(text)
 
     fun setFocus(on: Boolean) {
         if (on) { requester.requestFocus(); keyboard?.show() } else { focus.clearFocus(force = true); keyboard?.hide() }
@@ -304,13 +456,21 @@ internal fun StoryTextCard(
             androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
             linkDraft?.takeIf { it.url == linkUrl }?.let { d ->
                 val cardW = with(density) { (cardWidth * TextStoryRules.LINK_CARD_WIDTH).toDp() }
-                val cardH = with(density) { TextStoryRules.linkCardHeight(cardWidth * TextStoryRules.LINK_CARD_WIDTH).toDp() }
-                androidx.compose.foundation.Canvas(Modifier.size(cardW, cardH)) {
-                    drawIntoCanvas { drawStoryLinkCard(it.nativeCanvas, d, 0f, 0f, size.width, size.height) }
+                val cardH = with(density) { storyLinkCardHeight(d, linkStyle, cardWidth * TextStoryRules.LINK_CARD_WIDTH).toDp() }
+                // A tap on the card moves to the next style (iOS: the card's only control).
+                androidx.compose.foundation.Canvas(
+                    Modifier.size(cardW, cardH)
+                        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null) { onLinkStyle(linkStyle.next()) }
+                        .semantics { contentDescription = "Change link card" },
+                ) {
+                    drawIntoCanvas { drawStoryLinkCard(it.nativeCanvas, d, linkStyle, 0f, 0f, size.width, size.height) }
                 }
                 Spacer(Modifier.height(with(density) { (cardWidth * TextStoryRules.LINK_GAP).toDp() }))
             }
-            Box(contentAlignment = Alignment.Center) {
+            // Words that are only the link sit under the tall card's own capsule: not drawn twice
+            // (still there to type in, as on iOS).
+            Box(if (hideWords) Modifier.height(0.dp).then(Modifier.alpha(0f)) else Modifier, contentAlignment = Alignment.Center) {
             if (text.isEmpty()) {
                 Text("Type something…", style = textStyle.copy(color = ink.copy(alpha = 0.45f)),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = TextStoryRules.CARD_SIDE_DP.dp))
