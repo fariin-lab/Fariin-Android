@@ -19,7 +19,7 @@ class NewBadgesTest {
     }
 
     @Test fun catalogHasEveryIdOnceAndTheOldKeys() {
-        assertEquals(115, NewBadgeSpots.ALL.size)
+        assertEquals(116, NewBadgeSpots.ALL.size)
         for (k in listOf("subscriptions", "account", "devices", "notifications", "appearance", "chats",
             "stories", "privacy", "storage", "invite", "safety", "help")) assert(k in NewBadgeSpots.ALL) { k }
     }
