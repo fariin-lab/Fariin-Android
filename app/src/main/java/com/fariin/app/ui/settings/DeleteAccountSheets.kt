@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,7 +49,6 @@ import com.fariin.app.data.AccountDeletion
 import com.fariin.app.data.AuthRepository
 import com.fariin.app.data.MyProfile
 import com.fariin.app.ui.components.FariinSheetDialog
-import com.fariin.app.ui.components.FloatingIcon
 import com.fariin.app.ui.components.SheetMotion
 import com.fariin.app.ui.components.rememberSheetMotion
 import com.fariin.app.ui.components.sheetDrag
@@ -186,15 +184,17 @@ internal fun sheetRestAt(motion: SheetMotion, height: Dp) {
     motion.mid = with(density) { windowH - statusTop - 10.dp.toPx() - height.toPx() - navBottom }.coerceAtLeast(0f)
 }
 
-/** The drag strip and the round X in the corner, as the app's other sheets. */
+/**
+ * The drag strip over the content. No corner X: every sheet here already ends with Cancel, and the
+ * owner wants one way out, not two (2026-11-07, same as the contact Block sheet).
+ */
 @Composable
+@Suppress("UNUSED_PARAMETER")
 internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(top = 56.dp, bottom = 16.dp),
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) { content() }
         Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
-        FloatingIcon(Icons.Filled.Close, contentDescription = "Close", onClick = { if (closeEnabled) motion.close() },
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp), circle = true)
     }
 }
 
