@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.filled.Close
@@ -23,7 +24,7 @@ import com.fariin.app.ui.theme.Fariin
 /**
  * The Bubble Style picker as a sheet over the chat (owner 2026-11-07): the long-press menu on my own
  * text opens it. The same chooser as Settings > Bubble Style, with a round X and Save in its top strip;
- * the strip also drags the sheet down.
+ * the strip and the grabber move the sheet. It opens at 70% of the screen, the chat above it.
  */
 object BubbleStyleSheet {
     /** Set by the menu row; the chat screen's [Host] shows the sheet while it is true. */
@@ -45,12 +46,22 @@ object BubbleStyleSheet {
 private fun Sheet(onDismiss: () -> Unit) {
     val c = Fariin.colors
     val motion = rememberSheetMotion(onDismiss)
-    FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
+    // Opens at 70% of the screen with the chat above it (owner 2026-11-07); the grabber or the top
+    // strip pulls it to full or down to close. The sheet's top at full sits 10 dp under the status bar.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
+    val statusTop = WindowInsets.statusBars.getTop(density)
+    motion.mid = (windowH * 0.3f - statusTop - with(density) { 10.dp.toPx() }).coerceAtLeast(1f)
+    // At the 70% stop the sheet's lower part is below the screen: the grid's end pads by that much
+    // so its last row still scrolls into view.
+    val hidden = with(density) { motion.mid.toDp() }
+    FariinSheetDialog(motion, handle = true, fill = c.bgSecondary) { _ ->
         BubbleStyleChooser(
-            bottomPad = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            bottomPad = 16.dp + hidden + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
             onSaved = { motion.close() },
             bar = { dirty, save ->
-                Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(horizontal = 8.dp, vertical = 10.dp)) {
+                // Under the grabber (FariinSheet draws it in the top strip).
+                Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 10.dp)) {
                     // The round X the other sheets use (owner 2026-11-07), not a "Cancel" word.
                     com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.Close, "Cancel",
                         onClick = { motion.close() }, modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp))
