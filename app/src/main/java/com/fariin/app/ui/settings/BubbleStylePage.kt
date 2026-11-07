@@ -90,7 +90,7 @@ internal fun chatColorName(spec: ChatColorSpec): String =
  * the new-account card), so the Colours chip shows first.
  */
 @Composable
-internal fun BubbleStylePage(onClose: () -> Unit, startOnColours: Boolean = false) {
+internal fun BubbleStylePage(startOnColours: Boolean = false, onClose: () -> Unit) {
     BubbleStyleChooser(
         bottomPad = 16.dp + com.fariin.app.ui.shell.bottomBarInset(),
         onSaved = onClose,

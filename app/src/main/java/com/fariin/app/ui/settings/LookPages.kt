@@ -115,7 +115,7 @@ internal fun lookRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
         PAGE_WALLPAPER -> ChatWallpaperPage(push, pop)
         PAGE_WALL_COLOR -> WallpaperColorPage(pop)
         // The Chat Color page is gone (owner 2026-11-07): its colours are the Bubble Style page's first chip.
-        PAGE_CHAT_COLOR -> BubbleStylePage(pop, startOnColours = true)
+        PAGE_CHAT_COLOR -> BubbleStylePage(startOnColours = true, onClose = pop)
         else -> return false
     }
     return true
