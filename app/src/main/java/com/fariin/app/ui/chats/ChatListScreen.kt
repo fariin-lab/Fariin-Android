@@ -33,6 +33,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -296,6 +302,8 @@ fun ChatListScreen(
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
     val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    // Chats taken out of the search page's top row by a long press (per account, as iOS).
+    var topHidden by remember(me) { mutableStateOf(TopPeersHidden.load(appCtx, me)) }
     var gsUndo by remember { mutableStateOf(false) }
     val screenCtx = androidx.compose.ui.platform.LocalContext.current
     val myProfile = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value
@@ -663,6 +671,13 @@ fun ChatListScreen(
                     // Groups, Channels, then Global Search.
                     if (searching) {
                         if (q.isEmpty()) {
+                            // iOS TopPeersRow: the people I chat with, newest first, above Recent.
+                            val peers = topPeers(state.chats, me, topHidden)
+                            if (peers.isNotEmpty()) item(key = "peers", contentType = "peers") {
+                                TopPeersRow(peers, me, onOpen = { conv ->
+                                    SearchRecents.recordChat(appCtx, me, conv); searching = false; query = ""; onOpen(conv)
+                                }, onRemove = { conv -> topHidden = TopPeersHidden.hide(appCtx, me, conv.id) })
+                            }
                             val recents = SearchRecents.entries.toList()
                             if (recents.isNotEmpty()) {
                                 item(key = "h-recent") { RecentHeader { SearchRecents.clear(appCtx, me) } }
@@ -769,6 +784,19 @@ fun ChatListScreen(
                     scope.launch { kotlinx.coroutines.delay(5_000); gsUndo = false }
                 })
             else if (gsUndo) GetStartedUndo { gsUndo = false; GetStartedStore.reopen(appCtx, me) }
+        }
+        // iOS findChannelsButton: one round filled button with the compass, bottom right above the
+        // keyboard, on the empty search page only (typing hands the page to the results).
+        if (searching && q.isEmpty() && !selecting) {
+            Box(Modifier.align(Alignment.BottomEnd)
+                .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.ime.union(androidx.compose.foundation.layout.WindowInsets.navigationBars))
+                .padding(end = 16.dp, bottom = 12.dp)
+                .size(44.dp).floating(CircleShape, fill = c.accent)
+                .clickable(onClickLabel = "Find Channels", onClick = channels.find)
+                .semantics { contentDescription = "Find Channels" },
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Explore, contentDescription = null, tint = c.onAccent, modifier = Modifier.size(24.dp))
+            }
         }
         }
     }
@@ -1288,3 +1316,65 @@ object ChatListRules {
 /** Fariin's own drawings (converted from the iOS assets) where iOS has one; stock icons elsewhere. */
 @Composable
 private fun fi(@androidx.annotation.DrawableRes id: Int): ImageVector = ImageVector.vectorResource(id)
+
+/** The top row's people (iOS ChatSearchPage.peers): 1:1 chats with someone else, newest first, up to 20. */
+private fun topPeers(chats: List<Conversation>, me: String, hidden: Set<String>): List<Conversation> =
+    chats.asSequence().filter { c ->
+        val other = c.otherUid(me)
+        !c.isGroup && !c.isChannel && c.id.contains('_') && c.id !in hidden &&
+            other.isNotEmpty() && other != me && !c.isCleared(me) && !c.isArchived(me)
+    }.sortedByDescending { it.updatedAtMillis }.take(20).toList()
+
+/** Chats removed from the top row, kept per account (iOS TopPeersHidden). */
+private object TopPeersHidden {
+    private fun prefs(ctx: android.content.Context) = ctx.getSharedPreferences("top_peers_hidden", android.content.Context.MODE_PRIVATE)
+    fun load(ctx: android.content.Context, me: String): Set<String> = prefs(ctx).getStringSet(me, null)?.toSet() ?: emptySet()
+    fun hide(ctx: android.content.Context, me: String, cid: String): Set<String> {
+        val next = load(ctx, me) + cid
+        prefs(ctx).edit().putStringSet(me, next).apply()
+        return next
+    }
+}
+
+/**
+ * iOS TopPeersRow: 60 dp faces with the first name under each in 11 sp on one line, an unread count
+ * at the face's top right (grey when muted), scrolling sideways, 92 dp tall. A tap opens the chat; a
+ * long press offers Remove.
+ */
+@Composable
+private fun TopPeersRow(peers: List<Conversation>, me: String, onOpen: (Conversation) -> Unit, onRemove: (Conversation) -> Unit) {
+    val c = Fariin.colors
+    val now = System.currentTimeMillis().toDouble()
+    androidx.compose.foundation.lazy.LazyRow(Modifier.fillMaxWidth().height(92.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) {
+        items(peers, key = { it.id }) { conv ->
+            var menu by remember { mutableStateOf(false) }
+            val name = conv.displayName(me)
+            val first = name.split(' ').firstOrNull { it.isNotEmpty() } ?: name
+            val unread = conv.unread(me)
+            val muted = conv.isMuted(me, now)
+            Box {
+                Column(Modifier.width(72.dp).combinedClickable(onClick = { onOpen(conv) }, onLongClick = { menu = true })
+                    .padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box {
+                        Avatar(conv.displayPhoto(me), 60.dp, kind = com.fariin.app.ui.components.AvatarKind.of(false, false))
+                        if (unread > 0) Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-2).dp)
+                            .background(c.bg, RoundedCornerShape(50)).padding(2.dp)
+                            .heightIn(min = 20.dp).widthIn(min = 20.dp).clip(RoundedCornerShape(50))
+                            .background(if (muted) Color(0xFF8E8E93) else c.accent).padding(horizontal = 5.dp),
+                            contentAlignment = Alignment.Center) {
+                            Text(if (unread > 99) "99+" else "$unread", fontSize = 14.sp, lineHeight = 16.sp,
+                                color = if (muted) Color.White else c.onAccent)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(first, fontSize = 11.sp, lineHeight = 13.sp, color = c.label, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 64.dp))
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Remove", color = c.red) }, onClick = { menu = false; onRemove(conv) })
+                }
+            }
+        }
+    }
+}
