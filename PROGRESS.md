@@ -1106,3 +1106,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Sheets (0b21c1f, 4575f9f): location sheet had a black status bar band (dialog lacked FLAG_DRAWS_SYSTEM_BAR_
   BACKGROUNDS and cutout mode) and dark icons on the dim; fixed, white icons on every sheet. Handle drag closes.
   Receive animation (ad5adda) still needs a live incoming message to watch.
+- 22:20 Owner: check today's work for crashes and battery drain. Three reviewer agents on today's 205 commits
+  (chat+glass, sheets+maps+browser+PDF, data+pages), each fixing what it confirms. Pixel measured: only Fariin
+  crash today 11:00 (layout index, fixed 11:05/11:10); CPU idle 0% on chat list, in a chat, in kk (moving
+  background) and in background; no wake locks, alarms or jobs held. Chat gaps batch 9251984..47abb25 merged;
+  glass pages 4b3af57 + 56bec33 (back circle showed rows hidden under the bar).
