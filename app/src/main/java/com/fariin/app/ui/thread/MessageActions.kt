@@ -170,7 +170,7 @@ internal fun MessageMenu(
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
         if (!m.deleted) {
-            if (MessageRules.canReplyHere(m, mayReplyHere(ui))) add(MenuItem("Reply", Icons.AutoMirrored.Outlined.Reply, badge = NewBadgeSpots.CHAT_MENU_REPLY) { onReply(m) })
+            if (MessageRules.canReplyHere(m, mayReplyHere(ui))) add(MenuItem("Reply", null, iconRes = com.fariin.app.R.drawable.ic_menu_reply, badge = NewBadgeSpots.CHAT_MENU_REPLY) { onReply(m) })
             // A call record: call back from here too, through the same confirm as its tap (iOS);
             // not while the call is still ringing or going.
             if (m.isCall && onCallBack != null) {
@@ -179,7 +179,7 @@ internal fun MessageMenu(
                 if (!live) add(MenuItem(if (m.callVideo) "Video Call" else "Voice Call",
                     if (m.callVideo) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice)) { onCallBack(m) })
             }
-            if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", Icons.AutoMirrored.Outlined.Forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) {
+            if (!restricted && MessageRules.canForward(m)) add(MenuItem("Forward", null, iconRes = com.fariin.app.R.drawable.ic_menu_forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onForward(m) })
             // Quote a channel post into a chat of mine, with my own words (iOS, owner 2026-11-06):
             // only where Forward is offered.
