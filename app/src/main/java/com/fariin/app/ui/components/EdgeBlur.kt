@@ -4,6 +4,7 @@ import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.Easing
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.hazeEffect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
@@ -78,4 +79,13 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
     } else androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
         0f to page, 0.40f to page, 0.55f to page.copy(alpha = 0.78f), 0.7f to page.copy(alpha = 0.45f),
         0.84f to page.copy(alpha = 0.18f), 0.94f to page.copy(alpha = 0.05f), 1f to page.copy(alpha = 0f))))
+    // The blur fades at its own top edge, so the screen's first pixels let the page show through sharp
+    // (owner's photo of the physical screen 2026-11-08; a screenshot does not catch it). A band of the
+    // page colour, solid at the very top and gone 10 dp down, covers that edge.
+    .drawWithContent {
+        drawContent()
+        val band = 10.dp.toPx()
+        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page, 0.35f to page.copy(alpha = 0.8f),
+            1f to page.copy(alpha = 0f), startY = 0f, endY = band), size = androidx.compose.ui.geometry.Size(size.width, band))
+    }
     .padding(bottom = tail)
