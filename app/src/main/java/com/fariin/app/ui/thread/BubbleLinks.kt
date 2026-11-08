@@ -142,7 +142,16 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
                             if (g != null) storyOpen = g else notice("This story is no longer available.")
                         }
                         adminCode != null -> invite = adminCode
-                        groupCode != null -> groupInvite = groupCode
+                        // Already in it: straight in. Otherwise the sheet, filled if the answer came in time.
+                        groupCode != null -> scope.launch {
+                            val d = kotlinx.coroutines.withTimeoutOrNull(800) { runCatching { com.fariin.app.ui.people.GroupLinkPreviews.get(groupCode) }.getOrNull() }
+                            val to = com.fariin.app.ui.people.GroupLinkPreviews.memberTarget(d)
+                            when {
+                                to == null -> groupInvite = groupCode
+                                to.second -> channelNav.open(to.first)
+                                else -> nav.chat(to.first)
+                            }
+                        }
                         call != null -> nav.joinLink(call.text, com.fariin.app.call.CallLinkKey.linkSaysVideo(sp.target))
                         h != null -> handle(h)
                         else -> openWeb(ctx, sp.target) { notice("No app here can open this link") }

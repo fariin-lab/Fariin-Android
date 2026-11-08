@@ -43,11 +43,51 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.async
+import androidx.compose.animation.animateContentSize
 
 /** A group or channel invite link, https://fariin.com/g/<code> (iOS KulanApp.groupLink). */
 object GroupInviteLink {
     private val re = Regex("^https?://(www\\.)?fariin\\.com/g/([A-Za-z0-9_-]{4,64})/?$", RegexOption.IGNORE_CASE)
     fun code(url: String): String? = re.find(url.trim())?.groupValues?.get(2)
+}
+
+/**
+ * The server's answer for an invite link, shared by the tap and the sheet: the tap asks first, so a
+ * link to a group or channel I am already in opens it straight away (the reference apps), and any
+ * other opens the sheet already filled, with no spinner then a jump (owner's recording 2026-11-07).
+ * Kept a minute; one call in flight per code.
+ */
+object GroupLinkPreviews {
+    private class Kept(val at: Long, val data: Map<*, *>)
+    private val kept = java.util.concurrent.ConcurrentHashMap<String, Kept>()
+    private val inFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Map<*, *>>>()
+    private val io = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
+    fun peek(code: String): Map<*, *>? = kept[code]?.takeIf { System.currentTimeMillis() - it.at < 60_000 }?.data
+
+    /** The preview, or the call's failure (thrown, for the sheet's own wording). */
+    suspend fun get(code: String): Map<*, *> {
+        peek(code)?.let { return it }
+        val task = inFlight.getOrPut(code) {
+            io.async {
+                try {
+                    val d = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("groupLinkPreview")
+                        .call(mapOf("code" to code)).await().getData() as? Map<*, *> ?: emptyMap<String, Any>()
+                    kept[code] = Kept(System.currentTimeMillis(), d)
+                    d
+                } finally { inFlight.remove(code) }
+            }
+        }
+        return task.await()
+    }
+
+    /** Where a member's tap goes: (cid, isChannel), or null when I am not in it. */
+    fun memberTarget(d: Map<*, *>?): Pair<String, Boolean>? {
+        if (d == null || d["isMember"] != true) return null
+        val cid = (d["cid"] as? String)?.ifEmpty { null } ?: return null
+        return cid to (d["channel"] == true)
+    }
 }
 
 private class Face(val uid: String, val name: String, val photo: String?)
@@ -85,7 +125,7 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val fn = remember { FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION) }
-    var preview by remember { mutableStateOf<LinkPreview?>(null) }
+    var preview by remember { mutableStateOf(GroupLinkPreviews.peek(code)?.let { LinkPreview(it) }) }
     var refused by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf<String?>(null) }
     var joining by remember { mutableStateOf(false) }
@@ -102,8 +142,9 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
                 FirebaseFunctionsException.Code.DEADLINE_EXCEEDED))
             e.message?.takeIf { it.isNotBlank() && it != e.code.name } ?: fallback else fallback
     LaunchedEffect(code, attempt) {
-        runCatching { fn.getHttpsCallable("groupLinkPreview").call(mapOf("code" to code)).await().getData() as? Map<*, *> }
-            .onSuccess { preview = LinkPreview(it ?: emptyMap<String, Any>()) }
+        if (preview != null && attempt == 0) return@LaunchedEffect   // filled at the tap
+        runCatching { GroupLinkPreviews.get(code) }
+            .onSuccess { preview = LinkPreview(it) }
             .onFailure { e ->
                 val fe = e as? FirebaseFunctionsException
                 if (fe?.code == FirebaseFunctionsException.Code.NOT_FOUND || fe?.code == FirebaseFunctionsException.Code.PERMISSION_DENIED)
@@ -129,8 +170,10 @@ fun JoinGroupSheet(code: String, onClose: () -> Unit, onOpenChat: (String) -> Un
             joining = false
         }
     }
-    ModalBottomSheet(onDismissRequest = onClose, containerColor = sheetFill, shape = SheetShape) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    // Open at its height at once, and grow smoothly if the answer comes after (no jump).
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = sheetFill, shape = SheetShape,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().animateContentSize().padding(horizontal = 24.dp).padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val p = preview
             when {
                 p != null -> {
