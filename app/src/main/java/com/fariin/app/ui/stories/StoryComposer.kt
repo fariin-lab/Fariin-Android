@@ -128,6 +128,22 @@ object StoryUploads {
     /** The picture being posted, for the uploading My Story card (iOS storyBudget.inFlight image). */
     val pending = MutableStateFlow<ByteArray?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Posts still going: "Uploading…" stays until the last of several back-to-back posts is done. */
+    private var inFlight = 0
+    /** The first failure among the posts in flight, shown once they are all done. */
+    private var failure: State.Failed? = null
+
+    @Synchronized private fun begin() { inFlight++ }
+
+    @Synchronized private fun finish(result: State?) {
+        if (result is State.Failed && failure == null) failure = result
+        inFlight = (inFlight - 1).coerceAtLeast(0)
+        if (inFlight == 0) {
+            state.value = failure
+            failure = null
+            pending.value = null
+        }
+    }
 
     fun start(context: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
               hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false,
@@ -136,6 +152,7 @@ object StoryUploads {
               videoEdit: com.fariin.app.media.StoryVideoCut.Edit? = null) {
         // A group story picked on the Share Story page, handed over for this call only (GroupStoryCompose).
         val group = com.fariin.app.data.GroupStoryCompose.pending
+        begin()
         state.value = State.Uploading
         pending.value = media.jpeg
         // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
@@ -143,8 +160,10 @@ object StoryUploads {
         val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
         val app = context.applicationContext
         scope.launch {
+            var outcome: State? = null
             // The edited clip first, as one new file; everything after posts it like a picked one.
             var exported: java.io.File? = null
+            try {
             val source = media.video
             val media = if (videoEdit == null || source == null) media else {
                 val file = java.io.File(app.cacheDir, "story-edit-${System.nanoTime()}.mp4")
@@ -153,8 +172,7 @@ object StoryUploads {
                 val clip = part?.video
                 if (part == null || clip == null) {
                     file.delete()
-                    state.value = State.Failed("Couldn't prepare this video for your story.")
-                    pending.value = null
+                    outcome = State.Failed("Couldn't prepare this video for your story.")
                     return@launch
                 }
                 exported = file
@@ -163,7 +181,7 @@ object StoryUploads {
             }
             val video = media.video
             val pieces = video?.let { com.fariin.app.data.StoryLimits.segments(it.info.durationSec) }.orEmpty()
-            state.value = if (video == null || pieces.isEmpty()) {
+            outcome = if (video == null || pieces.isEmpty()) {
                 postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group)
             } else {
                 // iOS postVideo: a clip past 90 s goes as several stories in order, each its own
@@ -190,9 +208,14 @@ object StoryUploads {
                 }
                 result
             }
-            exported?.delete()   // the outbox keeps its own copy
-            pending.value = null
-            com.fariin.app.data.StoryLimits.refresh(me)
+            } catch (e: Exception) {
+                android.util.Log.w("StoryPost", "post failed", e)
+                outcome = State.Failed(NETWORK_FAILED)
+            } finally {
+                exported?.delete()   // the outbox keeps its own copy
+                finish(outcome)
+                com.fariin.app.data.StoryLimits.refresh(me)
+            }
         }
     }
 
@@ -649,7 +672,8 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             })
             Row(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = lift).padding(horizontal = 12.dp).fillMaxWidth()
-                    .clip(RoundedCornerShape(26.dp)).background(Color.Black).padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    .clip(RoundedCornerShape(26.dp)).background(Color.Black)
+                    .padding(start = if (onAddMore != null) 4.dp else 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (onAddMore != null) Box(Modifier.size(width = 38.dp, height = 40.dp).clip(CircleShape).clickable {
@@ -900,9 +924,9 @@ private fun ChipPrompt(title: String, hint: String, onDone: (String) -> Unit, on
 }
 
 /** The tools bar under the story editor's frame (Aa, stickers, pen | NEXT), as iOS. */
-private val EDIT_BAR = 80.dp
+internal val EDIT_BAR = 80.dp
 /** iOS StoryEditorView: the card sits 8 under the status bar with 40 corners. */
-private val CARD_TOP = 8.dp
+internal val CARD_TOP = 8.dp
 internal val CARD_CORNER = 40.dp
 
 /** The picked or recorded video, playing on a loop in the editor's frame (the first frame shows until it starts). */
