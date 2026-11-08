@@ -98,6 +98,7 @@ fun GlassBarPage(
                     LocalGlassWindow provides LocalView.current,
                     LocalGlassFrost provides frost,
                     LocalGlassBar provides true,
+                    LocalGlassBlur provides frosted,
                 ) { bar() }
             }
             // No line under the bar (owner 2026-11-08).

@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.fariin.app.ui.theme.Fariin
 import dev.chrisbanes.haze.hazeEffect
 import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 
@@ -50,6 +51,10 @@ val LocalGlassWindow = androidx.compose.runtime.staticCompositionLocalOf<android
  */
 val LocalGlassFrost = androidx.compose.runtime.staticCompositionLocalOf<Color?> { null }
 
+/** On a frosted bar (GlassBarPage frosted): the buttons' glass blurs too, so nothing readable shows
+ *  through them (owner 2026-11-08: the rows read sharp through Edit and All/Missed on Calls). */
+val LocalGlassBlur = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 @Composable
 fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier {
     val c = Fariin.colors
@@ -63,6 +68,7 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
         // visible"): a faint grey in the surface, a hairline rim and a clearer shadow, as iOS glass
         // shows on white.
         val frost = LocalGlassFrost.current ?: if (c.dark) c.card else Color(0xFFF4F4F7)
+        val blurred = LocalGlassBlur.current
         return this
             .shadow(12.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.18f))
             .drawBackdrop(
@@ -70,6 +76,7 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
                 shape = { shape },
                 effects = {
                     vibrancy()
+                    if (blurred) blur(8.dp.toPx())
                     lens(10.dp.toPx(), 20.dp.toPx())
                 },
                 shadow = null,
