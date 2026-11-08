@@ -1,5 +1,8 @@
 package com.fariin.app
 
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
@@ -306,7 +309,11 @@ class MainActivity : ComponentActivity() {
                 override val onBackPressedDispatcher = OnBackPressedDispatcher()
                 override val lifecycle get() = this@MainActivity.lifecycle
             } }
-            Box(Modifier.fillMaxSize()) {
+            // During a call: the bar on top, the app under it (the bar holds the status bar's strip).
+            val callBar = com.fariin.app.ui.call.ongoingCallShown()
+            androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+            com.fariin.app.ui.call.OngoingCallBar()
+            Box(Modifier.fillMaxWidth().weight(1f).then(if (callBar) Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.statusBars) else Modifier)) {
             Box(Modifier.fillMaxSize().graphicsLayer {
                 alpha = if (shell.shown) shell.alpha else 0f
                 translationX = shell.shift * size.width
@@ -331,6 +338,7 @@ class MainActivity : ComponentActivity() {
                     val cid = entry.arguments?.getString("cid") ?: return@composable
                     ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
                 }
+            }
             }
             }
         }
