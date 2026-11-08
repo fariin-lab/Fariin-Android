@@ -63,6 +63,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.draw.clip
@@ -134,11 +135,19 @@ private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable 
     var sheetH by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val drop = remember { androidx.compose.animation.core.Animatable(10_000f) }
     var leaving by remember { mutableStateOf(false) }
-    val sheetSpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 1f, stiffness = 420f)
+    val sheetSpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.86f, stiffness = 520f)
+    // Open and a button close ride the iOS sheet curve (FariinSheet's SheetEase, 500 up / 380 down);
+    // a flick keeps its own speed.
+    val sheetEase = androidx.compose.animation.core.CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
     fun dismiss(velocity: Float = 0f) {
         if (leaving) return
         leaving = true
-        scope.launch { drop.animateTo(sheetH.coerceAtLeast(1f), sheetSpring, velocity); onClose() }
+        scope.launch {
+            drop.animateTo(sheetH.coerceAtLeast(1f),
+                if (velocity > 0f) androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 700f)
+                else androidx.compose.animation.core.tween(380, easing = sheetEase), velocity)
+            onClose()
+        }
     }
     fun settle(velocity: Float) {
         // iOS sheets: past a quarter of the height, or a flick down, closes; otherwise springs home.
@@ -146,7 +155,7 @@ private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable 
         else scope.launch { drop.animateTo(0f, sheetSpring, velocity) }
     }
     androidx.compose.runtime.LaunchedEffect(sheetH > 0f) {
-        if (sheetH > 0f) { drop.snapTo(sheetH); drop.animateTo(0f, sheetSpring) }
+        if (sheetH > 0f) { drop.snapTo(sheetH); drop.animateTo(0f, androidx.compose.animation.core.tween(500, easing = sheetEase)) }
     }
     // The list hands its pull to the sheet when it is at its top, and takes back an upward scroll.
     val pull = remember {
@@ -177,9 +186,11 @@ private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable 
     }
     androidx.activity.compose.BackHandler { dismiss() }
     val shade = if (sheetH > 0f) (1f - drop.value / sheetH).coerceIn(0f, 1f) else 0f
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f * shade))
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f * shade))
         .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { dismiss() }) {
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.72f).padding(horizontal = 8.dp).padding(bottom = 8.dp)
+        // As tall as what it holds (iOS presentationDetents .height(sheetHeight)), at most 88% of the screen.
+        val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.88f).dp
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxH).padding(horizontal = 8.dp).padding(bottom = 8.dp)
             .onSizeChanged { sheetH = it.height.toFloat() + 40f }
             .graphicsLayer { translationY = if (sheetH > 0f) drop.value.coerceAtMost(sheetH) else 10_000f }
             .clip(RoundedCornerShape(34.dp)).background(c.bgSecondary)
@@ -190,10 +201,10 @@ private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable 
             Column(Modifier.fillMaxWidth().draggable(dragState, androidx.compose.foundation.gestures.Orientation.Vertical,
                 onDragStopped = { v -> settle(v) })) {
                 Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).size(40.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.35f)))
-                Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp)) {
-                    androidx.compose.material3.IconButton(onClick = { dismiss() }, modifier = Modifier.align(Alignment.CenterStart)) {
-                        Icon(androidx.compose.material.icons.Icons.Filled.Close, "Close", tint = c.label)
-                    }
+                // iOS inline bar: the X in its round glass button at the start, the title in the middle.
+                Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp)) {
+                    com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.Close, "Close", onClick = { dismiss() },
+                        modifier = Modifier.align(Alignment.CenterStart), circle = true)
                     Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                 }
             }
@@ -669,7 +680,7 @@ fun ShareStoryAudiencePage(
 
     StorySheet(if (editing == null) "Share Story" else "Edit Viewers", onClose = onBack) {
         run {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 val footer = when {
                     oneTimeActive -> StoryAudienceChoice.ONE_TIME.footer
                     choice == StoryAudienceChoice.CUSTOM && chosenLists.size > 1 -> "Only the people in these lists can watch it."
@@ -725,12 +736,18 @@ fun ShareStoryAudiencePage(
                     }
                 }
             }
-            Text(
-                if (editing == null) "Post Story" else "Update", color = c.bg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                    .background(if (ready) c.label else c.label.copy(alpha = 0.35f))
-                    .clickable(enabled = ready) {
+            // iOS postButton: a 52 tall capsule in the action colour, 16 in from the sides, 10 above and
+            // below, squeezing to 0.88 under the finger (StoryPressStyle).
+            val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val pressed by press.collectIsPressedAsState()
+            val squeeze by androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.88f else 1f,
+                androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 630f), label = "post-press")
+            Box(
+                Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth().height(52.dp)
+                    .graphicsLayer { scaleX = squeeze; scaleY = squeeze; alpha = if (pressed) 0.85f else 1f }
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(if (ready) c.accent else c.accent.copy(alpha = 0.35f))
+                    .clickable(interactionSource = press, indication = null, enabled = ready) {
                         // Remembered between posts, as iOS storyAudienceSelected.
                         if (editing == null) runCatching {
                             prefs.edit().putString(SELECTED_KEY, when (choice) {
@@ -742,9 +759,12 @@ fun ShareStoryAudiencePage(
                         }
                         onPost(choice, if (choice == StoryAudienceChoice.ONE_TIME) oneTime else emptySet(), chosenLists,
                             StoryPrivacyRules.captureProtected(choice, blockShots))
-                    }
-                    .padding(vertical = 17.dp),
-            )
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (busy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = c.onAccent)
+                else Text(if (editing == null) "Post Story" else "Update", color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
