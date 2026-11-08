@@ -137,6 +137,9 @@ object CallManager {
     private var restartRequestsSeen = 0
     private var restartRequestsSent = 0
     private var lastPeerBeat = 0.0
+    /** When (this phone's clock) their beat last changed, and when the server last took one of mine. */
+    private var peerBeatChangedAt = 0L
+    private var myBeatAckedAt = 0L
     private var ringShown: String? = null
 
     fun init(context: Context) {
@@ -545,7 +548,7 @@ object CallManager {
         }
         d.cams[peer]?.let { on -> if (on != _ui.value.remoteCameraOn) edit { it.copy(remoteCameraOn = on) } }
         d.muted[peer]?.let { m -> if (m != _ui.value.remoteMuted) edit { it.copy(remoteMuted = m) } }
-        d.heartbeats[peer]?.let { lastPeerBeat = it }
+        d.heartbeats[peer]?.let { if (it != lastPeerBeat) { lastPeerBeat = it; peerBeatChangedAt = android.os.SystemClock.elapsedRealtime() } }
     }
 
     private fun acceptedTimeout() {
@@ -706,8 +709,18 @@ object CallManager {
     private fun startHeartbeat(id: String) {
         timers += main.launch {
             while (callId == id && status.live) {
-                signaling.update(id, CallWire.heartbeatField(me, System.currentTimeMillis()))
+                signaling.update(id, CallWire.heartbeatField(me, System.currentTimeMillis())) { ok ->
+                    if (ok && callId == id) myBeatAckedAt = android.os.SystemClock.elapsedRealtime()
+                }
                 delay(CallWire.HEARTBEAT_MS)
+                // Their phone died (battery) and the relay keeps the line "up": no beat from them for
+                // 30 s while the server still takes mine = they are gone; the call ends here
+                // (iOS 2026-11-08; before, the survivor's clock ran on until the server's sweep).
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (callId == id && status.phase == CallPhase.ACTIVE && CallWire.peerGone(peerBeatChangedAt, myBeatAckedAt, now)) {
+                    Log.i(TAG, "peer heartbeat silent 30 s, ending")
+                    remoteEnded(EndReason.FAILED)
+                }
             }
         }
     }
@@ -1079,7 +1092,7 @@ object CallManager {
         pendingRemote.clear(); localBuffer.clear(); offerSdp = null
         preNegotiated = false; heldAnswer = null; preJob?.cancel(); preJob = null; earlyOut = false
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
-        lastPeerBeat = 0.0
+        lastPeerBeat = 0.0; peerBeatChangedAt = 0L; myBeatAckedAt = 0L
     }
 
     // ================================================================== helpers

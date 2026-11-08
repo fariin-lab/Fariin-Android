@@ -40,6 +40,16 @@ object CallWire {
     const val CALLEE_RING_MS = 60_000L
     /** Heartbeat while a call is live (iOS writes every 5 s, every 10 s when calm). */
     const val HEARTBEAT_MS = 10_000L
+    /** No beat from them this long (while mine still land) = their phone is gone (iOS 2026-11-08). */
+    const val PEER_SILENT_MS = 30_000L
+
+    /**
+     * The survivor's rule: their beat has been seen and has not changed for [PEER_SILENT_MS], and
+     * the server took one of mine in the last 15 s (so it is not my own phone that is offline).
+     * Times are this phone's elapsed clock; 0 = never.
+     */
+    fun peerGone(peerChangedAt: Long, myAckedAt: Long, now: Long): Boolean =
+        peerChangedAt > 0 && myAckedAt > 0 && now - peerChangedAt > PEER_SILENT_MS && now - myAckedAt < 15_000L
     /** The caller's data channel; the callee says "accepted" on it for a fast start (iOS). */
     const val ACCEPT_CHANNEL = "accept"
     const val ACCEPT_MESSAGE = "accepted"

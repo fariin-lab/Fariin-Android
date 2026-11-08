@@ -252,4 +252,12 @@ class CallWireTest {
         assertTrue(GroupCallWire.isActive(mapOf("active" to true))); assertFalse(GroupCallWire.isActive(null))
         assertEquals("This call is full.", GroupCallWire.joinNotice("full"))
     }
+
+    @Test fun peerGoneAfterThirtySilentSecondsWhileMineLand() {
+        assertFalse(CallWire.peerGone(0L, 100_000L, 200_000L))          // never heard them: no ending
+        assertFalse(CallWire.peerGone(100_000L, 0L, 200_000L))          // mine never landed
+        assertFalse(CallWire.peerGone(100_000L, 125_000L, 129_000L))    // 29 s silent
+        assertTrue(CallWire.peerGone(100_000L, 125_000L, 131_000L))     // 31 s silent, mine 6 s ago
+        assertFalse(CallWire.peerGone(100_000L, 110_000L, 131_000L))    // mine stopped too: I am the one offline
+    }
 }
