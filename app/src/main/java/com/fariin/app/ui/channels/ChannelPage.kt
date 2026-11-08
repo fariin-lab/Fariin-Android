@@ -400,11 +400,11 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_wallpaper)) {
                     com.fariin.app.ui.settings.ChatWallpaperLink.request(info.cid); onBack() })
                 add(com.fariin.app.ui.components.GlassMenuItem("Share Channel",
-                    androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.IosShare)) { share() })
+                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share)) { share() })
                 if (info.username.isNotEmpty()) add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
                     androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_qr)) { showQr = true })
                 add(com.fariin.app.ui.components.GlassMenuItem("Save to Photos: " + (if (saveOn) "On" else "Off"),
-                    androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Download), divider = true) {
+                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_save_down), divider = true) {
                     saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, info.cid, saveOn) })
             }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
         }
