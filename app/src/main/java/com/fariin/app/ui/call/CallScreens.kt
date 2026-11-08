@@ -148,6 +148,8 @@ import livekit.org.webrtc.VideoTrack
 
 // iOS keeps the call screens flat black (no gradient, no blurred photo: its 2026-07-11 decision).
 private val Backdrop = Color.Black
+/** The call window's fill (owner 2026-11-08, the reference's floating card). */
+private val PipFill = Color(0xFF1B1D21)
 private val Red = Color(0xFFFF3B30)
 private val Green = Color(0xFF34C759)
 /** iOS noAnswerBar's tint (0x22C55E). */
@@ -802,7 +804,8 @@ fun PipScreen(ui: CallUi) {
     val connected = s.phase == CallPhase.ACTIVE || s.phase == CallPhase.RECONNECTING
     val status = if (ui.held && s.live) "On hold" else CallMachine.label(s, now)
     val theirMute = ui.remoteMuted && connected
-    Box(Modifier.fillMaxSize().background(Backdrop), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(PipFill), contentAlignment = Alignment.Center) {
+        val roomy = maxHeight >= 180.dp
         val remote = ui.remoteVideo.takeIf { ui.remoteCameraOn }
         val local = ui.localVideo.takeIf { ui.cameraOn }
         val demoThem = ui.peerUid == "demo" && ui.remoteCameraOn
@@ -811,7 +814,7 @@ fun PipScreen(ui: CallUi) {
             remote != null -> VideoView(remote, mirror = false, modifier = Modifier.fillMaxSize(), fit = ui.remoteScreen)
             demoThem -> DemoVideo(Modifier.fillMaxSize(), ThemA, ThemB)
             local != null -> VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize())
-            else -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+            else -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(8.dp)) {
                 // BOTH OF US with no camera (owner 2026-11-08, the reference's call window): their photo,
                 // then mine under it, smaller, so the window reads as a call between two people.
                 val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
@@ -821,17 +824,18 @@ fun PipScreen(ui: CallUi) {
                         ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me).get().await().getString("photoUrl") }.getOrNull()
                 }
                 Box {
-                    Avatar(ui.peerPhoto, 56.dp, Modifier.semantics { contentDescription = ui.peerName })
+                    Avatar(ui.peerPhoto, 66.dp, Modifier.semantics { contentDescription = ui.peerName })
                     if (theirMute) PipMicOff("${ui.peerName.substringBefore(' ')} is muted", Modifier.align(Alignment.BottomEnd).offset(4.dp, 2.dp))
                 }
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(14.dp))
                 Avatar(myPhoto, 40.dp, Modifier.semantics { contentDescription = "You" })
-                Spacer(Modifier.height(6.dp))
-                Text(ui.peerName.substringBefore(' '), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                // The name and clock only where the window has room for them under the two faces.
+                if (roomy) Spacer(Modifier.height(6.dp))
+                if (roomy) Text(ui.peerName.substringBefore(' '), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(status, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
+                if (roomy) Text(status, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
                 // Mine in words (owner 2026-11-05: two identical icons, whose was whose?).
-                if (ui.muted) Text("You're muted", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 1,
+                if (ui.muted && roomy) Text("You're muted", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, maxLines = 1,
                     modifier = Modifier.padding(top = 3.dp).background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp))
             }
         }
@@ -948,8 +952,37 @@ private fun CardVideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier
 fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit = {},
                     onMinimize: (() -> Unit)? = null, pip: Boolean = false,
                     onHand: (Boolean) -> Unit = {}, onReact: (String) -> Unit = {}) {
+    // The small window with no video anywhere: the people's faces, as the reference's floating card.
+    if (pip && !g.cameraOn && g.members.none { it.video != null || it.screen != null }) { GroupPipFaces(g); return }
     androidx.compose.runtime.CompositionLocalProvider(LocalRaisedHands provides g.hands.toSet()) {
         GroupCallStage(g, onMic, onCamera, onLeave, onShare, onMinimize, pip, onHand, onReact)
+    }
+}
+
+/**
+ * The group call window without video: a 2x2 grid of round faces, the others first and me last;
+ * with more than four people the last cell says "+N" for the rest.
+ */
+@Composable
+private fun GroupPipFaces(g: GroupCallUi) {
+    val people = g.members.filter { !it.local } + g.members.filter { it.local }
+    val shown = if (people.size > 4) people.take(3) else people
+    val rest = people.size - shown.size
+    BoxWithConstraints(Modifier.fillMaxSize().background(PipFill).padding(10.dp), contentAlignment = Alignment.Center) {
+        val cell = ((minOf(maxWidth, maxHeight) - 8.dp) / 2).coerceAtLeast(24.dp)
+        val cells: List<GroupMember?> = shown + if (rest > 0) listOf(null) else emptyList()
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            cells.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { m ->
+                        if (m != null) Avatar(m.photo, cell, Modifier.semantics { contentDescription = if (m.local) "You" else m.name })
+                        else Box(Modifier.size(cell).clip(CircleShape).background(Color(0xFF2C2F35)), contentAlignment = Alignment.Center) {
+                            Text("+$rest", color = Color.White, fontSize = (cell.value * 0.32f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -982,7 +1015,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     val chrome = rememberChrome(allowed)
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f, tween(280), label = "chrome")
     val waitingScreen = g.linkRoom == null && !g.cameraOn && !g.waiting && (g.connecting || (g.joined && remotes.isEmpty()))
-    Box(Modifier.fillMaxSize().background(Backdrop)) {
+    Box(Modifier.fillMaxSize().background(if (pip) PipFill else Backdrop)) {
         if (waitingScreen) GroupWaiting(g.groupPhoto, pulse = g.calling)
         Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = com.fariin.app.call.GroupCallWords.subtitle(g.waiting, g.connecting, g.reconnecting, g.joined, g.calling, g.members.size)
