@@ -205,9 +205,11 @@ class CirclePhotoPicker internal constructor(
 @Composable
 fun rememberCirclePhotoPicker(onJpeg: (ByteArray) -> Unit): CirclePhotoPicker {
     var pending by rememberSaveable { mutableStateOf<Uri?>(null) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        if (uri != null) pending = uri
-    }
+    // Our own photo library sheet, photos only (iOS StoryLibraryPicker photosOnly), not the system
+    // picker (owner 2026-11-08: "it doesn't use our advanced sheets"). A tap goes to the cropper.
+    var library by rememberSaveable { mutableStateOf(false) }
+    if (library) com.fariin.app.ui.stories.StoryLibrarySheet(busy = false, onPick = { uri -> library = false; pending = uri },
+        onClose = { library = false }, photosOnly = true)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var shot by rememberSaveable { mutableStateOf<Uri?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) shot?.let { pending = it } }
@@ -225,7 +227,7 @@ fun rememberCirclePhotoPicker(onJpeg: (ByteArray) -> Unit): CirclePhotoPicker {
         if (ok) openCamera() else com.fariin.app.ui.components.Snack.show("Allow the camera in Settings to take a photo.")
     }
     return CirclePhotoPicker(
-        launch = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        launch = { library = true },
         takePhoto = {
             if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED) openCamera()

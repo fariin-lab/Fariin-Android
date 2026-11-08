@@ -1263,24 +1263,17 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                     }
                 }
                 if (hasPhoto) Box(
-                    Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(30.dp).clip(CircleShape)
-                        .background(c.card).clickable { confirmRemove = true },
+                    // The profile's own "−" badge: a 30 glass circle, mostly outside the photo (iOS).
+                    Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(30.dp)
+                        .floating(CircleShape).clickable { confirmRemove = true },
                     contentAlignment = Alignment.Center,
                 ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus), "Remove Photo", tint = c.label, modifier = Modifier.size(18.dp)) }
             }
             Spacer(Modifier.height(12.dp))
-            // Take Photo or Choose Photo (iOS NewGroup / EditGroup photo dialog); Remove is the badge.
-            var groupPhotoMenu by remember { mutableStateOf(false) }
-            Box {
-                Text("Set New Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                    modifier = Modifier.clip(CircleShape).background(c.card).clickable { groupPhotoMenu = true }.padding(horizontal = 20.dp, vertical = 9.dp))
-                androidx.compose.material3.DropdownMenu(expanded = groupPhotoMenu, onDismissRequest = { groupPhotoMenu = false }) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { groupPhotoMenu = false; picker.takePhoto() })
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { groupPhotoMenu = false; pick() })
-                }
-            }
+            // iOS EditGroupView: "Set New Photo" opens the app's own photo library straight away
+            // (photos only), then the circle cropper; Remove is the badge.
+            Text("Set New Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                modifier = Modifier.clip(CircleShape).background(c.card).clickable(onClick = pick).padding(horizontal = 20.dp, vertical = 9.dp))
             Spacer(Modifier.height(8.dp))
             // Name and description in ONE card, a line between them (iOS EditGroupView).
             SettingsSection(footer = w("Optional. Shown on the group's info page.")) {

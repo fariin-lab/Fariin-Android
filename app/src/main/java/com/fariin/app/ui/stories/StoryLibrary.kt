@@ -111,11 +111,13 @@ fun StoryLibrarySheet(
     onClose: () -> Unit,
     /** Tick several, then add them all at once (the editor's +); null = a tap opens the editor (the camera's door). */
     multi: StoryLibraryMulti? = null,
+    /** Photos only, one tap picks (iOS StoryLibraryPicker photosOnly: a group's or profile photo). */
+    photosOnly: Boolean = false,
 ) {
     val motion = rememberSheetMotion(onClose)
     FariinTheme(dark = true, bars = false) {
         FariinSheetDialog(motion, fill = Color.Black) { m ->
-            StoryLibrary(busy, onPick, onClose = { m.close() }, motion = m, multi = multi)
+            StoryLibrary(busy, onPick, onClose = { m.close() }, motion = m, multi = multi, photosOnly = photosOnly)
         }
     }
 }
@@ -147,7 +149,7 @@ private class FailedBatch(val failed: Int, val removed: List<Uri>, val resolved:
 
 @Composable
 private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Unit, motion: com.fariin.app.ui.components.SheetMotion,
-                         multi: StoryLibraryMulti?) {
+                         multi: StoryLibraryMulti?, photosOnly: Boolean = false) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // The ticks in tap order, seeded from the post; what was there at the open tells a new pick from
@@ -155,6 +157,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     val picked = remember { mutableStateListOf<Uri>().apply { multi?.preselected?.let { addAll(it.distinct()) } } }
     val initial = remember { multi?.preselected?.toSet() ?: emptySet() }
     val fileMode = multi?.fileMode == true
+    val noVideos = fileMode || photosOnly
     val limit = if (fileMode) (multi?.maxPicks ?: 0) else StoryCameraRules.pickLimit(multi?.reserved ?: 0)
     val fresh = picked.filter { it !in initial }
     var tooMany by remember { mutableStateOf(false) }
@@ -222,7 +225,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     val none = access == RecentMedia.Access.NONE
     val photos by produceState(emptyList<RecentMedia.Item>(), access, reload) {
         value = if (none) emptyList() else withContext(Dispatchers.IO) {
-            RecentMedia.load(context, limit = 2000).let { l -> if (fileMode) l.filter { !it.isVideo } else l }
+            RecentMedia.load(context, limit = 2000).let { l -> if (noVideos) l.filter { !it.isVideo } else l }
         }
     }
     val albums by produceState<List<RecentMedia.Album>?>(null, access, reload, tab == 1) {
@@ -231,7 +234,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     val inAlbum by produceState(emptyList<RecentMedia.Item>(), album, reload) {
         val a = album
         value = if (a == null) emptyList() else withContext(Dispatchers.IO) {
-            RecentMedia.load(context, limit = 5000, bucket = a.id).let { l -> if (fileMode) l.filter { !it.isVideo } else l }
+            RecentMedia.load(context, limit = 5000, bucket = a.id).let { l -> if (noVideos) l.filter { !it.isVideo } else l }
         }
     }
     BackHandler(enabled = album != null) { album = null }
