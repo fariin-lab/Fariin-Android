@@ -73,6 +73,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -691,6 +692,7 @@ fun StoryViewer(
     fun nextGroup() {
         if (pager.currentPage + 1 < groups.size) scope.launch { pager.animateScrollToPage(pager.currentPage + 1, animationSpec = turnSpec) } else close()
     }
+    val pxPerDp = androidx.compose.ui.platform.LocalDensity.current.density
     fun previousGroup() {
         if (pager.currentPage > 0) scope.launch { pager.animateScrollToPage(pager.currentPage - 1, animationSpec = turnSpec) }
     }
@@ -724,7 +726,15 @@ fun StoryViewer(
             // Person to person: commit at 30% of a face, settle over 0.4s on the iOS curve.
             flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = turnSpec, snapPositionalThreshold = StoryMotion.TURN_THRESHOLD),
             userScrollEnabled = sheetFor == null,
-            modifier = Modifier.fillMaxSize().graphicsLayer {
+            // Swiping right from the left edge is the phone's Back gesture, so going to the previous
+            // person closed the viewer instead (owner 2026-11-08: "I can only go right"). The middle
+            // band of both edges is the viewer's (Android allows 200 dp per edge); the top and bottom
+            // of the edges stay the phone's Back.
+            modifier = Modifier.fillMaxSize().systemGestureExclusion { lc ->
+                val w = lc.size.width.toFloat(); val h = lc.size.height.toFloat()
+                val band = minOf(h, 200f * pxPerDp)
+                androidx.compose.ui.geometry.Rect(0f, (h - band) / 2f, w, (h + band) / 2f)
+            }.graphicsLayer {
                 if (size == IntSize.Zero) return@graphicsLayer
                 val w = size.width.toFloat(); val h = size.height.toFloat()
                 // Viewers up: the story is the row's centre card, picture and all, scaled (never resized,
