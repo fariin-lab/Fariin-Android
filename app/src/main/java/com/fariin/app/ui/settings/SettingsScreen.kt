@@ -205,7 +205,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     val glassAlpha by com.fariin.app.ui.components.rememberEdgeAlpha(underBar)
     val glass = com.fariin.app.perf.rememberPowerState().glass()
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        val barH = 56.dp
+        val barH = 48.dp   // a bit shorter (owner 2026-11-08)
         Column(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
             .verticalScroll(scroll).statusBarsPadding().padding(top = barH)
             .padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
@@ -266,11 +266,15 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             0f to Color.Black, 0.50f to Color.Black, 0.62f to Color.Black.copy(alpha = 0.85f),
             0.74f to Color.Black.copy(alpha = 0.55f), 0.85f to Color.Black.copy(alpha = 0.25f),
             0.93f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
-        // A solid bar and one soft line under it once the list passes under (owner 2026-11-08: no blur).
-        Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding().height(barH)
-            .drawBehind { if (glassAlpha > 0f) drawRect(c.separator.copy(alpha = c.separator.alpha * glassAlpha),
-                topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - 0.5.dp.toPx()),
-                size = androidx.compose.ui.geometry.Size(size.width, 0.5.dp.toPx())) }) {
+        // FROSTED, EXACTLY THE BAR (owner 2026-11-08): the rows show blurred through it as they scroll
+        // under; no line, and no long fading tail below it (that tail was the band he did not want).
+        Box(Modifier.fillMaxWidth().then(
+            if (glass) Modifier.hazeEffect(haze) {
+                backgroundColor = c.bgSecondary; blurRadius = 20.dp; noiseFactor = 0f
+                tints = listOf(dev.chrisbanes.haze.HazeTint(c.bgSecondary.copy(alpha = 0.72f)))
+                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
+            } else Modifier.background(c.bgSecondary.copy(alpha = 0.94f))
+        ).statusBarsPadding().height(barH)) {
             Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)) {
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,

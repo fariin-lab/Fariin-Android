@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.fariin.app.ui.theme.Fariin
 import com.kyant.backdrop.backdrops.layerBackdrop
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 /**
@@ -54,6 +56,8 @@ fun GlassBarPage(
     barEstimate: Dp = 64.dp,
     /** False: always the plain bar (a host that is sometimes a sheet). */
     enabled: Boolean = true,
+    /** The bar is frosted: the rows show blurred through it (its own background must be clear). */
+    frosted: Boolean = false,
     bar: @Composable () -> Unit,
     content: @Composable (top: Dp) -> Unit,
 ) {
@@ -76,17 +80,22 @@ fun GlassBarPage(
     Box(modifier.fillMaxSize()) {
         // Nothing inside the content may draw glass from the content itself: a layer that holds its
         // own reader is an endless render tree (the chat's crash, 2026-11-06).
-        Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(page)) {
+        val haze = remember { dev.chrisbanes.haze.HazeState() }
+        Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(page).then(if (frosted) Modifier.hazeSource(haze) else Modifier)) {
             CompositionLocalProvider(LocalLiquidBackdrop provides null) {
                 content(with(density) { barPx.toDp() })
             }
             // The glass must see what the eye sees: the bar's solid page colour and its fade, not the
             // rows hidden under them (the back circle showed ghost letters from under the bar,
             // Pixel 2026-11-06).
-            Box(Modifier.fillMaxWidth().align(Alignment.TopCenter).height(with(density) { barPx.toDp() }).background(page))
+            if (!frosted) Box(Modifier.fillMaxWidth().align(Alignment.TopCenter).height(with(density) { barPx.toDp() }).background(page))
         }
         Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
-            Box(Modifier.fillMaxWidth().onSizeChanged { barPx = it.height }) {
+            Box(Modifier.fillMaxWidth().onSizeChanged { barPx = it.height }.then(if (frosted) Modifier.hazeEffect(haze) {
+                backgroundColor = page; blurRadius = 20.dp; noiseFactor = 0f
+                tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.72f)))
+                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
+            } else Modifier)) {
                 CompositionLocalProvider(
                     LocalLiquidBackdrop provides backdrop,
                     LocalGlassWindow provides LocalView.current,
@@ -94,9 +103,7 @@ fun GlassBarPage(
                     LocalGlassBar provides true,
                 ) { bar() }
             }
-            // ONE SOFT LINE under the bar once rows pass under it (owner 2026-11-08: the blur and the
-            // fade never came out right; a hairline, as the high-end apps), fading in with the scroll.
-            Box(Modifier.fillMaxWidth().height(0.5.dp).graphicsLayer { alpha = fade.value }.background(c.separator))
+            // No line under the bar (owner 2026-11-08).
         }
     }
 }
@@ -117,7 +124,7 @@ fun GlassColumnPage(
     body: Color? = null,
     bar: @Composable () -> Unit,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.(top: Dp) -> Unit,
-) = GlassBarPage(under, modifier, page, barEstimate, enabled, bar) { top ->
+) = GlassBarPage(under, modifier, page, barEstimate, enabled, bar = bar) { top ->
     Column(Modifier.fillMaxSize().then(if (body != null) Modifier.background(body) else Modifier)) { content(top) }
 }
 

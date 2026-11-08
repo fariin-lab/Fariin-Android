@@ -285,8 +285,9 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     // the list and scroll away with it, as iOS's large title does.
     val underBar by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
     Box(Modifier.fillMaxSize()) {
-    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bg), page = c.bg, barEstimate = 56.dp, bar = {
-        Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding().height(56.dp).padding(horizontal = 12.dp)) {
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bg), page = c.bg, barEstimate = 48.dp, frosted = true, bar = {
+        // Frosted (GlassBarPage), so no background of its own; a bit shorter (owner 2026-11-08).
+        Box(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal = 12.dp)) {
             if (selecting) {
                 com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, contentDescription = "Done", onClick = { leaveSelect() },
                     modifier = Modifier.align(Alignment.CenterStart))
