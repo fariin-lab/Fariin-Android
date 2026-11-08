@@ -90,7 +90,8 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
                     drawRect(frost.copy(alpha = if (field) 0.92f else if (c.dark) 0.76f else 0.82f))
                 },
             )
-            .border(0.5.dp, c.label.copy(alpha = if (c.dark) 0.14f else 0.12f), shape)
+            // A soft white rim, as the iPhone's buttons (owner 2026-11-08: ours had a dark outline).
+            .border(if (c.dark) 0.5.dp else 1.dp, if (c.dark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.95f), shape)
     }
     if (fill == null && haze != null) {
         // Glass (the reference app's recipe in our own terms): what is behind blurred hard, under
