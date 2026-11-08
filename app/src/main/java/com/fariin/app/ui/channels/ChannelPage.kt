@@ -160,6 +160,32 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         "storage" -> { com.fariin.app.ui.people.ChatStoragePage(info.cid, me, info.title, pop = { sub = null }); return }
         "stats" -> { com.fariin.app.ui.people.GroupStatsPage(info.cid, info.title, onBack = { sub = null }); return }
     }
+    // Clear Messages (iOS, owner only): every post goes for everyone; the followers stay.
+    var askClear by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
+    if (askClear) androidx.compose.material3.AlertDialog(onDismissRequest = { askClear = false },
+        title = { Text("Clear all messages?") },
+        text = { Text("All posts in this channel will be deleted for everyone. Your followers stay. You can't undo this.") },
+        confirmButton = { androidx.compose.material3.TextButton({
+            askClear = false
+            clearing = true
+            scope.launch {
+                val ok = runCatching {
+                    val fn = com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                        .getHttpsCallable("clearGroupMessages").withTimeout(540, java.util.concurrent.TimeUnit.SECONDS)
+                    val data = mutableMapOf<String, Any>("cid" to info.cid)
+                    for (round in 0 until 12) {
+                        val d = fn.call(data).await().getData() as? Map<*, *> ?: break
+                        if (d["more"] != true) break
+                        d["before"]?.let { data["before"] = it }
+                    }
+                }.isSuccess
+                clearing = false
+                com.fariin.app.ui.components.Snack.show(if (ok) "All messages were cleared." else "Couldn't clear the messages. Check your connection and try again.")
+            }
+        }) { Text("Clear", color = c.red) } },
+        dismissButton = { androidx.compose.material3.TextButton({ askClear = false }) { Text("Cancel", color = c.accent) } },
+        containerColor = c.card)
     if (askDelete) androidx.compose.material3.AlertDialog(onDismissRequest = { askDelete = false },
         title = { Text("Delete Channel?") },
         text = { Text("This deletes the channel and all its posts for every follower.") },
@@ -364,12 +390,16 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                                 onLeave = if (role == Role.FOLLOWER) ({ leave(fromUndo = false) }) else null))
                         }
                     }
-                    if (role == Role.ADMIN && team?.isOwner(me) == true) FootRow("Delete Channel", ImageVector.vectorResource(R.drawable.ic_sf_trash), c.red) { askDelete = true }
+                    if (role == Role.ADMIN && team?.isOwner(me) == true) {
+                        FootRow(if (clearing) "Clearing\u2026" else "Clear Messages", ImageVector.vectorResource(R.drawable.ic_sf_eraser), c.red) { if (!clearing) askClear = true }
+                        FootRow("Delete Channel", ImageVector.vectorResource(R.drawable.ic_sf_trash), c.red) { askDelete = true }
+                    }
                     else if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(16.dp))
                 }
                 if (info.createdAtMillis > 0) {
-                    Text((if (team?.isOwner(me) == true) "Created by you. " else "") + "Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
+                    Text((if (team?.isOwner(me) == true) "Created by you.
+" else "") + "Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp))
                 }
                 error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }

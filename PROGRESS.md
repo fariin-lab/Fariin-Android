@@ -1288,3 +1288,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Pinned/Presenting label, sharing card with Stop Sharing, hand chips) 92df4dfc; raised-hands pill
   75565b9d; link call "Not here yet" list with status + nudge bell, and a tapped nudge opens the
   join screen without ringing. All built and installed; need a real call to verify.
+- 2026-11-08 night: two-person group call = the 1:1 look (54bef3e0); two people + a share = iOS
+  share layout (277aa7cf); iOS fixes of the day from session abdik-f8 brought over (fd22193d: links
+  voice by default, lobby mic on, group chrome never hides, tap-large only with a picture, camera
+  locked while ringing out, re-created call screen never re-dials); channel owner Clear Messages.
+  Still to check from abdik-f8's list: duplicate ring on receive, channel empty-flash, replies sheet
+  details, Quotes off on private channels, report sheet look, expired call links, swipe-to-delete
+  link rows, link join speed.
