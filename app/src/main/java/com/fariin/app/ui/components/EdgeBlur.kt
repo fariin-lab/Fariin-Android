@@ -53,7 +53,7 @@ fun rememberEdgeAlpha(under: Boolean, startOn: Boolean = false): androidx.compos
  */
 fun androidx.compose.ui.Modifier.frostedTopBar(
     haze: dev.chrisbanes.haze.HazeState, page: androidx.compose.ui.graphics.Color, glass: Boolean,
-    tail: androidx.compose.ui.unit.Dp = 0.dp,   // measured on the reference (Pixel, 2026-11-08): nothing below the bar
+    tail: androidx.compose.ui.unit.Dp = 24.dp,   // a little room for the cross-fade to finish under the bar
 ): androidx.compose.ui.Modifier = this
     .layout { m, k ->
         val t = tail.roundToPx()
@@ -66,8 +66,15 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
         tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.42f)))
         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
         // Solid down the bar, then a long, soft ease to nothing over the tail.
-        // Reference: full strength to the bar's middle, then a short soft fade; the bar's lower part is clear.
-        progressive = edgeStages(0.62f, gentle = true)
+        // A CROSS-FADE, NOT A FADING RADIUS (owner's video 2026-11-08, frame by frame: a letter under
+        // the edge came out half blurred, half sharp, cut by a line where the radius changed). The blur
+        // stays the same strength; the blurred layer's opacity eases to nothing on a smooth curve, so
+        // the sharp page shows through gradually, as the reference app does.
+        mask = androidx.compose.ui.graphics.Brush.verticalGradient(
+            0f to androidx.compose.ui.graphics.Color.Black, 0.50f to androidx.compose.ui.graphics.Color.Black,
+            0.60f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.90f), 0.70f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.66f),
+            0.80f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.36f), 0.90f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.12f),
+            0.96f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.03f), 1f to androidx.compose.ui.graphics.Color.Transparent)
     } else androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
         0f to page, 0.40f to page, 0.55f to page.copy(alpha = 0.78f), 0.7f to page.copy(alpha = 0.45f),
         0.84f to page.copy(alpha = 0.18f), 0.94f to page.copy(alpha = 0.05f), 1f to page.copy(alpha = 0f))))
