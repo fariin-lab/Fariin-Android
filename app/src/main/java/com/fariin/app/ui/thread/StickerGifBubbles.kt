@@ -429,7 +429,8 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
         val items = list ?: emptyList()
         items(items.size, key = { items[it].id }) { i ->
             val g = items[i]
-            val ratio = if (g.height > 0) (g.width / g.height).toFloat().coerceIn(0.4f, 3f) else 1f
+            // Square tiles, cropped (iOS b5232314d: w x w), not each GIF at its own shape.
+            val ratio = 1f
             var menu by remember { mutableStateOf(false) }
             Box {
                 AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", contentScale = ContentScale.Crop,
