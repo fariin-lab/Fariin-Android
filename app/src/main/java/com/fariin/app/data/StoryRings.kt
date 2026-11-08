@@ -13,13 +13,18 @@ object StoryRings {
             if (other.isEmpty() || other in hidden) return null
             return s.others.firstOrNull { it.key == other && it.stories.isNotEmpty() }
         }
-        val key = StoryGroup.GROUP_PREFIX + c.id
+        return forGroup(c.id, c.displayName(me), c.displayPhoto(me), s, hidden)
+    }
+
+    /** A group's or channel's ring by its id (the info pages' header); null = no story up. */
+    fun forGroup(cid: String, name: String, photo: String?, s: StoriesState, hidden: Set<String>): StoryGroup? {
+        val key = StoryGroup.GROUP_PREFIX + cid
         s.others.firstOrNull { it.key == key && it.stories.isNotEmpty() }?.let { g ->
             return if (g.stories.first().authorUid in hidden) null else g
         }
-        val mine = s.mine?.stories?.filter { it.groupId == c.id }.orEmpty()
+        val mine = s.mine?.stories?.filter { it.groupId == cid }.orEmpty()
         if (mine.isEmpty()) return null
-        return StoryGroup(key, c.displayName(me), c.displayPhoto(me), mine)
+        return StoryGroup(key, name, photo, mine)
     }
 
     /** One flag per story, oldest first: true = seen (grey arc), from the group's watermark. */

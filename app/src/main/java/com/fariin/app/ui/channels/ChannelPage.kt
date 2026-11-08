@@ -277,7 +277,10 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         }) { top ->
             Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top).padding(horizontal = 16.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL, modifier = if (canEdit) Modifier.clickable { manage.edit(info.cid) } else Modifier)
+                // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
+                val photoChoice = com.fariin.app.ui.people.headerPhotoOrStory(info.cid, info.title.ifEmpty { "Channel" }, info.avatarUrl, me, emptyList())
+                Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL,
+                    modifier = if (photoChoice != null) Modifier.clickable(onClick = photoChoice) else if (canEdit) Modifier.clickable { manage.edit(info.cid) } else Modifier)
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(info.title.ifEmpty { "Channel" }, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label,

@@ -904,8 +904,11 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         }))
     }) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
+            // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
+            val photoChoice = headerPhotoOrStory(cid, conv["title"] as? String ?: "Group", conv["avatarUrl"] as? String, me, chats)
             Avatar(conv["avatarUrl"] as? String, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
-                modifier = if (canEdit) Modifier.clickable(onClickLabel = "Edit group") { editing = true }.semantics { contentDescription = "Group photo" } else Modifier)
+                modifier = if (photoChoice != null) Modifier.clickable(onClickLabel = "View photo or story", onClick = photoChoice).semantics { contentDescription = "Group photo" }
+                else if (canEdit) Modifier.clickable(onClickLabel = "Edit group") { editing = true }.semantics { contentDescription = "Group photo" } else Modifier)
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
@@ -1334,4 +1337,32 @@ internal object GroupStepBack {
         start in STEPS && !stepOpen(start, adding, editing, pages)
 
     private val STEPS = setOf("add", "edit", "link")
+}
+
+/**
+ * A group's or channel's header photo with a story up (iOS dd1a37ac, owner 2026-11-08): a tap asks
+ * "Select an action", View profile photo or View story, so the photo can still be seen. Returns
+ * that tap, or null when there is no story or no photo (the header's tap then stays as it was).
+ * Place it once on the page: it also draws the sheet, the photo and the story it opens.
+ */
+@Composable
+internal fun headerPhotoOrStory(cid: String, name: String, photoUrl: String?, me: String,
+                                conversations: List<com.fariin.app.data.Conversation>): (() -> Unit)? {
+    val feed by com.fariin.app.data.LiveStories.state.collectAsState()
+    val hidden by com.fariin.app.data.StoryMutes.set.collectAsState()
+    val ring = com.fariin.app.data.StoryRings.forGroup(cid, name, photoUrl, feed, hidden)
+    var asking by remember { mutableStateOf(false) }
+    var showPhoto by remember { mutableStateOf(false) }
+    var story by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
+    if (asking) com.fariin.app.ui.components.CarefulSheet(onDismiss = { asking = false }, steps = listOf(
+        com.fariin.app.ui.components.CarefulStep("Select an action", buttons = listOf(
+            com.fariin.app.ui.components.CarefulButton("View profile photo") { showPhoto = true },
+            com.fariin.app.ui.components.CarefulButton("View story") { story = ring },
+        ))))
+    if (showPhoto && !photoUrl.isNullOrEmpty())
+        // As ready-made pages: no bubble on screen to zoom out of, so the plain window fade.
+        com.fariin.app.ui.thread.MediaViewer(com.fariin.app.ui.thread.Viewing.Pages(
+            listOf(com.fariin.app.data.ViewerRules.Page(photoUrl, null, false, photoUrl, null)), 0)) { showPhoto = false }
+    story?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, conversations, onClose = { story = null }) }
+    return if (ring != null && !photoUrl.isNullOrEmpty()) ({ asking = true }) else null
 }
