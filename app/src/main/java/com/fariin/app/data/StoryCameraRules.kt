@@ -111,6 +111,28 @@ object StoryCameraRules {
     /** The flash button is drawn for a lens with a flash unit, and for the front lens (the screen is its flash). */
     fun showsFlashButton(front: Boolean, lensHasFlash: Boolean): Boolean = lensHasFlash || front
 
+    // The library's "select several" (iOS StoryLibraryPicker allowsMultiple, opened by the editor's +).
+
+    /** A story post holds at most this many photos and videos (iOS storyLimit; owner 2026-08-10: 5). */
+    const val POST_ITEMS = 5
+
+    /** Ticks one picker session may hold: the post's five less what cannot be ticked (a camera capture). */
+    fun pickLimit(reserved: Int): Int = (POST_ITEMS - reserved).coerceAtLeast(0)
+
+    /** What a tap on a tile does in that mode (iOS toggle). */
+    enum class Tick { REMOVED, ADDED, FULL, TOO_LONG }
+
+    /** Ticked = off again; a video past the pick limit is refused; at the limit = "That's the limit". */
+    fun <T> tick(picked: List<T>, item: T, limit: Int, tooLong: Boolean): Tick = when {
+        item in picked -> Tick.REMOVED
+        tooLong -> Tick.TOO_LONG
+        picked.size >= limit -> Tick.FULL
+        else -> Tick.ADDED
+    }
+
+    /** The selection bar's button: "Add 3" for three new ticks, "Done" when only something came off. */
+    fun addLabel(fresh: Int): String = if (fresh <= 0) "Done" else "Add $fresh"
+
     /** What a flick on the camera page asks for (iOS StoryCameraView's swipe, judged at the release). */
     enum class Swipe { NONE, LIBRARY, TO_TEXT, TO_CAMERA }
 

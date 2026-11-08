@@ -141,6 +141,13 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var viewing by remember { mutableStateOf<Pair<List<StoryGroup>, Int>?>(null) }
     var composing by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
     var composingText by remember { mutableStateOf(false) }
+    // SEVERAL IN ONE POST (iOS: the editor's + ticks up to five; Post shares each as its own story).
+    // The editor holds one item, so the rest wait here in tap order and open one after another, each
+    // posted as its own story. [composingUri] is the open item's library photo (null = a camera
+    // capture or a text story), so the + shows it ticked and the five stay the post's.
+    var composingUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var queue by remember { mutableStateOf<List<Pair<android.net.Uri, StoryMedia.Prepared>>>(emptyList()) }
+    var addMore by remember { mutableStateOf(false) }
     var pickError by remember { mutableStateOf<String?>(null) }
     // iOS "That video is too long" (past the 10-minute pick) and "That's today's limit".
     var tooLong by remember { mutableStateOf(false) }
@@ -159,7 +166,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             libraryBusy = true
             scope.launch {
                 prepareStoryMedia(context, uri)
-                    .onSuccess { composing = it; pickError = null }
+                    .onSuccess { composing = it; composingUri = uri; queue = emptyList(); pickError = null }
                     .onFailure { if (it is StoryMedia.TooLong) tooLong = true else pickError = it.message ?: "Couldn't open this file." }
                 libraryBusy = false
             }
@@ -252,6 +259,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     LaunchedEffect(active) {
         if (!active) {
             viewing = null; camera = false; library = false; composing = null; composingText = false; posted = false; tooLong = false; dayLimit = false
+            composingUri = null; queue = emptyList(); addMore = false
             privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
         }
     }
@@ -418,11 +426,11 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             onCaptured = { uri ->
                 scope.launch {
                     prepareStoryMedia(context, uri)
-                        .onSuccess { composing = it; pickError = null }
+                        .onSuccess { composing = it; composingUri = null; queue = emptyList(); pickError = null }
                         .onFailure { pickError = it.message ?: "Couldn't open this file." }
                 }
             },
-            onTextStory = { m -> composingText = true; composing = m },
+            onTextStory = { m -> composingText = true; composing = m; composingUri = null; queue = emptyList() },
             onLibrary = openLibrary, onClose = { camera = false },
         )
     }
@@ -520,11 +528,43 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         confirmButton = { androidx.compose.material3.TextButton(onClick = { dayLimit = false }) { Text("OK") } },
     )
     if (library) StoryLibrarySheet(busy = libraryBusy, onPick = pickFromLibrary, onClose = { library = false })
-    composing?.let { m ->
-        StoryComposerDialog(me, m, conversations, onClose = { composing = null; composingText = false },
-            onPosted = { composing = null; composingText = false; camera = false; library = false }, textStory = composingText,
-            flyHome = true, onFlightStart = { camera = false; library = false })
+    // The next waiting item takes the editor; none left = the editor goes.
+    fun openNext(): Boolean {
+        val next = queue.firstOrNull() ?: return false
+        queue = queue.drop(1)
+        composingUri = next.first
+        composing = next.second
+        return true
     }
+    composing?.let { m ->
+        // A fresh editor for each item: its caption, edits and crop belong to that one picture.
+        androidx.compose.runtime.key(m) {
+            val more = queue.isNotEmpty()
+            StoryComposerDialog(me, m, conversations,
+                // Closing the editor drops the whole post, the waiting items too (iOS: one editor, one post).
+                onClose = { composing = null; composingText = false; composingUri = null; queue = emptyList() },
+                onPosted = {
+                    if (!openNext()) { composing = null; composingText = false; composingUri = null; camera = false; library = false }
+                },
+                textStory = composingText,
+                // Only the last one flies home: the camera and the library stay for the items still to come.
+                flyHome = !more, onFlightStart = { camera = false; library = false },
+                onAddMore = if (composingText) null else ({ addMore = true }))
+        }
+    }
+    // The editor's + (iOS StoryLibraryPicker allowsMultiple from the editor), over the editor.
+    if (addMore) StoryLibrarySheet(busy = false, onPick = {}, onClose = { addMore = false },
+        multi = StoryLibraryMulti(
+            preselected = listOfNotNull(composingUri) + queue.map { it.first },
+            reserved = if (composingUri == null && composing != null) 1 else 0,
+            onApply = { removed, added ->
+                val off = removed.toSet()
+                queue = queue.filter { it.first !in off } + added
+                // The open item taken off: the next one takes the editor, or the editor goes.
+                val cur = composingUri
+                if (cur != null && cur in off && !openNext()) { composing = null; composingUri = null }
+            },
+        ))
 }
 
 /** iOS ContentUnavailableView.search, in the words the app's other searches use. */

@@ -241,16 +241,18 @@ fun StoryComposerDialog(
      */
     flyHome: Boolean = false,
     onFlightStart: () -> Unit = {},
+    /** The + at the caption's start (iOS addMoreButton): opens the library to tick more for this post. Null = no +. */
+    onAddMore: (() -> Unit)? = null,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
-        StoryComposer(me, media, conversations, onClose, onPosted, textStory, flyHome, onFlightStart)
+        StoryComposer(me, media, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore)
     }
 }
 
 @Composable
 private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false,
-                          flyHome: Boolean = false, onFlightStart: () -> Unit = {}) {
+                          flyHome: Boolean = false, onFlightStart: () -> Unit = {}, onAddMore: (() -> Unit)? = null) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
@@ -449,6 +451,12 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                     .clip(RoundedCornerShape(26.dp)).background(Color.Black).padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (onAddMore != null) Box(Modifier.size(width = 38.dp, height = 40.dp).clip(CircleShape).clickable {
+                    captionArmed = false; focus.clearFocus(force = true); keyboard?.hide(); onAddMore()
+                }, contentAlignment = Alignment.Center) {
+                    Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_add_media), contentDescription = "Add more photos or videos",
+                        tint = Color.White, modifier = Modifier.size(19.dp))
+                }
                 Box(
                     Modifier.weight(1f).padding(vertical = 10.dp).pointerInput(Unit) {
                         awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); captionArmed = true }

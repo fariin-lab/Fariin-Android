@@ -31,7 +31,9 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,13 +46,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -61,15 +66,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fariin.app.data.StoryCameraRules
+import com.fariin.app.data.StoryLimits
+import com.fariin.app.data.StoryMedia
 import com.fariin.app.media.MediaRules
 import com.fariin.app.media.RecentMedia
 import com.fariin.app.ui.components.FariinSheetDialog
 import com.fariin.app.ui.components.FariinSpinner
 import com.fariin.app.ui.components.rememberSheetMotion
 import com.fariin.app.ui.components.sheetDrag
+import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.theme.FariinTheme
 import com.fariin.app.ui.thread.attachThumb
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -93,18 +103,75 @@ fun StoryLibrarySheet(
     busy: Boolean,
     onPick: (Uri) -> Unit,
     onClose: () -> Unit,
+    /** Tick several, then add them all at once (the editor's +); null = a tap opens the editor (the camera's door). */
+    multi: StoryLibraryMulti? = null,
 ) {
     val motion = rememberSheetMotion(onClose)
     FariinTheme(dark = true, bars = false) {
         FariinSheetDialog(motion, fill = Color.Black) { m ->
-            StoryLibrary(busy, onPick, onClose = { m.close() }, motion = m)
+            StoryLibrary(busy, onPick, onClose = { m.close() }, motion = m, multi = multi)
         }
     }
 }
 
+/**
+ * iOS StoryLibraryPicker(allowsMultiple: true): a tap only ticks, numbered in tap order; the bar at
+ * the bottom shows the ticks and "Add N" (or "Done" when something only came off). The five is the
+ * POST's: [preselected] is what the post already holds (ticked as this opens, so the + at the limit
+ * still opens and shows them), [reserved] what it holds that has no tile (a camera capture).
+ * [onApply] gets what was taken off and the new picks, made ready, in tap order; the sheet closes.
+ */
+class StoryLibraryMulti(
+    val preselected: List<Uri>,
+    val reserved: Int,
+    val onApply: (removed: List<Uri>, added: List<Pair<Uri, StoryMedia.Prepared>>) -> Unit,
+)
+
+/** A batch where some picks would not open (iOS "Couldn't add everything"): the ones that did still go on OK. */
+private class FailedBatch(val failed: Int, val removed: List<Uri>, val resolved: List<Pair<Uri, StoryMedia.Prepared>>)
+
 @Composable
-private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Unit, motion: com.fariin.app.ui.components.SheetMotion) {
+private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Unit, motion: com.fariin.app.ui.components.SheetMotion,
+                         multi: StoryLibraryMulti?) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // The ticks in tap order, seeded from the post; what was there at the open tells a new pick from
+    // one still ticked, and a tick turned off is a removal (iOS seedFromPost / initialIDs).
+    val picked = remember { mutableStateListOf<Uri>().apply { multi?.preselected?.let { addAll(it.distinct()) } } }
+    val initial = remember { multi?.preselected?.toSet() ?: emptySet() }
+    val limit = StoryCameraRules.pickLimit(multi?.reserved ?: 0)
+    val fresh = picked.filter { it !in initial }
+    var tooMany by remember { mutableStateOf(false) }
+    var tooLongVideo by remember { mutableStateOf(false) }
+    var resolving by remember { mutableStateOf(false) }
+    var failedBatch by remember { mutableStateOf<FailedBatch?>(null) }
+    val toggle: (RecentMedia.Item) -> Unit = { item ->
+        when (StoryCameraRules.tick(picked, item.uri, limit, item.isVideo && StoryLimits.pickTooLong(item.durationMs / 1000.0))) {
+            StoryCameraRules.Tick.REMOVED -> { picked.remove(item.uri) }
+            StoryCameraRules.Tick.ADDED -> { picked.add(item.uri) }
+            StoryCameraRules.Tick.FULL -> { tooMany = true }
+            StoryCameraRules.Tick.TOO_LONG -> { tooLongVideo = true }
+        }
+    }
+    // One door for the tile's tap: a tick here, the editor in the camera's door.
+    val tap: (RecentMedia.Item) -> Unit = { item -> if (multi != null) toggle(item) else onPick(item.uri) }
+    // Add: only the new ticks are made ready (iOS addPicked), in tap order, then the whole change at once.
+    val addPicked: () -> Unit = add@{
+        val m = multi ?: return@add
+        if (resolving) return@add
+        val still = picked.toSet()
+        val removed = initial.filter { it !in still }
+        val chosen = picked.filter { it !in initial }
+        if (chosen.isEmpty()) { m.onApply(removed, emptyList()); onClose(); return@add }
+        resolving = true
+        scope.launch {
+            val out = ArrayList<Pair<Uri, StoryMedia.Prepared>>()
+            for (u in chosen) prepareStoryMedia(context, u).getOrNull()?.let { out += u to it }
+            resolving = false
+            if (out.size < chosen.size) failedBatch = FailedBatch(chosen.size - out.size, removed, out)
+            else { m.onApply(removed, out); onClose() }
+        }
+    }
     var access by remember { mutableStateOf(RecentMedia.access(context)) }
     var blocked by remember { mutableStateOf(false) }
     // Bumped after every answer: a second "selected photos" pick changes the grid, not the access level.
@@ -164,19 +231,92 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 none -> AccessOff(blocked, askAgain)
-                album != null -> LibraryGrid(inAlbum, null, motion, onPick)
-                tab == 0 -> LibraryGrid(photos, if (access == RecentMedia.Access.PARTIAL) askAgain else null, motion, onPick)
+                album != null -> LibraryGrid(inAlbum, null, motion, if (multi != null) picked else null, tap)
+                tab == 0 -> LibraryGrid(photos, if (access == RecentMedia.Access.PARTIAL) askAgain else null, motion,
+                    if (multi != null) picked else null, tap)
                 else -> {
                     val list = albums
                     if (list == null) FariinSpinner(Modifier.align(Alignment.Center), size = 28.dp, color = Color.White)
                     else Collections(list, motion) { album = it }
                 }
             }
-            if (busy) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable(enabled = true) {},
+            if (busy || resolving) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable(enabled = true) {},
                 contentAlignment = Alignment.Center) {
                 FariinSpinner(size = 40.dp, stroke = 4.dp, color = Color.White)
             }
         }
+        if (multi != null && picked.isNotEmpty()) SelectionBar(picked, StoryCameraRules.addLabel(fresh.size), enabled = !resolving,
+            onRemove = { picked.remove(it) }, onAdd = addPicked)
+    }
+    if (tooMany) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { tooMany = false },
+        title = { Text("That's the limit") },
+        text = { Text("A story can hold ${StoryCameraRules.POST_ITEMS} photos and videos. Take one off to add another.") },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { tooMany = false }) { Text("OK") } },
+    )
+    if (tooLongVideo) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { tooLongVideo = false },
+        title = { Text(StoryLimits.TOO_LONG_TITLE) },
+        text = { Text(StoryLimits.TOO_LONG_TEXT) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { tooLongVideo = false }) { Text("OK") } },
+    )
+    failedBatch?.let { f ->
+        // OK hands over what did open (iOS: the notice first, so it is never closed away unseen).
+        val ok: () -> Unit = {
+            failedBatch = null
+            if (f.resolved.isNotEmpty()) { multi?.onApply?.invoke(f.removed, f.resolved); onClose() }
+        }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = ok,
+            title = { Text("Couldn't add everything") },
+            text = {
+                Text(if (f.resolved.isEmpty()) "None of what you picked would open. Give it a moment and try again."
+                    else "${f.failed} of them wouldn't open, so the rest were added.")
+            },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = ok) { Text("OK") } },
+        )
+    }
+}
+
+/**
+ * iOS selectionBar: a thin line, the ticks as 52 dp thumbnails (8 corners, an x top right; a tap
+ * takes one off), and the action pill on the right.
+ */
+@Composable
+private fun SelectionBar(picked: List<Uri>, label: String, enabled: Boolean, onRemove: (Uri) -> Unit, onAdd: () -> Unit) {
+    val c = Fariin.colors
+    Column(Modifier.fillMaxWidth().background(Color.Black).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color.White.copy(alpha = 0.12f)))
+        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 10.dp)) {
+                items(picked.size, key = { picked[it].toString() }) { i ->
+                    val u = picked[i]
+                    Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).clickable { onRemove(u) }
+                        .semantics { contentDescription = "Remove" }) {
+                        PickedThumb(u)
+                        Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(16.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(11.dp))
+                        }
+                    }
+                }
+            }
+            Text(label, color = c.onAccent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clip(CircleShape).background(c.accent).clickable(enabled = enabled, onClick = onAdd)
+                    .padding(horizontal = 18.dp, vertical = 10.dp))
+        }
+    }
+}
+
+@Composable
+private fun PickedThumb(uri: Uri) {
+    val context = LocalContext.current
+    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
+        value = withContext(Dispatchers.IO) { attachThumb(context, uri, StoryMedia.isVideo(context, uri), 160) }
+    }
+    Box(Modifier.fillMaxSize().background(Color(0xFF1C1C1E))) {
+        bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
 }
 
@@ -200,7 +340,9 @@ private fun LibrarySwitch(tab: Int, onPick: (Int) -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun LibraryGrid(items: List<RecentMedia.Item>, onMore: (() -> Unit)?, motion: com.fariin.app.ui.components.SheetMotion, onPick: (Uri) -> Unit) {
+private fun LibraryGrid(items: List<RecentMedia.Item>, onMore: (() -> Unit)?, motion: com.fariin.app.ui.components.SheetMotion,
+                        /** The ticks in tap order while selecting several; null = no ticks drawn. */
+                        picked: List<Uri>?, onTap: (RecentMedia.Item) -> Unit) {
     val grid = rememberLazyGridState()
     LazyVerticalGrid(
         GridCells.Fixed(4),
@@ -222,20 +364,37 @@ private fun LibraryGrid(items: List<RecentMedia.Item>, onMore: (() -> Unit)?, mo
                         .padding(horizontal = 14.dp, vertical = 7.dp))
             }
         }
-        items(items, key = { it.uri.toString() }) { r -> LibraryTile(r) { onPick(r.uri) } }
+        items(items, key = { it.uri.toString() }) { r ->
+            LibraryTile(r, tick = if (picked == null) -1 else picked.indexOf(r.uri) + 1) { onTap(r) }
+        }
     }
 }
 
-/** One photo or video: square, cropped, the video's length bottom right (iOS tile). */
+/**
+ * One photo or video: square, cropped, the video's length bottom right (iOS tile). [tick]: -1 = no
+ * tick (a tap opens the editor), 0 = an empty circle, n = chosen n-th: a white disc with its number,
+ * and the picture under it dimmed (the dim stays off the tick, iOS).
+ */
 @Composable
-private fun LibraryTile(item: RecentMedia.Item, onClick: () -> Unit) {
+private fun LibraryTile(item: RecentMedia.Item, tick: Int, onClick: () -> Unit) {
     val context = LocalContext.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, item.uri) {
         value = withContext(Dispatchers.IO) { attachThumb(context, item.uri, item.isVideo, 256) }
     }
     Box(Modifier.aspectRatio(1f).background(Color(0xFF1C1C1E)).clickable(onClick = onClick)
         .semantics { contentDescription = if (item.isVideo) "Video" else "Photo" }) {
-        bmp?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        bmp?.let {
+            Image(it, null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (tick > 0) 0.55f else 1f })
+        }
+        if (tick >= 0) Box(
+            Modifier.align(Alignment.TopEnd).padding(5.dp).size(22.dp).clip(CircleShape)
+                .background(if (tick > 0) Color.White else Color.Black.copy(alpha = 0.25f))
+                .border(1.5.dp, Color.White.copy(alpha = 0.9f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (tick > 0) Text("$tick", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
         if (item.isVideo) Text(
             MediaRules.durationLabel(item.durationMs / 1000.0), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).clip(RoundedCornerShape(5.dp))
