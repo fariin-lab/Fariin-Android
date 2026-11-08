@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -36,15 +39,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.Brush
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FontDownload
-import androidx.compose.material.icons.outlined.FontDownload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -369,7 +363,7 @@ fun StoryTrash(hot: Boolean, modifier: Modifier) {
         modifier.scale(if (hot) 1.25f else 1f).size(52.dp).clip(CircleShape)
             .background(if (hot) Color.Red else Color.Black.copy(alpha = 0.5f)),
         contentAlignment = Alignment.Center,
-    ) { Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = Color.White) }
+    ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = "Delete", tint = Color.White) }
 }
 
 @Composable
@@ -422,12 +416,12 @@ fun StoryTextEditor(t: StoryTextItem, img: Rect, onDone: () -> Unit) {
                         Text("Aa", color = Color.White, fontSize = 17.sp, fontFamily = composeFamily(t.font), fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                     Box(Modifier.size(44.dp).clickable { t.bg = t.bg.next() }, contentAlignment = Alignment.Center) {
-                        Icon(if (t.bg == Bg.PLAIN) Icons.Outlined.FontDownload else Icons.Filled.FontDownload,
+                        Icon(if (t.bg == Bg.PLAIN) ImageVector.vectorResource(R.drawable.ic_sf_textformat) else ImageVector.vectorResource(R.drawable.ic_sf_textformat),
                             contentDescription = "Text background", tint = Color.White)
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                RoundButton(onDone, light = true) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = Color.Black) }
+                RoundButton(onDone, light = true) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = Color.Black) }
             }
         }
     }
@@ -468,7 +462,7 @@ fun StoryPenTopBar(edits: StoryEdits, onClearAll: () -> Unit, modifier: Modifier
     if (edits.strokes.isEmpty()) return
     Row(modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         RoundButton({ if (edits.strokes.isNotEmpty()) edits.strokes.removeAt(edits.strokes.lastIndex) }) {
-            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo", tint = Color.White)
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_uturn_left), contentDescription = "Undo", tint = Color.White)
         }
         Spacer(Modifier.weight(1f))
         Text("Clear All", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
@@ -515,24 +509,24 @@ fun StoryPenBar(
         }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            RoundButton(onCancel) { Icon(Icons.Filled.Close, contentDescription = "Cancel", tint = Color.White) }
+            RoundButton(onCancel) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Cancel", tint = Color.White) }
             Spacer(Modifier.weight(1f))
             Row(
                 Modifier.height(46.dp).clip(RoundedCornerShape(23.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(40.dp).clickable { onHighlighter(false) }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Edit, contentDescription = "Pen", tint = if (!highlighter) blue else Color.White)
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_pencil), contentDescription = "Pen", tint = if (!highlighter) blue else Color.White)
                 }
                 Box(Modifier.size(40.dp).clickable { onHighlighter(true) }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Brush, contentDescription = "Highlighter", tint = if (highlighter) blue else Color.White)
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_paintbrush), contentDescription = "Highlighter", tint = if (highlighter) blue else Color.White)
                 }
                 Box(Modifier.size(40.dp).clickable(onClick = onWidth), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(minOf(width + 6f, 24f).dp).clip(CircleShape).background(current))
                 }
             }
             Spacer(Modifier.weight(1f))
-            RoundButton(onDone, light = true) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = Color.Black) }
+            RoundButton(onDone, light = true) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = Color.Black) }
         }
     }
 }

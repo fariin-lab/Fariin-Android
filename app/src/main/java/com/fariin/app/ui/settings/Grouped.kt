@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import com.fariin.app.ui.components.listPress
 import com.fariin.app.ui.components.NewPill
 import com.fariin.app.ui.components.isNew
@@ -20,10 +22,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.NorthEast
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -174,11 +172,11 @@ internal fun SettingsRow(
             modifier = Modifier.padding(start = 12.dp).widthIn(max = 200.dp))
         if (accessory != null) Box(Modifier.padding(start = 12.dp)) { accessory() }
         if (trailing == Trailing.CHEVRON && onClick != null) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
                 modifier = Modifier.padding(start = 4.dp).size(24.dp))
         }
         if (trailing == Trailing.OUT_LINK) {
-            Icon(Icons.Filled.NorthEast, contentDescription = null, tint = c.secondary, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right), contentDescription = null, tint = c.secondary, modifier = Modifier.padding(start = 8.dp).size(18.dp))
         }
     }
     // Full width, edge to edge of the card (owner 2026-11-04).

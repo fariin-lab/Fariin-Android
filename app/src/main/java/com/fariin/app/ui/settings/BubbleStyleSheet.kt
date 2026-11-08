@@ -1,5 +1,8 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -8,7 +11,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
@@ -64,7 +66,7 @@ private fun Sheet(cid: String?, onDismiss: () -> Unit) {
                 // Under the grabber (FariinSheet draws it in the top strip).
                 Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 10.dp)) {
                     // The round X the other sheets use (owner 2026-11-07), not a "Cancel" word.
-                    com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.Close, "Cancel",
+                    com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel",
                         onClick = { motion.close() }, modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp))
                     Text("Bubble Style", Modifier.align(Alignment.Center), fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold, color = c.label)

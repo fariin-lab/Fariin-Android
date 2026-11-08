@@ -1,5 +1,8 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -27,8 +30,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -146,7 +147,7 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
     FariinSheetDialog(motion, fill = c.bgSecondary, typing = true) { _ ->
         AccountSheetFrame(motion, closeEnabled = true) {
             Box(Modifier.size(56.dp).clip(CircleShape).background(c.red.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Favorite, contentDescription = null, tint = c.red, modifier = Modifier.size(28.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), contentDescription = null, tint = c.red, modifier = Modifier.size(28.dp))
             }
             Box(Modifier.height(16.dp))
             Title("We're sorry to see you go")

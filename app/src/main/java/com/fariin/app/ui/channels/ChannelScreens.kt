@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -26,11 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -142,7 +138,7 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (r.verified) {
                         Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
                     }
                     if (r.official) {
                         Spacer(Modifier.width(4.dp))
@@ -238,7 +234,7 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
             Column(Modifier.width(260.dp).clip(RoundedCornerShape(20.dp)).background(c.bgSecondary).padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(c.accent.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Campaign, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_channel_megaphone), null, tint = c.accent, modifier = Modifier.size(20.dp))
                     }
                     Spacer(Modifier.width(8.dp))
                     Column {
@@ -445,7 +441,7 @@ private fun TypeRow(title: String, selected: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.label, modifier = Modifier.size(18.dp))
+        if (selected) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = c.label, modifier = Modifier.size(18.dp))
     }
 }
 

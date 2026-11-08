@@ -1,9 +1,8 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material.icons.filled.Close
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import com.fariin.app.ui.components.floating
@@ -36,18 +35,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Forward
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -313,22 +300,22 @@ fun ChannelPostMenu(
     val items = buildList {
         if (!m.deleted) {
             // A contact or location card is no text to copy (as the chat menu, MessageActions).
-            if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", Icons.Filled.ContentCopy, badge = NewBadgeSpots.CHAT_MENU_COPY) { onCopy(m.bodyText) })
-            if (!ch.info.restricted) add(PostItem("Share", Icons.AutoMirrored.Filled.Forward, badge = NewBadgeSpots.CHAT_MENU_FORWARD) { sharePost(ctx, ch.info, m) })
+            if (!ch.info.restricted && m.bodyText.isNotEmpty() && !com.fariin.app.data.CardRules.isCard(m.text)) add(PostItem("Copy", ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), badge = NewBadgeSpots.CHAT_MENU_COPY) { onCopy(m.bodyText) })
+            if (!ch.info.restricted) add(PostItem("Share", ImageVector.vectorResource(R.drawable.ic_menu_forward), badge = NewBadgeSpots.CHAT_MENU_FORWARD) { sharePost(ctx, ch.info, m) })
             // Quote into a chat of mine with my own words (iOS 6848baf9): where the post may be forwarded.
             // Not when the channel turned Quotes off, for anyone (the server refuses everyone then).
             if (onQuote != null && !ch.info.restricted && com.fariin.app.data.MessageRules.canQuote(m) && !ch.info.quotesOff)
                 add(PostItem("Quote", quoteIcon, badge = NewBadgeSpots.CHAT_MENU_QUOTE) { onDismiss(); onQuote(m) })
             // Tick several posts to forward, copy or (owner and admins) delete them together.
-            if (onSelect != null) add(PostItem("Select", Icons.Outlined.CheckCircle) { onDismiss(); onSelect(m) })
+            if (onSelect != null) add(PostItem("Select", ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle)) { onDismiss(); onSelect(m) })
             if (ch.role != Role.ADMIN) add(PostItem("Report", reportIcon, destructive = true, badge = NewBadgeSpots.CHAT_MENU_REPORT) { ch.onReport(m) })
         }
         // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).
         if (ch.role == Role.ADMIN && !m.deleted) {
             // onEdit is only passed when this post may be edited (my own, in the edit window).
-            if (onEdit != null) add(PostItem("Edit", Icons.Outlined.Edit, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onDismiss(); onEdit(m) })
-            if (onEditHistory != null && m.edited) add(PostItem("Edit History", Icons.Outlined.History, badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onDismiss(); onEditHistory(m) })
-            if (pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", Icons.Outlined.PushPin, badge = NewBadgeSpots.CHAT_MENU_PIN) { onDismiss(); onPin(m) })
+            if (onEdit != null) add(PostItem("Edit", ImageVector.vectorResource(R.drawable.ic_sf_pencil), badge = NewBadgeSpots.CHAT_MENU_EDIT) { onDismiss(); onEdit(m) })
+            if (onEditHistory != null && m.edited) add(PostItem("Edit History", ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow), badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onDismiss(); onEditHistory(m) })
+            if (pinned != null && onPin != null) add(PostItem(if (pinned) "Unpin" else "Pin", ImageVector.vectorResource(R.drawable.ic_pin_menu), badge = NewBadgeSpots.CHAT_MENU_PIN) { onDismiss(); onPin(m) })
             // Replies off or on for this post (iOS, owner 2026-11-06): the Change info right, which the
             // server checks too. The post's own switch wins over the channel's; the post changes on
             // screen at once (PostRepliesSwitch), older posts included.
@@ -336,12 +323,12 @@ fun ChannelPostMenu(
             if (ch.canEdit && m.sendState == null && !com.fariin.app.data.MessageRules.isServiceLine(m)) {
                 val off = com.fariin.app.data.PostReplyRules.postOff(m.repliesOff, ch.info.repliesOff, PostRepliesSwitch.of(m.id))
                 add(PostItem(if (off) "Turn On Replies" else "Turn Off Replies",
-                    if (off) replyIcon else Icons.Outlined.Block, badge = NewBadgeSpots.CHAT_MENU_REPLIES) {
+                    if (off) replyIcon else ImageVector.vectorResource(R.drawable.ic_block), badge = NewBadgeSpots.CHAT_MENU_REPLIES) {
                     onDismiss(); PostRepliesSwitch.set(ch.info.cid, m.id, !off, ch.notice)
                 })
             }
         }
-        if (ch.role == Role.ADMIN) add(PostItem("Delete", Icons.Filled.Delete, destructive = true) { onDelete(m) })
+        if (ch.role == Role.ADMIN) add(PostItem("Delete", ImageVector.vectorResource(R.drawable.ic_sf_trash), destructive = true) { onDelete(m) })
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
@@ -383,7 +370,7 @@ fun ChannelPostMenu(
                             if (ch.pickable.size > ch.offered.size) {
                                 Box(Modifier.size(36.dp).clip(CircleShape).background(c.bgSecondary).clickable { more = true },
                                     contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "More reactions", tint = c.secondary)
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), contentDescription = "More reactions", tint = c.secondary)
                                 }
                             }
                         }
@@ -507,7 +494,7 @@ private fun SimilarChannelsStrip(cid: String) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Similar Channels", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
             Box(Modifier.size(28.dp).clip(CircleShape).clickable { SimilarChannelsStore.close(cid) }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Close, "Close Similar Channels", tint = c.secondary, modifier = Modifier.size(16.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close Similar Channels", tint = c.secondary, modifier = Modifier.size(16.dp))
             }
         }
         androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),

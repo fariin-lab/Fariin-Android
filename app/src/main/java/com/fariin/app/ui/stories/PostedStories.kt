@@ -26,11 +26,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -68,11 +63,6 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
@@ -163,7 +153,7 @@ fun PostedStoriesPage(
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(filter.title, color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Filter", tint = c.label, modifier = Modifier.size(16.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), contentDescription = "Filter", tint = c.label, modifier = Modifier.size(16.dp))
                 }
                 DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
                     PostedStoriesRules.Filter.entries.forEach { f ->
@@ -217,7 +207,7 @@ fun PostedStoriesPage(
                                     ctx.startActivity(android.content.Intent.createChooser(send, "Share"))
                                 })
                             DropdownMenuItem(text = { Text("Delete", color = c.red) },
-                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = c.red) },
+                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) },
                                 onClick = { menuFor = null; confirmDelete = s })
                         }
                     }
@@ -246,7 +236,7 @@ fun PostedStoriesPage(
                 .semantics { contentDescription = "Delete" },
                 contentAlignment = Alignment.Center) {
                 if (deleting) com.fariin.app.ui.components.FariinSpinner(size = 20.dp, color = c.label)
-                else Icon(Icons.Outlined.Delete, contentDescription = null, tint = c.red.copy(alpha = if (selected.isEmpty()) 0.4f else 1f),
+                else Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red.copy(alpha = if (selected.isEmpty()) 0.4f else 1f),
                     modifier = Modifier.size(22.dp))
             }
         }
@@ -375,7 +365,7 @@ private fun PostedTile(s: Story, views: Int?, editing: Boolean, chosen: Boolean,
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(52.dp)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)))))
             Row(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(shortCount(views), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
@@ -383,13 +373,13 @@ private fun PostedTile(s: Story, views: Int?, editing: Boolean, chosen: Boolean,
         if (s.isVideo) Box(
             Modifier.align(Alignment.TopEnd).padding(8.dp).size(23.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp)) }
+        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp)) }
         if (editing) Box(Modifier.align(Alignment.TopStart).padding(8.dp).size(22.dp)
             .shadow(2.dp, CircleShape).clip(CircleShape)
             .background(if (chosen) Color(0xFF0A84FF) else Color.Transparent)
             .border(if (chosen) 0.dp else 1.5.dp, Color.White, CircleShape),
             contentAlignment = Alignment.Center) {
-            if (chosen) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+            if (chosen) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
         }
         menu()
     }

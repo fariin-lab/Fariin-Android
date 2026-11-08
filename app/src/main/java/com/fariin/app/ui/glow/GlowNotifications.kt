@@ -1,5 +1,8 @@
 package com.fariin.app.ui.glow
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,8 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -192,7 +193,7 @@ fun GlowNotificationsPage(
                                 Chip.ALL -> "Glows and reactions to your stories appear here."
                             },
                             icon = {
-                                if (chip == Chip.LOVES) Icon(Icons.Outlined.FavoriteBorder, null, tint = c.label, modifier = Modifier.size(44.dp))
+                                if (chip == Chip.LOVES) Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart), null, tint = c.label, modifier = Modifier.size(44.dp))
                                 else GlowMark(48.dp)
                             },
                         ) else PullToRefreshBox(refreshing, onRefresh = { refreshing = true; reload++ }, modifier = Modifier.fillMaxSize()) {

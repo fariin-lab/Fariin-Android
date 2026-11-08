@@ -1,19 +1,13 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
 import com.fariin.app.data.NewBadgeSpots
-import androidx.compose.material.icons.filled.CallReceived
-import androidx.compose.material.icons.filled.CallMissed
-import androidx.compose.material.icons.filled.CallMade
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material.icons.outlined.Videocam
-import androidx.compose.material.icons.outlined.Call
 import com.fariin.app.data.isRestricted
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,22 +32,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.outlined.GroupAdd
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.automirrored.filled.Backspace
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -91,11 +69,6 @@ import com.fariin.app.data.Person
 import com.fariin.app.data.Requests
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.components.floating
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.NotificationsOff
-import androidx.compose.material.icons.outlined.Wallpaper
-import androidx.compose.material.icons.outlined.Download
 import com.fariin.app.ui.settings.PageBar
 import com.fariin.app.ui.settings.SettingsRow
 import com.fariin.app.ui.settings.SettingsSection
@@ -188,7 +161,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         if (p?.verified == true) {
                             Spacer(Modifier.width(4.dp))
-                            Icon(Icons.Filled.Verified, "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
                         }
                     }
                     if (!p?.handle.isNullOrEmpty()) Text("@" + p!!.handle, fontSize = 13.sp, color = c.secondary, maxLines = 1)
@@ -209,7 +182,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
             // The close circle and the centred title (iOS sheet header).
             Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { onBack() },
-                    contentAlignment = Alignment.Center) { Icon(Icons.Filled.Close, null, tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
                 Text("New chat", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
             }
             LazyColumn(Modifier.fillMaxSize(), state = listState,
@@ -219,7 +192,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                         val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
                         val actions = listOf(
                             Triple("New group", onNewGroup, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)),
-                            Triple("New channel", channelNav.create, Icons.Outlined.Campaign),
+                            Triple("New channel", channelNav.create, ImageVector.vectorResource(R.drawable.ic_channel_megaphone)),
                             Triple("Invite friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_share)),
                         )
                         card {
@@ -300,7 +273,7 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
         Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Icon(Icons.Filled.Close, "Close", tint = c.secondary, modifier = Modifier.size(28.dp).clickable(onClick = onDismiss))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.secondary, modifier = Modifier.size(28.dp).clickable(onClick = onDismiss))
             }
             Spacer(Modifier.height(12.dp))
             Text("Enter Chat Key", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
@@ -333,7 +306,7 @@ fun ChatKeySheet(api: PeopleApi, p: Person, onDismiss: () -> Unit, onOpened: (St
                                 }
                             }, contentAlignment = Alignment.Center) {
                             when (k) {
-                                "del" -> Icon(Icons.AutoMirrored.Filled.Backspace, "Delete", tint = c.label)
+                                "del" -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_delete_left), "Delete", tint = c.label)
                                 "Paste" -> Text("Paste", fontSize = 17.sp, color = c.accent)
                                 else -> Text(k, fontSize = 28.sp, color = c.label)
                             }
@@ -608,7 +581,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // iOS actionsRow: equal shares, inside the page's 16 dp margins.
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 val share = Modifier.weight(1f)
-                ActionTile("Message", androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline, share) { onOpenChat(cid) }
+                ActionTile("Message", ImageVector.vectorResource(R.drawable.ic_chat), share) { onOpenChat(cid) }
                 if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor, share)
                 // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
                 if (uid != me && !blocked) {
@@ -626,7 +599,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), share) {
                     setMute(if (muted) 0.0 else com.fariin.app.data.GroupInfoCircles.FOREVER)
                 }
-                if (fromChat && uid != me) ActionTile("Search", androidx.compose.material.icons.Icons.Filled.Search, share) {
+                if (fromChat && uid != me) ActionTile("Search", ImageVector.vectorResource(R.drawable.ic_search_ios), share) {
                     com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack)
                 }
             }
@@ -697,20 +670,20 @@ private fun GroupsInCommonSection(groups: List<Conversation>, me: String, onAdd:
         .let { if (any) it.clickable(onClickLabel = "See All") { onSeeAll() } else it }.padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(header, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
-        if (any) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.secondary, modifier = Modifier.size(26.dp))
+        if (any) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(26.dp))
         Spacer(Modifier.weight(1f))
     }
     SettingsSection {
         Row(Modifier.fillMaxWidth().clickable { onAdd() }.padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Add, null, tint = c.label, modifier = Modifier.size(24.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), null, tint = c.label, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.width(14.dp))
             Text("Add to a Group", fontSize = 17.sp, color = c.label)
         }
         shownGroups.forEach { g -> GroupInCommonRow(g, me, onOpenChat) }
-        if (more) SettingsRow("See All", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.KeyboardArrowDown),
+        if (more) SettingsRow("See All", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down)),
             trailing = Trailing.NONE, last = true) { onSeeAll() }
     }
 }
@@ -751,9 +724,9 @@ private fun CallLogCard(call: com.fariin.app.data.CallEntry, me: String) {
             Text(date, fontSize = 15.sp, color = c.secondary)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(when {
-                    missed -> androidx.compose.material.icons.Icons.Filled.CallMissed
-                    call.mine(me) -> androidx.compose.material.icons.Icons.Filled.CallMade
-                    else -> androidx.compose.material.icons.Icons.Filled.CallReceived
+                    missed -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left)
+                    call.mine(me) -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right)
+                    else -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left)
                 }, contentDescription = null, tint = if (missed) c.red else c.secondary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(com.fariin.app.data.CallInfoLink.line(call, me), fontSize = 15.sp, color = if (missed) c.red else c.label,
@@ -771,7 +744,7 @@ private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Uni
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
-        com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "More",
+        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More",
             onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
         androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
@@ -798,7 +771,7 @@ private fun ShareProfileItem(onClick: () -> Unit) {
 private fun ClearMineItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Clear My Messages", color = c.red) },
-        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Delete, null, tint = c.red) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Export Chat" (ChatExportRun), above Clear My Messages as iOS orders it. */
@@ -806,7 +779,7 @@ private fun ClearMineItem(onClick: () -> Unit) {
 internal fun ExportChatItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Export Chat", color = c.label) },
-        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Download, null, tint = c.label) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Add to a Group" (AddToGroup.kt). */
@@ -814,7 +787,7 @@ internal fun ExportChatItem(onClick: () -> Unit) {
 private fun AddToGroupItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Add to a Group", color = c.label) },
-        leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.GroupAdd, null, tint = c.label) }, onClick = onClick)
+        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_add_member), null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable
@@ -875,7 +848,7 @@ private fun NewContactPage(api: PeopleApi, onBack: () -> Unit, onOpenChat: (Stri
     com.fariin.app.ui.settings.BarPage("New Contact", onBack = onBack, modifier = Modifier.background(c.bgSecondary), action = {
             androidx.compose.material3.IconButton(onClick = { add() }, enabled = canSave, modifier = com.fariin.app.ui.components.barGlass()) {
                 if (working) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Filled.Check, "Add contact", tint = if (canSave) c.accent else c.secondary)
+                else Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Add contact", tint = if (canSave) c.accent else c.secondary)
             }
         }) { top ->
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))

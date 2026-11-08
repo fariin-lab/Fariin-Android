@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.res.vectorResource
 import com.fariin.app.ui.components.underBar
 
 import android.content.Context
@@ -21,10 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -355,17 +352,17 @@ private fun SecurityCheckupPage(profile: MyProfile?, demo: Boolean, push: (Strin
                     fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
             }
             if (g.missing.isNotEmpty()) SettingsSection(footer = "Set these up to keep your account safe if your phone is lost or someone learns your password.") {
-                for (e in g.missing) CheckupRow(Icons.Outlined.ErrorOutline, c.blue, e.missingTitle, e.why, e === g.missing.last()) { open(e.id) }
+                for (e in g.missing) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_circle), c.blue, e.missingTitle, e.why, e === g.missing.last()) { open(e.id) }
             }
             if (g.failed.isNotEmpty()) SettingsSection(header = "Couldn't check") {
-                for (e in g.failed) CheckupRow(Icons.Outlined.WarningAmber, Orange, e.title, "Check your connection and try again.", e === g.failed.last()) {
+                for (e in g.failed) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_triangle), Orange, e.title, "Check your connection and try again.", e === g.failed.last()) {
                     scope.launch { SecurityCheckup.run(ctx) }
                 }
             }
             if (g.rest.isNotEmpty()) SettingsSection(header = g.restHeader) {
                 for (e in g.rest) {
                     val s = e.status
-                    if (s is SecurityCheckupRules.Status.Done) CheckupRow(Icons.Outlined.CheckCircle, Green, e.title, s.line, e === g.rest.last()) { open(e.id) }
+                    if (s is SecurityCheckupRules.Status.Done) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), Green, e.title, s.line, e === g.rest.last()) { open(e.id) }
                     else CheckupRow(null, c.secondary, e.title, "Checking…", e === g.rest.last(), null)
                 }
             }

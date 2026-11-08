@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.R
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.graphics.graphicsLayer
 import android.graphics.BitmapFactory
@@ -26,13 +27,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -172,7 +166,7 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
             }
             // The label colour, not blue (owner 2026-11-06: "don't use blue"); 15 sp (2026-11-07).
             Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiary, modifier = Modifier.size(18.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.tertiary, modifier = Modifier.size(18.dp))
         },
         modifier = Modifier
             .padding(top = if (inBubble && edge == 0.dp) 6.dp else if (inBubble) 0.dp else 4.dp)
@@ -300,9 +294,9 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
         // A text post's words as its bubble shows them; a picture's or video's caption.
         text = PostQuoteRules.cardText(if (m.mediaKind == null) m.bodyText else m.text, m.type, album),
         kindIcon = when {
-            album -> Icons.Filled.PhotoLibrary
-            m.type == "image" -> Icons.Filled.Photo
-            m.type == "video" -> Icons.Filled.Videocam
+            album -> ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle)
+            m.type == "image" -> ImageVector.vectorResource(R.drawable.ic_sf_photo)
+            m.type == "video" -> ImageVector.vectorResource(R.drawable.ic_call_video)
             else -> null
         },
         thumb = thumb,
@@ -377,7 +371,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                     PostQuoteRules.hiddenLine(a.hidden)?.let { line ->
                         item {
                             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.Lock, null, tint = c.secondary, modifier = Modifier.size(14.dp))
+                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock_fill), null, tint = c.secondary, modifier = Modifier.size(14.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text(line, fontSize = 13.sp, color = c.secondary)
                             }
@@ -528,7 +522,7 @@ private fun NameAndSeal(name: String, verified: Boolean, size: TextUnit, seal: D
             overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (verified) {
             Spacer(Modifier.width(4.dp))
-            Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(seal))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(seal))
         }
     }
 }

@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -36,9 +39,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -488,7 +488,7 @@ internal fun StoryTextCard(
         }
 
         GlassCircle(ink, "Close", Modifier.statusBarsPadding().padding(14.dp), onClick = { close() }) {
-            Icon(Icons.Filled.Close, contentDescription = null, tint = ink)
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = null, tint = ink)
         }
 
         Row(
@@ -507,7 +507,7 @@ internal fun StoryTextCard(
             Spacer(Modifier.weight(1f))
             AnimatedVisibility(focused, enter = fadeIn(), exit = fadeOut()) {
                 GlassCircle(ink, "Done", onClick = { setFocus(false) }) {
-                    Icon(Icons.Filled.Check, contentDescription = null, tint = ink)
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null, tint = ink)
                 }
             }
         }

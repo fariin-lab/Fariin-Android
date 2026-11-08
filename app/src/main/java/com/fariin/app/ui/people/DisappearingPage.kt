@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -19,10 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -69,7 +67,7 @@ fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: (
     if (custom) CustomTimeDialog(selected, onDismiss = { custom = false }) { selected = it; custom = false }
     val barScroll = rememberScrollState()
     BarPage("Disappearing Messages", onBack = onBack, action = {
-            IconButton(onClick = { onApply(selected) }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(Icons.Filled.Check, contentDescription = "Done", tint = c.accent) }
+            IconButton(onClick = { onApply(selected) }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = c.accent) }
         }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top)) {
             Text(Disappearing.pageHeader(isChannel), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
@@ -95,12 +93,12 @@ private fun CustomTimeDialog(seconds: Int, onDismiss: () -> Unit, onSet: (Int) -
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { value = (value - 1).coerceIn(unit.range) }, enabled = value > unit.range.first) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Less", tint = c.accent)
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus), contentDescription = "Less", tint = c.accent)
                     }
                     Text("$value", fontSize = 32.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                         modifier = Modifier.width(72.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     IconButton(onClick = { value = (value + 1).coerceIn(unit.range) }, enabled = value < unit.range.last) {
-                        Icon(Icons.Filled.Add, contentDescription = "More", tint = c.accent)
+                        Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "More", tint = c.accent)
                     }
                 }
                 Spacer(Modifier.size(8.dp))
@@ -152,7 +150,7 @@ internal fun NewGroupTimerSection(seconds: Int, onChange: (Int) -> Unit) {
                 if (choices.none { it.second == seconds }) choices.add(Disappearing.newGroupLabel(seconds) to seconds)
                 for ((label, secs) in choices) DropdownMenuItem(
                     text = { Text(label, color = c.label) },
-                    trailingIcon = { if (secs == seconds) Icon(Icons.Filled.Check, null, tint = c.accent) },
+                    trailingIcon = { if (secs == seconds) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) },
                     onClick = { open = false; onChange(secs) })
             }
             }

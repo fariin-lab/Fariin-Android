@@ -1,5 +1,8 @@
 package com.fariin.app.ui.browser
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -36,16 +39,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -286,7 +279,7 @@ private fun Browser(start: String, motion: SheetMotion) {
         // Close, top-left.
         Box(Modifier.padding(start = 18.dp, top = 14.dp).size(44.dp).floating(CircleShape)
             .clickable(onClickLabel = "Close") { onClose() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Close, "Close", tint = c.label, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.label, modifier = Modifier.size(22.dp))
         }
 
         // The bottom row: back, the address capsule, open in the phone's browser.
@@ -294,7 +287,7 @@ private fun Browser(start: String, motion: SheetMotion) {
             .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(48.dp).floating(CircleShape).clickable(enabled = canBack) { web?.goBack() },
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = if (canBack) c.label else c.label.copy(alpha = 0.3f),
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = if (canBack) c.label else c.label.copy(alpha = 0.3f),
                     modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(10.dp))
@@ -307,20 +300,20 @@ private fun Browser(start: String, motion: SheetMotion) {
                 Row(Modifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box {
                         Box(Modifier.size(36.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Menu, "Menu", tint = c.label, modifier = Modifier.size(20.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_line3), "Menu", tint = c.label, modifier = Modifier.size(20.dp))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Forward") }, enabled = canForward,
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null) },
+                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null) },
                                 onClick = { menu = false; web?.goForward() })
-                            DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = {
+                            DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_link_share), null) }, onClick = {
                                 menu = false
                                 runCatching {
                                     ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
                                         .putExtra(Intent.EXTRA_TEXT, url), null))
                                 }
                             })
-                            DropdownMenuItem(text = { Text("Copy link") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = {
+                            DropdownMenuItem(text = { Text("Copy link") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), null) }, onClick = {
                                 menu = false
                                 (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                     .setPrimaryClip(ClipData.newPlainText("link", url))
@@ -331,7 +324,7 @@ private fun Browser(start: String, motion: SheetMotion) {
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Box(Modifier.size(36.dp).clip(CircleShape).clickable { val w = web ?: return@clickable; if (loading) w.stopLoading() else w.reload() },
                         contentAlignment = Alignment.Center) {
-                        Icon(if (loading) Icons.Filled.Stop else Icons.Filled.Refresh, if (loading) "Stop" else "Reload",
+                        Icon(if (loading) ImageVector.vectorResource(R.drawable.ic_sf_xmark) else ImageVector.vectorResource(R.drawable.ic_sf_arrow_clockwise), if (loading) "Stop" else "Reload",
                             tint = c.label, modifier = Modifier.size(20.dp))
                     }
                 }
@@ -340,7 +333,7 @@ private fun Browser(start: String, motion: SheetMotion) {
             Box(Modifier.size(48.dp).floating(CircleShape).clickable {
                 runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Explore, "Open in browser", tint = c.label, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_safari), "Open in browser", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
     }

@@ -7,7 +7,6 @@ import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material.icons.filled.History
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -29,13 +28,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.outlined.EmojiEmotions
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -185,7 +177,7 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
     }
     Card {
         com.fariin.app.ui.people.DisappearingRow(timer, short = false, badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)
-        SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.History), last = true,
+        SettingsRow("Recent Actions", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow)), last = true,
             badge = NewBadgeSpots.GROUP_SETTINGS_RECENT_ACTIONS, onClick = onRecent)
     }
     // LAST (owner's mockup 2026-11-07): Reactions (the picks themselves, else Any / Off), Replies,
@@ -621,7 +613,7 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
                         last = true) { if (!saving) transferring = true }
                 }
                 if (team.canDismiss(me, uid)) SettingsSection {
-                    SettingsRow("Dismiss Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PersonRemove),
+                    SettingsRow("Dismiss Admin", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_person_minus)),
                         titleColor = c.red, trailing = Trailing.NONE, last = true) { if (!saving) confirmDismiss = true }
                 }
             }
@@ -653,7 +645,7 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton({ open = true }) { Icon(Icons.Filled.MoreVert, "More", tint = c.secondary) }
+        IconButton({ open = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", tint = c.secondary) }
         DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             items.forEach { (label, act) ->
                 DropdownMenuItem(text = { Text(label, color = if (label == "Ban") banOrange() else c.red) }, onClick = { open = false; act() })

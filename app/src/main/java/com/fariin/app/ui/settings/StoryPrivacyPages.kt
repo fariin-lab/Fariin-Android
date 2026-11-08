@@ -1,5 +1,8 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,11 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -89,9 +87,9 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
         val myPhoto = remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value?.photoUrl
         AudienceBadgeRow({
             if (!myPhoto.isNullOrEmpty()) com.fariin.app.ui.components.Avatar(myPhoto, 40.dp)
-            else AudienceCircle(Fariin.colors.blue, androidx.compose.material.icons.Icons.Filled.Public)
+            else AudienceCircle(Fariin.colors.blue, ImageVector.vectorResource(R.drawable.ic_sf_globe))
         }, "Everyone", StoryPrivacyRules.everyoneSubtitle(), last = false) { push(PAGE_STORY_EVERYONE) }
-        AudienceBadgeRow({ AudienceCircle(androidx.compose.ui.graphics.Color(0xFFFF9500), androidx.compose.material.icons.Icons.Filled.People) },
+        AudienceBadgeRow({ AudienceCircle(androidx.compose.ui.graphics.Color(0xFFFF9500), ImageVector.vectorResource(R.drawable.ic_sf_person2_fill)) },
             "My Chats", StoryPrivacyRules.myChatsSubtitle(myFriends), last = custom.isEmpty()) { push(PAGE_STORY_MYCHATS) }
         for ((i, l) in custom.withIndex()) {
             Row(
@@ -183,7 +181,7 @@ internal fun StoryEveryonePage(pop: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(36.dp).clip(CircleShape).background(Fariin.colors.fieldFill), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = null, tint = Fariin.colors.label, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Text("Add People", fontSize = 17.sp, color = Fariin.colors.label)
@@ -192,7 +190,7 @@ internal fun StoryEveryonePage(pop: () -> Unit) {
             for ((i, p) in list.withIndex()) {
                 PersonRow(p.name.ifEmpty { "Fariin user" }, p.photo, last = i == list.lastIndex, trailing = {
                     IconButton(onClick = { StoryPrivacyStore.setHidden(setOf(p.uid), false) }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Remove ${p.name}", tint = Fariin.colors.secondary)
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove ${p.name}", tint = Fariin.colors.secondary)
                     }
                 }, onClick = null)
             }

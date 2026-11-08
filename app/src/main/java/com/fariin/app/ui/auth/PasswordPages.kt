@@ -1,5 +1,7 @@
 package com.fariin.app.ui.auth
 
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
@@ -26,13 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Fingerprint
-import androidx.compose.material.icons.outlined.Key
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,7 +70,7 @@ private fun TitleBar(title: String, onBack: () -> Unit, action: String? = null, 
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().height(52.dp)) {
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.label)
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = c.label)
         }
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
         if (action != null) Box(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)) {
@@ -163,14 +158,14 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
             actionEnabled = canSave, busy = busy) { save() }
         when (gate) {
             Gate.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Busy(c.label, 40) }
-            Gate.Refused -> StateCard(Icons.Outlined.Lock, "Not verified",
+            Gate.Refused -> StateCard(ImageVector.vectorResource(R.drawable.ic_sf_lock), "Not verified",
                 "Unlock with your fingerprint, face or screen lock to change your password.", "Try Again") { prove() }
-            Gate.NoLock -> StateCard(Icons.Outlined.Lock, "Lock your phone first",
+            Gate.NoLock -> StateCard(ImageVector.vectorResource(R.drawable.ic_sf_lock), "Lock your phone first",
                 "Set a screen lock (PIN, pattern or password) in your phone's settings first, so nobody else holding it can change your password.",
                 "Open Settings") { ctx.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             Gate.NeedsReauth -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("One more check", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 4.dp))
-                AuthField(current, { current = it }, "Your current password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal })
+                AuthField(current, { current = it }, "Your current password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal })
                 ActionPill("Verify", enabled = current.isNotEmpty(), busy = busy) {
                     busy = true; error = null
                     scope.launch {
@@ -183,9 +178,9 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
                 ErrorLine(error)
             }
             Gate.Open -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (!isFirst) AuthField(current, { current = it }, "Current password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal })
-                AuthField(password, { password = it }, "New password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal })
-                AuthField(confirm, { confirm = it }, "Confirm new password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal })
+                if (!isFirst) AuthField(current, { current = it }, "Current password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal })
+                AuthField(password, { password = it }, "New password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal })
+                AuthField(confirm, { confirm = it }, "Confirm new password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal })
                 PasswordChecklist(rules)
                 Text("After changing, all other devices will need to sign in again.", fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
                 // The wait shows ON the link (spinner + "Sending code..."), not as a spinner in the
@@ -266,8 +261,8 @@ fun ResetCodePage(auth: AuthRepository, address: String, onBack: () -> Unit, onD
                     scope.launch { try { auth.startPasswordReset(); code = ""; resendIn = CodeEntry.RESEND_SECONDS } catch (e: Exception) { error = AuthRepository.codeMessageFor(e) } }
                 }
             } else {
-                AuthField(password, { password = it }, "New password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal })
-                AuthField(confirm, { confirm = it }, "Confirm new password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal })
+                AuthField(password, { password = it }, "New password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal })
+                AuthField(confirm, { confirm = it }, "Confirm new password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal })
                 PasswordChecklist(rules)
                 Text("After changing, all other devices will need to log in again.", fontSize = 13.sp, color = c.secondary)
                 ActionPill("Save", enabled = rules.allMet, busy = working) { saveIt() }
@@ -311,9 +306,9 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
         if (loading) com.fariin.app.ui.components.PageLoading()
         else if (rows.isEmpty()) Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Text("Sign in securely and protect your account", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
-            Point(Icons.Outlined.Shield, "Create a passkey for a secure, easy way to sign in to your account.")
-            Point(Icons.Outlined.Fingerprint, "Sign in to Fariin with your fingerprint, face or screen lock.")
-            Point(Icons.Outlined.Key, "Your passkey is stored safely in your password manager, such as Google Password Manager.")
+            Point(ImageVector.vectorResource(R.drawable.ic_sf_shield), "Create a passkey for a secure, easy way to sign in to your account.")
+            Point(ImageVector.vectorResource(R.drawable.ic_sf_touchid), "Sign in to Fariin with your fingerprint, face or screen lock.")
+            Point(ImageVector.vectorResource(R.drawable.ic_sf_key), "Your passkey is stored safely in your password manager, such as Google Password Manager.")
             Spacer(Modifier.weight(1f))
             ErrorLine(error)
             PrimaryPill("Create Passkey") { add() }
@@ -322,14 +317,14 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
             Text("Sign in with your screen lock. No password needed.", fontSize = 15.sp, color = c.secondary)
             Column(Modifier.clip(RoundedCornerShape(12.dp)).background(c.card)) {
                 for (r in rows) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Key, null, tint = c.secondary, modifier = Modifier.size(28.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_key), null, tint = c.secondary, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(r.name, fontSize = 17.sp, color = c.label)
                         Text(listOfNotNull(r.createdMs?.let { "created " + f.format(Date(it.toLong())) }, r.lastUsedMs?.let { "used " + f.format(Date(it.toLong())) })
                             .joinToString(" · "), fontSize = 15.sp, color = c.secondary)
                     }
-                    IconButton(onClick = { toDelete = r }) { Icon(Icons.Outlined.Delete, "Delete", tint = c.red) }
+                    IconButton(onClick = { toDelete = r }) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), "Delete", tint = c.red) }
                 }
             }
             Text("Add Passkey", fontSize = 17.sp, color = c.accent, modifier = Modifier.clickable { add() }.padding(vertical = 8.dp))

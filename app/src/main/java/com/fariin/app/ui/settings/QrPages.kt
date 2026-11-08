@@ -59,16 +59,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlashOff
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.outlined.QrCode
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -380,7 +370,7 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp)) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.22f)).clickable { close() },
                         contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
                 Spacer(Modifier.weight(1f).heightIn(min = 10.dp))
@@ -412,7 +402,7 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                             ctx.startActivity(Intent.createChooser(send, null))
                         }
                     }
-                    PosterAction(rememberVectorPainter(Icons.Outlined.Download), if (saving) "Saving…" else "Save", Modifier.weight(1f), enabled = !saving) {
+                    PosterAction(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_save_down)), if (saving) "Saving…" else "Save", Modifier.weight(1f), enabled = !saving) {
                         if (com.fariin.app.media.GallerySaver.needsPermission(ctx)) askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else doSave()
                     }
                     PosterAction(rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)), "Copy link", Modifier.weight(1f)) {
@@ -420,7 +410,7 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("Fariin link", link))
                         flash("Link copied")
                     }
-                    if (onScan != null) PosterAction(rememberVectorPainter(Icons.Outlined.QrCodeScanner), "Scan", Modifier.weight(1f)) {
+                    if (onScan != null) PosterAction(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_qrcode_viewfinder)), "Scan", Modifier.weight(1f)) {
                         scope.launch { sheet.hide() }.invokeOnCompletion { onClose(); onScan() }
                     }
                 }
@@ -570,9 +560,9 @@ internal fun ScanQrPage(onMyCode: () -> Unit, onClose: () -> Unit, onDone: () ->
             if (denied && !hasCamera) CameraOffCard(ctx)
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(16.dp)) {
                 Row(Modifier.fillMaxWidth()) {
-                    GlassCircle(rememberVectorPainter(Icons.Filled.Close), "Close", onClose)
+                    GlassCircle(rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_xmark)), "Close", onClose)
                     Spacer(Modifier.weight(1f))
-                    if (hasTorch) GlassCircle(rememberVectorPainter(if (torch) Icons.Filled.FlashOn else Icons.Filled.FlashOff),
+                    if (hasTorch) GlassCircle(rememberVectorPainter(if (torch) ImageVector.vectorResource(R.drawable.ic_sf_bolt_fill) else ImageVector.vectorResource(R.drawable.ic_sf_bolt_slash_fill)),
                         if (torch) "Turn off flash" else "Turn on flash") {
                         torch = !torch; camera?.cameraControl?.enableTorch(torch)
                     }
