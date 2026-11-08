@@ -83,6 +83,7 @@ import com.fariin.app.ui.components.sheetDrag
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.theme.FariinTheme
 import com.fariin.app.ui.thread.attachThumb
+import com.fariin.app.ui.thread.heroSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -398,7 +399,11 @@ private fun LibraryTile(item: RecentMedia.Item, tick: Int, onHold: (androidx.com
     val click by rememberUpdatedState(onTap)
     val held by rememberUpdatedState(onHold)
     // A tap picks, a long press lifts the preview; a scroll that starts on the tile cancels both.
-    Box(Modifier.aspectRatio(1f).background(Color(0xFF1C1C1E))
+    val flyKey = StoryLibraryTiles.key(item.uri)
+    Box(Modifier.aspectRatio(1f)
+        // The tile a picked photo flies out of (iOS PickerFlySource), empty while it is in the air.
+        .heroSource(flyKey, 0.dp, StoryLibraryTiles.rects, StoryLibraryTiles.radii) { StoryLibraryTiles.hiddenKey == flyKey }
+        .background(Color(0xFF1C1C1E))
         .pointerInput(item.uri) { detectTapGestures(onLongPress = { held(bmp) }, onTap = { click() }) }
         .semantics {
             contentDescription = if (item.isVideo) "Video" else "Photo"

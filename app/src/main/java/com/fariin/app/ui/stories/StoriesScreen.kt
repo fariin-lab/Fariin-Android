@@ -161,12 +161,19 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // picker. It stays open under the editor, so closing the editor comes back to it (iOS).
     var library by remember { mutableStateOf(false) }
     var libraryBusy by remember { mutableStateOf(false) }
+    // A picked photo in the air from its tile to the editor (StoryLibraryFlight.kt, iOS flyFromTile).
+    var libraryFlight by remember { mutableStateOf<LibraryFlight?>(null) }
     val pickFromLibrary: (android.net.Uri) -> Unit = { uri ->
-        if (!libraryBusy) {
+        if (!libraryBusy && libraryFlight == null) {
             libraryBusy = true
             scope.launch {
                 prepareStoryMedia(context, uri)
-                    .onSuccess { composing = it; composingUri = uri; queue = emptyList(); pickError = null }
+                    .onSuccess {
+                        composingUri = uri; queue = emptyList(); pickError = null
+                        // From its tile when the tile is on screen; the editor opens as it lands.
+                        if (StoryLibraryTiles.has(uri) && com.fariin.app.ui.components.Motion.on) libraryFlight = LibraryFlight(uri, it)
+                        else composing = it
+                    }
                     .onFailure { if (it is StoryMedia.TooLong) tooLong = true else pickError = it.message ?: "Couldn't open this file." }
                 libraryBusy = false
             }
@@ -259,7 +266,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     LaunchedEffect(active) {
         if (!active) {
             viewing = null; camera = false; library = false; composing = null; composingText = false; posted = false; tooLong = false; dayLimit = false
-            composingUri = null; queue = emptyList(); addMore = false
+            composingUri = null; queue = emptyList(); addMore = false; libraryFlight = null
             privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
         }
     }
@@ -528,6 +535,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         confirmButton = { androidx.compose.material3.TextButton(onClick = { dayLimit = false }) { Text("OK") } },
     )
     if (library) StoryLibrarySheet(busy = libraryBusy, onPick = pickFromLibrary, onClose = { library = false })
+    libraryFlight?.let { f ->
+        StoryLibraryFlightLayer(f, onLanded = { if (library) composing = f.media }, onDone = { libraryFlight = null })
+    }
     // The next waiting item takes the editor; none left = the editor goes.
     fun openNext(): Boolean {
         val next = queue.firstOrNull() ?: return false
