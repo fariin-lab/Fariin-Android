@@ -77,6 +77,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.filled.Draw
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -128,7 +131,9 @@ object StoryUploads {
 
     fun start(context: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
               hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false,
-              lists: List<com.fariin.app.data.StoryListDoc> = emptyList()) {
+              lists: List<com.fariin.app.data.StoryListDoc> = emptyList(),
+              /** A clip with edits to burn in, trim or mute: exported here, off the editor (iOS does it at post time). */
+              videoEdit: com.fariin.app.media.StoryVideoCut.Edit? = null) {
         // A group story picked on the Share Story page, handed over for this call only (GroupStoryCompose).
         val group = com.fariin.app.data.GroupStoryCompose.pending
         state.value = State.Uploading
@@ -138,6 +143,24 @@ object StoryUploads {
         val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
         val app = context.applicationContext
         scope.launch {
+            // The edited clip first, as one new file; everything after posts it like a picked one.
+            var exported: java.io.File? = null
+            val source = media.video
+            val media = if (videoEdit == null || source == null) media else {
+                val file = java.io.File(app.cacheDir, "story-edit-${System.nanoTime()}.mp4")
+                val part = if (com.fariin.app.media.StoryVideoCut.edit(app, source.file, file, videoEdit))
+                    runCatching { StoryMedia.prepareVideo(app, Uri.fromFile(file)) }.getOrNull() else null
+                val clip = part?.video
+                if (part == null || clip == null) {
+                    file.delete()
+                    state.value = State.Failed("Couldn't prepare this video for your story.")
+                    pending.value = null
+                    return@launch
+                }
+                exported = file
+                StoryMedia.Prepared(part.jpeg, part.blurThumb, StoryMedia.Video(clip.file, clip.info.copy(bytes = file.length())),
+                    part.width, part.height, media.stickers, media.repostOf)
+            }
             val video = media.video
             val pieces = video?.let { com.fariin.app.data.StoryLimits.segments(it.info.durationSec) }.orEmpty()
             state.value = if (video == null || pieces.isEmpty()) {
@@ -167,6 +190,7 @@ object StoryUploads {
                 }
                 result
             }
+            exported?.delete()   // the outbox keeps its own copy
             pending.value = null
             com.fariin.app.data.StoryLimits.refresh(me)
         }
@@ -295,7 +319,17 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     val isVideo = base.video != null
     // Pinch and pan of the picture on the card (iOS ZoomableImageView, baked into the post). Not on a
     // text story's card, a repost or a picture already carrying tap areas: those post as they are.
-    val zoomable = StoryCardRules.zoomable(textStory, media.stickers.isNotEmpty() || media.repostOf != null) && !isVideo
+    val zoomable = StoryCardRules.zoomable(textStory, media.stickers.isNotEmpty() || media.repostOf != null)
+    // A clip only zooms in: its zoom becomes the export's crop (iOS videoBurnIn).
+    val minZoom = if (isVideo) StoryCardRules.VIDEO_MIN_ZOOM else StoryCardRules.MIN_ZOOM
+    // A clip's sound and length (iOS DraftItem.muted / trimStart / trimEnd; trimEnd 0 = not trimmed).
+    val clipSeconds = (base.video?.info?.durationSec ?: 0.0).toFloat()
+    var muted by remember { mutableStateOf(false) }
+    var trimStart by remember { mutableFloatStateOf(0f) }
+    var trimEnd by remember { mutableFloatStateOf(0f) }
+    var trimming by remember { mutableStateOf(false) }
+    var scrubMs by remember { mutableStateOf<Long?>(null) }
+    var videoJob by remember { mutableStateOf<com.fariin.app.media.StoryVideoCut.Edit?>(null) }
     // 0: nobody has framed it yet, so it shows at its default (iOS DraftItem.zoom); any other number is the owner's.
     var zoomSet by remember { mutableFloatStateOf(0f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -305,7 +339,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
 
     // The editor tools (iOS StoryEditorView Aa and pen). Photos only: iOS burns them into a video
     // by re-encoding it, which Android does not do yet.
-    val canEdit = !isVideo && bmp != null
+    val canEdit = bmp != null
     val edits = remember { StoryEdits() }
     var editingId by remember { mutableLongStateOf(-1L) }
     var drawing by remember { mutableStateOf(false) }
@@ -411,14 +445,14 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     }
     fun cancelPen() { if (edits.strokes.toList() != penSnapshot) askDiscardPen = true else closePen(false) }
     // Work that a close would lose (iOS hasWork): anything placed, or the picture framed by hand.
-    fun hasWork() = !edits.isEmpty || zoomSet > 0f
+    fun hasWork() = !edits.isEmpty || zoomSet > 0f || muted || StoryTrimRules.isTrimmed(trimStart, trimEnd, clipSeconds)
     fun close() { if (hasWork()) askDiscard = true else onClose() }
 
     // A pinch let go past either end springs back inside, and the picture's edge back onto the card's.
     fun settleZoom() {
         if (!zoomable || img.width <= 1f) return
         val z0 = currentZoom(); val p0 = pan
-        val z1 = z0.coerceIn(StoryCardRules.MIN_ZOOM, StoryCardRules.MAX_ZOOM)
+        val z1 = z0.coerceIn(minZoom, StoryCardRules.MAX_ZOOM)
         val (px, py) = StoryCardRules.clampPan(p0.x, p0.y, img.width, img.height, z1, card.width, card.height)
         if (z1 == z0 && px == p0.x && py == p0.y) return
         scope.launch {
@@ -456,7 +490,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     // or down on the card closes the editor back to the picker under it. A text under the finger
     // takes the touch first (the canvas inside sees it before this does).
     val dragProgress = if (box.height > 0) (kotlin.math.abs(dragY) / (box.height / 2f)).coerceIn(0f, 1f) else 0f
-    val cardGestures = if (drawing || editingId >= 0 || flight != null || audience || leaving || baking) Modifier
+    val cardGestures = if (drawing || editingId >= 0 || flight != null || audience || leaving || baking || trimming) Modifier
     else Modifier.pointerInput(zoomable, img, card, zoomDefault) {
         val slop = viewConfiguration.touchSlop
         awaitEachGesture {
@@ -474,7 +508,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 if (pressed >= 2 && zoomable && (mode == 0 || mode == 1) && img.width > 1f) {
                     mode = 1
                     val z0 = currentZoom()
-                    val z1 = StoryCardRules.liveZoom(z0 * ev.calculateZoom(), StoryCardRules.MIN_ZOOM, StoryCardRules.MAX_ZOOM)
+                    val z1 = StoryCardRules.liveZoom(z0 * ev.calculateZoom(), minZoom, StoryCardRules.MAX_ZOOM)
                     val f = z1 / z0
                     val at = ev.calculateCentroid(useCurrent = true)
                     val prev = at - ev.calculatePan()
@@ -529,7 +563,8 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 wash?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.9f }) }
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
             }
-            if (!isVideo) bmp?.let {
+            // A clip's poster stays under the player until its first frame is up.
+            bmp?.let {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Image(it, contentDescription = null, contentScale = ContentScale.Fit,
                         modifier = Modifier.aspectRatio(it.width.toFloat() / it.height.coerceAtLeast(1)).graphicsLayer {
@@ -538,7 +573,10 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 }
             }
             // A video plays here, looping, as on iOS (it only said "Video · 5 s" over its first frame).
-            media.video?.let { v -> StoryEditVideo(v.file) }
+            media.video?.let { v ->
+                StoryEditVideo(v.file, muted, (trimStart * 1000).toLong(), if (trimEnd > 0f) (trimEnd * 1000).toLong() else 0L, scrubMs,
+                    Modifier.graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y })
+            }
         }
         if (canEdit && flight == null) StoryEditCanvas(
             edits, space, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
@@ -557,11 +595,28 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         )
         }
         }
-        val chrome = !drawing && !dragging && editingId < 0 && flight == null && dragY == 0f && !leaving
+        val chrome = !drawing && !dragging && editingId < 0 && flight == null && dragY == 0f && !leaving && !trimming
         // Close inside the frame's top corner (iOS).
         if (chrome) Box(Modifier.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
             .clickable { close() }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
+        }
+        // A clip's sound, beside the X (iOS keeps it at the top: it only flips a state).
+        if (chrome && isVideo && !audience) Box(Modifier.statusBarsPadding().padding(start = 64.dp, top = 12.dp).size(44.dp).clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.35f)).clickable { muted = !muted }, contentAlignment = Alignment.Center) {
+            Icon(if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                contentDescription = if (muted) "Sound off" else "Sound on", tint = Color.White)
+        }
+        if (trimming) base.video?.let { v ->
+            StoryTrimBar(v.file, clipSeconds, trimStart, trimEnd,
+                onScrub = { scrubMs = it },
+                onCancel = { scrubMs = null; trimming = false },
+                onDone = { s, e ->
+                    trimStart = if (s < 0.05f) 0f else s
+                    trimEnd = if (e >= clipSeconds - 0.05f) 0f else e
+                    scrubMs = null; trimming = false
+                },
+                modifier = Modifier.align(Alignment.BottomCenter))
         }
         if (drawing && !stroking && editingId < 0) {
             StoryPenTopBar(edits, onClearAll = { askClearAll = true }, modifier = Modifier.align(Alignment.TopCenter))
@@ -639,7 +694,15 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_TEXT))
                         }
                     }
-                    if (base.video == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
+                    // A clip's length (iOS scissors; not on a reposted clip, which is someone else's video).
+                    if (isVideo && media.repostOf == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Trim") {
+                        focus.clearFocus(force = true); keyboard?.hide(); trimming = true
+                    }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.ContentCut, contentDescription = "Trim",
+                            tint = if (StoryTrimRules.isTrimmed(trimStart, trimEnd, clipSeconds)) Color(0xFFFFD60A) else Color.White,
+                            modifier = Modifier.size(24.dp))
+                    }
+                    Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
                         Box {
                             Icon(androidx.compose.material.icons.Icons.Outlined.EmojiEmotions, contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_STICKERS))
@@ -656,6 +719,57 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 Row(
                     Modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(Color.White).clickable(enabled = !baking) {
                     focus.clearFocus(); keyboard?.hide()
+                    if (isVideo) {
+                        // iOS videoBurnIn: the edits, the pinch, the cut and the sound travel to the export,
+                        // which runs once the story is on its way (StoryUploads), off this screen.
+                        val range = StoryTrimRules.rangeMs(trimStart, trimEnd, clipSeconds)
+                        val art = !edits.isEmpty
+                        val framed = zoom > 1.001f || kotlin.math.abs(pan.x) > 0.5f || kotlin.math.abs(pan.y) > 0.5f
+                        if (!art && !framed && !muted && range == null) {
+                            videoJob = null; posted = base; cardRect = img; audience = true; return@clickable
+                        }
+                        val onCard = (art || framed) && card.width > 1f && shown.width > 1f
+                        // 540 across like every story clip, the card's own shape, even sides for the encoder.
+                        val cw = if (onCard) 540 else 0
+                        val ch = if (onCard) (kotlin.math.round(540f * card.height / card.width / 2f).toInt() * 2).coerceAtLeast(2) else 0
+                        val visible = shown.intersect(card)
+                        val crop = if (onCard && framed && visible.width > 1f && visible.height > 1f) android.graphics.RectF(
+                            (visible.left - shown.left) / shown.width, (visible.top - shown.top) / shown.height,
+                            (visible.right - shown.left) / shown.width, (visible.bottom - shown.top) / shown.height) else null
+                        val ground = edges ?: (0xFF000000.toInt() to 0xFF000000.toInt())
+                        val m = strokeMatrix
+                        baking = true
+                        scope.launch {
+                            val job = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                                runCatching {
+                                    var chips = emptyList<com.fariin.app.data.StoryTapTarget>()
+                                    val overlay = if (!onCard) null else {
+                                        val o = android.graphics.Bitmap.createBitmap(cw, ch, android.graphics.Bitmap.Config.ARGB_8888)
+                                        val c = android.graphics.Canvas(o)
+                                        val f = cw / card.width
+                                        // The card's canvas round the clip, where the clip leaves the card open.
+                                        c.save()
+                                        c.clipOutRect((visible.left - card.left) * f, (visible.top - card.top) * f,
+                                            (visible.right - card.left) * f, (visible.bottom - card.top) * f)
+                                        StoryMedia.paintCanvas(c, cw, ch, ground.first, ground.second)
+                                        c.restore()
+                                        if (art) bakeStoryEdits(c, cw / StoryEditRules.SPACE, edits, m)
+                                        chips = chipTapTargets(edits, cw, ch)
+                                        o
+                                    }
+                                    com.fariin.app.media.StoryVideoCut.Edit(range, muted, crop, cw, ch, overlay) to chips
+                                }.getOrNull()
+                            }
+                            baking = false
+                            if (job != null) {
+                                videoJob = job.first
+                                posted = StoryMedia.Prepared(base.jpeg, base.blurThumb, base.video, base.width, base.height,
+                                    base.stickers + job.second, base.repostOf)
+                                cardRect = img; audience = true
+                            }
+                        }
+                        return@clickable
+                    }
                     // iOS flatten's one fast path: nothing placed, never framed, and the picture fills the card.
                     val untouched = edits.isEmpty && kotlin.math.abs(zoom - 1f) < 0.001f && pan == Offset.Zero &&
                         img.width >= card.width - 1f && img.height >= card.height - 1f
@@ -712,7 +826,8 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         if (audience) Box(Modifier.fillMaxSize().graphicsLayer { translationY = leaveSheet.value * box.height }) {
             ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
                 if (flight != null) return@ShareStoryAudiencePage
-                StoryUploads.start(ctx, me, posted, caption, choice, picked, hours, storyConvs(conversations), capture, lists)
+                StoryUploads.start(ctx, me, posted, caption, choice, picked, hours, storyConvs(conversations), capture, lists,
+                    videoEdit = if (posted.video != null) videoJob else null)
                 val pic = if (flyHome) runCatching { BitmapFactory.decodeByteArray(posted.jpeg, 0, posted.jpeg.size)?.asImageBitmap() }.getOrNull() else null
                 if (pic == null) { onPosted(); return@ShareStoryAudiencePage }
                 // From the picture as the card shows it: a photo that fills the card wears its 40 corners.
@@ -805,7 +920,8 @@ internal val CARD_CORNER = 40.dp
 /** The picked or recorded video, playing on a loop in the editor's frame (the first frame shows until it starts). */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-private fun StoryEditVideo(uri: Uri) {
+private fun StoryEditVideo(uri: Uri, muted: Boolean = false, startMs: Long = 0L, endMs: Long = 0L, scrubMs: Long? = null,
+                           modifier: Modifier = Modifier) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember(uri) {
         androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
@@ -816,6 +932,21 @@ private fun StoryEditVideo(uri: Uri) {
         }
     }
     androidx.compose.runtime.DisposableEffect(player) { onDispose { player.release() } }
+    // Sound off is heard at once (iOS previewPlayer.isMuted).
+    LaunchedEffect(player, muted) { player.volume = if (muted) 0f else 1f }
+    // The trimmed piece loops; a handle in the hand shows its frame instead.
+    LaunchedEffect(player, startMs, endMs, scrubMs) {
+        val scrub = scrubMs
+        if (scrub != null) { player.playWhenReady = false; player.seekTo(scrub); return@LaunchedEffect }
+        player.playWhenReady = true
+        val p0 = player.currentPosition
+        if (p0 < startMs || (endMs > 0L && p0 >= endMs)) player.seekTo(startMs)
+        while (true) {
+            kotlinx.coroutines.delay(40)
+            val p = player.currentPosition
+            if ((endMs > 0L && p >= endMs) || p < startMs - 150L) player.seekTo(startMs)
+        }
+    }
     androidx.compose.ui.viewinterop.AndroidView(
         factory = { ctx ->
             (android.view.LayoutInflater.from(ctx).inflate(com.fariin.app.R.layout.story_player, null) as androidx.media3.ui.PlayerView).apply {
@@ -826,6 +957,6 @@ private fun StoryEditVideo(uri: Uri) {
             }
         },
         update = { it.player = player },
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().then(modifier),
     )
 }
