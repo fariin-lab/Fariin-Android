@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
         takeOpenCid(intent)
         takeCallLink(intent)
         com.fariin.app.system.SystemRouter.take(intent)
+        takeLinkNudge(intent)
         // Debug builds only: `--ez notifDemo true` posts made-up notifications through the real
         // builder (push/DebugNotifs), no sign-in and no Firebase.
         if (debuggable && intent.getBooleanExtra("notifDemo", false)) com.fariin.app.push.DebugNotifs.post(this)
@@ -394,11 +395,21 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    /** A tapped "wants to talk" notification (app was closed): its data keys open the invitation. */
+    private fun takeLinkNudge(i: android.content.Intent?) {
+        val e = i?.extras ?: return
+        if (e.getString("type") != "linknudge") return
+        val d = e.keySet().mapNotNull { k -> e.getString(k)?.let { k to it } }.toMap()
+        i.removeExtra("type")
+        com.fariin.app.call.GroupRing.onLinkNudge(applicationContext, d)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         takeOpenCid(intent)
         takeCallLink(intent)
         com.fariin.app.system.SystemRouter.take(intent)
+        takeLinkNudge(intent)
         // Debug builds only: `--es notifChat <cid>` to the running app = that push arriving in front (the in-app banner).
         if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) intent.getStringExtra("notifChat")?.let { com.fariin.app.push.DebugNotifs.postReal(this, it) }
     }

@@ -1284,3 +1284,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   onTaskRemoved). Group call bar as iOS with Speaker + Flip Camera. Group call gap list (33 items,
   6 starred) from the iOS comparison: next are the large-tile behaviour, sharer card, raised-hands
   pill, two-person view, Not here yet + nudge bell.
+- 2026-11-08 night: group call stage as iOS (large tile tap = controls, swipe down unpins,
+  Pinned/Presenting label, sharing card with Stop Sharing, hand chips) 92df4dfc; raised-hands pill
+  75565b9d; link call "Not here yet" list with status + nudge bell, and a tapped nudge opens the
+  join screen without ringing. All built and installed; need a real call to verify.

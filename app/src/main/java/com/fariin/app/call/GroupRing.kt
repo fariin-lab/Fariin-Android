@@ -38,8 +38,23 @@ data class RingFace(val uid: String, val name: String, val photo: String?)
  */
 data class GroupInvite(val cid: String, val title: String, val video: Boolean, val startedBy: String, val startedAtMs: Long, val faces: List<RingFace>,
                        /** A call link's ring (Add people in a link call): the link's key; [cid] is its room id. */
-                       val linkKey: String? = null) {
+                       val linkKey: String? = null,
+                       /** A nudge ("wants to talk"), not a ring: no ringtone, Ignore tells nobody (iOS openNudge). */
+                       val nudge: Boolean = false) {
     val roomKind: String get() = if (linkKey != null) "link" else "group"
+}
+
+/** One person Add People rang into a link call (callLinks/{roomId}/invites/{uid}, iOS LinkCallInvites.Invite). */
+data class LinkInvite(val uid: String, val atMs: Long?, val sid: String?, val state: String) {
+    companion object {
+        /** iOS LinkCallInvites.status: Declined, Missed, Left (was in, went), else Ringing… for the minute. */
+        fun status(i: LinkInvite, nowMs: Long): String = when (i.state) {
+            "declined" -> "Declined"
+            "missed" -> "Missed"
+            "joined" -> "Left"
+            else -> if (i.atMs != null && nowMs - i.atMs > GroupCallWire.RING_WINDOW_MS) "Missed" else "Ringing\u2026"
+        }
+    }
 }
 
 /** The pure rules of a group ring, for the tests. */
@@ -131,7 +146,15 @@ object GroupRing {
      * sentAt}. Rings while my invite (callLinks/{roomId}/invites/{me}) is still "ringing"; Join goes
      * straight in (the invite lets me past the approval), as iOS acceptFromScreen with a link key.
      */
-    fun onLinkPush(context: Context, d: Map<String, String>) {
+    fun onLinkPush(context: Context, d: Map<String, String>) = linkInvite(context, d, nudge = false)
+
+    /**
+     * A nudge's tap (server linkCallNudge, data type "linknudge"): the same invitation screen with
+     * Ignore and Join, without the ring behind it; it goes by itself after the ring minute.
+     */
+    fun onLinkNudge(context: Context, d: Map<String, String>) = linkInvite(context, d, nudge = true)
+
+    private fun linkInvite(context: Context, d: Map<String, String>, nudge: Boolean) {
         val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val roomId = d["roomId"].orEmpty()
         val key = d["key"]?.let { CallLinkKey.ofText(it) } ?: return
@@ -142,9 +165,10 @@ object GroupRing {
         if (_invite.value?.cid == roomId || GroupCall.ui.value.cid == "link:$roomId" || roomId in declinedHere) return
         val started = d["startedAt"]?.toLongOrNull()
         val sent = d["sentAt"]?.toLongOrNull()
-        if (sent != null && System.currentTimeMillis() - sent > GroupCallWire.RING_WINDOW_MS) return
+        if (!nudge && sent != null && System.currentTimeMillis() - sent > GroupCallWire.RING_WINDOW_MS) return
         if (GroupCall.ui.value.cid != null || CallManager.ui.value.status.live || _invite.value != null) {
-            answer("busy", roomId, started, roomKind = "link"); return
+            if (!nudge) answer("busy", roomId, started, roomKind = "link")
+            return
         }
         val name = d["callerName"]?.takeIf { it.isNotEmpty() } ?: "Someone"
         val title = d["title"]?.takeIf { it.isNotEmpty() } ?: CallLinkDefaults.NAME
@@ -152,7 +176,7 @@ object GroupRing {
             val photo = try { db.collection("users").document(caller).get().await().getString("photoUrl") } catch (_: Exception) { null }
             if (_invite.value != null || GroupCall.ui.value.cid != null) return@launch
             ring(GroupInvite(roomId, title, d["video"] != "0" && d["video"] != "false", caller, started ?: System.currentTimeMillis(),
-                listOf(RingFace(caller, name, photo?.ifEmpty { null })), linkKey = key.text))
+                listOf(RingFace(caller, name, photo?.ifEmpty { null })), linkKey = key.text, nudge = nudge))
         }
     }
 
@@ -162,6 +186,13 @@ object GroupRing {
     private fun ring(i: GroupInvite) {
         val c = app ?: return
         _invite.value = i
+        if (i.nudge) {
+            // A nudge was tapped: straight to the screen, no ring, no watch on the (missed) invite.
+            try { c.startActivity(ringIntent(c, ACTION_RING)) } catch (_: Exception) {}
+            timer?.cancel()
+            timer = scope.launch { delay(GroupCallWire.RING_WINDOW_MS); if (_invite.value === i) stop() }
+            return
+        }
         startRingtone(c)
         notifyRing(c, i)
         if (inFront()) try { c.startActivity(ringIntent(c, ACTION_RING)) } catch (_: Exception) {}
@@ -188,6 +219,7 @@ object GroupRing {
     /** Ignore: the ring stops and the server hears "decline" (iOS settleDecline). */
     fun decline() {
         val i = _invite.value ?: return
+        if (i.nudge) { stop(); return }   // a nudge's Ignore only closes it
         declinedHere += i.cid
         stop()
         answer("decline", i.cid, i.startedAtMs, tries = 3, roomKind = i.roomKind)
@@ -200,13 +232,13 @@ object GroupRing {
      */
     fun accept(context: Context, muted: Boolean, cameraAllowed: Boolean): GroupInvite? {
         val i = _invite.value ?: return null
-        declinedHere += i.cid   // never ring again for a room I answered
+        if (!i.nudge) declinedHere += i.cid   // never ring again for a room I answered
         stop()
         val key = i.linkKey?.let { CallLinkKey.ofText(it) }
         if (key != null) {
             // Straight in, no approval wait (invited); the server hears "joined" (iOS reportLinkJoined).
             GroupCall.joinLink(context, key, video = i.video && cameraAllowed, mic = !muted)
-            answer("joined", i.cid, i.startedAtMs, roomKind = "link")
+            if (!i.nudge) answer("joined", i.cid, i.startedAtMs, roomKind = "link")
         } else GroupCall.join(context, i.cid, i.title, video = i.video && cameraAllowed, requireLive = true, mic = !muted)
         return i
     }

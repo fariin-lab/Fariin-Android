@@ -1499,7 +1499,9 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                 }
             }
             // The list scrolls in the room left; the owner's End bar stays pinned under it.
-            Column(Modifier.weight(1f)) { SheetSection {
+            Column(Modifier.weight(1f)) {
+            if (isLink && g.joined) NotHereYet(g, meId)
+            SheetSection {
                 androidx.compose.foundation.lazy.LazyColumn {
                     items(g.members, key = { it.id }) { m ->
                         val mine = m.id == meId
@@ -1542,6 +1544,77 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
     if (showRequests) CallLinkBulkRequestsSheet(g.requests) { showRequests = false }
     if (showAdd) GroupAddPeopleSheet(g) { showAdd = false }
     HostDialogs(g, confirm) { confirm = null }
+}
+
+/**
+ * iOS notConnectedSection (owner 2026-10-23): on a link call, everyone Add People rang who is not in
+ * the call now, with how it went ("Ringing…", "Declined", "Missed", "Left") and a bell: somebody who
+ * declined or missed is not rung again; the bell nudges them instead. No bell for someone who left.
+ */
+@Composable
+private fun NotHereYet(g: GroupCallUi, meId: String?) {
+    val room = g.linkRoom ?: return
+    var invites by remember(room) { mutableStateOf<List<com.fariin.app.call.LinkInvite>>(emptyList()) }
+    val people = remember(room) { androidx.compose.runtime.mutableStateMapOf<String, Pair<String, String?>>() }
+    val nudgedAt = remember(room) { androidx.compose.runtime.mutableStateMapOf<String, Long>() }
+    var toast by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(toast) { if (toast != null) { kotlinx.coroutines.delay(3_000); toast = null } }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1_000); now = System.currentTimeMillis() } }
+    androidx.compose.runtime.DisposableEffect(room) {
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val reg = db.collection("callLinks").document(room).collection("invites").addSnapshotListener { snap, _ ->
+            snap ?: return@addSnapshotListener
+            invites = snap.documents.mapNotNull { d ->
+                val uid = d.getString("uid")?.ifEmpty { null } ?: d.id
+                com.fariin.app.call.LinkInvite(uid, d.getTimestamp("at")?.toDate()?.time, d.getString("sid")?.ifEmpty { null }, d.getString("state") ?: "ringing")
+            }.sortedBy { it.atMs ?: 0L }
+            for (i in invites) if (i.uid !in people) {
+                people[i.uid] = "User" to null
+                db.collection("users").document(i.uid).get().addOnSuccessListener { u ->
+                    people[i.uid] = (u.getString("name")?.ifEmpty { null } ?: "User") to u.getString("photoUrl")?.ifEmpty { null }
+                }
+            }
+        }
+        onDispose { reg.remove() }
+    }
+    val sid = GroupCall.roomSessionId()
+    val here = g.members.map { it.id }.toSet()
+    val rows = invites.filter { it.uid !in here && it.uid != meId && (sid == null || it.sid == null || it.sid == sid) }
+    if (rows.isEmpty()) return
+    Row(Modifier.fillMaxWidth().padding(start = 32.dp, end = 24.dp).heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Not here yet", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(" \u00b7 ${rows.size}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+    }
+    SheetSection {
+        Column {
+            rows.forEach { i ->
+                val (name, photo) = people[i.uid] ?: ("User" to null)
+                val status = com.fariin.app.call.LinkInvite.status(i, now)
+                val waiting = nudgedAt[i.uid]?.let { now - it < 60_000 } == true
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Avatar(photo, 36.dp) }
+                    Spacer(Modifier.width(8.dp))
+                    Text(name, color = Color.White, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    Text(status, color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp, maxLines = 1)
+                    if (i.state != "joined") {
+                        Spacer(Modifier.width(12.dp))
+                        Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
+                            .clickable(enabled = !waiting) {
+                                nudgedAt[i.uid] = System.currentTimeMillis()
+                                GroupCall.nudge(i.uid, name) { ok, line -> if (!ok) nudgedAt.remove(i.uid); toast = line }
+                            }.graphicsLayer { alpha = if (waiting) 0.4f else 1f }
+                            .semantics { contentDescription = "Nudge $name" }, contentAlignment = Alignment.Center) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_bell), null, tint = Color.White, modifier = Modifier.size(17.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    toast?.let { Text(it, color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) }
+    Spacer(Modifier.height(20.dp))
 }
 
 /**

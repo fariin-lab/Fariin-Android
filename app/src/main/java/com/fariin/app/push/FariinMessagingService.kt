@@ -58,6 +58,13 @@ class FariinMessagingService : FirebaseMessagingService() {
             android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onLinkPush(applicationContext, d) }
             return
         }
+        // "<name> wants to talk" (server linkCallNudge) with the app open: the system does not draw
+        // a notification part then, so we show the invitation screen at once (iOS in-app banner + Join).
+        if (message.data["type"] == "linknudge") {
+            val d = message.data.toMap()
+            android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onLinkNudge(applicationContext, d) }
+            return
+        }
         if (message.data["type"] == "groupcall") {
             val cid = message.data["cid"].orEmpty()
             android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }

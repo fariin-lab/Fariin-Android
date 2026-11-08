@@ -706,6 +706,31 @@ object GroupCall {
     /** My own `micBlocked` attribute has read "1" in this call. */
     private var sawMicBlocked = false
 
+    /**
+     * The bell next to someone in Not here yet (iOS nudge): "<me> wants to talk" on their phone
+     * (`linkCallNudge` {roomId, key, uid}), once a minute per person. [done] gets the line to show.
+     */
+    fun nudge(uid: String, name: String, done: (ok: Boolean, line: String) -> Unit) {
+        val key = linkKey ?: return done(false, "Can't nudge them now")
+        scope.launch {
+            try {
+                functions.getHttpsCallable("linkCallNudge").call(mapOf("roomId" to key.roomId, "key" to key.text, "uid" to uid)).await()
+                done(true, "Nudged $name")
+            } catch (e: Exception) {
+                val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
+                done(code == com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED, when (code) {
+                    com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED -> "Wait a minute before nudging again"
+                    com.google.firebase.functions.FirebaseFunctionsException.Code.FAILED_PRECONDITION,
+                    com.google.firebase.functions.FirebaseFunctionsException.Code.PERMISSION_DENIED -> "Can't nudge them now"
+                    else -> "Couldn't nudge. Try again."
+                })
+            }
+        }
+    }
+
+    /** This call's media session id: the invites of an earlier call on the same link are not shown. */
+    fun roomSessionId(): String? = try { room?.sid?.sid } catch (_: Exception) { null }
+
     /** A person the group's lists do not know (a link call): their public profile, once. */
     private fun loadFace(uid: String) {
         asked += uid
