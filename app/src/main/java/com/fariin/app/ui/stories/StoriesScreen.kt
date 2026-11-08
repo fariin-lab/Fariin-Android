@@ -224,6 +224,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val recent = shown.filter { it.hasUnseen }
     val viewed = shown.filter { !it.hasUnseen }
     val ordered = recent + viewed
+    // My Story leads into everyone else, in the page's order (iOS openStoryFromRow, owner 2026-11-07:
+    // from my own story a swipe could not reach the next person). Each ring once.
+    fun withOthers(mine: StoryGroup) = (listOf(mine) + ordered).distinctBy { it.key }
     // iOS .searchable "Search": typing replaces the page with name matches (StoriesTabView.searchResults).
     var search by rememberSaveable { mutableStateOf("") }
     val query = search.trim()
@@ -351,7 +354,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         thumbImage = pendingImage, uploading = true,
                         backThumbUrl = if (pendingImage != null) newest?.listThumb else mine?.stories?.let { it.getOrNull(it.size - 2) }?.listThumb,
                         originKey = StoryPostFlight.UPLOAD_KEY,
-                        onClick = { mine?.let { viewing = listOf(it) to 0 } }, onCamera = addStory, menu = myMenu,
+                        onClick = { mine?.let { viewing = withOthers(it) to 0 } }, onCamera = addStory, menu = myMenu,
                     )
                 } else if (mine != null && newest != null) {
                     StoryRow(
@@ -360,7 +363,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         seenFlags = com.fariin.app.data.StoryRings.seenFlags(mine),
                         backThumbUrl = mine.stories.getOrNull(mine.stories.size - 2)?.listThumb,
                         originKey = mine.key,
-                        onClick = { if (retryWaiting) retryNow() else { viewing = listOf(mine) to 0 } }, onCamera = addStory, menu = myMenu,
+                        onClick = { if (retryWaiting) retryNow() else { viewing = withOthers(mine) to 0 } }, onCamera = addStory, menu = myMenu,
                     )
                 } else {
                     StoryRow(

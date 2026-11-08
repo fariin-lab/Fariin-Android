@@ -1137,6 +1137,10 @@ private fun StoryPage(
         var elapsed by remember(story.id) { mutableLongStateOf(0L) }
         LaunchedEffect(story.id, active, loaded) {
             if (!active || !loaded) return@LaunchedEffect
+            // Back on this ring (owner 2026-11-07): its story starts over. The page kept its clock
+            // from before, so a story watched to the end was over at once and threw me to the next
+            // person; the reference apps replay the story you come back to.
+            elapsed = 0L; progress = 0f
             var last = withFrameMillis { it }
             while (elapsed < story.showMs) {
                 if (stoppedNow) {
@@ -1425,7 +1429,11 @@ private fun StoryMedia(
             player.addListener(l)
             onDispose { player.removeListener(l); player.release() }
         }
-        LaunchedEffect(active, player) { player.playWhenReady = active }
+        // Back on a clip that had ended: from its start, not stuck at the end (same bug as the photo clock).
+        LaunchedEffect(active, player) {
+            if (active && player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+            player.playWhenReady = active
+        }
         // Only while it plays: a paused clip does not move, so no frame each vsync for it.
         LaunchedEffect(player, active) {
             while (active) {
