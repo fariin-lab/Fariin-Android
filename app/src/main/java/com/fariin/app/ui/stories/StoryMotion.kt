@@ -86,6 +86,9 @@ internal object StoryMotion {
     /** Close: the slot's picture is fully on by 85% of the landing (`heroCoverIn`). */
     fun coverIn(t: Float): Float = (t / 0.85f).coerceIn(0f, 1f)
 
+    /** Close into a Stories card: the slot's picture comes over the last 15% of the landing. */
+    fun coverInLate(t: Float): Float = ((t - 0.85f) / 0.15f).coerceIn(0f, 1f)
+
     /** Open: the slot's picture dissolves into the story between 20% and 55% (`heroCoverOut`, card). */
     fun coverOut(t: Float): Float = 1f - ((t - 0.2f) / 0.35f).coerceIn(0f, 1f)
 

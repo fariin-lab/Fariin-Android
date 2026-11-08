@@ -538,9 +538,28 @@ fun StoryViewer(
         if (!hero.staged || size == IntSize.Zero) { land(); return }
         heroJob[0]?.cancel()
         hero.committing = true
+        // The header, its name, time and X stay in the card as it shrinks home (iOS): held at what
+        // they show now (all of it after a tap on X), not faded on the card's size.
+        hero.chromeHold = StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 1.4f).coerceIn(0f, 1f)
         if (!hero.live) { hero.center = rest(); hero.f = 0f }
         hero.live = true
         val a = anchorFor(currentKey())
+        if (a == null && com.fariin.app.ui.components.Motion.on) {
+            // The slot may be a frame behind (the list re-laid out under the viewer): look once more
+            // before giving up on it, so the card never drops off the bottom when its slot is there.
+            scope.launch {
+                withFrameMillis { }
+                val again = anchorFor(currentKey())
+                hero.committing = false
+                if (again != null) closeTo(again, vy) else closeTo(null, vy)
+            }
+            return
+        }
+        closeTo(a, vy)
+    }
+
+    fun closeTo(a: Rect?, vy: Float) {
+        hero.committing = true
         if (!com.fariin.app.ui.components.Motion.on) {
             // Power Saving's animations off: a short fade where it stands.
             heroJob[0] = scope.launch { Animatable(hero.rootAlpha).animateTo(0f, tween(150)) { hero.rootAlpha = value }; land() }
@@ -560,7 +579,9 @@ fun StoryViewer(
             val av = hero.avatar
             runHero(1f, a.center, 1f, minOf(6f, maxOf(0f, vy) / remaining), StoryMotion.CLOSE_STIFFNESS,
                 StoryMotion.settle(remaining, density),
-                cover = if (av) StoryMotion::avatarCoverIn else StoryMotion::coverIn,
+                // A Stories card: the face shrinks whole and turns into the slot's picture only at
+                // the end, so the landing is the slot itself (no empty slot, no pop).
+                cover = if (av) StoryMotion::avatarCoverIn else StoryMotion::coverInLate,
                 crop = if (av) StoryMotion::avatarCropIn else StoryMotion::coverIn, dimFloor = { 1f - it },
                 extra = if (av) ({ t -> hero.ring = StoryMotion.ringIn(t) }) else null) { land() }
         }
@@ -743,7 +764,10 @@ fun StoryViewer(
                     paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null,
                     // The bars and caption stay inside the shrinking card and fade as it shrinks (iOS);
                     // over a third of the pull they were gone in a frame on a quick swipe.
-                    chrome = { StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 1.4f).coerceIn(0f, 1f) },
+                    chrome = {
+                        if (hero.chromeHold >= 0f) hero.chromeHold
+                        else StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 1.4f).coerceIn(0f, 1f)
+                    },
                     jumpTo = if (page == pager.currentPage) jumpTo else null,
                     summaries = summaries, service = service, who = who,
                     onSeen = { s ->
@@ -1605,6 +1629,8 @@ private class HeroState {
     var live by mutableStateOf(false)
     var visible by mutableStateOf(false)
     var committing = false
+    /** The bars' opacity held for a close's flight: they shrink inside the card (iOS), not fade away. */
+    var chromeHold by mutableFloatStateOf(-1f)
     var closed = false
     var staged = false
 }
