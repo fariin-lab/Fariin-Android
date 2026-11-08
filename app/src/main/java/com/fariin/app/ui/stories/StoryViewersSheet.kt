@@ -290,12 +290,22 @@ internal fun ViewersCarousel(
                         Box(Modifier.fillMaxSize().graphicsLayer { alpha = geo(sheet.fraction).placement(i - sheet.row.value).dim }.background(Color.Black))
                     }
                 }
-                CardCount(
-                    summaries[s.id],
-                    Modifier.align(Alignment.TopCenter).offset(y = with(LocalDensity.current) { (slotH / density).dp } + StorySheetGeometry.COUNT_GAP.dp)
-                        .graphicsLayer { alpha = geo(sheet.fraction).countAlpha(i - sheet.row.value) * sheet.fraction },
-                )
             }
+            // The count rides under the card's bottom edge from the first frame and fades in (iOS); it
+            // is moved with the card but never scaled with it (scaled, it showed as a big ghost low on
+            // the screen while the card was still near full size).
+            CardCount(
+                summaries[s.id],
+                Modifier.layout { m, _ ->
+                    val p = m.measure(Constraints())
+                    layout(size.width, size.height) { p.place(((size.width - p.width) / 2f).toInt(), 0) }
+                }.graphicsLayer {
+                    val pl = geo(sheet.fraction).placement(i - sheet.row.value)
+                    translationX = pl.cx - size.width / 2f
+                    translationY = pl.cy + pl.h / 2f + StorySheetGeometry.COUNT_GAP * d
+                    alpha = geo(sheet.fraction).countAlpha(i - sheet.row.value) * sheet.fraction
+                },
+            )
         }
     }
 }

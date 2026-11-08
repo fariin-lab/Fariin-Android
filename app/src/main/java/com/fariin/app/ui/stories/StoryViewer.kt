@@ -741,8 +741,9 @@ fun StoryViewer(
                     onRepost = { st -> startRepost(st, g) },
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
                     paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null,
-                    // The bars and caption go over the first third of the sheet's pull (iOS storySheetProgress).
-                    chrome = { StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 3f).coerceIn(0f, 1f) },
+                    // The bars and caption stay inside the shrinking card and fade as it shrinks (iOS);
+                    // over a third of the pull they were gone in a frame on a quick swipe.
+                    chrome = { StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 1.4f).coerceIn(0f, 1f) },
                     jumpTo = if (page == pager.currentPage) jumpTo else null,
                     summaries = summaries, service = service, who = who,
                     onSeen = { s ->
