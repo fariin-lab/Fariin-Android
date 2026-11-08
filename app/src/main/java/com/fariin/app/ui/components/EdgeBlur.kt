@@ -15,9 +15,10 @@ import androidx.compose.ui.unit.dp
  * in and out: full strength over the top [solid] part of the strip, then the radius eases down to
  * nothing at its lower edge. Used by the Chats bar, Settings and the chat header.
  */
-fun edgeStages(solid: Float): HazeProgressive.LinearGradient =
+fun edgeStages(solid: Float, gentle: Boolean = false): HazeProgressive.LinearGradient =
     HazeProgressive.verticalGradient(
-        easing = Easing { t -> if (t <= solid) 0f else EaseInOutCubic.transform(((t - solid) / (1f - solid)).coerceIn(0f, 1f)) },
+        // [gentle]: a quintic ease (zero slope at both ends), so neither where the fade starts nor where it ends can be seen.
+        easing = Easing { t -> if (t <= solid) 0f else ((t - solid) / (1f - solid)).coerceIn(0f, 1f).let { x -> if (gentle) x * x * x * (x * (6f * x - 15f) + 10f) else EaseInOutCubic.transform(x) } },
         startIntensity = 1f,
         endIntensity = 0f,
         preferPerformance = false,
@@ -52,7 +53,7 @@ fun rememberEdgeAlpha(under: Boolean, startOn: Boolean = false): androidx.compos
  */
 fun androidx.compose.ui.Modifier.frostedTopBar(
     haze: dev.chrisbanes.haze.HazeState, page: androidx.compose.ui.graphics.Color, glass: Boolean,
-    tail: androidx.compose.ui.unit.Dp = 44.dp,
+    tail: androidx.compose.ui.unit.Dp = 84.dp,   // long and gentle (owner: "still noticeable a bit")
 ): androidx.compose.ui.Modifier = this
     .layout { m, k ->
         val t = tail.roundToPx()
@@ -61,11 +62,11 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
     }
     .then(if (glass) androidx.compose.ui.Modifier.hazeEffect(haze) {
         backgroundColor = page; blurRadius = 22.dp; noiseFactor = 0f
-        tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.82f)))
+        tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.70f)))   // 70%: the owner liked Calls at this
         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
         // Solid down the bar, then a long, soft ease to nothing over the tail.
-        progressive = edgeStages(0.42f)
+        progressive = edgeStages(0.40f, gentle = true)
     } else androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
-        0f to page, 0.42f to page, 0.62f to page.copy(alpha = 0.7f), 0.8f to page.copy(alpha = 0.3f),
-        0.92f to page.copy(alpha = 0.08f), 1f to page.copy(alpha = 0f))))
+        0f to page, 0.40f to page, 0.55f to page.copy(alpha = 0.78f), 0.7f to page.copy(alpha = 0.45f),
+        0.84f to page.copy(alpha = 0.18f), 0.94f to page.copy(alpha = 0.05f), 1f to page.copy(alpha = 0f))))
     .padding(bottom = tail)
