@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,9 +40,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -246,8 +246,8 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.12f))
                 .clickable { if (a != null) album = null else onClose() }, contentAlignment = Alignment.Center) {
-                if (a != null) Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White, modifier = Modifier.size(22.dp))
-                else Icon(Icons.Filled.Close, "Close", tint = Color.White, modifier = Modifier.size(22.dp))
+                if (a != null) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = Color.White, modifier = Modifier.size(22.dp))
+                else Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(22.dp))
             }
             if (a != null) Text(a.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Center).padding(horizontal = 60.dp))
@@ -335,7 +335,7 @@ private fun SelectionBar(picked: List<Uri>, label: String, enabled: Boolean, onR
                         PickedThumb(u)
                         Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(16.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
                             contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(11.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(11.dp))
                         }
                     }
                 }

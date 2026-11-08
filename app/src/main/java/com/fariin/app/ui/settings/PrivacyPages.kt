@@ -1,5 +1,8 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import com.fariin.app.ui.components.listPress
 import android.content.Context
@@ -20,8 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -316,7 +317,7 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
                 Text(name, fontSize = 17.sp, color = c.label, maxLines = 1)
                 if (sub != null) Text(sub, fontSize = 13.sp, color = c.secondary, maxLines = 1)
             }
-            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(22.dp))
+            if (selected) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(22.dp))
             trailing?.invoke()
         }
         if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)

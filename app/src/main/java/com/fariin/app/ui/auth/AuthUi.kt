@@ -29,11 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -89,7 +84,7 @@ internal fun Logo(side: Int, modifier: Modifier = Modifier) {
 internal fun BackRow(onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Fariin.colors.label)
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Back", tint = Fariin.colors.label)
         }
     }
 }
@@ -296,7 +291,7 @@ internal fun PasswordChecklist(rules: PasswordRules) {
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().heightIn(min = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             rules.hint?.let { h ->
-                if (h.ok) { Icon(Icons.Filled.Check, null, tint = GreenOk, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(5.dp)) }
+                if (h.ok) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = GreenOk, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(5.dp)) }
                 Text(h.text, fontSize = 13.sp, color = if (h.ok) c.label else if (h.bad) RedHint else c.secondary)
             }
             Spacer(Modifier.weight(1f))

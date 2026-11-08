@@ -1,5 +1,8 @@
 package com.fariin.app.ui.auth
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,10 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -167,17 +166,17 @@ fun CodePage(
                 CodeStep.NewPassword -> {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.fieldFill).padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.AccountCircle, null, tint = c.secondary, modifier = Modifier.size(26.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_person_crop_circle_fill), null, tint = c.secondary, modifier = Modifier.size(26.dp))
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text("Logged in as", fontSize = 13.sp, color = c.secondary)
                             Text(trimmed, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
                         }
                     }
-                    AuthField(newPassword, { newPassword = it }, "New password", Icons.Outlined.Lock, secret = true, reveal = reveal,
+                    AuthField(newPassword, { newPassword = it }, "New password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal,
                         onReveal = { reveal = !reveal }, keyboard = passwordKeyboard(false), focusRequester = newFocus,
                         actions = KeyboardActions(onNext = { try { confirmFocus.requestFocus() } catch (_: Exception) {} }))
-                    AuthField(confirmPassword, { confirmPassword = it }, "Confirm password", Icons.Outlined.Lock, secret = true, reveal = reveal,
+                    AuthField(confirmPassword, { confirmPassword = it }, "Confirm password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal,
                         onReveal = { reveal = !reveal }, keyboard = passwordKeyboard(true), focusRequester = confirmFocus,
                         actions = KeyboardActions(onGo = { saveNewPassword() }))
                     PasswordChecklist(rules)
@@ -187,7 +186,7 @@ fun CodePage(
                         fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 8.dp))
                 }
                 CodeStep.Email -> {
-                    AuthField(address, { address = it }, "Email", Icons.Outlined.Email, focusRequester = emailFocus,
+                    AuthField(address, { address = it }, "Email", ImageVector.vectorResource(R.drawable.ic_sf_envelope), focusRequester = emailFocus,
                         keyboard = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send, autoCorrectEnabled = false),
                         actions = KeyboardActions(onSend = { if (trimmed.contains("@")) send() }))
                     ActionPill("Send code", enabled = trimmed.contains("@"), busy = busy) { send() }

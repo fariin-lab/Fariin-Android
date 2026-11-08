@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -31,20 +33,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Celebration
-import androidx.compose.material.icons.filled.EmojiEmotions
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material.icons.filled.VolunteerActivism
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.filled.WavingHand
-import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -139,23 +127,23 @@ object StoryStickers {
 private sealed interface StickerTab {
     data object Recent : StickerTab
     data object BuiltIn : StickerTab
-    data class Term(val icon: ImageVector, val query: String) : StickerTab
+    data class Term(val icon: Int, val query: String) : StickerTab
 }
 
 /** iOS StickerTab.all: trending (an empty query) leads the searched tabs. */
 private val TABS: List<StickerTab> = listOf(
     StickerTab.Recent,
     StickerTab.BuiltIn,
-    StickerTab.Term(Icons.Filled.Whatshot, ""),
-    StickerTab.Term(Icons.Filled.EmojiEmotions, "laughing"),
-    StickerTab.Term(Icons.Filled.Favorite, "love"),
-    StickerTab.Term(Icons.Filled.Celebration, "party"),
-    StickerTab.Term(Icons.Filled.WavingHand, "hello"),
-    StickerTab.Term(Icons.Filled.VolunteerActivism, "thank you"),
-    StickerTab.Term(Icons.Filled.Bedtime, "tired"),
-    StickerTab.Term(Icons.Filled.AutoAwesome, "sparkle"),
-    StickerTab.Term(Icons.Filled.ThumbUp, "yes"),
-    StickerTab.Term(Icons.Filled.WaterDrop, "crying"),
+    StickerTab.Term(R.drawable.ic_sf_flame_fill, ""),
+    StickerTab.Term(R.drawable.ic_sf_face_smiling, "laughing"),
+    StickerTab.Term(R.drawable.ic_sf_heart_fill, "love"),
+    StickerTab.Term(R.drawable.ic_sf_party, "party"),
+    StickerTab.Term(R.drawable.ic_sf_hand_wave, "hello"),
+    StickerTab.Term(R.drawable.ic_sf_star_fill, "thank you"),
+    StickerTab.Term(R.drawable.ic_sf_moon_fill, "tired"),
+    StickerTab.Term(R.drawable.ic_sf_sparkles, "sparkle"),
+    StickerTab.Term(R.drawable.ic_sf_hand_thumbsup_fill, "yes"),
+    StickerTab.Term(R.drawable.ic_sf_drop_fill, "crying"),
 )
 
 /** Trending, kept for the process like iOS trendingCache. */
@@ -213,7 +201,7 @@ fun StoryStickerTray(
             Row(Modifier.padding(horizontal = 16.dp).padding(bottom = 14.dp).fillMaxWidth().height(40.dp)
                 .clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) Text("Search", color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp)
@@ -221,7 +209,7 @@ fun StoryStickerTray(
                         textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
                         modifier = Modifier.fillMaxWidth())
                 }
-                if (searching) Icon(Icons.Filled.Cancel, contentDescription = "Clear", tint = Color.White.copy(alpha = 0.6f),
+                if (searching) Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark_circle_fill), contentDescription = "Clear", tint = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp).clickable { query = "" })
             }
             LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f).fillMaxWidth(),
@@ -264,11 +252,11 @@ fun StoryStickerTray(
                         .background(if (on) Color.White.copy(alpha = 0.18f) else Color.Transparent)
                         .clickable { query = ""; tab = t }, contentAlignment = Alignment.Center) {
                         when (t) {
-                            StickerTab.Recent -> Icon(Icons.Filled.History, contentDescription = "Recent", tint = Color.White, modifier = Modifier.size(22.dp))
+                            StickerTab.Recent -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow), contentDescription = "Recent", tint = Color.White, modifier = Modifier.size(22.dp))
                             // Our pack's tab is its first sticker, as iOS draws it.
                             StickerTab.BuiltIn -> AsyncImage(StoryStickers.builtIn.first().url, contentDescription = "Fariin stickers",
                                 contentScale = ContentScale.Fit, modifier = Modifier.size(27.dp))
-                            is StickerTab.Term -> Icon(t.icon, contentDescription = t.query.ifEmpty { "Trending" }, tint = Color.White, modifier = Modifier.size(22.dp))
+                            is StickerTab.Term -> Icon(ImageVector.vectorResource(t.icon), contentDescription = t.query.ifEmpty { "Trending" }, tint = Color.White, modifier = Modifier.size(22.dp))
                         }
                     }
                 }

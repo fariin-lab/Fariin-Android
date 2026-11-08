@@ -1,5 +1,8 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
@@ -34,10 +37,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -203,7 +202,7 @@ private fun ReportBar(onBack: (() -> Unit)?) {
     Box(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 8.dp)) {
         if (onBack != null) Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape)
             .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack), contentAlignment = Alignment.Center) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Back", tint = c.label,
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Back", tint = c.label,
                 modifier = Modifier.padding(start = 6.dp).size(20.dp))
         }
         Text("Report", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
@@ -217,7 +216,7 @@ private fun ChevronRow(label: String, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 50.dp)
         .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
             modifier = Modifier.size(24.dp))
     }
 }
@@ -321,7 +320,7 @@ private fun ThanksPage(t: ReportTarget, reason: ReportReason, sub: ReportSub?, o
     val done = remember { mutableStateMapOf<String, Boolean>() }
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(64.dp).clip(CircleShape).background(Color(0xFF34C759)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
         }
         Text(ReportRules.THANKS_TITLE, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 18.dp))

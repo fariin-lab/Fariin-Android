@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import com.fariin.app.ui.components.underBar
 
 import androidx.compose.foundation.Image
@@ -21,10 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -209,7 +207,7 @@ private fun ChangeEmailPage(push: (String) -> Unit, pop: () -> Unit) {
                     when (door.first) {
                         Door.Google -> Image(painterResource(R.drawable.ic_google_g), null, Modifier.size(22.dp))
                         Door.Apple -> Icon(painterResource(R.drawable.ic_account), null, tint = c.label, modifier = Modifier.size(22.dp))
-                        Door.Email -> Icon(Icons.Filled.Email, null, tint = c.label, modifier = Modifier.size(20.dp))
+                        Door.Email -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_envelope), null, tint = c.label, modifier = Modifier.size(20.dp))
                     }
                 }
                 Spacer(Modifier.width(12.dp))
@@ -218,7 +216,7 @@ private fun ChangeEmailPage(push: (String) -> Unit, pop: () -> Unit) {
                     Text(door.second, fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.Filled.CheckCircle, contentDescription = "Confirmed", tint = IosGreen, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill), contentDescription = "Confirmed", tint = IosGreen, modifier = Modifier.size(22.dp))
             }
         }
         SettingsSection(header = "New email", footer = "We'll send a 6-digit code to your new address to confirm it's yours.") {
@@ -311,7 +309,7 @@ private fun TwoStepPage(push: (String) -> Unit, pop: () -> Unit) {
             enabled -> Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = top + 8.dp)) {
                 SettingsSection(footer = "An additional password is required when you sign in on a new device.") {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Shield, null, tint = IosGreen, modifier = Modifier.size(22.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_shield_fill), null, tint = IosGreen, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
                         Text("Two-step verification is on", fontSize = 17.sp, color = IosGreen)
                     }

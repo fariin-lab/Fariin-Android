@@ -1,5 +1,7 @@
 package com.fariin.app.ui.auth
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -34,11 +36,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -344,7 +341,7 @@ internal fun MethodPage(
                     Row(Modifier.fillMaxWidth().height(56.dp).clip(CircleShape).background(c.fieldFill)
                         .combinedClickable(enabled = !busy) { onDoors(AuthMode.Login) },
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Add, null, tint = c.label, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), null, tint = c.label, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Add account", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     }
@@ -422,7 +419,7 @@ private fun SavedAccountRow(a: SavedAccount, photo: Bitmap?, lastUsed: Boolean, 
             }
             Spacer(Modifier.width(8.dp))
             if (resuming) Busy(c.label, 20)
-            else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.tertiary)
+            else Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.tertiary)
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("Remove from This Phone", color = c.red) }, onClick = { menu = false; onForget() })
@@ -552,18 +549,18 @@ internal fun EmailPage(
                     Text("Change", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                 }
             } else {
-                AuthField(email, { email = it; emailInvalid = false }, "Email", Icons.Outlined.Email,
+                AuthField(email, { email = it; emailInvalid = false }, "Email", ImageVector.vectorResource(R.drawable.ic_sf_envelope),
                     keyboard = EmailKeyboard, invalid = emailInvalid, focusRequester = emailFocus, onFocus = { emailFocused = it },
                     actions = KeyboardActions(onNext = { if (mode == AuthMode.Create) advance() else try { passwordFocus.requestFocus() } catch (_: Exception) {} }))
                 if (emailInvalid) Text("Enter a correct email address, like name@example.com", fontSize = 13.sp, color = c.red,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
             }
             if (!onEmailStep) {
-                AuthField(password, { password = it }, "Password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal },
+                AuthField(password, { password = it }, "Password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal },
                     keyboard = passwordKeyboard(last = mode == AuthMode.Login), focusRequester = passwordFocus,
                     actions = KeyboardActions(onNext = { try { confirmFocus.requestFocus() } catch (_: Exception) {} }, onGo = { if (canSubmit) submit() }))
                 if (mode == AuthMode.Create) {
-                    AuthField(confirm, { confirm = it }, "Confirm password", Icons.Outlined.Lock, secret = true, reveal = reveal, onReveal = { reveal = !reveal },
+                    AuthField(confirm, { confirm = it }, "Confirm password", ImageVector.vectorResource(R.drawable.ic_sf_lock), secret = true, reveal = reveal, onReveal = { reveal = !reveal },
                         keyboard = passwordKeyboard(last = true), focusRequester = confirmFocus,
                         actions = KeyboardActions(onGo = { if (canSubmit) submit() }))
                     PasswordChecklist(rules)

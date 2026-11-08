@@ -1,9 +1,8 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.R
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.ui.components.glassMenuAnchor
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.outlined.Download
 import com.fariin.app.ui.settings.BarPage
 
 import com.fariin.app.data.NewBadgeSpots
@@ -31,15 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ExitToApp
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.NotificationsOff
-import androidx.compose.material.icons.outlined.Report
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,8 +41,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,12 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.fariin.app.ui.components.GlassActionCircle
-import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material.icons.outlined.Search
 import kotlinx.coroutines.tasks.await
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -300,7 +283,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     if (info.verified) {
                         Spacer(Modifier.width(6.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -326,7 +309,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 if (info.description.isNotEmpty() || info.username.isNotEmpty()) Card {
                     if (info.description.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.AutoMirrored.Filled.Notes, null, tint = c.label, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_text_alignleft), null, tint = c.label, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(14.dp))
                             Text("Description", fontSize = 17.sp, color = c.label)
                         }
@@ -336,13 +319,13 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     if (info.username.isNotEmpty()) {
                         if (info.description.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                         Row(Modifier.fillMaxWidth().clickable { share() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Link, null, tint = c.label, modifier = Modifier.size(24.dp))   // the chain, as iOS
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_link), null, tint = c.label, modifier = Modifier.size(24.dp))   // the chain, as iOS
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text("fariin.com/${info.username}", fontSize = 17.sp, color = c.label)
                                 Text("Link", fontSize = 14.sp, color = c.secondary)
                             }
-                            Icon(Icons.Filled.QrCode2, "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
                         }
                     }
                 }
@@ -370,7 +353,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Spacer(Modifier.height(20.dp))
                 Card {
                     // Leave first, then Report (iOS order), with the Leave Group arrow.
-                    if (role == Role.FOLLOWER) FootRow("Leave Channel", Icons.AutoMirrored.Outlined.Logout, c.red) { confirmLeave = true }
+                    if (role == Role.FOLLOWER) FootRow("Leave Channel", ImageVector.vectorResource(R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
                     if (role != Role.ADMIN) {
                         if (role == Role.FOLLOWER && com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
                         FootRow(if (reported) "Reported" else "Report Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report),
@@ -380,7 +363,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                                 onLeave = if (role == Role.FOLLOWER) ({ leave(fromUndo = false) }) else null))
                         }
                     }
-                    if (role == Role.ADMIN && team?.isOwner(me) == true) FootRow("Delete Channel", Icons.Outlined.Delete, c.red) { askDelete = true }
+                    if (role == Role.ADMIN && team?.isOwner(me) == true) FootRow("Delete Channel", ImageVector.vectorResource(R.drawable.ic_sf_trash), c.red) { askDelete = true }
                     else if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.padding(16.dp))
                 }
@@ -497,14 +480,14 @@ private fun ChannelMoreMenu(open: Boolean, onDismiss: () -> Unit, onWallpaper: (
             leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
             onClick = { onDismiss(); onWallpaper() })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Share Channel", color = c.label) },
-            leadingIcon = { Icon(Icons.Outlined.IosShare, null, tint = c.label) },
+            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_link_share), null, tint = c.label) },
             onClick = { onDismiss(); onShare() })
         if (onQr != null) androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
             leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
             onClick = { onDismiss(); onQr() })
         androidx.compose.material3.HorizontalDivider(color = c.separator)
         androidx.compose.material3.DropdownMenuItem(text = { Text("Save to Photos: " + (if (saveOn) "On" else "Off"), color = c.label) },
-            leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Download, null, tint = c.label) },
+            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) },
             onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); onDismiss() })
     }
 }

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,10 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -70,10 +67,10 @@ internal fun EditPhotoSheet(
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().sheetDrag(motion).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable { motion.close() },
-                    contentAlignment = Alignment.Center) { Icon(Icons.Filled.Close, "Cancel", tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.label) }
                 Text("Edit Photo", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                 Box(Modifier.align(Alignment.CenterEnd).size(44.dp).floating(CircleShape).clickable { onDone(); motion.close() },
-                    contentAlignment = Alignment.Center) { Icon(Icons.Filled.Check, "Done", tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Done", tint = c.label) }
             }
             Spacer(Modifier.height(20.dp))
             Box {
@@ -84,7 +81,7 @@ internal fun EditPhotoSheet(
                 // The minus at the circle's top right takes the photo off (asked first).
                 if (hasPhoto) Box(Modifier.align(Alignment.TopEnd).offset(x = (-8).dp, y = 8.dp).size(44.dp).floating(CircleShape)
                     .clickable { askRemove = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Remove, "Remove photo", tint = c.label)
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus), "Remove photo", tint = c.label)
                 }
                 DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card,

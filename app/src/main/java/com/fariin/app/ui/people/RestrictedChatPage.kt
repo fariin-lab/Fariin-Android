@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -17,12 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Forward
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.NoPhotography
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -87,10 +82,10 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("If this is on, people:", fontSize = 15.sp, color = c.secondary)
                     listOf(
-                        Icons.Outlined.NoPhotography to "Can't take screenshots or record the screen in this chat",
-                        Icons.AutoMirrored.Outlined.Forward to "Can't forward messages to other chats",
-                        Icons.Outlined.ContentCopy to "Can't copy text from this chat",
-                        Icons.Outlined.Download to "Can't save or share photos and videos from this chat",
+                        ImageVector.vectorResource(R.drawable.ic_sf_camera_slash) to "Can't take screenshots or record the screen in this chat",
+                        ImageVector.vectorResource(R.drawable.ic_menu_forward) to "Can't forward messages to other chats",
+                        ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc) to "Can't copy text from this chat",
+                        ImageVector.vectorResource(R.drawable.ic_save_down) to "Can't save or share photos and videos from this chat",
                         ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album) to "Can't save media from this chat to their gallery automatically",
                     ).forEach { (icon, text) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {

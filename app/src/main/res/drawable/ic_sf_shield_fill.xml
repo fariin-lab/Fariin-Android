@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "shield.fill". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M12,3.1L19.2,5.8V11.3C19.2,15.8 16.2,19.6 12,20.9C7.8,19.6 4.8,15.8 4.8,11.3V5.8Z"
+        android:fillColor="#FF000000" />
+</vector>

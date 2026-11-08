@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,10 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -77,7 +75,7 @@ private fun FollowerPart(ch: ChannelThreadUi) {
                 overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
             if (info.verified) {
                 Spacer(Modifier.width(5.dp))
-                Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
             }
         }
         if (info.isPublic && info.username.isNotEmpty()) Text("@" + info.username, fontSize = 17.sp, color = c.secondary, maxLines = 1)
@@ -114,7 +112,7 @@ private fun AdminPart(ch: ChannelThreadUi) {
         Text("Share your channel so people can follow it.", fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center)
     }
     Row {
-        CardCircle(Icons.Outlined.IosShare, "Share") {
+        CardCircle(ImageVector.vectorResource(R.drawable.ic_link_share), "Share") {
             scope.launch {
                 val link = ch.shareLink()
                 if (link == null) {
@@ -127,7 +125,7 @@ private fun AdminPart(ch: ChannelThreadUi) {
                 ctx.startActivity(android.content.Intent.createChooser(send, null))
             }
         }
-        if (ch.canEdit) CardCircle(Icons.Outlined.Edit, if (info.description.isEmpty()) "Description" else "Edit") { nav.edit(info.cid) }
+        if (ch.canEdit) CardCircle(ImageVector.vectorResource(R.drawable.ic_sf_pencil), if (info.description.isEmpty()) "Description" else "Edit") { nav.edit(info.cid) }
     }
 }
 

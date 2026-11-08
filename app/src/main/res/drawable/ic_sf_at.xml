@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "at". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M8.4,12a3.6,3.6 0 1,0 7.2,0a3.6,3.6 0 1,0 -7.2,0Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M15.6,8.4V13.3C15.6,14.9 16.6,15.9 18,15.9C19.6,15.9 20.6,14.2 20.6,12C20.6,7.2 16.8,3.4 12,3.4C7.2,3.4 3.4,7.2 3.4,12C3.4,16.8 7.2,20.6 12,20.6C13.7,20.6 15.3,20.1 16.6,19.3"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

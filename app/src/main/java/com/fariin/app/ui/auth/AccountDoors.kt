@@ -1,5 +1,8 @@
 package com.fariin.app.ui.auth
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -15,8 +18,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -186,7 +187,7 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(40.dp))
-            Icon(Icons.Outlined.History, null, tint = c.secondary, modifier = Modifier.size(44.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow), null, tint = c.secondary, modifier = Modifier.size(44.dp))
             Text("Scheduled for deletion on $dueText", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
                 modifier = Modifier.padding(top = 16.dp))
             Text("Everything is still here", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center,

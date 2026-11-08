@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import com.fariin.app.ui.components.isNew
 import com.fariin.app.ui.components.NewCornerPill
 import com.fariin.app.data.NewBadgeSpots
@@ -7,10 +10,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material.icons.filled.Sell
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -37,12 +37,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -76,11 +70,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableFloatStateOf
@@ -96,7 +85,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -458,13 +446,13 @@ private fun StripThumb(item: StoryItemState, current: Boolean, onTap: () -> Unit
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF2C2C2E)).clickable(onClick = onTap)
             .then(if (current) Modifier.border(2.dp, Color(0xFF0A84FF), RoundedCornerShape(8.dp)) else Modifier)) {
             pic?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-            if (item.isVideo) Icon(Icons.Filled.PlayArrow, contentDescription = "Video", tint = Color.White,
+            if (item.isVideo) Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), contentDescription = "Video", tint = Color.White,
                 modifier = Modifier.align(Alignment.BottomStart).padding(2.dp).size(13.dp))
         }
         if (current) Box(Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(22.dp).clip(CircleShape)
             .clickable(onClickLabel = "Remove", onClick = onRemove), contentAlignment = Alignment.Center) {
             Box(Modifier.size(17.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp))
             }
         }
     }
@@ -803,12 +791,12 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
         // Close inside the frame's top corner (iOS).
         if (chrome) Box(Modifier.graphicsLayer { alpha = chromeIn.value }.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
             .clickable { close() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White)
         }
         // A clip's sound, beside the X (iOS keeps it at the top: it only flips a state).
         if (chrome && isVideo && !audience) Box(Modifier.statusBarsPadding().padding(start = 64.dp, top = 12.dp).size(44.dp).clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.35f)).clickable { cur.muted = !cur.muted }, contentAlignment = Alignment.Center) {
-            Icon(if (cur.muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+            Icon(if (cur.muted) ImageVector.vectorResource(R.drawable.ic_speaker_off) else ImageVector.vectorResource(R.drawable.ic_speaker_on),
                 contentDescription = if (cur.muted) "Sound off" else "Sound on", tint = Color.White)
         }
         if (trimming) base.video?.let { v ->
@@ -893,7 +881,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                         StoryRules.HOURS.forEach { h ->
                             DropdownMenuItem(
                                 text = { Text("$h Hours") },
-                                trailingIcon = { if (h == hours) Icon(Icons.Filled.Check, contentDescription = null) },
+                                trailingIcon = { if (h == hours) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null) },
                                 onClick = { captionArmed = false; hours = h; hoursMenu = false; focus.clearFocus(force = true) },
                             )
                         }
@@ -918,19 +906,19 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                     if (isVideo && media.repostOf == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Trim") {
                         focus.clearFocus(force = true); keyboard?.hide(); trimming = true
                     }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.ContentCut, contentDescription = "Trim",
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_scissors), contentDescription = "Trim",
                             tint = if (StoryTrimRules.isTrimmed(cur.trimStart, cur.trimEnd, clipSeconds)) Color(0xFFFFD60A) else Color.White,
                             modifier = Modifier.size(24.dp))
                     }
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
                         Box {
-                            Icon(androidx.compose.material.icons.Icons.Outlined.EmojiEmotions, contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_face_smiling), contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_STICKERS))
                         }
                     }
                     Box(Modifier.size(48.dp).clip(CircleShape).clickable { openPen() }, contentAlignment = Alignment.Center) {
                         Box {
-                            Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_scribble), contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(24.dp))
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_DRAW))
                         }
                     }
@@ -956,7 +944,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("NEXT", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
                 }
             }
         }

@@ -1,5 +1,8 @@
 package com.fariin.app.ui.photo
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -20,9 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -142,14 +142,14 @@ fun CircleCropper(uri: Uri, title: String, subtitle: String, onDone: (ByteArray)
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RoundButton(Icons.Filled.Close, "Cancel", onClick = onCancel)
+            RoundButton(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", onClick = onCancel)
             Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White, textAlign = TextAlign.Center)
                 Text(subtitle, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
             }
             if (cutting) Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 com.fariin.app.ui.components.ButtonSpinner(Color.White)
-            } else RoundButton(Icons.Filled.Check, "Done") {
+            } else RoundButton(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Done") {
                 val b = source ?: return@RoundButton
                 val r = CropMath.cropRect(b.width, b.height, window, scale, offX, offY)
                 if (r[2] <= 0) return@RoundButton

@@ -1,5 +1,7 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.contentDescription
@@ -19,10 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,7 +84,7 @@ internal fun glassBar(): Boolean {
 fun FloatingBack(onBack: () -> Unit, modifier: Modifier = Modifier, contentDescription: String = "Back", circle: Boolean = false) {
     val c = Fariin.colors
     IconButton(onClick = onBack, modifier = modifier.size(44.dp).then(if (circle || glassBar()) Modifier.floating() else Modifier)) {
-        Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = contentDescription, tint = c.label,
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = contentDescription, tint = c.label,
             modifier = Modifier.padding(start = 6.dp).size(20.dp))
     }
 }
@@ -131,7 +129,7 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Outlined.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
+        Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -149,7 +147,7 @@ fun FloatingSearchField(value: String, onChange: (String) -> Unit, prompt: Strin
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
         }
         if (value.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable { onChange("") }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Close, contentDescription = "Clear", tint = c.secondary, modifier = Modifier.size(18.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Clear", tint = c.secondary, modifier = Modifier.size(18.dp))
         }
         if (value.isEmpty()) Spacer(Modifier.width(10.dp))
     }

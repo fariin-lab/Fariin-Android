@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "globe". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M2.8,12a9.2,9.2 0 1,0 18.4,0a9.2,9.2 0 1,0 -18.4,0Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M12,2.8C9.5,5.3 8.2,8.5 8.2,12C8.2,15.5 9.5,18.7 12,21.2C14.5,18.7 15.8,15.5 15.8,12C15.8,8.5 14.5,5.3 12,2.8ZM2.8,12H21.2M4.6,7.6H19.4M4.6,16.4H19.4"
+        android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.R
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.vectorResource
 import android.content.ActivityNotFoundException
@@ -39,15 +40,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -160,7 +152,7 @@ internal fun SharedMediaCard(cid: String, state: SharedMediaState, onSeeAll: () 
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("All Media", style = MaterialTheme.typography.titleMedium, color = c.label, modifier = Modifier.weight(1f))
                     Text("See All", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = c.accent)
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.secondary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.height(10.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -188,7 +180,7 @@ private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, onOpen: () -> 
         if (item.isVideo) {
             Box(Modifier.align(Alignment.Center).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.PlayArrow, "Video", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), "Video", tint = Color.White, modifier = Modifier.size(22.dp))
             }
             item.duration?.let { d ->
                 Text(MediaRules.durationLabel(d), fontSize = 11.sp, color = Color.White,
@@ -226,13 +218,13 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                     actions = {
                         // No menu on an empty tab (iOS showsMoreMenu): Show is the only thing in it here.
                         if (tab == SharedMedia.Tab.MEDIA && state.lists.media.isNotEmpty()) Box {
-                            IconButton({ menu = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(Icons.Filled.MoreVert, "More", tint = c.label) }
+                            IconButton({ menu = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", tint = c.label) }
                             DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                                 Text("Show", style = MaterialTheme.typography.labelMedium, color = c.secondary,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                                 SharedMedia.Filter.entries.forEach { f ->
                                     DropdownMenuItem(text = { Text(f.label, color = c.label) }, onClick = { filter = f; menu = false },
-                                        trailingIcon = { if (f == filter) Icon(Icons.Filled.Check, null, tint = c.accent) })
+                                        trailingIcon = { if (f == filter) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) })
                                 }
                             }
                         }
@@ -259,10 +251,10 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                 when (tabs[page]) {
                     SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded) { viewing = viewingOf(it, media) }
-                    SharedMedia.Tab.FILES -> Rows(state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, Icons.Outlined.Description) {
+                    SharedMedia.Tab.FILES -> Rows(state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, ImageVector.vectorResource(R.drawable.ic_file)) {
                         items(state.lists.files, key = { it.id }) { m -> FileRow(m) }
                     }
-                    SharedMedia.Tab.VOICE -> Rows(state.loaded, state.lists.voice.isEmpty(), SharedMedia.Tab.VOICE, Icons.Outlined.Mic) {
+                    SharedMedia.Tab.VOICE -> Rows(state.loaded, state.lists.voice.isEmpty(), SharedMedia.Tab.VOICE, ImageVector.vectorResource(R.drawable.ic_mic)) {
                         items(state.lists.voice, key = { it.id }) { m -> VoiceRow(cid, m) }
                     }
                     SharedMedia.Tab.LINKS -> Rows(state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)) {

@@ -1,6 +1,5 @@
 package com.fariin.app.ui.stories
 
-import androidx.compose.material.icons.filled.Search
 import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
@@ -32,19 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.activity.result.contract.ActivityResultContracts
@@ -323,17 +310,17 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             androidx.compose.animation.AnimatedVisibility(searchGone && query.isEmpty(), Modifier.align(Alignment.CenterEnd),
                 enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.6f),
                 exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.6f)) {
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, contentDescription = "Search",
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search",
                     onClick = { barScope.launch { listState.animateScrollToItem(0) } }, circle = true)
             }
             // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
             Box(Modifier.align(Alignment.CenterStart)) {
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreHoriz, contentDescription = "More", onClick = { moreOpen = true }, circle = true)
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { moreOpen = true }, circle = true)
                 if (glowUnread) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(8.dp).clip(CircleShape).background(c.accent))
                 androidx.compose.material3.DropdownMenu(moreOpen, onDismissRequest = { moreOpen = false },
                     shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Story privacy", color = c.label) },
-                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, tint = c.label) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock), contentDescription = null, tint = c.label) },
                         onClick = { moreOpen = false; privacyPages.add(com.fariin.app.ui.settings.PAGE_STORIES) })
                     if (glowOn) androidx.compose.material3.DropdownMenuItem(text = { Text("Notifications", color = c.label) },
                         leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell), contentDescription = null, tint = c.label) },
@@ -368,7 +355,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     // iOS: 17 semibold in the soft heading ink, 6 to a grey 13 pt chevron.
                     Text("My Story", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = headingInk())
                     Spacer(Modifier.width(6.dp))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary, modifier = Modifier.size(18.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = c.secondary, modifier = Modifier.size(18.dp))
                 }
             }
             item {
@@ -434,7 +421,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         val turn by androidx.compose.animation.core.animateFloatAsState(if (viewedCollapsed) 180f else 0f,
                             androidx.compose.animation.core.tween(250), label = "fold")
                         Icon(
-                            Icons.Filled.KeyboardArrowUp,
+                            ImageVector.vectorResource(R.drawable.ic_sf_chevron_up),
                             contentDescription = if (viewedCollapsed) "Show viewed stories" else "Hide viewed stories",
                             tint = c.secondary, modifier = Modifier.size(20.dp).rotate(turn),
                         )
@@ -456,7 +443,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         val turn by androidx.compose.animation.core.animateFloatAsState(if (hiddenCollapsed) 180f else 0f,
                             androidx.compose.animation.core.tween(250), label = "fold")
                         Icon(
-                            Icons.Filled.KeyboardArrowUp,
+                            ImageVector.vectorResource(R.drawable.ic_sf_chevron_up),
                             contentDescription = if (hiddenCollapsed) "Show hidden stories" else "Hide hidden stories",
                             tint = c.secondary, modifier = Modifier.size(20.dp).rotate(turn),
                         )
@@ -666,7 +653,7 @@ private fun RowVerifiedMark(uid: String) {
     val kind = if (official) "" else com.fariin.app.data.VerifiedPeople.badge(kinds, uid) ?: return
     val tint = if (com.fariin.app.data.VerifiedPeople.isGold(kind)) Color(0xFFE8B21E) else Color(0xFF2392FE)
     Box(Modifier.padding(start = 4.dp).size(15.dp).background(Color.White, CircleShape).padding(1.dp)) {
-        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = tint, modifier = Modifier.fillMaxSize())
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = tint, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -769,8 +756,8 @@ private fun StoryRow(
                     thumbUrl.startsWith("demo:") -> Box(Modifier.fillMaxSize().background(demoColor(thumbUrl)))
                     thumbUrl.isNotEmpty() -> AsyncImage(thumbUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.1f; scaleY = 1.1f })
                     addBadge && !authorPhoto.isNullOrEmpty() -> AsyncImage(authorPhoto, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    addBadge -> Icon(Icons.Filled.Person, null, tint = c.secondary, modifier = Modifier.size(30.dp))
-                    else -> Icon(Icons.Filled.Add, null, tint = c.secondary, modifier = Modifier.size(26.dp))
+                    addBadge -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_person_fill), null, tint = c.secondary, modifier = Modifier.size(30.dp))
+                    else -> Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), null, tint = c.secondary, modifier = Modifier.size(26.dp))
                 }
             }
             if (addBadge) {
@@ -779,7 +766,7 @@ private fun StoryRow(
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(Modifier.size(24.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Add, null, tint = c.onAccent, modifier = Modifier.size(16.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), null, tint = c.onAccent, modifier = Modifier.size(16.dp))
                     }
                 }
             } else {

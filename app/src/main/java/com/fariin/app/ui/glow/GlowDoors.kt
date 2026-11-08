@@ -1,5 +1,8 @@
 package com.fariin.app.ui.glow
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,8 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -109,7 +110,7 @@ fun GlowOverflow(door: GlowDoor, more: @Composable (close: () -> Unit) -> Unit =
     var open by remember { mutableStateOf(false) }
     val glowing = s.known && s.glowing.contains(door.uid)
     Box {
-        FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { open = true })
+        FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true })
         DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
             if (glowing) DropdownMenuItem(text = { Text("Remove Glowing", color = c.red) },
                 onClick = { open = false; door.remove() }, leadingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })

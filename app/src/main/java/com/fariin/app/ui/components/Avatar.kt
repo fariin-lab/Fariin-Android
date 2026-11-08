@@ -1,14 +1,13 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,8 +42,8 @@ fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier, squircle:
         if (photoUrl.isNullOrEmpty() || failed) {
             Icon(
                 when (kind) {
-                    AvatarKind.PERSON -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Person)
-                    AvatarKind.GROUP -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Groups)
+                    AvatarKind.PERSON -> androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_person_fill))
+                    AvatarKind.GROUP -> androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_person2_fill))
                     // The iPhone's megaphone, not the one with sound lines (owner 2026-11-07).
                     AvatarKind.CHANNEL -> androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_channel_megaphone)
                 },

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.animation.core.Animatable
@@ -31,17 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -377,7 +367,7 @@ private fun CardCount(summary: StoryViewSummary?, modifier: Modifier) {
         Text(compact(views), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         if (likes > 0) {
             Spacer(Modifier.width(4.dp))
-            Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Text(compact(likes), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
@@ -533,7 +523,7 @@ internal fun ViewersSheet(
                             .clip(RoundedCornerShape(19.dp)).background(SearchFill).padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Filled.Search, contentDescription = null, tint = Placeholder, modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = null, tint = Placeholder, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(6.dp))
                         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                             if (query.isEmpty()) Text("Search", color = Placeholder, fontSize = 17.sp, maxLines = 1)
@@ -630,7 +620,7 @@ private fun ViewerRow(
                         .background(Color(0xE63A3A3C)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (r == "❤️") Icon(Icons.Filled.Favorite, contentDescription = "Liked", tint = HeartRed, modifier = Modifier.size(12.dp))
+                    if (r == "❤️") Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), contentDescription = "Liked", tint = HeartRed, modifier = Modifier.size(12.dp))
                     else Text(r, fontSize = 11.sp)
                 }
             }
@@ -643,14 +633,14 @@ private fun ViewerRow(
         if (!readOnly) {
             Box {
                 Box(Modifier.size(38.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.MoreHoriz, contentDescription = "More", tint = Color.White.copy(alpha = 0.55f))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", tint = Color.White.copy(alpha = 0.55f))
                 }
                 // Dark like the sheet it opens from (iOS draws the row's menu in the dark style).
                 androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(
                     surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Send message") },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_chat), contentDescription = null) },
                         onClick = { menu = false; onSendMessage() })
                     DropdownMenuItem(
                         text = { Text(if (isHidden) "Don't hide my stories from ${v.name}" else "Hide my stories from ${v.name}") },
@@ -756,10 +746,10 @@ private fun ReplyRow(
             surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 if (!r.isReaction) DropdownMenuItem(text = { Text("Copy") },
-                    leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) },
                     onClick = { menu = false; clipboard.setText(androidx.compose.ui.text.AnnotatedString(r.text)) })
                 if (canDelete) DropdownMenuItem(text = { Text("Delete", color = Fariin.colors.red) },
-                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Fariin.colors.red) },
+                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = Fariin.colors.red) },
                     onClick = { menu = false; onDelete() })
             }
         }

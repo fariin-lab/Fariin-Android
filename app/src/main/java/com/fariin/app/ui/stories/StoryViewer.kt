@@ -1,20 +1,10 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.R
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.LooksOne
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Download
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
@@ -76,19 +66,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -1342,12 +1321,12 @@ private fun StoryPage(
                                 }
                                 // Fariin's own story offers Save and nothing else (iOS StorySaveSeam).
                                 val official = com.fariin.app.data.OfficialStories.isOfficial(story)
-                                if (official) item("Save", Icons.Filled.Download, null, "save")
+                                if (official) item("Save", ImageVector.vectorResource(R.drawable.ic_save_down), null, "save")
                                 // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
                                 if (mine) {
-                                    item("Save", Icons.Filled.Download, null, "save")
+                                    item("Save", ImageVector.vectorResource(R.drawable.ic_save_down), null, "save")
                                     if (com.fariin.app.data.PostedStoriesRules.canEditViewers(story)) item("Edit Viewers", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), null, "viewers")
-                                    if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", Icons.Filled.Share, null, "share")
+                                    if (com.fariin.app.data.PostedStoriesRules.canShare(story)) item("Share", ImageVector.vectorResource(R.drawable.ic_link_share), null, "share")
                                 }
                                 // iOS: Get notifications first, for a person's story (not a group's).
                                 if (!mine && !official && story.groupId == null) {
@@ -1362,7 +1341,7 @@ private fun StoryPage(
                                     )
                                 }
                                 // Somebody else's story that anyone may pass on (the repost rule): Share Story.
-                                if (!mine && !official && canRepost(story)) item("Share Story", Icons.Filled.Share, null, "share")
+                                if (!mine && !official && canRepost(story)) item("Share Story", ImageVector.vectorResource(R.drawable.ic_link_share), null, "share")
                                 if (!mine && !official) androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("Hide Stories") },
                                     leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
@@ -1373,7 +1352,7 @@ private fun StoryPage(
                         }
                     }
                     Box(Modifier.size(44.dp).clickable { onClose() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White, modifier = Modifier.size(24.dp))
                     }
                 }
             }
@@ -1449,7 +1428,7 @@ private fun StoryMedia(
             Box(Modifier.size(72.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.Black.copy(alpha = 0.45f))
                 .clickable { tapped = true }.semantics { contentDescription = "Play video" },
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
             }
             return@Box
         }
@@ -1538,14 +1517,14 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
             }
             if ((summary?.reactionCount ?: 0) > 0) {
                 Spacer(Modifier.width(18.dp))
-                Icon(Icons.Filled.FavoriteBorder, contentDescription = "Likes", tint = Color.White, modifier = Modifier.size(19.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart), contentDescription = "Likes", tint = Color.White, modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("${summary!!.reactionCount}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             }
         }
         Spacer(Modifier.weight(1f))
         if (onDelete != null) Box(Modifier.size(44.dp).clickable { onDelete() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Delete, contentDescription = "Delete story", tint = Color.White, modifier = Modifier.size(24.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = "Delete story", tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -1630,7 +1609,7 @@ private fun ReplyBar(
                 Box(Modifier.size(44.dp).clip(CircleShape).background(com.fariin.app.ui.theme.Fariin.colors.blue).clickable {
                     onSend(text.trim(), false); text = ""; focus.clearFocus()
                 }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White)
                 }
             } else if (showLike || onRepost != null) {
                 // iOS repost button (ic_repost), left of the heart, only where the story may be passed on.
@@ -1641,7 +1620,7 @@ private fun ReplyBar(
                 if (showLike)
                 Box(Modifier.size(44.dp).clip(CircleShape)
                     .clickable { liked = !liked; onLike(liked) }, contentAlignment = Alignment.Center) {
-                    Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
+                    Icon(if (liked) ImageVector.vectorResource(R.drawable.ic_sf_heart_fill) else ImageVector.vectorResource(R.drawable.ic_sf_heart), contentDescription = if (liked) "Unlike" else "Like",
                         tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(28.dp))
                 }
             }
@@ -1787,7 +1766,7 @@ private fun VisitLinkBubble(tailDown: Boolean, onTap: () -> Unit, modifier: Modi
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
         } else Text("Visit link", color = Color.White, fontSize = 17.sp)
         Spacer(Modifier.width(6.dp))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null,
             tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
     }
 }
@@ -1869,14 +1848,14 @@ private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Bo
                 else -> { liked = !liked; delta += if (liked) 1 else -1; onLike(liked) }
             }
         }, verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (liked) "Unlike" else "Like",
+            Icon(if (liked) ImageVector.vectorResource(R.drawable.ic_sf_heart_fill) else ImageVector.vectorResource(R.drawable.ic_sf_heart), if (liked) "Unlike" else "Like",
                 tint = if (liked) Color(0xFFFF3B30) else Color.White, modifier = Modifier.size(23.dp))
             Spacer(Modifier.width(7.dp)); Text(n(maxOf(0, likes + delta)), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.weight(1f))
         if (story.audienceLabel == "everyone" && !story.oneTime && !story.captureProtected)
             Box(Modifier.size(44.dp).clickable(onClick = onShare), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Share, "Share", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_link_share), "Share", tint = Color.White, modifier = Modifier.size(22.dp))
             }
     }
 }
@@ -1898,7 +1877,7 @@ private fun HeaderTick(key: String) {
     val kinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
     if (!official && com.fariin.app.data.VerifiedPeople.badge(kinds, key) == null) return
     Spacer(Modifier.width(4.dp))
-    Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = Color.White, modifier = Modifier.size(12.dp))
+    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = Color.White, modifier = Modifier.size(12.dp))
 }
 
 /** iOS audienceBadge glyph, 12 white at 85 %: globe, one, sparkles, folder, people, group or channel. */
@@ -1907,14 +1886,14 @@ private fun AudienceGlyph(s: Story) {
     val tint = Color.White.copy(alpha = 0.85f)
     val m = Modifier.size(12.dp)
     when {
-        s.oneTime -> Icon(Icons.Outlined.LooksOne, null, tint = tint, modifier = m)
-        s.audienceLabel == "everyone" -> Icon(Icons.Filled.Public, null, tint = tint, modifier = m)
-        s.audienceLabel == "glowers" -> Icon(Icons.Filled.AutoAwesome, null, tint = tint, modifier = m)
+        s.oneTime -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_one_circle), null, tint = tint, modifier = m)
+        s.audienceLabel == "everyone" -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_globe), null, tint = tint, modifier = m)
+        s.audienceLabel == "glowers" -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_sparkles), null, tint = tint, modifier = m)
         s.audienceLabel == "custom" -> Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_story_folder), null, tint = tint, modifier = m)
         s.audienceLabel == "group" -> {
             val channel = s.groupId?.let { com.fariin.app.data.GroupStoryRules.isChannel(it, com.fariin.app.data.ChatsNow.list) } == true
-            Icon(if (channel) Icons.Filled.Campaign else Icons.Filled.Groups, null, tint = tint, modifier = m)
+            Icon(if (channel) ImageVector.vectorResource(R.drawable.ic_channel_megaphone) else ImageVector.vectorResource(R.drawable.ic_sf_person2_fill), null, tint = tint, modifier = m)
         }
-        else -> Icon(Icons.Filled.People, null, tint = tint, modifier = m)
+        else -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_person2_fill), null, tint = tint, modifier = m)
     }
 }

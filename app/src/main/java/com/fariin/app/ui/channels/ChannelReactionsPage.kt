@@ -1,5 +1,8 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -26,9 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -212,7 +212,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
                          if (i < 0) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                             Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill).clickable { picking = true },
                                 contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Add, "Add an emoji", tint = c.secondary)
+                                Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), "Add an emoji", tint = c.secondary)
                             }
                          } else {
                             // No x on the bar (owner 2026-11-06: tapped by mistake). Any emoji opens the

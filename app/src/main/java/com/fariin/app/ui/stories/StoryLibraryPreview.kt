@@ -1,5 +1,8 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -19,8 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -127,7 +128,7 @@ internal fun StoryLibraryPreview(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(actionLabel, color = Color.White, fontSize = 17.sp)
-                    Icon(Icons.Outlined.AddCircleOutline, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_plus_circle), contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
         }

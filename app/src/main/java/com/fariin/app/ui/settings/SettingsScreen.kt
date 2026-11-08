@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.semantics.contentDescription
@@ -20,7 +22,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,15 +34,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.BatterySaver
-import androidx.compose.material.icons.outlined.Brush
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -274,7 +266,7 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
                     modifier = Modifier.align(Alignment.Center))
-                com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search, "Search settings",
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search settings",
                     onClick = { openSettingsSearch(push) }, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
             }
         }
@@ -304,7 +296,7 @@ private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (profile?.verified == true) {
                     Spacer(Modifier.width(6.dp))
-                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Verified, "Verified",
+                    androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), "Verified",
                         tint = c.blue, modifier = Modifier.size(22.dp))
                 }
             }

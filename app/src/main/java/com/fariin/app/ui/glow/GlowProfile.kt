@@ -1,5 +1,6 @@
 package com.fariin.app.ui.glow
 
+import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
@@ -30,10 +31,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -242,7 +239,7 @@ private fun StatsCard(glowers: Int, glowing: Int, faces: List<GlowPerson>, modif
             Text(GlowRules.byLine(faces.map { it.name }), fontSize = 15.sp, color = Secondary, maxLines = 1)
         }
         Spacer(Modifier.width(4.dp))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Secondary, modifier = Modifier.size(18.dp))
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Secondary, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -280,7 +277,7 @@ private fun PostedCard(state: GlowLoad<List<PostedStory>>, onSeeAll: () -> Unit,
             if (rows.isNotEmpty()) Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onSeeAll).padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("See All", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Label)
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Label, modifier = Modifier.size(16.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), contentDescription = null, tint = Label, modifier = Modifier.size(16.dp))
             }
         }
         when {
@@ -314,7 +311,7 @@ fun PostedTile(s: PostedStory, onClick: () -> Unit) {
             }
         }
         if (s.isVideo) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(6.dp)) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
         }
     }
 }

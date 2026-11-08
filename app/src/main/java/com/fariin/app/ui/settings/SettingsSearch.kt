@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,11 +19,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.Brush
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -93,12 +90,12 @@ private fun indexIcon(key: String): Painter = when (key) {
     "account" -> painterResource(R.drawable.ic_account)
     "devices" -> painterResource(R.drawable.ic_linked_devices)
     "notifications" -> painterResource(R.drawable.ic_notifications)
-    "appearance" -> vec(Icons.Outlined.Brush)
+    "appearance" -> vec(ImageVector.vectorResource(R.drawable.ic_sf_paintbrush))
     "chats" -> painterResource(R.drawable.ic_settings_chats)
     "stories" -> painterResource(R.drawable.ic_stories_stack)
     "privacy" -> painterResource(R.drawable.ic_privacy)
-    "storage" -> vec(Icons.Outlined.Dns)
-    else -> vec(Icons.Outlined.HelpOutline)
+    "storage" -> vec(ImageVector.vectorResource(R.drawable.ic_sf_server))
+    else -> vec(ImageVector.vectorResource(R.drawable.ic_set_help))
 }
 
 /** Kept while a found page is open on top, so back returns to the same results (iOS). */
@@ -125,7 +122,7 @@ internal fun SettingsSearchPage(push: (String) -> Unit, pop: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             com.fariin.app.ui.components.FloatingSearchField(query, { query = it }, "Search",
                 Modifier.weight(1f).focusRequester(focus))
-            com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Close", onClick = pop)
+            com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClick = pop)
         }
         if (results.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {

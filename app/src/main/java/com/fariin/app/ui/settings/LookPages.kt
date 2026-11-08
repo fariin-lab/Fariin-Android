@@ -1,5 +1,8 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import com.fariin.app.ui.components.underBar
 
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,15 +50,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -142,7 +136,7 @@ private fun ResetMenu(wallpaperPage: Boolean) {
     fun resetWallpaper() = ChatLookStore.resetAllWallpapers(ctx, ChatWallpaper.None)
     fun resetColor() = ChatLookStore.setDefaultColor(ctx, null)
     Box {
-        IconButton(onClick = { open = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(Icons.Filled.MoreVert, contentDescription = "Reset options", tint = c.label) }
+        IconButton(onClick = { open = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "Reset options", tint = c.label) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
             DropdownMenuItem(text = { Text(if (wallpaperPage) "Reset Wallpaper" else "Reset Bubble Color") },
@@ -279,9 +273,9 @@ private fun WallTile(w: ChatWallpaper, current: ChatWallpaper, modifier: Modifie
         if (current == w) {
             val darkTick = (solid != null && !ChatWallpapers.isDark(solid.hex)) || (w == ChatWallpaper.None && !c.dark)
             // iOS: the white tick carries a soft black shadow (0.5, radius 3); a dimmed copy under it here.
-            if (!darkTick) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black.copy(alpha = 0.35f),
+            if (!darkTick) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null, tint = Color.Black.copy(alpha = 0.35f),
                 modifier = Modifier.size(32.dp).offset(y = 1.dp))
-            Icon(Icons.Filled.Check, contentDescription = "Selected", tint = if (darkTick) Color.Black else Color.White,
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = if (darkTick) Color.Black else Color.White,
                 modifier = Modifier.size(30.dp))
         }
     }
@@ -476,14 +470,14 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                 Box(Modifier.fillMaxSize().drawBehind { if (dimsShown) drawWallpaperDim(dimState.floatValue) })
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 14.dp)) {
-                        com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Close", onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onClose() } },
+                        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onClose() } },
                             modifier = Modifier.align(Alignment.CenterStart), circle = true)
                         // The title over a dark-topped animated wallpaper is light (iOS topIsDark), else unreadable.
                         val shown = if (pages) siblings.getOrNull(pager.currentPage) else first
                         val lightTitle = (shown as? ChatWallpaper.Animated)?.wallpaper?.topIsDark(dark) == true && !dark
                         Text("Preview", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (lightTitle) Color.White else c.label,
                             modifier = Modifier.align(Alignment.Center))
-                        com.fariin.app.ui.components.FloatingIcon(if (dark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                        com.fariin.app.ui.components.FloatingIcon(if (dark) ImageVector.vectorResource(R.drawable.ic_sf_sun) else ImageVector.vectorResource(R.drawable.ic_sf_moon_fill),
                             if (dark) "Show in light mode" else "Show in dark mode", onClick = { previewDark = !dark },
                             modifier = Modifier.align(Alignment.CenterEnd), circle = true)
                     }
@@ -502,7 +496,7 @@ private fun WallpaperPreview(first: ChatWallpaper, siblings: List<ChatWallpaper>
                             modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp).floating(CircleShape).padding(horizontal = 12.dp, vertical = 6.dp))
                         Row(Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp).floating(CircleShape).clickable { blurred = !blurred }
                             .padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (blurred) Icons.Filled.CheckCircle else Icons.Outlined.Circle, contentDescription = null, tint = c.label, modifier = Modifier.size(20.dp))
+                            Icon(if (blurred) ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.vectorResource(R.drawable.ic_sf_circle), contentDescription = null, tint = c.label, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.size(8.dp))
                             Text("Blurred", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                         }
@@ -722,7 +716,7 @@ internal fun ChatColorGrid(chosen: ChatColorSpec?, ring: Boolean = true, onPick:
         add { m ->
             ColorCircle(false, m, onTap = { custom = true }) {
                 Box(Modifier.fillMaxSize().clip(CircleShape).background(systemGray5(c.dark)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, contentDescription = "Custom Color", tint = c.label, modifier = Modifier.size(24.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "Custom Color", tint = c.label, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -785,7 +779,7 @@ private fun CustomColorSheet(onClose: () -> Unit, onSet: (ChatColorSpec) -> Unit
         shape = com.fariin.app.ui.components.SheetShape) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Close", onClick = { close() }, modifier = Modifier.align(Alignment.CenterStart))
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClick = { close() }, modifier = Modifier.align(Alignment.CenterStart))
                 Text("Custom Color", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                 com.fariin.app.ui.components.FloatingTextAction("Set", modifier = Modifier.align(Alignment.CenterEnd)) { onSet(spec); close() }
             }

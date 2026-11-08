@@ -1,5 +1,8 @@
 package com.fariin.app.ui.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import android.content.Context
 import android.content.Intent
@@ -27,10 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material.icons.filled.VerifiedUser
-import androidx.compose.material.icons.filled.UnfoldMore
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -232,7 +231,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
         SettingsSection(header = "Other devices", footer = if (hoursLeft > 0 && others.isNotEmpty()) "You can sign out other devices in about $hoursLeft h."
             else "Sign out any device you don't recognise.") {
             if (rows != null && others.isEmpty()) Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.VerifiedUser, null,
+                androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_shield), null,
                     tint = Fariin.colors.blue, modifier = Modifier.size(30.dp))
                 Spacer(Modifier.width(14.dp))
                 Column {
@@ -250,7 +249,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("Sign out after", fontSize = 17.sp, color = Fariin.colors.label, modifier = Modifier.weight(1f))
                     Text(auto?.let { SettingsRules.autoSignOutLabel(it) } ?: "", fontSize = 17.sp, color = Fariin.colors.label)
-                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.UnfoldMore, null,
+                    androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up_down), null,
                         tint = Fariin.colors.label, modifier = Modifier.padding(start = 4.dp).size(20.dp))
                 }
                 // Anchored at the right under the value (a modifier on the menu itself does not move it).
@@ -258,7 +257,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                 androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card) {
                     for (d in SettingsRules.autoSignOut) androidx.compose.material3.DropdownMenuItem(
                         text = { Text(SettingsRules.autoSignOutLabel(d), color = Fariin.colors.label) },
-                        trailingIcon = { if (auto == d) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Check, null, tint = Fariin.colors.accent) },
+                        trailingIcon = { if (auto == d) androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Fariin.colors.accent) },
                         onClick = {
                             menu = false; val was = auto; auto = d
                             scope.launch {
@@ -286,7 +285,7 @@ private fun DeviceLine(d: DeviceRow, thisDevice: Boolean, now: Long, last: Boole
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         // iOS: the device in a blue circle.
         Box(Modifier.size(46.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
-            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.PhoneAndroid, null,
+            androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_iphone), null,
                 tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(14.dp))

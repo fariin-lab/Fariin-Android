@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -21,8 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -124,7 +125,7 @@ fun NotesCard(note: String) {
     SettingsSection {
         Column(Modifier.fillMaxWidth().clickable { open = !open }.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.AutoMirrored.Outlined.Notes, contentDescription = null, tint = c.label, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_text_alignleft), contentDescription = null, tint = c.label, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(14.dp))
                 Text("Notes", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                 Text("only visible to you", fontSize = 14.sp, color = c.secondary)
