@@ -299,10 +299,12 @@ fun StoryComposerDialog(
     onFlightStart: () -> Unit = {},
     /** The + at the caption's start (iOS addMoreButton): opens the library to tick more for this post. Null = no +. */
     onAddMore: (() -> Unit)? = null,
+    /** Built under a picture still flying in from the library: drawn once it lands ([hidden] false). */
+    hidden: Boolean = false,
 ) {
     // One picture, one item: the repost and anything else that posts a single story.
     val items = remember(media) { androidx.compose.runtime.mutableStateListOf(StoryItemState(media, null)) }
-    StoryComposerDialog(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore)
+    StoryComposerDialog(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
 }
 
 /**
@@ -321,10 +323,11 @@ internal fun StoryComposerDialog(
     flyHome: Boolean = false,
     onFlightStart: () -> Unit = {},
     onAddMore: (() -> Unit)? = null,
+    hidden: Boolean = false,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
-        StoryComposer(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore)
+        StoryComposer(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
     }
 }
 
@@ -470,8 +473,14 @@ private fun StripThumb(item: StoryItemState, current: Boolean, onTap: () -> Unit
 @Composable
 private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.SnapshotStateList<StoryItemState>, conversations: List<Conversation>,
                           onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false,
-                          flyHome: Boolean = false, onFlightStart: () -> Unit = {}, onAddMore: (() -> Unit)? = null) {
+                          flyHome: Boolean = false, onFlightStart: () -> Unit = {}, onAddMore: (() -> Unit)? = null,
+                          hidden: Boolean = false) {
     if (items.isEmpty()) return
+    // ARRIVING FROM THE LIBRARY (owner's video 2026-11-08: the bare picture sat ~170 ms, then every
+    // control popped in at once). The editor is built while the picture flies, unseen; when it lands
+    // the card shows in the very place the flying copy drew it and the controls fade in (iOS).
+    val chromeIn = remember { androidx.compose.animation.core.Animatable(if (hidden) 0f else 1f) }
+    LaunchedEffect(hidden) { if (!hidden) chromeIn.animateTo(1f, androidx.compose.animation.core.tween(220)) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // The item on the card (iOS index): the strip moves it, the X takes one out.
     var index by remember { mutableIntStateOf(0) }
@@ -735,7 +744,8 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = leaveBlack.value * (1f - dragProgress))).onSizeChanged { box = it }) {
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (hidden) 0f else 1f }
+        .background(Color.Black.copy(alpha = leaveBlack.value * (1f - dragProgress))).onSizeChanged { box = it }) {
         val navDp = with(density) { navBottom.toDp() }
         // The card and everything on it move with the closing drag; the gestures sit outside the
         // moving layer so the finger is read in the screen's own frame.
@@ -791,7 +801,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
         }
         val chrome = !drawing && !dragging && editingId < 0 && flight == null && dragY == 0f && !leaving && !trimming
         // Close inside the frame's top corner (iOS).
-        if (chrome) Box(Modifier.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
+        if (chrome) Box(Modifier.graphicsLayer { alpha = chromeIn.value }.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
             .clickable { close() }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
         }
@@ -831,7 +841,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             if (imeDp > 0.dp) Box(Modifier.fillMaxSize().pointerInput(Unit) {
                 detectTapGestures { focus.clearFocus(force = true); keyboard?.hide(); captionArmed = false }
             })
-            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = lift).fillMaxWidth()) {
+            Column(Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = chromeIn.value }.padding(bottom = lift).fillMaxWidth()) {
             // The strip (iOS itemStrip): only with more than one item, right-aligned over the caption,
             // gone while the caption is being typed.
             if (items.size > 1 && !captionFocused) Row(
@@ -893,7 +903,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             }
             // The bar on black under the frame: Aa, stickers and the pen in one capsule, NEXT on the right.
             Row(
-                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().height(EDIT_BAR).fillMaxWidth().padding(horizontal = 14.dp),
+                Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = chromeIn.value }.navigationBarsPadding().height(EDIT_BAR).fillMaxWidth().padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (canEdit) Row(Modifier.height(52.dp).clip(RoundedCornerShape(26.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 6.dp),

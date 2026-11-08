@@ -368,7 +368,18 @@ private fun ThreadContent(
     val deletedById = remember(ui.messages) { lazy {
         HashMap<String, Boolean>(ui.messages.size * 2).also { map -> ui.messages.forEach { if (it.id !in map) map[it.id] = it.deleted } }
     } }
-    val listState = rememberLazyListState()
+    // BACK ON A CHAT LEFT SCROLLED UP (owner's video 2026-11-08, back from the profile): the list
+    // drew one frame at the newest messages, then the saved place was restored a frame later. When
+    // the place's row is already loaded, the list starts there, so its first frame is the place.
+    // Same rule as the restore below (no unread, no push for this chat).
+    val placedAtOpen = remember(ui.cid) {
+        val saved = ChatReadingPositions.get(ui.cid)
+        val pushHere = com.fariin.app.push.PushRouter.pendingMid.value?.midFor(ui.cid, android.os.SystemClock.elapsedRealtime()) != null
+        val i = if (saved == null || pushHere || !ThreadOpenRules.restoresPlace(ui.unreadAtOpen, false, null, false)) -1
+            else ui.messages.indexOfFirst { it.rowId == saved.rowId }
+        if (i >= 0) (ui.messages.size - 1 - i) to saved!!.offset else null
+    }
+    val listState = rememberLazyListState(placedAtOpen?.first ?: 0, placedAtOpen?.second ?: 0)
     val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
@@ -485,10 +496,10 @@ private fun ThreadContent(
     // Declared before the stick-to-newest effect, which asks it whether to glide (ArrivalMotion.kt).
     val arrivalMotion = remember(ui.cid) { ArrivalMotion() }
     val sendMotion = remember(ui.cid) { SendMotion() }
-    var stick by remember { mutableStateOf(true) }
+    var stick by remember { mutableStateOf(placedAtOpen == null) }
     // A reopened chat's restored reading place, held against the snap to the newest until the reader
     // drags the list or sends (below), and whether the reader has dragged this visit.
-    var heldPlace by remember { mutableStateOf(false) }
+    var heldPlace by remember { mutableStateOf(placedAtOpen != null) }
     var userDragged by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { if (!it) stick = listState.firstVisibleItemIndex <= 1 }
@@ -604,6 +615,8 @@ private fun ThreadContent(
     }
     LaunchedEffect(ui.cid, ui.loaded, ui.messages.isEmpty(), dividerId) {
         if (restoredPlace) return@LaunchedEffect
+        // Already started at the place (placedAtOpen): hold it, nothing to scroll.
+        if (placedAtOpen != null) { restoredPlace = true; stick = false; heldPlace = true; return@LaunchedEffect }
         val saved = ChatReadingPositions.get(ui.cid) ?: run { restoredPlace = true; return@LaunchedEffect }
         // Unread messages win (known from the open's count, before the server answers and the
         // divider is placed: restoring first showed read rows, then jumped); a tapped notification

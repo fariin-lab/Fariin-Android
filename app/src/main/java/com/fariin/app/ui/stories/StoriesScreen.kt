@@ -169,6 +169,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var libraryBusy by remember { mutableStateOf(false) }
     // A picked photo in the air from its tile to the editor (StoryLibraryFlight.kt, iOS flyFromTile).
     var libraryFlight by remember { mutableStateOf<LibraryFlight?>(null) }
+    var arriving by remember { mutableStateOf(false) }
     val pickFromLibrary: (android.net.Uri) -> Unit = { uri ->
         if (!libraryBusy && libraryFlight == null) {
             libraryBusy = true
@@ -177,7 +178,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     .onSuccess {
                         pickError = null
                         // From its tile when the tile is on screen; the editor opens as it lands.
-                        if (StoryLibraryTiles.has(uri) && com.fariin.app.ui.components.Motion.on) libraryFlight = LibraryFlight(uri, it)
+                        // The editor is built at once, unseen, while the picture flies; it shows as it lands.
+                        if (StoryLibraryTiles.has(uri) && com.fariin.app.ui.components.Motion.on) { libraryFlight = LibraryFlight(uri, it); arriving = true; openPost(uri, it) }
                         else openPost(uri, it)
                     }
                     .onFailure { if (it is StoryMedia.TooLong) tooLong = true else pickError = it.message ?: "Couldn't open this file." }
@@ -569,7 +571,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     )
     if (library) StoryLibrarySheet(busy = libraryBusy, onPick = pickFromLibrary, onClose = { library = false })
     libraryFlight?.let { f ->
-        StoryLibraryFlightLayer(f, onLanded = { if (library) openPost(f.uri, f.media) }, onDone = { libraryFlight = null })
+        StoryLibraryFlightLayer(f, onLanded = { arriving = false }, onDone = { libraryFlight = null; arriving = false })
     }
     if (post.isNotEmpty()) {
         // One editor for the whole post; a new post is a fresh one.
@@ -581,7 +583,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 textStory = composingText,
                 // Every item posts at once, so the one on the card flies home.
                 flyHome = true, onFlightStart = { camera = false; library = false; StoryAppShrink.play() },
-                onAddMore = if (composingText) null else ({ addMore = true }))
+                onAddMore = if (composingText) null else ({ addMore = true }), hidden = arriving)
         }
     }
     // The editor's + (iOS StoryLibraryPicker allowsMultiple from the editor), over the editor.

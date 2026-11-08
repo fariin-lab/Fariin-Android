@@ -249,9 +249,15 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
                     else Collections(list, motion) { album = it }
                 }
             }
-            if (busy || resolving) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable(enabled = true) {},
-                contentAlignment = Alignment.Center) {
-                FariinSpinner(size = 40.dp, stroke = 4.dp, color = Color.White)
+            // Taps are held at once, but the dim and the spinner wait 300 ms: a pick that is ready
+            // sooner flies straight out of its tile with no flash (owner's video 2026-11-08).
+            if (busy || resolving) {
+                var slow by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { kotlinx.coroutines.delay(300); slow = true }
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (slow) 0.35f else 0f)).clickable(enabled = true) {},
+                    contentAlignment = Alignment.Center) {
+                    if (slow) FariinSpinner(size = 40.dp, stroke = 4.dp, color = Color.White)
+                }
             }
         }
         if (multi != null && picked.isNotEmpty()) SelectionBar(picked, StoryCameraRules.addLabel(fresh.size), enabled = !resolving,
