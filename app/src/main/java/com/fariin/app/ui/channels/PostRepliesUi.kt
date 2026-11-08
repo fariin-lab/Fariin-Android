@@ -1076,6 +1076,16 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                 Text("Creator", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, maxLines = 1,
                     modifier = Modifier.clip(CircleShape).background(c.label.copy(alpha = 0.08f)).padding(horizontal = 6.dp, vertical = 1.5.dp))
             }
+            // An answer to an answer: "Jayz ▸ Salmo" in the name line (iOS 785831e73); a tap on the
+            // name brings that reply into view and lights it.
+            r.to?.let { to ->
+                Spacer(Modifier.width(4.dp))
+                Text("\u25B8", fontSize = 8.sp, color = c.secondary)
+                Spacer(Modifier.width(4.dp))
+                Text(to.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+                        .clickable(interactionSource = null, indication = null, onClickLabel = "Show the reply") { s.jumpTo(r) })
+            }
             Spacer(Modifier.width(4.dp))
             Text(PostReplyRules.ageLine(r, now), fontSize = 13.sp, color = c.secondary, maxLines = 1)
         }
@@ -1088,21 +1098,8 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                     .clickable(enabled = !r.mine, interactionSource = null, indication = null, onClick = onAuthor))
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f, fill = false).padding(end = 24.dp)) {
-                // An answer to an answer starts with "@name " in the accent colour; a tap on it brings
-                // that reply into view and lights it.
-                val accent = c.accent
-                val words = remember(r.text, r.to, accent) {
-                    androidx.compose.ui.text.buildAnnotatedString {
-                        r.to?.let { to ->
-                            val start = length
-                            append("@" + to.name)
-                            addStyle(androidx.compose.ui.text.SpanStyle(color = accent, fontWeight = FontWeight.SemiBold), start, length)
-                            addLink(androidx.compose.ui.text.LinkAnnotation.Clickable("to") { s.jumpTo(r) }, start, length)
-                            append(" ")
-                        }
-                        append(r.text)
-                    }
-                }
+                // The words only: whom it answers is in the name line now (iOS 785831e73).
+                val words = remember(r.text) { androidx.compose.ui.text.AnnotatedString(r.text) }
                 Text(words, fontSize = if (small) 15.sp else 17.sp, color = c.label,
                     modifier = Modifier.alpha(if (dim) 0.55f else 1f).clip(RoundedCornerShape(20.dp)).background(c.fieldFill)
                         .pointerInput(r.id, r.send) {
