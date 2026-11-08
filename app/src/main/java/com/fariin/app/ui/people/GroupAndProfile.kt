@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import androidx.compose.foundation.combinedClickable
 import com.fariin.app.ui.components.glassMenuAnchor
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.R
@@ -908,7 +909,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
             val photoChoice = headerPhotoOrStory(cid, conv["title"] as? String ?: "Group", conv["avatarUrl"] as? String, me, chats)
             Avatar(conv["avatarUrl"] as? String, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
-                modifier = if (photoChoice != null) Modifier.clickable(onClickLabel = "View photo or story", onClick = photoChoice).semantics { contentDescription = "Group photo" }
+                modifier = if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
+                    onLongClickLabel = "View photo", onLongClick = photoChoice.hold).semantics { contentDescription = "Group photo" }
                 else if (canEdit) Modifier.clickable(onClickLabel = "Edit group") { editing = true }.semantics { contentDescription = "Group photo" } else Modifier)
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
@@ -1396,22 +1398,25 @@ internal object GroupStepBack {
  */
 @Composable
 internal fun headerPhotoOrStory(cid: String, name: String, photoUrl: String?, me: String,
-                                conversations: List<com.fariin.app.data.Conversation>): (() -> Unit)? {
+                                conversations: List<com.fariin.app.data.Conversation>): HeaderPhotoActions? {
     val feed by com.fariin.app.data.LiveStories.state.collectAsState()
     val hidden by com.fariin.app.data.StoryMutes.set.collectAsState()
     val ring = com.fariin.app.data.StoryRings.forGroup(cid, name, photoUrl, feed, hidden)
-    var asking by remember { mutableStateOf(false) }
     var showPhoto by remember { mutableStateOf(false) }
     var story by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
-    if (asking) com.fariin.app.ui.components.CarefulSheet(onDismiss = { asking = false }, steps = listOf(
-        com.fariin.app.ui.components.CarefulStep("Select an action", buttons = listOf(
-            com.fariin.app.ui.components.CarefulButton("View profile photo") { showPhoto = true },
-            com.fariin.app.ui.components.CarefulButton("View story") { story = ring },
-        ))))
     if (showPhoto && !photoUrl.isNullOrEmpty())
         // As ready-made pages: no bubble on screen to zoom out of, so the plain window fade.
         com.fariin.app.ui.thread.MediaViewer(com.fariin.app.ui.thread.Viewing.Pages(
             listOf(com.fariin.app.data.ViewerRules.Page(photoUrl, null, false, photoUrl, null)), 0)) { showPhoto = false }
     story?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, conversations, onClose = { story = null }) }
-    return if (ring != null && !photoUrl.isNullOrEmpty()) ({ asking = true }) else null
+    // iOS 5ed8c7786 (owner 2026-11-08): no "Select an action" sheet any more. A tap opens the
+    // story, a hold opens the photo.
+    if (ring == null) return null
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    return HeaderPhotoActions(tap = { story = ring },
+        hold = if (photoUrl.isNullOrEmpty()) null else ({
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); showPhoto = true }))
 }
+
+/** A group's or channel's header photo while it has a story: tap = the story, hold = the photo. */
+internal class HeaderPhotoActions(val tap: () -> Unit, val hold: (() -> Unit)?)

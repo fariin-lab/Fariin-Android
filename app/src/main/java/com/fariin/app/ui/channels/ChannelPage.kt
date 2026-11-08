@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.foundation.combinedClickable
 import com.fariin.app.R
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.ui.components.glassMenuAnchor
@@ -306,7 +307,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
                 val photoChoice = com.fariin.app.ui.people.headerPhotoOrStory(info.cid, info.title.ifEmpty { "Channel" }, info.avatarUrl, me, emptyList())
                 Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL,
-                    modifier = if (photoChoice != null) Modifier.clickable(onClick = photoChoice) else if (canEdit) Modifier.clickable { editSheet = true } else Modifier)
+                    modifier = if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
+                        onLongClickLabel = "View photo", onLongClick = photoChoice.hold) else if (canEdit) Modifier.clickable { editSheet = true } else Modifier)
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(info.title.ifEmpty { "Channel" }, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label,
