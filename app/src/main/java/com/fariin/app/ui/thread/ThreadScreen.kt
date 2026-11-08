@@ -2436,6 +2436,9 @@ private fun Composer(
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
                         modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged { if (it.isFocused) emojiOpen = false }
+                            // A tap on the box while the GIF/sticker panel is up: the box already has focus, so
+                            // the keyboard rose over the panel and both stood stacked (owner 2026-11-08). Close it.
+                            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); if (emojiOpen) emojiOpen = false } }
                             .boldMenuItem(boldable, hasSelection = { !boxValue.selection.collapsed }, onBold = boldBar.onBold)
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },

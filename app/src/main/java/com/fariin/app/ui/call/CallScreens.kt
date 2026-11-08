@@ -51,6 +51,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.tasks.await
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -811,10 +812,20 @@ fun PipScreen(ui: CallUi) {
             demoThem -> DemoVideo(Modifier.fillMaxSize(), ThemA, ThemB)
             local != null -> VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize())
             else -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+                // BOTH OF US with no camera (owner 2026-11-08, the reference's call window): their photo,
+                // then mine under it, smaller, so the window reads as a call between two people.
+                val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                val myPhoto by androidx.compose.runtime.produceState<String?>(null, me) {
+                    if (me != null) value = runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users")
+                        .document(me).get(com.google.firebase.firestore.Source.CACHE).await().getString("photoUrl") }.getOrNull()
+                        ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me).get().await().getString("photoUrl") }.getOrNull()
+                }
                 Box {
                     Avatar(ui.peerPhoto, 56.dp, Modifier.semantics { contentDescription = ui.peerName })
                     if (theirMute) PipMicOff("${ui.peerName.substringBefore(' ')} is muted", Modifier.align(Alignment.BottomEnd).offset(4.dp, 2.dp))
                 }
+                Spacer(Modifier.height(6.dp))
+                Avatar(myPhoto, 40.dp, Modifier.semantics { contentDescription = "You" })
                 Spacer(Modifier.height(6.dp))
                 Text(ui.peerName.substringBefore(' '), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -164,16 +164,15 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         about = me?.about ?: ""; links = me?.links.orEmpty()
     }
     // The picked photo goes to the circle cropper first (iOS ProfilePhotoCropper, its Avatar stage).
-    val picker = rememberCirclePhotoPicker { jpeg ->
-        scope.launch {
-            busy = true
-            try {
-                api.uploadPhoto(jpeg); me = api.profile(api.me)
-                com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, jpeg); historyGen++
-            } catch (_: Exception) { error = "Couldn't upload the photo. Try again." }
-            busy = false
-        }
-    }
+    // THE PHOTO WAITS FOR SAVE (iOS Edit Photo sheet, owner 2026-11-08): a new picture or a removal is
+    // only held here, shown in the circle, and goes to the server when Edit Profile's Save is pressed.
+    var stagedJpeg by remember { mutableStateOf<ByteArray?>(null) }
+    var stagedRemove by remember { mutableStateOf(false) }
+    // The Edit Photo sheet's own pick, kept until its check mark hands it to the page.
+    var photoSheet by remember { mutableStateOf(false) }
+    var sheetJpeg by remember { mutableStateOf<ByteArray?>(null) }
+    var sheetRemove by remember { mutableStateOf(false) }
+    val picker = rememberCirclePhotoPicker { jpeg -> sheetJpeg = jpeg; sheetRemove = false }
     val pick = picker.launch
     // iOS ProfilePhotoSheet Recents: the photos I had before, tap one to use it again.
     fun useAgain(f: java.io.File) {
@@ -181,9 +180,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         scope.launch {
             busy = true
             val bytes = runCatching { f.readBytes() }.getOrNull()
-            try { if (bytes != null) { api.uploadPhoto(bytes); me = api.profile(api.me); f.setLastModified(System.currentTimeMillis())
-                com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, bytes); f.delete(); historyGen++ } }
-            catch (_: Exception) { error = "Couldn't upload the photo. Try again." }
+            if (bytes != null) { stagedJpeg = bytes; stagedRemove = false }
             busy = false
         }
     }
@@ -193,7 +190,8 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
     error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        val changed = me != null && (name != (me?.name ?: "").trim() || about.trim() != (me?.about ?: "").trim())
+        val changed = me != null && (name != (me?.name ?: "").trim() || about.trim() != (me?.about ?: "").trim() ||
+            stagedJpeg != null || stagedRemove)
         val close = { if (changed) askDiscard = true else onBack() }
         androidx.activity.compose.BackHandler(onBack = close)
         // The contact page's bottom sheet; Cancel is Keep Editing.
@@ -210,6 +208,12 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                     busy = true; saving = true
                     try {
                         if (name.trim() != me?.name) api.saveName(name)
+                        // The held photo goes now (iOS: nothing changes until Save).
+                        stagedJpeg?.let { j ->
+                            api.uploadPhoto(j)
+                            com.fariin.app.data.ProfilePhotoHistory.record(appCtx, api.me, j); historyGen++
+                        }
+                        if (stagedRemove && stagedJpeg == null) api.removePhoto()
                         // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
                         if (me != null && about.trim() != me?.about?.trim()) com.fariin.app.data.ProfileWrites.saveAbout(api.me, about)
                         onBack()
@@ -222,38 +226,28 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         val pageScroll = rememberScrollState()
         Column(Modifier.fillMaxSize().then(if (sheet != null) Modifier.sheetDrag(sheet, atTop = { pageScroll.value == 0 }) else Modifier)
             .verticalScroll(pageScroll), horizontalAlignment = Alignment.CenterHorizontally) {
-            var photoMenu by remember { mutableStateOf(false) }
             Spacer(Modifier.height(8.dp))
-            Box(Modifier.clip(CircleShape).clickable { photoMenu = true }, contentAlignment = Alignment.Center) {
-                Avatar(me?.photoUrl, 120.dp)
-                // The photo is going up: the ring over the photo, white on a dimmed circle (iOS).
-                if (busy && !saving) Box(Modifier.size(120.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+            // The circle shows what Save will keep: a held new photo, nothing if removal is held, else mine.
+            val heldBmp = remember(stagedJpeg) { stagedJpeg?.let { j -> runCatching { android.graphics.BitmapFactory.decodeByteArray(j, 0, j.size)?.asImageBitmap() }.getOrNull() } }
+            Box(Modifier.size(120.dp).clip(CircleShape).clickable { sheetJpeg = stagedJpeg; sheetRemove = stagedRemove; photoSheet = true },
+                contentAlignment = Alignment.Center) {
+                if (heldBmp != null) androidx.compose.foundation.Image(heldBmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else Avatar(if (stagedRemove) null else me?.photoUrl, 120.dp)
+                if (saving) Box(Modifier.size(120.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
                     com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = androidx.compose.ui.graphics.Color.White)
                 }
             }
-            // iOS ProfilePhotoSheet: Camera, Photo Library, and Remove while there is a photo.
-            var askRemove by remember { mutableStateOf(false) }
             Spacer(Modifier.height(12.dp))
-            Box {
-                Text("Edit Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
-                    modifier = Modifier.clip(CircleShape).background(c.card).clickable { photoMenu = true }.padding(horizontal = 20.dp, vertical = 8.dp))
-                androidx.compose.material3.DropdownMenu(expanded = photoMenu, onDismissRequest = { photoMenu = false }) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { photoMenu = false; picker.takePhoto() })
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { photoMenu = false; pick() })
-                    if (!me?.photoUrl.isNullOrEmpty()) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
-                        leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = c.red) }, onClick = { photoMenu = false; askRemove = true })
-                }
-            }
-            if (askRemove) PersonConfirmSheet(me?.photoUrl, me?.name.orEmpty(), "Remove your photo?", "People will see your initial instead.",
-                listOf(PersonAction("Remove") {
-                    busy = true
-                    val ok = try { api.removePhoto(); me = api.profile(api.me); true } catch (_: Exception) { error = "Couldn't remove the photo. Try again."; false }
-                    busy = false
-                    if (ok) com.fariin.app.ui.components.Snack.show("Photo removed")
-                    ok
-                }), onDismiss = { askRemove = false })
+            Text("Edit Photo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                modifier = Modifier.clip(CircleShape).background(c.card)
+                    .clickable { sheetJpeg = stagedJpeg; sheetRemove = stagedRemove; photoSheet = true }.padding(horizontal = 20.dp, vertical = 8.dp))
+            // iOS Edit Photo: its own sheet over Edit Profile (hidden while the cropper is up).
+            if (photoSheet && picker.pending == null) EditPhotoSheet(
+                current = if (sheetRemove) null else me?.photoUrl, held = sheetJpeg, removed = sheetRemove,
+                onCamera = { picker.takePhoto() }, onLibrary = { pick() },
+                onRemove = { sheetJpeg = null; sheetRemove = true },
+                onDone = { stagedJpeg = sheetJpeg; stagedRemove = sheetRemove && sheetJpeg == null; photoSheet = false },
+                onCancel = { photoSheet = false })
             if (history.isNotEmpty()) {
                 Text("Recents", fontSize = 13.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
                 androidx.compose.foundation.lazy.LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
