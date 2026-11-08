@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PhotoCamera
@@ -286,12 +288,16 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
-        // Title at the start, the overflow at the end. No camera here: iOS took add-story off the
+        // iOS StoriesTabView bar: the ••• menu in a round glass button at the LEADING edge and
+        // "Stories" centred (inline title, 17 semibold). No camera here: iOS took add-story off the
         // header (owner 2026-10-11, "I don't need it"); the camera on My Story's row posts.
-        com.fariin.app.ui.components.FloatingTopBar(com.fariin.app.ui.chats.rememberConnectionTitle("Stories"), tabRoot = true, actions = {
+        Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp)) {
+            Text(com.fariin.app.ui.chats.rememberConnectionTitle("Stories"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp))
             // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
-            Box {
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { moreOpen = true })
+            Box(Modifier.align(Alignment.CenterStart)) {
+                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreHoriz, contentDescription = "More", onClick = { moreOpen = true }, circle = true)
                 if (glowUnread) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(8.dp).clip(CircleShape).background(c.accent))
                 androidx.compose.material3.DropdownMenu(moreOpen, onDismissRequest = { moreOpen = false },
                     shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
@@ -304,7 +310,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         onClick = { moreOpen = false; glowNotifs = true })
                 }
             }
-        })
+        }
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             item(key = "search", contentType = "search") { com.fariin.app.ui.calls.SearchField(search, { search = it }, "Search") }
             // The field replaces the page rather than filtering it in place (iOS): one list of
@@ -324,8 +330,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         .semantics { contentDescription = "Posted Stories" },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("My Story", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.accent)
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
+                    // iOS: 17 semibold in the soft heading ink, 6 to a grey 13 pt chevron.
+                    Text("My Story", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = headingInk())
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary, modifier = Modifier.size(18.dp))
                 }
             }
             item {
@@ -385,12 +393,15 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Viewed Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.accent)
-                        Spacer(Modifier.width(4.dp))
+                        Text("Viewed Stories", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = headingInk())
+                        Spacer(Modifier.width(6.dp))
+                        // iOS chevron.up, turned over while folded.
+                        val turn by androidx.compose.animation.core.animateFloatAsState(if (viewedCollapsed) 180f else 0f,
+                            androidx.compose.animation.core.tween(250), label = "fold")
                         Icon(
-                            if (viewedCollapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+                            Icons.Filled.KeyboardArrowUp,
                             contentDescription = if (viewedCollapsed) "Show viewed stories" else "Hide viewed stories",
-                            tint = c.secondary, modifier = Modifier.size(20.dp),
+                            tint = c.secondary, modifier = Modifier.size(20.dp).rotate(turn),
                         )
                     }
                 }
@@ -404,12 +415,15 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Hidden Stories", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.accent)
-                        Spacer(Modifier.width(4.dp))
+                        Text("Hidden Stories", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = headingInk())
+                        Spacer(Modifier.width(6.dp))
+                        // iOS chevron.up, turned over while folded.
+                        val turn by androidx.compose.animation.core.animateFloatAsState(if (hiddenCollapsed) 180f else 0f,
+                            androidx.compose.animation.core.tween(250), label = "fold")
                         Icon(
-                            if (hiddenCollapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+                            Icons.Filled.KeyboardArrowUp,
                             contentDescription = if (hiddenCollapsed) "Show hidden stories" else "Hide hidden stories",
-                            tint = c.secondary, modifier = Modifier.size(20.dp),
+                            tint = c.secondary, modifier = Modifier.size(20.dp).rotate(turn),
                         )
                     }
                 }
@@ -604,9 +618,28 @@ private fun NoResults(query: String) {
 @Composable
 private fun Heading(title: String) {
     Text(
-        title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Fariin.colors.accent,
+        title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = headingInk(),
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
     )
+}
+
+/** iOS listHeadingColor: the text colour at 70 %, a soft white in dark and a soft black in light. */
+@Composable
+private fun headingInk(): Color = Fariin.colors.label.copy(alpha = 0.7f)
+
+/** iOS StoryListRow badge: the person's tick at 15 after the name (Fariin's own story included). */
+@Composable
+private fun RowVerifiedMark(uid: String) {
+    if (uid.isEmpty() || uid.startsWith(StoryGroup.GROUP_PREFIX)) return
+    val ctx = LocalContext.current
+    val official = uid == com.fariin.app.data.OfficialChannel.CID
+    if (!official) LaunchedEffect(uid) { com.fariin.app.data.VerifiedPeople.warm(ctx.applicationContext, uid) }
+    val kinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
+    val kind = if (official) "" else com.fariin.app.data.VerifiedPeople.badge(kinds, uid) ?: return
+    val tint = if (com.fariin.app.data.VerifiedPeople.isGold(kind)) Color(0xFFE8B21E) else Color(0xFF2392FE)
+    Box(Modifier.padding(start = 4.dp).size(15.dp).background(Color.White, CircleShape).padding(1.dp)) {
+        Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = tint, modifier = Modifier.fillMaxSize())
+    }
 }
 
 @Composable
@@ -616,7 +649,7 @@ private fun FriendRow(g: StoryGroup, now: Long, menu: List<RowAction>, onClick: 
         thumbUrl = newest?.listThumb ?: "", title = g.name.ifEmpty { "Fariin user" },
         subtitle = StoryList.subtitle(g, now),
         authorPhoto = g.photoUrl, seen = !g.hasUnseen, seenFlags = com.fariin.app.data.StoryRings.seenFlags(g),
-        squircle = false, originKey = g.key, onClick = onClick, menu = menu,
+        squircle = false, originKey = g.key, badgeUid = g.key, onClick = onClick, menu = menu,
     )
 }
 
@@ -645,6 +678,8 @@ private fun StoryRow(
     thumbImage: androidx.compose.ui.graphics.ImageBitmap? = null,
     /** The story is uploading: the face's ring turns (iOS isUploading). */
     uploading: Boolean = false,
+    /** iOS badgeUid: whose verified tick follows the name; null for none (My Story). */
+    badgeUid: String? = null,
     onClick: () -> Unit = {},
     onCamera: () -> Unit = {},
     menu: List<RowAction> = emptyList(),
@@ -701,10 +736,10 @@ private fun StoryRow(
                 // story still reads as a card on the white page instead of a hole beside the back card.
                 Box(Modifier.matchParentSize().zIndex(1f).border(0.5.dp, c.label.copy(alpha = 0.12f), shape))
                 when {
-                    thumbImage != null -> androidx.compose.foundation.Image(thumbImage, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    thumbImage != null -> androidx.compose.foundation.Image(thumbImage, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.1f; scaleY = 1.1f })
                     // Debug demo data only: a plain colour instead of a picture.
                     thumbUrl.startsWith("demo:") -> Box(Modifier.fillMaxSize().background(demoColor(thumbUrl)))
-                    thumbUrl.isNotEmpty() -> AsyncImage(thumbUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    thumbUrl.isNotEmpty() -> AsyncImage(thumbUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.1f; scaleY = 1.1f })
                     addBadge && !authorPhoto.isNullOrEmpty() -> AsyncImage(authorPhoto, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     addBadge -> Icon(Icons.Filled.Person, null, tint = c.secondary, modifier = Modifier.size(30.dp))
                     else -> Icon(Icons.Filled.Add, null, tint = c.secondary, modifier = Modifier.size(26.dp))
@@ -741,7 +776,11 @@ private fun StoryRow(
         }
         Spacer(Modifier.width(18.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false))
+                if (badgeUid != null) RowVerifiedMark(badgeUid)
+            }
             Spacer(Modifier.height(2.dp))
             Text(subtitle, fontSize = 15.sp, color = c.secondary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         }
