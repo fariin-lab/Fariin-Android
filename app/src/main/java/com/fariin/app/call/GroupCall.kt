@@ -235,6 +235,8 @@ data class GroupCallUi(
     val myRole: CallRole = CallRole.PARTICIPANT,
     /** An admin muted me: my mic stays off until an admin allows me to speak. */
     val micLocked: Boolean = false,
+    /** A voice-only call (the pass's `voiceOnly`): the camera cannot come on (iOS cameraLocked). */
+    val cameraLocked: Boolean = false,
     /** A call link's address, for Copy Link / Share Link (null on a group chat's call). */
     val linkUrl: String? = null,
     /** A group chat's members (Add People's list), names and photos from the group. */
@@ -505,7 +507,7 @@ object GroupCall {
                 // Muted by an admin in this call before I left: I come back muted (iOS noteJoinPass).
                 sawMicBlocked = pass.micBlocked
                 _ui.value = _ui.value.copy(connecting = false, joined = true, micOn = micOn, cameraOn = video && !pass.voiceOnly,
-                    micLocked = pass.micBlocked, linkUrl = linkKey?.url(video = !pass.voiceOnly))
+                    micLocked = pass.micBlocked, cameraLocked = pass.voiceOnly, linkUrl = linkKey?.url(video = !pass.voiceOnly))
                 passRole = CallRole.of(pass.role)
                 joinedAtMs = System.currentTimeMillis()
                 startSpeakerTicks(r)
@@ -827,6 +829,7 @@ object GroupCall {
     }
 
     fun toggleCamera() {
+        if (_ui.value.cameraLocked) return
         val on = !_ui.value.cameraOn
         _ui.value = _ui.value.copy(cameraOn = on)
         scope.launch { room?.localParticipant?.setCameraEnabled(on); refresh() }

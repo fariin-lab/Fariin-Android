@@ -1100,11 +1100,23 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                         if (g.joined) GroupMoreSocial(g, onReact = { more = false; onReact(it) }, onHand = { more = false; onHand(it) })
                     }
                 }
-                Circle(if (g.cameraOn) ImageVector.vectorResource(R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_call_video_off), !g.cameraOn,
-                    if (g.cameraOn) "Turn camera off" else "Turn camera on", 56.dp) { chrome.touch(); onCamera() }
+                // A voice-only call: the camera dimmed and still (iOS cameraLocked).
+                Box(Modifier.alpha(if (g.cameraLocked) 0.35f else 1f)) {
+                    Circle(if (g.cameraOn) ImageVector.vectorResource(R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_call_video_off),
+                        !g.cameraOn && !g.cameraLocked, if (g.cameraOn) "Turn camera off" else "Turn camera on", 56.dp) {
+                        chrome.touch(); if (!g.cameraLocked) onCamera()
+                    }
+                }
                 SpeakerButton(g.route, 56.dp) { chrome.touch(); onRoute(it) }
-                Circle(if (g.micOn) ImageVector.vectorResource(R.drawable.ic_mic) else ImageVector.vectorResource(R.drawable.ic_mic_off), !g.micOn, if (g.micOn) "Mute" else "Unmute", 56.dp) {
-                    chrome.touch(); onMic()
+                Box {
+                    Circle(if (g.micOn) ImageVector.vectorResource(R.drawable.ic_mic) else ImageVector.vectorResource(R.drawable.ic_mic_off), !g.micOn, if (g.micOn) "Mute" else "Unmute", 56.dp) {
+                        chrome.touch(); onMic()
+                    }
+                    // Muted by an admin: a small red lock says why the mic will not come on (iOS micLockedByAdmin).
+                    if (g.micLocked) Box(Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).size(20.dp).clip(CircleShape)
+                        .background(Color(0xFFFF3B30)).semantics { contentDescription = "Muted by an admin" }, contentAlignment = Alignment.Center) {
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock_fill), null, tint = Color.White, modifier = Modifier.size(11.dp))
+                    }
                 }
                 EndCircle("End call", 56.dp, onLeave)
             }
