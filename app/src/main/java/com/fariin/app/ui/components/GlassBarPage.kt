@@ -56,8 +56,9 @@ fun GlassBarPage(
     barEstimate: Dp = 64.dp,
     /** False: always the plain bar (a host that is sometimes a sheet). */
     enabled: Boolean = true,
-    /** The bar is frosted: the rows show blurred through it (its own background must be clear). */
-    frosted: Boolean = false,
+    /** The bar is frosted: the rows show blurred through it (its own background must be clear). Every
+     *  pushed page by default (iOS: rows blur under the bar), not a solid band that cuts them off. */
+    frosted: Boolean = true,
     /** No bar at all: the buttons float over the page (iOS info pages). */
     clear: Boolean = false,
     bar: @Composable () -> Unit,
