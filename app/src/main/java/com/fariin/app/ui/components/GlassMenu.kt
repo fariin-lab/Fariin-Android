@@ -87,8 +87,10 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     LaunchedEffect(open) {
         // Out of the button on a soft spring, and back into it the same way (owner: the way it
         // goes back must be seen), not a quick fade.
-        if (open) { shown = true; grow.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 240f)) }
-        else if (shown) { grow.animateTo(0f, spring(dampingRatio = 1f, stiffness = 320f, visibilityThreshold = 0.01f)); shown = false }
+        // A LIVING MORPH, not a flat zoom (owner's video 2026-11-08): a slower spring with a real
+        // overshoot on the way out, a firm one back.
+        if (open) { shown = true; grow.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 150f)) }
+        else if (shown) { grow.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 260f, visibilityThreshold = 0.01f)); shown = false }
     }
     if (!shown) return
     BackHandler { onDismiss() }
@@ -130,8 +132,12 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     val cy0 = src.center.y - origin.y - (top + this.size.height / 2f)
                     translationX = cx0 * (1f - k)
                     translationY = cy0 * (1f - k)
-                    scaleX = (sx + (1f - sx) * k) * (1f + 0.025f * lean.value)
-                    scaleY = (sy + (1f - sy) * k) * (1f - 0.015f * lean.value)
+                    // Jelly: the glass widens first and drops after (x leads, y lags), so it stretches out
+                    // of the button instead of zooming; the overshoot of [grow] gives the bounce.
+                    val kx = if (k >= 1f) k else Math.pow(k.coerceAtLeast(0f).toDouble(), 0.6).toFloat()
+                    val ky = if (k >= 1f) 1f + (k - 1f) * 1.6f else Math.pow(k.coerceAtLeast(0f).toDouble(), 1.5).toFloat()
+                    scaleX = (sx + (1f - sx) * kx) * (1f + 0.025f * lean.value)
+                    scaleY = (sy + (1f - sy) * ky) * (1f - 0.015f * lean.value)
                     alpha = (k * 6f).coerceIn(0f, 1f)   // only the last bit of the fold fades
                     transformOrigin = TransformOrigin.Center
                     shadowElevation = 18.dp.toPx() * k
@@ -166,7 +172,9 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                 }
                 .padding(vertical = 6.dp),
         ) {
-            Box {
+            // The rows come in after the glass has opened, and leave first.
+            Box(Modifier.graphicsLayer { alpha = ((grow.value - 0.55f) / 0.35f).coerceIn(0f, 1f)
+                translationY = (1f - ((grow.value - 0.55f) / 0.45f).coerceIn(0f, 1f)) * -6.dp.toPx() }) {
                 // The light pill under the finger.
                 if (pressed >= 0 && rowH > 0) Box(Modifier.offset { IntOffset(0, (pill.value * rowH).roundToInt()) }
                     .padding(horizontal = 6.dp).fillMaxWidth().height(with(density) { rowH.toDp() })
