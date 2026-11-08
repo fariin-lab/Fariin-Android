@@ -921,7 +921,7 @@ private fun SelectionBar(
 
 /** The resting search field, a grey capsule; a tap opens the live one. */
 @Composable
-private fun SearchCapsule(hiddenPx: () -> Float, onOpen: () -> Unit) {
+internal fun SearchCapsule(hiddenPx: () -> Float, prompt: String = "Search", onOpen: () -> Unit) {
     val c = Fariin.colors
     // iOS search field on scroll (owner's iPhone video 2026-11-05): it does not slide away under the
     // bar, it shrinks in place. The word and the glass fade within the first few points, then the
@@ -948,7 +948,7 @@ private fun SearchCapsule(hiddenPx: () -> Float, onOpen: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Search", fontSize = 17.sp, color = c.secondary, maxLines = 1)
+                Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1)
             }
         }
     }

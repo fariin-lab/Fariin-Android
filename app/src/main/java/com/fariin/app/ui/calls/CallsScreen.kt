@@ -1,5 +1,7 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.outlined.Search
 import android.text.format.DateFormat
@@ -479,22 +481,20 @@ private fun RowMenu(open: Boolean, onDismiss: () -> Unit, callUp: Boolean, chats
 internal fun SearchField(value: String, onChange: (String) -> Unit, prompt: String,
                          /** How much of the field the list has pulled under the bar (0 at rest), read while drawing. */
                          hiddenPx: () -> Float = { 0f }) {
-    // The floating search capsule every tab page shares. Scrolled up it SHRINKS IN PLACE, as the chat
-    // list's (iOS, owner 2026-11-08 "still in Calls it won't shrink"): its top edge stays, the words fade
-    // in the first 10 dp, the capsule gets thinner from the bottom until it is gone.
+    // THE CHAT LIST'S OWN SEARCH (owner 2026-11-08: "not the same as the chat list"): at rest the very
+    // same capsule, shrinking in place on scroll exactly as there; a tap turns it into the live field
+    // with the keyboard up. A field with words in it, or in use, stays the live one.
+    var live by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    if (!live && value.isEmpty()) {
+        com.fariin.app.ui.chats.SearchCapsule(hiddenPx, onOpen = { live = true }, prompt = prompt)
+        return
+    }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.runtime.LaunchedEffect(live) { if (live) runCatching { focus.requestFocus() } }
     com.fariin.app.ui.components.FloatingSearchField(value, onChange, prompt,
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 10.dp)
-            .graphicsLayer {
-                val hidden = if (value.isEmpty()) hiddenPx() else 0f
-                translationY = hidden
-                alpha = if (hidden <= 0f) 1f else (1f - hidden / (size.height * 1.1f)).coerceIn(0f, 1f)
-                clip = hidden > 0f
-                val h = (size.height - hidden).coerceAtLeast(0f)
-                shape = androidx.compose.foundation.shape.GenericShape { sz, _ ->
-                    addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, 0f, sz.width, h.coerceAtMost(sz.height),
-                        androidx.compose.ui.geometry.CornerRadius(minOf(sz.height / 2f, h / 2f))))
-                }
-            })
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
+            .focusRequester(focus)
+            .onFocusChanged { if (!it.isFocused && value.isEmpty()) live = false })
 }
 
 @Composable
