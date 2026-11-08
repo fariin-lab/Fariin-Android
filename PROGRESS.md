@@ -1240,3 +1240,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   for 3 picks), top and bottom bars restyled with our floating build and menu icons.
 - 2026-11-07 night: invite link tap goes straight in when already a member, sheet opens filled (b99f629);
   New Call picked row end-anchored with slide-then-grow (owner's reference video, via iOS session).
+- 2026-11-07 late: on main and on the Pixel: New Call face grows smoothly (b143457); no grey square on the
+  attach tick (fb571a8); tab pill fills its cell (98079f5); attach sheet grows out of the + and shrinks back,
+  albums run to the rounded top (1296035); chat list top bar hides on scroll down / returns on scroll up,
+  no blur band, soft 90% page colour (ac6f879). Story flow from the iOS session's builders landed via CI
+  (515a1c8, Actions back after the repo went public); Pixel has ac6f879 (9096f29 waits for its CI run).
