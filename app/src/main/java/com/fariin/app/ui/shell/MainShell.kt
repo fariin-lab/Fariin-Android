@@ -439,19 +439,24 @@ private fun TabItem(t: TabSpec, selected: Boolean, badge: Int, photo: String?, a
                 // No ripple: the sliding pill is the tap's feedback (a ripple left a second blob).
                 indication = null,
                 role = Role.Tab, onClick = onClick,
-            ),
+            )
+            // The pill fills the tab's cell (owner 2026-11-07, the reference's bar): 94% of the cell
+            // wide, 4 dp in from the bar's inner top and bottom, a capsule inside the capsule. It
+            // used to hug the icon and label (~78% wide, more air around it).
+            .drawBehind {
+                if (on <= 0f) return@drawBehind
+                val inset = 4.dp.toPx()
+                val fullW = size.width * 0.94f; val fullH = size.height - 2 * inset
+                val s = 0.6f + 0.4f * on
+                val w = fullW * s; val h = fullH * s
+                drawRoundRect(pillColor.copy(alpha = pillColor.alpha * on),
+                    topLeft = Offset((size.width - w) / 2, (size.height - h) / 2),
+                    size = Size(w, h), cornerRadius = CornerRadius(h / 2))
+            },
         contentAlignment = Alignment.Center,
     ) {
         androidx.compose.foundation.layout.Column(
             Modifier.widthIn(min = 64.dp).height(48.dp)
-                .drawBehind {
-                    if (on <= 0f) return@drawBehind
-                    val s = 0.6f + 0.4f * on
-                    val w = size.width * s; val h = size.height * s
-                    drawRoundRect(pillColor.copy(alpha = pillColor.alpha * on),
-                        topLeft = Offset((size.width - w) / 2, (size.height - h) / 2),
-                        size = Size(w, h), cornerRadius = CornerRadius(h / 2))
-                }
                 // The grey pill spans the whole cell anyway; the side padding only squeezed the label
                 // ("Storie", "Settin" on a 320 dp phone, Android 8.1 emulator, 2026-11-05).
                 .padding(horizontal = 2.dp),
