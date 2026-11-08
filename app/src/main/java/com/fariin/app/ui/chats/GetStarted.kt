@@ -17,13 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -46,13 +39,14 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.first
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.R
 
 /** iOS GetStartedCard: the four things a new account can do from the chat list. */
-enum class GetStartedCard(val title: String, val icon: ImageVector) {
-    NEW_GROUP("New group", Icons.Filled.Groups),
-    INVITE("Invite friends", Icons.Filled.Email),
-    ADD_PHOTO("Add photo", Icons.Filled.AccountCircle),
-    CHAT_COLOR("Bubble color", Icons.Filled.Palette),
+enum class GetStartedCard(val title: String, val iconRes: Int) {
+    NEW_GROUP("New group", com.fariin.app.R.drawable.ic_gs_members),
+    INVITE("Invite friends", com.fariin.app.R.drawable.ic_invite_friends),
+    ADD_PHOTO("Add photo", com.fariin.app.R.drawable.ic_account),
+    CHAT_COLOR("Bubble color", com.fariin.app.R.drawable.ic_set_appearance),
 }
 
 /**
@@ -131,7 +125,7 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
                 Text("Things you can do", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
                 Box(Modifier.size(28.dp).clip(CircleShape).background(c.label.copy(alpha = 0.08f)).clickable(onClick = onHideAll),
                     contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, "Hide", tint = c.secondary, modifier = Modifier.size(14.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Hide", tint = c.secondary, modifier = Modifier.size(14.dp))
                 }
             }
             Row(Modifier.fillMaxWidth()) {
@@ -155,11 +149,11 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
                             }).padding(vertical = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(54.dp).floating(CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(if (card == GetStartedCard.NEW_GROUP) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members) else card.icon, null, tint = c.label, modifier = Modifier.size(26.dp))
+                                Icon(if (card == GetStartedCard.NEW_GROUP) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members) else ImageVector.vectorResource(card.iconRes), null, tint = c.label, modifier = Modifier.size(26.dp))
                                 androidx.compose.animation.AnimatedVisibility(done, Modifier.align(Alignment.BottomEnd),
                                     enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn()) {
                                     Box(Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF34C759)), contentAlignment = Alignment.Center) {
-                                        Icon(androidx.compose.material.icons.Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(14.dp))
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Done", tint = Color.White, modifier = Modifier.size(14.dp))
                                     }
                                 }
                             }

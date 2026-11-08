@@ -11,7 +11,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -33,13 +32,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -71,6 +63,7 @@ import com.fariin.app.ui.call.CallActivity
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.R
 
 /** One row of the New Call page: a person from my chats, or a group I may call. */
 data class CallTarget(val id: String, val name: String, val photo: String?, val uid: String?, val groupCid: String?, val updatedAt: Double)
@@ -194,7 +187,7 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
             }
         } else {
             com.fariin.app.ui.components.FloatingTopBar("New Call", onBack = onBack) {
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, "Search", onClick = { searching = true })
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", onClick = { searching = true })
             }
         }
         AnimatedVisibility(chosen.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -305,7 +298,7 @@ private fun PickedStrip(chosen: List<CallTarget>, onUnpick: (CallTarget) -> Unit
                         Avatar(t.photo, 52.dp, Modifier.align(Alignment.Center))
                         Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(c.bg).padding(2.dp)
                             .clip(CircleShape).background(c.tertiary), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Close, null, tint = c.bg, modifier = Modifier.size(11.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.bg, modifier = Modifier.size(11.dp))
                         }
                     }
                     Text(t.name.substringBefore(' ').ifEmpty { t.name }, fontSize = 12.sp, color = c.label, maxLines = 1,
@@ -343,7 +336,7 @@ private fun PersonPickRow(t: CallTarget, on: Boolean, onToggle: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         val ring = Modifier.size(24.dp).clip(CircleShape)
         if (on) Box(ring.background(c.accent), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Check, null, tint = c.onAccent, modifier = Modifier.size(16.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(16.dp))
         } else Box(ring.border(1.5.dp, c.tertiary, CircleShape))
     }
 }

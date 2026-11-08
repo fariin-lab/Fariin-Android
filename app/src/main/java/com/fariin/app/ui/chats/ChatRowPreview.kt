@@ -14,27 +14,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.automirrored.filled.CallMade
-import androidx.compose.material.icons.automirrored.filled.CallReceived
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ArrowCircleUp
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.FolderZip
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PanTool
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.WavingHand
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -138,30 +117,30 @@ internal fun ChatRowVerifiedMark(conv: Conversation, me: String) {
 @Composable
 private fun Seal(tint: Color, label: String) {
     Box(Modifier.padding(start = 4.dp).size(16.dp).background(Color.White, CircleShape).padding(1.dp)) {
-        Icon(Icons.Filled.Verified, contentDescription = label, tint = tint, modifier = Modifier.fillMaxSize())
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = label, tint = tint, modifier = Modifier.fillMaxSize())
     }
 }
 
 @Composable
 private fun iconFor(icon: PreviewIcon): ImageVector = when (icon) {
-    PreviewIcon.PIN -> Icons.Filled.PushPin
-    PreviewIcon.CONTACT -> Icons.Filled.AccountCircle
-    PreviewIcon.LOCATION -> Icons.Filled.LocationOn
-    PreviewIcon.POLL -> Icons.Filled.BarChart
-    PreviewIcon.MIC -> Icons.Filled.Mic
-    PreviewIcon.DELETED -> Icons.Filled.Block
-    PreviewIcon.VIDEO, PreviewIcon.VIDEO_CALL, PreviewIcon.VIDEO_CALL_OUT, PreviewIcon.VIDEO_CALL_IN -> Icons.Filled.Videocam
-    PreviewIcon.PHOTO -> Icons.Filled.Photo
-    PreviewIcon.ALBUM -> Icons.Filled.PhotoLibrary
-    PreviewIcon.FILE, PreviewIcon.VIEW_ONCE -> Icons.Filled.Description
-    PreviewIcon.FILE_ZIP -> Icons.Filled.FolderZip
-    PreviewIcon.FILE_DOC -> Icons.AutoMirrored.Filled.Article
-    PreviewIcon.FILE_AUDIO -> Icons.Filled.MusicNote
+    PreviewIcon.PIN -> ImageVector.vectorResource(R.drawable.ic_sf_pin_fill)
+    PreviewIcon.CONTACT -> ImageVector.vectorResource(R.drawable.ic_account)
+    PreviewIcon.LOCATION -> ImageVector.vectorResource(R.drawable.ic_location)
+    PreviewIcon.POLL -> ImageVector.vectorResource(R.drawable.ic_sf_chart_bar_fill)
+    PreviewIcon.MIC -> ImageVector.vectorResource(R.drawable.ic_mic)
+    PreviewIcon.DELETED -> ImageVector.vectorResource(R.drawable.ic_block)
+    PreviewIcon.VIDEO, PreviewIcon.VIDEO_CALL, PreviewIcon.VIDEO_CALL_OUT, PreviewIcon.VIDEO_CALL_IN -> ImageVector.vectorResource(R.drawable.ic_video_fill)
+    PreviewIcon.PHOTO -> ImageVector.vectorResource(R.drawable.ic_sf_photo)
+    PreviewIcon.ALBUM -> ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle)
+    PreviewIcon.FILE, PreviewIcon.VIEW_ONCE -> ImageVector.vectorResource(R.drawable.ic_file)
+    PreviewIcon.FILE_ZIP -> ImageVector.vectorResource(R.drawable.ic_sf_doc_zipper)
+    PreviewIcon.FILE_DOC -> ImageVector.vectorResource(R.drawable.ic_sf_doc_text)
+    PreviewIcon.FILE_AUDIO -> ImageVector.vectorResource(R.drawable.ic_sf_music_note)
     PreviewIcon.GIF -> ImageVector.vectorResource(R.drawable.ic_gif)
-    PreviewIcon.CALL, PreviewIcon.CALL_OUT, PreviewIcon.CALL_IN -> Icons.Filled.Call
-    PreviewIcon.NEWER -> Icons.Filled.ArrowCircleUp
-    PreviewIcon.HELLO -> Icons.Filled.WavingHand
-    PreviewIcon.BLOCKED -> Icons.Filled.PanTool
+    PreviewIcon.CALL, PreviewIcon.CALL_OUT, PreviewIcon.CALL_IN -> ImageVector.vectorResource(R.drawable.ic_tab_calls)
+    PreviewIcon.NEWER -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_circle_fill)
+    PreviewIcon.HELLO -> ImageVector.vectorResource(R.drawable.ic_sf_hand_wave)
+    PreviewIcon.BLOCKED -> ImageVector.vectorResource(R.drawable.ic_sf_hand_raised_fill)
 }
 
 /** One preview icon, as iOS previewRow draws it: a directional arrow on a call, the "1" circle on a view-once. */
@@ -176,7 +155,7 @@ private fun PreviewGlyph(icon: PreviewIcon, tint: Color) {
             val video = icon == PreviewIcon.VIDEO_CALL_OUT || icon == PreviewIcon.VIDEO_CALL_IN
             Icon(iconFor(icon), null, tint = tint,
                 modifier = Modifier.align(Alignment.BottomStart).size(if (video) 13.dp else 11.dp))
-            Icon(if (out) Icons.AutoMirrored.Filled.CallMade else Icons.AutoMirrored.Filled.CallReceived, null, tint = tint,
+            Icon(if (out) ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right) else ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left), null, tint = tint,
                 modifier = Modifier.align(Alignment.TopEnd).size(8.dp))
         }
         else -> Icon(iconFor(icon), null, tint = tint, modifier = Modifier.fillMaxSize())
@@ -227,7 +206,7 @@ internal fun ChatRowPreviewText(
             // owner 2026-10-27: the kind of call in bold green, then " · In call" in grey.
             val green = liveGreen(c.dark)
             inline["call"] = InlineTextContent(Placeholder(sp(14.dp), sp(14.dp), PlaceholderVerticalAlign.TextCenter)) {
-                Icon(if (live.video) Icons.Filled.Videocam else Icons.Filled.Call, null, tint = green, modifier = Modifier.fillMaxSize())
+                Icon(if (live.video) ImageVector.vectorResource(R.drawable.ic_video_fill) else ImageVector.vectorResource(R.drawable.ic_tab_calls), null, tint = green, modifier = Modifier.fillMaxSize())
             }
             appendInlineContent("call", "[call]"); append(" ")
             pushStyle(SpanStyle(color = green, fontWeight = FontWeight.SemiBold)); append(if (live.video) "Video call" else "Voice call"); pop()

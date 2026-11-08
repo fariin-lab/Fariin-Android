@@ -6,11 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -33,20 +28,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Forward
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Campaign
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -215,14 +196,14 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                             modifier = Modifier.fillMaxWidth().focusRequester(focus))
                     }
                     if (query.isNotEmpty()) androidx.compose.material3.IconButton({ query = "" }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Clear", tint = c.label)
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Clear", tint = c.label)
                     }
                 }
             }
             else FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE,
                 container = c.bgSecondary) {
                 // Search and the bell in floating circles, as the chat header's buttons.
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, "Search",
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search",
                     onClick = { searching = true; query = ""; fromNewest = 0 }, modifier = Modifier.padding(end = 8.dp))
                 // The bell opens the chat's mute menu (iOS OfficialChatInfoView actionButtons, the
                 // profile's Mute): 1 hour to Always, or, muted, until when and Unmute.
@@ -280,22 +261,22 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         if (selecting) Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.IconButton({ pendingDelete = pickedNotes().map { it.id } }) {
-                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = c.red)
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = "Delete", tint = c.red)
             }
             Text("${picked.size} Selected", style = MaterialTheme.typography.titleSmall, color = c.label,
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             androidx.compose.material3.IconButton({ forwardTexts = pickedNotes().map { it.plainText } }) {
-                Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = "Forward", tint = c.accent)
+                Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), contentDescription = "Forward", tint = c.accent)
             }
         }
         // The normal chat's up/down and "n of N" (iOS searchNavBar); up is older.
         else if (searching) Row(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.IconButton({ fromNewest++ }, enabled = matches.isNotEmpty() && matchIndex > 0) {
-                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Previous")
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up), contentDescription = "Previous")
             }
             androidx.compose.material3.IconButton({ fromNewest-- }, enabled = matches.isNotEmpty() && matchIndex < matches.size - 1) {
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Next")
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), contentDescription = "Next")
             }
             Spacer(Modifier.weight(1f))
             if (matches.isNotEmpty() || query.trim().length >= 2)
@@ -311,12 +292,13 @@ fun OfficialChatScreen(onBack: () -> Unit) {
     }
 }
 
+@Composable
 private fun kindIcon(k: AnnouncementKind): ImageVector = when (k) {
-    AnnouncementKind.FEATURE -> Icons.Outlined.AutoAwesome
-    AnnouncementKind.RELEASE -> Icons.Outlined.Inventory2
-    AnnouncementKind.MAINTENANCE -> Icons.Outlined.Build
-    AnnouncementKind.SECURITY -> Icons.Outlined.Security
-    AnnouncementKind.NEWS -> Icons.Outlined.Campaign
+    AnnouncementKind.FEATURE -> ImageVector.vectorResource(R.drawable.ic_sf_sparkles)
+    AnnouncementKind.RELEASE -> ImageVector.vectorResource(R.drawable.ic_sf_shippingbox)
+    AnnouncementKind.MAINTENANCE -> ImageVector.vectorResource(R.drawable.ic_sf_wrench)
+    AnnouncementKind.SECURITY -> ImageVector.vectorResource(R.drawable.ic_sf_lock_shield)
+    AnnouncementKind.NEWS -> ImageVector.vectorResource(R.drawable.ic_channel_megaphone)
 }
 
 @Composable
@@ -332,7 +314,7 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
     // While selecting (ticked not null) a tap or long press ticks the card and its buttons rest.
     Row(verticalAlignment = Alignment.CenterVertically) {
     if (ticked != null) {
-        Icon(if (ticked) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+        Icon(if (ticked) ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill) else ImageVector.vectorResource(R.drawable.ic_sf_circle),
             contentDescription = if (ticked) "Selected" else "Not selected",
             tint = if (ticked) c.blue else c.tertiary,
             modifier = Modifier.padding(end = 10.dp).size(24.dp).clickable(onClick = onToggle))
@@ -384,13 +366,13 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
         }
         HorizontalDivider(color = c.separator)
         androidx.compose.material3.DropdownMenuItem(text = { Text("Copy") }, onClick = { menu = false; onCopy() },
-            leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) })
+            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Forward") }, onClick = { menu = false; onForward() },
-            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Forward, contentDescription = null) })
+            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Select") }, onClick = { menu = false; onSelect() },
-            leadingIcon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) })
+            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { menu = false; onDelete() },
-            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = c.red) })
+            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) })
     }
     }
     // My reaction as a chip under the card; a tap takes it back.
@@ -437,7 +419,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                     Text(OfficialChannel.NAME, style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Medium, color = c.label, maxLines = 1)
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Filled.Verified, contentDescription = "Official", tint = c.blue, modifier = Modifier.size(17.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Official", tint = c.blue, modifier = Modifier.size(17.dp))
                     if (muted) {
                         Spacer(Modifier.width(6.dp))
                         Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))

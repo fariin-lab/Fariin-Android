@@ -3,7 +3,6 @@ package com.fariin.app.ui.calls
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.material.icons.outlined.Search
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,20 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.NorthEast
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.SouthWest
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.Phone
-import androidx.compose.material.icons.outlined.Videocam
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -299,11 +284,11 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         // Frosted (GlassBarPage), so no background of its own; a bit shorter (owner 2026-11-08).
         Box(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal = 12.dp)) {
             if (selecting) {
-                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, contentDescription = "Done", onClick = { leaveSelect() },
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Done", onClick = { leaveSelect() },
                     modifier = Modifier.align(Alignment.CenterStart))
                 Text(if (picked.isEmpty()) "Select Calls" else "${picked.size} Selected", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                     color = c.label, modifier = Modifier.align(Alignment.Center))
-                com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.Delete, contentDescription = "Delete",
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = "Delete",
                     onClick = { if (picked.isNotEmpty()) askDelete = true }, tint = if (picked.isEmpty()) c.secondary else c.red,
                     modifier = Modifier.align(Alignment.CenterEnd))
             } else {
@@ -313,7 +298,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                 androidx.compose.animation.AnimatedVisibility(searchGone, Modifier.align(Alignment.CenterEnd),
                     enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.6f),
                     exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.6f)) {
-                    com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.Search, contentDescription = "Search calls",
+                    com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search calls",
                         onClick = { barScope.launch { listState.animateScrollToItem(0) } })
                 }
             }
@@ -368,7 +353,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                                 // iOS swipeActions: Delete behind the row (a grouped row hides all its calls).
                                 com.fariin.app.ui.chats.SwipeActionsRow(run.id, enabled = !selecting && !isLive, leading = emptyList(),
                                     trailing = listOf(com.fariin.app.ui.chats.SwipeAction("Delete",
-                                        androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Delete), c.red) { deleteRun() })) {
+                                        painterResource(R.drawable.ic_sf_trash), c.red) { deleteRun() })) {
                                     Box(Modifier.background(c.bg)) {
                                         // The live call is not a record: it cannot be picked or deleted.
                                         PickableRow(selecting && !isLive, run.id in picked, onToggle = { toggle(run.id) }) {
@@ -444,7 +429,7 @@ private fun CreateLinkRow(onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Link, contentDescription = null, tint = c.label, modifier = Modifier.size(26.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_link), contentDescription = null, tint = c.label, modifier = Modifier.size(26.dp))
         }
         Spacer(Modifier.width(12.dp))
         Text("Create a Call Link", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
@@ -466,14 +451,14 @@ private fun RowMenu(open: Boolean, onDismiss: () -> Unit, callUp: Boolean, chats
                 leadingIcon = { Icon(icon, null, tint = if (enabled) ink else c.secondary) },
                 enabled = enabled, onClick = { onDismiss(); run() })
         }
-        val voice = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Phone)
-        val video = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Videocam)
+        val voice = painterResource(R.drawable.ic_call_voice)
+        val video = painterResource(R.drawable.ic_call_video)
         if (videoFirst) { item("Video Call", video, c.label, !callUp, onVideo); item("Voice Call", voice, c.label, !callUp, onVoice) }
         else { item("Voice Call", voice, c.label, !callUp, onVoice); item("Video Call", video, c.label, !callUp, onVideo) }
         if (chats != null) item("Chats", painterResource(R.drawable.ic_menu_chat), c.label, true, chats)
-        item("Select", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.CheckCircle), c.label, true, onSelect)
+        item("Select", painterResource(R.drawable.ic_sf_checkmark_circle), c.label, true, onSelect)
         HorizontalDivider(color = c.separator)
-        item("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Delete), c.red, true, onDelete)
+        item("Delete", painterResource(R.drawable.ic_sf_trash), c.red, true, onDelete)
     }
 }
 
@@ -505,7 +490,7 @@ private fun Empty(title: String, text: String, search: Boolean = false) {
     Box(Modifier.fillMaxWidth().imePadding().padding(horizontal = 32.dp).padding(top = 72.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (!search) {
-                Icon(Icons.Outlined.Phone, contentDescription = null, tint = c.secondary, modifier = Modifier.size(44.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_call_voice), contentDescription = null, tint = c.secondary, modifier = Modifier.size(44.dp))
                 Spacer(Modifier.height(12.dp))
             }
             Text(title, fontSize = if (search) 17.sp else 22.sp, fontWeight = if (search) FontWeight.SemiBold else FontWeight.Bold,
@@ -534,7 +519,7 @@ private fun PickableRow(selecting: Boolean, picked: Boolean, onToggle: () -> Uni
                 .background(if (picked) c.blue else c.bg)
                 .then(if (picked) Modifier else Modifier.border(1.5.dp, c.secondary, CircleShape)),
                 contentAlignment = Alignment.Center) {
-                if (picked) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(14.dp))
+                if (picked) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(14.dp))
             }
         }
     }
@@ -570,12 +555,12 @@ private fun CallRow(run: CallRun, me: String, now: Long, verified: Boolean, live
                 )
                 if (verified) {
                     Spacer(Modifier.width(5.dp))
-                    Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
                 }
             }
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (call.mine(me)) Icons.Filled.NorthEast else Icons.Filled.SouthWest,
+                Icon(if (call.mine(me)) ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right) else ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left),
                     contentDescription = null, tint = c.secondary, modifier = Modifier.size(12.dp))
                 if (call.video) {
                     Spacer(Modifier.width(2.dp))
@@ -595,13 +580,13 @@ private fun CallRow(run: CallRun, me: String, now: Long, verified: Boolean, live
             Row(Modifier.height(34.dp).clip(CircleShape).background(ReturnGreen)
                 .clickable { callBack(ctx, call, call.video) }.padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(if (call.video) Icons.Filled.Videocam else Icons.Filled.Phone, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(if (call.video) ImageVector.vectorResource(R.drawable.ic_video_fill) else ImageVector.vectorResource(R.drawable.ic_tab_calls), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                 Text("Return", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
             }
         } else {
             Text(callTimeLabel(call.dateMs, DateFormat.is24HourFormat(ctx), now), fontSize = 14.sp, color = c.secondary)
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onInfo), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Info, contentDescription = "Info", tint = c.label, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_info_circle), contentDescription = "Info", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
     }

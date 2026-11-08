@@ -2,7 +2,6 @@ package com.fariin.app.ui.calls
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material.icons.automirrored.filled.Send
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -29,14 +28,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -80,6 +71,7 @@ import com.fariin.app.ui.components.FariinTopBar
 import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
+import com.fariin.app.R
 
 private const val NET_ERROR = "Check your connection and try again."
 
@@ -218,9 +210,9 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // iOS CallLinkShareRows "Send": the link into Fariin chats picked here.
-            RoundAction(Icons.AutoMirrored.Filled.Send, "Send", Modifier.weight(1f)) { if (s.url != null) { onUsed(); sendingLink = true } }
-            RoundAction(Icons.Filled.ContentCopy, "Copy link", Modifier.weight(1f)) { s.url?.let { onUsed(); copyLink(ctx, it) } }
-            RoundAction(Icons.Filled.Share, "Share link", Modifier.weight(1f)) { s.url?.let { onUsed(); shareLink(ctx, it) } }
+            RoundAction(ImageVector.vectorResource(R.drawable.ic_share_turn_right), "Send", Modifier.weight(1f)) { if (s.url != null) { onUsed(); sendingLink = true } }
+            RoundAction(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), "Copy link", Modifier.weight(1f)) { s.url?.let { onUsed(); copyLink(ctx, it) } }
+            RoundAction(ImageVector.vectorResource(R.drawable.ic_sf_share), "Share link", Modifier.weight(1f)) { s.url?.let { onUsed(); shareLink(ctx, it) } }
         }
         Spacer(Modifier.height(16.dp))
         if (s.admin) {
@@ -252,7 +244,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(thickness = 0.5.dp, color = c.separator)
             Row(Modifier.fillMaxWidth().clickable { askDelete = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Delete, null, tint = c.red)
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red)
                 Spacer(Modifier.width(16.dp))
                 Text("Delete Call Link", fontSize = 17.sp, color = c.red)
             }
@@ -367,7 +359,7 @@ fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onIn
             Spacer(Modifier.width(8.dp))
             Text(timeLabel, fontSize = 14.sp, color = c.secondary)
             IconButton(onClick = onInfo) {
-                Icon(Icons.Outlined.Info, contentDescription = "Link details", tint = c.label, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_info_circle), contentDescription = "Link details", tint = c.label, modifier = Modifier.size(22.dp))
             }
         }
     }

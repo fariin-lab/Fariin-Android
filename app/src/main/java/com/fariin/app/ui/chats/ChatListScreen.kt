@@ -43,38 +43,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.Campaign
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.MarkChatRead
-import androidx.compose.material.icons.outlined.MarkChatUnread
-import androidx.compose.material.icons.outlined.NotificationsOff
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Unarchive
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -118,9 +86,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Favorite
 import com.kyant.backdrop.backdrops.layerBackdrop
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -497,7 +462,7 @@ fun ChatListScreen(
                             },
                             actions = {
                                 // In the Archive the search stays a button; the list itself has the field below.
-                                if (showArchive || searchGone) FloatingIcon(Icons.Outlined.Search, contentDescription = "Search", onClick = { searching = true },
+                                if (showArchive || searchGone) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search", onClick = { searching = true },
                                     modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
                                 if (!showArchive) OverflowMenu(
                                     filter = filter, onFilter = { filter = it },
@@ -543,7 +508,7 @@ fun ChatListScreen(
                         Icon(fi(R.drawable.ic_story_camera), contentDescription = "New Story", tint = c.label)
                     }
                     IconButton(onClick = people.newChat, modifier = Modifier.size(56.dp).floating(fill = c.accent)) {
-                        Icon(Icons.Outlined.Edit, contentDescription = "New Chat", tint = c.onAccent)
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_pencil), contentDescription = "New Chat", tint = c.onAccent)
                     }
                 }
             }
@@ -587,10 +552,10 @@ fun ChatListScreen(
                 shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { when {
                     query.isNotBlank() -> Centered(null, "No results", null)
                     showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
-                    filter == FILTER_UNREAD -> Centered(Icons.Outlined.CheckCircle, "No unread chats", "You're all caught up.")
+                    filter == FILTER_UNREAD -> Centered(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), "No unread chats", "You're all caught up.")
                     filter == FILTER_GROUPS -> Centered(fi(R.drawable.ic_gs_group_type), "No groups yet", "Groups you join will appear here.",
                         "New Group" to people.newGroup)
-                    filter == FILTER_CHANNELS -> Centered(Icons.Outlined.Campaign, "No channels yet", "Channels you follow or run will appear here.",
+                    filter == FILTER_CHANNELS -> Centered(ImageVector.vectorResource(R.drawable.ic_channel_megaphone), "No channels yet", "Channels you follow or run will appear here.",
                         "Find Channels" to channels.find)
                     else -> Centered(fi(R.drawable.ic_chat), "No chats yet", "Find a friend by username to start talking.")
                 } }
@@ -799,7 +764,7 @@ fun ChatListScreen(
                 .clickable(onClickLabel = "Find Channels", onClick = channels.find)
                 .semantics { contentDescription = "Find Channels" },
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Explore, contentDescription = null, tint = c.onAccent, modifier = Modifier.size(24.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_compass), contentDescription = null, tint = c.onAccent, modifier = Modifier.size(24.dp))
             }
         }
         }
@@ -879,12 +844,12 @@ private fun SelectionBar(
     val c = Fariin.colors
     TopAppBar(
         title = { Text("$count", style = MaterialTheme.typography.titleLarge) },
-        navigationIcon = { FloatingIcon(Icons.Filled.Close, contentDescription = "Cancel", onClick = onClose, modifier = Modifier.padding(start = 12.dp, end = 4.dp)) },
+        navigationIcon = { FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Cancel", onClick = onClose, modifier = Modifier.padding(start = 12.dp, end = 4.dp)) },
         actions = {
           // The actions share one floating capsule, as the chat screen's call buttons do.
           Row(Modifier.padding(end = 12.dp).floating(CircleShape).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             if (!archive) IconButton(onClick = onPin) {
-                Icon(if (allPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, contentDescription = if (allPinned) "Unpin" else "Pin")
+                Icon(if (allPinned) ImageVector.vectorResource(R.drawable.ic_sf_pin_fill) else ImageVector.vectorResource(R.drawable.ic_sf_pin), contentDescription = if (allPinned) "Unpin" else "Pin")
             }
             Box {
                 IconButton(onClick = { if (allMuted) onUnmute() else muteOpen = true }) {
@@ -893,20 +858,20 @@ private fun SelectionBar(
                 MuteForMenu(muteOpen, onDismiss = { muteOpen = false }, onPick = onMuteFor)
             }
             IconButton(onClick = onArchive) {
-                Icon(if (archive) Icons.Outlined.Unarchive else fi(R.drawable.ic_archive), contentDescription = if (archive) "Unarchive" else "Archive")
+                Icon(if (archive) ImageVector.vectorResource(R.drawable.ic_sf_archivebox_up) else fi(R.drawable.ic_archive), contentDescription = if (archive) "Unarchive" else "Archive")
             }
-            IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = "Delete") }
+            IconButton(onClick = onDelete) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = "Delete") }
             Box {
-                IconButton(onClick = { more = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                IconButton(onClick = { more = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More") }
                 DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                     DropdownMenuItem(text = { Text(if (allUnread) "Mark as Read" else "Mark as Unread") },
                         leadingIcon = { Icon(if (allUnread) fi(R.drawable.ic_menu_read) else fi(R.drawable.ic_menu_unread), null) },
                         onClick = { more = false; onReadToggle() })
-                    DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) },
+                    DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), null) },
                         onClick = { more = false; onSelectAll() })
                     // One chat picked: straight to its info page.
                     single?.let { s ->
-                        DropdownMenuItem(text = { Text(s.infoLabel) }, leadingIcon = { Icon(Icons.Outlined.Info, null) },
+                        DropdownMenuItem(text = { Text(s.infoLabel) }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_info_circle), null) },
                             onClick = { more = false; s.onInfo() })
                     }
                 }
@@ -946,7 +911,7 @@ internal fun SearchCapsule(hiddenPx: () -> Float, prompt: String = "Search", onO
             contentAlignment = Alignment.CenterStart,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Search, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(prompt, fontSize = 17.sp, color = c.secondary, maxLines = 1)
             }
@@ -976,20 +941,20 @@ private fun OverflowMenu(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { open = true }, modifier = Modifier.padding(end = 12.dp))
+        FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, modifier = Modifier.padding(end = 12.dp))
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             val item: @Composable (String, ImageVector, Boolean, () -> Unit) -> Unit = { text, icon, checked, onClick ->
                 DropdownMenuItem(
                     text = { Text(text) },
                     leadingIcon = { Icon(icon, null) },
-                    trailingIcon = if (checked) ({ Icon(Icons.Filled.Check, contentDescription = "Selected") }) else null,
+                    trailingIcon = if (checked) ({ Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected") }) else null,
                     onClick = { open = false; onClick() },
                 )
             }
             item("All", fi(R.drawable.ic_menu_read), filter == FILTER_ALL) { onFilter(FILTER_ALL) }
             item("Unread", fi(R.drawable.ic_menu_unread), filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) }
             item("Groups", fi(R.drawable.ic_gs_group_type), filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) }
-            item("Channels", Icons.Outlined.Campaign, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) }
+            item("Channels", ImageVector.vectorResource(R.drawable.ic_channel_megaphone), filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) }
             HorizontalDivider()
             // iOS shows the entry whenever requests are switched on, not only with one waiting. This app
             // has no admin switch for them (always on), so the entry is always here; the count only when > 0.
@@ -999,7 +964,7 @@ private fun OverflowMenu(
             // New Group / New Channel / Find Channels live under the pen, Settings is a tab: the menu
             // keeps iOS's own set (owner 2026-11-03, "a lot of things in there").
             HorizontalDivider()
-            item("Mark All Read", Icons.Outlined.CheckCircle, false, onMarkAllRead)
+            item("Mark All Read", ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), false, onMarkAllRead)
         }
     }
 }
@@ -1220,7 +1185,7 @@ fun ChatRow(
                     Modifier.align(Alignment.BottomEnd).size(22.dp).clip(CircleShape).background(c.bg).padding(2.dp)
                         .clip(CircleShape).background(c.blue),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(14.dp)) }
+                ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(14.dp)) }
             }
         }
         Spacer(Modifier.width(16.dp))
@@ -1257,17 +1222,17 @@ fun ChatRow(
                     modifier = Modifier.padding(top = 1.dp),
                 ) {
                     if (conv.isPinned(me) && unread == 0) {
-                        Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = c.tertiary, modifier = Modifier.size(16.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_pin_fill), contentDescription = "Pinned", tint = c.tertiary, modifier = Modifier.size(16.dp))
                     }
                     // Never beside a call: it is a record, not a message with a sent / read state (iOS).
                     if (conv.lastIsMine(me) && !conv.isChannel && !ChatList.lastIsCall(conv)) Ticks(conv, me)
                     // Someone reacted to my message: one grey heart, never the emoji itself (iOS).
                     if (preview.heart) {
-                        Icon(Icons.Filled.Favorite, contentDescription = "Reaction", tint = c.secondary, modifier = Modifier.size(15.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), contentDescription = "Reaction", tint = c.secondary, modifier = Modifier.size(15.dp))
                     }
                     if (conv.hasUnreadReply(me)) {
                         Box(Modifier.size(20.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Someone replied to you",
+                            Icon(ImageVector.vectorResource(R.drawable.ic_menu_reply), contentDescription = "Someone replied to you",
                                 tint = c.onAccent, modifier = Modifier.size(12.dp))
                         }
                     }
@@ -1296,7 +1261,7 @@ private fun Ticks(conv: Conversation, me: String) {
     val c = Fariin.colors
     if (ChatListRules.lastSendPending(conv, me) { com.fariin.app.local.SendQueue.pending(me, conv.id).isNotEmpty() }) {
         // Still on this phone (sent offline): the clock, as the chat's own bubble shows.
-        Icon(Icons.Filled.Schedule, contentDescription = "Sending", tint = c.secondary, modifier = Modifier.size(15.dp))
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), contentDescription = "Sending", tint = c.secondary, modifier = Modifier.size(15.dp))
         return
     }
     val read = conv.lastReadByOther(me)
