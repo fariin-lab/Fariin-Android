@@ -85,8 +85,10 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     val grow = remember { Animatable(0f) }
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(open) {
-        if (open) { shown = true; grow.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 420f)) }
-        else if (shown) { grow.animateTo(0f, tween(200)); shown = false }
+        // Out of the button on a soft spring, and back into it the same way (owner: the way it
+        // goes back must be seen), not a quick fade.
+        if (open) { shown = true; grow.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 240f)) }
+        else if (shown) { grow.animateTo(0f, spring(dampingRatio = 1f, stiffness = 320f, visibilityThreshold = 0.01f)); shown = false }
     }
     if (!shown) return
     BackHandler { onDismiss() }
@@ -112,9 +114,10 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         val shape = RoundedCornerShape(28.dp)
         val glassMod = if (backdrop != null) Modifier.drawBackdrop(
             backdrop = backdrop, shape = { shape },
-            effects = { vibrancy(); blur(14.dp.toPx()); lens(14.dp.toPx(), 28.dp.toPx()) },
+            effects = { vibrancy(); blur(24.dp.toPx()); lens(14.dp.toPx(), 28.dp.toPx()) },
             shadow = null, highlight = null,
-            onDrawSurface = { drawRect((if (c.dark) c.card else Color.White).copy(alpha = if (c.dark) 0.62f else 0.66f)) },
+            // Thick frost (owner: rows under it showed through, "On >" read in the menu).
+            onDrawSurface = { drawRect((if (c.dark) c.card else Color.White).copy(alpha = if (c.dark) 0.88f else 0.9f)) },
         ) else Modifier.background((if (c.dark) c.card else Color(0xFFF7F7F9)).copy(alpha = 0.97f), shape)
         Column(
             Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }
@@ -129,7 +132,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     translationY = cy0 * (1f - k)
                     scaleX = (sx + (1f - sx) * k) * (1f + 0.025f * lean.value)
                     scaleY = (sy + (1f - sy) * k) * (1f - 0.015f * lean.value)
-                    alpha = (k * 3f).coerceIn(0f, 1f)
+                    alpha = (k * 6f).coerceIn(0f, 1f)   // only the last bit of the fold fades
                     transformOrigin = TransformOrigin.Center
                     shadowElevation = 18.dp.toPx() * k
                     this.shape = shape; clip = true

@@ -58,6 +58,8 @@ fun GlassBarPage(
     enabled: Boolean = true,
     /** The bar is frosted: the rows show blurred through it (its own background must be clear). */
     frosted: Boolean = false,
+    /** No bar at all: the buttons float over the page (iOS info pages). */
+    clear: Boolean = false,
     bar: @Composable () -> Unit,
     content: @Composable (top: Dp) -> Unit,
 ) {
@@ -88,7 +90,7 @@ fun GlassBarPage(
             // The glass must see what the eye sees: the bar's solid page colour and its fade, not the
             // rows hidden under them (the back circle showed ghost letters from under the bar,
             // Pixel 2026-11-06).
-            if (!frosted) Box(Modifier.fillMaxWidth().align(Alignment.TopCenter).height(with(density) { barPx.toDp() }).background(page))
+            if (!frosted && !clear) Box(Modifier.fillMaxWidth().align(Alignment.TopCenter).height(with(density) { barPx.toDp() }).background(page))
         }
         Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
             Box(Modifier.fillMaxWidth().then(if (frosted) Modifier.frostedTopBar(haze, page, true) else Modifier)
@@ -99,7 +101,7 @@ fun GlassBarPage(
                     LocalGlassFrost provides frost,
                     LocalGlassBar provides true,
                     LocalGlassBlur provides frosted,
-                    LocalFrostedBar provides frosted,
+                    LocalFrostedBar provides (frosted || clear),
                 ) { bar() }
             }
             // No line under the bar (owner 2026-11-08).

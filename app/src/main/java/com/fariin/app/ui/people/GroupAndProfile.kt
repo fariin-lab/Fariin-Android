@@ -880,7 +880,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
     val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
-    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), frosted = true, bar = {
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), clear = true, bar = {
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever

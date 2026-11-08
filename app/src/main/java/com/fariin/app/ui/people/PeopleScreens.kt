@@ -550,7 +550,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
     val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
-    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), frosted = true, bar = {
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), clear = true, bar = {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
             // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
