@@ -90,6 +90,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -1079,6 +1081,9 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 EndCircle("End call", 56.dp, onLeave)
             }
         }
+        // iOS GroupCallRaisedHandsPill: under the header while any hand is up.
+        if (!pip && g.hands.isNotEmpty()) RaisedHandsPill(g, meId, onTap = { people = true }, onLower = { onHand(false) },
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp))
         // iOS GroupCallSocialViews: reactions rise at the lower left with the sender's name, 4 s each.
         Column(Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 16.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1243,6 +1248,51 @@ private fun SharingCard(onStop: () -> Unit, onTap: () -> Unit, modifier: Modifie
                 Text("Stop Sharing", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+    }
+}
+
+/**
+ * iOS GroupCallRaisedHandsPill: the hand and a count ("3", "You +2"); the first hand opens it to say
+ * who ("Ana +1 raised a hand", "Your hand is raised", with Lower for mine), then it folds after 4 s.
+ * A tap on the folded pill opens it; on the open one, the people list.
+ */
+@Composable
+private fun RaisedHandsPill(g: GroupCallUi, meId: String?, onTap: () -> Unit, onLower: () -> Unit, modifier: Modifier = Modifier) {
+    val hands = g.hands
+    val mine = meId != null && meId in hands
+    var expanded by remember { mutableStateOf(false) }
+    var openedAt by remember { mutableStateOf(0L) }
+    fun expand() { expanded = true; openedAt = System.nanoTime() }
+    var before by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(hands) {
+        if (hands.isEmpty()) expanded = false
+        else if (before.isEmpty()) expand()
+        else if (expanded) openedAt = System.nanoTime()   // still changing while open: stays open longer
+        before = hands
+    }
+    LaunchedEffect(mine) { if (mine) expand() }
+    LaunchedEffect(expanded, openedAt) { if (expanded) { kotlinx.coroutines.delay(4_000); expanded = false } }
+    val others = (hands.size - 1).coerceAtLeast(0)
+    val first = g.members.firstOrNull { it.id == hands.firstOrNull() }?.name?.trim()?.substringBefore(' ')?.ifEmpty { null } ?: "Someone"
+    val text = if (expanded) {
+        if (mine) (if (others > 0) "You +$others raised a hand" else "Your hand is raised")
+        else (if (others > 0) "$first +$others raised a hand" else "$first raised a hand")
+    } else if (mine) (if (hands.size > 1) "You +${hands.size - 1}" else "You") else "${hands.size}"
+    val corner by animateDpAsState(if (expanded) 10.dp else 24.dp, spring(dampingRatio = 1f, stiffness = 439f), label = "pillCorner")
+    val shape = RoundedCornerShape(corner)
+    Row(modifier.padding(horizontal = 16.dp).then(if (expanded) Modifier.widthIn(max = 512.dp).fillMaxWidth() else Modifier)
+        .clip(shape).background(Color(0xFF1C1C1E).copy(alpha = 0.85f)).animateContentSize(spring(dampingRatio = 1f, stiffness = 439f)),
+        verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.then(if (expanded) Modifier.weight(1f) else Modifier).clickable { if (expanded) onTap() else expand() }
+            .padding(horizontal = if (expanded) 12.dp else 16.dp, vertical = 12.dp)
+            .semantics { contentDescription = text }, verticalAlignment = Alignment.CenterVertically) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_hand_raised_fill), null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(text, color = Color.White, fontSize = 15.sp, maxLines = if (expanded) 3 else 1)
+        }
+        if (expanded && mine) Text("Lower", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.heightIn(min = 44.dp).clickable(onClick = onLower).padding(start = 8.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
+                .semantics { contentDescription = "Lower hand" })
     }
 }
 
