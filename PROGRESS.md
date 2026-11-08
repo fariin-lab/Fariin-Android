@@ -1236,3 +1236,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-07 night: Calls' New Call moved to a floating bottom-end button (owner, reference app). Chat
   open: preloader retries (chat close, launch hold, slot free, foreground), top 20; stale saved rows held
   up to 1.5 s on open (shared rule with iOS, 2 s slack).
+- 2026-11-07 night: select mode: swipe scrolls (the bubble cover ate drags and ticked rows: "7 messages"
+  for 3 picks), top and bottom bars restyled with our floating build and menu icons.
