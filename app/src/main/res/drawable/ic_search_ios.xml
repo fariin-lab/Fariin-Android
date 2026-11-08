@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Search, our own drawing in the iOS outline style (the iOS "magnifying glass" place): a ring and a
+     short round-capped handle. Owner 2026-11-08: iOS icons only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M10.6,3.9C14.3,3.9 17.3,6.9 17.3,10.6C17.3,14.3 14.3,17.3 10.6,17.3C6.9,17.3 3.9,14.3 3.9,10.6C3.9,6.9 6.9,3.9 10.6,3.9Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.8" android:fillColor="#00000000" />
+    <path android:pathData="M15.5,15.5L20.2,20.2"
+        android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:fillColor="#00000000" />
+</vector>

@@ -424,19 +424,17 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
 private fun ActionCircle(a: Action, label: String, dimmed: Boolean, modifier: Modifier, onClick: () -> Unit) {
     // The owner's own drawings where iOS uses them ("ic_channel_leave", the bells); the SF Symbols
     // (plus, square.and.arrow.up, magnifyingglass) as the matching outline icons.
+    // iOS icons only (owner 2026-11-08): our iOS drawings, or our own in their style.
     val own = when (a) {
         Action.LEAVE -> com.fariin.app.R.drawable.ic_channel_leave
         Action.MUTE -> com.fariin.app.R.drawable.ic_bell_off
         Action.UNMUTE -> com.fariin.app.R.drawable.ic_bell
-        else -> null
+        Action.FOLLOW -> com.fariin.app.R.drawable.ic_plus_ios
+        Action.SHARE -> com.fariin.app.R.drawable.ic_link_share
+        Action.MORE -> com.fariin.app.R.drawable.ic_more_ios
+        Action.SEARCH -> com.fariin.app.R.drawable.ic_search_ios
     }
-    if (own != null) GlassActionCircle(label, androidx.compose.ui.res.painterResource(own), modifier, dimmed = dimmed, onClick = onClick)
-    else GlassActionCircle(label, when (a) {
-        Action.FOLLOW -> Icons.Filled.Add
-        Action.SHARE -> Icons.Outlined.IosShare
-        Action.MORE -> Icons.Filled.MoreHoriz
-        else -> Icons.Outlined.Search
-    }, modifier, dimmed = dimmed, onClick = onClick)
+    GlassActionCircle(label, androidx.compose.ui.res.painterResource(own), modifier, dimmed = dimmed, onClick = onClick)
 }
 
 @Composable
