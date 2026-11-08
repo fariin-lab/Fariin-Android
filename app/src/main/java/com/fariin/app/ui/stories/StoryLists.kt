@@ -639,7 +639,8 @@ fun ShareStoryAudiencePage(
     // GROUP STORY (iOS pickedGroup / groupPicking): picked in Groups & Channels from + New, the
     // sheet becomes the group's last sheet (iOS groupBody) with its own two switches.
     var groupPicking by remember { mutableStateOf(false) }
-    var pickedGroup by remember { mutableStateOf<com.fariin.app.data.GroupStoryTarget?>(null) }
+    // Opened from a group's page (Add Story there): that group is already the audience.
+    var pickedGroup by remember { mutableStateOf(if (editing == null) com.fariin.app.data.GroupStoryCompose.preset else null) }
     var groupReplies by remember { mutableStateOf(true) }
     // A ticked list deleted elsewhere drops out; the last one gone falls back to My Chats.
     val liveTicked = ticked.filter { id -> custom.any { it.id == id } }.toSet()

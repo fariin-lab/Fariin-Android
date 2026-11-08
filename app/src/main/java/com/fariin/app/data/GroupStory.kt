@@ -35,6 +35,12 @@ data class GroupStoryPost(val target: GroupStoryTarget, val allowsReplies: Boole
 object GroupStoryCompose {
     @Volatile var pending: GroupStoryPost? = null
 
+    /**
+     * The group page's Add Story button (iOS GroupStoryCompose.open): the camera opens with this group
+     * already the last sheet's audience. Cleared when that camera and editor close.
+     */
+    @Volatile var preset: GroupStoryTarget? = null
+
     /** Runs [post] with [group] handed over, and clears it again whatever happens. */
     inline fun <T> during(group: GroupStoryPost?, post: () -> T): T {
         pending = group
@@ -61,6 +67,27 @@ object GroupStoryRights {
         val size = if (channel) (d["followerCount"] as? Number)?.toInt() ?: 0 else team.users.size
         if (size < minMembers && !appAdmin && !open) return false
         return team.can(me, GroupAdmins.Right.POST_STORIES)
+    }
+
+    /** The page button: [bigEnough] false = the tap explains when stories open ([need], [have]). */
+    data class ButtonState(val target: GroupStoryTarget, val bigEnough: Boolean, val need: Int, val have: Int)
+
+    /**
+     * iOS hasRight / bigEnough for the Add Story button on a group's page: null = no button (not a
+     * group I run with the Add story right). Read from the group's own document, as the rules read it.
+     */
+    suspend fun buttonState(me: String, cid: String): ButtonState? {
+        if (me.isEmpty() || cid.isEmpty()) return null
+        val db = FirebaseFirestore.getInstance()
+        val d = runCatching { db.collection("conversations").document(cid).get().await().data }.getOrNull() ?: return null
+        if (d["type"] != "group") return null
+        val team = GroupAdmins.Team.from(d)
+        if (me !in team.users || team.closed || !team.can(me, GroupAdmins.Right.POST_STORIES)) return null
+        val channel = d["channel"] == true
+        val size = if (channel) (d["followerCount"] as? Number)?.toInt() ?: 0 else team.users.size
+        val g = gate(db, me)
+        val target = GroupStoryTarget(cid, (d["title"] as? String).orEmpty(), (d["avatarUrl"] as? String)?.ifEmpty { null }, size, channel)
+        return ButtonState(target, size >= g.minMembers || g.appAdmin || g.open, g.minMembers, size)
     }
 
     /** iOS GroupStoryRow's grey line: "1 member" / "N members", a channel "1 follower" / "N followers". */

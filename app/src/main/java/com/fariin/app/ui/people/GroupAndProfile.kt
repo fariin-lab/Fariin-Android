@@ -893,9 +893,13 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
         // may change its info: back to the chat, which opens its picker. Save to Photos waits for auto-save.
         // iOS (owner's screenshots 2026-11-08): no title in the bar, only Edit; the menu is the More circle.
-        PageBar("", onBack = onBack, action = if (canEdit) ({
-            Row(verticalAlignment = Alignment.CenterVertically) { TextAction("Edit", enabled = true) { editing = true } }
-        }) else null)
+        // iOS: the Add Story mark (owner, admins with the right), then Edit.
+        PageBar("", onBack = onBack, action = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.fariin.app.ui.stories.GroupStoryButton(me, cid, onLeave = onBack)
+                if (canEdit) TextAction("Edit", enabled = true) { editing = true }
+            }
+        })
     }) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.

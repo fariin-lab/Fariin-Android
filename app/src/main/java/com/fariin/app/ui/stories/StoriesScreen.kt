@@ -204,6 +204,14 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         if (addRequest < AddRequests.handled) AddRequests.handled = addRequest
         if (addRequest > AddRequests.handled) { AddRequests.handled = addRequest; addStory() }
     }
+    // A group page's Add Story preset lasts while its camera and editor are open, then goes.
+    LaunchedEffect(Unit) {
+        var wasOpen = false
+        androidx.compose.runtime.snapshotFlow { camera || post.isNotEmpty() || composingText }.collect { open ->
+            if (wasOpen && !open) com.fariin.app.data.GroupStoryCompose.preset = null
+            wasOpen = open
+        }
+    }
     LaunchedEffect(pickError) { if (pickError != null) { delay(3000); pickError = null } }
     // "Xm ago" moves once a minute.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
