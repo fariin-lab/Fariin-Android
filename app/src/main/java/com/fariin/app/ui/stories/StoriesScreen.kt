@@ -143,14 +143,16 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var viewing by remember { mutableStateOf<Pair<List<StoryGroup>, Int>?>(null) }
     // Posted Stories' tile the open story flies out of and back into (null: the ring's own card).
     var viewingOrigin by remember { mutableStateOf<StoryOrigin?>(null) }
-    var composing by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
+    // SEVERAL IN ONE POST (iOS StoryEditorView items: the editor's + ticks up to five, the strip
+    // moves between them, Post shares each as its own story). ONE editor holds the whole post; an
+    // item's uri is its library photo (null = a camera capture or a text story), so the + shows it
+    // ticked. [postId] gives each new post a fresh editor.
+    val post = remember { androidx.compose.runtime.mutableStateListOf<StoryItemState>() }
+    var postId by remember { mutableIntStateOf(0) }
     var composingText by remember { mutableStateOf(false) }
-    // SEVERAL IN ONE POST (iOS: the editor's + ticks up to five; Post shares each as its own story).
-    // The editor holds one item, so the rest wait here in tap order and open one after another, each
-    // posted as its own story. [composingUri] is the open item's library photo (null = a camera
-    // capture or a text story), so the + shows it ticked and the five stay the post's.
-    var composingUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    var queue by remember { mutableStateOf<List<Pair<android.net.Uri, StoryMedia.Prepared>>>(emptyList()) }
+    fun openPost(uri: android.net.Uri?, m: StoryMedia.Prepared) {
+        post.clear(); post.add(StoryItemState(m, uri)); postId++
+    }
     var addMore by remember { mutableStateOf(false) }
     var pickError by remember { mutableStateOf<String?>(null) }
     // iOS "That video is too long" (past the 10-minute pick) and "That's today's limit".
@@ -173,10 +175,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             scope.launch {
                 prepareStoryMedia(context, uri)
                     .onSuccess {
-                        composingUri = uri; queue = emptyList(); pickError = null
+                        pickError = null
                         // From its tile when the tile is on screen; the editor opens as it lands.
                         if (StoryLibraryTiles.has(uri) && com.fariin.app.ui.components.Motion.on) libraryFlight = LibraryFlight(uri, it)
-                        else composing = it
+                        else openPost(uri, it)
                     }
                     .onFailure { if (it is StoryMedia.TooLong) tooLong = true else pickError = it.message ?: "Couldn't open this file." }
                 libraryBusy = false
@@ -272,8 +274,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // whole tab went.
     LaunchedEffect(active) {
         if (!active) {
-            viewing = null; camera = false; library = false; composing = null; composingText = false; posted = false; tooLong = false; dayLimit = false
-            composingUri = null; queue = emptyList(); addMore = false; libraryFlight = null
+            viewing = null; camera = false; library = false; post.clear(); composingText = false; posted = false; tooLong = false; dayLimit = false
+            addMore = false; libraryFlight = null
             privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
         }
     }
@@ -457,15 +459,15 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     if (camera) {
         // A capture goes through the same prepare and composer as a picked item.
         StoryCameraDialog(
-            active = composing == null && !library, error = pickError,
+            active = post.isEmpty() && !library, error = pickError,
             onCaptured = { uri ->
                 scope.launch {
                     prepareStoryMedia(context, uri)
-                        .onSuccess { composing = it; composingUri = null; queue = emptyList(); pickError = null }
+                        .onSuccess { openPost(null, it); pickError = null }
                         .onFailure { pickError = it.message ?: "Couldn't open this file." }
                 }
             },
-            onTextStory = { m -> composingText = true; composing = m; composingUri = null; queue = emptyList() },
+            onTextStory = { m -> composingText = true; openPost(null, m) },
             onLibrary = openLibrary, onClose = { camera = false },
         )
     }
@@ -567,43 +569,33 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     )
     if (library) StoryLibrarySheet(busy = libraryBusy, onPick = pickFromLibrary, onClose = { library = false })
     libraryFlight?.let { f ->
-        StoryLibraryFlightLayer(f, onLanded = { if (library) composing = f.media }, onDone = { libraryFlight = null })
+        StoryLibraryFlightLayer(f, onLanded = { if (library) openPost(f.uri, f.media) }, onDone = { libraryFlight = null })
     }
-    // The next waiting item takes the editor; none left = the editor goes.
-    fun openNext(): Boolean {
-        val next = queue.firstOrNull() ?: return false
-        queue = queue.drop(1)
-        composingUri = next.first
-        composing = next.second
-        return true
-    }
-    composing?.let { m ->
-        // A fresh editor for each item: its caption, edits and crop belong to that one picture.
-        androidx.compose.runtime.key(m) {
-            val more = queue.isNotEmpty()
-            StoryComposerDialog(me, m, conversations,
-                // Closing the editor drops the whole post, the waiting items too (iOS: one editor, one post).
-                onClose = { composing = null; composingText = false; composingUri = null; queue = emptyList() },
-                onPosted = {
-                    if (!openNext()) { composing = null; composingText = false; composingUri = null; camera = false; library = false }
-                },
+    if (post.isNotEmpty()) {
+        // One editor for the whole post; a new post is a fresh one.
+        androidx.compose.runtime.key(postId) {
+            StoryComposerDialog(me, post, conversations,
+                // Closing the editor drops the whole post (iOS: one editor, one post).
+                onClose = { post.clear(); composingText = false },
+                onPosted = { post.clear(); composingText = false; camera = false; library = false },
                 textStory = composingText,
-                // Only the last one flies home: the camera and the library stay for the items still to come.
-                flyHome = !more, onFlightStart = { camera = false; library = false; StoryAppShrink.play() },
+                // Every item posts at once, so the one on the card flies home.
+                flyHome = true, onFlightStart = { camera = false; library = false; StoryAppShrink.play() },
                 onAddMore = if (composingText) null else ({ addMore = true }))
         }
     }
     // The editor's + (iOS StoryLibraryPicker allowsMultiple from the editor), over the editor.
     if (addMore) StoryLibrarySheet(busy = false, onPick = {}, onClose = { addMore = false },
         multi = StoryLibraryMulti(
-            preselected = listOfNotNull(composingUri) + queue.map { it.first },
-            reserved = if (composingUri == null && composing != null) 1 else 0,
+            preselected = post.mapNotNull { it.uri },
+            reserved = post.count { it.uri == null },
             onApply = { removed, added ->
+                // Into the same editor's items (iOS applyPickerChange): untick takes one out, a new tick
+                // goes on the end; the editor goes if nothing is left.
                 val off = removed.toSet()
-                queue = queue.filter { it.first !in off } + added
-                // The open item taken off: the next one takes the editor, or the editor goes.
-                val cur = composingUri
-                if (cur != null && cur in off && !openNext()) { composing = null; composingUri = null }
+                post.removeAll { it.uri != null && it.uri in off }
+                added.forEach { (u, m) -> post.add(StoryItemState(m, u)) }
+                if (post.isEmpty()) composingText = false
             },
         ))
 }
