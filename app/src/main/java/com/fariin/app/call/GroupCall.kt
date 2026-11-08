@@ -657,7 +657,9 @@ object GroupCall {
         }
         val mine = r.localParticipant.getTrackPublication(Track.Source.SCREEN_SHARE)
         val sharing = mine?.track != null && mine.muted != true
-        members.filter { !it.local && it.id.isNotEmpty() && it.id !in faces && it.id !in asked }.forEach { loadFace(it.id) }
+        // Anyone with no photo from the group's lists, me included (owner 2026-11-08: a tile showed the
+        // grey person in a screen-share call): their own profile's photo, read once per person.
+        members.filter { it.id.isNotEmpty() && it.id !in asked && faces[it.id]?.second == null }.forEach { loadFace(it.id) }
         _ui.value = _ui.value.copy(members = members, calling = ringing, sharing = sharing)
         tickSpeaker()
     }
@@ -683,7 +685,9 @@ object GroupCall {
             if (_ui.value.cid != cid) return@addSnapshotListener
             val names = (d["names"] as? Map<*, *>).orEmpty()
             val photos = (d["photos"] as? Map<*, *>).orEmpty()
-            faces = (names.keys + photos.keys).mapNotNull { it as? String }.associateWith { u -> names[u] as? String to photos[u] as? String }
+            val fresh = (names.keys + photos.keys).mapNotNull { it as? String }.associateWith { u -> names[u] as? String to (photos[u] as? String)?.takeIf { it.isNotEmpty() } }
+            // A photo read from someone's own profile (loadFace) stays when the group still has none.
+            faces = fresh.mapValues { (u, v) -> if (v.second == null) v.first to faces[u]?.second else v } + faces.filterKeys { it !in fresh }
             val t = GroupAdmins.Team.from(d)
             team = t
             val people = t.users.map { u -> CallPerson(u, (names[u] as? String)?.takeIf { it.isNotEmpty() } ?: "Member", (photos[u] as? String)?.takeIf { it.isNotEmpty() }) }
@@ -704,7 +708,8 @@ object GroupCall {
         asked += uid
         scope.launch {
             val d = try { db.collection("users").document(uid).get().await().data } catch (_: Exception) { null } ?: return@launch
-            faces = faces + (uid to ((d["name"] as? String) to (d["photoUrl"] as? String)?.takeIf { it.isNotEmpty() }))
+            // The group's name for them stays; only the missing photo is filled in.
+            faces = faces + (uid to ((faces[uid]?.first ?: d["name"] as? String) to (d["photoUrl"] as? String)?.takeIf { it.isNotEmpty() }))
             refresh()
         }
     }
