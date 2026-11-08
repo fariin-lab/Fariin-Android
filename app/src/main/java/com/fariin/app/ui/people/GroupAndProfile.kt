@@ -354,7 +354,10 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
 
 /** People I can add: the other person of each 1:1 chat I have (iOS NewGroupView lists contacts). */
 internal fun contactsFrom(chats: List<Conversation>, me: String): List<Person> =
-    chats.filter { !it.isGroup && (it.startedBy.isEmpty() || it.accepted) }.map {
+    // iOS NewGroupView contacts: every 1:1 chat of mine, a chat I started and they have not answered
+    // included (was left out); never a message request waiting for me, never one I cleared. The
+    // server still applies each person's "who can add me".
+    chats.filter { !it.isGroup && !it.isChannel && (it.accepted || it.startedBy.isEmpty() || it.startedBy == me) && !it.isCleared(me) }.map {
         val u = it.otherUid(me)
         Person(u, name = it.names[u] ?: "", photoUrl = it.photos[u])
     }.filter { it.uid.isNotEmpty() }.distinctBy { it.uid }
