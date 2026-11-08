@@ -1004,7 +1004,10 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     var announced by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(presenter) {
         val p = remotes.firstOrNull { it.id == presenter }
-        if (p != null && announced != p.id) { announced = p.id; GroupCall.say("${p.name.substringBefore(' ')} is sharing their screen") }
+        if (p != null && announced != p.id) {
+            announced = p.id; GroupCall.say("${p.name.substringBefore(' ')} is sharing their screen")
+            focus = null   // iOS updateMode: a share that starts clears my pin; the screen takes the stage
+        }
         if (p == null) announced = null
     }
     val chrome = rememberChrome(allowed)
@@ -1029,11 +1032,17 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 onConfirm = { tileConfirm = it })
             Box(Modifier.weight(1f).fillMaxWidth().plainTap { chrome.tap(allowed) }) {
                 if (!waitingScreen) androidx.compose.runtime.CompositionLocalProvider(LocalTileMenu provides tileMenu) {
-                    GroupStage(g.members, meId, g.activeSpeaker, focus ?: presenter, g.sharing, onTile = { id ->
-                        chrome.touch()
-                        // My own tile does nothing (iOS); a tap on the large one goes back.
-                        focus = if ((focus ?: presenter) == id || id == meId || (remotes.size < 2 && presenter == null)) null else id
-                    })
+                    GroupStage(g.members, meId, g.activeSpeaker, focus ?: presenter, g.sharing, pinned = focus,
+                        onTile = { id ->
+                            chrome.touch()
+                            // A strip tile goes large (pinned); my own tile does nothing (iOS).
+                            if (id != meId && (remotes.size >= 2 || presenter != null)) focus = id
+                        },
+                        // iOS GroupCallFocusView: a tap on the large tile shows or hides the controls,
+                        // a swipe down unpins it.
+                        onLargeTap = { chrome.tap(allowed) },
+                        onUnpin = { chrome.touch(); focus = null },
+                        onStopShare = { chrome.touch(); onShare() })
                 }
                 // iOS `notes`: who joined or left, and the call's short notes, under the header.
                 if (!pip) GroupCallNotes(g, Modifier.align(Alignment.TopCenter))
@@ -1126,7 +1135,9 @@ private fun <T> stageSpring() = spring<T>(dampingRatio = 1f, stiffness = 273f)
  * else. Every tile moves to its new frame on the one stage spring.
  */
 @Composable
-private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: String?, focus: String?, iAmSharing: Boolean, onTile: (String) -> Unit) {
+private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: String?, focus: String?, iAmSharing: Boolean,
+                       pinned: String? = null, onTile: (String) -> Unit, onLargeTap: () -> Unit = {}, onUnpin: () -> Unit = {},
+                       onStopShare: () -> Unit = {}) {
     val me = members.firstOrNull { it.id == meId }
     val remotes = members.filter { it.id != meId }
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -1135,7 +1146,14 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
         val big = remotes.firstOrNull { it.id == focus }
         when {
             remotes.isEmpty() -> if (me != null) MemberTile(me, true, false, Modifier.fillMaxSize(), alone = true, iAmSharing = iAmSharing) {}
-            big != null -> FocusStage(big, members.filter { it.id != big.id }, meId, speaker, iAmSharing, onTile)
+            // iOS GroupCallStagePager iAmSharing: the sharing card with Stop Sharing, everyone else under it.
+            iAmSharing -> Column(Modifier.fillMaxSize()) {
+                SharingCard(onStopShare, onLargeTap, Modifier.weight(1f).fillMaxWidth()
+                    .padding(start = com.fariin.app.call.GroupCallMetrics.INSET.dp, end = com.fariin.app.call.GroupCallMetrics.INSET.dp,
+                        top = com.fariin.app.call.GroupCallMetrics.INSET.dp))
+                Strip(remotes, meId, speaker, iAmSharing, onTile, Modifier)
+            }
+            big != null -> FocusStage(big, remotes, me, speaker, pinned == big.id, onTile, onLargeTap, onUnpin)
             else -> {
                 val full = com.fariin.app.call.GroupCallLayout.capacity(w, h)
                 val cells = if (remotes.size >= 2) members.size else remotes.size
@@ -1166,12 +1184,79 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
     }
 }
 
-/** One person large (iOS GroupCallFocusView) over the strip of everyone else, me among them. */
+/**
+ * One person large (iOS GroupCallFocusView) over the strip of everyone else. A tap on the large tile
+ * shows or hides the controls; a swipe down unpins it (only a pin; an auto-shown presenter stays).
+ * Top left: "Presenting" on a shared screen, the raised hand with the name, else "Pinned". A presenter's
+ * face stays in the strip (iOS: the screen is a tile of its own); I sit fixed at the strip's end.
+ */
 @Composable
-private fun FocusStage(big: GroupMember, others: List<GroupMember>, meId: String?, speaker: String?, iAmSharing: Boolean, onTile: (String) -> Unit) {
+private fun FocusStage(big: GroupMember, remotes: List<GroupMember>, me: GroupMember?, speaker: String?, isPinned: Boolean,
+                       onTile: (String) -> Unit, onLargeTap: () -> Unit, onUnpin: () -> Unit) {
+    val m = com.fariin.app.call.GroupCallMetrics
+    val presenting = big.screen != null
+    val stripPeople = remotes.filter { it.id != big.id || presenting }
+    val hands = LocalRaisedHands.current
     Column(Modifier.fillMaxSize()) {
-        MemberTile(big, false, big.id == speaker, Modifier.weight(1f).fillMaxWidth().padding(com.fariin.app.call.GroupCallMetrics.INSET.dp), large = true) { onTile(big.id) }
-        Strip(others, meId, speaker, iAmSharing, onTile, Modifier)
+        Box(Modifier.weight(1f).fillMaxWidth().padding(m.INSET.dp)
+            .pointerInput(isPinned) {
+                var dx = 0f
+                var dy = 0f
+                detectDragGestures(onDragStart = { dx = 0f; dy = 0f },
+                    onDragEnd = { if (isPinned && dy > 80.dp.toPx() && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.5f) onUnpin() }) { c, d ->
+                    c.consume(); dx += d.x; dy += d.y
+                }
+            }) {
+            MemberTile(big, false, big.id == speaker, Modifier.fillMaxSize(), large = true, onClick = onLargeTap)
+            val label = when {
+                presenting -> "Presenting"
+                big.id in hands -> null
+                isPinned -> "Pinned"
+                else -> null
+            }
+            if (label != null) Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(10.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 10.dp, vertical = 5.dp))
+            else if (big.id in hands) RaisedHandChip(big.name, Modifier.padding(10.dp))
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Strip(stripPeople, me?.id, speaker, false, onTile, Modifier.weight(1f))
+            if (me != null) MemberTile(me, true, false, Modifier.padding(end = m.STRIP_LEADING.dp, top = m.INSET.dp, bottom = m.STRIP_INSET.dp)
+                .size(m.STRIP_TILE.dp), strip = true) {}
+        }
+    }
+}
+
+/** iOS GroupCallSharingCard: what I see while my screen goes out, with Stop Sharing. */
+@Composable
+private fun SharingCard(onStop: () -> Unit, onTap: () -> Unit, modifier: Modifier) {
+    Box(modifier.clip(RoundedCornerShape(com.fariin.app.call.GroupCallMetrics.TILE_CORNER.dp)).background(Color(0xFF1F1F1F))
+        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onTap),
+        contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.padding(20.dp)) {
+            Icon(painterResource(R.drawable.ic_share_screen), null, tint = Color.White, modifier = Modifier.size(44.dp))
+            Text("You're sharing your screen", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            Row(Modifier.height(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).clickable(onClick = onStop)
+                .padding(horizontal = 22.dp).semantics { contentDescription = "Stop sharing screen" },
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Stop Sharing", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/** iOS CallRaisedHandChip: the hand in a white circle, with the name in a dark capsule when given. */
+@Composable
+private fun RaisedHandChip(name: String?, modifier: Modifier = Modifier) {
+    Row(modifier.clip(CircleShape).background(Color.Black.copy(alpha = if (name == null) 0f else 0.5f)), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_hand_raised_fill), "Hand raised", tint = Color.Black, modifier = Modifier.size(15.dp))
+        }
+        if (name != null) {
+            Spacer(Modifier.width(6.dp))
+            Text(name, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 10.dp))
+        }
     }
 }
 
@@ -1259,7 +1344,6 @@ private fun MemberTile(
             if (!strip && !pip && !alone && w >= 90) {
                 Row(Modifier.align(Alignment.BottomStart).padding(inset).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
                     .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (m.id in LocalRaisedHands.current) { Text("\u270B", fontSize = 12.sp); Spacer(Modifier.width(4.dp)) }
                     if (!m.micOn && !large) { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
                     Text(if (isMe) "You" else m.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1278,6 +1362,8 @@ private fun MemberTile(
                 if (w >= 150) Text("You're sharing your screen", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 10.dp))
             }
+            // iOS tile hand mark: the white circle at the top start (the large tile has its own chip).
+            if (m.id in LocalRaisedHands.current && !large && !(pip && w < 60)) RaisedHandChip(null, Modifier.align(Alignment.TopStart).padding(inset))
             if (m.poor && !(pip && w < 60)) {
                 Box(Modifier.align(if (large) Alignment.TopEnd else Alignment.TopStart).padding(inset).size(22.dp).clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
