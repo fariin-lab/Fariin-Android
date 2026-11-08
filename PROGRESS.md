@@ -1245,3 +1245,11 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   albums run to the rounded top (1296035); chat list top bar hides on scroll down / returns on scroll up,
   no blur band, soft 90% page colour (ac6f879). Story flow from the iOS session's builders landed via CI
   (515a1c8, Actions back after the repo went public); Pixel has ac6f879 (9096f29 waits for its CI run).
+- 2026-11-08 early: Group Info for everyone: member card for non-admins (2e7b154), Sounds & Notifications,
+  Storage Used size, "Created by" footer (90e1e8e), Bubble Styles switch on the info card (d5d98b5).
+  Channel info as iOS (1cd12fb, 6720ae0): size/None, Leave before Report, chain/bell icons, iOS date,
+  owner's "Add channel description...", All Media, "Created by you.", iOS megaphone placeholder.
+  Our own "Share with" sheet for group/channel links (191849f). Set nickname: phone Back -> profile.
+  Stories (9342c89): going back replays the story (stale clock threw you to the next person); My Story
+  leads into everyone else. Not device-tested (viewing others' stories sends real view receipts): owner to try.
+  Report flow (iOS session, 52138eb..685b7fe) built and on the Pixel.
