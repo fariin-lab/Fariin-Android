@@ -328,16 +328,25 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             item {
                 val mine = state.mine
                 val newest = mine?.stories?.lastOrNull()
+                // iOS uploadPhase: "Preparing…" for the phone's half, "Uploading…" once it is sending.
+                val sending by com.fariin.app.data.StoryOutbox.sending.collectAsState()
+                val phaseLine = if (sending) "Uploading…" else "Preparing…"
+                // A failed post still waiting on disk: the row says so and a tap sends it again, after
+                // the alert is gone too (the reconnect retry still runs by itself, MainShell).
+                val retryWaiting = remember(upload, mine?.stories?.size) {
+                    upload !is StoryUploads.State.Uploading && com.fariin.app.data.StoryOutbox.hasWaiting(context, me)
+                }
+                val retryNow = { StoryUploads.state.value = null; StoryUploads.retry(context, me, storyConvs(conversations)) }
                 val uploadLine = when (val u = upload) {
-                    StoryUploads.State.Uploading -> "Uploading…"
-                    is StoryUploads.State.Failed -> u.message
-                    null -> null
+                    StoryUploads.State.Uploading -> phaseLine
+                    is StoryUploads.State.Failed -> if (retryWaiting) com.fariin.app.data.StoryOutbox.RETRY_LINE else u.message
+                    null -> if (retryWaiting) com.fariin.app.data.StoryOutbox.RETRY_LINE else null
                 }
                 if (upload == StoryUploads.State.Uploading) {
                     // iOS: while it uploads, My Story shows the picture going up and the ring turns
                     // round my face; the post's flight lands on this card (StoryPostFlight).
                     StoryRow(
-                        thumbUrl = newest?.listThumb ?: "", title = "My Story", subtitle = "Uploading…",
+                        thumbUrl = newest?.listThumb ?: "", title = "My Story", subtitle = phaseLine,
                         authorPhoto = profile?.photoUrl, seen = true, camera = true,
                         thumbImage = pendingImage, uploading = true,
                         backThumbUrl = if (pendingImage != null) newest?.listThumb else mine?.stories?.let { it.getOrNull(it.size - 2) }?.listThumb,
@@ -351,13 +360,13 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                         seenFlags = com.fariin.app.data.StoryRings.seenFlags(mine),
                         backThumbUrl = mine.stories.getOrNull(mine.stories.size - 2)?.listThumb,
                         originKey = mine.key,
-                        onClick = { viewing = listOf(mine) to 0 }, onCamera = addStory, menu = myMenu,
+                        onClick = { if (retryWaiting) retryNow() else { viewing = listOf(mine) to 0 } }, onCamera = addStory, menu = myMenu,
                     )
                 } else {
                     StoryRow(
                         thumbUrl = "", title = "Add Story", subtitle = uploadLine ?: "Disappears after 24 hours",
                         authorPhoto = profile?.photoUrl, seen = true, camera = true, addBadge = true,
-                        onClick = addStory, onCamera = addStory, menu = myMenu,
+                        onClick = { if (retryWaiting) retryNow() else addStory() }, onCamera = addStory, menu = myMenu,
                     )
                 }
                 pickError?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp)) }

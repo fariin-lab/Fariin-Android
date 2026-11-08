@@ -176,6 +176,20 @@ class StoryService(
         group: GroupStoryPost? = null,
     ): String {
         if (me.isEmpty()) throw PostRefused("Not signed in.")
+        // The phone's half is over: My Story says "Uploading…" from here (iOS markSending).
+        StoryOutbox.sending.value = true
+        try {
+            return postNow(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hiddenFrom, lists, fixedId, group)
+        } finally {
+            StoryOutbox.sending.value = false
+        }
+    }
+
+    private suspend fun postNow(
+        media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>, hours: Int,
+        convs: List<Conversation>, captureSwitch: Boolean, myFriends: StoryListDoc, hiddenFrom: Set<String>,
+        lists: List<StoryListDoc>, fixedId: String?, group: GroupStoryPost?,
+    ): String {
         // A custom post names the people of its ticked lists (iOS postToLists: the union).
         val custom = group == null && choice == StoryAudienceChoice.CUSTOM
         val everyone = group == null && choice == StoryAudienceChoice.EVERYONE

@@ -19,6 +19,15 @@ import java.io.File
  */
 object StoryOutbox {
     private const val MAX_AGE_MS = 24L * 3600 * 1000
+    /** My Story's line while a failed post waits on disk: a tap on the row sends it again. */
+    const val RETRY_LINE = "Couldn't post. Tap to retry."
+
+    /**
+     * iOS uploadPhase: false is "Preparing…" (the phone's half: the copy to disk, a video's cut),
+     * true is "Uploading…" (the network half, from the moment the post itself starts).
+     * Set by [StoryService.post] for the length of the post.
+     */
+    val sending = kotlinx.coroutines.flow.MutableStateFlow(false)
     /** Posts running in this process: never picked up by [resume] while their own upload goes on. */
     private val active = java.util.Collections.synchronizedSet(HashSet<String>())
 
