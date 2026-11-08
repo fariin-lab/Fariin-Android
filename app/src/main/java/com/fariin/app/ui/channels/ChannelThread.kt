@@ -433,7 +433,9 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
         val capsule = RoundedCornerShape(25.dp)
         Box {
             Box(
-                Modifier.fillMaxWidth().height(50.dp).floating(capsule).clip(capsule)
+                // Follow is solid (iOS 033b30e70): black in light mode, white in dark; Mute stays clear glass.
+                Modifier.fillMaxWidth().height(50.dp)
+                    .then(if (!joined) Modifier.clip(capsule).background(c.label) else Modifier.floating(capsule).clip(capsule))
                     .combinedClickable(
                         onClick = {
                             if (!joined) { SimilarChannelsStore.followed(ch.info.cid); ch.onFollow() }
@@ -453,7 +455,7 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                                 tint = c.label, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                         }
-                        Text(t, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                        Text(t, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (t == "Follow") c.bg else c.label)
                     }
                 }
             }
