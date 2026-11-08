@@ -1318,3 +1318,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~3:40 PM: Group Settings Bubble Styles switch removed (2a033c27); Message Requests
   white frosted page (cd99459b). Checked and fine: Settings pages light + dark, group settings
   subpages, Archive, search + Recent, All Media, story viewers sheet, New Chat. main -> d972b045 (green).
+- 2026-11-08 ~3:55 PM: every pushed page frosted by default (147c3aa3; light + dark checked);
+  Edit Profile photo library = ours (from 630fba31, checked). Group read tick = slowest current
+  member on both apps (members added later hold it back): same on iOS, left as is.
