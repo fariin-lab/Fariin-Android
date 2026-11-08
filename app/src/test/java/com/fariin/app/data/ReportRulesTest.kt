@@ -96,4 +96,15 @@ class ReportRulesTest {
             "createdAt" to 1_700_000_000_000L, "status" to "open", "targetName" to "Amina"))))
         assertEquals("Account · Amina", MyReports.what(list.single()))
     }
+
+    @Test
+    fun requestSaysWhichApp() {
+        val base = ReportRules.request(ReportTarget(ReportKind.GROUP, cid = "g1"), ReportReason.SPAM, "", false)
+        val m = ReportRules.withApp(base, "1.4 (57)")
+        assertEquals("android", m["platform"])
+        assertEquals("1.4 (57)", m["appVersion"])
+        assertEquals("g1", m["cid"])
+        assertFalse(ReportRules.withApp(base, null).containsKey("appVersion"))
+        assertEquals("android", ReportRules.withApp(base, null)["platform"])
+    }
 }

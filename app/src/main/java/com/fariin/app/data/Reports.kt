@@ -182,6 +182,14 @@ object ReportRules {
         if (shareText && canShareText(t)) m["messageText"] = t.messageText!!.take(1000)
         return m
     }
+
+    /** Which app sent the report, for the admin panel: "android" plus "versionName (versionCode)". */
+    fun withApp(m: Map<String, Any>, appVersion: String?): Map<String, Any> {
+        val out = LinkedHashMap(m)
+        out["platform"] = "android"
+        if (!appVersion.isNullOrBlank()) out["appVersion"] = appVersion.take(40)
+        return out
+    }
 }
 
 /** The one network call of the report flow. */
@@ -197,7 +205,7 @@ object ReportSender {
         try {
             com.google.firebase.functions.FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
                 .getHttpsCallable("reportContent").withTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-                .call(ReportRules.request(t, reason, note, block, sub, shareText)).await()
+                .call(ReportRules.withApp(ReportRules.request(t, reason, note, block, sub, shareText), appVersion())).await()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -207,6 +215,13 @@ object ReportSender {
         if (block && !block(t)) com.fariin.app.ui.components.Snack.show("Reported, but couldn't block. Try again from their profile.")
         return null
     }
+
+    private fun appVersion(): String? = try {
+        val app = com.google.firebase.FirebaseApp.getInstance().applicationContext
+        val p = app.packageManager.getPackageInfo(app.packageName, 0)
+        com.fariin.app.device.DeviceRecord.appVersion(p.versionName,
+            androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(p))
+    } catch (_: Exception) { null }
 
     private fun people(): FirestorePeople? =
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { FirestorePeople(it, CryptoHub.crypto) }
