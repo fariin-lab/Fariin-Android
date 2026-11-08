@@ -260,7 +260,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     val pageScroll = rememberScrollState()
     val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        com.fariin.app.ui.components.GlassBarPage(underBar, modifier = if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier, clear = true, bar = {
+        com.fariin.app.ui.components.GlassBarPage(underBar, modifier = if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier, frosted = true, bar = {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             // The ••• menu holds Change Wallpaper for the same people (iOS Group Info's first menu
             // section): back to the chat, which opens the channel's shared picker for every follower.

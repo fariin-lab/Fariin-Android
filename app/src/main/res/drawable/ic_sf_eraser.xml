@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clear / erase, our own outline drawing in the iOS style (the iOS "eraser" place): a tilted eraser
+     with its band, on a short base line. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M8.6,19.5L4.4,15.3C3.7,14.6 3.7,13.5 4.4,12.8L12.8,4.4C13.5,3.7 14.6,3.7 15.3,4.4L19.6,8.7C20.3,9.4 20.3,10.5 19.6,11.2L11.3,19.5Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M8.1,9.1L14.9,15.9M11.3,19.5H19.8"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:fillColor="#00000000" />
+</vector>

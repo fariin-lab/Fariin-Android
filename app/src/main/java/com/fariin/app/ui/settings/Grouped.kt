@@ -60,8 +60,11 @@ internal val CardShape = RoundedCornerShape(24.dp)
 @Composable
 internal fun PageBar(title: String, onBack: (() -> Unit)?, action: (@Composable () -> Unit)? = null) {
     // On a frosted page the bar is clear: the page's frost is behind it (owner 2026-11-08).
-    Box(Modifier.fillMaxWidth().then(if (com.fariin.app.ui.components.LocalFrostedBar.current) Modifier else Modifier.background(Fariin.colors.bgSecondary)).statusBarsPadding()) {
-        com.fariin.app.ui.components.FariinTopBar(title, onBack = onBack, container = Fariin.colors.bgSecondary, actions = { if (action != null) action() })
+    val frosted = com.fariin.app.ui.components.LocalFrostedBar.current
+    Box(Modifier.fillMaxWidth().then(if (frosted) Modifier else Modifier.background(Fariin.colors.bgSecondary)).statusBarsPadding()) {
+        // Frosted page: the bar itself paints nothing (a solid grey band hid the rows, Pixel 2026-11-08).
+        com.fariin.app.ui.components.FariinTopBar(title, onBack = onBack,
+            container = if (frosted) androidx.compose.ui.graphics.Color.Transparent else Fariin.colors.bgSecondary, actions = { if (action != null) action() })
     }
 }
 

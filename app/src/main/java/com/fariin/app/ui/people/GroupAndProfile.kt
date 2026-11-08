@@ -642,6 +642,26 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var askLeave by remember { mutableStateOf(false) }
     var askEnd by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
+    var askClearAll by remember { mutableStateOf(false) }
+    var clearingAll by remember { mutableStateOf(false) }
+    if (askClearAll) PersonConfirmSheet((conv["avatarUrl"] as? String)?.ifEmpty { null }, conv["title"] as? String ?: "", "Clear all messages?",
+        "Every message in this group is deleted for you and all members. You can't undo this.",
+        listOf(PersonAction("Clear") {
+            clearingAll = true
+            val ok = runCatching {
+                val fn = com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable("clearGroupMessages").withTimeout(540, java.util.concurrent.TimeUnit.SECONDS)
+                val data = mutableMapOf<String, Any>("cid" to cid)
+                for (round in 0 until 12) {
+                    val d = fn.call(data).await().getData() as? Map<*, *> ?: break
+                    if (d["more"] != true) break
+                    d["before"]?.let { data["before"] = it }
+                }
+            }.isSuccess
+            clearingAll = false
+            com.fariin.app.ui.components.Snack.show(if (ok) "All messages were cleared." else "Couldn't clear the messages. Check your connection and try again.")
+            ok
+        }), onDismiss = { askClearAll = false })
     val exitScope = rememberCoroutineScope()
     // iOS settingsCard for everyone in the group (owner 2026-11-07 with the iPhone's page): Sounds &
     // Notifications ("On" / "Muted"), and Storage Used with the chat's size on this phone.
@@ -846,31 +866,27 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var sharingLink by remember { mutableStateOf(false) }
     if (sharingLink && inviteLink != null) com.fariin.app.ui.thread.LinkShareSheet(me, inviteLink, onDismiss = { sharingLink = false })
     var showQr by remember { mutableStateOf(false) }
+    var publicQr by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
     // iOS GroupInfoView exportChat: this group's messages as a text file (ChatExportRun). Not for a channel.
     var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
     exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
+    publicQr?.let { link -> com.fariin.app.ui.settings.GroupQrSheet(conv["title"] as? String ?: "Group", link,
+        (conv["avatarUrl"] as? String)?.ifEmpty { null }, users.size, onClose = { publicQr = null }) }
     if (showQr && inviteLink != null) com.fariin.app.ui.settings.GroupQrSheet(conv["title"] as? String ?: "Group", inviteLink,
         (conv["avatarUrl"] as? String)?.ifEmpty { null }, users.size, onClose = { showQr = false })
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
     val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
-    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), clear = true, bar = {
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), frosted = true, bar = {
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
         // may change its info: back to the chat, which opens its picker. Save to Photos waits for auto-save.
-        PageBar("Group Info", onBack = onBack, action = ({
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (canEdit) TextAction("Edit", enabled = true) { editing = true }
-                GroupInfoMenu(onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }) else null,
-                    // Our own "Share with" sheet (iOS), the system share in its corner.
-                    onShare = if (inviteLink != null) ({ sharingLink = true }) else null, onQr = { showQr = true }, saveCid = cid,
-                    onExport = if (!ChatExportRun.SHOWN || conv["channel"] == true) null else ({
-                        if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group")
-                    }))
-            }
-        }))
+        // iOS (owner's screenshots 2026-11-08): no title in the bar, only Edit; the menu is the More circle.
+        PageBar("", onBack = onBack, action = if (canEdit) ({
+            Row(verticalAlignment = Alignment.CenterVertically) { TextAction("Edit", enabled = true) { editing = true } }
+        }) else null)
     }) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
@@ -902,10 +918,34 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             if (iAmMember) {
                 Spacer(Modifier.height(16.dp))
                 GroupCirclesRow(cid, me, conv, users.size, onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack) }) else null,
-                    onNotice = { notice = it })
+                    onNotice = { notice = it }, more = { open, onDismiss ->
+                        GroupInfoMenuItems(open, onDismiss,
+                            onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }) else null,
+                            onShare = if (inviteLink != null) ({ sharingLink = true }) else null, onQr = { showQr = true }, saveCid = cid,
+                            onExport = if (!ChatExportRun.SHOWN || conv["channel"] == true) null else ({
+                                if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group")
+                            }))
+                    })
             }
             Spacer(Modifier.height(20.dp))
-            if (desc.isNotEmpty()) SettingsSection { DescriptionCard(desc) }
+            // iOS GroupAboutCard: the description and, for a public group, its link with the QR.
+            val publicName = (conv["username"] as? String)?.takeIf { it.isNotEmpty() && conv["isPublic"] == true }
+            if (desc.isNotEmpty() || publicName != null) SettingsSection {
+                if (desc.isNotEmpty()) DescriptionCard(desc)
+                if (publicName != null) {
+                    if (desc.isNotEmpty()) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+                    Row(Modifier.fillMaxWidth().clickable { publicQr = "https://fariin.com/$publicName" }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_link), null, tint = c.label, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("fariin.com/$publicName", fontSize = 17.sp, color = c.label)
+                            Text("Link", fontSize = 14.sp, color = c.secondary)
+                        }
+                        Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
             if (iAmMember) SettingsSection {
                 // iOS settingsCard (owner 2026-10-18/20): Storage Used, then for the owner and admins one
                 // Group Settings row (the management lives on that page) and Join Requests while
@@ -914,7 +954,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 SettingsRow("Sounds & Notifications", icon = painterResource(com.fariin.app.R.drawable.ic_notifications),
                     value = contactNotifValue(muteUntil)) { soundsOpen = true }
                 SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats,
-                    value = storageBytes?.takeIf { it > 0 }?.let { android.text.format.Formatter.formatShortFileSize(storageCtx, it) },
+                    value = storageBytes?.let { if (it > 0) android.text.format.Formatter.formatShortFileSize(storageCtx, it) else "None" },
                     badge = NewBadgeSpots.GROUP_INFO_STORAGE) {
                     pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))
                 }
@@ -1002,6 +1042,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             if (iAmMember && owner == me) SettingsSection {
                 val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
                 if (!ended) SettingsRow("End Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_xmark_circle)), titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
+                // iOS (owner 2026-11-08): the owner clears every message for everyone; the group stays.
+                SettingsRow(if (clearingAll) "Clearing…" else "Clear Messages", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_eraser)),
+                    titleColor = c.red, trailing = Trailing.NONE) { if (!clearingAll) askClearAll = true }
                 SettingsRow("Delete Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_trash)), titleColor = c.red, trailing = Trailing.NONE, last = true) { askDelete = true }
             }
             // iOS footer: who made the group and when.
@@ -1011,7 +1054,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             if (maker != null || createdMs != null) {
                 val is24 = android.text.format.DateFormat.is24HourFormat(storageCtx)
                 Text(listOfNotNull(maker?.let { "Created by $it." },
-                        createdMs?.let { "Created ${com.fariin.app.data.MessageInfoRules.dateLine(it, is24)}." }).joinToString(" "),
+                        createdMs?.let { "Created ${com.fariin.app.data.MessageInfoRules.dateLine(it, is24)}." }).joinToString("\n"),
                     fontSize = 14.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 4.dp))
             }
             Spacer(Modifier.height(30.dp))
@@ -1028,7 +1071,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
  */
 @Composable
 private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, memberCount: Int, onSearch: (() -> Unit)?,
-                            onNotice: (String) -> Unit) {
+                            onNotice: (String) -> Unit,
+                            /** The More circle's menu (iOS fifth circle): drawn under the circle while open. */
+                            more: @Composable (open: Boolean, onDismiss: () -> Unit) -> Unit = { _, _ -> }) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1043,12 +1088,15 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
     val oneCall by com.fariin.app.call.CallManager.ui.collectAsState()
     val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
     val mayStart = com.fariin.app.call.GroupCallWire.mayStart(conv, me)
-    val ready = circles.callReady(groupCall.cid, oneCall.status.live, cid, ended, mayStart, live)
+    // On a call in another app too (iOS busyElsewhere with CallKit): the phone's own call state.
+    val systemCall = rememberSystemCallActive()
+    val ready = !systemCall && circles.callReady(groupCall.cid, oneCall.status.live, cid, ended, mayStart, live)
     val title = conv["title"] as? String ?: "Group"
     var solo by remember { mutableStateOf(false) }
     if (solo) AlertDialog(onDismissRequest = { solo = false }, title = { Text(circles.SOLO_TITLE) }, text = { Text(circles.SOLO_TEXT) },
         confirmButton = { TextButton({ solo = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     fun call(video: Boolean) {
+        if (systemCall) { com.fariin.app.ui.components.Snack.show("You're already on a call"); return }
         when (val t = circles.callTap(groupCall.cid, oneCall.status.live, cid, ended, mayStart, live, memberCount)) {
             com.fariin.app.data.GroupInfoCircles.CallTap.Restore -> com.fariin.app.ui.call.CallActivity.startGroup(ctx, cid, title, video)
             com.fariin.app.data.GroupInfoCircles.CallTap.Solo -> solo = true
@@ -1094,41 +1142,53 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
             }
         }
         ActionTile("Search", ImageVector.vectorResource(R.drawable.ic_search_ios), share, dimmed = onSearch == null) { onSearch?.invoke() }
+        var moreOpen by remember { mutableStateOf(false) }
+        Box(share) {
+            ActionTile("More", ImageVector.vectorResource(R.drawable.ic_more_ios), Modifier.fillMaxWidth()) { moreOpen = true }
+            more(moreOpen) { moreOpen = false }
+        }
     }
 }
 
-/** The group page's three-dot menu (iOS GroupInfoView moreMenuItems, menuGroupItems). */
+/** True while the phone is on a call (any app): iOS greys Voice and Video then. */
 @Composable
-private fun GroupInfoMenu(onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit, saveCid: String? = null,
-                          onExport: (() -> Unit)? = null) {
-    if (onWallpaper == null && onShare == null && saveCid == null && onExport == null) return
+private fun rememberSystemCallActive(): Boolean {
+    val ctx = LocalContext.current
+    val active by androidx.compose.runtime.produceState(false) {
+        val am = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        while (true) {
+            value = am.mode == android.media.AudioManager.MODE_IN_CALL || am.mode == android.media.AudioManager.MODE_IN_COMMUNICATION
+            kotlinx.coroutines.delay(1500)
+        }
+    }
+    return active
+}
+
+/** The More circle's menu (iOS GroupInfoView moreMenuItems, menuGroupItems). */
+@Composable
+private fun GroupInfoMenuItems(open: Boolean, onDismiss: () -> Unit, onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit,
+                               saveCid: String? = null, onExport: (() -> Unit)? = null) {
     val c = Fariin.colors
-    var open by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     var saveOn by remember(saveCid, open) { mutableStateOf(saveCid?.let { com.fariin.app.media.AutoSaveMedia.savesMedia(ctx, it) } ?: false) }
-    Box {
-        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More",
-            onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
-        androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-            if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-                leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
-                onClick = { open = false; onWallpaper() })
-            if (onShare != null) {
-                androidx.compose.material3.DropdownMenuItem(text = { Text("Share Group", color = c.label) },
-                    leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label, modifier = Modifier.size(24.dp)) },
-                    onClick = { open = false; onShare() })
-                androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
-                    leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
-                    onClick = { open = false; onQr() })
-            }
-            // iOS menuMediaItems: this group's own Save to Photos, over the Settings switch.
-            if (saveCid != null) androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Save to Photos: ${if (saveOn) "On" else "Off"}", color = c.label) },
-                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) },
-                onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); open = false })
-            if (onExport != null) ExportChatItem { open = false; onExport() }
+    androidx.compose.material3.DropdownMenu(open, onDismissRequest = onDismiss, shape = com.fariin.app.ui.components.FariinMenu.shape,
+        border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+        if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
+            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
+            onClick = { onDismiss(); onWallpaper() })
+        if (onShare != null) {
+            androidx.compose.material3.DropdownMenuItem(text = { Text("Share Group", color = c.label) },
+                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label, modifier = Modifier.size(24.dp)) },
+                onClick = { onDismiss(); onShare() })
+            androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
+                leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
+                onClick = { onDismiss(); onQr() })
         }
+        if (saveCid != null) androidx.compose.material3.DropdownMenuItem(
+            text = { Text("Save to Photos: " + (if (saveOn) "On" else "Off"), color = c.label) },
+            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) },
+            onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); onDismiss() })
+        if (onExport != null) ExportChatItem { onDismiss(); onExport() }
     }
 }
 
