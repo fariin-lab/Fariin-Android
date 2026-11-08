@@ -95,7 +95,7 @@ class ChannelRulesTest {
         assertFalse(after.any { it.dimmed })
         assertEquals(Action.UNMUTE, ChannelRules.circles(Role.FOLLOWER, true, muted = true)[3].action)
         assertTrue(ChannelRules.circles(Role.VISITOR, hasLink = false, muted = false)[1].dimmed)
-        assertEquals(listOf("Share", "Search", "Mute"), ChannelRules.circles(Role.ADMIN, true, false).map { it.label })
+        assertEquals(listOf("Mute", "Search", "Share", "More"), ChannelRules.circles(Role.ADMIN, true, false).map { it.label })
         assertEquals("Follow the channel to search its posts.", ChannelRules.visitorNotice(Action.SEARCH))
     }
 

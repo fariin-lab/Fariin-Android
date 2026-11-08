@@ -304,6 +304,12 @@ internal fun MyQrSheet(profile: MyProfile?, onClose: () -> Unit, onScan: () -> U
 
 /** iOS GroupLinkQRSheet for a group: "Group · N members" under the name, "to join" under the code, no Scan. */
 @Composable
+internal fun ChannelQrSheet(title: String, link: String, photoUrl: String?, followers: Int, onClose: () -> Unit) {
+    QrPosterSheet(title = title, subtitle = "Channel · " + followers + (if (followers == 1) " follower" else " followers"), link = link,
+        photoUrl = photoUrl, hint = "Scan with the camera to follow", onClose = onClose, onScan = null)
+}
+
+@Composable
 internal fun GroupQrSheet(title: String, link: String, photoUrl: String?, memberCount: Int, onClose: () -> Unit) {
     QrPosterSheet(title = title, subtitle = "Group · $memberCount member${if (memberCount == 1) "" else "s"}", link = link,
         photoUrl = photoUrl, hint = "Scan with the camera to join", onClose = onClose, onScan = null)

@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.outlined.Download
 import com.fariin.app.ui.settings.BarPage
 
 import com.fariin.app.data.NewBadgeSpots
@@ -147,6 +149,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     // iOS channel info rows that open a page here: Storage Used and Statistics.
     var sub by remember(info.cid) { mutableStateOf<String?>(null) }
     var shareLink by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var moreOpen by remember { mutableStateOf(false) }
+    var showQr by remember { mutableStateOf(false) }
     val shared = com.fariin.app.ui.people.rememberSharedMedia(info.cid, me)
     var allMedia by remember { mutableStateOf(false) }
     // Storage Used's value (iOS: the size, or "None"): this phone's copy of the posts' files, no network.
@@ -236,6 +240,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             Action.SEARCH -> onSearch?.invoke()
             Action.MUTE -> scope.launch { ChannelService.setMuted(info.cid, true, 0.0) }
             Action.UNMUTE -> scope.launch { ChannelService.setMuted(info.cid, false) }
+            Action.MORE -> moreOpen = true
         }
     }
 
@@ -243,6 +248,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) }, containerColor = c.card,
             confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } })
     }
+    if (showQr) com.fariin.app.ui.settings.ChannelQrSheet(info.title.ifEmpty { "Channel" }, "https://fariin.com/" + info.username,
+        info.avatarUrl, shownCount, onClose = { showQr = false })
     shareLink?.let { (url, words) -> if (me.isNotEmpty()) com.fariin.app.ui.thread.LinkShareSheet(me, url, words, onDismiss = { shareLink = null }) }
     if (confirmLeave) com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmLeave = false }, steps = listOf(
         com.fariin.app.ui.components.CarefulStep(
@@ -270,8 +277,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             // section): back to the chat, which opens the channel's shared picker for every follower.
             PageBar("", onBack, action = if (canEdit) ({
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // iOS: Edit alone up here; Change Wallpaper and the rest are under the More circle.
                     com.fariin.app.ui.components.FloatingTextAction("Edit") { manage.edit(info.cid) }
-                    ChannelInfoMenu { com.fariin.app.ui.settings.ChatWallpaperLink.request(info.cid); onBack() }
                 }
             }) else null)
         }) { top ->
@@ -302,7 +309,14 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     for (circle in ChannelRules.circles(shownRole, info.username.isNotEmpty(), muted)) {
                         // A follower's Search is dimmed when the page was not opened from the channel (iOS).
                         val dim = circle.dimmed || (circle.action == Action.SEARCH && onSearch == null)
-                        ActionCircle(circle.action, circle.label, dim, Modifier.weight(1f)) { tap(circle.action, circle.dimmed) }
+                        if (circle.action == Action.MORE) Box(Modifier.weight(1f)) {
+                            ActionCircle(circle.action, circle.label, dim, Modifier.fillMaxWidth()) { tap(circle.action, circle.dimmed) }
+                            ChannelMoreMenu(moreOpen, onDismiss = { moreOpen = false },
+                                onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(info.cid); onBack() }) else null,
+                                onShare = { share() },
+                                onQr = if (info.username.isNotEmpty()) ({ showQr = true }) else null, saveCid = info.cid)
+                        }
+                        else ActionCircle(circle.action, circle.label, dim, Modifier.weight(1f)) { tap(circle.action, circle.dimmed) }
                     }
                 }
                 Spacer(Modifier.height(20.dp))
@@ -402,6 +416,7 @@ private fun ActionCircle(a: Action, label: String, dimmed: Boolean, modifier: Mo
     else GlassActionCircle(label, when (a) {
         Action.FOLLOW -> Icons.Filled.Add
         Action.SHARE -> Icons.Outlined.IosShare
+        Action.MORE -> Icons.Filled.MoreHoriz
         else -> Icons.Outlined.Search
     }, modifier, dimmed = dimmed, onClick = onClick)
 }
@@ -453,19 +468,27 @@ private fun createdLine(ctx: android.content.Context, ms: Double): String {
     return com.fariin.app.data.MessageInfoRules.dateLine(ms, DateFormat.is24HourFormat(ctx))
 }
 
-/** The channel page's three-dot menu, shown only to whoever may change its info: Change Wallpaper. */
+/** The More circle's menu (iOS, the owner's page): Change Wallpaper, Share Channel, QR Code, then Save to Photos. */
 @Composable
-private fun ChannelInfoMenu(onWallpaper: () -> Unit) {
+private fun ChannelMoreMenu(open: Boolean, onDismiss: () -> Unit, onWallpaper: (() -> Unit)?, onShare: () -> Unit,
+                            onQr: (() -> Unit)?, saveCid: String) {
     val c = Fariin.colors
-    var open by remember { mutableStateOf(false) }
-    Box {
-        com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "More",
-            onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
-        androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-            androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-                leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
-                onClick = { open = false; onWallpaper() })
-        }
+    val ctx = LocalContext.current
+    var saveOn by remember(saveCid, open) { mutableStateOf(com.fariin.app.media.AutoSaveMedia.savesMedia(ctx, saveCid)) }
+    androidx.compose.material3.DropdownMenu(open, onDismissRequest = onDismiss, shape = com.fariin.app.ui.components.FariinMenu.shape,
+        border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+        if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
+            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
+            onClick = { onDismiss(); onWallpaper() })
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Share Channel", color = c.label) },
+            leadingIcon = { Icon(Icons.Outlined.IosShare, null, tint = c.label) },
+            onClick = { onDismiss(); onShare() })
+        if (onQr != null) androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
+            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
+            onClick = { onDismiss(); onQr() })
+        androidx.compose.material3.HorizontalDivider(color = c.separator)
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Save to Photos: " + (if (saveOn) "On" else "Off"), color = c.label) },
+            leadingIcon = { Icon(androidx.compose.material.icons.Icons.Outlined.Download, null, tint = c.label) },
+            onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); onDismiss() })
     }
 }

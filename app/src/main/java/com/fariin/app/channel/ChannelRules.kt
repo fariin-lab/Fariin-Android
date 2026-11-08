@@ -137,7 +137,7 @@ object ChannelRules {
 
     // ---- The page's buttons (owner's rule: they never reshuffle after following) --------------
 
-    enum class Action { FOLLOW, LEAVE, SHARE, SEARCH, MUTE, UNMUTE }
+    enum class Action { FOLLOW, LEAVE, SHARE, SEARCH, MUTE, UNMUTE, MORE }
 
     data class Circle(val action: Action, val label: String, val dimmed: Boolean)
 
@@ -153,7 +153,14 @@ object ChannelRules {
             when (role) {
                 Role.VISITOR -> add(Circle(Action.FOLLOW, "Follow", false))
                 Role.FOLLOWER -> add(Circle(Action.LEAVE, "Leave", false))
-                Role.ADMIN -> {}
+                Role.ADMIN -> {
+                    // iOS, the owner's page (2026-11-08): Mute, Search, Share, More.
+                    add(if (muted) Circle(Action.UNMUTE, "Unmute", false) else Circle(Action.MUTE, "Mute", false))
+                    add(Circle(Action.SEARCH, "Search", false))
+                    add(Circle(Action.SHARE, "Share", !hasLink))
+                    add(Circle(Action.MORE, "More", false))
+                    return@buildList
+                }
             }
             add(Circle(Action.SHARE, "Share", !hasLink && !following))
             add(Circle(Action.SEARCH, "Search", !following))

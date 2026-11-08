@@ -109,9 +109,10 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                         Box(Modifier.size(68.dp)) {
                             Avatar(conv.displayPhoto(me), 64.dp, Modifier.align(Alignment.Center), squircle = conv.isChannel,
                                 kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
-                            if (on) Box(Modifier.align(Alignment.BottomEnd).size(24.dp).clip(CircleShape).background(c.blue)
+                            // iOS: a black tick badge (white in dark mode).
+                            if (on) Box(Modifier.align(Alignment.BottomEnd).size(24.dp).clip(CircleShape).background(c.label)
                                 .border(2.dp, com.fariin.app.ui.components.sheetFill, CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Filled.Check, null, tint = c.bg, modifier = Modifier.size(14.dp))
                             }
                         }
                         Spacer(Modifier.height(6.dp))
@@ -122,7 +123,7 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
             }
             val sending = chosen.isNotEmpty()
             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).height(52.dp).clip(CircleShape)
-                .background(if (sending) c.blue else c.label)
+                .background(c.label)
                 .clickable {
                     if (!sending) {
                         (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
@@ -142,8 +143,8 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                         }
                     }
                 }, contentAlignment = Alignment.Center) {
-                Text(if (sending) (if (chosen.size > 1) "Send to ${chosen.size} chats" else "Send") else "Copy Link",
-                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (sending) Color.White else c.bg)
+                // iOS: "Send to N" in the same black capsule as Copy Link.
+                Text(if (sending) "Send to ${chosen.size}" else "Copy Link", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.bg)
             }
         }
     }
