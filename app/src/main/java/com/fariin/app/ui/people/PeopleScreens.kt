@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.glassMenuAnchor
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
@@ -523,19 +525,26 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
     val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
-    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), frosted = true, bar = {
+    // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
+    // under Glow Story and a divider when Glow is on, as iOS orders the menu.
+    val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
+    val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
+    val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ ask = "clearMine" }) else null
+    val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
+    // iOS Export Chat: only where a real 1:1 chat exists, never on my own page.
+    val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
+    val exportChat: (() -> Unit)? = if (ChatExportRun.SHOWN && uid != me && chat != null && !chat.isGroup)
+        ({ if (exportJob == null) exportJob = ChatExportRun.Job(chat.id, name.ifEmpty { chat.displayName(me) }, uid) }) else null
+    // The ••• menu is the glass menu over the page, grown from its button (as the group's and channel's).
+    val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    var moreOpen by remember { mutableStateOf(false) }
+    val menuBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val menuGlass = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= 33
+    Box(Modifier.fillMaxSize()) {
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary)
+        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true, bar = {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
-            // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
-            // under Glow Story and a divider when Glow is on, as iOS orders the menu.
-            val wallpaper: () -> Unit = { com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }
-            val addToGroup: (() -> Unit)? = if (uid != me) ({ addingToGroup = true }) else null
-            val clearMine: (() -> Unit)? = if (uid != me && conv != null) ({ ask = "clearMine" }) else null
-            val shareProfile: (() -> Unit)? = if (uid != me) ({ sharingProfile = true }) else null
-            // iOS Export Chat: only where a real 1:1 chat exists, never on my own page.
-            val chat = conv ?: com.fariin.app.data.CryptoHub.listedConversation(cid)
-            val exportChat: (() -> Unit)? = if (ChatExportRun.SHOWN && uid != me && chat != null && !chat.isGroup)
-                ({ if (exportJob == null) exportJob = ChatExportRun.Job(chat.id, name.ifEmpty { chat.displayName(me) }, uid) }) else null
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
                 if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
                 if (shareProfile != null) ShareProfileItem { close(); shareProfile() }
@@ -544,8 +553,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 if (exportChat != null) ExportChatItem { close(); exportChat() }
                 if (clearMine != null) ClearMineItem { close(); clearMine() }
             }
-            else if (fromChat || addToGroup != null) ContactInfoMenu(onWallpaper = if (fromChat) wallpaper else null, onAddToGroup = addToGroup,
-                onClearMine = clearMine, onShare = shareProfile, onExport = exportChat)
+            else if (fromChat || addToGroup != null) com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios),
+                contentDescription = "More", onClick = { moreOpen = true }, modifier = Modifier.padding(end = 4.dp).glassMenuAnchor(moreAnchor))
         }
     }) { top ->
         exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
@@ -665,6 +674,19 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Spacer(Modifier.height(30.dp))
         }
     }
+    com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
+        if (shareProfile != null) add(com.fariin.app.ui.components.GlassMenuItem("Share Profile",
+            androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { shareProfile() })
+        if (addToGroup != null) add(com.fariin.app.ui.components.GlassMenuItem("Add to a Group",
+            androidx.compose.ui.res.painterResource(R.drawable.ic_add_member)) { addToGroup() })
+        if (fromChat) add(com.fariin.app.ui.components.GlassMenuItem("Change Wallpaper",
+            androidx.compose.ui.res.painterResource(R.drawable.ic_wallpaper)) { wallpaper() })
+        if (exportChat != null) add(com.fariin.app.ui.components.GlassMenuItem("Export Chat",
+            androidx.compose.ui.res.painterResource(R.drawable.ic_save_down)) { exportChat() })
+        if (clearMine != null) add(com.fariin.app.ui.components.GlassMenuItem("Clear My Messages",
+            androidx.compose.ui.res.painterResource(R.drawable.ic_sf_trash), danger = true, divider = true) { clearMine() })
+    }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
+    }
 }
 
 /**
@@ -746,26 +768,6 @@ private fun CallLogCard(call: com.fariin.app.data.CallEntry, me: String) {
                     modifier = Modifier.weight(1f))
                 Text(time, fontSize = 15.sp, color = c.secondary)
             }
-        }
-    }
-}
-
-/** The contact page's three-dot menu (iOS ContactInfoView moreMenu): Change Wallpaper for this chat. */
-@Composable
-private fun ContactInfoMenu(onWallpaper: (() -> Unit)?, onAddToGroup: (() -> Unit)? = null, onClearMine: (() -> Unit)? = null,
-                            onShare: (() -> Unit)? = null, onExport: (() -> Unit)? = null) {
-    val c = Fariin.colors
-    var open by remember { mutableStateOf(false) }
-    Box {
-        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More",
-            onClick = { open = true }, modifier = Modifier.padding(end = 4.dp))
-        androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-            if (onShare != null) ShareProfileItem { open = false; onShare() }
-            if (onAddToGroup != null) AddToGroupItem { open = false; onAddToGroup() }
-            if (onWallpaper != null) ChangeWallpaperItem { open = false; onWallpaper() }
-            if (onExport != null) ExportChatItem { open = false; onExport() }
-            if (onClearMine != null) ClearMineItem { open = false; onClearMine() }
         }
     }
 }
