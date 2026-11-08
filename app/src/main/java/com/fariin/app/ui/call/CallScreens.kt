@@ -1599,6 +1599,34 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                 }
                 Spacer(Modifier.height(20.dp))
             }
+            // iOS GroupCallRaisedHandsSection: who has a hand up, oldest first; Lower on my own row.
+            if (g.hands.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().padding(start = 32.dp, end = 24.dp).heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Raised hands", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(" · ${g.hands.size}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                }
+                SheetSection {
+                    Column {
+                        g.hands.forEach { uid ->
+                            val who = g.members.firstOrNull { it.id == uid }
+                            val mine = uid == meId
+                            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 6.dp)
+                                .semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Avatar(who?.photo, 36.dp) }
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (mine) "You" else who?.name ?: "Someone", color = Color.White, fontSize = 17.sp, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                if (mine) Text("Lower", color = Color(0xFF0A84FF), fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = "Lower my hand") { GroupCall.setHand(false) }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_hand_raised_fill), null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(20.dp))
+            }
             Row(Modifier.fillMaxWidth().padding(start = 32.dp, end = 24.dp).heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("In call", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Text(" · ${g.members.size}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.weight(1f))
