@@ -30,19 +30,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Cameraswitch
-import androidx.compose.material.icons.filled.CloseFullscreen
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -79,10 +66,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.fariin.app.call.AudioRoute
 import com.fariin.app.call.CallMachine
 import com.fariin.app.call.CallRouting
-import androidx.compose.material.icons.filled.BluetoothAudio
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateOf
@@ -119,21 +102,14 @@ import androidx.compose.ui.util.lerp
 import io.livekit.android.renderer.TextureViewRenderer
 import androidx.compose.animation.core.animateFloat
 
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.SignalWifiStatusbarConnectedNoInternet4
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Share
 import com.fariin.app.call.GroupCallAdmin
 import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.aspectRatio
@@ -273,7 +249,7 @@ fun CallScreen(
                 name = ui.peerName, status = status,
                 muted = ui.remoteMuted && connected, mutedLabel = "${ui.peerName.substringBefore(' ')} is muted",
                 left = if (onMinimize != null && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED) {
-                    { HeaderCircle(Icons.Filled.CloseFullscreen, "Minimize call", 48.dp) { chrome.touch(); onMinimize() } }
+                    { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_collapse), "Minimize call", 48.dp) { chrome.touch(); onMinimize() } }
                 } else null,
                 modifier = Modifier.alpha(shown).semantics { isTraversalGroup = true; traversalIndex = -2f },
                 // No shade over the flat colour and the photo (owner 2026-11-06: it read as a
@@ -298,7 +274,7 @@ fun CallScreen(
         // Back from their full-screen share to the card.
         if (shareFull) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(end = 16.dp, bottom = 22.dp + BarHeight + 14.dp)
             .alpha(shown), contentAlignment = Alignment.BottomEnd) {
-            if (chrome.visible) HeaderCircle(Icons.Filled.FullscreenExit, "Exit full screen", 40.dp) { chrome.touch(); shareFull = false }
+            if (chrome.visible) HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_collapse), "Exit full screen", 40.dp) { chrome.touch(); shareFull = false }
         }
         // My camera: a card at the bottom corner, smaller while the controls are away (iOS pipLayer).
         // Above the catch-all tap, so it can be dragged and tapped while the controls are away too.
@@ -399,7 +375,7 @@ private fun ShareCard(ui: CallUi, chrome: Chrome, remote: VideoTrack?, onStop: (
                     Row(Modifier.height(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).clickable(onClick = onStop)
                         .padding(horizontal = 22.dp).semantics { contentDescription = "Stop Sharing" },
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Stop Sharing", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                     }
@@ -408,7 +384,7 @@ private fun ShareCard(ui: CallUi, chrome: Chrome, remote: VideoTrack?, onStop: (
         } else {
             ShareStage(remote, Modifier.fillMaxSize(), zoomable = false) { chrome.tap(true) }
             Box(Modifier.align(Alignment.BottomEnd).padding(12.dp)) {
-                HeaderCircle(Icons.Filled.Fullscreen, "Full screen", 40.dp, onFull)
+                HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_expand), "Full screen", 40.dp, onFull)
             }
         }
     }
@@ -581,7 +557,7 @@ private fun SelfCard(grown: Boolean, chrome: Chrome, label: String, onFlip: (() 
             if (onFlip != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(34.dp).darkGlass(CircleShape)
                 .clickable(onClick = onFlip).semantics { contentDescription = "Flip camera" },
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_flip_camera), null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -640,8 +616,8 @@ private fun DemoVideo(modifier: Modifier, a: Color, b: Color) {
 @Composable
 private fun IncomingButtons(video: Boolean, onAccept: () -> Unit, onDecline: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 56.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        LabeledCircle(Icons.Filled.CallEnd, "Decline", Red, onDecline)
-        LabeledCircle(if (video) Icons.Filled.Videocam else Icons.Filled.Call, "Accept", Green, onAccept)
+        LabeledCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_phone_down), "Decline", Red, onDecline)
+        LabeledCircle(if (video) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), "Accept", Green, onAccept)
     }
 }
 
@@ -673,13 +649,13 @@ private fun NoAnswerCard(s: com.fariin.app.call.CallStatus, onCallAgain: () -> U
                 .semantics { contentDescription = retry },
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(if (s.video) Icons.Filled.Videocam else Icons.Filled.Call, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(if (s.video) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), null, tint = Color.White, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(8.dp))
             Text(retry, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            NoAnswerSecondary(Icons.Filled.Mic, "Voice message", Modifier.weight(1f), onVoiceMessage)
-            NoAnswerSecondary(Icons.Filled.Close, "Close", Modifier.weight(1f), onClose)
+            NoAnswerSecondary(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), "Voice message", Modifier.weight(1f), onVoiceMessage)
+            NoAnswerSecondary(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), "Close", Modifier.weight(1f), onClose)
         }
     }
 }
@@ -746,7 +722,7 @@ private fun ShareCircle(lit: Boolean, on: Boolean, enabled: Boolean, size: Dp, o
 private fun EndCircle(label: String, size: Dp, onClick: () -> Unit) {
     Box(Modifier.size(size).darkGlass(CircleShape, Red).clickable(onClick = onClick)
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-        Icon(Icons.Filled.CallEnd, null, tint = Color.White, modifier = Modifier.size(size * 0.42f))
+        Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_phone_down), null, tint = Color.White, modifier = Modifier.size(size * 0.42f))
     }
 }
 
@@ -759,8 +735,8 @@ private fun SpeakerButton(ui: CallUi, size: Dp, onRoute: (AudioRoute) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val r = ui.route
     val icon = when (r.current) {
-        AudioRoute.BLUETOOTH -> Icons.Filled.BluetoothAudio
-        AudioRoute.HEADSET -> Icons.Filled.Headphones
+        AudioRoute.BLUETOOTH -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_bluetooth)
+        AudioRoute.HEADSET -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_headphones)
         // One speaker picture, lit (white circle) when on, as iOS; the struck-through "off" speaker
         // read as broken (owner 2026-11-05: "looks super cheap").
         else -> ImageVector.vectorResource(R.drawable.ic_speaker_on)
@@ -778,12 +754,12 @@ private fun SpeakerButton(ui: CallUi, size: Dp, onRoute: (AudioRoute) -> Unit) {
                 DropdownMenuItem(
                     text = { Text(CallRouting.label(route, r.bluetoothName)) },
                     leadingIcon = { Icon(when (route) {
-                        AudioRoute.BLUETOOTH -> Icons.Filled.BluetoothAudio
-                        AudioRoute.HEADSET -> Icons.Filled.Headphones
-                        AudioRoute.EARPIECE -> Icons.Filled.PhoneInTalk
-                        AudioRoute.SPEAKER -> Icons.AutoMirrored.Filled.VolumeUp
+                        AudioRoute.BLUETOOTH -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_bluetooth)
+                        AudioRoute.HEADSET -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_headphones)
+                        AudioRoute.EARPIECE -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice)
+                        AudioRoute.SPEAKER -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_speaker_on)
                     }, null) },
-                    trailingIcon = { if (route == r.current) Icon(Icons.Filled.Check, "In use") },
+                    trailingIcon = { if (route == r.current) Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark), "In use") },
                     onClick = { open = false; onRoute(route) },
                 )
             }
@@ -1022,9 +998,9 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
             // In the small window (picture in picture) only the people show, as iOS's floating card.
             if (!pip) CallHeader(
                 name = g.title, status = status, muted = false, mutedLabel = "",
-                left = onMinimize?.let { m -> { HeaderCircle(Icons.Filled.CloseFullscreen, "Minimize call", 44.dp) { chrome.touch(); m() } } },
+                left = onMinimize?.let { m -> { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_collapse), "Minimize call", 44.dp) { chrome.touch(); m() } } },
                 side = 44.dp,
-                right = { HeaderCircle(Icons.Filled.People, "Participants", 44.dp) { chrome.touch(); people = true } },
+                right = { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person2), "Participants", 44.dp) { chrome.touch(); people = true } },
                 modifier = Modifier.alpha(shown),
             )
             Spacer(Modifier.height(2.dp))
@@ -1060,7 +1036,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 }
                 // iOS GroupCallMoreMenu: Raise Hand / Lower Hand and the reaction row.
                 if (g.joined) Box {
-                    Circle(Icons.Filled.MoreHoriz, false, "More", 56.dp) { chrome.touch(); more = true }
+                    Circle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_more_ios), false, "More", 56.dp) { chrome.touch(); more = true }
                     androidx.compose.material3.DropdownMenu(more, onDismissRequest = { more = false }, containerColor = Color(0xFF2C2C2E)) {
                         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                             com.fariin.app.call.GroupCall.QUICK_EMOJIS.forEach { e ->
@@ -1268,7 +1244,7 @@ private fun MemberTile(
                 Row(Modifier.align(Alignment.BottomStart).padding(inset).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
                     .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (m.id in LocalRaisedHands.current) { Text("\u270B", fontSize = 12.sp); Spacer(Modifier.width(4.dp)) }
-                    if (!m.micOn && !large) { Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
+                    if (!m.micOn && !large) { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(4.dp)) }
                     Text(if (isMe) "You" else m.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -1276,7 +1252,7 @@ private fun MemberTile(
                 val compact = pip && w < 60
                 Box(Modifier.align(Alignment.BottomStart).padding(inset).size(if (compact) 16.dp else 28.dp).clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.MicOff, null, tint = Color.White, modifier = Modifier.size(if (compact) 9.dp else 16.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White, modifier = Modifier.size(if (compact) 9.dp else 16.dp))
                 }
             }
             // I am sharing my screen (owner 2026-10-28): my own tile says so (iOS sharingCard).
@@ -1289,7 +1265,7 @@ private fun MemberTile(
             if (m.poor && !(pip && w < 60)) {
                 Box(Modifier.align(if (large) Alignment.TopEnd else Alignment.TopStart).padding(inset).size(22.dp).clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.SignalWifiStatusbarConnectedNoInternet4, null, tint = Color.White, modifier = Modifier.size(11.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_wifi_slash), null, tint = Color.White, modifier = Modifier.size(11.dp))
                 }
             }
         }
@@ -1326,7 +1302,7 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
                 Box(Modifier.align(Alignment.CenterEnd).size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
                     .clickable(onClick = onClose).semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -1335,12 +1311,12 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
             if (g.joined && (!isLink || g.linkUrl != null)) {
                 SheetSection {
                     Column {
-                        SheetPlainRow(Icons.Filled.PersonAdd, "Add People") { showAdd = true }
+                        SheetPlainRow(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member), "Add People") { showAdd = true }
                         g.linkUrl?.let { url ->
-                            SheetPlainRow(if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy, if (copied) "Copied" else "Copy Link") {
+                            SheetPlainRow(if (copied) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_doc_on_doc), if (copied) "Copied" else "Copy Link") {
                                 copyLink(context, url); copied = true
                             }
-                            SheetPlainRow(Icons.Filled.Share, "Share Link") { shareLink(context, url) }
+                            SheetPlainRow(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_share), "Share Link") { shareLink(context, url) }
                         }
                     }
                 }
@@ -1350,11 +1326,11 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                 SheetSection {
                     Row(Modifier.fillMaxWidth().height(48.dp).clickable { showRequests = true }.padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.PersonAdd, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(20.dp))
+                        Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member), null, tint = Color(0xFF0A84FF), modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(com.fariin.app.call.GroupCallWords.waitingTitle(g.requests.size), color = Color(0xFF0A84FF), fontSize = 17.sp,
                             modifier = Modifier.weight(1f))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                        Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_chevron_right), null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                     }
                 }
                 Spacer(Modifier.height(20.dp))
@@ -1392,10 +1368,10 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                             }
                             Spacer(Modifier.width(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (m.poor) Icon(Icons.Filled.SignalWifiStatusbarConnectedNoInternet4, "Poor connection", tint = Color(0xFFFF9F0A), modifier = Modifier.size(20.dp))
-                                if (m.video != null) Icon(Icons.Filled.Videocam, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                if (m.poor) Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_wifi_slash), "Poor connection", tint = Color(0xFFFF9F0A), modifier = Modifier.size(20.dp))
+                                if (m.video != null) Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                                 val host = GroupCallAdmin.mayModerate(meId, g.myRole, m)
-                                if (!m.micOn && !host) Icon(Icons.Filled.MicOff, "Muted", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                if (!m.micOn && !host) Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), "Muted", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                             }
                             if (GroupCallAdmin.mayModerate(meId, g.myRole, m)) HostRowControls(g, m, canBlock) { confirm = it }
                         }
@@ -1430,13 +1406,13 @@ private fun HostRowControls(g: GroupCallUi, m: GroupMember, canBlock: Boolean, o
         Box(Modifier.size(44.dp).clip(CircleShape)
             .clickable(enabled = blocked || m.micOn) { GroupCall.tapMic(m.id, mute = !blocked) }
             .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-            Icon(if (blocked || !m.micOn) Icons.Filled.MicOff else Icons.Filled.Mic, null,
+            Icon(if (blocked || !m.micOn) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), null,
                 tint = if (blocked) Color(0xFFFF453A) else Color.White.copy(alpha = if (m.micOn) 0.9f else 0.6f), modifier = Modifier.size(22.dp))
         }
         Box {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }.semantics { contentDescription = "Actions for ${m.name}" },
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.MoreHoriz, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
+                Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_more_ios), null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
             }
             DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Color(0xFF2C2C2E)) {
                 HostMenuItems(g, m, canBlock, onConfirm, close = { menu = false })

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.call
 
+import androidx.compose.ui.res.vectorResource
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -22,15 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.PersonRemove
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -123,20 +115,20 @@ fun HostMenuItems(g: GroupCallUi, m: GroupMember, canBlock: Boolean, onConfirm: 
     val me = g.members.firstOrNull { it.local }?.id
     if (onPin != null && pinned != null) {
         DropdownMenuItem(text = { Text(if (pinned) "Unpin" else "Pin", color = Color.White) },
-            leadingIcon = { Icon(Icons.Filled.PushPin, null, tint = Color.White) }, onClick = { close(); onPin() })
+            leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_pin), null, tint = Color.White) }, onClick = { close(); onPin() })
     }
     if (!GroupCallAdmin.mayModerate(me, g.myRole, m)) return
     if (!shownBlocked(g, m)) {
-        DropdownMenuItem(text = { Text("Mute", color = Color.White) }, leadingIcon = { Icon(Icons.Filled.MicOff, null, tint = Color.White) },
+        DropdownMenuItem(text = { Text("Mute", color = Color.White) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White) },
             onClick = { close(); GroupCall.tapMic(m.id, mute = true) })
     } else {
-        DropdownMenuItem(text = { Text("Allow to Speak", color = Color.White) }, leadingIcon = { Icon(Icons.Filled.Mic, null, tint = Color.White) },
+        DropdownMenuItem(text = { Text("Allow to Speak", color = Color.White) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), null, tint = Color.White) },
             onClick = { close(); GroupCall.tapMic(m.id, mute = false) })
     }
-    DropdownMenuItem(text = { Text("Remove from call", color = Danger) }, leadingIcon = { Icon(Icons.Filled.PersonRemove, null, tint = Danger) },
+    DropdownMenuItem(text = { Text("Remove from call", color = Danger) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person_minus), null, tint = Danger) },
         onClick = { close(); onConfirm(HostConfirm.Remove(m)) })
     if (canBlock) {
-        DropdownMenuItem(text = { Text("Remove and Block", color = Danger) }, leadingIcon = { Icon(Icons.Filled.Block, null, tint = Danger) },
+        DropdownMenuItem(text = { Text("Remove and Block", color = Danger) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), null, tint = Danger) },
             onClick = { close(); onConfirm(HostConfirm.Block(m)) })
     }
 }
@@ -194,7 +186,7 @@ fun GroupAddPeopleSheet(g: GroupCallUi, onClose: () -> Unit) {
             Box(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp)) {
                 Box(Modifier.align(Alignment.CenterStart).size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
                     .clickable(onClick = onClose).semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
                 Text("Add People", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.Center))
                 val enabled = picked.isNotEmpty()
@@ -235,7 +227,7 @@ fun GroupAddPeopleSheet(g: GroupCallUi, onClose: () -> Unit) {
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     note?.let { Text(it, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp) }
                                 }
-                                if (note == null) Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                if (note == null) Icon(if (on) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark_circle_fill) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_circle),
                                     if (on) "Selected" else "Not selected",
                                     tint = if (on) Color(0xFF0A84FF) else Color.White.copy(alpha = 0.35f), modifier = Modifier.size(24.dp))
                             }
