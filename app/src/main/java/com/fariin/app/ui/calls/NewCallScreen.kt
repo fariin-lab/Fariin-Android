@@ -279,16 +279,24 @@ private fun PickedStrip(chosen: List<CallTarget>, onUnpick: (CallTarget) -> Unit
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
             items(chosen.asReversed(), key = { "c-" + it.id }) { t ->
                 // A face seen before keeps its size; a new one waits for the slide, then grows in.
-                val grow = remember { androidx.compose.animation.core.Animatable(if (shown[t.id] == true) 1f else 0.2f) }
+                // Owner's recording 2026-11-07, frame by frame: a 20 % dot sat still for 0.2 s (it waited
+                // for a slide that only happens once the row is full), then popped to full size in three
+                // frames. Now nothing shows until it grows; it waits only when the row really slides;
+                // and it grows on a soft spring from 20 % (~0.25 s).
+                val grow = remember { androidx.compose.animation.core.Animatable(if (shown[t.id] == true) 1f else 0f) }
                 LaunchedEffect(t.id) {
-                    if (grow.value < 1f) { kotlinx.coroutines.delay(150); grow.animateTo(1f, androidx.compose.animation.core.tween(150)) }
+                    if (grow.value < 1f) {
+                        if (rowState.canScrollForward || rowState.canScrollBackward) kotlinx.coroutines.delay(150)
+                        grow.snapTo(0.2f)
+                        grow.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 520f))
+                    }
                     shown[t.id] = true
                 }
                 val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 val pressed by press.collectIsPressedAsState()
                 Column(Modifier.animateItem(fadeInSpec = null, placementSpec = slide,
                         fadeOutSpec = androidx.compose.animation.core.tween(150))
-                    .graphicsLayer { val k = grow.value; scaleX = k; scaleY = k }
+                    .graphicsLayer { val k = grow.value; scaleX = k; scaleY = k; alpha = if (k <= 0f) 0f else minOf(1f, k * 1.6f) }
                     .width(66.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
                     .clickable(interactionSource = press, indication = null, onClickLabel = "Remove ${t.name}") { onUnpick(t) }
                     .graphicsLayer { alpha = if (pressed) 0.6f else 1f }.padding(vertical = 4.dp),
