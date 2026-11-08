@@ -1253,3 +1253,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Stories (9342c89): going back replays the story (stale clock threw you to the next person); My Story
   leads into everyone else. Not device-tested (viewing others' stories sends real view receipts): owner to try.
   Report flow (iOS session, 52138eb..685b7fe) built and on the Pixel.
+- 2026-11-08 morning (branch edit-photo-sheet, rebased on main; not all merged yet): Edit Profile as a
+  pull-down sheet; Edit Photo sheet as iOS, held until Save; GIF panel closes on a box tap; call PiP shows
+  both photos; in-call bar over the app; group call tiles fill missing photos (ab5fd96, in main); Calls,
+  Stories frosted 48 dp bars with no line; Settings tried with no bar (owner judging); tab bar frost 86%.
+  Friend's iOS-parity branch (Files Photos, photo pager, story/photo chooser, replies by 5, reactions) reviewed,
+  rebuilt and merged. Session rule: I am "android"; partner is "iOS session" only.
