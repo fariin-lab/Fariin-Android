@@ -214,7 +214,11 @@ private fun Browser(start: String, motion: SheetMotion) {
         AndroidView(
             // As iOS InAppBrowser (owner, 2026-11-06): the page fills the screen under the status bar;
             // the close circle and the bottom row float over it.
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = pageAlpha },
+            // iOS InAppBrowser's insets (top: the close circle's row + 8, bottom: the toolbar + 8): the page
+            // starts under the X and ends above the bottom row, so neither covers it (the X sat on the
+            // site's logo, Safety page, Pixel 2026-11-08).
+            modifier = Modifier.fillMaxSize().padding(top = 66.dp).navigationBarsPadding().padding(bottom = 64.dp)
+                .graphicsLayer { alpha = pageAlpha },
             factory = { context ->
                 WebView(context).apply {
                     settings.javaScriptEnabled = true
