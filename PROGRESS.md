@@ -1315,3 +1315,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   camera lock (d0120d49) and Raised hands section (11945224), followers @username + reply scroll
   (847fcb3c), contact verified seal (9e52699b), glass menu on contact page, chat list, Stories
   (28a55f80, 70855ff8, and the Stories commit). Line-ending mixes in 3 files normalized (no repo diff).
+- 2026-11-08 ~3:40 PM: Group Settings Bubble Styles switch removed (2a033c27); Message Requests
+  white frosted page (cd99459b). Checked and fine: Settings pages light + dark, group settings
+  subpages, Archive, search + Recent, All Media, story viewers sheet, New Chat. main -> d972b045 (green).
