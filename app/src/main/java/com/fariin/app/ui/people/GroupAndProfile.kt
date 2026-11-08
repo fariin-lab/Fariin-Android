@@ -987,8 +987,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 }
                 shownMembers.forEach { u ->
                     PersonRow(photos[u]?.ifEmpty { null }, if (u == me) "You" else names[u] ?: "Member", "",
-                        // An admin opens the member card (Make Group Admin, Ban from Group...); others the profile.
-                        onClick = if (iAmAdmin) ({ card = u }) else if (u == me) null else ({ onOpenPerson(u) })) {
+                        // The member's short card for everyone (owner 2026-11-07: only admins got it, the rest went
+                        // straight to the profile); it shows only the rows I may use. My own row: admins only.
+                        onClick = if (iAmAdmin || u != me) ({ card = u }) else null) {
                         val tag = when { u == owner -> "Owner"; u in admins -> "Admin"; else -> "" }
                         if (tag.isNotEmpty()) Text(tag, fontSize = 14.sp, color = c.secondary)
                     }

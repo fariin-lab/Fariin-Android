@@ -710,7 +710,7 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
     @Composable
     fun memberRow(uid: String) {
                                 val removable = team.canRemove(me, uid)
-                                val open: (() -> Unit)? = if (team.isStaff(me)) ({ card = uid }) else if (uid == me) null else ({ onOpenPerson(uid) })
+                                val open: (() -> Unit)? = if (team.isStaff(me) || uid != me) ({ card = uid }) else null   // the card for everyone, as Group Info
                                 val on = uid in picked
                                 MemberSwipeRow(enabled = removable && !selecting, onSwiped = { pendingRemove = listOf(uid) }) {
                                     Box(Modifier.fillMaxWidth().background(if (on) c.blue.copy(alpha = 0.12f) else c.card)
