@@ -959,8 +959,8 @@ private fun BanSheet(onDismiss: () -> Unit, onBan: (Boolean) -> Unit) {
 
 /**
  * THREAD LINES (iOS, owner 2026-11-07): from the reply's photo a solid light-grey line runs down and
- * bends into the "View N replies" line (and into each open answer's photo) with a quarter circle of
- * [ThreadLineRadius], never a sharp elbow. Each row draws its own piece behind itself, at the list's
+ * bends into the "View N replies" line (and into each open answer's photo) with iOS's continuous
+ * corner of [ThreadLineRadius], never a sharp elbow. Each row draws its own piece behind itself, at the list's
  * x of the reply photo's centre ([ThreadLineX]), so no extra layouts.
  */
 private const val LINE_NONE = 0
@@ -979,10 +979,15 @@ private fun threadLineColor(): Color = if (Fariin.colors.dark) Color(0xFF48484A)
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.elbow(color: Color, x: Float, y: Float, toX: Float) {
     val r = ThreadLineRadius.toPx()
     val w = ThreadLineWidth.toPx()
-    if (y - r > 0f) drawLine(color, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, y - r), w)
+    // iOS's continuous corner (iOS 2026-11-08), not a quarter circle: it starts 1.53 radii before
+    // the corner and eases in over three cubics (the rounded-rect curve's own control points).
+    val a = 1.52866483f * r
+    if (y - a > 0f) drawLine(color, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, y - a), w)
     val p = androidx.compose.ui.graphics.Path().apply {
-        moveTo(x, y - r)
-        arcTo(androidx.compose.ui.geometry.Rect(x, y - 2 * r, x + 2 * r, y), 180f, -90f, false)
+        moveTo(x, y - a)
+        cubicTo(x, y - 1.08849299f * r, x + 0.02225930f * r, y - 0.86840701f * r, x + 0.07491100f * r, y - 0.63149399f * r)
+        cubicTo(x + 0.16905201f * r, y - 0.37282401f * r, x + 0.37282401f * r, y - 0.16905201f * r, x + 0.63149399f * r, y - 0.07491100f * r)
+        cubicTo(x + 0.86840701f * r, y - 0.02225930f * r, x + 1.08849299f * r, y, x + a, y)
         lineTo(toX, y)
     }
     drawPath(p, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))

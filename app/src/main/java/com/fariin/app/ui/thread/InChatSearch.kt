@@ -1,5 +1,8 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -169,7 +172,12 @@ internal fun SearchTopBar(s: InChatSearchState, focus: FocusRequester, onClose: 
 @Composable
 internal fun SearchNavBar(s: InChatSearchState, onStep: (Int) -> Unit, onList: (Boolean) -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 6.dp).height(44.dp),
+    // The composer's own edges (iOS 2026-11-08): the same rest insets, 8 under it and the composer's
+    // side gap; with the keyboard up, 8 above the keys (the screen's imePadding does that).
+    val rest = rememberComposerRestInsets()
+    Row(Modifier.fillMaxWidth()
+        .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.navigationBars.only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))
+        .windowInsetsPadding(rest).padding(start = COMPOSER_SIDE, end = COMPOSER_SIDE, top = 8.dp, bottom = 8.dp).height(44.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (s.matches.isNotEmpty() || s.searchable) {
             Box(Modifier.height(40.dp).floating().clickable(enabled = s.asList) { onList(false) }.padding(horizontal = 16.dp),

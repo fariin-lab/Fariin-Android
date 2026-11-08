@@ -213,10 +213,19 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     }
     fun leave(fromUndo: Boolean) {
         undo = false
-        scope.launch {
-            try { ChannelService.unfollow(info.cid); following = false; if (!fromUndo) onLeft() }
-            catch (e: Exception) { error = if (fromUndo) "Couldn't undo. Use Leave Channel on the channel page." else ChannelService.errorText(e) }
+        if (fromUndo) {
+            scope.launch {
+                try { ChannelService.unfollow(info.cid); following = false }
+                catch (e: Exception) { error = "Couldn't undo. Use Leave Channel on the channel page." }
+            }
+            return
         }
+        // At the tap (iOS 2026-11-08): the page closes at once and the server call runs behind it.
+        // If it fails the follow is still there, so the channel stays in the list, and a note says so.
+        com.fariin.app.data.LeaveUndo.hideWhile(info.cid, "Couldn't leave the channel. Check your connection and try again.") {
+            ChannelService.unfollow(info.cid)
+        }
+        onLeft()
     }
     fun tap(a: Action, dimmed: Boolean) {
         if (dimmed) { ChannelRules.visitorNotice(a)?.let { notice = it }; if (a == Action.SHARE) notice = "This channel has no public link."; return }

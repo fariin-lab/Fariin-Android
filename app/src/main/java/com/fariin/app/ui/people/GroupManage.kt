@@ -248,7 +248,8 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
         if (doc.isEmpty()) { Loading(); return@BarPage }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             GroupManageRows(doc, me, cid, open)
-            // Bubble Styles moved to Group Info's settings card (iOS, owner 2026-11-07).
+            // Bubble Styles: back here, off the group page (iOS 2026-11-08).
+            if (bubbleStylesSwitchShown(me, doc)) SettingsSection { BubbleStylesSwitchRow(cid, me, doc, last = true) }
             SettingsSection {
                 DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false,
                     badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)

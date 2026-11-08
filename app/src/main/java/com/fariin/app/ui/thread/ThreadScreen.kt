@@ -2579,7 +2579,7 @@ private fun FieldIcon(icon: Int, label: String, onClick: () -> Unit) {
  * imePadding, takes this to zero, which leaves the 8 above the keys.
  */
 @Composable
-private fun rememberComposerRestInsets(): androidx.compose.foundation.layout.WindowInsets {
+internal fun rememberComposerRestInsets(): androidx.compose.foundation.layout.WindowInsets {
     val nav = androidx.compose.foundation.layout.WindowInsets.navigationBars
     val tappable = androidx.compose.foundation.layout.WindowInsets.tappableElement
     return remember(nav, tappable) { ComposerRestInsets(nav, tappable) }

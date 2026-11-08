@@ -110,6 +110,18 @@ object LeaveUndo {
         timer = scope.launch { delay(WINDOW_MS); commit() }
     }
 
+    /**
+     * Off my lists at once while [work] runs behind (a channel's Leave, iOS 2026-11-08: no
+     * "Leaving..." wait); a failure puts it back and [failed] is shown.
+     */
+    fun hideWhile(cid: String, failed: String, work: suspend () -> Unit) {
+        _hidden.value = _hidden.value + cid
+        scope.launch {
+            try { work(); delay(3_000); _hidden.value = _hidden.value - cid }
+            catch (_: Exception) { _hidden.value = _hidden.value - cid; com.fariin.app.ui.components.Snack.show(failed) }
+        }
+    }
+
     /** Taken back: nothing went to the server, so the group simply comes back. */
     fun undo() {
         timer?.cancel(); timer = null

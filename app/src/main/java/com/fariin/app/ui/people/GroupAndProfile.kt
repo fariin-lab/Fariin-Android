@@ -135,7 +135,9 @@ private fun TextAction(text: String, enabled: Boolean, busy: Boolean = false, on
  * Username row that opens the username page. The photo goes to `profiles/{me}.jpg`.
  */
 @Composable
-fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
+fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
+                      /** In the sheet: no status-bar gap above the bar (the sheet already sits under it). */
+                      inSheet: Boolean = false) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     var me by remember { mutableStateOf<Person?>(null) }
@@ -194,7 +196,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit) {
         // The contact page's bottom sheet; Cancel is Keep Editing.
         if (askDiscard) PersonConfirmSheet(me?.photoUrl, me?.name.orEmpty(), "Discard changes?", "Your changes are not saved yet.",
             listOf(PersonAction("Discard Changes", plain = true) { onBack(); true }), onDismiss = { askDiscard = false })
-        Box(Modifier.fillMaxWidth().statusBarsPadding().height(64.dp).padding(horizontal = 12.dp)) {
+        Box(Modifier.fillMaxWidth().then(if (inSheet) Modifier.padding(top = 8.dp) else Modifier.statusBarsPadding()).height(64.dp).padding(horizontal = 12.dp)) {
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { close() },
                 contentAlignment = Alignment.Center) { Icon(androidx.compose.material.icons.Icons.Filled.Close, null, tint = c.label) }
             Text("Edit Profile", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
@@ -942,8 +944,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING) {
                     notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
-                // Bubble Styles for the group, between Storage and Group Settings (iOS settingsCard).
-                if (iAmAdmin) BubbleStylesSwitchRow(cid, me, conv, last = false)
+                // No Bubble Styles row here (iOS 2026-11-08 took it off the group page again).
                 if (iAmAdmin) {
                     val waiting = rememberJoinRequests(cid, allowed = team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS) && !team.closed)
                     SettingsRow("Group Settings", icon = painterResource(com.fariin.app.R.drawable.ic_group_settings),

@@ -87,10 +87,11 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 .padding(10.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(card?.photoUrl?.ifEmpty { null }, 20.dp, squircle = true, kind = AvatarKind.of(true, true))
+                // iOS 2026-11-08: the header at the card's own size, photo 24, name 16 semibold.
+                Avatar(card?.photoUrl?.ifEmpty { null }, 24.dp, squircle = true, kind = AvatarKind.of(true, true))
                 Spacer(Modifier.width(6.dp))
                 // Mine sits on my own coloured bubble, where blue would not read: white there.
-                Text(QuoteRules.heading(card), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                Text(QuoteRules.heading(card), fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     color = ink.copy(alpha = if (quiet) 0.6f else 1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f))
                 // A short "Quote" tag at the row's right end; the name shrinks to leave it room.

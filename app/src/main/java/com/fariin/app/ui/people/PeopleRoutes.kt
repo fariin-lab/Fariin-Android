@@ -65,7 +65,8 @@ fun peopleNav(nav: NavHostController, api: PeopleApi? = null) = PeopleNav(
     group = { nav.navigate("group/$it") { launchSingleTop = true } },
     groupStep = { cid, step -> nav.navigate("group/$cid?open=$step") { launchSingleTop = true } },
     newGroup = { nav.navigate("newgroup") { launchSingleTop = true } },
-    editProfile = { nav.navigate("editprofile") { launchSingleTop = true } },
+    // A sheet over the page it was opened from (iOS presents Edit Profile as a sheet), not a page.
+    editProfile = { EditProfileSheet.open.value = true },
     myProfile = { nav.navigate("myprofile") { launchSingleTop = true } },
     newCall = { nav.navigate("newcall") { launchSingleTop = true } },
     newCallLink = { nav.navigate("calllink/new") { launchSingleTop = true } },
@@ -96,4 +97,18 @@ fun liveGroupDoc(cid: String): Map<String, Any?> {
         onDispose { reg.remove() }
     }
     return data
+}
+
+
+/** Edit Profile as a sheet from the bottom over whatever page asked (iOS, owner 2026-11-08). */
+object EditProfileSheet { val open = androidx.compose.runtime.mutableStateOf(false) }
+
+/** Mounted once in the app shell; shows [EditProfileScreen] in the iOS sheet while it is asked for. */
+@androidx.compose.runtime.Composable
+fun EditProfileSheetHost(api: PeopleApi) {
+    if (!EditProfileSheet.open.value) return
+    val motion = com.fariin.app.ui.components.rememberSheetMotion { EditProfileSheet.open.value = false }
+    com.fariin.app.ui.components.FariinSheetDialog(motion, fill = com.fariin.app.ui.theme.Fariin.colors.bgSecondary, typing = true) {
+        EditProfileScreen(api, onBack = { motion.close() }, inSheet = true)
+    }
 }

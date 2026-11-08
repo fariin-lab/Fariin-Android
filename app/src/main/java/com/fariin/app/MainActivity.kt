@@ -293,6 +293,7 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.ui.channels.LocalChannelNav provides com.fariin.app.ui.channels.channelNav(nav)) {
             // A profile, invite or story link opened from outside the app (App Links).
             com.fariin.app.ui.thread.ExternalLinkHost(me)
+            com.fariin.app.ui.people.EditProfileSheetHost(people)
             // The main shell is built once and kept under every page, the way large messengers keep
             // their list alive, so coming back to it costs no rebuild (that was ~50 ms of main-thread
             // work, two dropped frames, on the Pixel 5). The "main" page in the host is see-through;

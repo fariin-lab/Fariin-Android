@@ -441,11 +441,12 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(c.card).padding(14.dp))
             return@Column
         }
-        // Follow: a blue capsule. Following: the chat's glass (iOS liquidGlass, tinted blue only for Follow).
+        // Follow and Mute are the same clear glass with the text colour (iOS 2026-11-08: no blue fill), so the
+        // swap after following changes only the words; a group's Join keeps its blue (not here).
         val capsule = RoundedCornerShape(25.dp)
         Box {
             Box(
-                Modifier.fillMaxWidth().height(50.dp).floating(capsule, fill = if (joined) null else c.blue).clip(capsule)
+                Modifier.fillMaxWidth().height(50.dp).floating(capsule).clip(capsule)
                     .combinedClickable(
                         onClick = {
                             if (!joined) { SimilarChannelsStore.followed(ch.info.cid); ch.onFollow() }
@@ -465,7 +466,7 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                                 tint = c.label, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                         }
-                        Text(t, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (t == "Follow") Color.White else c.label)
+                        Text(t, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     }
                 }
             }
