@@ -510,7 +510,10 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
                 Text(MediaRules.durationLabel(item.durationMs / 1000.0), color = Color.White, fontSize = 11.sp)
             }
         }
-        Box(Modifier.align(Alignment.TopEnd).size(44.dp).clickable(onClick = onToggle)
+        // No tap shade: the 44 dp touch area drew a grey SQUARE over the picture on each tap (owner,
+        // 2026-11-07); the circle filling blue with its number is the answer to the tap.
+        Box(Modifier.align(Alignment.TopEnd).size(44.dp)
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onToggle)
             .semantics { contentDescription = if (chosen) "Selected, number $number" else "Select" }, contentAlignment = Alignment.TopEnd) {
             // On a light picture the white ring vanished (seen on the Pixel, 2026-11-07): a soft dark
             // edge just outside it keeps the empty circle visible on any picture.
