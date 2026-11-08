@@ -1021,8 +1021,14 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     // controls away, the card takes the header's and the bar's room (iOS padding -(height + 16)).
     val duoShare = g.joined && remotes.size == 1 && (g.sharing || remotes[0].screen != null)
     val room by animateFloatAsState(if (duoShare && !chrome.visible) 0f else 1f, tween(280), label = "chromeRoom")
+    // iOS GroupCallDuoView: me and one other person, nothing shared: the 1:1 look. They fill the
+    // screen (video, or their photo large); my card floats in a corner when anyone has video.
+    val duo = !pip && g.joined && remotes.size == 1 && me != null && !duoShare
+    var swapped by remember { mutableStateOf(false) }
+    LaunchedEffect(duo) { if (!duo) swapped = false }
     Box(Modifier.fillMaxSize().background(if (pip) PipFill else Backdrop)) {
         if (waitingScreen) GroupWaiting(g.groupPhoto, pulse = g.calling)
+        if (duo) DuoFeed(if (swapped && duoTile(me!!, remotes[0])) me else remotes[0], meId)
         Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = com.fariin.app.call.GroupCallWords.subtitle(g.waiting, g.connecting, g.reconnecting, g.joined, g.calling, g.members.size)
             // In the small window (picture in picture) only the people show, as iOS's floating card.
@@ -1039,7 +1045,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
             val tileMenu = TileMenu(g, focus, canPin = remotes.size >= 2, onPin = { id -> chrome.touch(); focus = if (focus == id) null else id },
                 onConfirm = { tileConfirm = it })
             Box(Modifier.weight(1f).fillMaxWidth().plainTap { chrome.tap(allowed) }) {
-                if (!waitingScreen) androidx.compose.runtime.CompositionLocalProvider(LocalTileMenu provides tileMenu) {
+                if (!waitingScreen && !duo) androidx.compose.runtime.CompositionLocalProvider(LocalTileMenu provides tileMenu) {
                     GroupStage(g.members, meId, g.activeSpeaker, focus ?: presenter, g.sharing, pinned = focus,
                         onTile = { id ->
                             chrome.touch()
@@ -1085,6 +1091,15 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                     chrome.touch(); onMic()
                 }
                 EndCircle("End call", 56.dp, onLeave)
+            }
+        }
+        if (duo && duoTile(me!!, remotes[0])) {
+            val other = remotes[0]
+            val small = if (swapped) other else me
+            SelfCard(grown = chrome.visible, chrome = chrome, label = if (small.local) "Your video" else "${small.name}'s video",
+                onFlip = if (small.local && small.video != null) ({ onFlip() }) else null,
+                onTap = { if (!chrome.visible) chrome.touch() else { chrome.touch(); swapped = !swapped } }) {
+                DuoCardContent(small)
             }
         }
         // iOS GroupCallRaisedHandsPill: under the header while any hand is up.
@@ -1247,6 +1262,48 @@ private fun FocusStage(big: GroupMember, remotes: List<GroupMember>, me: GroupMe
             Strip(stripPeople, me?.id, speaker, false, onTile, Modifier.weight(1f))
             if (me != null) MemberTile(me, true, false, Modifier.padding(end = m.STRIP_LEADING.dp, top = m.INSET.dp, bottom = m.STRIP_INSET.dp)
                 .size(m.STRIP_TILE.dp), strip = true) {}
+        }
+    }
+}
+
+/** iOS showsTile: the corner card shows only when someone in the two-person call has video. */
+private fun duoTile(me: GroupMember, other: GroupMember): Boolean = me.video != null || other.video != null
+
+/** iOS GroupCallDuoView's big feed: the person's video filling the screen under a top scrim, else their photo at 180. */
+@Composable
+private fun DuoFeed(big: GroupMember, meId: String?) {
+    val v = big.video
+    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        androidx.compose.animation.Crossfade(v != null, animationSpec = androidx.compose.animation.core.tween(200), label = "duoFeed") { live ->
+            if (live && v != null) Box(Modifier.fillMaxSize()) {
+                LiveKitVideo(v, Modifier.fillMaxSize(), mirror = big.id == meId)
+                Box(Modifier.fillMaxWidth().height(200.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))))
+            } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Avatar(big.photo, 180.dp, Modifier.shadow(26.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape))
+            }
+        }
+        if (big.poor) Box(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 14.dp, top = 72.dp).size(22.dp).clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.7f)).semantics { contentDescription = "${big.name}, poor connection" }, contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_wifi_slash), null, tint = Color.White, modifier = Modifier.size(11.dp))
+        }
+    }
+}
+
+/** What the corner card shows (iOS tileContent): the video, else the photo on black with a small camera-off mark. */
+@Composable
+private fun DuoCardContent(m: GroupMember) {
+    val v = m.video
+    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        if (v != null) LiveKitVideo(v, Modifier.fillMaxSize(), mirror = m.local)
+        else {
+            Avatar(m.photo, 54.dp)
+            Icon(ImageVector.vectorResource(R.drawable.ic_call_video_off), null, tint = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).size(13.dp))
+        }
+        if (!m.local && !m.micOn) Box(Modifier.align(Alignment.BottomStart).padding(6.dp).size(22.dp).clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_mic_off), "Muted", tint = Color.White, modifier = Modifier.size(12.dp))
         }
     }
 }
