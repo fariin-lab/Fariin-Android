@@ -345,7 +345,9 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         LazyColumn(Modifier.fillMaxSize().then(if (frost) Modifier.hazeSource(storiesHaze) else Modifier), state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = topPad, bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             // A little air under the bar's buttons (owner 2026-11-08: "too close" to the ••• circle).
-            item(key = "search", contentType = "search") { Box(Modifier.padding(top = 10.dp)) { com.fariin.app.ui.calls.SearchField(search, { search = it }, "Search") } }
+            item(key = "search", contentType = "search") { Box(Modifier.padding(top = 10.dp)) { com.fariin.app.ui.calls.SearchField(search, { search = it }, "Search", hiddenPx = {
+                (-(listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "search" }?.offset ?: 0)).toFloat().coerceAtLeast(0f)
+            }) } }
             // The field replaces the page rather than filtering it in place (iOS): one list of
             // matches in the list's own rows under "Friends", or "No Results".
             if (query.isNotEmpty()) {

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.outlined.Search
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
@@ -322,7 +323,9 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                 Text("Calls", fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp, color = c.label,
                     modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 8.dp))
             }
-            item(key = "search", contentType = "search") { SearchField(search, { search = it }, "Search calls") }
+            item(key = "search", contentType = "search") { SearchField(search, { search = it }, "Search calls", hiddenPx = {
+                (-(listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "search" }?.offset ?: 0)).toFloat().coerceAtLeast(0f)
+            }) }
             when {
                 // iOS CallListSkeleton while the history is read.
                 !loaded -> item(key = "skeleton") { com.fariin.app.ui.components.CallListSkeleton() }
@@ -473,10 +476,25 @@ private fun RowMenu(open: Boolean, onDismiss: () -> Unit, callUp: Boolean, chats
 }
 
 @Composable
-internal fun SearchField(value: String, onChange: (String) -> Unit, prompt: String) {
-    // The floating search capsule every tab page shares.
+internal fun SearchField(value: String, onChange: (String) -> Unit, prompt: String,
+                         /** How much of the field the list has pulled under the bar (0 at rest), read while drawing. */
+                         hiddenPx: () -> Float = { 0f }) {
+    // The floating search capsule every tab page shares. Scrolled up it SHRINKS IN PLACE, as the chat
+    // list's (iOS, owner 2026-11-08 "still in Calls it won't shrink"): its top edge stays, the words fade
+    // in the first 10 dp, the capsule gets thinner from the bottom until it is gone.
     com.fariin.app.ui.components.FloatingSearchField(value, onChange, prompt,
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 10.dp))
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 10.dp)
+            .graphicsLayer {
+                val hidden = if (value.isEmpty()) hiddenPx() else 0f
+                translationY = hidden
+                alpha = if (hidden <= 0f) 1f else (1f - hidden / (size.height * 1.1f)).coerceIn(0f, 1f)
+                clip = hidden > 0f
+                val h = (size.height - hidden).coerceAtLeast(0f)
+                shape = androidx.compose.foundation.shape.GenericShape { sz, _ ->
+                    addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, 0f, sz.width, h.coerceAtMost(sz.height),
+                        androidx.compose.ui.geometry.CornerRadius(minOf(sz.height / 2f, h / 2f))))
+                }
+            })
 }
 
 @Composable
