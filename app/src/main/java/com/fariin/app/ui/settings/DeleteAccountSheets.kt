@@ -255,8 +255,10 @@ internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, conte
     // imePadding: with the keyboard up the scroll ends at its top, so a field and the button under it
     // can be scrolled (and brought) into view instead of sitting behind it (same as ReportSheet).
     Box(Modifier.fillMaxSize().imePadding()) {
+        // A pull down anywhere while the page is at its top moves the sheet with the finger (iOS);
+        // taps, and every other drag, stay the page's own (sheetDrag atTop, as ReportSheet).
         // Measured inside the scroll (unbounded), so this is the content's own height with its padding.
-        Column(Modifier.fillMaxWidth().verticalScroll(scroll)
+        Column(Modifier.fillMaxWidth().sheetDrag(motion, atTop = { scroll.value == 0 }).verticalScroll(scroll)
             .onSizeChanged { contentDp = with(density) { it.height.toDp().value } }
             .padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) { content() }
