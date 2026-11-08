@@ -66,6 +66,9 @@ object MessageRules {
      */
     fun canReplyHere(m: Message, mayReply: Boolean): Boolean = mayReply && canReply(m) && !isStoryReaction(m)
 
+    /** A swipe replies to a story react-bar emoji too (iOS 2fff7ecc8); it still has no long press. */
+    fun canSwipeReply(m: Message, mayReply: Boolean): Boolean = mayReply && canReply(m)
+
     /** Info: my own delivered message in a group (iOS). */
     fun canInfo(m: Message, me: String, isGroup: Boolean): Boolean = isGroup && m.authorId == me && m.sendState == null
 

@@ -994,7 +994,7 @@ private fun ThreadContent(
                                 // A long press opens the message menu like any bubble; it used to fall
                                 // through to the bubble's tap and ask "Call them?" (Pixel, 2026-11-04).
                                 // A swipe replies, as on every other bubble (iOS allows Reply on a call).
-                                SwipeRow(enabled = MessageRules.canReplyHere(m, mayReply), onReply = { replyTo = m; editing = null }) {
+                                SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }) {
                                 Box(Modifier.fillMaxWidth()
                                     .onPlaced { coords[0] = it }
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
@@ -1062,7 +1062,7 @@ private fun ThreadContent(
                                     })
                                 }
                             }
-                            else -> SwipeRow(enabled = MessageRules.canReplyHere(m, mayReply), onReply = { replyTo = m; editing = null }) {
+                            else -> SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }) {
                                 Column(Modifier.fillMaxWidth()
                                     .onPlaced { coords[0] = it }
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }

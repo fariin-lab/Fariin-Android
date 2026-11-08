@@ -55,6 +55,7 @@ class ChatGapsRulesTest {
         assertEquals(true, MessageRules.canReplyHere(plain, true))
         assertEquals(false, MessageRules.canReplyHere(plain, false))
         assertEquals(false, MessageRules.canReplyHere(storyReact, true))
+        assertEquals(true, MessageRules.canSwipeReply(storyReact, true))   // iOS 2fff7ecc8
         assertEquals(true, MessageRules.canReplyHere(storyTyped, true))
     }
 
