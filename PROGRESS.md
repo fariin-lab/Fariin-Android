@@ -1327,3 +1327,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~4:37 PM: GIF panel square tiles (c6deafe7). Checked fine: sticker panel, photo
   editor (HD with crop/draw, as iOS), Calls Missed filter + select mode. MISTAKE: a text-tap on
   "Missed" hit a call row and rang adnan ~10 s (ended); Calls tab now tapped by coordinates only.
+- 2026-11-08 ~5:40 PM: group call strip newest first (37f40c6a, test), call-end notice as an alert
+  with OK (973b1244, untested live). Manage Storage checked: type split differs from iOS by design
+  (Android's own caches), left.
