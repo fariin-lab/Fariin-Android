@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style for the iOS "play.fill: a solid triangle with soft corners" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M8,5.2C8,4.4 8.9,3.9 9.6,4.4L19,11.1C19.6,11.5 19.6,12.5 19,12.9L9.6,19.6C8.9,20.1 8,19.6 8,18.8Z"
+        android:fillColor="#FF000000" />
+</vector>

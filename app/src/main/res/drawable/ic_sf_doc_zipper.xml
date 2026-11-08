@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style for the iOS "doc.zipper: a page with a folded corner and a zip" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M14,3.5H7.5C6.4,3.5 5.5,4.4 5.5,5.5V18.5C5.5,19.6 6.4,20.5 7.5,20.5H16.5C17.6,20.5 18.5,19.6 18.5,18.5V8Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M14,3.5V8H18.5"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M10.2,4.6V5.4M11.8,6.4V7.2M10.2,8.2V9M11.8,10V10.8"
+        android:strokeColor="#FF000000" android:strokeWidth="1.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M9.8,12.4H12.2V14.8H9.8Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

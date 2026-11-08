@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style for the iOS "music.note: a solid note head on a stem with a flag" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M8.2,15.1C9.6,15.1 10.8,16 10.8,17.2C10.8,18.4 9.6,19.3 8.2,19.3C6.8,19.3 5.6,18.4 5.6,17.2C5.6,16 6.8,15.1 8.2,15.1Z"
+        android:fillColor="#FF000000" />
+    <path android:pathData="M10.4,17V4.6L17.6,3.2V7L10.4,8.4"
+        android:strokeColor="#FF000000" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

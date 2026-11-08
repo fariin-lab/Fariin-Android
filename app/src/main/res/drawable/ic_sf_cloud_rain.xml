@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style for the iOS "cloud.rain: a cloud outline with three drops" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M7.5,15.5C5.3,15.5 3.5,13.8 3.5,11.7C3.5,9.7 5.1,8 7.1,7.9C7.9,5.6 10,4 12.5,4C15.6,4 18.1,6.4 18.3,9.4C19.8,9.8 20.9,11.2 20.9,12.8C20.9,14.3 19.7,15.5 18.2,15.5Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M8.5,18.2L7.8,20.2M12.5,18.2L11.8,20.2M16.5,18.2L15.8,20.2"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

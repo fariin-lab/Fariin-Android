@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style for the iOS "aspectratio: a frame with two corner marks" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M6,5.5H18C19.4,5.5 20.5,6.6 20.5,8V16C20.5,17.4 19.4,18.5 18,18.5H6C4.6,18.5 3.5,17.4 3.5,16V8C3.5,6.6 4.6,5.5 6,5.5Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M7,12V9H10M17,12V15H14"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

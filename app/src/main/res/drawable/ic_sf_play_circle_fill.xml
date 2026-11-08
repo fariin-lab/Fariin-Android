@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style for the iOS "play.circle.fill: a solid disc with the play triangle cut out" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M12,12m-10,0a10,10 0,1 1,20,0a10,10 0,1 1,-20,0ZM10,8.1L16.3,12L10,15.9Z"
+        android:fillColor="#FF000000" android:fillType="evenOdd" />
+</vector>
