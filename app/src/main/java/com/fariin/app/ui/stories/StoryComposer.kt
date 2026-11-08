@@ -519,7 +519,10 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     var trimming by remember { mutableStateOf(false) }
     var scrubMs by remember { mutableStateOf<Long?>(null) }
     // Every item as it will go up, filled in by Next (a text story's card goes as it is).
-    var prepared by remember { mutableStateOf(if (textStory) items.map { it.media to null as com.fariin.app.media.StoryVideoCut.Edit? } else emptyList()) }
+    var prepared by remember {
+        mutableStateOf<List<Pair<StoryMedia.Prepared, com.fariin.app.media.StoryVideoCut.Edit?>>>(
+            if (textStory) items.map { Pair(it.media, null) } else emptyList())
+    }
     // The drag that closes the editor back to the picker (iOS handleDismissPan); 0 at rest.
     var dragY by remember { mutableFloatStateOf(0f) }
     var leaving by remember { mutableStateOf(false) }
@@ -971,7 +974,8 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
                 if (flight != null) return@ShareStoryAudiencePage
                 // Every item, each its own story, in the post's order (iOS send: one sheet for all).
-                val outs = if (prepared.size == items.size) prepared else items.map { it.media to null }
+                val outs: List<Pair<StoryMedia.Prepared, com.fariin.app.media.StoryVideoCut.Edit?>> =
+                    if (prepared.size == items.size) prepared else items.map { Pair(it.media, null) }
                 items.forEachIndexed { i, item ->
                     val (p, job) = outs[i]
                     StoryUploads.start(ctx, me, p, item.caption, choice, picked, hours, storyConvs(conversations), capture, lists,
