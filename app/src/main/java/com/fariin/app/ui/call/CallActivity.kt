@@ -259,6 +259,15 @@ class CallActivity : ComponentActivity() {
     }
 
     /** iOS: nobody is looking at the No answer page once the app has gone; it closes. */
+    /**
+     * The call screen lives in its own task; closing it with a plain finish() left that task in
+     * recents with an old snapshot, so after a few calls the app showed up there twice or more
+     * (owner 2026-11-08). Every close takes its task away with it.
+     */
+    override fun finish() {
+        if (android.os.Build.VERSION.SDK_INT >= 21 && !isChangingConfigurations) finishAndRemoveTask() else super.finish()
+    }
+
     override fun onStop() {
         super.onStop()
         if (!inPip && !isChangingConfigurations) CallManager.closeNoAnswer()
