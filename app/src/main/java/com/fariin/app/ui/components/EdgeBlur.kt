@@ -53,7 +53,7 @@ fun rememberEdgeAlpha(under: Boolean, startOn: Boolean = false): androidx.compos
  */
 fun androidx.compose.ui.Modifier.frostedTopBar(
     haze: dev.chrisbanes.haze.HazeState, page: androidx.compose.ui.graphics.Color, glass: Boolean,
-    tail: androidx.compose.ui.unit.Dp = 34.dp,   // iOS measured (owner screenshot 2026-11-08): ends 34 under the bar
+    tail: androidx.compose.ui.unit.Dp = 0.dp,   // measured on the reference (Pixel, 2026-11-08): nothing below the bar
 ): androidx.compose.ui.Modifier = this
     .layout { m, k ->
         val t = tail.roundToPx()
@@ -61,12 +61,13 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
         layout(p.width, (p.height - t).coerceAtLeast(0)) { p.place(0, 0) }
     }
     .then(if (glass) androidx.compose.ui.Modifier.hazeEffect(haze) {
-        backgroundColor = page; blurRadius = 22.dp; noiseFactor = 0f
-        tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.70f)))   // 70%: the owner liked Calls at this
+        // Mostly blur, a light tint: a colour band is what shows where a bar ends (reference: ~0.4).
+        backgroundColor = page; blurRadius = 26.dp; noiseFactor = 0f
+        tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.42f)))
         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
         // Solid down the bar, then a long, soft ease to nothing over the tail.
-        // iOS: full strength to the bar's middle, then a ~58 pt fade (status 28 + bar 48 + tail 34: middle at 0.47).
-        progressive = edgeStages(0.47f, gentle = true)
+        // Reference: full strength to the bar's middle, then a short soft fade; the bar's lower part is clear.
+        progressive = edgeStages(0.62f, gentle = true)
     } else androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
         0f to page, 0.40f to page, 0.55f to page.copy(alpha = 0.78f), 0.7f to page.copy(alpha = 0.45f),
         0.84f to page.copy(alpha = 0.18f), 0.94f to page.copy(alpha = 0.05f), 1f to page.copy(alpha = 0f))))
