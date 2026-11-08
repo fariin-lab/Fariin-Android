@@ -90,6 +90,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -1015,6 +1017,10 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     val chrome = rememberChrome(allowed)
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f, tween(280), label = "chrome")
     val waitingScreen = g.linkRoom == null && !g.cameraOn && !g.waiting && (g.connecting || (g.joined && remotes.isEmpty()))
+    // iOS duoSharePair: me and one other person with a screen shared by either of us. With the
+    // controls away, the card takes the header's and the bar's room (iOS padding -(height + 16)).
+    val duoShare = g.joined && remotes.size == 1 && (g.sharing || remotes[0].screen != null)
+    val room by animateFloatAsState(if (duoShare && !chrome.visible) 0f else 1f, tween(280), label = "chromeRoom")
     Box(Modifier.fillMaxSize().background(if (pip) PipFill else Backdrop)) {
         if (waitingScreen) GroupWaiting(g.groupPhoto, pulse = g.calling)
         Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1025,7 +1031,7 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 left = onMinimize?.let { m -> { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_collapse), "Minimize call", 44.dp) { chrome.touch(); m() } } },
                 side = 44.dp,
                 right = { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person2), "Participants", 44.dp) { chrome.touch(); people = true } },
-                modifier = Modifier.alpha(shown),
+                modifier = Modifier.alpha(shown).roomFactor(room),
             )
             Spacer(Modifier.height(2.dp))
             // iOS callTileMenu: a long press on someone's tile offers Pin / Unpin and, to a host,
@@ -1053,8 +1059,8 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 Spacer(Modifier.height(12.dp))
                 CallLinkRequestStack(g.requests, Modifier.padding(horizontal = 14.dp))
             }
-            Spacer(Modifier.height(16.dp))
-            if (!pip) ControlCapsule(Modifier.alpha(shown)) {
+            Spacer(Modifier.height(16.dp * room))
+            if (!pip) ControlCapsule(Modifier.alpha(shown).roomFactor(room)) {
                 val shareOn = g.sharing || g.sharePending
                 // iOS bar (GroupCallView controls): More, Camera, Speaker, Mic, End. Share Screen and
                 // Flip Camera are in More; More is lit white while I share.
@@ -1151,6 +1157,20 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
         val big = remotes.firstOrNull { it.id == focus }
         when {
             remotes.isEmpty() -> if (me != null) MemberTile(me, true, false, Modifier.fillMaxSize(), alone = true, iAmSharing = iAmSharing) {}
+            // iOS GroupCallDuoShareView: two people and a shared screen (either side's): the screen, or
+            // my sharing card, in one big rounded card; the two people side by side under it.
+            remotes.size == 1 && me != null && (iAmSharing || remotes[0].screen != null) -> {
+                val other = remotes[0]
+                val tileH = minOf(110f, maxOf(84f, h * 0.13f)).dp
+                Column(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (iAmSharing) SharingCard(onStopShare, onLargeTap, Modifier.weight(1f).fillMaxWidth())
+                    else MemberTile(other, false, false, Modifier.weight(1f).fillMaxWidth(), large = true, onClick = onLargeTap)
+                    Row(Modifier.fillMaxWidth().height(tileH), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        MemberTile(other.copy(screen = null), false, other.id == speaker, Modifier.weight(1f).fillMaxHeight(), onClick = onLargeTap)
+                        MemberTile(me, true, false, Modifier.weight(1f).fillMaxHeight(), iAmSharing = false, onClick = onLargeTap)
+                    }
+                }
+            }
             // iOS GroupCallStagePager iAmSharing: the sharing card with Stop Sharing, everyone else under it.
             iAmSharing -> Column(Modifier.fillMaxSize()) {
                 SharingCard(onStopShare, onLargeTap, Modifier.weight(1f).fillMaxWidth()
@@ -1229,6 +1249,13 @@ private fun FocusStage(big: GroupMember, remotes: List<GroupMember>, me: GroupMe
                 .size(m.STRIP_TILE.dp), strip = true) {}
         }
     }
+}
+
+/** Lays a bar out at [f] of its height (0 = gone), clipped, so the stage below grows into its room. */
+private fun Modifier.roomFactor(f: Float): Modifier = if (f >= 1f) this else this.clipToBounds().layout { m, c ->
+    val p = m.measure(c)
+    val h = (p.height * f).toInt()
+    layout(p.width, h) { p.place(0, h - p.height) }
 }
 
 /** iOS GroupCallSharingCard: what I see while my screen goes out, with Stop Sharing. */
