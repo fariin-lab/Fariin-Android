@@ -950,6 +950,7 @@ fun StoryViewer(
                 // iOS onBlock: straight away, no question (ChatService.setBlocked).
                 onBlock = { v -> storyScope.launch { runCatching { FirestorePeople(me, CryptoHub.crypto).setBlocked(v.uid, true) } } },
                 convs = convs,
+                knownViews = summaries[s.id]?.count,
             )
         }
         // A profile opened from the sheet sits over it; closing it leaves the sheet where it was.
@@ -1116,7 +1117,11 @@ private fun StoryPage(
             var job: kotlinx.coroutines.Job? = null
             fun refresh() {
                 job?.cancel()
-                job = storyScope.launch { service.viewSummary(story.id, who)?.let { summaries[story.id] = it } }
+                job = storyScope.launch {
+                    service.viewSummary(story.id, who)?.let { summaries[story.id] = it }
+                    // The viewers list too, so a swipe up shows the real rows from its first frame (iOS).
+                    service.fetchViewers(story.id, who)?.let { StoryViewersCache.put(story.id, it) }
+                }
             }
             refresh()
             val reg = service.watchViews(story.id) { refresh() }

@@ -395,9 +395,12 @@ internal fun ViewersSheet(
     rowSwipe: RowSwipe? = null,
     /** The chat list: a group story's Replies tab reads its group from it (names, who may delete). */
     convs: List<com.fariin.app.data.Conversation> = emptyList(),
+    /** The story's view count when known: the loading rows are that many (never six for one view). */
+    knownViews: Int? = null,
 ) {
     val storyId = story.id
-    var people by remember(storyId) { mutableStateOf<List<StoryViewer>?>(null) }
+    // What is already known (fetched while the story was on screen) shows from the first frame.
+    var people by remember(storyId) { mutableStateOf(StoryViewersCache.get(storyId)) }
     var failed by remember(storyId) { mutableStateOf(false) }
     var query by rememberSaveable(storyId) { mutableStateOf("") }
     var tab by rememberSaveable(storyId) { mutableStateOf(0) }
@@ -409,7 +412,7 @@ internal fun ViewersSheet(
             job = loadScope.launch {
                 var got = service.fetchViewers(storyId, who)
                 while (got == null) { failed = true; delay(3000); got = service.fetchViewers(storyId, who) }
-                failed = false; people = got
+                failed = false; people = got; StoryViewersCache.put(storyId, got)
             }
         }
         load()
@@ -534,7 +537,7 @@ internal fun ViewersSheet(
                             replies = replies.filter { it.id != r.id }
                             loadScope.launch { runCatching { com.fariin.app.data.GroupStoryReplies.delete(storyId, r.id) } }
                         })
-                    list == null && !failed -> ViewersSkeleton()
+                    list == null && !failed && knownViews != 0 -> ViewersSkeleton(knownViews ?: 6)
                     list == null || list.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 24.dp)) {
                         Text(
                             when {
@@ -754,11 +757,21 @@ internal fun replyAgo(atMs: Long, nowMs: Long = System.currentTimeMillis()): Str
     }
 }
 
-/** The list while it loads (iOS StoryViewerSkeleton): six rows the shape of a viewer. */
+/**
+ * The viewers already fetched for each of my stories (iOS shows the real rows from the first frame):
+ * filled by the story page while it is on screen and by the sheet itself.
+ */
+object StoryViewersCache {
+    private val map = java.util.concurrent.ConcurrentHashMap<String, List<StoryViewer>>()
+    fun get(id: String): List<StoryViewer>? = map[id]
+    fun put(id: String, list: List<StoryViewer>) { map[id] = list }
+}
+
+/** The list while it loads (iOS StoryViewerSkeleton): one row per known view (1 view, 1 row), at most six. */
 @Composable
-private fun ViewersSkeleton() {
+private fun ViewersSkeleton(rows: Int = 6) {
     Column(Modifier.fillMaxWidth()) {
-        listOf(130, 96, 150, 110, 84, 140).forEach { w ->
+        listOf(130, 96, 150, 110, 84, 140).take(rows.coerceIn(1, 6)).forEach { w ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 SkeletonCircle(46.dp)
                 Spacer(Modifier.width(12.dp))
