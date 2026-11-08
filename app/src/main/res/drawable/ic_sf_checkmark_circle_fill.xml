@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "checkmark.circle.fill". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M2,12a10,10 0 1,0 20,0a10,10 0 1,0 -20,0ZM7.04,12.98L10.73,16.55L17.09,9.75L15.71,8.45L10.67,13.85L8.36,11.62Z"
+        android:fillColor="#FF000000" android:fillType="evenOdd" />
+</vector>

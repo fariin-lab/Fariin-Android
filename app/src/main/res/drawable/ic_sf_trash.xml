@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "trash". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M4,6.4H20M9,6.4V5C9,4.1 9.7,3.4 10.6,3.4H13.4C14.3,3.4 15,4.1 15,5V6.4M6,6.4L6.9,19C7,20.1 7.9,20.9 9,20.9H15C16.1,20.9 17,20.1 17.1,19L18,6.4M10,10.4V16.8M14,10.4V16.8"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

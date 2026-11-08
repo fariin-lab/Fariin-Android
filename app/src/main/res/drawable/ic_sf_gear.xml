@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "gear". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M18.82,10.43L21.23,10.87L21.23,13.13L18.82,13.57L17.94,15.71L19.33,17.73L17.73,19.33L15.71,17.94L13.57,18.82L13.13,21.23L10.87,21.23L10.43,18.82L8.29,17.94L6.27,19.33L4.67,17.73L6.06,15.71L5.18,13.57L2.77,13.13L2.77,10.87L5.18,10.43L6.06,8.29L4.67,6.27L6.27,4.67L8.29,6.06L10.43,5.18L10.87,2.77L13.13,2.77L13.57,5.18L15.71,6.06L17.73,4.67L19.33,6.27L17.94,8.29Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M9,12a3,3 0 1,0 6,0a3,3 0 1,0 -6,0Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

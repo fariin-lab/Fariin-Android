@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "star.fill". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M12,3.2L14.41,9.28L20.94,9.7L15.9,13.87L17.53,20.2L12,16.7L6.47,20.2L8.1,13.87L3.06,9.7L9.59,9.28Z"
+        android:fillColor="#FF000000" />
+</vector>

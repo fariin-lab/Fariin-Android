@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "person.crop.circle.fill". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M2,12a10,10 0 1,0 20,0a10,10 0 1,0 -20,0ZM8.5,9.3a3.5,3.5 0 1,0 7,0a3.5,3.5 0 1,0 -7,0ZM5.9,18.4C7.3,16.3 9.5,15.1 12,15.1C14.5,15.1 16.7,16.3 18.1,18.4C16.6,19.9 14.4,20.8 12,20.8C9.6,20.8 7.4,19.9 5.9,18.4Z"
+        android:fillColor="#FF000000" android:fillType="evenOdd" />
+</vector>

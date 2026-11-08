@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "qrcode.viewfinder". Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M3.5,8V5.5C3.5,4.4 4.4,3.5 5.5,3.5H8M16,3.5H18.5C19.6,3.5 20.5,4.4 20.5,5.5V8M20.5,16V18.5C20.5,19.6 19.6,20.5 18.5,20.5H16M8,20.5H5.5C4.4,20.5 3.5,19.6 3.5,18.5V16"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M8,7.4H10.6A0.6,0.6 0 0,1 11.2,8V10.6A0.6,0.6 0 0,1 10.6,11.2H8A0.6,0.6 0 0,1 7.4,10.6V8A0.6,0.6 0 0,1 8,7.4Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M13.4,7.4H16A0.6,0.6 0 0,1 16.6,8V10.6A0.6,0.6 0 0,1 16,11.2H13.4A0.6,0.6 0 0,1 12.8,10.6V8A0.6,0.6 0 0,1 13.4,7.4Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M8,12.8H10.6A0.6,0.6 0 0,1 11.2,13.4V16A0.6,0.6 0 0,1 10.6,16.6H8A0.6,0.6 0 0,1 7.4,16V13.4A0.6,0.6 0 0,1 8,12.8Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M13.1,12.8H14.2A0.3,0.3 0 0,1 14.5,13.1V14.2A0.3,0.3 0 0,1 14.2,14.5H13.1A0.3,0.3 0 0,1 12.8,14.2V13.1A0.3,0.3 0 0,1 13.1,12.8Z"
+        android:fillColor="#FF000000" />
+    <path android:pathData="M15.2,14.9H16.3A0.3,0.3 0 0,1 16.6,15.2V16.3A0.3,0.3 0 0,1 16.3,16.6H15.2A0.3,0.3 0 0,1 14.9,16.3V15.2A0.3,0.3 0 0,1 15.2,14.9Z"
+        android:fillColor="#FF000000" />
+</vector>
