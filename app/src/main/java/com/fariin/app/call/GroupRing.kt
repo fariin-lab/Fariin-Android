@@ -36,7 +36,11 @@ data class RingFace(val uid: String, val name: String, val photo: String?)
  * A group chat's call ringing me (iOS AdhocInvite as GroupCallRinging builds it for a group ring):
  * the group's title, voice or video, who started it and when, and their face (the starter first).
  */
-data class GroupInvite(val cid: String, val title: String, val video: Boolean, val startedBy: String, val startedAtMs: Long, val faces: List<RingFace>)
+data class GroupInvite(val cid: String, val title: String, val video: Boolean, val startedBy: String, val startedAtMs: Long, val faces: List<RingFace>,
+                       /** A call link's ring (Add people in a link call): the link's key; [cid] is its room id. */
+                       val linkKey: String? = null) {
+    val roomKind: String get() = if (linkKey != null) "link" else "group"
+}
 
 /** The pure rules of a group ring, for the tests. */
 object GroupRingRules {
@@ -56,8 +60,9 @@ object GroupRingRules {
     }
 
     /** iOS GroupCallRinging.sendAnswer's payload ("decline", "busy", "joined"); a group's room also as `cid`. */
-    fun answerBody(answer: String, cid: String, startedAtMs: Long?): Map<String, Any> = buildMap {
-        put("roomKind", "group"); put("roomId", cid); put("answer", answer); put("cid", cid)
+    fun answerBody(answer: String, cid: String, startedAtMs: Long?, roomKind: String = "group"): Map<String, Any> = buildMap {
+        put("roomKind", roomKind); put("roomId", cid); put("answer", answer)
+        if (roomKind == "group") put("cid", cid)
         startedAtMs?.let { put("startedAt", it) }
     }
 
@@ -120,6 +125,37 @@ object GroupRing {
         }
     }
 
+    /**
+     * A call link's ring (server linkCallInvite, owner 2026-11-08: Android never rang when added):
+     * a data push {type: "linkring", roomId, key, callerUid, callerName, title, video, startedAt,
+     * sentAt}. Rings while my invite (callLinks/{roomId}/invites/{me}) is still "ringing"; Join goes
+     * straight in (the invite lets me past the approval), as iOS acceptFromScreen with a link key.
+     */
+    fun onLinkPush(context: Context, d: Map<String, String>) {
+        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val roomId = d["roomId"].orEmpty()
+        val key = d["key"]?.let { CallLinkKey.ofText(it) } ?: return
+        if (roomId.isEmpty() || roomId.contains("/") || key.roomId != roomId) return
+        val caller = d["callerUid"].orEmpty()
+        if (caller == me) return
+        app = context.applicationContext
+        if (_invite.value?.cid == roomId || GroupCall.ui.value.cid == "link:$roomId" || roomId in declinedHere) return
+        val started = d["startedAt"]?.toLongOrNull()
+        val sent = d["sentAt"]?.toLongOrNull()
+        if (sent != null && System.currentTimeMillis() - sent > GroupCallWire.RING_WINDOW_MS) return
+        if (GroupCall.ui.value.cid != null || CallManager.ui.value.status.live || _invite.value != null) {
+            answer("busy", roomId, started, roomKind = "link"); return
+        }
+        val name = d["callerName"]?.takeIf { it.isNotEmpty() } ?: "Someone"
+        val title = d["title"]?.takeIf { it.isNotEmpty() } ?: CallLinkDefaults.NAME
+        scope.launch {
+            val photo = try { db.collection("users").document(caller).get().await().getString("photoUrl") } catch (_: Exception) { null }
+            if (_invite.value != null || GroupCall.ui.value.cid != null) return@launch
+            ring(GroupInvite(roomId, title, d["video"] != "0" && d["video"] != "false", caller, started ?: System.currentTimeMillis(),
+                listOf(RingFace(caller, name, photo?.ifEmpty { null })), linkKey = key.text))
+        }
+    }
+
     /** Debug demo only: the ring screen with made-up people, no Firebase, no sound. */
     fun demo(invite: GroupInvite) { _invite.value = invite }
 
@@ -132,7 +168,13 @@ object GroupRing {
         // The call doc: ended, or answered / declined on my other phone, stops this ring.
         val me = FirebaseAuth.getInstance().currentUser?.uid ?: ""
         reg?.remove()
-        reg = db.collection("groupCalls").document(i.cid).addSnapshotListener { s, _ ->
+        reg = if (i.linkKey != null) {
+            // A link's ring: my invite answered, declined, timed out or gone (the call ended) stops it.
+            db.collection("callLinks").document(i.cid).collection("invites").document(me).addSnapshotListener { s, _ ->
+                if (_invite.value?.cid != i.cid || s == null) return@addSnapshotListener
+                if (s.getString("state") != "ringing") stop()
+            }
+        } else db.collection("groupCalls").document(i.cid).addSnapshotListener { s, _ ->
             if (_invite.value?.cid != i.cid || s == null) return@addSnapshotListener
             if (!GroupRingRules.rings(s.data, me, null, 0)) stop()
         }
@@ -148,7 +190,7 @@ object GroupRing {
         val i = _invite.value ?: return
         declinedHere += i.cid
         stop()
-        answer("decline", i.cid, i.startedAtMs, tries = 3)
+        answer("decline", i.cid, i.startedAtMs, tries = 3, roomKind = i.roomKind)
     }
 
     /**
@@ -160,7 +202,12 @@ object GroupRing {
         val i = _invite.value ?: return null
         declinedHere += i.cid   // never ring again for a room I answered
         stop()
-        GroupCall.join(context, i.cid, i.title, video = i.video && cameraAllowed, requireLive = true, mic = !muted)
+        val key = i.linkKey?.let { CallLinkKey.ofText(it) }
+        if (key != null) {
+            // Straight in, no approval wait (invited); the server hears "joined" (iOS reportLinkJoined).
+            GroupCall.joinLink(context, key, video = i.video && cameraAllowed, mic = !muted)
+            answer("joined", i.cid, i.startedAtMs, roomKind = "link")
+        } else GroupCall.join(context, i.cid, i.title, video = i.video && cameraAllowed, requireLive = true, mic = !muted)
         return i
     }
 
@@ -177,9 +224,9 @@ object GroupRing {
     }
 
     /** groupRingAnswer (functions-groups); an offline decline is tried again a few times. */
-    fun answer(answer: String, cid: String, startedAtMs: Long?, tries: Int = 2) {
+    fun answer(answer: String, cid: String, startedAtMs: Long?, tries: Int = 2, roomKind: String = "group") {
         if (FirebaseAuth.getInstance().currentUser == null) return
-        val body = GroupRingRules.answerBody(answer, cid, startedAtMs)
+        val body = GroupRingRules.answerBody(answer, cid, startedAtMs, roomKind)
         scope.launch {
             repeat(maxOf(1, tries)) { attempt ->
                 try {

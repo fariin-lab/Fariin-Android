@@ -52,6 +52,12 @@ class FariinMessagingService : FirebaseMessagingService() {
         }
         // A group chat's call ringing me (server onGroupCallStarted: data {cid, type: "groupcall"}).
         // With the app running the ring screen comes up (GroupRing); closed, Android drew the banner.
+        // Added to a call link's call (server linkCallInvite): the same ring screen, joining the link.
+        if (message.data["type"] == "linkring") {
+            val d = message.data.toMap()
+            android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onLinkPush(applicationContext, d) }
+            return
+        }
         if (message.data["type"] == "groupcall") {
             val cid = message.data["cid"].orEmpty()
             android.os.Handler(android.os.Looper.getMainLooper()).post { com.fariin.app.call.GroupRing.onPush(applicationContext, cid) }
