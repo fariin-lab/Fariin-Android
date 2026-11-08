@@ -668,6 +668,32 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var askEnd by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
     val exitScope = rememberCoroutineScope()
+    // iOS settingsCard for everyone in the group (owner 2026-11-07 with the iPhone's page): Sounds &
+    // Notifications ("On" / "Muted"), and Storage Used with the chat's size on this phone.
+    var muteOverride by remember(cid) { mutableStateOf<Double?>(null) }
+    val liveUntil = com.fariin.app.data.GroupInfoCircles.mutedUntil(conv, me)
+    androidx.compose.runtime.LaunchedEffect(liveUntil) { muteOverride = null }
+    val muteUntil = muteOverride ?: liveUntil
+    var soundsOpen by remember { mutableStateOf(false) }
+    if (soundsOpen) {
+        ContactSoundsPage(muteUntil, onMute = { until ->
+            muteOverride = until
+            scope.launch { if (!writeContactMute(cid, me, until)) muteOverride = null }
+        }, onBack = { soundsOpen = false })
+        return
+    }
+    val storageCtx = LocalContext.current.applicationContext
+    val hiddenNow by com.fariin.app.data.HiddenMessages.ids.collectAsState()
+    val storageBytes by androidx.compose.runtime.produceState<Long?>(null, cid, hiddenNow) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val crypto = com.fariin.app.data.CryptoHub.get(storageCtx)
+                val msgs = com.fariin.app.data.SharedMediaSource(cid, me, crypto).local()
+                val media = com.fariin.app.media.ChatMedia(storageCtx, cid, crypto)
+                ChatStorageRules.items(msgs, media) { it in hiddenNow }.sumOf { it.bytes }
+            }.getOrNull()
+        }
+    }
     // Awaited, so the sheet's button spins until the server answers; then the sheet closes and the note shows.
     suspend fun callable(name: String, done: String): Boolean {
         val ok = runCatching {
@@ -935,7 +961,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // Group Settings row (the management lives on that page) and Join Requests while
                 // someone waits; a member's Disappearing Messages row stays here, read-only.
                 // No Chat Bubble row (owner 2026-11-07): bubble styles live in Settings > Appearance and the chat's wallpaper sheet.
+                SettingsRow("Sounds & Notifications", icon = painterResource(com.fariin.app.R.drawable.ic_notifications),
+                    value = contactNotifValue(muteUntil)) { soundsOpen = true }
                 SettingsRow("Storage Used", icon = painterResource(com.fariin.app.R.drawable.ic_set_storage), last = !iAmAdmin && timer <= 0 && !showStats,
+                    value = storageBytes?.takeIf { it > 0 }?.let { android.text.format.Formatter.formatShortFileSize(storageCtx, it) },
                     badge = NewBadgeSpots.GROUP_INFO_STORAGE) {
                     pages.add(GroupPage.Storage(conv["title"] as? String ?: "Group"))
                 }
@@ -1010,6 +1039,16 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
                 if (!ended) SettingsRow("End Group", icon = rememberVectorPainter(Icons.Outlined.Cancel), titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
                 SettingsRow("Delete Group", icon = rememberVectorPainter(Icons.Outlined.Delete), titleColor = c.red, trailing = Trailing.NONE, last = true) { askDelete = true }
+            }
+            // iOS footer: who made the group and when.
+            val createdMs = (conv["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble()
+                ?: (conv["createdAt"] as? Number)?.toDouble()
+            val maker = if (owner == me) "you" else names[owner]?.ifEmpty { null }
+            if (maker != null || createdMs != null) {
+                val is24 = android.text.format.DateFormat.is24HourFormat(storageCtx)
+                Text(listOfNotNull(maker?.let { "Created by $it." },
+                        createdMs?.let { "Created ${com.fariin.app.data.MessageInfoRules.dateLine(it, is24)}." }).joinToString(" "),
+                    fontSize = 14.sp, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 4.dp))
             }
             Spacer(Modifier.height(30.dp))
         }
