@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- From the iOS asset ic_repost.svg. -->
+<!-- From the iOS asset ic_repost.svg: two arrows round a rounded square. They are STROKES; drawn as
+     fills they closed into a "C" blob next to the story's reply box (owner 2026-11-08). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:pathData="M8 18.5h4.5c3.287 0 4.931 0 6.038-.908q.304-.25.554-.554C20 15.93 20 14.288 20 11m-4-5.5h-4.5c-3.287 0-4.931 0-6.038.908a4 4 0 0 0-.554.554C4 8.07 4 9.712 4 13" android:fillColor="#FF000000" />
-    <path android:pathData="M13.5 2S17 4.578 17 5.5S13.5 9 13.5 9m-3 6S7 17.578 7 18.5s3.5 3.5 3.5 3.5" android:fillColor="#FF000000" />
+    <path android:pathData="M8 18.5h4.5c3.287 0 4.931 0 6.038-.908q.304-.25.554-.554C20 15.93 20 14.288 20 11m-4-5.5h-4.5c-3.287 0-4.931 0-6.038.908a4 4 0 0 0-.554.554C4 8.07 4 9.712 4 13"
+        android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path android:pathData="M13.5 2S17 4.578 17 5.5S13.5 9 13.5 9m-3 6S7 17.578 7 18.5s3.5 3.5 3.5 3.5"
+        android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
 </vector>

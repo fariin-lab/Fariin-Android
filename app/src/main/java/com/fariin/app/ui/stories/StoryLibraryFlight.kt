@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.fariin.app.data.StoryCardRules
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.foundation.layout.aspectRatio
 import com.fariin.app.data.StoryMedia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -92,6 +94,7 @@ internal fun StoryLibraryFlightLayer(flight: LibraryFlight, onLanded: () -> Unit
     val media = flight.media
     var photo by remember { mutableStateOf<ImageBitmap?>(null) }
     var wash by remember { mutableStateOf<ImageBitmap?>(null) }
+    var edges by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var from by remember { mutableStateOf<Rect?>(null) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     val t = remember { Animatable(0f) }
@@ -102,6 +105,8 @@ internal fun StoryLibraryFlightLayer(flight: LibraryFlight, onLanded: () -> Unit
         photo = withContext(Dispatchers.Default) {
             runCatching { BitmapFactory.decodeByteArray(media.jpeg, 0, media.jpeg.size)?.asImageBitmap() }.getOrNull()
         }
+        // The editor's ground behind a picture that does not fill the card (its two edge colours).
+        edges = photo?.let { p -> withContext(Dispatchers.Default) { runCatching { RepostCard.edgeColours(p.asAndroidBitmap()) }.getOrNull() } }
         wash = withContext(Dispatchers.Default) {
             runCatching {
                 val b = android.util.Base64.decode(media.blurThumb, android.util.Base64.DEFAULT)
@@ -136,8 +141,13 @@ internal fun StoryLibraryFlightLayer(flight: LibraryFlight, onLanded: () -> Unit
             val h = minOf(kotlin.math.ceil(box.width * 16f / 9f), room).coerceAtLeast(1f)
             Rect(Offset(0f, top), Size(box.width.toFloat(), h))
         }
-        val fills = StoryCardRules.fillsCard(media.width, media.height, media.video != null,
-            media.stickers.isNotEmpty() || media.repostOf != null)
+        // LAND AS THE EDITOR DRAWS IT (owner's video 2026-11-08: at the handover the face showed twice
+        // and the card slid). The editor fits the picture, zooms it by its default zoom, over the
+        // two edge colours when it can zoom, over the blurred wash otherwise: the copy does the same.
+        val zoomable = StoryCardRules.zoomable(false, media.stickers.isNotEmpty() || media.repostOf != null)
+        val pz = photo
+        val zoom = if (!zoomable || pz == null || card.height <= 1f || media.video != null) 1f
+            else StoryCardRules.defaultZoom(pz.width, pz.height, card.width / card.height)
         Box(Modifier.fillMaxSize().onSizeChanged { box = it }.background(Color.Black.copy(alpha = black.value))) {
             val f = from
             val pic = photo
@@ -151,10 +161,18 @@ internal fun StoryLibraryFlightLayer(flight: LibraryFlight, onLanded: () -> Unit
                 with(density) {
                     Box(Modifier.offset { IntOffset(r.left.toInt(), r.top.toInt()) }.size(r.width.toDp(), r.height.toDp())
                         .clip(RoundedCornerShape(corner)), contentAlignment = Alignment.Center) {
-                        Box(Modifier.requiredSize((card.width * s).toDp(), (card.height * s).toDp()).background(Color(0xFF1C1C1E))) {
-                            wash?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.9f }) }
-                            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
-                            Image(pic, null, contentScale = if (fills) ContentScale.Crop else ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                        Box(Modifier.requiredSize((card.width * s).toDp(), (card.height * s).toDp()).background(Color(0xFF1C1C1E)),
+                            contentAlignment = Alignment.Center) {
+                            val e = edges
+                            if (zoomable) {
+                                if (e != null) Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(e.first), Color(e.second)))))
+                            } else {
+                                wash?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.9f }) }
+                                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+                            }
+                            Image(pic, null, contentScale = ContentScale.Fit,
+                                modifier = Modifier.aspectRatio(pic.width.toFloat() / pic.height.coerceAtLeast(1))
+                                    .graphicsLayer { scaleX = zoom; scaleY = zoom })
                         }
                     }
                 }
