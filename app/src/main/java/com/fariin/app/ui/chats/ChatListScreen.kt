@@ -331,8 +331,11 @@ fun ChatListScreen(
     }
 
     val barState = rememberTopAppBarState()
-    // The title stays put (owner 2026-11-03, the reference apps): the chats slide under it.
-    val scroll = TopAppBarDefaults.pinnedScrollBehavior(barState)
+    // The bar leaves with a scroll down and comes back at once with any scroll up (owner 2026-11-07,
+    // the reference feed app on his Pixel): more chats on screen, no band over them. Searching and
+    // selecting keep it in place (their bars are what you are working with).
+    val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior(barState)
+    val pinBar = TopAppBarDefaults.pinnedScrollBehavior(barState)
     // Frosted once the list has moved under it, the page colour at rest; the search field scrolls
     // away with the list and a search button takes its place in the bar.
     val haze = remember { dev.chrisbanes.haze.HazeState() }
@@ -388,8 +391,10 @@ fun ChatListScreen(
         with(density) { (gsHeightPx.toDp() - 44.dp).coerceAtLeast(0.dp) } +
             (if (com.fariin.app.ui.components.Snack.showing.value) 64.dp else 0.dp), label = "fabLift")
 
+    // Into search or select mode: a bar that was away comes back first.
+    LaunchedEffect(selecting, searching) { if (selecting || searching) barState.heightOffset = 0f }
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection).nestedScroll(fabScroll),
+        modifier = Modifier.nestedScroll((if (selecting || searching) pinBar else scroll).nestedScrollConnection).nestedScroll(fabScroll),
         containerColor = c.bg,
         // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
         contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
@@ -399,27 +404,11 @@ fun ChatListScreen(
             com.fariin.app.ui.components.LocalGlassBar provides (showArchive || searching),
             com.fariin.app.ui.components.LocalGlassWindow provides androidx.compose.ui.platform.LocalView.current) {
             Column(
-                Modifier.then(when {
-                    // Owner 2026-11-05 ("make it high end like Settings"): the glass is always on, so
-                    // nothing switches at the first scroll, and it reaches a long tail below the bar
-                    // where blur and tint fade out together, so its end can not be seen. The tail is
-                    // drawn but not measured: the list's top padding stays the bar's own height.
-                    glass -> Modifier.layout { m, k ->
-                        val tail = 36.dp.roundToPx()
-                        val p = m.measure(k.copy(maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
-                        val h = (p.height - tail).coerceAtLeast(0)
-                        layout(p.width, h) { p.place(0, 0) }
-                    }.hazeEffect(haze) {
-                        backgroundColor = c.bg; blurRadius = 24.dp; noiseFactor = 0f
-                        tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.7f)))
-                        // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
-                        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-                        progressive = com.fariin.app.ui.components.edgeStages(0.45f)
-                        alpha = glassAlpha
-                    }.padding(bottom = 36.dp)
-                    scrolled || selecting -> Modifier.background(c.bg.copy(alpha = 0.97f))
-                    else -> Modifier.background(c.bg)
-                }).statusBarsPadding(),
+                // No blur and no edge (owner 2026-11-07: the frosted band under the bar read as a
+                // border). A soft see-through page colour instead, as the reference app's: the chats
+                // show faintly as they pass under it, so it is not a hard white slab. The status bar
+                // strip keeps it while the bar is away.
+                Modifier.background(c.bg.copy(alpha = 0.9f)).statusBarsPadding(),
             ) {
                 when {
                     selecting -> SelectionBar(
@@ -528,7 +517,7 @@ fun ChatListScreen(
                                 )
                             },
                             windowInsets = WindowInsets(0, 0, 0, 0),
-                            scrollBehavior = scroll,
+                            scrollBehavior = if (selecting || searching) pinBar else scroll,
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent,
                                 titleContentColor = c.label, actionIconContentColor = c.label, navigationIconContentColor = c.label,
