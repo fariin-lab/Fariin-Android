@@ -83,6 +83,20 @@ object QuoteStore {
         com.fariin.app.local.LocalCache.saveQuotes(uid, o.toString())
     }
 
+    /** qid -> "cid/mid" of the message that quotes it here (iOS noteHost): sent with getQuotes as `hosts`. */
+    private val hosts = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * The chat and message this quote sits in (iOS 1a953cdf4): the server shows a private channel's
+     * post to the readers of the chat that quotes it. A new host asks again.
+     */
+    fun noteHost(qid: String, cid: String, mid: String) {
+        if (!QuoteRules.isQid(qid) || cid.isEmpty() || mid.isEmpty()) return
+        val h = "$cid/$mid"
+        val before = hosts.put(qid, h)
+        if (before != h && (before != null || _cards.value[qid]?.state == QuoteCard.State.HIDDEN)) fetchedAt.remove(qid)
+    }
+
     /** The card for [qid], or null while its first answer is on its way. Asks again when old. */
     fun card(qid: String): QuoteCard? {
         loadSaved()
@@ -103,7 +117,7 @@ object QuoteStore {
 
     /** Sign-out: nothing of this account's cards stays in memory (the disk copy goes with LocalCache.wipe). */
     fun reset() {
-        _cards.value = emptyMap(); fetchedAt.clear(); lastUsed.clear(); queued.clear(); loadedFor = null
+        _cards.value = emptyMap(); fetchedAt.clear(); lastUsed.clear(); queued.clear(); loadedFor = null; hosts.clear()
         // A call still out for the old account must not keep its ids "asked" (never asked again) or
         // write its answer into the next account's cards.
         inFlight.clear(); generation++
@@ -135,7 +149,8 @@ object QuoteStore {
             val gen = generation
             try {
                 val r = fn.getHttpsCallable("getQuotes").withTimeout(15, TimeUnit.SECONDS)
-                    .call(mapOf("qids" to batch)).await().getData() as? Map<*, *>
+                    .call(mapOf("qids" to batch, "hosts" to batch.mapNotNull { q -> hosts[q]?.let { q to it } }.toMap()))
+                    .await().getData() as? Map<*, *>
                 val got = r?.get("quotes") as? Map<*, *> ?: emptyMap<String, Any>()
                 if (gen != generation) return
                 val now = System.currentTimeMillis()

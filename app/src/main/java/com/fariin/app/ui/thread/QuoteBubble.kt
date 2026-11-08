@@ -50,10 +50,14 @@ import com.fariin.app.ui.theme.Fariin
  */
 @Composable
 internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta: (@Composable () -> Unit)? = null,
+                              /** The message this card sits in (its chat is [openCid]): the server's `hosts`. */ hostMid: String? = null,
                               /** The quoting post has its own photo, video or album: the compact row. */ compact: Boolean = false) {
     val cards by QuoteStore.cards.collectAsState()
     // Every draw asks: a miss, or an answer older than two minutes, is fetched with the others on screen.
-    SideEffect { QuoteStore.card(qid) }
+    SideEffect {
+        if (openCid != null && hostMid != null) QuoteStore.noteHost(qid, openCid, hostMid)
+        QuoteStore.card(qid)
+    }
     val card = cards[qid]
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current

@@ -16,6 +16,11 @@ data class QuoteCard(
     /** "text", "photo", "video" or "album". */
     val kind: String = "text",
     val image: String = "",
+    /**
+     * A private channel's post shown to readers of the chat it was quoted in (server getQuotes
+     * `hosts`, iOS 1a953cdf4): the preview is there, but the channel may not be opened.
+     */
+    val locked: Boolean = false,
 ) {
     /** OK: the post as it was quoted. DELETED: the channel's face, "Post deleted". HIDDEN: the
      *  channel is private to this reader, nothing of the post. GONE: the channel no longer exists. */
@@ -46,7 +51,7 @@ object QuoteRules {
         }
         fun s(k: String) = d[k] as? String ?: ""
         return QuoteCard(state, s("cid"), s("mid"), s("title"), s("photoUrl"), s("username"), s("text"),
-            (d["kind"] as? String)?.ifEmpty { null } ?: "text", s("image"))
+            (d["kind"] as? String)?.ifEmpty { null } ?: "text", s("image"), locked = d["locked"] == true)
     }
 
     /** The card's title: the channel's name, or "Channel post" when nothing of it may be shown. */
@@ -82,7 +87,7 @@ object QuoteRules {
     /** What a tap says instead of opening, or null when it opens the post. */
     fun tapNotice(c: QuoteCard?): String? = when (c?.state) {
         null -> null
-        QuoteCard.State.OK -> null
+        QuoteCard.State.OK -> if (c.locked) "This channel is private" else null
         QuoteCard.State.DELETED -> "This post was deleted"
         QuoteCard.State.HIDDEN -> "This channel is private"
         QuoteCard.State.GONE -> "Content unavailable"
