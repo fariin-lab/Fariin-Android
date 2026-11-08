@@ -1324,3 +1324,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~4:05 PM: in-app browser insets (1d1d18d9: X no longer covers the page), default
   disappearing page wording (d8b34045, iOS told). Checked fine: in-chat search, message Info, story
   camera + text mode, Edit Profile photo library, wallpaper page, Privacy subpages, Help & About.
+- 2026-11-08 ~4:37 PM: GIF panel square tiles (c6deafe7). Checked fine: sticker panel, photo
+  editor (HD with crop/draw, as iOS), Calls Missed filter + select mode. MISTAKE: a text-tap on
+  "Missed" hit a call row and rang adnan ~10 s (ended); Calls tab now tapped by coordinates only.
