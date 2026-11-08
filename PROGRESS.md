@@ -1259,3 +1259,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Stories frosted 48 dp bars with no line; Settings tried with no bar (owner judging); tab bar frost 86%.
   Friend's iOS-parity branch (Files Photos, photo pager, story/photo chooser, replies by 5, reactions) reviewed,
   rebuilt and merged. Session rule: I am "android"; partner is "iOS session" only.
+- 2026-11-08 mid-morning: tab pages' top (Settings, Calls, Stories, chat list) = frostedTopBar: 14 dp blur,
+  42% tint, opacity cross-fade (Haze mask) from mid-bar, 24 dp tail, 10 dp page band over the screen's top
+  edge; measured against the reference app on the Pixel. Chat list bar pinned again. Tab bar frost 86%.
+  Calls/Stories: search shrinks in place into a bar button; glass buttons on frosted bars blur too; white
+  rim instead of dark hairline. Pixel: 2% janky frames on fast scrolls.
