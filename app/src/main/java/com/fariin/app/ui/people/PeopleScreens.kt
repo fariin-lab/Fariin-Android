@@ -192,7 +192,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                         val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
                         val actions = listOf(
                             Triple("New group", onNewGroup, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)),
-                            Triple("New channel", channelNav.create, ImageVector.vectorResource(R.drawable.ic_channel_megaphone)),
+                            Triple("New channel", channelNav.create, ImageVector.vectorResource(R.drawable.ic_sf_megaphone)),
                             Triple("Invite friends", { com.fariin.app.ui.settings.shareInvite(ctx, myHandle) }, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_share)),
                         )
                         card {
