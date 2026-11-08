@@ -972,6 +972,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING) {
                     notice = com.fariin.app.data.Disappearing.refusal(conv, me)
                 }
+                // Bubble Styles for the group, between Storage and Group Settings (iOS settingsCard).
+                if (iAmAdmin) BubbleStylesSwitchRow(cid, me, conv, last = false)
                 if (iAmAdmin) {
                     val waiting = rememberJoinRequests(cid, allowed = team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS) && !team.closed)
                     SettingsRow("Group Settings", icon = painterResource(com.fariin.app.R.drawable.ic_group_settings),
