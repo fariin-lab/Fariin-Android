@@ -175,7 +175,12 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
         picked = emptyList()
     }
 
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
+    // A glass page as the others (owner 2026-11-07: every page's back in liquid glass). The picked
+    // strip rides in the bar, so it stays put while the list scrolls under it.
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    com.fariin.app.ui.components.GlassColumnPage(
+        under = com.fariin.app.ui.components.underBar(list), modifier = Modifier.background(c.bg), page = c.bg,
+        bar = { Column(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
         if (searching) {
             val focus = remember { FocusRequester() }
             LaunchedEffect(Unit) { focus.requestFocus() }
@@ -193,7 +198,10 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
         AnimatedVisibility(chosen.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             PickedStrip(chosen, onUnpick = { t -> picked = picked - (t.uid ?: "") }, onVoice = { callPicked(false) }, onVideo = { callPicked(true) })
         }
-        LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
+        } },
+    ) { top ->
+        LazyColumn(Modifier.fillMaxSize().navigationBarsPadding(), state = list,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = top)) {
             if (q.isBlank()) {
                 item(key = "link") {
                     // On a floating rounded card, as the chat list's Archived row.
