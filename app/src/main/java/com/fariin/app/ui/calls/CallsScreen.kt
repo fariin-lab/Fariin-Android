@@ -284,6 +284,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     // Only the top row is the bar (glass over the list); the large title and the search field head
     // the list and scroll away with it, as iOS's large title does.
     val underBar by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
+    Box(Modifier.fillMaxSize()) {
     com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bg), page = c.bg, barEstimate = 56.dp, bar = {
         Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding().height(56.dp).padding(horizontal = 12.dp)) {
             if (selecting) {
@@ -297,9 +298,6 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
             } else {
                 if (hasHistory) com.fariin.app.ui.components.FloatingTextAction("Edit", modifier = Modifier.align(Alignment.CenterStart)) { selecting = true }
                 CallsSegments(if (missedOnly) 1 else 0, { missedOnly = it == 1 }, Modifier.align(Alignment.Center))
-                // New Call in the action colour, as Chats' compose pen (iOS glassProminent).
-                com.fariin.app.ui.components.FloatingIcon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call",
-                    onClick = { nav.newCall() }, tint = c.onAccent, fill = c.accent, modifier = Modifier.align(Alignment.CenterEnd))
             }
         }
     }) { top ->
@@ -386,6 +384,17 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                 }
             }
         }
+    }
+    // New Call as a floating button at the bottom end, over the tab bar (owner 2026-11-07: the
+    // Android messengers put it there, as Chats' New Chat pen), no longer in the top bar.
+    androidx.compose.animation.AnimatedVisibility(!selecting, Modifier.align(Alignment.BottomEnd)
+        .padding(end = 16.dp, bottom = com.fariin.app.ui.shell.bottomBarInset() + 16.dp),
+        enter = com.fariin.app.ui.components.Motion.fabIn(), exit = com.fariin.app.ui.components.Motion.fabOut()) {
+        androidx.compose.material3.IconButton(onClick = { nav.newCall() },
+            modifier = Modifier.size(56.dp).floating(fill = c.accent)) {
+            androidx.compose.material3.Icon(painterResource(R.drawable.ic_new_call), contentDescription = "New Call", tint = c.onAccent)
+        }
+    }
     }
 }
 
