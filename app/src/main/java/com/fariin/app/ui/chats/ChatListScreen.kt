@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import com.fariin.app.ui.components.glassMenuAnchor
 import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -362,6 +363,11 @@ fun ChatListScreen(
 
     // Into search or select mode: a bar that was away comes back first.
     LaunchedEffect(selecting, searching) { if (selecting || searching) barState.heightOffset = 0f }
+    // The ••• menu is the glass menu over the list, grown from its button (owner: the glass menu everywhere).
+    val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    var moreOpen by remember { mutableStateOf(false) }
+    var moreItems by remember { mutableStateOf<List<com.fariin.app.ui.components.GlassMenuItem>>(emptyList()) }
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.nestedScroll((if (selecting || searching) pinBar else scroll).nestedScrollConnection).nestedScroll(fabScroll),
         containerColor = c.bg,
@@ -464,7 +470,7 @@ fun ChatListScreen(
                                 // In the Archive the search stays a button; the list itself has the field below.
                                 if (showArchive || searchGone) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search", onClick = { searching = true },
                                     modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
-                                if (!showArchive) OverflowMenu(
+                                if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
                                     onRequests = people.requests,
@@ -822,6 +828,8 @@ fun ChatListScreen(
                 ),
             )))
     }
+    com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, moreItems, backdrop = glassLayer, onDismiss = { moreOpen = false })
+    }
 }
 
 /** The selection menu's extra row when exactly one chat is picked: its info page. */
@@ -936,37 +944,28 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
  *  New Group / New Channel / Find Channels and a Settings shortcut, as an Android overflow menu. */
 @Composable
 private fun OverflowMenu(
+    anchor: com.fariin.app.ui.components.GlassMenuAnchor, onOpen: (List<com.fariin.app.ui.components.GlassMenuItem>) -> Unit,
     filter: Int, onFilter: (Int) -> Unit, requests: Int, onRequests: () -> Unit, onChatKey: () -> Unit, onArchive: () -> Unit,
     onMarkAllRead: () -> Unit, onNewGroup: () -> Unit, onNewChannel: () -> Unit, onFindChannels: () -> Unit, onSettings: () -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, modifier = Modifier.padding(end = 12.dp))
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            val item: @Composable (String, ImageVector, Boolean, () -> Unit) -> Unit = { text, icon, checked, onClick ->
-                DropdownMenuItem(
-                    text = { Text(text) },
-                    leadingIcon = { Icon(icon, null) },
-                    trailingIcon = if (checked) ({ Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Selected") }) else null,
-                    onClick = { open = false; onClick() },
-                )
-            }
-            item("All", fi(R.drawable.ic_menu_read), filter == FILTER_ALL) { onFilter(FILTER_ALL) }
-            item("Unread", fi(R.drawable.ic_menu_unread), filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) }
-            item("Groups", fi(R.drawable.ic_gs_group_type), filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) }
-            item("Channels", ImageVector.vectorResource(R.drawable.ic_channel_megaphone), filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) }
-            HorizontalDivider()
-            // iOS shows the entry whenever requests are switched on, not only with one waiting. This app
-            // has no admin switch for them (always on), so the entry is always here; the count only when > 0.
-            item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", fi(R.drawable.ic_message_request), false, onRequests)
-            item("Chat Key", fi(R.drawable.ic_chat_key), false, onChatKey)
-            item("Archive", fi(R.drawable.ic_archive), false, onArchive)
-            // New Group / New Channel / Find Channels live under the pen, Settings is a tab: the menu
-            // keeps iOS's own set (owner 2026-11-03, "a lot of things in there").
-            HorizontalDivider()
-            item("Mark All Read", ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), false, onMarkAllRead)
-        }
-    }
+    // iOS's own set, in its order: the filters (the chosen one ticked), then Message Requests, Chat Key,
+    // Archive, then Mark All Read; New Group / Channel live under the pen, Settings is a tab.
+    fun item(text: String, icon: Int, checked: Boolean = false, divider: Boolean = false, onClick: () -> Unit) = icon to
+        { p: androidx.compose.ui.graphics.painter.Painter -> com.fariin.app.ui.components.GlassMenuItem(text, p, divider = divider, checked = checked, onClick = onClick) }
+    val rows = listOf(
+        item("All", R.drawable.ic_menu_read, filter == FILTER_ALL) { onFilter(FILTER_ALL) },
+        item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) },
+        item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) },
+        item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) },
+        item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", R.drawable.ic_message_request, divider = true, onClick = onRequests),
+        item("Chat Key", R.drawable.ic_chat_key, onClick = onChatKey),
+        item("Archive", R.drawable.ic_archive, onClick = onArchive),
+        item("Mark All Read", R.drawable.ic_sf_checkmark_circle, divider = true, onClick = onMarkAllRead),
+    )
+    val painters = rows.map { androidx.compose.ui.res.painterResource(it.first) }
+    FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More",
+        onClick = { onOpen(rows.mapIndexed { i, r -> r.second(painters[i]) }) },
+        modifier = Modifier.padding(end = 12.dp).glassMenuAnchor(anchor))
 }
 
 /**

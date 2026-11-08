@@ -1,5 +1,6 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -58,6 +59,7 @@ import kotlin.math.roundToInt
 
 /** One row of a [GlassMenu]; [divider] draws a line above it. */
 class GlassMenuItem(val title: String, val icon: Painter, val danger: Boolean = false, val divider: Boolean = false,
+                    /** The chosen one of a set (a filter): a tick at the row's end. */ val checked: Boolean = false,
                     val onClick: () -> Unit)
 
 /** Where a menu's button sits in the window, so the menu can grow out of it. */
@@ -186,7 +188,11 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                             .padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(it.icon, null, tint = if (it.danger) c.red else c.label, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(14.dp))
-                            Text(it.title, fontSize = 17.sp, color = if (it.danger) c.red else c.label, maxLines = 2)
+                            Text(it.title, fontSize = 17.sp, color = if (it.danger) c.red else c.label, maxLines = 2,
+                                modifier = Modifier.weight(1f))
+                            if (it.checked) Icon(androidx.compose.ui.graphics.vector.rememberVectorPainter(
+                                androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark)),
+                                "Selected", tint = c.label, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
