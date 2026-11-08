@@ -226,7 +226,7 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
 @Composable
 private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
     val c = Fariin.colors
-    com.fariin.app.ui.components.FloatingBarPage("", onBack, modifier = Modifier.navigationBarsPadding()) { top ->
+    com.fariin.app.ui.components.FloatingBarPage("", onBack, modifier = Modifier.background(c.bg).navigationBarsPadding()) { top ->
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
@@ -255,8 +255,19 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             Text("Share news, photos and videos with as many people as you like.", fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center)
         }
-        Text("By creating a channel you agree to the Channel Guidelines.", fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+        // The guidelines link, as the form page and iOS (it opens the help page).
+        val introCtx = androidx.compose.ui.platform.LocalContext.current
+        Text(androidx.compose.ui.text.buildAnnotatedString {
+            append("By creating a channel you agree to the ")
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.label))
+            append("Channel Guidelines")
+            pop()
+            append(".")
+        }, fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).clickable {
+                runCatching { introCtx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://help.fariin.com/channels/channel-guidelines"))) }
+            })
         Spacer(Modifier.height(12.dp))
         BigButton("Create Channel", enabled = true, onClick = onNext)
     }
