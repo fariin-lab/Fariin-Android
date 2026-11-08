@@ -2,6 +2,8 @@ package com.fariin.app.ui.settings
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,8 +12,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.Composable
@@ -40,9 +45,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -132,6 +138,11 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
     sheetRestAt(motion, if (code == AccountDeletion.OTHER) 720.dp else 640.dp)
     // A reason is required (owner 2026-11-08, same as iOS); "Other" also needs its box filled.
     val ready = code != null && (code != AccountDeletion.OTHER || text.trim().isNotEmpty())
+    val into = remember { BringIntoViewRequester() }
+    var typing by remember { mutableStateOf(false) }
+    val ime = WindowInsets.ime.getBottom(LocalDensity.current)
+    // Each step of the keyboard coming up keeps the box and Continue in sight.
+    LaunchedEffect(typing, ime) { if (typing && ime > 0) into.bringIntoView() }
     FariinSheetDialog(motion, fill = c.bgSecondary, typing = true) { _ ->
         AccountSheetFrame(motion, closeEnabled = true) {
             Box(Modifier.size(56.dp).clip(CircleShape).background(c.red.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
@@ -159,13 +170,19 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
                 Text("You can also report someone from their profile, or block them, without leaving.", fontSize = 13.sp,
                     color = c.secondary, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 4.dp, end = 4.dp))
             }
-            if (code == AccountDeletion.OTHER) {
-                OutlinedTextField(text, onText, placeholder = { Text("Tell us more") }, maxLines = 4,
-                    supportingText = { Text("${text.length}/${AccountDeletion.REASON_TEXT_MAX}", color = c.secondary) },
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+            // The box, Continue and Cancel are one block that is brought above the keyboard while typing.
+            Column(Modifier.fillMaxWidth().bringIntoViewRequester(into)) {
+                if (code == AccountDeletion.OTHER) {
+                    OutlinedTextField(text, onText, placeholder = { Text("Tell us more") }, maxLines = 4,
+                        supportingText = { Text("${text.length}/${AccountDeletion.REASON_TEXT_MAX}", color = c.secondary) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).onFocusChanged { f ->
+                            typing = f.isFocused
+                            if (f.isFocused) motion.expand()   // full height, so the keyboard has room under it
+                        })
+                }
+                SheetPill("Continue", c.accent, ink = c.onAccent, enabled = ready, modifier = Modifier.padding(top = 24.dp)) { go[0] = true; motion.close() }
+                SheetCancel { motion.close() }
             }
-            SheetPill("Continue", c.accent, ink = c.onAccent, enabled = ready, modifier = Modifier.padding(top = 24.dp)) { go[0] = true; motion.close() }
-            SheetCancel { motion.close() }
         }
     }
 }
@@ -234,9 +251,12 @@ internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, conte
     val density = LocalDensity.current
     var contentDp by remember { mutableFloatStateOf(0f) }
     if (contentDp > 0f) { val stop = restStop(contentDp); SideEffect { motion.fitMid(stop) } }
-    Box(Modifier.fillMaxSize()) {
+    val scroll = rememberScrollState()
+    // imePadding: with the keyboard up the scroll ends at its top, so a field and the button under it
+    // can be scrolled (and brought) into view instead of sitting behind it (same as ReportSheet).
+    Box(Modifier.fillMaxSize().imePadding()) {
         // Measured inside the scroll (unbounded), so this is the content's own height with its padding.
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxWidth().verticalScroll(scroll)
             .onSizeChanged { contentDp = with(density) { it.height.toDp().value } }
             .padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) { content() }
@@ -258,9 +278,13 @@ private fun Line(s: String) {
 @Composable
 internal fun SheetPill(label: String, fill: Color, modifier: Modifier = Modifier, busy: Boolean = false,
                        ink: Color = Color.White, enabled: Boolean = true, onClick: () -> Unit) {
-    Box(modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(fill)
-        .clickable(enabled = enabled && !busy, onClickLabel = label) { onClick() }
-        .then(if (enabled || busy) Modifier else Modifier.alpha(0.35f)), contentAlignment = Alignment.Center) {
+    // Disabled = the same capsule, fill and label together, at 35%. The layer is always in the chain
+    // (only its alpha changes) and sits before the fill, so it fades the whole capsule, not the label
+    // alone, and switching enabled never adds or drops a layer under a drawn fill (owner 2026-11-08:
+    // the enabled Continue drew as a white capsule with white text on the Pixel, light mode).
+    val fade = if (enabled || busy) 1f else 0.35f
+    Box(modifier.fillMaxWidth().height(52.dp).graphicsLayer { alpha = fade }.clip(CircleShape).background(fill)
+        .clickable(enabled = enabled && !busy, onClickLabel = label) { onClick() }, contentAlignment = Alignment.Center) {
         if (busy) CircularProgressIndicator(color = ink, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
         else Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = ink)
     }
