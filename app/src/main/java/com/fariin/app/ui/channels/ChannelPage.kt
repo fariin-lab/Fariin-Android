@@ -48,6 +48,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -143,6 +145,18 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     var confirmLeave by remember { mutableStateOf(false) }
     // iOS channel info rows that open a page here: Storage Used and Statistics.
     var sub by remember(info.cid) { mutableStateOf<String?>(null) }
+    // Storage Used's value (iOS: the size, or "None"): this phone's copy of the posts' files, no network.
+    val channelStorage by androidx.compose.runtime.produceState<Long?>(null, info.cid, me) {
+        if (me.isEmpty()) return@produceState
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val app = ctx.applicationContext
+                val crypto = com.fariin.app.data.CryptoHub.get(app)
+                val msgs = com.fariin.app.data.SharedMediaSource(info.cid, me, crypto).local()
+                com.fariin.app.ui.people.ChatStorageRules.items(msgs, com.fariin.app.media.ChatMedia(app, info.cid, crypto)) { false }.sumOf { it.bytes }
+            }.getOrNull()
+        }
+    }
     var askDelete by remember { mutableStateOf(false) }
     when (sub) {
         "storage" -> { com.fariin.app.ui.people.ChatStoragePage(info.cid, me, info.title, pop = { sub = null }); return }
@@ -289,7 +303,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     if (info.username.isNotEmpty()) {
                         if (info.description.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                         Row(Modifier.fillMaxWidth().clickable { share() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.label, modifier = Modifier.size(24.dp))
+                            Icon(Icons.Outlined.Link, null, tint = c.label, modifier = Modifier.size(24.dp))   // the chain, as iOS
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text("fariin.com/${info.username}", fontSize = 17.sp, color = c.label)
@@ -303,12 +317,13 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Card {
                     val admin = role == Role.ADMIN && team != null
                     com.fariin.app.ui.settings.SettingsRow("Sounds & Notifications",
-                        icon = androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell),
+                        icon = androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
                         value = if (muted && shownRole != Role.VISITOR) "Off" else "On", badge = NewBadgeSpots.GROUP_INFO_SOUNDS) {
                         if (shownRole == Role.VISITOR) notice = "Follow this channel to change its notifications."
                         else tap(if (muted) Action.UNMUTE else Action.MUTE, false)
                     }
                     com.fariin.app.ui.settings.SettingsRow("Storage Used", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_set_storage),
+                        value = channelStorage?.let { if (it > 0) android.text.format.Formatter.formatShortFileSize(ctx, it) else "None" },
                         last = !admin, badge = NewBadgeSpots.GROUP_INFO_STORAGE) { sub = "storage" }
                     if (admin) {
                         ChannelManageRows(info, team!!, me, shownCount, manage, last = false)
@@ -319,11 +334,12 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 }
                 Spacer(Modifier.height(20.dp))
                 Card {
-                    if (role != Role.ADMIN) FootRow(if (reported) "Reported" else "Report Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report),
-                        if (reported) c.secondary else c.red) { if (!reported) confirmReport = true }
-                    if (role == Role.FOLLOWER) {
-                        if (com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
-                        FootRow("Leave Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_channel_leave), c.red) { confirmLeave = true }
+                    // Leave first, then Report (iOS order), with the Leave Group arrow.
+                    if (role == Role.FOLLOWER) FootRow("Leave Channel", Icons.AutoMirrored.Outlined.Logout, c.red) { confirmLeave = true }
+                    if (role != Role.ADMIN) {
+                        if (role == Role.FOLLOWER && com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
+                        FootRow(if (reported) "Reported" else "Report Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report),
+                            if (reported) c.secondary else c.red) { if (!reported) confirmReport = true }
                     }
                     if (role == Role.ADMIN && team?.isOwner(me) == true) FootRow("Delete Channel", Icons.Outlined.Delete, c.red) { askDelete = true }
                     else if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,
@@ -421,9 +437,8 @@ private fun AdminCard(info: ChannelInfo) {
 }
 
 private fun createdLine(ctx: android.content.Context, ms: Double): String {
-    val day = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(ms.toLong()))
-    val time = DateFormat.getTimeFormat(ctx).format(java.util.Date(ms.toLong()))
-    return "on $day at $time"
+    // iOS: "Oct 30, 2026 at 12:19 PM", as a group's footer.
+    return com.fariin.app.data.MessageInfoRules.dateLine(ms, DateFormat.is24HourFormat(ctx))
 }
 
 /** The channel page's three-dot menu, shown only to whoever may change its info: Change Wallpaper. */
