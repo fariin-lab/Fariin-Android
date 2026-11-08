@@ -845,9 +845,12 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
     card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) }) }
     if (editing && canEdit) {
-        EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
-            onClose = { editing = false; editAtDescription = false }, description = desc, focusDescription = editAtDescription)
-        return
+        // iOS: Edit Group is a sheet over the group page (.sheet), pulled down to close.
+        val editMotion = com.fariin.app.ui.components.rememberSheetMotion { editing = false; editAtDescription = false }
+        com.fariin.app.ui.components.FariinSheetDialog(editMotion, fill = c.bgSecondary, typing = true) {
+            EditGroupScreen(api, cid, conv["title"] as? String ?: "Group", (conv["avatarUrl"] as? String)?.ifEmpty { null },
+                onClose = { editMotion.close() }, description = desc, focusDescription = editAtDescription, sheet = editMotion)
+        }
     }
     if (startOpen && start == "edit" && editing) {
         // The welcome card's Edit before the group's doc has said I may edit: nothing yet (drawing this
@@ -1198,7 +1201,9 @@ private fun rememberSystemCallActive(): Boolean {
  */
 @Composable
 internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUrl: String?, onClose: () -> Unit,
-                             description: String = "", focusDescription: Boolean = false, channel: Boolean = false) {
+                             description: String = "", focusDescription: Boolean = false, channel: Boolean = false,
+                             /** Shown in the iOS sheet (EditGroupView is a .sheet): X, title and Save in the sheet's own bar. */
+                             sheet: com.fariin.app.ui.components.SheetMotion? = null) {
     // A channel's words and its squircle photo (iOS EditGroupView with ChannelWords.forChat).
     fun w(s: String) = if (channel) com.fariin.app.channel.ChannelRules.words(s) else s
     val shape = if (channel) RoundedCornerShape(36.dp) else CircleShape
@@ -1223,7 +1228,14 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
     // The picked photo goes to the circle cropper (iOS: the same move-and-scale a profile photo uses).
     val picker = rememberCirclePhotoPicker { jpeg -> newPhoto = jpeg; removePhoto = false }
     val pick = picker.launch
-    if (picker.pending != null) { picker.Host(w("Group photo"), w("Shown in chats and on the group page")); return }
+    if (picker.pending != null) {
+        if (sheet == null) { picker.Host(w("Group photo"), w("Shown in chats and on the group page")); return }
+        androidx.compose.ui.window.Dialog(onDismissRequest = {}, properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
+            picker.Host(w("Group photo"), w("Shown in chats and on the group page"))
+        }
+    }
     val descFocus = remember { FocusRequester() }
     LaunchedEffect(focusDescription) { if (focusDescription) { delay(350); runCatching { descFocus.requestFocus() } } }
     // Only marks the photo for removal; Save does the rest, as before.
@@ -1231,7 +1243,7 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
         listOf(PersonAction("Remove") { newPhoto = null; removePhoto = true; true }),
         onDismiss = { confirmRemove = false }, kind = com.fariin.app.ui.components.AvatarKind.of(true, channel))
     val barScroll = rememberScrollState()
-    BarPage(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = {
+    val saveAction: @Composable () -> Unit = {
             TextAction("Save", enabled = trimmed.isNotEmpty() && changed && !saving, busy = saving) {
                 saving = true; error = null
                 scope.launch {
@@ -1249,8 +1261,8 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                     }
                 }
             }
-        }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
-        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
+        }
+    val body: @Composable () -> Unit = {
             Spacer(Modifier.height(8.dp))
             Box {
                 Box(Modifier.size(120.dp).clip(shape).clickable(onClick = pick), contentAlignment = Alignment.Center) {
@@ -1282,7 +1294,24 @@ internal fun EditGroupScreen(api: PeopleApi, cid: String, title: String, photoUr
                 DescriptionField(desc, descFocus) { desc = GroupRules.oneParagraph(it) }
             }
             error?.let { Text(it, fontSize = 15.sp, color = c.red, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)) }
+    }
+    if (sheet != null) {
+        // The sheet's own bar (as Edit Profile's): X to close, the title, Save; a drag on it pulls the sheet.
+        Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
+            Box(Modifier.fillMaxWidth().sheetDrag(sheet).padding(top = 8.dp).height(64.dp).padding(horizontal = 12.dp)) {
+                Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Cancel") { onClose() },
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
+                Text(if (channel) "Edit Channel" else "Edit Group", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                    modifier = Modifier.align(Alignment.Center))
+                Box(Modifier.align(Alignment.CenterEnd)) { saveAction() }
+            }
+            Column(Modifier.fillMaxSize().verticalScroll(barScroll).imePadding(), horizontalAlignment = Alignment.CenterHorizontally) { body() }
         }
+        return
+    }
+    BarPage(if (channel) "Edit Channel" else "Edit Group", onBack = onClose, action = { saveAction() },
+        under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) { body() }
     }
 }
 
