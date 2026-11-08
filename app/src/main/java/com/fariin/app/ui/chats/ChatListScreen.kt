@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
@@ -409,7 +410,9 @@ fun ChatListScreen(
                 // border). A soft see-through page colour instead, as the reference app's: the chats
                 // show faintly as they pass under it, so it is not a hard white slab. The status bar
                 // strip keeps it while the bar is away.
-                Modifier.background(c.bg.copy(alpha = 0.9f)).statusBarsPadding(),
+                // The tab pages' frosted top (owner 2026-11-08: "this one is ok", on every tab), always on,
+                // from the first frame; when the bar leaves on scroll the status strip stays frosted.
+                Modifier.frostedTopBar(haze, c.bg, glass).statusBarsPadding(),
             ) {
                 when {
                     selecting -> SelectionBar(
