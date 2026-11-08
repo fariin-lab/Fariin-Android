@@ -567,7 +567,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 },
                 textStory = composingText,
                 // Only the last one flies home: the camera and the library stay for the items still to come.
-                flyHome = !more, onFlightStart = { camera = false; library = false },
+                flyHome = !more, onFlightStart = { camera = false; library = false; StoryAppShrink.play() },
                 onAddMore = if (composingText) null else ({ addMore = true }))
         }
     }

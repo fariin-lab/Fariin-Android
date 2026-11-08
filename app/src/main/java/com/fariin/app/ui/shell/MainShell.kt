@@ -247,7 +247,8 @@ fun MainShell(
     val liquid = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
     val backdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
 
-    Box(Modifier.fillMaxSize().background(c.bg)) {
+    // storyAppShrink: the app grows back from a card after a story is posted (StoryPostFlight.kt).
+    Box(Modifier.fillMaxSize().then(com.fariin.app.ui.stories.StoryAppShrink.modifier()).background(c.bg)) {
         Box(Modifier.fillMaxSize().then(when {
             liquid -> Modifier.layerBackdrop(backdrop)
             glass -> Modifier.hazeSource(haze)

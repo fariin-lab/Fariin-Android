@@ -37,6 +37,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
 
 /**
  * After Post Story (iOS StoryPostFlight in StoryCameraDoor.swift): the posted picture leaves the
@@ -96,7 +100,14 @@ fun PostFlightLayer(image: ImageBitmap, from: Rect, fromRadius: Float, onDone: (
         FlightBox(image, from, fromRadius, 1f)
         return
     }
-    val d = dest
+    // The slot as it stands this frame: the app grows back under the flight (StoryAppShrink), so a
+    // fresh place for the card wins over the one found at the start.
+    val d = dest?.let { found ->
+        val loc = IntArray(2)
+        view.getLocationOnScreen(loc)
+        StoryOrigins.rects[StoryPostFlight.UPLOAD_KEY]?.translate(-loc[0].toFloat(), -loc[1].toFloat())
+            ?.takeIf { it.width > 1f } ?: found
+    }
     if (d != null) {
         val r = Rect(
             Offset(lerp(from.left, d.left, t), lerp(from.top, d.top, t)),
@@ -112,6 +123,53 @@ fun PostFlightLayer(image: ImageBitmap, from: Rect, fromRadius: Float, onDone: (
 }
 
 private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+
+/**
+ * THE APP SHRINKS BACK FROM THE CAMERA ON POST (iOS StoryCameraDoor.closeAfterPost, the root
+ * transform): at the tap the app behind the camera is held as a card, (width - 32) / width wide, its
+ * top at the status bar, 38 corners, black around it, and it grows back to full screen in 0.3 s
+ * ease-in-out while the sheet drops and the picture flies. The real app is moved, not a picture of it.
+ * [play] starts it; [storyAppShrink] on the app's root draws it.
+ */
+object StoryAppShrink {
+    internal val tick = androidx.compose.runtime.mutableIntStateOf(0)
+    fun play() { tick.intValue = tick.intValue + 1 }
+    /** For the app's root, without an import there. */
+    fun modifier(): Modifier = Modifier.storyAppShrink()
+    const val MS = 300
+    val EASE_IN_OUT = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+}
+
+/** On the app's root: black behind, the content scaled and rounded while [StoryAppShrink] runs. */
+fun Modifier.storyAppShrink(): Modifier = composed {
+    val tick = StoryAppShrink.tick.intValue
+    val p = remember { Animatable(0f) }
+    LaunchedEffect(tick) {
+        if (tick == 0 || !com.fariin.app.ui.components.Motion.on) return@LaunchedEffect
+        p.snapTo(1f)
+        p.animateTo(0f, tween(StoryAppShrink.MS, easing = StoryAppShrink.EASE_IN_OUT))
+    }
+    val density = LocalDensity.current
+    val top = WindowInsets.statusBars.getTop(density).toFloat()
+    val gutter = with(density) { 32.dp.toPx() }
+    val corner = with(density) { 38.dp.toPx() }
+    this.drawBehind { if (p.value > 0f) drawRect(androidx.compose.ui.graphics.Color.Black) }
+        .graphicsLayer {
+            val t = p.value
+            if (t <= 0f || size.width <= gutter) return@graphicsLayer
+            val w = size.width
+            val h = size.height
+            val held = (w - gutter) / w
+            val s = 1f + (held - 1f) * t
+            scaleX = s
+            scaleY = s
+            // iOS: translate(0, statusBar - h(1 - s)/2), so the held card's top sits at the status bar.
+            translationY = (top - h * (1f - held) / 2f) * t
+            clip = true
+            // Drawn at 38 when held, down to square at full size; the layer's own size is unscaled.
+            shape = RoundedCornerShape(corner * t / s)
+        }
+}
 
 @Composable
 private fun FlightBox(image: ImageBitmap, r: Rect, radiusPx: Float, alpha: Float) {
