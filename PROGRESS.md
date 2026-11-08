@@ -1275,3 +1275,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   (clearGroupMessages loop), Storage "None", two-line footer. Info pages (group, channel, profile) use the
   frosted top; PageBar draws no grey band there. Untested on device: link row (no public group on the
   Pixel), greying during a call, the clear itself.
+- 2026-11-08 evening: channel owner's Share circle no longer greyed on a private channel (iOS shares the
+  invite link; Android stopped at "no public link"). Group More circle opens the glass menu (as the
+  channel's), Export Chat in it. Both checked on the Pixel.

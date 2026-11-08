@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.glassMenuAnchor
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.R
 import com.fariin.app.ui.components.sheetDrag
 import com.fariin.app.ui.settings.BarPage
@@ -878,7 +880,14 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
     val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
-    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary), frosted = true, bar = {
+    // The More circle's glass menu grows out of the circle over the page's own layer (as the channel's).
+    val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    var moreOpen by remember { mutableStateOf(false) }
+    val menuBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val menuGlass = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= 33
+    Box(Modifier.fillMaxSize()) {
+    com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary)
+        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true, bar = {
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
@@ -918,14 +927,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             if (iAmMember) {
                 Spacer(Modifier.height(16.dp))
                 GroupCirclesRow(cid, me, conv, users.size, onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack) }) else null,
-                    onNotice = { notice = it }, more = { open, onDismiss ->
-                        GroupInfoMenuItems(open, onDismiss,
-                            onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }) else null,
-                            onShare = if (inviteLink != null) ({ sharingLink = true }) else null, onQr = { showQr = true }, saveCid = cid,
-                            onExport = if (!ChatExportRun.SHOWN || conv["channel"] == true) null else ({
-                                if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group")
-                            }))
-                    })
+                    onNotice = { notice = it }, moreAnchor = moreAnchor, onMore = { moreOpen = true })
             }
             Spacer(Modifier.height(20.dp))
             // iOS GroupAboutCard: the description and, for a public group, its link with the QR.
@@ -1060,6 +1062,28 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Spacer(Modifier.height(30.dp))
         }
     }
+    run {
+        val ctx2 = LocalContext.current
+        var saveOn by remember(cid, moreOpen) { mutableStateOf(com.fariin.app.media.AutoSaveMedia.savesMedia(ctx2, cid)) }
+        com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
+            if (canEdit) add(com.fariin.app.ui.components.GlassMenuItem("Change Wallpaper",
+                androidx.compose.ui.res.painterResource(R.drawable.ic_wallpaper)) {
+                com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() })
+            if (inviteLink != null) {
+                add(com.fariin.app.ui.components.GlassMenuItem("Share Group",
+                    androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { sharingLink = true })
+                add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
+                    androidx.compose.ui.res.painterResource(R.drawable.ic_qr)) { showQr = true })
+            }
+            add(com.fariin.app.ui.components.GlassMenuItem("Save to Photos: " + (if (saveOn) "On" else "Off"),
+                androidx.compose.ui.res.painterResource(R.drawable.ic_save_down), divider = true) {
+                saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, cid, saveOn) })
+            if (ChatExportRun.SHOWN && conv["channel"] != true) add(com.fariin.app.ui.components.GlassMenuItem("Export Chat",
+                androidx.compose.ui.res.painterResource(R.drawable.ic_save_down)) {
+                if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group") })
+        }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
+    }
+    }
 }
 
 /**
@@ -1072,8 +1096,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
 @Composable
 private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, memberCount: Int, onSearch: (() -> Unit)?,
                             onNotice: (String) -> Unit,
-                            /** The More circle's menu (iOS fifth circle): drawn under the circle while open. */
-                            more: @Composable (open: Boolean, onDismiss: () -> Unit) -> Unit = { _, _ -> }) {
+                            /** The More circle (iOS fifth circle): its glass menu is the page's, grown from [moreAnchor]. */
+                            moreAnchor: com.fariin.app.ui.components.GlassMenuAnchor? = null, onMore: () -> Unit = {}) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1142,10 +1166,8 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
             }
         }
         ActionTile("Search", ImageVector.vectorResource(R.drawable.ic_search_ios), share, dimmed = onSearch == null) { onSearch?.invoke() }
-        var moreOpen by remember { mutableStateOf(false) }
-        Box(share) {
-            ActionTile("More", ImageVector.vectorResource(R.drawable.ic_more_ios), Modifier.fillMaxWidth()) { moreOpen = true }
-            more(moreOpen) { moreOpen = false }
+        Box(share.then(if (moreAnchor != null) Modifier.glassMenuAnchor(moreAnchor) else Modifier)) {
+            ActionTile("More", ImageVector.vectorResource(R.drawable.ic_more_ios), Modifier.fillMaxWidth(), onClick = onMore)
         }
     }
 }
@@ -1162,34 +1184,6 @@ private fun rememberSystemCallActive(): Boolean {
         }
     }
     return active
-}
-
-/** The More circle's menu (iOS GroupInfoView moreMenuItems, menuGroupItems). */
-@Composable
-private fun GroupInfoMenuItems(open: Boolean, onDismiss: () -> Unit, onWallpaper: (() -> Unit)?, onShare: (() -> Unit)?, onQr: () -> Unit,
-                               saveCid: String? = null, onExport: (() -> Unit)? = null) {
-    val c = Fariin.colors
-    val ctx = LocalContext.current
-    var saveOn by remember(saveCid, open) { mutableStateOf(saveCid?.let { com.fariin.app.media.AutoSaveMedia.savesMedia(ctx, it) } ?: false) }
-    androidx.compose.material3.DropdownMenu(open, onDismissRequest = onDismiss, shape = com.fariin.app.ui.components.FariinMenu.shape,
-        border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-        if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
-            onClick = { onDismiss(); onWallpaper() })
-        if (onShare != null) {
-            androidx.compose.material3.DropdownMenuItem(text = { Text("Share Group", color = c.label) },
-                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label, modifier = Modifier.size(24.dp)) },
-                onClick = { onDismiss(); onShare() })
-            androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
-                leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
-                onClick = { onDismiss(); onQr() })
-        }
-        if (saveCid != null) androidx.compose.material3.DropdownMenuItem(
-            text = { Text("Save to Photos: " + (if (saveOn) "On" else "Off"), color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) },
-            onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); onDismiss() })
-        if (onExport != null) ExportChatItem { onDismiss(); onExport() }
-    }
 }
 
 /**

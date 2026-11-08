@@ -157,7 +157,8 @@ object ChannelRules {
                     // iOS, the owner's page (2026-11-08): Mute, Search, Share, More.
                     add(if (muted) Circle(Action.UNMUTE, "Unmute", false) else Circle(Action.MUTE, "Mute", false))
                     add(Circle(Action.SEARCH, "Search", false))
-                    add(Circle(Action.SHARE, "Share", !hasLink))
+                    // Never grey for an admin (iOS, owner 2026-11-08): a private channel shares its invite link.
+                    add(Circle(Action.SHARE, "Share", false))
                     add(Circle(Action.MORE, "More", false))
                     return@buildList
                 }
