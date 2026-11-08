@@ -3,6 +3,7 @@ package com.fariin.app.ui.people
 import com.fariin.app.ui.settings.BarPage
 import androidx.compose.foundation.layout.height
 
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -105,6 +106,13 @@ internal object ChatStorageRules {
         }
     }
 
+    /**
+     * The last list measured per chat, in memory only, so the page opens on its real tiles at once
+     * on re-entry and only refreshes the sizes behind them. Wiped with the shared-media cache at
+     * sign-out (it holds opened messages).
+     */
+    val lastItems = java.util.concurrent.ConcurrentHashMap<String, List<Item>>()
+
     fun sorted(items: List<Item>, sort: Sort): List<Item> = when (sort) {
         Sort.LARGEST -> items.sortedWith(compareByDescending<Item> { it.bytes }.thenByDescending { it.m.createdAtMillis })
         Sort.NEWEST -> items.sortedByDescending { it.m.createdAtMillis }
@@ -120,13 +128,34 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
     val media = remember(cid) { ChatMedia(ctx.applicationContext, cid, CryptoHub.get(ctx.applicationContext)) }
     val hidden by HiddenMessages.ids.collectAsState()
     var gen by remember { mutableStateOf(0) }
-    val items by produceState<List<ChatStorageRules.Item>?>(null, cid, gen, hidden) {
-        value = withContext(Dispatchers.IO) {
-            val source = SharedMediaSource(cid, me, CryptoHub.get(ctx.applicationContext))
-            val msgs = (source.fetch() ?: runCatching { source.local() }.getOrDefault(emptyList()))
-            ChatStorageRules.items(msgs, media) { it in hidden }
+    // One screen from the first frame (iOS measures the chat's messages already on the phone, no
+    // network): the last list of this chat at once, then the phone's own copy of the chat, then the
+    // server's newest window only to add what the saved copy lacks. Each pass keeps the previous
+    // list on screen until the next is ready, so the grid never empties or goes grey.
+    val measured by produceState<List<ChatStorageRules.Item>?>(ChatStorageRules.lastItems[cid], cid, gen, hidden) {
+        val source = SharedMediaSource(cid, me, CryptoHub.get(ctx.applicationContext))
+        val local = withContext(Dispatchers.IO) {
+            runCatching { ChatStorageRules.items(source.local(), media) { it in hidden } }.getOrNull()
+        }
+        if (local != null) { value = local; ChatStorageRules.lastItems[cid] = local }
+        val fresh = withContext(Dispatchers.IO) {
+            source.fetch()?.let { msgs -> runCatching { ChatStorageRules.items(msgs, media) { it in hidden } }.getOrNull() }
+        }
+        when {
+            fresh != null -> {
+                // Both reads together: the saved copy can hold older items than the server's window.
+                val merged = (fresh + local.orEmpty()).distinctBy { it.m.id }
+                if (merged.map { it.m.id to it.bytes } != value?.map { it.m.id to it.bytes }) value = merged
+                ChatStorageRules.lastItems[cid] = merged
+            }
+            local == null -> value = value ?: emptyList()
         }
     }
+    // A cached list may still hold what was just deleted here; never show a hidden one.
+    val items = measured?.filter { it.m.id !in hidden }
+    // "Measuring…" only when it takes long enough to be seen (a quick pass shows no flash).
+    var slow by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(cid) { kotlinx.coroutines.delay(150); slow = true }
     var sort by remember { mutableStateOf(ChatStorageRules.Sort.LARGEST) }
     var sortOpen by remember { mutableStateOf(false) }
     var selecting by remember { mutableStateOf(false) }
@@ -140,11 +169,12 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
     androidx.activity.compose.BackHandler(selecting) { selecting = false; selected = emptySet() }
     BarPage(if (selecting) (if (selected.isEmpty()) "Select Items" else "${selected.size} Selected") else "Storage",
             onBack = if (selecting) null else pop,
-            action = if (!list.isNullOrEmpty()) ({
-                com.fariin.app.ui.components.FloatingTextAction(if (selecting) "Done" else "Select") {
+            // The slot is always there, so the bar keeps its shape; Select wakes when there is a tile.
+            action = {
+                com.fariin.app.ui.components.FloatingTextAction(if (selecting) "Done" else "Select", enabled = !list.isNullOrEmpty()) {
                     selecting = !selecting; if (!selecting) selected = emptySet()
                 }
-            }) else null, modifier = Modifier.background(c.bgSecondary)) { top ->
+            }, modifier = Modifier.background(c.bgSecondary)) { top ->
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         Box(Modifier.weight(1f)) {
             LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -152,9 +182,18 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                 item(span = { GridItemSpan(3) }) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if (list != null) SettingsRules.bytes(total) else " ", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label)
-                            Text(if (list != null) "${list.size} ${if (list.size == 1) "item" else "items"} from $title on this phone" else "Measuring…",
-                                fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                            // Same two lines in every state; the total fades in over the blank of the same height.
+                            androidx.compose.animation.AnimatedContent(if (list != null) SettingsRules.bytes(total) else " ",
+                                transitionSpec = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)) togetherWith
+                                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) },
+                                label = "storageTotal") { t ->
+                                Text(t, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, maxLines = 1)
+                            }
+                            Text(when {
+                                list != null -> "${list.size} ${if (list.size == 1) "item" else "items"} from $title on this phone"
+                                slow -> "Measuring…"
+                                else -> " "
+                            }, fontSize = 13.sp, color = c.secondary, maxLines = 1)
                         }
                         Box {
                             Row(Modifier.clip(CircleShape).background(c.card).clickable(enabled = !list.isNullOrEmpty()) { sortOpen = true }
@@ -173,7 +212,8 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                     }
                 }
                 when {
-                    list == null -> items(12) { Box(Modifier.aspectRatio(1f).background(c.label.copy(alpha = 0.07f))) }
+                    // Not known yet (first open, a slow phone): no placeholder grid, the header waits alone.
+                    list == null -> Unit
                     list.isEmpty() -> item(span = { GridItemSpan(3) }) {
                         Column(Modifier.fillMaxWidth().padding(top = 80.dp, start = 32.dp, end = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Outlined.Storage, null, tint = c.secondary, modifier = Modifier.size(38.dp))

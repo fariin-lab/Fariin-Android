@@ -216,6 +216,6 @@ class SharedMediaSource(
         private val cache = ConcurrentHashMap<String, List<Message>>()
 
         /** Sign-out: opened messages must not outlive the account in memory (iOS clearSharedMediaCache). */
-        fun clear() = cache.clear()
+        fun clear() { cache.clear(); com.fariin.app.ui.people.ChatStorageRules.lastItems.clear() }
     }
 }
