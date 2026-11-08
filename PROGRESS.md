@@ -1230,3 +1230,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   - Not yet checked on the Pixel: the owner paused phone use; waiting for his OK.
 - 2026-11-07 evening: New Call checked on the fariin_pixel emulator (picker ticks, strip, search; no call
   placed). Its back/search were not glass (missed by the sweep): fixed, strip now rides in the bar.
+- 2026-11-07 night: Forward sheet: preview (up to 3 cards, +N), "Add a message…", send arrow; one chat
+  picked lands in it (owner's ask, iOS parity). Emulator: preview and landing OK; the note needs a server
+  (emulator has none), owner to try on the Pixel in kream.
