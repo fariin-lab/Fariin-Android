@@ -51,6 +51,8 @@ object AppLifecycle : DefaultLifecycleObserver {
         scope.launch { Presence.set(online = true, context = app) }
         try { FirebaseFirestore.getInstance().enableNetwork() } catch (_: Exception) {}
         reconnect()
+        // Back in front: chats that moved while away are warmed before they are opened.
+        com.fariin.app.data.ChatHistoryPreloader.retry()
     }
 
     override fun onStop(owner: LifecycleOwner) {

@@ -32,12 +32,42 @@ object ChatHistoryPreloader {
     private val warming = HashSet<String>()
     private val warmedAt = HashMap<String, Double>()
 
-    private const val TOP_CHATS = 12
+    // Shared with iOS 2026-11-07: the top 20 of the list.
+    private const val TOP_CHATS = 20
+
+    /** How long an opening chat waits for its listener before drawing saved rows that are behind. */
+    const val OPEN_WAIT_MS = 1_500L
+
+    /** Behind (shared with iOS): the list's last activity is newer than the newest saved row, 2 s slack. */
+    fun behind(listTime: Double, cachedNewest: Double?): Boolean =
+        listTime > 0 && (cachedNewest == null || listTime > cachedNewest + 2_000)
+
+    // The last list seen, for a retry: a quiet list sends no new snapshot, so a refresh dropped
+    // while a chat was open or during the launch hold would otherwise never come back (iOS finding).
+    private var lastList: List<Conversation> = emptyList()
+    private var lastMe = ""
+    private var holdRetry = false
+
+    /** Runs the last refresh again: a chat closed, the launch hold ended, a slot freed, back in front. */
+    fun retry() {
+        // A moment later: a chat that just closed is still on the open list for a frame.
+        scope.launch {
+            kotlinx.coroutines.delay(300)
+            val (l, m) = synchronized(this@ChatHistoryPreloader) { lastList to lastMe }
+            if (l.isNotEmpty()) refresh(l, m, null)
+        }
+    }
 
     @Synchronized
     fun refresh(conversations: List<Conversation>, me: String, openChat: String?) {
-        if (me.isEmpty() || openChat != null) return
-        if (SystemClock.elapsedRealtime() - launchedAt < LAUNCH_HOLD_MS) return
+        if (me.isEmpty()) return
+        lastList = conversations; lastMe = me
+        if (openChat != null || ThreadRepository.anyOpen()) return
+        val held = LAUNCH_HOLD_MS - (SystemClock.elapsedRealtime() - launchedAt)
+        if (held > 0) {
+            if (!holdRetry) { holdRetry = true; scope.launch { kotlinx.coroutines.delay(held + 50); retry() } }
+            return
+        }
         // Battery audit 2026-11-05: on a cheap phone or in Battery Saver nothing is warmed ahead, and
         // elsewhere only the chats near the top (the ones about to be opened), not up to 300 of them.
         val power = com.fariin.app.perf.PowerSaving.state.value
@@ -58,7 +88,7 @@ object ChatHistoryPreloader {
     }
 
     @Synchronized
-    fun stopAll() { warming.clear(); warmedAt.clear() }
+    fun stopAll() { warming.clear(); warmedAt.clear(); lastList = emptyList(); lastMe = "" }
 
     private fun warm(c: Conversation, me: String) {
         val cid = c.id
@@ -77,6 +107,8 @@ object ChatHistoryPreloader {
                 warming -= cid
                 if (ok) warmedAt[cid] = stamp
             }
+            // A slot is free: the next chat behind goes (only those not yet warmed to their time).
+            if (ok && com.fariin.app.AppLifecycle.inFront) retry()   // not after a failure: offline it would loop
         }
     }
 }

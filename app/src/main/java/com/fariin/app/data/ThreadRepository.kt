@@ -147,8 +147,22 @@ class ThreadRepository(
             val now = System.currentTimeMillis().toDouble()
             val saved = LocalCache.loadThread(me, cid).filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
             if (saved.isNotEmpty()) {
-                seeded = true
-                _state.update { it.copy(messages = order.sort(saved), loaded = true) }
+                // Safety net (shared rules 2026-11-07): when the list knows a newer message than the
+                // saved rows, they are not drawn, so the chat does not open on old rows and then
+                // jump. The listener (warm from ChatHistoryPreloader) answers first; past 1.5 s the saved
+                // rows show and the new ones glide in at the bottom.
+                val listTime = CryptoHub.listedConversation(cid)?.displayUpdatedAt(me) ?: 0.0
+                val stale = ChatHistoryPreloader.behind(listTime, saved.maxOf { it.createdAtMillis })
+                if (!stale) {
+                    seeded = true
+                    _state.update { it.copy(messages = order.sort(saved), loaded = true) }
+                } else scope.launch {
+                    kotlinx.coroutines.delay(ChatHistoryPreloader.OPEN_WAIT_MS)
+                    if (!live && liveDocs.isEmpty() && _state.value.messages.isEmpty()) {
+                        seeded = true
+                        _state.update { it.copy(messages = order.sort(saved), loaded = true) }
+                    }
+                }
             }
         }
         open[cid] = this
@@ -1690,6 +1704,9 @@ class ThreadRepository(
         /** The repository of each chat on screen, so a queue drain sends through it (its bubble
          *  turns from failed back to sending) rather than through a second copy. */
         private val open = ConcurrentHashMap<String, ThreadRepository>()
+
+        /** True while a chat is on screen (ChatHistoryPreloader leaves warming until it closes). */
+        fun anyOpen(): Boolean = open.isNotEmpty()
 
         /** Sends outlive the chat screen: leaving a chat mid-send never cancels the send. */
         private val sendScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)

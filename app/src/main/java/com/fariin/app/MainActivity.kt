@@ -260,6 +260,8 @@ class MainActivity : ComponentActivity() {
             openChat = openCid
             PushRouter.activeChatId = if (started) openCid else null
             openCid?.let { NotificationPoster.clear(applicationContext, it) }
+            // A chat closed: the chats that moved while it was open are warmed now.
+            if (openCid == null) com.fariin.app.data.ChatHistoryPreloader.retry()
         }
         val pending by PushRouter.pendingOpen.collectAsState()
         LaunchedEffect(pending) {
