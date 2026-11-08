@@ -141,6 +141,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val scope = rememberCoroutineScope()
     // The viewer: which rings it walks through and where it starts.
     var viewing by remember { mutableStateOf<Pair<List<StoryGroup>, Int>?>(null) }
+    // Posted Stories' tile the open story flies out of and back into (null: the ring's own card).
+    var viewingOrigin by remember { mutableStateOf<StoryOrigin?>(null) }
     var composing by remember { mutableStateOf<StoryMedia.Prepared?>(null) }
     var composingText by remember { mutableStateOf(false) }
     // SEVERAL IN ONE POST (iOS: the editor's + ticks up to five; Post shares each as its own story).
@@ -449,7 +451,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     }
     viewing?.let { (groups, start) ->
         // Live copies of the rings, so a story posted or deleted meanwhile is not stale when opened.
-        if (live) StoryViewerDialog(me, groups, start, conversations, onClose = { viewing = null })
+        if (live) StoryViewerDialog(me, groups, start, conversations, onClose = { viewing = null; viewingOrigin = null }, origin = viewingOrigin)
         else viewing = null
     }
     if (camera) {
@@ -511,7 +513,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             PostedStoriesPage(me, state.mine?.stories ?: emptyList(), profile?.photoUrl,
                 onOpen = { s ->
                     // Start the viewer on the tapped story: a watermark just before it.
-                    state.mine?.let { g -> viewing = listOf(g.copy(lastViewedAtMs = s.createdAtMs - 1)) to 0 }
+                    state.mine?.let { g ->
+                        viewingOrigin = StoryOrigin(postedTileKey(s.id), s.listThumb)
+                        viewing = listOf(g.copy(lastViewedAtMs = s.createdAtMs - 1)) to 0
+                    }
                 },
                 onBack = { posted = false }, conversations = conversations, myHandle = profile?.handle)
         }

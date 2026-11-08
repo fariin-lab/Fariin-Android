@@ -181,6 +181,8 @@ fun StoryViewerDialog(
     startGroup: Int,
     conversations: List<Conversation>,
     onClose: () -> Unit,
+    /** A card that is not the ring's own (Posted Stories' tile): the flight leaves and lands there. */
+    origin: StoryOrigin? = null,
 ) {
     // Back reaches this window's own dispatcher too (owner 2026-11-04: the back swipe did nothing in a
     // story). Since 919d7a6 the app is off the predictive-back system, so the viewer's
@@ -244,7 +246,7 @@ fun StoryViewerDialog(
         }
         androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.people.LocalPeopleNav provides routed) {
             StoryViewer(me, groups, startGroup, conversations, onClose, onShown = { secure = it.captureProtected },
-                onBarsOverList = { overList = it }, backTick = backTick)
+                onBarsOverList = { overList = it }, backTick = backTick, origin = origin)
         }
     }
 }
@@ -261,6 +263,8 @@ fun StoryViewer(
     onBarsOverList: (Boolean) -> Unit = {},
     /** Bumped by the window's own back: close as the back gesture would. */
     backTick: Int = 0,
+    /** See [StoryViewerDialog]: the tapped card when it is not the ring's own slot. */
+    origin: StoryOrigin? = null,
 ) {
     val service = remember(me) { StoryService(me) }
     val context = LocalContext.current
@@ -394,9 +398,11 @@ fun StoryViewer(
     val hero = remember { HeroState() }
     val heroJob = remember { arrayOfNulls<Job>(1) }
     fun currentKey() = groups.getOrNull(pager.currentPage)?.key
+    // The slot the flight uses: the tapped tile when one was given (Posted Stories), else the ring's card.
+    fun slotKey() = origin?.key ?: currentKey()
     val cardRadius = 14f * density
     // The hole follows whoever is on screen, so the landing fills the slot it came out of.
-    val shownKey = currentKey()
+    val shownKey = slotKey()
     // The card in the list hides only once the viewer has drawn its copy (one frame), as the photo
     // and menu zooms: hiding it in the same frame left an empty card for a frame.
     LaunchedEffect(shownKey) { if (!hero.closed) { withFrameMillis { }; if (!hero.closed) StoryOrigins.hiddenKey = shownKey } }
@@ -442,6 +448,8 @@ fun StoryViewer(
         } else {
             hero.coverUrl = g?.stories?.lastOrNull()?.listThumb
         }
+        // A Posted Stories tile wears its own story's picture, the one already on screen.
+        origin?.let { hero.avatar = false; hero.coverUrl = it.coverUrl }
     }
 
     /** The card's corner at its size on screen now, in px: into a chat row's photo it is round once its crop is done. */
@@ -494,7 +502,7 @@ fun StoryViewer(
         androidx.compose.runtime.snapshotFlow { size }.first { it != IntSize.Zero }
         if (hero.staged) return@LaunchedEffect
         hero.staged = true
-        val a = anchorFor(currentKey())
+        val a = anchorFor(slotKey())
         hero.center = rest()
         // Power Saving's animations off: no flight, the same short fade as a story with no slot.
         if (a == null || !com.fariin.app.ui.components.Motion.on) {
@@ -505,7 +513,7 @@ fun StoryViewer(
             return@LaunchedEffect
         }
         hero.anchor = a
-        hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
+        hero.radius = StoryOrigins.radii[slotKey()] ?: cardRadius
         stageCover(a, currentKey())
         hero.f = 1f; hero.center = a.center; hero.crop = 1f; hero.cover = 1f; hero.dimFloor = 0f
         hero.ring = if (hero.avatar) 1f else 0f
@@ -547,7 +555,7 @@ fun StoryViewer(
                 dimFloor = { 1f - it }, extra = { t -> hero.shrink = 1f - (1f - StoryMotion.DRIFT_SCALE) * t; hero.rootAlpha = 1f - t }) { land() }
         } else {
             hero.anchor = a
-            hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
+            hero.radius = StoryOrigins.radii[slotKey()] ?: cardRadius
             stageCover(a, currentKey())
             val remaining = maxOf(1f, (a.center - hero.center).getDistance())
             // Into a chat row's photo the card turns round and wears the photo early, and the row's
@@ -590,13 +598,13 @@ fun StoryViewer(
         hero.chromeHold = StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 1.4f).coerceIn(0f, 1f)
         if (!hero.live) { hero.center = rest(); hero.f = 0f }
         hero.live = true
-        val a = anchorFor(currentKey())
+        val a = anchorFor(slotKey())
         if (a == null && com.fariin.app.ui.components.Motion.on) {
             // The slot may be a frame behind (the list re-laid out under the viewer): look once more
             // before giving up on it, so the card never drops off the bottom when its slot is there.
             scope.launch {
                 withFrameMillis { }
-                val again = anchorFor(currentKey())
+                val again = anchorFor(slotKey())
                 hero.committing = false
                 if (again != null) closeTo(again, vy) else closeTo(null, vy)
             }
@@ -608,8 +616,8 @@ fun StoryViewer(
     fun dragBegin() {
         if (hero.committing || hero.closed || size == IntSize.Zero) return
         heroJob[0]?.cancel()
-        hero.anchor = anchorFor(currentKey())
-        hero.radius = StoryOrigins.radii[currentKey()] ?: cardRadius
+        hero.anchor = anchorFor(slotKey())
+        hero.radius = StoryOrigins.radii[slotKey()] ?: cardRadius
         hero.live = true
         hero.f = 0f; hero.center = rest(); hero.alpha = 1f
         // Nothing cross-fades under the finger, nothing is cropped, the floor is held.

@@ -28,6 +28,10 @@ object StoryOrigins {
     var hiddenKey by mutableStateOf<String?>(null)
 }
 
+/** A card the viewer flies from and back into that is not a ring's own slot ([key] in [StoryOrigins]),
+ *  wearing [coverUrl] (the picture the card shows) for the flight. */
+class StoryOrigin(val key: String, val coverUrl: String)
+
 /** The iOS story viewer's motion numbers (StoriesViews.swift hero, StoryCubePager, StoryPager). */
 internal object StoryMotion {
     /** Finger travel (dp) for the card to be fully seated in its slot (`heroDragSpan`). */
