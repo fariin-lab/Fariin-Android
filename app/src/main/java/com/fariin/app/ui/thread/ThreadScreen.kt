@@ -1006,7 +1006,8 @@ private fun ThreadContent(
                                 }
                             }
                             selecting -> Row(
-                                Modifier.fillMaxWidth().background(selLit),
+                                // The tick's side of the row ticks too, as the rest of it.
+                                Modifier.fillMaxWidth().background(selLit).pointerInput(m.rowId) { detectTapGestures(onTap = { toggle(m) }) },
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 SelectTick(m.rowId in selected)
@@ -1019,17 +1020,12 @@ private fun ThreadContent(
                                         }
                                         ReactionChips(m, ui, m.authorId == ui.me) {}
                                     }
+                                    // On top of the bubble, so the bubble itself gets no touch; only a TAP ticks.
+                                    // It used to eat every event, so a swipe never reached the list (no scroll
+                                    // while selecting) and its lift ticked the row (owner 2026-11-07: 3 picked,
+                                    // "7 messages" in Forward). A drag past the slop is the list's scroll now.
                                     Box(Modifier.matchParentSize().pointerInput(m.rowId) {
-                                        awaitEachGesture {
-                                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).consume()
-                                            var up = false
-                                            while (!up) {
-                                                val e = awaitPointerEvent(PointerEventPass.Initial)
-                                                e.changes.forEach { it.consume() }
-                                                up = e.changes.none { it.pressed }
-                                            }
-                                            toggle(m)
-                                        }
+                                        detectTapGestures(onTap = { toggle(m) })
                                     })
                                 }
                             }

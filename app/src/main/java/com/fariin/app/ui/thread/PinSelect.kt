@@ -31,6 +31,8 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -300,18 +302,24 @@ internal fun PinnedMessagesSheet(
 @Composable
 internal fun SelectTopBar(count: Int, onClose: () -> Unit) {
     val c = Fariin.colors
-    Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer)
-            .windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    // The chat header's build (owner 2026-11-07: select mode looked like a different app): the close
+    // in a floating circle at the start, the count centred and semibold, on the page colour.
+    Box(
+        Modifier.fillMaxWidth().background(c.bg)
+            .windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 12.dp),
     ) {
-        IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Cancel", tint = c.label) }
-        Spacer(Modifier.width(8.dp))
-        Text("$count Selected", style = MaterialTheme.typography.titleLarge, color = c.label)
+        com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Cancel", onClick = onClose, circle = true,
+            modifier = Modifier.align(Alignment.CenterStart))
+        Text(if (count == 1) "1 Selected" else "$count Selected", fontSize = 17.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
     }
 }
 
-/** The bar that stands in for the composer while selecting: Delete, Forward, Copy. */
+/**
+ * The bar that stands in for the composer while selecting: Delete, Forward, Copy in a floating
+ * capsule where the composer floats, with the long-press menu's own icons (the outlined bin, the
+ * curved Forward arrow, the outlined copy), so a forward looks the same from either place.
+ */
 @Composable
 internal fun SelectionBar(
     deleteEnabled: Boolean, forwardEnabled: Boolean, copyEnabled: Boolean, busy: Boolean,
@@ -319,24 +327,28 @@ internal fun SelectionBar(
 ) {
     val c = Fariin.colors
     Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer)
-            .windowInsetsPadding(WindowInsets.navigationBars).height(64.dp),
+        Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 12.dp, vertical = 8.dp).height(60.dp)
+            .floating(androidx.compose.foundation.shape.RoundedCornerShape(30.dp)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SelectAction("Delete", Icons.Filled.Delete, deleteEnabled && !busy, c.red, onDelete)
-        SelectAction("Forward", Icons.AutoMirrored.Filled.Forward, forwardEnabled && !busy, c.label, onForward)
-        SelectAction("Copy", Icons.Filled.ContentCopy, copyEnabled && !busy, c.label, onCopy)
+        SelectAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Delete),
+            deleteEnabled && !busy, c.red, onDelete)
+        SelectAction("Forward", painterResource(R.drawable.ic_menu_forward), forwardEnabled && !busy, c.label, onForward)
+        SelectAction("Copy", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.ContentCopy), copyEnabled && !busy, c.label, onCopy)
     }
 }
 
 @Composable
-private fun RowScope.SelectAction(title: String, icon: ImageVector, enabled: Boolean, tint: Color, onClick: () -> Unit) {
+private fun RowScope.SelectAction(title: String, icon: androidx.compose.ui.graphics.painter.Painter, enabled: Boolean, tint: Color, onClick: () -> Unit) {
     val ink = if (enabled) tint else Fariin.colors.secondary.copy(alpha = 0.5f)
     Column(
-        Modifier.weight(1f).fillMaxHeight().clickable(enabled = enabled, onClick = onClick),
+        Modifier.weight(1f).fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(30.dp))
+            .clickable(enabled = enabled, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, null, tint = ink, modifier = Modifier.size(24.dp))
+        Icon(icon, null, tint = ink, modifier = Modifier.size(23.dp))
+        Spacer(Modifier.height(2.dp))
         Text(title, fontSize = 12.sp, color = ink)
     }
 }
