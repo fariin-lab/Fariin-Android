@@ -672,8 +672,16 @@ private fun FriendRow(g: StoryGroup, now: Long, menu: List<RowAction>, onClick: 
         thumbUrl = newest?.listThumb ?: "", title = g.name.ifEmpty { "Fariin user" },
         subtitle = StoryList.subtitle(g, now),
         authorPhoto = g.photoUrl, seen = !g.hasUnseen, seenFlags = com.fariin.app.data.StoryRings.seenFlags(g),
-        squircle = false, originKey = g.key, badgeUid = g.key, onClick = onClick, menu = menu,
+        squircle = channelKey(g.key), originKey = g.key, badgeUid = g.key, onClick = onClick, menu = menu,
     )
+}
+
+/** A channel's story row shows its photo as the squircle, as everywhere else (iOS avatarSquircle). */
+private fun channelKey(key: String): Boolean {
+    if (!key.startsWith(StoryGroup.GROUP_PREFIX)) return false
+    val cid = key.removePrefix(StoryGroup.GROUP_PREFIX)
+    return com.fariin.app.data.CryptoHub.listedConversation(cid)?.isChannel == true ||
+        com.fariin.app.channel.ChannelFollows.docs.value[cid]?.get("channel") == true
 }
 
 /** One entry of a row's long-press menu (iOS CMAction). */
@@ -781,19 +789,21 @@ private fun StoryRow(
                 // The face: 26 avatar, 1 gap, 1.2 ring (1.5 grey when seen); one arc per story
                 // when the row knows them (iOS StoryListRow faceRing, StoryRingView).
                 val ring = if (seen) 1.5.dp else 1.2.dp
+                // A channel's face and ring are its squircle (Avatar's 30 % corner), not a circle.
+                val faceShape = if (squircle) RoundedCornerShape(30.4.dp * 0.3f) else CircleShape
                 Box(
-                    Modifier.align(Alignment.BottomEnd).offset(x = 7.dp, y = 5.dp).size(30.4.dp).clip(CircleShape)
+                    Modifier.align(Alignment.BottomEnd).offset(x = 7.dp, y = 5.dp).size(30.4.dp).clip(faceShape)
                         .background(c.bg)
                         .then(
-                            if (seenFlags.isNotEmpty() || uploading) Modifier
-                            else if (seen) Modifier.border(ring, if (c.dark) Color(0xFF505052) else Color(0xFFCACACA), CircleShape)
-                            else Modifier.border(ring, UnseenRing, CircleShape),
+                            if ((seenFlags.isNotEmpty() && !squircle) || uploading) Modifier
+                            else if (seen) Modifier.border(ring, if (c.dark) Color(0xFF505052) else Color(0xFFCACACA), faceShape)
+                            else Modifier.border(ring, UnseenRing, faceShape),
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Avatar(authorPhoto, 26.dp, squircle = squircle, kind = com.fariin.app.ui.components.AvatarKind.of(squircle, false))
                     if (uploading) UploadSpinRing(Modifier.fillMaxSize(), UnseenRing, 1.2.dp)
-                    else if (seenFlags.isNotEmpty()) StoryRing(seenFlags, Modifier.fillMaxSize(), lineWidth = 1.2.dp)
+                    else if (seenFlags.isNotEmpty() && !squircle) StoryRing(seenFlags, Modifier.fillMaxSize(), lineWidth = 1.2.dp)
                 }
             }
         }
