@@ -2,6 +2,7 @@ package com.fariin.app.ui.settings
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +18,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,12 +40,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -62,7 +67,7 @@ import java.util.Date
 
 /**
  * Delete Account (owner 2026-11-07, same as iOS): two sheets from the red row on the Account page.
- * 1 "Why are you leaving?", an optional single reason (Other opens a short text field);
+ * 1 "We're sorry to see you go", one required reason (Other opens a short text field that must be filled);
  * 2 "Delete @username?", what happens, Download my data first, and the red Delete Account.
  * Success logs out straight to the front door with a toast giving the date; failure says why and
  * lets the button be tapped again.
@@ -104,7 +109,7 @@ internal fun DeleteAccountFlow(profile: MyProfile?, onDone: () -> Unit, onSignOu
     }
 
     when (stage) {
-        1 -> ReasonSheet(code, text, onPick = { code = if (code == it) null else it }, onText = { text = it.take(AccountDeletion.REASON_TEXT_MAX) },
+        1 -> ReasonSheet(code, text, onPick = { code = it }, onText = { text = it.take(AccountDeletion.REASON_TEXT_MAX) },
             onContinue = { stage = 2 }, onClosed = { if (stage == 1) closed() })
         2 -> ConfirmSheet(handle, fmt.format(Date(AccountDeletion.defaultDue())), busy, error,
             onDownload = {
@@ -124,32 +129,54 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
     val go = remember { booleanArrayOf(false) }
     // Continue opens the next sheet only after this one has gone, so it never opens under it.
     val motion = rememberSheetMotion { if (go[0]) onContinue() else onClosed() }
-    sheetRestAt(motion, if (code == AccountDeletion.OTHER) 640.dp else 560.dp)
+    sheetRestAt(motion, if (code == AccountDeletion.OTHER) 720.dp else 640.dp)
+    // A reason is required (owner 2026-11-08, same as iOS); "Other" also needs its box filled.
+    val ready = code != null && (code != AccountDeletion.OTHER || text.trim().isNotEmpty())
     FariinSheetDialog(motion, fill = c.bgSecondary, typing = true) { _ ->
         AccountSheetFrame(motion, closeEnabled = true) {
-            Title("Why are you leaving?")
-            Text("Optional. Only the reason is kept, not who gave it.", fontSize = 15.sp, color = c.secondary,
-                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            Column(Modifier.padding(top = 24.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card)) {
+            Box(Modifier.size(56.dp).clip(CircleShape).background(c.red.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Favorite, contentDescription = null, tint = c.red, modifier = Modifier.size(28.dp))
+            }
+            Box(Modifier.height(16.dp))
+            Title("We're sorry to see you go")
+            Text("Tell us what happened so we can do better. Your answer goes only to the Fariin team.", fontSize = 15.sp,
+                color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            Column(Modifier.padding(top = 24.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.card).selectableGroup()) {
                 AccountDeletion.reasons.forEachIndexed { i, (key, label) ->
-                    Row(Modifier.fillMaxWidth().clickable { onPick(key) }.padding(horizontal = 16.dp, vertical = 13.dp),
+                    val on = code == key
+                    // The radio sits at the leading edge and is always there, so picking never moves the text.
+                    Row(Modifier.fillMaxWidth().selectable(selected = on, role = Role.RadioButton) { onPick(key) }
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Text(label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+                        Radio(on)
                         Box(Modifier.width(12.dp))
-                        if (code == key) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.blue, modifier = Modifier.size(20.dp))
-                        else Box(Modifier.size(20.dp))
+                        Text(label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                     }
-                    if (i < AccountDeletion.reasons.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+                    if (i < AccountDeletion.reasons.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 50.dp))
                 }
             }
+            if (code == "abusive_users") {
+                Text("You can also report someone from their profile, or block them, without leaving.", fontSize = 13.sp,
+                    color = c.secondary, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 4.dp, end = 4.dp))
+            }
             if (code == AccountDeletion.OTHER) {
-                OutlinedTextField(text, onText, placeholder = { Text("Tell us more (optional)") }, maxLines = 4,
+                OutlinedTextField(text, onText, placeholder = { Text("Tell us more") }, maxLines = 4,
                     supportingText = { Text("${text.length}/${AccountDeletion.REASON_TEXT_MAX}", color = c.secondary) },
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             }
-            SheetPill("Continue", c.blue, modifier = Modifier.padding(top = 24.dp)) { go[0] = true; motion.close() }
+            SheetPill("Continue", c.accent, ink = c.onAccent, enabled = ready, modifier = Modifier.padding(top = 24.dp)) { go[0] = true; motion.close() }
             SheetCancel { motion.close() }
         }
+    }
+}
+
+/** 22dp radio: an empty ring, or the accent ring with an inner dot when picked. */
+@Composable
+private fun Radio(on: Boolean) {
+    val c = Fariin.colors
+    Box(Modifier.size(22.dp).border(if (on) 2.dp else 1.5.dp, if (on) c.accent else c.tertiary, CircleShape),
+        contentAlignment = Alignment.Center) {
+        if (on) Box(Modifier.size(11.dp).clip(CircleShape).background(c.accent))
     }
 }
 
@@ -229,11 +256,13 @@ private fun Line(s: String) {
 }
 
 @Composable
-internal fun SheetPill(label: String, fill: Color, modifier: Modifier = Modifier, busy: Boolean = false, onClick: () -> Unit) {
+internal fun SheetPill(label: String, fill: Color, modifier: Modifier = Modifier, busy: Boolean = false,
+                       ink: Color = Color.White, enabled: Boolean = true, onClick: () -> Unit) {
     Box(modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(fill)
-        .clickable(enabled = !busy, onClickLabel = label) { onClick() }, contentAlignment = Alignment.Center) {
-        if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
-        else Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        .clickable(enabled = enabled && !busy, onClickLabel = label) { onClick() }
+        .then(if (enabled || busy) Modifier else Modifier.alpha(0.35f)), contentAlignment = Alignment.Center) {
+        if (busy) CircularProgressIndicator(color = ink, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+        else Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = ink)
     }
 }
 
