@@ -79,6 +79,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -92,6 +95,7 @@ import com.fariin.app.data.StoryEditRules
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.StoryAudienceChoice
 import com.fariin.app.data.StoryMedia
+import com.fariin.app.data.StoryCardRules
 import com.fariin.app.data.StoryRules
 import com.fariin.app.data.StoryService
 import com.fariin.app.ui.components.Avatar
@@ -246,17 +250,29 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     // Decoded off the main thread (about 7 ms on the low-end phone); null until it lands.
-    val bmp by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, media) {
+    // What the editor works on: the picked photo, or a tall one cut to the card's shape once the card
+    // is measured (iOS defaultZoom: a portrait photo FILLS the 9:16 card, so what is seen is posted).
+    var base by remember { mutableStateOf(media) }
+    var cropped by remember { mutableStateOf(false) }
+    var cropBusy by remember { mutableStateOf(false) }
+    val bmp by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, base) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            BitmapFactory.decodeByteArray(media.jpeg, 0, media.jpeg.size)?.asImageBitmap()
+            BitmapFactory.decodeByteArray(base.jpeg, 0, base.jpeg.size)?.asImageBitmap()
         }
+    }
+    // The picture's colours, blurred, as the card's wash behind a photo that does not fill it (iOS StoryCanvas).
+    val wash = remember(media) {
+        runCatching {
+            val b = android.util.Base64.decode(media.blurThumb, android.util.Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap()
+        }.getOrNull()
     }
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
     // The editor tools (iOS StoryEditorView Aa and pen). Photos only: iOS burns them into a video
     // by re-encoding it, which Android does not do yet.
-    val canEdit = media.video == null && bmp != null
+    val canEdit = base.video == null && bmp != null
     val edits = remember { StoryEdits() }
     var editingId by remember { mutableLongStateOf(-1L) }
     var drawing by remember { mutableStateOf(false) }
@@ -272,6 +288,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     var askDiscard by remember { mutableStateOf(false) }
     var baking by remember { mutableStateOf(false) }
     var posted by remember { mutableStateOf(media) }
+    var cardRect by remember { mutableStateOf(Rect.Zero) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     var captionArmed by remember { mutableStateOf(true) }
     val navBottom = WindowInsets.navigationBars.getBottom(density)
@@ -279,13 +296,35 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     // bar, ending above the bar of tools; the picture is fitted inside it, edits keep its rectangle.
     val statusTop = WindowInsets.statusBars.getTop(density)
     val barPx = with(density) { EDIT_BAR.toPx() }
-    val img = remember(box, bmp, statusTop, navBottom) {
+    // THE CARD (iOS StoryEditorView.cardSize): full width, 8 under the status bar, 9:16 or as tall as
+    // the room above the tool bar allows, 40 corners. It never moves (the keyboard does not resize it).
+    val cardTopPx = with(density) { CARD_TOP.toPx() }
+    val card = remember(box, statusTop, navBottom) {
+        if (box.width == 0) Rect.Zero else {
+            val room = box.height - statusTop - cardTopPx - navBottom - barPx
+            val h = minOf(kotlin.math.ceil(box.width * 16f / 9f), room).coerceAtLeast(1f)
+            Rect(Offset(0f, statusTop + cardTopPx), androidx.compose.ui.geometry.Size(box.width.toFloat(), h))
+        }
+    }
+    // A portrait photo fills the card (iOS defaultZoom): cut once to the card's shape, so the edits,
+    // the bake and the posted story all see exactly what the card shows.
+    LaunchedEffect(card, media) {
+        if (!cropped && card.width > 1f && !textStory && StoryCardRules.fillsCard(media.width, media.height, media.video != null,
+                media.stickers.isNotEmpty() || media.repostOf != null)) {
+            cropped = true
+            cropBusy = true
+            val aspect = card.width / card.height
+            kotlinx.coroutines.withContext(Dispatchers.Default) { runCatching { StoryMedia.cropToAspect(media, aspect) }.getOrNull() }
+                ?.let { base = it }
+            cropBusy = false
+        }
+    }
+    val img = remember(card, bmp) {
         val b = bmp
-        if (b == null || box.width == 0) Rect.Zero else {
-            val fh = box.height - statusTop - navBottom - barPx
-            val k = minOf(box.width / b.width.toFloat(), fh / b.height.toFloat())
+        if (b == null || card.width <= 1f) Rect.Zero else {
+            val k = minOf(card.width / b.width.toFloat(), card.height / b.height.toFloat())
             val w = b.width * k; val h = b.height * k
-            Rect(Offset((box.width - w) / 2, statusTop + (fh - h) / 2), androidx.compose.ui.geometry.Size(w, h))
+            Rect(Offset(card.left + (card.width - w) / 2, card.top + (card.height - h) / 2), androidx.compose.ui.geometry.Size(w, h))
         }
     }
     val bin = with(density) { Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx()) }
@@ -331,13 +370,19 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
 
     Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { box = it }) {
         val navDp = with(density) { navBottom.toDp() }
-        Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = EDIT_BAR + navDp).clip(RoundedCornerShape(28.dp))) {
-            // The photo itself is rounded (a gallery photo is a different shape from the frame, so
-            // rounding only the frame left its corners square inside black bands).
-            bmp?.let {
+        if (card.width > 1f) Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, card.top.toInt()) }
+            .size(with(density) { card.width.toDp() }, with(density) { card.height.toDp() })
+            .clip(RoundedCornerShape(CARD_CORNER)).background(Color(0xFF1C1C1E))) {
+            // The wash: the picture's own colours behind a photo that does not fill the card.
+            wash?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.9f }) }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+            // A photo about to be cut to the card waits for the cut, so it never shows fitted first.
+            val waitCrop = base === media && !textStory && StoryCardRules.fillsCard(media.width, media.height, media.video != null,
+                media.stickers.isNotEmpty() || media.repostOf != null)
+            if (!waitCrop || (cropped && base === media && card.width > 1f && !cropBusy)) bmp?.let {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Image(it, contentDescription = null, contentScale = ContentScale.Fit,
-                        modifier = Modifier.aspectRatio(it.width.toFloat() / it.height.coerceAtLeast(1)).clip(RoundedCornerShape(28.dp)))
+                        modifier = Modifier.aspectRatio(it.width.toFloat() / it.height.coerceAtLeast(1)))
                 }
             }
             // A video plays here, looping, as on iOS (it only said "Video · 5 s" over its first frame).
@@ -433,7 +478,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_TEXT))
                         }
                     }
-                    if (media.video == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
+                    if (base.video == null) Box(Modifier.size(48.dp).clip(CircleShape).clickable { stickerTray = true }, contentAlignment = Alignment.Center) {
                         Box {
                             Icon(androidx.compose.material.icons.Icons.Outlined.EmojiEmotions, contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(24.dp))
                             NewCornerPill(isNew(NewBadgeSpots.STORY_EDITOR_STICKERS))
@@ -451,18 +496,18 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                     Modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(Color.White).clickable(enabled = !baking) {
                     focus.clearFocus(); keyboard?.hide()
                     if (!canEdit || !StoryEditRules.needsBake(edits.texts.size, edits.strokes.size)) {
-                        posted = media; audience = true; return@clickable
+                        posted = base; cardRect = img; audience = true; return@clickable
                     }
                     // iOS flatten: the text and the lines are burned into the photo, off the main thread.
                     baking = true
                     scope.launch {
                         val baked = kotlinx.coroutines.withContext(Dispatchers.Default) {
                             runCatching {
-                                StoryMedia.bake(media, chipTapTargets(edits, media.width, media.height)) { c, k -> bakeStoryEdits(c, k, edits) }
+                                StoryMedia.bake(base, chipTapTargets(edits, base.width, base.height)) { c, k -> bakeStoryEdits(c, k, edits) }
                             }.getOrNull()
                         }
                         baking = false
-                        if (baked != null) { posted = baked; audience = true }
+                        if (baked != null) { posted = baked; cardRect = img; audience = true }
                     }
                 }.padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -567,6 +612,9 @@ private fun ChipPrompt(title: String, hint: String, onDone: (String) -> Unit, on
 
 /** The tools bar under the story editor's frame (Aa, stickers, pen | NEXT), as iOS. */
 private val EDIT_BAR = 80.dp
+/** iOS StoryEditorView: the card sits 8 under the status bar with 40 corners. */
+private val CARD_TOP = 8.dp
+internal val CARD_CORNER = 40.dp
 
 /** The picked or recorded video, playing on a loop in the editor's frame (the first frame shows until it starts). */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)

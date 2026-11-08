@@ -50,6 +50,20 @@ object StoryMedia {
         return Prepared(out.jpeg, out.blurThumb, out.video, out.width, out.height, prepared.stickers + extraStickers, prepared.repostOf)
     }
 
+    /**
+     * The photo cut to [aspect] (width / height) around its middle, as the 9:16 card shows a portrait
+     * photo (iOS defaultZoom fills the card). Call off the main thread; null if it cannot be decoded.
+     */
+    fun cropToAspect(prepared: Prepared, aspect: Float): Prepared? {
+        val src = android.graphics.BitmapFactory.decodeByteArray(prepared.jpeg, 0, prepared.jpeg.size) ?: return null
+        val (x, y, w, h) = StoryCardRules.cropBox(src.width, src.height, aspect)
+        if (w == src.width && h == src.height) { src.recycle(); return prepared }
+        val cut = Bitmap.createBitmap(src, x, y, w, h)
+        if (cut !== src) src.recycle()
+        val out = encodePhoto(cut)
+        return Prepared(out.jpeg, out.blurThumb, null, out.width, out.height, prepared.stickers, prepared.repostOf)
+    }
+
     /** A picture drawn here (a text story, iOS renderTextStory): posted at its own size and [quality],
      *  like iOS; recycles [bmp]. */
     fun fromRendered(bmp: Bitmap, quality: Int, stickers: List<StoryTapTarget> = emptyList()): Prepared {
@@ -131,4 +145,26 @@ object StoryMedia {
 
     private fun jpeg(b: Bitmap, q: Int): ByteArray =
         ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.JPEG, q, it) }.toByteArray()
+}
+
+/** The editor card's rules (iOS StoryEditorView.defaultZoom / flyRest), kept pure for the tests. */
+object StoryCardRules {
+    data class Box(val x: Int, val y: Int, val w: Int, val h: Int)
+
+    /** A portrait photo fills the card; a square or landscape one, a clip, or one carrying tap areas is fitted. */
+    fun fillsCard(width: Int, height: Int, isVideo: Boolean, carriesStickers: Boolean): Boolean =
+        !isVideo && !carriesStickers && width > 1 && height > width
+
+    /** The middle part of a [w] x [h] picture with the shape [aspect] (width / height). */
+    fun cropBox(w: Int, h: Int, aspect: Float): Box {
+        if (w <= 0 || h <= 0 || aspect <= 0f) return Box(0, 0, w, h)
+        val a = w.toFloat() / h
+        return if (a > aspect) {
+            val nw = (h * aspect).toInt().coerceIn(1, w)
+            Box((w - nw) / 2, 0, nw, h)
+        } else {
+            val nh = (w / aspect).toInt().coerceIn(1, h)
+            Box(0, (h - nh) / 2, w, nh)
+        }
+    }
 }
