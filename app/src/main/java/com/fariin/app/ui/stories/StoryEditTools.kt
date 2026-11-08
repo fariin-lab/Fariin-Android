@@ -174,14 +174,19 @@ private fun boxH(l: StaticLayout, bg: Bg) = l.height + 2 * StoryEditRules.padV(b
 fun drawStoryEdits(
     c: android.graphics.Canvas, e: StoryEdits, ink: Paint, badge: Paint, rect: RectF,
     skip: Long = -1, layoutOf: (StoryTextItem) -> StaticLayout = { it.layout() },
+    /** The photo's pinch and pan in edit units (StoryCardRules.strokeMatrix): the pen lines ride the
+     *  picture as iOS draws them (`.scaleEffect(photoZoom).offset(photoOffset)`); the texts stay put. */
+    strokeMatrix: android.graphics.Matrix? = null,
 ) {
     fun strokes() {
+        if (strokeMatrix != null) { c.save(); c.concat(strokeMatrix) }
         for (s in e.strokes) {
             ink.color = s.color
             ink.alpha = StoryEditRules.inkAlpha(s.highlighter)
             ink.strokeWidth = s.width
             c.drawPath(s.path, ink)
         }
+        if (strokeMatrix != null) c.restore()
     }
     fun texts() {
         for (t in e.texts) {
@@ -208,11 +213,11 @@ fun newInkPaint() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 }
 
 /** The bake's drawing: fresh paints and layouts, so it never shares objects with the screen. */
-fun bakeStoryEdits(c: android.graphics.Canvas, pxPerUnit: Float, e: StoryEdits) {
+fun bakeStoryEdits(c: android.graphics.Canvas, pxPerUnit: Float, e: StoryEdits, strokeMatrix: android.graphics.Matrix? = null) {
     c.save()
     c.scale(pxPerUnit, pxPerUnit)
     drawStoryEdits(c, e, newInkPaint(), Paint(Paint.ANTI_ALIAS_FLAG), RectF(),
-        layoutOf = { buildStoryTextLayout(it.text, it.font, it.bg, it.color) })
+        layoutOf = { buildStoryTextLayout(it.text, it.font, it.bg, it.color) }, strokeMatrix = strokeMatrix)
     c.restore()
 }
 
@@ -235,6 +240,8 @@ fun StoryEditCanvas(
     penColor: Int, penWidth: Float, highlighter: Boolean,
     onStroke: (Boolean) -> Unit, onTapText: (StoryTextItem) -> Unit,
     onDrag: (StoryTextItem?, Offset) -> Unit, onDrop: (StoryTextItem, Offset) -> Unit,
+    /** See [drawStoryEdits]: a new line is stored under the photo's pinch, so it moves with it after. */
+    strokeMatrix: android.graphics.Matrix? = null,
 ) {
     val onStrokeNow by rememberUpdatedState(onStroke)
     val onTapNow by rememberUpdatedState(onTapText)
@@ -245,12 +252,21 @@ fun StoryEditCanvas(
     val rect = remember { RectF() }
     val slop = LocalViewConfiguration.current.touchSlop
     val k = if (img.width > 1f) StoryEditRules.SPACE / img.width else 1f
-    val gestures = if (drawing) Modifier.pointerInput(img, penColor, penWidth, highlighter) {
+    val gestures = if (drawing) Modifier.pointerInput(img, penColor, penWidth, highlighter, strokeMatrix) {
+        // Touches are on the picture as zoomed; the line is kept in the picture's own units.
+        val inv = android.graphics.Matrix().also { m -> strokeMatrix?.invert(m) }
+        val pt = FloatArray(2)
+        fun unzoom(x: Float, y: Float): Pair<Float, Float> {
+            if (strokeMatrix == null) return x to y
+            pt[0] = x; pt[1] = y; inv.mapPoints(pt)
+            return pt[0] to pt[1]
+        }
         awaitEachGesture {
             val down = awaitFirstDown()
             if (!img.contains(down.position)) return@awaitEachGesture
             down.consume()
             val (x0, y0) = StoryEditRules.toSpace(down.position.x, down.position.y, img.left, img.top, img.width, img.height)
+                .let { (a, b) -> unzoom(a, b) }
             val s = StoryStroke(penColor, StoryEditRules.penStroke(penWidth, highlighter), highlighter)
             s.path.moveTo(x0, y0); s.path.lineTo(x0 + 0.1f, y0); s.lastX = x0; s.lastY = y0
             edits.strokes.add(s)
@@ -261,6 +277,7 @@ fun StoryEditCanvas(
                 val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                 if (!ch.pressed) break
                 val (x, y) = StoryEditRules.toSpace(ch.position.x, ch.position.y, img.left, img.top, img.width, img.height)
+                    .let { (a, b) -> unzoom(a, b) }
                 // Midpoint curves: smooth lines from the touch samples, no new objects per point.
                 s.path.quadTo(s.lastX, s.lastY, (s.lastX + x) / 2, (s.lastY + y) / 2)
                 s.lastX = x; s.lastY = y
@@ -319,7 +336,7 @@ fun StoryEditCanvas(
             n.clipRect(img.left, img.top, img.right, img.bottom)
             n.translate(img.left, img.top)
             n.scale(1f / k, 1f / k)
-            drawStoryEdits(n, edits, ink, badge, rect, skip = editingId)
+            drawStoryEdits(n, edits, ink, badge, rect, skip = editingId, strokeMatrix = strokeMatrix)
             n.restore()
         }
     }

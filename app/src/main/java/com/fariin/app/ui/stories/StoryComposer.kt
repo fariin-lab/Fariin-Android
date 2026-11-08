@@ -61,6 +61,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -266,11 +271,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     // Decoded off the main thread (about 7 ms on the low-end phone); null until it lands.
-    // What the editor works on: the picked photo, or a tall one cut to the card's shape once the card
-    // is measured (iOS defaultZoom: a portrait photo FILLS the 9:16 card, so what is seen is posted).
-    var base by remember { mutableStateOf(media) }
-    var cropped by remember { mutableStateOf(false) }
-    var cropBusy by remember { mutableStateOf(false) }
+    val base = media
     val bmp by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, base) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             BitmapFactory.decodeByteArray(base.jpeg, 0, base.jpeg.size)?.asImageBitmap()
@@ -283,12 +284,28 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap()
         }.getOrNull()
     }
+    // The story canvas's two colours (iOS StoryCanvas): the card's ground behind a picture that does
+    // not fill it, in the editor and in the posted card alike.
+    val edges by androidx.compose.runtime.produceState<Pair<Int, Int>?>(null, bmp) {
+        val b = bmp ?: return@produceState
+        value = kotlinx.coroutines.withContext(Dispatchers.Default) { runCatching { RepostCard.edgeColours(b.asAndroidBitmap()) }.getOrNull() }
+    }
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val isVideo = base.video != null
+    // Pinch and pan of the picture on the card (iOS ZoomableImageView, baked into the post). Not on a
+    // text story's card, a repost or a picture already carrying tap areas: those post as they are.
+    val zoomable = StoryCardRules.zoomable(textStory, media.stickers.isNotEmpty() || media.repostOf != null) && !isVideo
+    // 0: nobody has framed it yet, so it shows at its default (iOS DraftItem.zoom); any other number is the owner's.
+    var zoomSet by remember { mutableFloatStateOf(0f) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    // The drag that closes the editor back to the picker (iOS handleDismissPan); 0 at rest.
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var leaving by remember { mutableStateOf(false) }
 
     // The editor tools (iOS StoryEditorView Aa and pen). Photos only: iOS burns them into a video
     // by re-encoding it, which Android does not do yet.
-    val canEdit = base.video == null && bmp != null
+    val canEdit = !isVideo && bmp != null
     val edits = remember { StoryEdits() }
     var editingId by remember { mutableLongStateOf(-1L) }
     var drawing by remember { mutableStateOf(false) }
@@ -327,25 +344,35 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             Rect(Offset(0f, statusTop + cardTopPx), androidx.compose.ui.geometry.Size(box.width.toFloat(), h))
         }
     }
-    // A portrait photo fills the card (iOS defaultZoom): cut once to the card's shape, so the edits,
-    // the bake and the posted story all see exactly what the card shows.
-    LaunchedEffect(card, media) {
-        if (!cropped && card.width > 1f && !textStory && StoryCardRules.fillsCard(media.width, media.height, media.video != null,
-                media.stickers.isNotEmpty() || media.repostOf != null)) {
-            cropped = true
-            cropBusy = true
-            val aspect = card.width / card.height
-            kotlinx.coroutines.withContext(Dispatchers.Default) { runCatching { StoryMedia.cropToAspect(media, aspect) }.getOrNull() }
-                ?.let { base = it }
-            cropBusy = false
-        }
-    }
+    // The picture fitted in the card; the zoom and pan below move it from here.
     val img = remember(card, bmp) {
         val b = bmp
         if (b == null || card.width <= 1f) Rect.Zero else {
             val k = minOf(card.width / b.width.toFloat(), card.height / b.height.toFloat())
             val w = b.width * k; val h = b.height * k
             Rect(Offset(card.left + (card.width - w) / 2, card.top + (card.height - h) / 2), androidx.compose.ui.geometry.Size(w, h))
+        }
+    }
+    // iOS defaultZoom: a portrait photo opens filling the card, so what is seen is what is posted.
+    val zoomDefault = remember(bmp, card) {
+        val b = bmp
+        if (b == null || card.height <= 1f || isVideo) 1f else StoryCardRules.defaultZoom(b.width, b.height, card.width / card.height)
+    }
+    fun currentZoom() = if (!zoomable) 1f else if (zoomSet > 0f) zoomSet else zoomDefault
+    val zoom = currentZoom()
+    // Where the edits live: the card itself when the picture can move under them (iOS: one space,
+    // fixed to the card, that no zoom can move), else the picture as before.
+    val space = if (zoomable) card else img
+    // The picture as it stands on screen.
+    val shown = if (img.width <= 1f) Rect.Zero else Rect(
+        Offset(card.center.x + pan.x - img.width * zoom / 2, card.center.y + pan.y - img.height * zoom / 2),
+        androidx.compose.ui.geometry.Size(img.width * zoom, img.height * zoom))
+    // The pen lines ride the picture (iOS draws the drawing with the photo's zoom and offset).
+    val strokeMatrix = remember(zoomable, space, zoom, pan) {
+        if (!zoomable || space.width <= 1f) null else {
+            val k = StoryEditRules.SPACE / space.width
+            val v = StoryCardRules.strokeTransform(StoryEditRules.SPACE, space.height * k, zoom, pan.x * k, pan.y * k)
+            android.graphics.Matrix().apply { setValues(floatArrayOf(v[0], v[1], v[2], v[3], v[4], v[5], 0f, 0f, 1f)) }
         }
     }
     val bin = with(density) { Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx()) }
@@ -362,8 +389,8 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         captionArmed = false
     }
     fun addText() {
-        val k = StoryEditRules.SPACE / img.width.coerceAtLeast(1f)
-        val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, img.height * k / 2)
+        val k = StoryEditRules.SPACE / space.width.coerceAtLeast(1f)
+        val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, space.height * k / 2)
         edits.drawingOnTop = false
         edits.texts.add(t)
         editingId = t.id
@@ -371,8 +398,8 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     // iOS chipSticker (Location, Link, Time): a white pill that moves like text; Link and Location
     // become a tap area on the posted story.
     fun addChip(label: String, link: String?) {
-        val k = StoryEditRules.SPACE / img.width.coerceAtLeast(1f)
-        val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, img.height * k / 2)
+        val k = StoryEditRules.SPACE / space.width.coerceAtLeast(1f)
+        val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, space.height * k / 2)
         t.text = label; t.bg = StoryEditRules.Bg.SOLID; t.isChip = true; t.link = link
         edits.drawingOnTop = false
         edits.texts.add(t)
@@ -383,34 +410,138 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         drawing = false
     }
     fun cancelPen() { if (edits.strokes.toList() != penSnapshot) askDiscardPen = true else closePen(false) }
-    fun close() { if (!edits.isEmpty) askDiscard = true else onClose() }
+    // Work that a close would lose (iOS hasWork): anything placed, or the picture framed by hand.
+    fun hasWork() = !edits.isEmpty || zoomSet > 0f
+    fun close() { if (hasWork()) askDiscard = true else onClose() }
+
+    // A pinch let go past either end springs back inside, and the picture's edge back onto the card's.
+    fun settleZoom() {
+        if (!zoomable || img.width <= 1f) return
+        val z0 = currentZoom(); val p0 = pan
+        val z1 = z0.coerceIn(StoryCardRules.MIN_ZOOM, StoryCardRules.MAX_ZOOM)
+        val (px, py) = StoryCardRules.clampPan(p0.x, p0.y, img.width, img.height, z1, card.width, card.height)
+        if (z1 == z0 && px == p0.x && py == p0.y) return
+        scope.launch {
+            androidx.compose.animation.core.animate(0f, 1f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.82f, stiffness = 500f)) { t, _ ->
+                zoomSet = z0 + (z1 - z0) * t
+                pan = Offset(p0.x + (px - p0.x) * t, p0.y + (py - p0.y) * t)
+            }
+        }
+    }
+    // The drag let go (iOS handleDismissPan): a third of the screen or a fast flick closes, the
+    // black going with it; anything less springs back.
+    fun releaseDrag(velocityY: Float) {
+        val far = kotlin.math.abs(dragY) > box.height / 3f || kotlin.math.abs(velocityY) > with(density) { 1000.dp.toPx() }
+        val from = dragY
+        if (far) {
+            leaving = true
+            val to = (if (from + velocityY * 0.1f >= 0f) 1f else -1f) * box.height
+            scope.launch {
+                androidx.compose.animation.core.animate(from, to,
+                    animationSpec = androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutLinearInEasing)) { v, _ -> dragY = v }
+                onClose()
+            }
+        } else scope.launch {
+            androidx.compose.animation.core.animate(from, 0f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 400f)) { v, _ -> dragY = v }
+        }
+    }
 
     BackHandler(enabled = editingId >= 0) { finishText() }
     BackHandler(enabled = drawing && editingId < 0) { cancelPen() }
-    BackHandler(enabled = !drawing && editingId < 0 && !audience && !edits.isEmpty) { askDiscard = true }
+    BackHandler(enabled = !drawing && editingId < 0 && !audience && hasWork()) { askDiscard = true }
 
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = leaveBlack.value)).onSizeChanged { box = it }) {
+    // Two fingers pinch and move the picture (iOS: its pan takes two touches); one finger dragged up
+    // or down on the card closes the editor back to the picker under it. A text under the finger
+    // takes the touch first (the canvas inside sees it before this does).
+    val dragProgress = if (box.height > 0) (kotlin.math.abs(dragY) / (box.height / 2f)).coerceIn(0f, 1f) else 0f
+    val cardGestures = if (drawing || editingId >= 0 || flight != null || audience || leaving || baking) Modifier
+    else Modifier.pointerInput(zoomable, img, card, zoomDefault) {
+        val slop = viewConfiguration.touchSlop
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            if (down.isConsumed || !card.contains(down.position)) return@awaitEachGesture
+            var mode = 0          // 0 not known yet, 1 pinch, 2 closing drag, 3 nothing
+            var travel = Offset.Zero
+            val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+            tracker.addPosition(down.uptimeMillis, down.position)
+            while (true) {
+                val ev = awaitPointerEvent()
+                if (mode == 0 && ev.changes.any { it.isConsumed }) mode = 3
+                val pressed = ev.changes.count { it.pressed }
+                if (pressed == 0) break
+                if (pressed >= 2 && zoomable && (mode == 0 || mode == 1) && img.width > 1f) {
+                    mode = 1
+                    val z0 = currentZoom()
+                    val z1 = StoryCardRules.liveZoom(z0 * ev.calculateZoom(), StoryCardRules.MIN_ZOOM, StoryCardRules.MAX_ZOOM)
+                    val f = z1 / z0
+                    val at = ev.calculateCentroid(useCurrent = true)
+                    val prev = at - ev.calculatePan()
+                    val c = card.center
+                    // The point under the fingers stays under them while it grows.
+                    pan = Offset(at.x - c.x - (prev.x - c.x - pan.x) * f, at.y - c.y - (prev.y - c.y - pan.y) * f)
+                    zoomSet = z1
+                    ev.changes.forEach { it.consume() }
+                    continue
+                }
+                val ch = ev.changes.firstOrNull { it.id == down.id }
+                if (ch == null || !ch.pressed) { if (mode == 2) break else continue }
+                if (mode == 0 && pressed == 1) {
+                    travel += ch.positionChange()
+                    if (kotlin.math.abs(travel.y) > slop && kotlin.math.abs(travel.y) > kotlin.math.abs(travel.x)) {
+                        // With work on it, iOS asks first (maybePresentDiscardAlert) instead of closing.
+                        if (hasWork()) { askDiscard = true; mode = 3 } else mode = 2
+                    } else if (travel.getDistance() > slop) mode = 3
+                }
+                if (mode == 2) {
+                    tracker.addPosition(ch.uptimeMillis, ch.position)
+                    dragY += ch.positionChange().y
+                    ch.consume()
+                }
+            }
+            when (mode) {
+                1 -> settleZoom()
+                2 -> releaseDrag(tracker.calculateVelocity().y)
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = leaveBlack.value * (1f - dragProgress))).onSizeChanged { box = it }) {
         val navDp = with(density) { navBottom.toDp() }
+        // The card and everything on it move with the closing drag; the gestures sit outside the
+        // moving layer so the finger is read in the screen's own frame.
+        Box(Modifier.fillMaxSize().then(cardGestures)) {
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            translationY = dragY
+            val k = 1f - 0.12f * dragProgress
+            scaleX = k; scaleY = k
+        }) {
         if (card.width > 1f && flight == null) Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, card.top.toInt()) }
             .size(with(density) { card.width.toDp() }, with(density) { card.height.toDp() })
             .clip(RoundedCornerShape(CARD_CORNER)).background(Color(0xFF1C1C1E))) {
-            // The wash: the picture's own colours behind a photo that does not fill the card.
-            wash?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.9f }) }
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
-            // A photo about to be cut to the card waits for the cut, so it never shows fitted first.
-            val waitCrop = base === media && !textStory && StoryCardRules.fillsCard(media.width, media.height, media.video != null,
-                media.stickers.isNotEmpty() || media.repostOf != null)
-            if (!waitCrop || (cropped && base === media && card.width > 1f && !cropBusy)) bmp?.let {
+            val e = edges
+            if (zoomable) {
+                // The story canvas, the same two colours the posted card is drawn on (iOS StoryCanvas).
+                if (e != null) Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(e.first), Color(e.second)))))
+            } else {
+                // The wash: the picture's own colours behind a photo that does not fill the card.
+                wash?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.9f }) }
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+            }
+            if (!isVideo) bmp?.let {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Image(it, contentDescription = null, contentScale = ContentScale.Fit,
-                        modifier = Modifier.aspectRatio(it.width.toFloat() / it.height.coerceAtLeast(1)))
+                        modifier = Modifier.aspectRatio(it.width.toFloat() / it.height.coerceAtLeast(1)).graphicsLayer {
+                            scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y
+                        })
                 }
             }
             // A video plays here, looping, as on iOS (it only said "Video · 5 s" over its first frame).
             media.video?.let { v -> StoryEditVideo(v.file) }
         }
         if (canEdit && flight == null) StoryEditCanvas(
-            edits, img, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
+            edits, space, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = { stroking = it },
             onTapText = { if (!it.isChip) editingId = it.id },
             onDrag = { _, p ->
@@ -422,8 +553,11 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 if (StoryEditRules.isOverTrash(p.x, p.y, bin.x, bin.y, binSize, binSlop)) edits.texts.remove(t)
                 dragging = false; trashHot = false
             },
+            strokeMatrix = strokeMatrix,
         )
-        val chrome = !drawing && !dragging && editingId < 0 && flight == null
+        }
+        }
+        val chrome = !drawing && !dragging && editingId < 0 && flight == null && dragY == 0f && !leaving
         // Close inside the frame's top corner (iOS).
         if (chrome) Box(Modifier.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
             .clickable { close() }, contentAlignment = Alignment.Center) {
@@ -522,17 +656,32 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 Row(
                     Modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(Color.White).clickable(enabled = !baking) {
                     focus.clearFocus(); keyboard?.hide()
-                    if (!canEdit || !StoryEditRules.needsBake(edits.texts.size, edits.strokes.size)) {
+                    // iOS flatten's one fast path: nothing placed, never framed, and the picture fills the card.
+                    val untouched = edits.isEmpty && kotlin.math.abs(zoom - 1f) < 0.001f && pan == Offset.Zero &&
+                        img.width >= card.width - 1f && img.height >= card.height - 1f
+                    if (!canEdit || (!zoomable && !StoryEditRules.needsBake(edits.texts.size, edits.strokes.size)) || (zoomable && untouched)) {
                         posted = base; cardRect = img; audience = true; return@clickable
                     }
                     // iOS flatten: the text and the lines are burned into the photo, off the main thread.
                     baking = true
+                    // The card as it stands, frozen for the render (iOS renders the canvas 1080 wide).
+                    val outW = StoryRules.PHOTO_WIDTHS.first()
+                    val outH = kotlin.math.round(outW * card.height / card.width.coerceAtLeast(1f)).toInt().coerceAtLeast(1)
+                    val f = outW / card.width.coerceAtLeast(1f)
+                    val dst = android.graphics.RectF((shown.left - card.left) * f, (shown.top - card.top) * f,
+                        (shown.right - card.left) * f, (shown.bottom - card.top) * f)
+                    val ground = edges ?: (0xFF000000.toInt() to 0xFF000000.toInt())
+                    val m = strokeMatrix
+                    val renderCard = zoomable
                     scope.launch {
                         val baked = kotlinx.coroutines.withContext(Dispatchers.Default) {
                             runCatching {
-                                StoryMedia.bake(base, chipTapTargets(edits, base.width, base.height)) { c, k -> bakeStoryEdits(c, k, edits) }
+                                if (renderCard) StoryMedia.renderCard(base, outW, outH, dst, ground.first, ground.second,
+                                    chipTapTargets(edits, outW, outH)) { c, k -> bakeStoryEdits(c, k, edits, m) }
+                                else StoryMedia.bake(base, chipTapTargets(edits, base.width, base.height)) { c, k -> bakeStoryEdits(c, k, edits) }
                             }.getOrNull()
                         }
+                        if (baked != null && renderCard) { baking = false; posted = baked; cardRect = card; audience = true; return@launch }
                         baking = false
                         if (baked != null) { posted = baked; cardRect = img; audience = true }
                     }
@@ -544,7 +693,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 }
             }
         }
-        if (editingId >= 0) edits.texts.firstOrNull { it.id == editingId }?.let { StoryTextEditor(it, img, onDone = { finishText() }) }
+        if (editingId >= 0) edits.texts.firstOrNull { it.id == editingId }?.let { StoryTextEditor(it, space, onDone = { finishText() }) }
         if (stickerTray) StickerTray(onClose = { stickerTray = false },
             onTime = { stickerTray = false; addChip("🕒 " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date()), null) },
             onLink = { stickerTray = false; askLink = true },

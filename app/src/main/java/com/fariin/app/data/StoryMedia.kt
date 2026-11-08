@@ -64,6 +64,33 @@ object StoryMedia {
         return Prepared(out.jpeg, out.blurThumb, null, out.width, out.height, prepared.stickers, prepared.repostOf)
     }
 
+    /**
+     * The story card as the editor shows it (iOS flatten): the picture's two edge colours top to
+     * bottom, the photo at [photo] (output pixels, where the pinch and pan put it; whatever falls
+     * outside the card is cut off), then the edits by [draw] (canvas, pixels per edit unit). [outW] x
+     * [outH] has the card's shape, so what is posted is what was framed. Call off the main thread.
+     */
+    fun renderCard(prepared: Prepared, outW: Int, outH: Int, photo: android.graphics.RectF, top: Int, bottom: Int,
+                   extraStickers: List<StoryTapTarget> = emptyList(), draw: (android.graphics.Canvas, Float) -> Unit): Prepared? {
+        if (outW <= 0 || outH <= 0) return null
+        val src = android.graphics.BitmapFactory.decodeByteArray(prepared.jpeg, 0, prepared.jpeg.size) ?: return null
+        val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(out)
+        paintCanvas(c, outW, outH, top, bottom)
+        c.drawBitmap(src, null, photo, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG))
+        src.recycle()
+        draw(c, outW / StoryEditRules.SPACE)
+        val enc = encodePhoto(out)
+        return Prepared(enc.jpeg, enc.blurThumb, null, enc.width, enc.height, prepared.stickers + extraStickers, prepared.repostOf)
+    }
+
+    /** The story canvas: [top] fading to [bottom] (iOS StoryCanvas, RepostCard.edgeColours). */
+    fun paintCanvas(c: android.graphics.Canvas, w: Int, h: Int, top: Int, bottom: Int) {
+        val p = android.graphics.Paint()
+        p.shader = android.graphics.LinearGradient(0f, 0f, 0f, h.toFloat(), top, bottom, android.graphics.Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+    }
+
     /** A picture drawn here (a text story, iOS renderTextStory): posted at its own size and [quality],
      *  like iOS; recycles [bmp]. */
     fun fromRendered(bmp: Bitmap, quality: Int, stickers: List<StoryTapTarget> = emptyList()): Prepared {
@@ -150,6 +177,43 @@ object StoryMedia {
 /** The editor card's rules (iOS StoryEditorView.defaultZoom / flyRest), kept pure for the tests. */
 object StoryCardRules {
     data class Box(val x: Int, val y: Int, val w: Int, val h: Int)
+
+    /** iOS PinchPanGestureView: a pinch may shrink the picture to 0.4 or grow it to 4 times its fit. */
+    const val MIN_ZOOM = 0.4f
+    const val MAX_ZOOM = 4f
+    /** A clip only zooms in: the zoom is its crop, and a crop cannot make it smaller (see StoryVideoCut). */
+    const val VIDEO_MIN_ZOOM = 1f
+    /** The rubber band past either end while the fingers are still on (iOS maxScale * 1.15, minScale * 0.9). */
+    fun liveZoom(z: Float, min: Float, max: Float) = z.coerceIn(min * 0.9f, max * 1.15f)
+
+    /** The editor can pinch and pan this one: not a text story's card, not a repost or a picture with tap areas drawn in. */
+    fun zoomable(textStory: Boolean, carriesStickers: Boolean) = !textStory && !carriesStickers
+
+    /**
+     * iOS defaultZoom: a portrait picture opens filling the card (the ratio on the axis fitting left
+     * open); square and landscape open fitted. [cardAspect] = width / height.
+     */
+    fun defaultZoom(w: Int, h: Int, cardAspect: Float): Float {
+        if (w <= 1 || h <= 1 || h <= w || cardAspect <= 0f) return 1f
+        val a = w.toFloat() / h
+        return maxOf(1f, if (a > cardAspect) a / cardAspect else cardAspect / a)
+    }
+
+    /** iOS clampOffset: the picture's edge may reach the card's edge but never come inside it. */
+    fun clampPan(panX: Float, panY: Float, fitW: Float, fitH: Float, zoom: Float, frameW: Float, frameH: Float): Pair<Float, Float> {
+        val mx = maxOf(0f, (fitW * zoom - frameW) / 2)
+        val my = maxOf(0f, (fitH * zoom - frameH) / 2)
+        return panX.coerceIn(-mx, mx) to panY.coerceIn(-my, my)
+    }
+
+    /**
+     * The pen's transform in edit units (a [spaceW] x [spaceH] card): the picture's zoom about the
+     * card's middle, then its pan, as `[a, b, tx, c, d, ty]` for an android Matrix (pure for the tests).
+     */
+    fun strokeTransform(spaceW: Float, spaceH: Float, zoom: Float, panX: Float, panY: Float): FloatArray {
+        val cx = spaceW / 2; val cy = spaceH / 2
+        return floatArrayOf(zoom, 0f, cx + panX - cx * zoom, 0f, zoom, cy + panY - cy * zoom)
+    }
 
     /** A portrait photo fills the card; a square or landscape one, a clip, or one carrying tap areas is fitted. */
     fun fillsCard(width: Int, height: Int, isVideo: Boolean, carriesStickers: Boolean): Boolean =
