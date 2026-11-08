@@ -61,7 +61,8 @@ internal val CardShape = RoundedCornerShape(24.dp)
 /** A pushed page's bar: up arrow, the title at the start, an optional action at the end. */
 @Composable
 internal fun PageBar(title: String, onBack: (() -> Unit)?, action: (@Composable () -> Unit)? = null) {
-    Box(Modifier.fillMaxWidth().background(Fariin.colors.bgSecondary).statusBarsPadding()) {
+    // On a frosted page the bar is clear: the page's frost is behind it (owner 2026-11-08).
+    Box(Modifier.fillMaxWidth().then(if (com.fariin.app.ui.components.LocalFrostedBar.current) Modifier else Modifier.background(Fariin.colors.bgSecondary)).statusBarsPadding()) {
         com.fariin.app.ui.components.FariinTopBar(title, onBack = onBack, container = Fariin.colors.bgSecondary, actions = { if (action != null) action() })
     }
 }

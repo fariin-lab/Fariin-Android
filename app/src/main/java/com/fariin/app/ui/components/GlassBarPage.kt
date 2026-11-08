@@ -99,6 +99,7 @@ fun GlassBarPage(
                     LocalGlassFrost provides frost,
                     LocalGlassBar provides true,
                     LocalGlassBlur provides frosted,
+                    LocalFrostedBar provides frosted,
                 ) { bar() }
             }
             // No line under the bar (owner 2026-11-08).

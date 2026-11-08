@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.fariin.app.ui.components.glassMenuAnchor
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.outlined.Download
 import com.fariin.app.ui.settings.BarPage
@@ -150,6 +152,10 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     var sub by remember(info.cid) { mutableStateOf<String?>(null) }
     var shareLink by remember { mutableStateOf<Pair<String, String>?>(null) }
     var moreOpen by remember { mutableStateOf(false) }
+    // The More circle's glass menu grows out of the circle (GlassMenu), over the page's own layer.
+    val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    val menuBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val menuGlass = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= 33
     var showQr by remember { mutableStateOf(false) }
     val shared = com.fariin.app.ui.people.rememberSharedMedia(info.cid, me)
     var allMedia by remember { mutableStateOf(false) }
@@ -271,7 +277,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     val pageScroll = rememberScrollState()
     val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        com.fariin.app.ui.components.GlassBarPage(underBar, bar = {
+        com.fariin.app.ui.components.GlassBarPage(underBar, modifier = if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier, frosted = true, bar = {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             // The ••• menu holds Change Wallpaper for the same people (iOS Group Info's first menu
             // section): back to the chat, which opens the channel's shared picker for every follower.
@@ -309,12 +315,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     for (circle in ChannelRules.circles(shownRole, info.username.isNotEmpty(), muted)) {
                         // A follower's Search is dimmed when the page was not opened from the channel (iOS).
                         val dim = circle.dimmed || (circle.action == Action.SEARCH && onSearch == null)
-                        if (circle.action == Action.MORE) Box(Modifier.weight(1f)) {
+                        if (circle.action == Action.MORE) Box(Modifier.weight(1f).glassMenuAnchor(moreAnchor)) {
                             ActionCircle(circle.action, circle.label, dim, Modifier.fillMaxWidth()) { tap(circle.action, circle.dimmed) }
-                            ChannelMoreMenu(moreOpen, onDismiss = { moreOpen = false },
-                                onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(info.cid); onBack() }) else null,
-                                onShare = { share() },
-                                onQr = if (info.username.isNotEmpty()) ({ showQr = true }) else null, saveCid = info.cid)
                         }
                         else ActionCircle(circle.action, circle.label, dim, Modifier.weight(1f)) { tap(circle.action, circle.dimmed) }
                     }
@@ -389,6 +391,22 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }
                 Spacer(Modifier.height(80.dp))
             }
+        }
+        run {
+            val ctx2 = LocalContext.current
+            var saveOn by remember(info.cid, moreOpen) { mutableStateOf(com.fariin.app.media.AutoSaveMedia.savesMedia(ctx2, info.cid)) }
+            com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
+                if (canEdit) add(com.fariin.app.ui.components.GlassMenuItem("Change Wallpaper",
+                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_wallpaper)) {
+                    com.fariin.app.ui.settings.ChatWallpaperLink.request(info.cid); onBack() })
+                add(com.fariin.app.ui.components.GlassMenuItem("Share Channel",
+                    androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.IosShare)) { share() })
+                if (info.username.isNotEmpty()) add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
+                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_qr)) { showQr = true })
+                add(com.fariin.app.ui.components.GlassMenuItem("Save to Photos: " + (if (saveOn) "On" else "Off"),
+                    androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Download), divider = true) {
+                    saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, info.cid, saveOn) })
+            }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
         }
         AnimatedVisibility(undo, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(24.dp)) {
             Row(Modifier.floating(CircleShape).clickable { leave(fromUndo = true) }.padding(horizontal = 18.dp, vertical = 12.dp)) {

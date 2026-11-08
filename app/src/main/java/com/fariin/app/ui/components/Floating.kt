@@ -55,6 +55,9 @@ val LocalGlassFrost = androidx.compose.runtime.staticCompositionLocalOf<Color?> 
  *  through them (owner 2026-11-08: the rows read sharp through Edit and All/Missed on Calls). */
 val LocalGlassBlur = androidx.compose.runtime.staticCompositionLocalOf { false }
 
+/** The bar sits on a frosted GlassBarPage: bars paint no background of their own. */
+val LocalFrostedBar = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 @Composable
 fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier {
     val c = Fariin.colors
