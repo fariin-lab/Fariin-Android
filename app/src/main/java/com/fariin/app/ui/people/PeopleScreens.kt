@@ -573,7 +573,20 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
             Spacer(Modifier.height(10.dp))
-            Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
+            // The verified seal after the name (iOS VerifiedMark, 20): it was missing on this page.
+            val vCtx = androidx.compose.ui.platform.LocalContext.current
+            LaunchedEffect(uid) { com.fariin.app.data.VerifiedPeople.warm(vCtx.applicationContext, uid) }
+            val vKinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
+            val vKind = com.fariin.app.data.VerifiedPeople.badge(vKinds, uid)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
+                if (vKind != null || person?.verified == true) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), "Verified",
+                        tint = if (vKind != null && com.fariin.app.data.VerifiedPeople.isGold(vKind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue,
+                        modifier = Modifier.size(20.dp))
+                }
+            }
             person?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 16.sp, color = c.secondary) }
             Spacer(Modifier.height(16.dp))
             // Spread over the width: with Search too, five circles at a fixed 28 dp gap ran past the
