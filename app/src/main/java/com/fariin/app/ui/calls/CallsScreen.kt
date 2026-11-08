@@ -1,5 +1,6 @@
 package com.fariin.app.ui.calls
 
+import androidx.compose.material.icons.outlined.Search
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -284,6 +285,12 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     // Only the top row is the bar (glass over the list); the large title and the search field head
     // the list and scroll away with it, as iOS's large title does.
     val underBar by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 } }
+    val barScope = androidx.compose.runtime.rememberCoroutineScope()
+    val searchGone by remember { androidx.compose.runtime.derivedStateOf {
+        val info = listState.layoutInfo.visibleItemsInfo
+        val field = info.firstOrNull { it.key == "search" }
+        if (field == null) info.isNotEmpty() && info.first().index > 1 else field.offset + field.size * 0.1f <= 0
+    } }
     Box(Modifier.fillMaxSize()) {
     com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bg), page = c.bg, barEstimate = 48.dp, frosted = true, bar = {
         // Frosted (GlassBarPage), so no background of its own; a bit shorter (owner 2026-11-08).
@@ -299,6 +306,13 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
             } else {
                 if (hasHistory) com.fariin.app.ui.components.FloatingTextAction("Edit", modifier = Modifier.align(Alignment.CenterStart)) { selecting = true }
                 CallsSegments(if (missedOnly) 1 else 0, { missedOnly = it == 1 }, Modifier.align(Alignment.Center))
+                // The field scrolled up under the bar: a search button takes its place (as the chat list).
+                androidx.compose.animation.AnimatedVisibility(searchGone, Modifier.align(Alignment.CenterEnd),
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.6f),
+                    exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.6f)) {
+                    com.fariin.app.ui.components.FloatingIcon(Icons.Outlined.Search, contentDescription = "Search calls",
+                        onClick = { barScope.launch { listState.animateScrollToItem(0) } })
+                }
             }
         }
     }) { top ->
