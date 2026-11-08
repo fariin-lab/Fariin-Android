@@ -20,14 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -51,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.fariin.app.ui.theme.Fariin
 import org.json.JSONArray
 import org.json.JSONObject
+import com.fariin.app.R
 
 /**
  * Files sent from this phone, newest first, so one can go again in one tap (iOS RecentFiles).
@@ -157,19 +150,19 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { if (searching) { searching = false; query = "" } else onBack() }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.label)
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = c.label)
             }
             if (searching) {
                 com.fariin.app.ui.components.FloatingSearchField(query, { query = it }, "Search files", Modifier.weight(1f).padding(end = 8.dp))
             } else {
                 Text("Files", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f).padding(start = 4.dp))
-                IconButton(onClick = { searching = true }) { Icon(Icons.Filled.Search, "Search", tint = c.label) }
+                IconButton(onClick = { searching = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", tint = c.label) }
                 Box {
-                    IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort", tint = c.label) }
+                    IconButton(onClick = { sortMenu = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_sort), "Sort", tint = c.label) }
                     DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }, containerColor = c.card) {
                         listOf(FileSort.DATE to "Sort by date", FileSort.NAME to "Sort by name").forEach { (s, label) ->
                             DropdownMenuItem(text = { Text(label, color = c.label) }, onClick = { sort = s; sortMenu = false },
-                                trailingIcon = { if (sort == s) Icon(Icons.Filled.Check, null, tint = c.accent) })
+                                trailingIcon = { if (sort == s) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) })
                         }
                     }
                 }
@@ -180,10 +173,10 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
                 item {
                     // Three ways in, as one rounded card (owner 2026-11-04: rounded and polished, as iOS).
                     Column(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(22.dp)).background(c.card)) {
-                        SourceRow(Icons.Filled.PhotoLibrary, "Photos", "Send photos as files, in their original quality") { choosingPhotos = true }
+                        SourceRow(ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle), "Photos", "Send photos as files, in their original quality") { choosingPhotos = true }
                         SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), "Browse documents", "PDFs, documents and other files", onBrowse)
                         SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Choose from gallery", "Photos or videos in full quality", onGallery)
-                        SourceRow(Icons.Filled.Headphones, "Browse audio", "Music and other sound files", onAudio)
+                        SourceRow(ImageVector.vectorResource(R.drawable.ic_sf_headphones), "Browse audio", "Music and other sound files", onAudio)
                     }
                 }
                 item { Text("Recent", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, modifier = Modifier.padding(start = 6.dp, top = 22.dp, bottom = 8.dp)) }

@@ -19,14 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.semantics
@@ -59,6 +51,9 @@ import com.fariin.app.media.MediaRules
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.ui.components.floating
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * The forward picker (iOS ForwardPicker): "Forward to", a search field, the chats newest first,
@@ -121,7 +116,7 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                             Modifier.size(24.dp).clip(CircleShape).background(if (on) c.blue else Color.Transparent)
                                 .border(1.5.dp, if (on) c.blue else c.secondary.copy(alpha = 0.5f), CircleShape),
                             contentAlignment = Alignment.Center,
-                        ) { if (on) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
+                        ) { if (on) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                     }
                 }
             }
@@ -197,7 +192,7 @@ private fun ForwardComposer(preview: List<com.fariin.app.data.Message>, picked: 
                 .clickable(enabled = ready) { onSend(note.trim()) }
                 .sendLabel(if (picked.size > 1) "Send to ${picked.size} chats" else "Send"),
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.ArrowUpward, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
         }
     }
@@ -229,12 +224,13 @@ private fun PreviewStack(msgs: List<com.fariin.app.data.Message>) {
     }
 }
 
-private fun forwardIcon(m: com.fariin.app.data.Message) = when (m.mediaKind) {
-    com.fariin.app.data.Message.MediaKind.VOICE -> Icons.Filled.Mic
-    com.fariin.app.data.Message.MediaKind.FILE -> Icons.Filled.Description
-    com.fariin.app.data.Message.MediaKind.VIDEO -> Icons.Filled.PlayArrow
-    com.fariin.app.data.Message.MediaKind.PHOTO, com.fariin.app.data.Message.MediaKind.ALBUM -> Icons.Filled.Image
-    else -> Icons.AutoMirrored.Filled.Notes
+@Composable
+private fun forwardIcon(m: com.fariin.app.data.Message): ImageVector = when (m.mediaKind) {
+    com.fariin.app.data.Message.MediaKind.VOICE -> ImageVector.vectorResource(R.drawable.ic_mic)
+    com.fariin.app.data.Message.MediaKind.FILE -> ImageVector.vectorResource(R.drawable.ic_file)
+    com.fariin.app.data.Message.MediaKind.VIDEO -> ImageVector.vectorResource(R.drawable.ic_sf_play_fill)
+    com.fariin.app.data.Message.MediaKind.PHOTO, com.fariin.app.data.Message.MediaKind.ALBUM -> ImageVector.vectorResource(R.drawable.ic_sf_photo)
+    else -> ImageVector.vectorResource(R.drawable.ic_sf_text_alignleft)
 }
 
 /** One line for what is forwarded: the chat list's words for media, the text itself otherwise. */

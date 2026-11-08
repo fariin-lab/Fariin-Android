@@ -5,7 +5,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +15,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -37,6 +34,9 @@ import com.fariin.app.data.UploadedEmoji
 import com.fariin.app.ui.components.Snack
 import com.fariin.app.ui.theme.Fariin
 import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /** True for the one account that may choose and add custom emoji (iOS CustomReaction.canChoose). */
 fun canChooseCustom(): Boolean = CustomEmojiUpload.canUpload(FirebaseAuth.getInstance().currentUser?.uid)
@@ -70,7 +70,7 @@ fun CustomEmojiGrid(onPick: (String) -> Unit, modifier: Modifier = Modifier,
                     .semantics { contentDescription = "Add custom emoji from files" },
                     contentAlignment = Alignment.Center) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = c.secondary, strokeWidth = 2.dp)
-                    else Icon(Icons.Filled.Add, contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    else Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = null, tint = c.secondary, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -91,7 +91,7 @@ fun PickMark(on: Boolean) {
     Box(Modifier.size(48.dp)) {
         Box(Modifier.matchParentSize().clip(CircleShape).background(c.accent.copy(alpha = 0.18f)).border(2.dp, c.accent, CircleShape))
         Box(Modifier.align(Alignment.BottomEnd).size(16.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Check, contentDescription = "Chosen", tint = Color.White, modifier = Modifier.size(11.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Chosen", tint = Color.White, modifier = Modifier.size(11.dp))
         }
     }
 }

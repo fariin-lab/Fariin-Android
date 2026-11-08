@@ -24,15 +24,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Forward
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,6 +58,7 @@ import com.fariin.app.data.Message
 import com.fariin.app.data.PinRules
 import com.fariin.app.data.SelectRules
 import com.fariin.app.ui.theme.Fariin
+import androidx.compose.ui.res.vectorResource
 
 /**
  * Edit History (iOS EditHistorySheet): the current text with "Current", then the earlier versions
@@ -196,7 +188,7 @@ internal fun PinnedBar(
                     )
                     DropdownMenuItem(
                         text = { Text("See All") },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null, Modifier.size(22.dp)) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_list_bullet), null, Modifier.size(22.dp)) },
                         onClick = { menu = false; onSeeAll() },
                     )
                 }
@@ -268,7 +260,7 @@ internal fun PinnedMessagesSheet(
                                         ))
                                     }
                                     IconButton(onClick = { onJump(m.id) }) {
-                                        Icon(Icons.AutoMirrored.Outlined.ArrowForward, "Go to Message", tint = c.secondary)
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_right), "Go to Message", tint = c.secondary)
                                     }
                                 }
                                 DropdownMenu(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
@@ -308,7 +300,7 @@ internal fun SelectTopBar(count: Int, onClose: () -> Unit) {
         Modifier.fillMaxWidth().background(c.bg)
             .windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 12.dp),
     ) {
-        com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Close, "Cancel", onClick = onClose, circle = true,
+        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", onClick = onClose, circle = true,
             modifier = Modifier.align(Alignment.CenterStart))
         Text(if (count == 1) "1 Selected" else "$count Selected", fontSize = 17.sp,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
@@ -332,10 +324,10 @@ internal fun SelectionBar(
             .floating(androidx.compose.foundation.shape.RoundedCornerShape(30.dp)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SelectAction("Delete", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Delete),
+        SelectAction("Delete", painterResource(R.drawable.ic_sf_trash),
             deleteEnabled && !busy, c.red, onDelete)
         SelectAction("Forward", painterResource(R.drawable.ic_menu_forward), forwardEnabled && !busy, c.label, onForward)
-        SelectAction("Copy", androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.ContentCopy), copyEnabled && !busy, c.label, onCopy)
+        SelectAction("Copy", painterResource(R.drawable.ic_sf_doc_on_doc), copyEnabled && !busy, c.label, onCopy)
     }
 }
 

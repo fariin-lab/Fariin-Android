@@ -15,11 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.PersonAddAlt
-import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +31,7 @@ import com.fariin.app.data.GroupWelcome
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.R
 
 /**
  * iOS GroupWelcomeCard: an empty group chat shows the group itself in a rounded glass card: its
@@ -77,9 +73,9 @@ internal fun GroupWelcomeCard(ui: ThreadUi, onStep: (String) -> Unit, modifier: 
             }
         }
         if (canEdit || canAdd) Row {
-            if (canAdd) WelcomeCircle(Icons.Outlined.PersonAddAlt, "Add Members") { onStep("add") }
+            if (canAdd) WelcomeCircle(ImageVector.vectorResource(R.drawable.ic_add_member), "Add Members") { onStep("add") }
             if (canLink) WelcomeCircle(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), "Group Link") { onStep("link") }
-            if (canEdit) WelcomeCircle(Icons.Outlined.Edit,
+            if (canEdit) WelcomeCircle(ImageVector.vectorResource(R.drawable.ic_sf_pencil),
                 if (GroupRules.description(doc).isEmpty()) "Description" else "Edit") { onStep("edit") }
         }
     }

@@ -51,16 +51,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material.icons.outlined.Place
-import androidx.compose.material.icons.filled.PhotoSizeSelectActual
-import androidx.compose.material.icons.outlined.Poll
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -87,10 +77,10 @@ import androidx.compose.ui.unit.sp
 import com.fariin.app.media.MediaRules
 import com.fariin.app.media.RecentMedia
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.fariin.app.R
 
 /** Where the composer's "+" sits on screen (window pixels), so the attach sheet grows out of it. */
 internal object AttachSource { @Volatile var rect: androidx.compose.ui.geometry.Rect? = null }
@@ -334,7 +324,7 @@ internal fun AttachSheet(
                 Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(60.dp).sheetGlass(CircleShape, sourceGlass).clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
-                        if (backShown) Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.label, modifier = Modifier.size(26.dp))
+                        if (backShown) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = c.label, modifier = Modifier.size(26.dp))
                         else Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Albums", tint = c.label, modifier = Modifier.size(29.dp))
                     }
                     Spacer(Modifier.weight(1f).widthIn(min = 12.dp))
@@ -377,7 +367,7 @@ internal fun AttachSheet(
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = Color.White, modifier = Modifier.size(18.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_share_turn_right), "Send", tint = Color.White, modifier = Modifier.size(18.dp))
                             if (picked.size > 1) {
                                 Spacer(Modifier.width(4.dp))
                                 Text("${picked.size}", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
@@ -517,7 +507,7 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
             Row(Modifier.align(Alignment.BottomStart).padding(6.dp).clip(RoundedCornerShape(50))
                 .background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 6.dp, vertical = 1.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(12.dp))
                 Text(MediaRules.durationLabel(item.durationMs / 1000.0), color = Color.White, fontSize = 11.sp)
             }
         }

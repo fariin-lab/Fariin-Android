@@ -32,11 +32,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Crop
-import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -94,6 +89,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /** iOS accent on the editor's black page (0x3DA1FD): the send circle and the view-once switch when on. */
 internal val EditorBlue = Color(0xFF3DA1FD)
@@ -282,7 +280,7 @@ private fun EditorBody(
                 Modifier.statusBarsPadding().padding(start = 20.dp, top = 8.dp).size(44.dp).floating()
                     .clickable { onClose() },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White) }
+            ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White) }
             EditorBar(
                 caption, { caption = it }, viewOnce, allowViewOnce,
                 onViewOnce = { viewOnce = !viewOnce; if (viewOnce) caption = "" },
@@ -329,10 +327,10 @@ private fun EditorBar(
         if (toolsShown) Box {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.size(40.dp).floating().clickable(onClick = onCrop), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Crop, contentDescription = "Crop", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_crop), contentDescription = "Crop", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
                 Box(Modifier.size(40.dp).floating().clickable(onClick = onPen), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_pencil), contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
                 Box(Modifier.size(40.dp).floating().clickable(onClick = onHd), contentAlignment = Alignment.Center) {
                     Text("HD", color = if (hd) EditorBlue else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -366,7 +364,7 @@ private fun EditorBar(
             }
             Spacer(Modifier.width(10.dp))
             Box(Modifier.size(40.dp).clip(CircleShape).background(EditorBlue).clickable(onClick = onSend), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
     }

@@ -36,12 +36,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Crop
-import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,6 +75,7 @@ import com.fariin.app.ui.theme.FariinTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.fariin.app.R
 
 /**
  * The attach sheet's editor for two or more chosen items (iOS MediaApprovalView): the photos and
@@ -204,7 +199,7 @@ private fun PagerBody(
             Modifier.statusBarsPadding().padding(start = 12.dp, top = 6.dp).size(44.dp).floating()
                 .clickable { onClose() },
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White) }
+        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White) }
 
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding()
@@ -223,10 +218,10 @@ private fun PagerBody(
                     // Crop and pen only make sense on a photo page; HD is for the whole batch.
                     if (currentIsPhoto) {
                         ToolCircle(onClick = { current?.let { openCrop(it) } }) {
-                            Icon(Icons.Filled.Crop, contentDescription = "Crop", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_crop), contentDescription = "Crop", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                         ToolCircle(onClick = { penOn = current }) {
-                            Icon(Icons.Filled.Draw, contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_pencil), contentDescription = "Draw", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                     ToolCircle(onClick = { hd = !hd }) {
@@ -250,7 +245,7 @@ private fun PagerBody(
                 }
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.size(40.dp).clip(CircleShape).background(EditorBlue).clickable { send() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -362,6 +357,6 @@ private fun RailTile(uri: Uri, isVideo: Boolean, current: Boolean, onTap: () -> 
             Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp).size(16.dp).clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.7f)).border(1.dp, Color.White, CircleShape).clickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp)) }
+        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(11.dp)) }
     }
 }

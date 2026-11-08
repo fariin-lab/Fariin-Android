@@ -22,12 +22,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,6 +55,9 @@ import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * The way in from the info pages (iOS searchFromInfoPage): the chat's own header opens its info
@@ -157,7 +154,7 @@ internal fun SearchTopBar(s: InChatSearchState, focus: FocusRequester, onClose: 
     Row(Modifier.fillMaxWidth().statusBarsPadding().height(64.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp).floating()) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = c.label, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Close search", tint = c.label, modifier = Modifier.size(22.dp))
         }
         com.fariin.app.ui.components.FloatingSearchField(s.query, { s.query = it }, "Search",
             Modifier.weight(1f).padding(end = 12.dp).focusRequester(focus), onSearch = onSubmit)
@@ -193,9 +190,9 @@ internal fun SearchNavBar(s: InChatSearchState, onStep: (Int) -> Unit, onList: (
             }
             if (!s.asList) {
                 Spacer(Modifier.width(8.dp))
-                StepButton(Icons.Filled.KeyboardArrowUp, "Previous result", s.index > 0) { onStep(-1) }
+                StepButton(ImageVector.vectorResource(R.drawable.ic_sf_chevron_up), "Previous result", s.index > 0) { onStep(-1) }
                 Spacer(Modifier.width(8.dp))
-                StepButton(Icons.Filled.KeyboardArrowDown, "Next result", s.index < s.matches.size - 1) { onStep(1) }
+                StepButton(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), "Next result", s.index < s.matches.size - 1) { onStep(1) }
             }
         }
     }

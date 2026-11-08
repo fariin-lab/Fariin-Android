@@ -27,10 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.RemoveCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -76,6 +72,9 @@ import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /** What a poll bubble needs from the chat (ThreadUi), kept small so the bubble stays reusable. */
 internal data class PollContext(
@@ -210,9 +209,9 @@ private fun Glyph(chosen: Boolean, multiple: Boolean, isMe: Boolean, mark: PollR
     val shape = if (multiple) RoundedCornerShape(5.dp) else CircleShape
     val green = Color(0xFF34C759)
     val (fill, icon) = when {
-        mark == PollRules.QuizMark.RIGHT -> green to Icons.Filled.Check
-        mark == PollRules.QuizMark.WRONG -> c.red to Icons.Filled.Close
-        chosen -> (if (isMe) Color.White else c.blue) to Icons.Filled.Check
+        mark == PollRules.QuizMark.RIGHT -> green to ImageVector.vectorResource(R.drawable.ic_sf_checkmark)
+        mark == PollRules.QuizMark.WRONG -> c.red to ImageVector.vectorResource(R.drawable.ic_sf_xmark)
+        chosen -> (if (isMe) Color.White else c.blue) to ImageVector.vectorResource(R.drawable.ic_sf_checkmark)
         else -> null to null
     }
     Box(
@@ -264,7 +263,7 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // The right answer shows only after I voted or it ended.
                     if (i in poll.correct && (mine.isNotEmpty() || !isOpen)) {
-                        Icon(Icons.Filled.Check, null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                     }
                     Text(opt, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.secondary, modifier = Modifier.weight(1f))
@@ -368,7 +367,7 @@ internal fun PollComposer(onDismiss: () -> Unit, onSend: (String) -> Unit) {
         com.fariin.app.ui.components.AppPageDialogWindow()
         Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close", tint = c.label) }
+                IconButton(onClick = onDismiss) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.label) }
                 Text("New Poll", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
                 TextButton(onClick = ::send, enabled = canSend) {
                     Text("Send", fontWeight = FontWeight.SemiBold, color = if (canSend) c.blue else c.secondary)
@@ -393,7 +392,7 @@ internal fun PollComposer(onDismiss: () -> Unit, onSend: (String) -> Unit) {
                                         // A quiz has one right answer.
                                         for (k in rights.indices) rights[k] = if (k == i) !rights[k] else false
                                     }, contentAlignment = Alignment.Center) {
-                                    if (right) Icon(Icons.Filled.Check, "Right answer", tint = Color.White, modifier = Modifier.size(16.dp))
+                                    if (right) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Right answer", tint = Color.White, modifier = Modifier.size(16.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
                             }
@@ -403,7 +402,7 @@ internal fun PollComposer(onDismiss: () -> Unit, onSend: (String) -> Unit) {
                             // Remove only an option that has words, and never below two rows.
                             if (texts.size > 2 && t.isNotEmpty()) {
                                 IconButton(onClick = { texts.removeAt(i); rights.removeAt(i); tidy() }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Filled.RemoveCircle, "Remove option", tint = c.red, modifier = Modifier.size(22.dp))
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus_circle_fill), "Remove option", tint = c.red, modifier = Modifier.size(22.dp))
                                 }
                             }
                         }

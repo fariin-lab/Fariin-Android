@@ -23,11 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +57,8 @@ import com.fariin.app.media.VoicePlayer
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * The playing clip, shared by the page (the picture) and the chrome (scrubber, play), after iOS
@@ -200,9 +197,9 @@ internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit) {
             if (ctl.durationMs >= 20_000) {
                 Row(Modifier.height(44.dp).floating(CircleShape).padding(horizontal = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PanelGlyph(Icons.Filled.Replay10, "Back 10 seconds", 36) { ctl.skip(-10) }
+                    PanelGlyph(ImageVector.vectorResource(R.drawable.ic_sf_gobackward_10), "Back 10 seconds", 36) { ctl.skip(-10) }
                     PlayGlyph(ctl)
-                    PanelGlyph(Icons.Filled.Forward10, "Forward 10 seconds", 36) { ctl.skip(10) }
+                    PanelGlyph(ImageVector.vectorResource(R.drawable.ic_sf_goforward_10), "Forward 10 seconds", 36) { ctl.skip(10) }
                 }
             } else Box(Modifier.floating(CircleShape)) { PlayGlyph(ctl) }
             Spacer(Modifier.weight(1f))
@@ -213,7 +210,7 @@ internal fun VideoPanel(ctl: VideoCtl, canShare: Boolean, onShare: () -> Unit) {
 
 @Composable
 private fun PlayGlyph(ctl: VideoCtl) =
-    PanelGlyph(if (ctl.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (ctl.playing) "Pause" else "Play", 44) { ctl.togglePlay() }
+    PanelGlyph(if (ctl.playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill), if (ctl.playing) "Pause" else "Play", 44) { ctl.togglePlay() }
 
 @Composable
 private fun PanelGlyph(icon: ImageVector, label: String, width: Int, onClick: () -> Unit) {

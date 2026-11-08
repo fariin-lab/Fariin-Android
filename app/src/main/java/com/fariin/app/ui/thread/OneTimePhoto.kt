@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +50,9 @@ import com.fariin.app.media.LowEnd
 import com.fariin.app.media.OnceBurn
 import com.fariin.app.media.ViewedOnce
 import java.io.File
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * Where a view-once photo is seen (owner redesign 2026-11-07, as on iOS): full screen and dark,
@@ -125,7 +126,7 @@ internal fun OneTimePhotoPage(m: Message, cid: String, onClose: () -> Unit) {
                 Box(
                     Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).clickable(onClick = onClose),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.Close, "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
+                ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
                 Spacer(Modifier.width(12.dp))
                 DashedOnceRing(Color.White.copy(alpha = 0.9f), showOne = true, side = 20.dp, digitSize = 10.sp)
                 Spacer(Modifier.width(6.dp))

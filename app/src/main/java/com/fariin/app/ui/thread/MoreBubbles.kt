@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -39,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.unit.sp
 import com.fariin.app.data.Message
 import com.fariin.app.media.AutoDownload
@@ -48,6 +44,9 @@ import com.fariin.app.media.MediaRules
 import com.fariin.app.media.UploadProgress
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /** Who I am and what Cancel does, for the upload ring's X (iOS onCancelUpload). */
 internal class UploadCancel(val me: String, val cancel: (Message) -> Unit,
@@ -318,7 +317,7 @@ internal fun ReplyThumb(o: Message, side: Dp, modifier: Modifier = Modifier) {
     Box(box.background(fill), contentAlignment = Alignment.Center) {
         if (bmp != null) Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         if (o.mediaKind == Message.MediaKind.VIDEO) {
-            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(side * 0.5f))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(side * 0.5f))
         }
     }
 }

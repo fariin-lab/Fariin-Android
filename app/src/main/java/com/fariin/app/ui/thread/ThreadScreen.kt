@@ -3,13 +3,8 @@ package com.fariin.app.ui.thread
 import com.fariin.app.ui.thread.bubbles.artBubble
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import kotlinx.coroutines.tasks.await
@@ -24,9 +19,6 @@ import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import dev.chrisbanes.haze.hazeSource
 import com.kyant.backdrop.backdrops.layerBackdrop
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.filled.Add
 import com.fariin.app.ui.components.floating
 import android.Manifest
 import android.content.pm.PackageManager
@@ -38,17 +30,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Mic
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.RectangleShape
@@ -89,12 +75,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -143,6 +123,7 @@ import com.fariin.app.data.ThreadLogic
 import com.fariin.app.data.Tick
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.R
 
 /** Everything the chat screen draws; the same for a live chat and the debug demo. */
 data class ThreadUi(
@@ -1390,7 +1371,7 @@ private fun SelectTick(on: Boolean) {
         .background(if (on) c.blue else Color.Transparent)
         .border(1.5.dp, if (on) c.blue else c.secondary.copy(alpha = 0.6f), CircleShape),
         contentAlignment = Alignment.Center) {
-        if (on) Icon(Icons.Filled.Done, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        if (on) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Color.White, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -1436,7 +1417,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                         // A verified channel: the blue tick beside its name (iOS ChatHeaderView).
                         if (ui.channel?.info?.verified == true) {
                             Spacer(Modifier.width(5.dp))
-                            Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(16.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(16.dp))
                         }
                         // The timer is on: a small mark beside the name (iOS ChatHeaderView secondary icon).
                         if (ui.disappearSeconds > 0) {
@@ -1463,7 +1444,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
             // search (iOS 93160b88, owner 2026-11-07). No bell there: the bottom Mute bar mutes.
             // A visitor gets neither (Search needs following).
             ui.channel?.takeIf { it.role != com.fariin.app.channel.ChannelRules.Role.VISITOR }?.let {
-                com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Outlined.Search,
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios),
                     contentDescription = "Search", onClick = { InChatSearchLink.request(ui.cid) }, circle = true)
             }
             HeaderMenu(ui, onToggleMute)
@@ -1484,9 +1465,9 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(start = 8.dp)) {
-        com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreVert, contentDescription = "More", onClick = { open = true }, circle = true)
+        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, circle = true)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null) },
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })
             ui.muted?.let { muted ->
                 DropdownMenuItem(text = { Text(if (muted) "Unmute" else "Mute") },
@@ -2070,7 +2051,7 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
         Text((if (m.edited && !m.deleted) "edited " else "") + time, fontSize = 11.sp, color = metaColor, maxLines = 1)
         if (channelPending) {
             Spacer(Modifier.width(3.dp))
-            Icon(Icons.Filled.Schedule, contentDescription = "Sending", tint = metaColor, modifier = Modifier.size(13.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), contentDescription = "Sending", tint = metaColor, modifier = Modifier.size(13.dp))
         }
         if (isMe && !m.deleted) {
             // Sent one drawn check, delivered and read two (iOS BubbleTicks), at their drawn size.
@@ -2085,7 +2066,7 @@ private fun Meta(m: Message, tick: Tick, isMe: Boolean, is24h: Boolean, onMedia:
                     else if (styledInk != null) (if (tick == Tick.READ) styledInk else metaColor)   // styled: 80% so the ticks read
                     else Color.White.copy(alpha = if (tick == Tick.READ) 1f else 0.55f)
                 if (drawn != null) Icon(androidx.compose.ui.res.painterResource(drawn), contentDescription = tickDescription(tick), tint = tint)
-                else Icon(Icons.Filled.Schedule, contentDescription = tickDescription(tick), tint = tint, modifier = Modifier.size(14.dp))
+                else Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), contentDescription = tickDescription(tick), tint = tint, modifier = Modifier.size(14.dp))
             }
         }
     }
@@ -2384,7 +2365,7 @@ private fun Composer(
                     Text(MediaRules.durationLabel(kotlin.math.floor(elapsed)), style = TextStyle(fontSize = 17.sp, color = c.label,
                         fontFeatureSettings = "tnum"))
                     Spacer(Modifier.weight(1f))
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), null, tint = c.secondary, modifier = Modifier.size(20.dp))
                     Text("Slide to cancel", fontSize = 15.sp, color = c.secondary,
                         modifier = Modifier.graphicsLayer { translationX = slide.coerceAtMost(0f) / 2 })
                     Spacer(Modifier.width(12.dp))
@@ -2392,7 +2373,7 @@ private fun Composer(
             } else {
                 Box(Modifier.size(COMPOSER_BUTTON).onGloballyPositioned { AttachSource.rect = it.boundsInWindow() }
                     .floating().clickable { lightTap(); onAttach() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, contentDescription = "Attach", tint = c.label, modifier = Modifier.size(28.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "Attach", tint = c.label, modifier = Modifier.size(28.dp))
                 }
                 Spacer(Modifier.width(8.dp))
                 // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
@@ -2472,7 +2453,7 @@ private fun Composer(
                     Modifier.size(COMPOSER_BUTTON).floating(fill = myFill()).clickable { sendVoice() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else if ((draft.isNotBlank() || sendsWithoutText) && !recording) {
                 Box(
@@ -2489,7 +2470,7 @@ private fun Composer(
                     },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else Box(Modifier.size(COMPOSER_BUTTON)) {
                 // The lock target floats over the mic while the hold runs and comes down to meet
@@ -2551,7 +2532,7 @@ private fun Composer(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Outlined.Mic, contentDescription = "Record a voice message. Tap for hands-free, hold to record",
+                    Icon(ImageVector.vectorResource(R.drawable.ic_mic), contentDescription = "Record a voice message. Tap for hands-free, hold to record",
                         tint = if (recording) Color.White else c.label, modifier = Modifier.size(28.dp))
                 }
             }

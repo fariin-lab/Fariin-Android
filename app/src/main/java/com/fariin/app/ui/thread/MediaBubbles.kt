@@ -23,11 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -74,6 +69,9 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /** The chat's file source (download + open + cache). Null: the demo, bundled files only. */
 val LocalChatMedia = staticCompositionLocalOf<ChatMedia?> { null }
@@ -332,7 +330,7 @@ internal fun DurationPill(seconds: Double, modifier: Modifier = Modifier) {
 @Composable
 internal fun PlayBadge(side: Dp, modifier: Modifier = Modifier) {
     Box(modifier.size(side).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-        Icon(Icons.Filled.PlayArrow, "Play video", tint = Color.White, modifier = Modifier.size(side * 0.62f))
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), "Play video", tint = Color.White, modifier = Modifier.size(side * 0.62f))
     }
 }
 
@@ -391,7 +389,7 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                 if (loading || url == null || m.uploading && m.audioUrl == null && m.localPath == null) {
                     com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = tint)
                 } else {
-                    Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    Icon(if (playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill),
                         if (playing) "Pause" else "Play", tint = glyph, modifier = Modifier.size(28.dp))
                 }
             }

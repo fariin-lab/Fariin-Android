@@ -2,8 +2,6 @@ package com.fariin.app.ui.thread
 
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material.icons.outlined.Videocam
-import androidx.compose.material.icons.outlined.Call
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,22 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Cancel
-import androidx.compose.material.icons.automirrored.outlined.Reply
-import androidx.compose.material.icons.automirrored.outlined.Forward
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Palette
 import com.fariin.app.ui.components.floating
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -75,6 +58,7 @@ import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import com.fariin.app.R
 
 /** What the long-press menu, swipe, typing and read-at-bottom call back into (live or demo). */
 data class ThreadActions(
@@ -167,8 +151,8 @@ internal fun MessageMenu(
     // A notice opens a menu only for a group admin who may clear it (iOS canDeleteNotice): Select
     // and Delete, nothing else.
     val items = if (m.isSystem) listOf(
-        MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) },
-        MenuItem("Delete", Icons.Outlined.Delete, destructive = true) { onDelete(m) },
+        MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) },
+        MenuItem("Delete", null, iconRes = com.fariin.app.R.drawable.ic_sf_trash, destructive = true) { onDelete(m) },
     ) else buildList<MenuItem> {
         // Restricted chat (iOS): no Forward, Save or Copy for anyone in it.
         val restricted = com.fariin.app.data.ChatRestrictions.isOn(ui.cid)
@@ -189,23 +173,23 @@ internal fun MessageMenu(
             // Not when the channel turned Quotes off, for anyone (the server refuses everyone then).
             if (!restricted && MessageRules.canQuote(m) && ui.channel?.info?.quotesOff == false) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote, badge = NewBadgeSpots.CHAT_MENU_QUOTE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onQuote(m) })
-            if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", Icons.Outlined.Download, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
+            if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", null, iconRes = com.fariin.app.R.drawable.ic_save_down, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })
             // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).
             val card = com.fariin.app.data.CardRules.isCard(m.text)
-            if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", Icons.Outlined.ContentCopy, badge = NewBadgeSpots.CHAT_MENU_COPY) {
+            if (!restricted && MessageRules.canCopy(m) && !card) add(MenuItem("Copy", null, iconRes = com.fariin.app.R.drawable.ic_sf_doc_on_doc, badge = NewBadgeSpots.CHAT_MENU_COPY) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) onCopy(m.text) })
             // My own words: change the style my next messages carry, right from here (owner 2026-11-07).
             // Not in a channel, nor in a group whose owner or admin turned styles off.
             if (com.fariin.app.data.BubbleStyles.SHOWN && m.authorId == ui.me && !card && m.text.isNotEmpty() &&
                 m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem &&
                 !bubbleStylesOff(ui.channel != null, ui.groupDoc))
-                add(MenuItem("Bubble Style", Icons.Outlined.Palette, badge = NewBadgeSpots.CHAT_MENU_BUBBLE_STYLE) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
-            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", Icons.Outlined.Edit, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onStartEdit(m) })
+                add(MenuItem("Bubble Style", null, iconRes = com.fariin.app.R.drawable.ic_set_appearance, badge = NewBadgeSpots.CHAT_MENU_BUBBLE_STYLE) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
+            if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", null, iconRes = com.fariin.app.R.drawable.ic_sf_pencil, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onStartEdit(m) })
             // In a channel only its owner and admins see a post's earlier versions (iOS 0ed7fa04);
             // groups and 1:1 chats unchanged.
             val historyAllowed = ui.channel?.let { it.role == com.fariin.app.channel.ChannelRules.Role.ADMIN } ?: true
-            if (m.edited && historyAllowed) add(MenuItem("Edit History", Icons.Outlined.History, badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onEditHistory(m) })
+            if (m.edited && historyAllowed) add(MenuItem("Edit History", null, iconRes = com.fariin.app.R.drawable.ic_sf_clock_arrow_circlepath, badge = NewBadgeSpots.CHAT_MENU_EDIT_HISTORY) { onEditHistory(m) })
             // Keep a sticker or a GIF from the chat, mine or theirs (iOS, owner 2026-10-17 / 10-18);
             // not in a restricted chat, where nothing is saved.
             if (!restricted) FavoriteToggles.stickerTitle(m)?.let { t ->
@@ -219,11 +203,11 @@ internal fun MessageMenu(
         }
         // iOS: a photo, video, album or GIF still going up can be stopped from its menu, not only its ring.
         if (m.sendState == Message.SendState.SENDING && (m.mediaKind != null || m.isGif)) uploadCancelFor(m)?.let { cancel ->
-            add(MenuItem("Cancel Sending", Icons.Outlined.Cancel, destructive = true) { cancel() })
+            add(MenuItem("Cancel Sending", null, iconRes = com.fariin.app.R.drawable.ic_sf_xmark_circle, destructive = true) { cancel() })
         }
-        if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", Icons.Outlined.CheckCircle) { onSelect(m) })
+        if (com.fariin.app.data.SelectRules.selectable(m)) add(MenuItem("Select", null, iconRes = com.fariin.app.R.drawable.ic_sf_checkmark_circle) { onSelect(m) })
         if (!m.deleted) {
-            if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", Icons.Outlined.Info, badge = NewBadgeSpots.CHAT_MENU_INFO) { onInfo(m) })
+            if (MessageRules.canInfo(m, ui.me, ui.isGroup)) add(MenuItem("Info", null, iconRes = com.fariin.app.R.drawable.ic_sf_info_circle, badge = NewBadgeSpots.CHAT_MENU_INFO) { onInfo(m) })
             if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) {
                 val pinnedNow = m.id in ui.pinnedIds
                 if (pinnedNow) add(MenuItem("Unpin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu, badge = NewBadgeSpots.CHAT_MENU_PIN) { actions.onUnpin(m.id) })
@@ -243,7 +227,7 @@ internal fun MessageMenu(
         // (iOS deleteOrTimerRow); someone who cannot delete gets the countdown on a row of its own.
         val expires = m.expiresAtMillis?.takeIf { !m.deleted }
         if (MessageRules.canDeleteHere(m, ui.me, ui.isGroup, ui.adminMayDelete)) {
-            add(MenuItem("Delete", Icons.Outlined.Delete, destructive = true, countdownTo = expires) { onDelete(m) })
+            add(MenuItem("Delete", null, iconRes = com.fariin.app.R.drawable.ic_sf_trash, destructive = true, countdownTo = expires) { onDelete(m) })
         } else if (expires != null) {
             add(MenuItem("Disappearing", null, iconRes = com.fariin.app.R.drawable.ic_disappearing, countdownTo = expires) {})
         }
@@ -483,7 +467,7 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit, content: @Composabl
                     animationSpec = androidx.compose.animation.core.tween(200)) { v, _ -> dx.floatValue = v }
             }
         }) { back[0]?.cancel(); dx.floatValue = it }) {
-        if (showArrow) Icon(Icons.AutoMirrored.Filled.Reply, null, tint = Fariin.colors.secondary,
+        if (showArrow) Icon(ImageVector.vectorResource(R.drawable.ic_menu_reply), null, tint = Fariin.colors.secondary,
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).size(22.dp)
                 .graphicsLayer {
                     val p = SwipeReplyMath.progress(-dx.floatValue, trigger)
@@ -513,7 +497,7 @@ internal fun ComposerBar(title: String, text: String, thumb: (@Composable () -> 
             Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
             Text(text, fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Cancel", tint = c.secondary) }
+        IconButton(onClick = onClose) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.secondary) }
     }
 }
 
@@ -526,7 +510,7 @@ internal fun JumpArrow(count: Int, onClick: () -> Unit, modifier: Modifier = Mod
         Box(
             Modifier.size(40.dp).floating().clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.KeyboardArrowDown, "Jump to the newest message", tint = c.label, modifier = Modifier.size(28.dp)) }
+        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), "Jump to the newest message", tint = c.label, modifier = Modifier.size(28.dp)) }
         if (count > 0) Text(
             if (count > 99) "99+" else "$count", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White,
             modifier = Modifier.align(Alignment.TopCenter).offset(y = (-9).dp).clip(CircleShape).background(c.blue)

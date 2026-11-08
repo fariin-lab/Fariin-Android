@@ -20,10 +20,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -54,6 +50,9 @@ import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * Sharing a group's or channel's link (iOS "Share with", owner 2026-11-07: Android opened the
@@ -80,7 +79,7 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).floating(CircleShape).clickable { searching = !searching; if (!searching) query = "" },
-                    contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Search, "Search", tint = c.label) }
+                    contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", tint = c.label) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Share with", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.label)
                     Text(if (chosen.isEmpty()) "Select chats" else "${chosen.size} selected", fontSize = 14.sp, color = c.secondary)
@@ -89,7 +88,7 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
                         .putExtra(android.content.Intent.EXTRA_TEXT, text)
                     close { ctx.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.IosShare, "More ways to share", tint = c.label) }
+                }, contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_share), "More ways to share", tint = c.label) }
             }
             if (searching) Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp).heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(22.dp)).background(c.fieldFill).padding(horizontal = 16.dp, vertical = 11.dp)) {
@@ -112,7 +111,7 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                             // iOS: a black tick badge (white in dark mode).
                             if (on) Box(Modifier.align(Alignment.BottomEnd).size(24.dp).clip(CircleShape).background(c.label)
                                 .border(2.dp, com.fariin.app.ui.components.sheetFill, CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Check, null, tint = c.bg, modifier = Modifier.size(14.dp))
+                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.bg, modifier = Modifier.size(14.dp))
                             }
                         }
                         Spacer(Modifier.height(6.dp))

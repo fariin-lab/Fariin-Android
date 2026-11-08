@@ -21,10 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -63,6 +59,7 @@ import com.fariin.app.media.VoicePreview
 import com.fariin.app.media.VoiceRecordRules
 import com.fariin.app.ui.theme.Fariin
 import java.io.File
+import com.fariin.app.R
 
 /**
  * A one-time voice note, never the inline player: the one-line view-once bubble ([OnceBubbleRow],
@@ -159,7 +156,7 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
                             contentAlignment = Alignment.Center,
                         ) {
                             if (!st.ready) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                            else Icon(if (st.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            else Icon(if (st.playing) ImageVector.vectorResource(R.drawable.ic_sf_pause_fill) else ImageVector.vectorResource(R.drawable.ic_sf_play_fill),
                                 if (st.playing) "Pause" else "Play", tint = Color.Black, modifier = Modifier.size(28.dp))
                         }
                         Spacer(Modifier.width(10.dp))
@@ -194,7 +191,7 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
                 Modifier.statusBarsPadding().padding(start = 16.dp, top = 8.dp).size(36.dp).clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClose),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.Close, "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
+            ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(18.dp)) }
         }
     }
 }

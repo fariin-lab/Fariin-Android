@@ -20,10 +20,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -51,6 +47,7 @@ import com.fariin.app.ui.components.SheetShape
 import com.fariin.app.ui.components.sheetFill
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
+import com.fariin.app.R
 
 /** Sends a sticker into the open chat: set by the thread while it is on screen (the pack grid uses it). */
 object StickerSendHook { var send: ((StickerRef) -> Unit)? = null }
@@ -83,7 +80,7 @@ internal fun StickerInfoSheet(m: Message, onDismiss: () -> Unit) {
             Box(Modifier.fillMaxWidth().height(60.dp)) {
                 Box(Modifier.padding(start = 12.dp).size(44.dp).align(Alignment.CenterStart).clip(CircleShape)
                     .background(c.label.copy(alpha = 0.08f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = c.label, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(20.dp))
                 }
             }
             if (!showPack) {
@@ -105,7 +102,7 @@ internal fun StickerInfoSheet(m: Message, onDismiss: () -> Unit) {
                         Text(if (favorite) "Remove from Favorites" else "Add to Favorites", fontSize = 17.sp, color = c.label)
                     }
                     if (pack != null) Row(rowMod(true) { showPack = true }, verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.GridView, null, tint = c.label, modifier = Modifier.size(22.dp))
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_square_grid), null, tint = c.label, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(14.dp))
                         Text("View sticker pack", fontSize = 17.sp, color = c.label)
                     }

@@ -19,9 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,6 +54,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * iOS AdminDeleteSheet (owner 2026-10-18): in a GROUP, an admin deleting SOMEONE ELSE's message gets
@@ -230,7 +230,7 @@ private fun TickRow(title: String, on: Boolean, supporting: String? = null, last
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        if (on) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = c.accent, modifier = Modifier.size(24.dp))
+        if (on) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill), contentDescription = null, tint = c.accent, modifier = Modifier.size(24.dp))
         else Box(Modifier.size(24.dp).padding(2.dp).border(1.5.dp, c.secondary, CircleShape))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -261,7 +261,7 @@ private fun MediaCount(on: Int, open: Boolean, onClick: () -> Unit) {
     Row(Modifier.clip(CircleShape).clickable(onClickLabel = if (open) "Hide media kinds" else "Show media kinds", onClick = onClick)
         .padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("$on/${MemberRestrict.MEDIA.size}", fontSize = 15.sp, color = c.secondary)
-        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = c.secondary,
+        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), contentDescription = null, tint = c.secondary,
             modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
     }
 }

@@ -43,13 +43,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Collections
-import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -113,6 +106,9 @@ import java.util.Date
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /** What the full-screen viewer shows. */
 sealed class Viewing {
@@ -423,16 +419,16 @@ private fun ViewerBody(
                 ViewerHeader(ViewerRules.title(page, me, host?.nameOf ?: { null }), dateLine(ctx, page.atMillis), page.isVideo,
                     onBack = { closeAnimated() }) { dismiss ->
                     if (buttons.saveAll > 1) {
-                        MenuRow("Save All (${buttons.saveAll})", rememberVectorPainter(Icons.Outlined.Collections)) {
+                        MenuRow("Save All (${buttons.saveAll})", painterResource(R.drawable.ic_sf_photo_on_rectangle)) {
                             dismiss(); save(ViewerRules.siblings(pages, page))
                         }
-                        MenuRow("Save This", rememberVectorPainter(Icons.Outlined.Download)) { dismiss(); save(listOf(page)) }
+                        MenuRow("Save This", painterResource(R.drawable.ic_save_down)) { dismiss(); save(listOf(page)) }
                     } else if (buttons.menuSave) {
-                        MenuRow(if (page.isVideo) "Save Video" else "Save Image", rememberVectorPainter(Icons.Outlined.Download)) {
+                        MenuRow(if (page.isVideo) "Save Video" else "Save Image", painterResource(R.drawable.ic_save_down)) {
                             dismiss(); save(listOf(page))
                         }
                     }
-                    if (buttons.menuDelete) MenuRow("Delete", rememberVectorPainter(Icons.Outlined.Delete), destructive = true) {
+                    if (buttons.menuDelete) MenuRow("Delete", painterResource(R.drawable.ic_sf_trash), destructive = true) {
                         dismiss(); askDelete = true
                     }
                 }
@@ -449,7 +445,7 @@ private fun ViewerBody(
         if (page.isVideo && chromeHidden && !video.playing && video.player != null) {
             Box(Modifier.align(Alignment.Center).size(92.dp).floating(CircleShape).clickable { video.togglePlay() },
                 contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.PlayArrow, "Play", tint = Fariin.colors.label, modifier = Modifier.size(40.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), "Play", tint = Fariin.colors.label, modifier = Modifier.size(40.dp))
             }
         }
     }
@@ -552,7 +548,7 @@ private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: ()
         Spacer(Modifier.weight(1f))
         var open by remember { mutableStateOf(false) }
         Box {
-            FloatingIcon(Icons.Filled.MoreVert, "More", onClick = { open = true }, circle = true)
+            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", onClick = { open = true }, circle = true)
             DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
                 containerColor = FariinMenu.container) { menu { open = false } }
         }
@@ -576,19 +572,19 @@ private fun PhotoBar(b: ViewerRules.Buttons, onShare: () -> Unit, onDraw: () -> 
         Spacer(Modifier.weight(1f))
         // iOS scribble.variable: draw on this photo and send the copy here.
         if (b.draw) {
-            BarButton(rememberVectorPainter(Icons.Outlined.Draw), "Draw", onClick = onDraw)
+            BarButton(painterResource(R.drawable.ic_sf_pencil), "Draw", onClick = onDraw)
             Spacer(Modifier.weight(1f))
         }
-        if (b.barDelete) BarButton(rememberVectorPainter(Icons.Outlined.Delete), "Delete", tint = c.red, onClick = onDelete)
+        if (b.barDelete) BarButton(painterResource(R.drawable.ic_sf_trash), "Delete", tint = c.red, onClick = onDelete)
         else if (b.barSave) {
             // iOS: an album asks which (Save All / Save This) from the same round button.
             var open by remember { mutableStateOf(false) }
             Box {
-                BarButton(rememberVectorPainter(Icons.Outlined.Download), "Save") { if (b.saveAll > 1) open = true else onSave() }
+                BarButton(painterResource(R.drawable.ic_save_down), "Save") { if (b.saveAll > 1) open = true else onSave() }
                 DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
                     containerColor = FariinMenu.container) {
-                    MenuRow("Save All (${b.saveAll})", rememberVectorPainter(Icons.Outlined.Collections)) { open = false; onSaveAll() }
-                    MenuRow("Save This", rememberVectorPainter(Icons.Outlined.Download)) { open = false; onSave() }
+                    MenuRow("Save All (${b.saveAll})", painterResource(R.drawable.ic_sf_photo_on_rectangle)) { open = false; onSaveAll() }
+                    MenuRow("Save This", painterResource(R.drawable.ic_save_down)) { open = false; onSave() }
                 }
             }
         }

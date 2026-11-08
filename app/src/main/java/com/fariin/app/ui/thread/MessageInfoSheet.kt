@@ -11,9 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,6 +34,8 @@ import com.fariin.app.ui.components.SheetCard
 import com.fariin.app.ui.components.SheetShape
 import com.fariin.app.ui.components.sheetFill
 import com.fariin.app.ui.theme.Fariin
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * Message Info (iOS MessageInfoView), for a group message I sent: the message, then who has read it
@@ -76,10 +75,10 @@ internal fun MessageInfoSheet(m: Message, ui: ThreadUi, is24h: Boolean, onDismis
                     modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
             if (split.readBy.isNotEmpty()) item {
-                MemberSection("Read by ${split.readBy.size}", Icons.Filled.CheckCircle, split.readBy, ui, name)
+                MemberSection("Read by ${split.readBy.size}", ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle_fill), split.readBy, ui, name)
             }
             if (split.deliveredTo.isNotEmpty()) item {
-                MemberSection("Delivered to ${split.deliveredTo.size}", Icons.Outlined.CheckCircle, split.deliveredTo, ui, name)
+                MemberSection("Delivered to ${split.deliveredTo.size}", ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), split.deliveredTo, ui, name)
             }
         }
     }

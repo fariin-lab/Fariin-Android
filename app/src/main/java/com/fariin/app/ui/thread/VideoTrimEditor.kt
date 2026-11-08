@@ -39,10 +39,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,6 +86,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * One clip's trim and play state in an editor (iOS VideoApprovalView / MediaApprovalView per item):
@@ -213,7 +212,7 @@ internal fun TrimVideo(s: TrimState, active: Boolean, modifier: Modifier = Modif
         // The still waits under the player until its first frame, so the page never shows black.
         if (!(active && firstFrame)) s.poster?.let { Image(it, null, contentScale = ContentScale.Fit, modifier = fit) }
         if (!s.playing && s.scrub == null) {
-            Icon(Icons.Filled.PlayCircle, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(66.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_circle_fill), null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(66.dp))
         }
     }
 }
@@ -377,7 +376,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
             Modifier.statusBarsPadding().padding(start = 12.dp, top = 6.dp).size(44.dp).floating()
                 .clickable { onClose() },
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White) }
+        ) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Color.White) }
         if (s.trimmed) {
             Box(
                 Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = 12.dp, top = 12.dp).height(32.dp)
@@ -416,7 +415,7 @@ private fun VideoEditorBody(uri: Uri, caption: String, onCaption: (String) -> Un
                 }
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.size(40.dp).clip(CircleShape).background(EditorBlue).clickable { send() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
         }

@@ -18,11 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.CallMade
-import androidx.compose.material.icons.automirrored.filled.CallReceived
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -48,6 +43,7 @@ import com.fariin.app.data.StickerGifRules.CallIcon
 import com.fariin.app.data.ThreadLogic
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.R
 
 /**
  * A call record in the chat (iOS CallBubbleView + MessageRowLayout.call): 60 tall, corners 16, a
@@ -73,9 +69,9 @@ internal fun CallBubble(
     val disc = if (look.mine) Color.White.copy(alpha = 0.22f) else (if (look.missedIncoming) red else accent).copy(alpha = 0.14f)
     val icon = when (look.icon) {
         CallIcon.VIDEO -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video)
-        CallIcon.VIDEO_MISSED -> Icons.Filled.VideocamOff
-        CallIcon.PHONE_IN -> Icons.AutoMirrored.Filled.CallReceived
-        CallIcon.PHONE_OUT -> Icons.AutoMirrored.Filled.CallMade
+        CallIcon.VIDEO_MISSED -> ImageVector.vectorResource(R.drawable.ic_call_video_off)
+        CallIcon.PHONE_IN -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_down_left)
+        CallIcon.PHONE_OUT -> ImageVector.vectorResource(R.drawable.ic_sf_arrow_up_right)
     }
     val maxW = (LocalConfiguration.current.screenWidthDp * 0.7f).dp
     val shape = RoundedCornerShape(16.dp)

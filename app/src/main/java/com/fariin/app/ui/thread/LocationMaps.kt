@@ -30,11 +30,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Directions
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -279,10 +274,10 @@ internal fun LocationMapPage(loc: CardRules.Location, approx: Boolean, onDismiss
                 map = m
                 m.markSpot(spot, approx, density)
             } else MapsMissingNote(Modifier.align(Alignment.Center))
-            FloatingIcon(Icons.Filled.Close, "Close", { motion.close() },
+            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", { motion.close() },
                 Modifier.padding(start = 12.dp, top = SheetHandleStrip), circle = true)
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 12.dp)) {
-                if (ok) FloatingIcon(Icons.Filled.MyLocation, "Show the place", {
+                if (ok) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_location_fill), "Show the place", {
                     map?.animateCamera(CameraUpdateFactory.newLatLngZoom(spot, zoom), 400, null)
                 }, Modifier.align(Alignment.End).padding(bottom = 10.dp), circle = true)
                 Column(Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp))
@@ -301,8 +296,8 @@ internal fun LocationMapPage(loc: CardRules.Location, approx: Boolean, onDismiss
                     }
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PageButton("Directions", Icons.Filled.Directions, filled = true, Modifier.weight(1f)) { openDirections(ctx, loc) }
-                        PageButton("Copy", Icons.Filled.ContentCopy, filled = false, Modifier.weight(1f)) { copyCoordinates(ctx, loc) }
+                        PageButton("Directions", ImageVector.vectorResource(R.drawable.ic_sf_directions), filled = true, Modifier.weight(1f)) { openDirections(ctx, loc) }
+                        PageButton("Copy", ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), filled = false, Modifier.weight(1f)) { copyCoordinates(ctx, loc) }
                     }
                 }
             }

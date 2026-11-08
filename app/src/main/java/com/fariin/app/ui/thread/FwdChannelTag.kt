@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,6 +39,9 @@ import com.fariin.app.ui.channels.LocalChannelNav
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 private val ChannelBlue = Color(0xFF2392FE)
 
@@ -83,7 +84,7 @@ internal fun ForwardedTag(m: Message, isMe: Boolean, inChannel: Boolean) {
                 .padding(horizontal = 6.dp, vertical = 1.dp))
         Spacer(Modifier.width(8.dp))
         if (following) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ink.copy(alpha = 0.45f), modifier = Modifier.size(18.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = ink.copy(alpha = 0.45f), modifier = Modifier.size(18.dp))
         } else {
             Box(Modifier.height(24.dp).clip(CircleShape).background(if (isMe) Color.White else ChannelBlue)
                 .clickable {

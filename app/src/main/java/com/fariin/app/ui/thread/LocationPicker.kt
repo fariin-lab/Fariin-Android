@@ -38,10 +38,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -99,6 +95,7 @@ import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
 import java.net.UnknownHostException
 import kotlin.coroutines.resume
+import com.fariin.app.R
 
 /**
  * Share Location (iOS LocationPickerSheet, "Select Location"): the map fills the top with a fixed
@@ -349,7 +346,7 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         if (!mapsOk) Box(Modifier.weight(1f).fillMaxWidth()) {
             // No map on this phone: my own fix only, sent from the panel below.
-            FloatingIcon(Icons.Filled.Close, "Close", onDismiss,
+            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onDismiss,
                 Modifier.padding(start = 16.dp, top = SheetHandleStrip), circle = true)
             MapsMissingNote(Modifier.align(Alignment.Center))
         } else Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -377,7 +374,7 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
             // Below the sheet's grabber strip, which drags the sheet.
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = SheetHandleStrip, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    FloatingIcon(Icons.Filled.Close, "Close", onDismiss, circle = true)
+                    FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onDismiss, circle = true)
                     Text("Location", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                         style = TextStyle(shadow = Shadow(c.bg, blurRadius = 8f)),
                         modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -388,7 +385,7 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
                         .padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                         Text("Cancel", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label)
                     }
-                    else FloatingIcon(Icons.Outlined.Search, "Search", { searching = true }, circle = true)
+                    else FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", { searching = true }, circle = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 if (searching) {
@@ -407,7 +404,7 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
                 }
                 ResultsList(loading, results, note, canRetry, ::retry, ::pick)
             }
-            FloatingIcon(Icons.Filled.MyLocation, "My location", ::locateMe,
+            FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_location_fill), "My location", ::locateMe,
                 Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp),
                 tint = if (source == Source.MY_FIX && fix != null) c.blue else c.label, circle = true)
         }

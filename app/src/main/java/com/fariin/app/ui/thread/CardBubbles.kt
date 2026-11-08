@@ -19,9 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +41,7 @@ import com.fariin.app.data.CardRules
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.people.LocalPeopleNav
 import com.fariin.app.ui.theme.Fariin
+import com.fariin.app.R
 
 /**
  * A shared place (iOS location bubble): a small map of the spot with its pin (LocationMaps.kt), the
@@ -71,7 +69,7 @@ internal fun LocationBody(loc: CardRules.Location, isMe: Boolean, width: Dp, met
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (approx) Text("Approximate area", fontSize = 13.sp, color = sub, maxLines = 1)
                 }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = sub, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = sub, modifier = Modifier.size(22.dp))
             }
         }
         Box(Modifier.align(Alignment.End)) { meta() }
@@ -101,7 +99,7 @@ internal fun ContactBody(card: CardRules.Contact, isMe: Boolean, me: String, cid
             Spacer(Modifier.width(10.dp))
             Text(card.name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = sub, modifier = Modifier.size(22.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = sub, modifier = Modifier.size(22.dp))
         }
         Box(Modifier.align(Alignment.End)) { meta() }
         if (CardRules.canMessage(card, me, cid)) {

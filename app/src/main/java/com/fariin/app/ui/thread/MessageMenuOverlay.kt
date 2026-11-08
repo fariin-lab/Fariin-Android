@@ -38,8 +38,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -82,6 +80,9 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.fariin.app.R
 
 /**
  * Where the pressed message sits on screen (px), and which side it hangs on. [live] reads where the
@@ -488,7 +489,7 @@ private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: 
         Box(Modifier.size(side).graphicsLayer { alpha = v.value; translationY = rise * (1 - v.value) }.clickable(onClick = onMore),
             contentAlignment = Alignment.Center) {
             Box(Modifier.size(side * 0.84f).clip(CircleShape).background(c.label.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Add, contentDescription = "More reactions", tint = c.label, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "More reactions", tint = c.label, modifier = Modifier.size(20.dp))
             }
         }
     }
