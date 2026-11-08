@@ -7,8 +7,7 @@ import com.google.firebase.Timestamp
  * (Kulan-iOS/Kulan/Models/Models.swift, `init(id:data:)`) that the list needs. Firestore field
  * names are kept exactly as iOS reads them; the Kotlin name is noted where it differs.
  *
- * Not ported yet (TODO, see Models.swift): typing/recording, reactions preview, album thumbnails,
- * channel follower state (users/{me}/channels), the private block list (BlockList), saved contact
+ * Not ported yet (TODO, see Models.swift): channel follower state (users/{me}/channels), the private block list (BlockList), saved contact
  * names, group moderation (`mod`), roles, restrictions, timers.
  */
 @androidx.compose.runtime.Immutable
@@ -89,7 +88,42 @@ data class Conversation(
     val followerMuted: Boolean = false,
     /** A group's shared wallpaper (iOS groupWallpaper, `wallpaper`): "none", "g:..", "u:<link>"; null when never set. */
     val groupWallpaper: String? = null,
+    /** `typing` read as iOS does: a "text-<s>" string or Bool true is typing, "audio-<s>" is recording;
+     *  [typingAt] is each flag's refresh time in seconds (0 / absent from an older build). */
+    val typing: Map<String, Boolean> = emptyMap(),
+    val recording: Map<String, Boolean> = emptyMap(),
+    val typingAt: Map<String, Double> = emptyMap(),
+    /** A digest of the raw typing map: the row's 15 s self-clear restarts whenever it changes. */
+    val typingRawKey: String = "",
+    /** An album's first pictures (up to 3) for the list's stacked thumbnails (`lastImages`). */
+    val lastImages: List<ListThumb> = emptyList(),
+    /** The reacted-to message's pictures (up to 3) for the reaction line (`lastReactionToImages`). */
+    val lastReactionToImages: List<ListThumb> = emptyList(),
+    /** The group badge's type (`verifiedType`): gold for business / organization. */
+    val verifiedType: String? = null,
+    /** Fariin's moderation (`mod`): its state, its "scam" / "fake" label, and a suspension's end (ms). */
+    val modState: String = "ok",
+    val modLabel: String = "",
+    val modUntilMillis: Double = 0.0,
 ) {
+    /** One small picture the list draws (iOS ListThumb / ReactionThumb). */
+    @androidx.compose.runtime.Immutable
+    data class ListThumb(val url: String, val enc: com.fariin.app.crypto.EncMeta?)
+
+    /** iOS activityFresh: a flag refreshed more than 25 s ago was left behind. No time: the row's 15 s clock decides. */
+    fun activityFresh(uid: String, nowMs: Double = System.currentTimeMillis().toDouble()): Boolean {
+        val at = typingAt[uid] ?: return true
+        if (at <= 0) return true
+        return nowMs / 1000 - at < 25
+    }
+
+    /** iOS fariinLocked: a group suspended (and not yet over) or disabled by Fariin. */
+    fun fariinLocked(nowMs: Double = System.currentTimeMillis().toDouble()): Boolean = isGroup && when (modState) {
+        "disabled" -> true
+        "suspended" -> modUntilMillis <= 0 || modUntilMillis > nowMs
+        else -> false
+    }
+
     val isGroup: Boolean get() = convType == "group"
 
     fun otherUid(me: String): String = users.firstOrNull { it != me } ?: ""
@@ -247,7 +281,33 @@ data class Conversation(
                 isChannel = data["channel"] as? Boolean ?: false,
                 postPreviewText = (data["postPreview"] as? Map<*, *>)?.let { (it["text"] as? String).orEmpty().take(300) },
                 postPreviewType = (data["postPreview"] as? Map<*, *>)?.let { it["type"] as? String },
-                verified = (data["verified"] as? Boolean ?: false) && (data["label"] as? String).isNullOrEmpty(),
+                // A Scam / Fake label (top level, or Fariin's `mod.label`) cancels the badge (iOS showsGroupBadge).
+                verified = (data["verified"] as? Boolean ?: false) && (data["label"] as? String).isNullOrEmpty() &&
+                    modLabel(data["mod"]).isEmpty(),
+                verifiedType = data["verifiedType"] as? String,
+                modState = ((data["mod"] as? Map<*, *>)?.get("state") as? String)
+                    ?.takeIf { it in listOf("ok", "limited", "suspended", "disabled") } ?: "ok",
+                modLabel = modLabel(data["mod"]),
+                modUntilMillis = millis((data["mod"] as? Map<*, *>)?.get("until")),
+                typing = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    (k as? String)?.takeIf { MessageRules.isTyping(v) }?.let { it to true } }?.toMap() ?: emptyMap(),
+                recording = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    (k as? String)?.takeIf { MessageRules.isRecording(v) }?.let { it to true } }?.toMap() ?: emptyMap(),
+                typingAt = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                    val at = (v as? String)?.substringAfter('-', "")?.toDoubleOrNull()
+                    if (k is String && at != null) k to at else null }?.toMap() ?: emptyMap(),
+                typingRawKey = (data["typing"] as? Map<*, *>)?.entries?.map { "${it.key}=${it.value}" }?.sorted()?.joinToString(",") ?: "",
+                lastImages = (data["lastImages"] as? List<*>)?.take(3)?.mapNotNull { d ->
+                    val m = d as? Map<*, *> ?: return@mapNotNull null
+                    val u = m["imageUrl"] as? String ?: return@mapNotNull null
+                    val e = com.fariin.app.crypto.EncMeta.fromMap(m["enc"] as? Map<*, *>) ?: return@mapNotNull null
+                    ListThumb(u, e)
+                } ?: emptyList(),
+                lastReactionToImages = (data["lastReactionToImages"] as? List<*>)?.take(3)?.mapNotNull { d ->
+                    val m = d as? Map<*, *> ?: return@mapNotNull null
+                    val u = (m["url"] as? String)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                    ListThumb(u, com.fariin.app.crypto.EncMeta.fromMap(m["enc"] as? Map<*, *>))
+                } ?: emptyList(),
                 e2eeOff = type == "group" && (data["e2ee"] as? Boolean) == false,
                 lastPlainTag = data["lastPlainTag"] as? String,
                 disappearSeconds = (data["disappearSeconds"] as? Number)?.toInt() ?: 0,
@@ -273,6 +333,9 @@ data class Conversation(
                 deletedPostSeqs = (data["deletedPostSeqs"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: emptyList(),
             )
         }
+
+        private fun modLabel(mod: Any?): String =
+            ((mod as? Map<*, *>)?.get("label") as? String)?.takeIf { it == "scam" || it == "fake" } ?: ""
 
         internal fun millis(v: Any?): Double = when (v) {
             is Timestamp -> v.seconds * 1000.0 + v.nanoseconds / 1_000_000.0
