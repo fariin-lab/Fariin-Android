@@ -125,6 +125,11 @@ import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.theme.Fariin
 import com.fariin.app.R
 
+/** A channel tops its page up while fewer posts than this show (deleted posts and notices are hidden). */
+private const val TOP_UP_ROWS = 20
+/** At most this many extra pages per open. */
+private const val TOP_UP_PAGES = 10
+
 /** Everything the chat screen draws; the same for a live chat and the debug demo. */
 data class ThreadUi(
     val title: String,
@@ -238,9 +243,27 @@ fun ThreadScreen(
             androidx.compose.runtime.CompositionLocalProvider(LocalThreadCid provides ui.cid) {
                 // A channel shows its posts only (owner 2026-11-06): no deleted rows, and followers and
                 // visitors see no system lines or pin notices at all (ChannelRules.shownMessages).
-                val shownUi = if (ui.channel == null) ui else remember(ui) {
+                // TOP-UP (owner 2026-11-08, VE3: 60 newest docs all deleted posts and notices, one live
+                // post further back): the filter left 0 rows, the pager only runs with rows, so a
+                // follower saw the empty card. While fewer than 20 posts show and older history
+                // exists, load the next page (10 pages per open at most); until the start is reached
+                // or the pages run out, a spinner, never the empty card.
+                var topUps by remember(ui.cid) { androidx.compose.runtime.mutableIntStateOf(0) }
+                val shownUi = if (ui.channel == null) ui else remember(ui, topUps) {
                     val admin = ui.channel.role == com.fariin.app.channel.ChannelRules.Role.ADMIN
-                    ui.copy(messages = com.fariin.app.channel.ChannelRules.shownMessages(ui.messages, admin))
+                    val kept = com.fariin.app.channel.ChannelRules.shownMessages(ui.messages, admin)
+                    // Pages spent with history still left: say so as "no more" so the screen settles.
+                    ui.copy(messages = kept, canLoadOlder = ui.canLoadOlder && (kept.isNotEmpty() || topUps < TOP_UP_PAGES))
+                }
+                if (ui.channel != null) {
+                    val kept = shownUi.messages.size
+                    LaunchedEffect(kept, ui.canLoadOlder, ui.loadingOlder, ui.loaded, ui.synced, ui.messages.size) {
+                        // After the server has answered (the saved copy has no page to go on from).
+                        if (ui.loaded && ui.synced && ui.canLoadOlder && !ui.loadingOlder && kept < TOP_UP_ROWS && topUps < TOP_UP_PAGES) {
+                            topUps++
+                            onLoadOlder()
+                        }
+                    }
                 }
                 // Not known yet whether this chat is a channel I visit: a loading ring, not a group chat.
                 if (ui.channelWaiting)
@@ -861,6 +884,9 @@ private fun ThreadContent(
             } else if (ui.messages.isEmpty() && ui.isGroup && ui.channel == null && !ui.notAMember && ui.groupDoc.isNotEmpty()) {
                 // iOS encryptionNotice: an empty group shows its welcome card (GroupWelcomeCard.kt).
                 GroupWelcomeCard(ui, onStep = { peopleNav.groupStep(ui.cid, it) }, modifier = Modifier.align(Alignment.Center))
+            } else if (ui.messages.isEmpty() && ch != null && (ui.canLoadOlder || ui.loadingOlder) && ui.loaded) {
+                // Posts may still be further back (the top-up is fetching): a spinner, not "empty".
+                com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty() && ch != null) {
                 // An empty channel shows its own card (iOS: the channel card from the first frame).
                 com.fariin.app.ui.channels.ChannelIntroCard(ch, Modifier.align(Alignment.Center))
