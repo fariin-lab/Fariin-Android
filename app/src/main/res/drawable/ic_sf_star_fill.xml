@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Our own drawing in the iOS outline style, for the place iOS uses "star.fill". Not Material. -->
+<!-- Our own drawing in the iOS outline style for the iOS "star.fill: a solid five-point star with soft corners" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:pathData="M12,3.2L14.41,9.28L20.94,9.7L15.9,13.87L17.53,20.2L12,16.7L6.47,20.2L8.1,13.87L3.06,9.7L9.59,9.28Z"
-        android:fillColor="#FF000000" />
+    <path android:pathData="M12,3.7L14.29,9.44L20.46,9.85L15.71,13.81L17.23,19.8L12,16.5L6.77,19.8L8.29,13.81L3.54,9.85L9.71,9.44Z"
+        android:fillColor="#FF000000" android:strokeColor="#FF000000" android:strokeWidth="1.4" android:strokeLineJoin="round" />
 </vector>

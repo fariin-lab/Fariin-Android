@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Our own drawing in the iOS outline style, for the place iOS uses "checkmark.circle.fill". Not Material. -->
+<!-- Our own drawing in the iOS outline style for the iOS "checkmark.circle.fill: a solid disc with the tick cut out" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:pathData="M2,12a10,10 0 1,0 20,0a10,10 0 1,0 -20,0ZM7.04,12.98L10.73,16.55L17.09,9.75L15.71,8.45L10.67,13.85L8.36,11.62Z"
+    <path android:pathData="M12,12m-9.8,0a9.8,9.8 0,1 1,19.6,0a9.8,9.8 0,1 1,-19.6,0ZM6.96,12.94L10.62,16.59L17.05,9.82L15.75,8.58L10.58,14.01L8.24,11.66Z"
         android:fillColor="#FF000000" android:fillType="evenOdd" />
 </vector>

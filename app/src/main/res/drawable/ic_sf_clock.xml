@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Our own drawing in the iOS outline style, for the place iOS uses "clock". Not Material. -->
+<!-- Our own drawing in the iOS outline style for the iOS "clock: a ring with two hands" place.
+     Owner 2026-11-08: iOS-look icons only, never the Android ones. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:pathData="M2.9,12a9.1,9.1 0 1,0 18.2,0a9.1,9.1 0 1,0 -18.2,0Z"
-        android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
-    <path android:pathData="M12,6.8V12L15.4,14.1"
+    <path android:pathData="M12,12m-9,0a9,9 0,1 1,18,0a9,9 0,1 1,-18,0Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M12,7V12L15.3,14"
         android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
 </vector>
