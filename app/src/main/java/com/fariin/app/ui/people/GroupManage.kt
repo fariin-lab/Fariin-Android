@@ -226,7 +226,7 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             GroupManageRows(doc, me, cid, open)
             // Bubble Styles: back here, off the group page (iOS 2026-11-08).
-            if (bubbleStylesSwitchShown(me, doc)) SettingsSection { BubbleStylesSwitchRow(cid, me, doc, last = true) }
+            // No Bubble Styles switch here (iOS 19410e2c4, owner 2026-11-08: "completely remove").
             SettingsSection {
                 DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false,
                     badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)
@@ -237,53 +237,6 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
         }
     }
 }
-
-/**
- * Bubble Styles on or off for the whole group (server `setGroupBubbleStyles`, which writes the
- * server-only `bubbleStylesOff`). Only the owner, or an admin with the Change Info right, sees it:
- * the server refuses anyone else, members-may-edit-info included. While the write runs the switch
- * shows the new position and stays still; the group's doc then confirms it, or it springs back
- * with the reason.
- */
-@Composable
-internal fun BubbleStylesSwitchRow(cid: String, me: String, doc: Map<String, Any?>, last: Boolean) {
-    if (!bubbleStylesSwitchShown(me, doc)) return
-    val scope = rememberCoroutineScope()
-    val off = doc["bubbleStylesOff"] == true
-    var pending by remember { mutableStateOf<Boolean?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    // The doc caught up with the write (or a slow listener: let the switch go after a while).
-    LaunchedEffect(off, pending) {
-        val p = pending ?: return@LaunchedEffect
-        if (off == !p) pending = null else { delay(8_000); pending = null }
-    }
-    val on = pending ?: !off
-    fun flip(to: Boolean) {
-        if (pending != null) return
-        pending = to
-        scope.launch {
-            val r = runCatching {
-                com.google.firebase.functions.FirebaseFunctions.getInstance(com.fariin.app.data.AuthRepository.FUNCTIONS_REGION)
-                    .getHttpsCallable("setGroupBubbleStyles").call(mapOf("cid" to cid, "off" to !to)).await()
-            }
-            r.exceptionOrNull()?.let { e ->
-                pending = null
-                error = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.message?.takeIf { it.isNotBlank() }
-                    ?: "Check your connection and try again."
-            } ?: Snack.show(if (to) "Bubble styles are on in this group." else "Bubble styles are off in this group.")
-        }
-    }
-    SettingsRow("Bubble Styles", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat),
-        trailing = Trailing.NONE, last = last,
-        accessory = { androidx.compose.material3.Switch(checked = on, enabled = pending == null, onCheckedChange = { flip(it) },
-            colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Fariin.colors.accent,
-                checkedThumbColor = Fariin.colors.onAccent, checkedBorderColor = Fariin.colors.accent)) }) { flip(!on) }
-    Problem(error) { error = null }
-}
-
-/** Only the owner, or an admin with the Change Info right (the server refuses anyone else). */
-internal fun bubbleStylesSwitchShown(me: String, doc: Map<String, Any?>): Boolean =
-    com.fariin.app.data.BubbleStyles.SHOWN && doc["channel"] != true && Team.from(doc).may(me, Right.CHANGE_INFO)
 
 /** Draws the page on top of the stack; back pops it. False when nothing is pushed. */
 @Composable
