@@ -83,11 +83,7 @@ fun GlassBarPage(
             // The glass must see what the eye sees: the bar's solid page colour and its fade, not the
             // rows hidden under them (the back circle showed ghost letters from under the bar,
             // Pixel 2026-11-06).
-            Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
-                Box(Modifier.fillMaxWidth().height(with(density) { barPx.toDp() }).background(page))
-                Box(Modifier.fillMaxWidth().height(20.dp).graphicsLayer { alpha = fade.value }
-                    .background(Brush.verticalGradient(listOf(page, page.copy(alpha = 0f)))))
-            }
+            Box(Modifier.fillMaxWidth().align(Alignment.TopCenter).height(with(density) { barPx.toDp() }).background(page))
         }
         Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
             Box(Modifier.fillMaxWidth().onSizeChanged { barPx = it.height }) {
@@ -98,8 +94,9 @@ fun GlassBarPage(
                     LocalGlassBar provides true,
                 ) { bar() }
             }
-            Box(Modifier.fillMaxWidth().height(20.dp).graphicsLayer { alpha = fade.value }
-                .background(Brush.verticalGradient(listOf(page, page.copy(alpha = 0f)))))
+            // ONE SOFT LINE under the bar once rows pass under it (owner 2026-11-08: the blur and the
+            // fade never came out right; a hairline, as the high-end apps), fading in with the scroll.
+            Box(Modifier.fillMaxWidth().height(0.5.dp).graphicsLayer { alpha = fade.value }.background(c.separator))
         }
     }
 }
