@@ -1,5 +1,6 @@
 package com.fariin.app
 
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -309,11 +310,37 @@ class MainActivity : ComponentActivity() {
                 override val onBackPressedDispatcher = OnBackPressedDispatcher()
                 override val lifecycle get() = this@MainActivity.lifecycle
             } }
-            // During a call: the bar on top, the app under it (the bar holds the status bar's strip).
+            // During a call: the bar on top (it holds the status bar's strip) and the app under it as a
+            // card, its top corners rounded and 6dp in from the sides over the bar's dark colour. The bar
+            // slides in and out and the card's corners and margins follow it over 300 ms, so the app
+            // becomes a card and goes back to full screen smoothly. The card consumes exactly the insets
+            // the bar and the margins already cover, so the pages inside keep their status bar, side
+            // and keyboard insets right while it moves; the bottom runs to the screen's edge.
             val callBar = com.fariin.app.ui.call.ongoingCallShown()
-            androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-            com.fariin.app.ui.call.OngoingCallBar()
-            Box(Modifier.fillMaxWidth().weight(1f).then(if (callBar) Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.statusBars) else Modifier)) {
+            val cardT by androidx.compose.animation.core.animateFloatAsState(if (callBar) 1f else 0f,
+                tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "callCard")
+            var barPx by remember { mutableStateOf(0) }
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val barDp = with(density) { barPx.toDp() }
+            val card = cardT > 0.001f
+            androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()
+                .then(if (card) Modifier.background(com.fariin.app.ui.call.CallBarBackdrop) else Modifier)) {
+            androidx.compose.animation.AnimatedVisibility(callBar,
+                modifier = Modifier.onSizeChanged { barPx = it.height },
+                enter = androidx.compose.animation.expandVertically(tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing), expandFrom = androidx.compose.ui.Alignment.Top),
+                exit = androidx.compose.animation.shrinkVertically(tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing), shrinkTowards = androidx.compose.ui.Alignment.Top)) {
+                com.fariin.app.ui.call.OngoingCallBar()
+            }
+            val side = 6.dp * cardT
+            val above = 2.dp * cardT
+            Box(Modifier.fillMaxWidth().weight(1f)
+                .then(if (card) Modifier
+                    .consumeWindowInsets(androidx.compose.foundation.layout.PaddingValues(start = side, end = side, top = barDp + above))
+                    .padding(start = side, end = side, top = above)
+                    .graphicsLayer {
+                        shape = com.fariin.app.ui.call.CallCardShape(26.dp.toPx() * cardT)
+                        clip = true
+                    } else Modifier)) {
             Box(Modifier.fillMaxSize().graphicsLayer {
                 alpha = if (shell.shown) shell.alpha else 0f
                 translationX = shell.shift * size.width

@@ -180,6 +180,10 @@ class CallActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         CallManager.init(this)
         handle(intent)
+        // A 1:1 call's window rect follows the screen's size (set once laid out, again after a turn).
+        window.decorView.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, orr, ob ->
+            if (!groupMode && !inPip && (r - l != orr - ol || b - t != ob - ot)) pipWish?.let { updatePip(it) }
+        }
         setContent {
             FariinTheme(dark = true) {
                 if (ringMode) {
@@ -292,17 +296,42 @@ class CallActivity : ComponentActivity() {
 
     private fun pipParams(auto: Boolean): PictureInPictureParams {
         val u = CallManager.ui.value
+        val tall = CallRouting.pipVideo(u.cameraOn, u.remoteCameraOn)
         val b = PictureInPictureParams.Builder()
-            .setAspectRatio(if (CallRouting.pipVideo(u.cameraOn, u.remoteCameraOn)) Rational(9, 16) else Rational(1, 1))
+            .setAspectRatio(if (tall) Rational(9, 16) else Rational(1, 1))
+        pipSource(if (tall) 9f / 16f else 1f)?.let { b.setSourceRectHint(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setAutoEnterEnabled(auto).setSeamlessResizeEnabled(true)
         return b.build()
     }
+
+    /**
+     * Where the window flies from (iOS: the call screen shrinks into its floating card): the part of
+     * the call screen with the window's shape, centred, in window pixels. The system grows the call
+     * screen from the window back out of the same rect on the way back (Android 12 and later), so
+     * minimising and opening are one smooth flight instead of a jump. Null before the first layout.
+     */
+    private fun pipSource(aspect: Float): android.graphics.Rect? {
+        val v = window?.decorView ?: return null
+        val w = v.width; val h = v.height
+        if (w <= 0 || h <= 0) return null
+        return if (w.toFloat() / h > aspect) {
+            val rw = (h * aspect).toInt(); val l = (w - rw) / 2
+            android.graphics.Rect(l, 0, l + rw, h)
+        } else {
+            val rh = (w / aspect).toInt(); val t = (h - rh) / 2
+            android.graphics.Rect(0, t, w, t + rh)
+        }
+    }
+
+    /** The last [updatePip] wish, so a new layout (a turn of the phone) refreshes the window's rect. */
+    private var pipWish: Boolean? = null
 
     private fun pipAllowed() = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     /** Android 12 and later go into the window by themselves on Home; older ones in [onUserLeaveHint]. */
     private fun updatePip(wanted: Boolean) {
         if (!pipAllowed()) return
+        pipWish = wanted
         try { setPictureInPictureParams(pipParams(wanted)) } catch (_: Exception) {}
     }
 
@@ -328,7 +357,9 @@ class CallActivity : ComponentActivity() {
         val g = GroupCall.ui.value
         if (pipAllowed() && (g.cameraOn || g.members.any { it.video != null || it.screen != null })) {
             try {
-                enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16)).build()); return
+                val b = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16))
+                pipSource(9f / 16f)?.let { b.setSourceRectHint(it) }
+                enterPictureInPictureMode(b.build()); return
             } catch (_: Exception) {}
         }
         moveTaskToBack(true)
