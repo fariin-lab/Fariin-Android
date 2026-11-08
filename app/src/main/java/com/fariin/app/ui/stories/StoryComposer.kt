@@ -124,6 +124,8 @@ object StoryUploads {
     fun start(context: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
               hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false,
               lists: List<com.fariin.app.data.StoryListDoc> = emptyList()) {
+        // A group story picked on the Share Story page, handed over for this call only (GroupStoryCompose).
+        val group = com.fariin.app.data.GroupStoryCompose.pending
         state.value = State.Uploading
         pending.value = media.jpeg
         // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
@@ -134,7 +136,7 @@ object StoryUploads {
             val video = media.video
             val pieces = video?.let { com.fariin.app.data.StoryLimits.segments(it.info.durationSec) }.orEmpty()
             state.value = if (video == null || pieces.isEmpty()) {
-                postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists)
+                postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group)
             } else {
                 // iOS postVideo: a clip past 90 s goes as several stories in order, each its own
                 // 90 s piece; the caption and the tap areas ride the first, the one seen first.
@@ -152,7 +154,7 @@ object StoryUploads {
                         val clip = part.video?.let { v -> StoryMedia.Video(v.file, v.info.copy(bytes = file.length())) }
                         val one = StoryMedia.Prepared(part.jpeg, part.blurThumb, clip, part.width, part.height,
                             if (i == 0) media.stickers else emptyList(), media.repostOf)
-                        result = postOne(app, me, one, if (i == 0) caption else "", choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists)
+                        result = postOne(app, me, one, if (i == 0) caption else "", choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group)
                         if (result != null) break
                     } finally {
                         file.delete()   // the outbox keeps its own copy
@@ -189,11 +191,11 @@ object StoryUploads {
     private suspend fun postOne(app: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice,
                                 picked: Set<String>, hours: Int, convs: List<Conversation>, captureSwitch: Boolean,
                                 myFriends: com.fariin.app.data.StoryListDoc, hidden: Set<String>,
-                                lists: List<com.fariin.app.data.StoryListDoc>): State? {
+                                lists: List<com.fariin.app.data.StoryListDoc>, group: com.fariin.app.data.GroupStoryPost?): State? {
         // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start.
-        val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists)
+        val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists, group)
         return try {
-            StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket)
+            StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket, group = group)
             ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
             null
         } catch (e: StoryService.PostRefused) {

@@ -31,7 +31,8 @@ object StoryOutbox {
 
     /** Written before the upload starts; returns the story id the post must use. */
     fun write(c: Context, owner: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice,
-              picked: Set<String>, hours: Int, capture: Boolean, lists: List<StoryListDoc>): String? = runCatching {
+              picked: Set<String>, hours: Int, capture: Boolean, lists: List<StoryListDoc>,
+              group: GroupStoryPost? = null): String? = runCatching {
         val id = StoryRules.newStoryId()
         val dir = File(root(c), id).also { it.mkdirs() }
         File(dir, "photo.jpg").writeBytes(media.jpeg)
@@ -42,6 +43,11 @@ object StoryOutbox {
             .put("blur", media.blurThumb).put("w", media.width).put("h", media.height)
             .put("stickers", JSONArray(media.stickers.map { JSONObject(StoryTaps.asMap(it)) }))
         media.repostOf?.let { o.put("repost", JSONObject(it.asMap())) }
+        // A group story keeps its group through a retry (iOS: the tag rides the upload queue).
+        group?.let { g ->
+            o.put("group", JSONObject().put("id", g.target.id).put("name", g.target.name).put("photo", g.target.photoUrl ?: "")
+                .put("count", g.target.memberCount).put("channel", g.target.isChannel).put("replies", g.allowsReplies))
+        }
         media.video?.info?.let { o.put("video", JSONObject().put("d", it.durationSec).put("w", it.width).put("h", it.height).put("b", it.bytes)) }
         File(dir, "ticket.json").writeText(o.toString())
         active += id
@@ -92,10 +98,14 @@ object StoryOutbox {
             val picked = o.optJSONArray("picked")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }.orEmpty()
             val listIds = o.optJSONArray("lists")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
             val lists = StoryPrivacyStore.custom.value.filter { it.id in listIds }
+            val group = o.optJSONObject("group")?.takeIf { it.optString("id").isNotEmpty() }?.let { g ->
+                GroupStoryPost(GroupStoryTarget(g.optString("id"), g.optString("name"), g.optString("photo").ifEmpty { null },
+                    g.optInt("count"), g.optBoolean("channel")), g.optBoolean("replies", true))
+            }
             active += id   // running: not "waiting" to the alert while it goes
             try {
                 StoryService(me).post(media, o.optString("caption"), choice, picked, o.optInt("hours", 24), convs, o.optBoolean("capture"),
-                    StoryPrivacyStore.myFriends.value, StoryPrivacyStore.hidden.value, lists, fixedId = id)
+                    StoryPrivacyStore.myFriends.value, StoryPrivacyStore.hidden.value, lists, fixedId = id, group = group)
                 dir.deleteRecursively()
             } catch (e: StoryService.PostRefused) {
                 dir.deleteRecursively()

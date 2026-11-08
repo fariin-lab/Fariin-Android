@@ -172,33 +172,52 @@ class StoryService(
         lists: List<StoryListDoc> = emptyList(),
         /** The outbox's id, so a resumed post writes the story it promised (StoryOutbox). */
         fixedId: String? = null,
+        /** A group story (iOS StoryAudienceTag.group): the group is the audience and [choice] is unused. */
+        group: GroupStoryPost? = null,
     ): String {
         if (me.isEmpty()) throw PostRefused("Not signed in.")
         // A custom post names the people of its ticked lists (iOS postToLists: the union).
-        val custom = choice == StoryAudienceChoice.CUSTOM
+        val custom = group == null && choice == StoryAudienceChoice.CUSTOM
+        val everyone = group == null && choice == StoryAudienceChoice.EVERYONE
         val people = if (custom) lists.flatMap { it.members }.toSet() else picked
         if (custom && lists.isEmpty()) throw PostRefused(EMPTY_AUDIENCE)
-        val glow = glowAudience(choice, convs)
-        val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom, glow.first, glow.second)
-        val recipients = reached
-        val mode = if (choice == StoryAudienceChoice.EVERYONE) "everyone" else how
-        val replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists)
-            else StoryPrivacyRules.allowsReplies(choice, myFriends, StoryPrivacyStore.glowers.value)
-        val capture = StoryPrivacyRules.captureProtected(choice, captureSwitch)
-        // iOS "No one will see this": a list that resolves to nobody while I do have chats.
-        if ((!choice.needsPeople || custom) && recipients.isEmpty() && StoryRules.contacts(me, convs).isNotEmpty())
-            throw PostRefused(EMPTY_AUDIENCE)
-        if (choice.needsPeople && recipients.isEmpty()) throw PostRefused("Pick at least one person.")
+        val recipients: Set<String>
+        val mode: String
+        val replies: Boolean
+        val capture: Boolean
+        if (group != null) {
+            // iOS resolveAudience for a group tag: the members as the server has them, mode "group".
+            // A channel's story keeps replies on underneath (iOS postToGroup: its followers get no
+            // reply field anyway, and the rules refuse a heart on a story with replies off).
+            recipients = GroupStoryRights.audience(me, group.target.id)
+            mode = "group"
+            replies = group.allowsReplies || group.target.isChannel
+            capture = captureSwitch
+        } else {
+            val glow = glowAudience(choice, convs)
+            val (reached, how) = StoryPrivacyRules.resolve(StoryRules.contacts(me, convs), choice, people, myFriends, hiddenFrom, glow.first, glow.second)
+            recipients = reached
+            mode = if (everyone) "everyone" else how
+            replies = if (custom) StoryPrivacyRules.listsAllowReplies(lists)
+                else StoryPrivacyRules.allowsReplies(choice, myFriends, StoryPrivacyStore.glowers.value)
+            capture = StoryPrivacyRules.captureProtected(choice, captureSwitch)
+            // iOS "No one will see this": a list that resolves to nobody while I do have chats.
+            if ((!choice.needsPeople || custom) && recipients.isEmpty() && StoryRules.contacts(me, convs).isNotEmpty())
+                throw PostRefused(EMPTY_AUDIENCE)
+            if (choice.needsPeople && recipients.isEmpty()) throw PostRefused("Pick at least one person.")
+        }
         countAgainstBudget()
         val id = fixedId ?: StoryRules.newStoryId()
         val doc = db.collection("stories").document(id)
         val expires = Timestamp(Date(System.currentTimeMillis() + hours * 3_600_000L))
         val isVideo = media.video != null
         val payload = StoryRules.payload(
-            me, isVideo, id, caption.trim(), choice, mode, recipients, expires, FieldValue.serverTimestamp(),
-            media.blurThumb, media.video?.info, allowsReplies = replies, captureProtected = capture,
+            me, isVideo, id, caption.trim(), if (group != null) StoryAudienceChoice.MY_CHATS else choice, mode, recipients, expires,
+            FieldValue.serverTimestamp(), media.blurThumb, media.video?.info, allowsReplies = replies, captureProtected = capture,
             stickers = media.stickers,
         ).let { p -> media.repostOf?.let { p + ("repostOf" to it.asMap()) } ?: p }
+            // A group story's fields laid over the ordinary ones (iOS payload.merge(groupStoryFields)).
+            .let { p -> if (group != null) p + GroupStoryRights.fields(group.target) else p }
         val mainRef = storage.reference.child(if (isVideo) StoryRules.videoPath(id) else StoryRules.photoPath(id))
         val thumbRef = storage.reference.child(StoryRules.thumbPath(id))
         try {
@@ -217,7 +236,7 @@ class StoryService(
                 main.await() to thumb.await()
             }
             doc.update(if (isVideo) mapOf("mediaUrl" to urls.first, "thumbUrl" to urls.second) else mapOf("mediaUrl" to urls.first)).await()
-            if (choice == StoryAudienceChoice.EVERYONE) {
+            if (everyone) {
                 runCatching {
                     db.collection("users").document(me).collection("publicStories").document(id).set(mapOf(
                         "authorUid" to me, "createdAt" to FieldValue.serverTimestamp(), "expiresAt" to expires,

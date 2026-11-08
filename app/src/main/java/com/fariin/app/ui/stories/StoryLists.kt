@@ -32,6 +32,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -127,7 +128,13 @@ private const val SELECTED_KEY = "storyAudienceSelected"
  * slides up with rounded corners, a grab handle, X and the title; a tap above it closes it.
  */
 @Composable
-private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+private fun StorySheet(
+    title: String,
+    onClose: () -> Unit,
+    /** A back chevron in place of the X (iOS groupBody picked from the audiences): one step back, the sheet stays. */
+    onBackArrow: (() -> Unit)? = null,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
     val c = Fariin.colors
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     // The sheet's height in px and how far it is pulled down: it rises from below on open and follows
@@ -184,7 +191,7 @@ private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable 
     val dragState = androidx.compose.foundation.gestures.rememberDraggableState { d ->
         scope.launch { drop.snapTo((drop.value + d).coerceAtLeast(0f)) }
     }
-    androidx.activity.compose.BackHandler { dismiss() }
+    androidx.activity.compose.BackHandler { if (onBackArrow != null) onBackArrow() else dismiss() }
     val shade = if (sheetH > 0f) (1f - drop.value / sheetH).coerceIn(0f, 1f) else 0f
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f * shade))
         .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { dismiss() }) {
@@ -203,7 +210,9 @@ private fun StorySheet(title: String, onClose: () -> Unit, content: @Composable 
                 Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).size(40.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.35f)))
                 // iOS inline bar: the X in its round glass button at the start, the title in the middle.
                 Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp)) {
-                    com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.Close, "Close", onClick = { dismiss() },
+                    if (onBackArrow != null) com.fariin.app.ui.components.FloatingIcon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Back",
+                        onClick = onBackArrow, modifier = Modifier.align(Alignment.CenterStart), circle = true)
+                    else com.fariin.app.ui.components.FloatingIcon(androidx.compose.material.icons.Icons.Filled.Close, "Close", onClick = { dismiss() },
                         modifier = Modifier.align(Alignment.CenterStart), circle = true)
                     Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
                 }
@@ -548,7 +557,7 @@ fun NewAudienceButton(canAddCustom: Boolean, onCustom: () -> Unit, onOneTime: ((
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             NewItem("New Custom Story", "Visible only to specific people.", painterResource(R.drawable.ic_story_folder), canAddCustom) { open = false; onCustom() }
-            NewItem("New Group Story", "Share to the members of a group you run.", rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)), onGroup != null) { open = false; onGroup?.invoke() }
+            NewItem("Groups & Channels", "Post to a group or channel you run.", rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)), onGroup != null) { open = false; onGroup?.invoke() }
             NewItem("One-Time Story", "Can only be viewed once by each recipient.", rememberVectorPainter(Icons.Outlined.LocalFireDepartment), onOneTime != null) { open = false; onOneTime?.invoke() }
         }
     }
@@ -638,6 +647,11 @@ fun ShareStoryAudiencePage(
     var blockShots by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var oneTimePicking by remember { mutableStateOf(false) }
+    // GROUP STORY (iOS pickedGroup / groupPicking): picked in Groups & Channels from + New, the
+    // sheet becomes the group's last sheet (iOS groupBody) with its own two switches.
+    var groupPicking by remember { mutableStateOf(false) }
+    var pickedGroup by remember { mutableStateOf<com.fariin.app.data.GroupStoryTarget?>(null) }
+    var groupReplies by remember { mutableStateOf(true) }
     // A ticked list deleted elsewhere drops out; the last one gone falls back to My Chats.
     val liveTicked = ticked.filter { id -> custom.any { it.id == id } }.toSet()
     if (choice == StoryAudienceChoice.CUSTOM && liveTicked.isEmpty() && custom.isNotEmpty() && ticked.isNotEmpty()) {
@@ -645,6 +659,16 @@ fun ShareStoryAudiencePage(
     }
     val oneTimeActive = choice == StoryAudienceChoice.ONE_TIME && oneTime.isNotEmpty()
 
+    if (groupPicking) {
+        GroupStoryPickerPage(me, conversations, onPick = { t ->
+            // iOS onPick: the one-time people go; the group is now the audience.
+            if (choice == StoryAudienceChoice.ONE_TIME) choice = StoryAudienceChoice.MY_CHATS
+            oneTime = emptySet()
+            pickedGroup = t
+            groupPicking = false
+        }, onCancel = { groupPicking = false })
+        return
+    }
     if (creating) {
         CreateCustomStoryFlow(people, onCreated = { l ->
             oneTime = emptySet()
@@ -678,8 +702,33 @@ fun ShareStoryAudiencePage(
         else -> true
     } && !busy
 
-    StorySheet(if (editing == null) "Share Story" else "Edit Viewers", onClose = onBack) {
-        run {
+    val g = pickedGroup
+    StorySheet(if (editing == null) "Share Story" else "Edit Viewers", onClose = onBack,
+        // Picked here, the group's sheet steps back to the audiences (iOS chevron.backward).
+        onBackArrow = if (g != null) ({ pickedGroup = null }) else null) {
+        if (g != null) {
+            // iOS groupBody: "Post story as" the group, one row, Block screenshots, Allow Replies
+            // (never on a channel), and the same Post Story button. The group is the audience.
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                SettingsSection(header = "Post story as ${g.name}",
+                    footer = if (g.isChannel) "The channel's followers see this story. It disappears after 24 hours."
+                        else "Only members of this group can see this story. It disappears after 24 hours.") {
+                    GroupStoryRow(g, trailing = { Tick(true) })
+                }
+                SettingsSection(footer = StoryPrivacyRules.captureFooter(StoryAudienceChoice.MY_CHATS)) {
+                    SwitchRow("Block screenshots", blockShots, last = true) { blockShots = it }
+                }
+                if (!g.isChannel) SettingsSection {
+                    SwitchRow("Allow Replies", groupReplies, last = true) { groupReplies = it }
+                }
+            }
+            PostStoryButton("Post Story", ready = !busy, busy = busy) {
+                // Handed to the upload for this one call (GroupStoryCompose); the audience row is not remembered.
+                com.fariin.app.data.GroupStoryCompose.during(com.fariin.app.data.GroupStoryPost(g, groupReplies)) {
+                    onPost(StoryAudienceChoice.MY_CHATS, emptySet(), emptyList(), blockShots)
+                }
+            }
+        } else run {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 val footer = when {
                     oneTimeActive -> StoryAudienceChoice.ONE_TIME.footer
@@ -689,7 +738,8 @@ fun ShareStoryAudiencePage(
                 }
                 SettingsSection(header = "Who can see your story", footer = footer,
                     headerAction = if (editing == null) {
-                        { NewAudienceButton(StoryPrivacyStore.canAddCustom, onCustom = { creating = true }, onOneTime = { oneTimePicking = true }) }
+                        { NewAudienceButton(StoryPrivacyStore.canAddCustom, onCustom = { creating = true }, onOneTime = { oneTimePicking = true },
+                            onGroup = { groupPicking = true }) }
                     } else null) {
                     val rows = 2 + custom.size + (if (oneTimeActive) 1 else 0) + (if (glowOn) 1 else 0)
                     var n = 0
@@ -736,34 +786,117 @@ fun ShareStoryAudiencePage(
                     }
                 }
             }
-            // iOS postButton: a 52 tall capsule in the action colour, 16 in from the sides, 10 above and
-            // below, squeezing to 0.88 under the finger (StoryPressStyle).
-            val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val pressed by press.collectIsPressedAsState()
-            val squeeze by androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.88f else 1f,
-                androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 630f), label = "post-press")
-            Box(
-                Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth().height(52.dp)
-                    .graphicsLayer { scaleX = squeeze; scaleY = squeeze; alpha = if (pressed) 0.85f else 1f }
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(if (ready) c.accent else c.accent.copy(alpha = 0.35f))
-                    .clickable(interactionSource = press, indication = null, enabled = ready) {
-                        // Remembered between posts, as iOS storyAudienceSelected.
-                        if (editing == null) runCatching {
-                            prefs.edit().putString(SELECTED_KEY, when (choice) {
-                                StoryAudienceChoice.EVERYONE -> "everyone"
-                                StoryAudienceChoice.GLOWERS -> StoryPrivacyRules.GLOWERS_ID
-                                StoryAudienceChoice.CUSTOM -> chosenLists.firstOrNull()?.id ?: "myFriends"
-                                else -> "myFriends"
-                            }).apply()
+            PostStoryButton(if (editing == null) "Post Story" else "Update", ready = ready, busy = busy) {
+                // Remembered between posts, as iOS storyAudienceSelected.
+                if (editing == null) runCatching {
+                    prefs.edit().putString(SELECTED_KEY, when (choice) {
+                        StoryAudienceChoice.EVERYONE -> "everyone"
+                        StoryAudienceChoice.GLOWERS -> StoryPrivacyRules.GLOWERS_ID
+                        StoryAudienceChoice.CUSTOM -> chosenLists.firstOrNull()?.id ?: "myFriends"
+                        else -> "myFriends"
+                    }).apply()
+                }
+                onPost(choice, if (choice == StoryAudienceChoice.ONE_TIME) oneTime else emptySet(), chosenLists,
+                    StoryPrivacyRules.captureProtected(choice, blockShots))
+            }
+        }
+    }
+}
+
+/**
+ * iOS postButton: a 52 tall capsule in the action colour, 16 in from the sides, 10 above and below,
+ * squeezing to 0.88 under the finger (StoryPressStyle).
+ */
+@Composable
+private fun PostStoryButton(title: String, ready: Boolean, busy: Boolean, onClick: () -> Unit) {
+    val c = Fariin.colors
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    val squeeze by androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.88f else 1f,
+        androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 630f), label = "post-press")
+    Box(
+        Modifier.padding(horizontal = 16.dp, vertical = 10.dp).fillMaxWidth().height(52.dp)
+            .graphicsLayer { scaleX = squeeze; scaleY = squeeze; alpha = if (pressed) 0.85f else 1f }
+            .clip(RoundedCornerShape(26.dp))
+            .background(if (ready) c.accent else c.accent.copy(alpha = 0.35f))
+            .clickable(interactionSource = press, indication = null, enabled = ready, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (busy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = c.onAccent)
+        else Text(title, color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** One group, as the picker and the last sheet show it (iOS GroupStoryRow): photo, name, members or followers. */
+@Composable
+private fun GroupStoryRow(g: com.fariin.app.data.GroupStoryTarget, trailing: @Composable () -> Unit = {}, onClick: (() -> Unit)? = null) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        // A channel's photo is a squircle (iOS avatarSquircle).
+        Avatar(g.photoUrl, 40.dp, squircle = g.isChannel)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(g.name, color = c.label, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(com.fariin.app.data.GroupStoryRights.countLine(g.memberCount, g.isChannel),
+                color = c.secondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(8.dp))
+        trailing()
+    }
+}
+
+/**
+ * GROUPS & CHANNELS (iOS GroupStoryPicker): two tabs over the groups and channels I may post a
+ * story in (GroupStoryRights, each read from its own document), a row each, and a footer. Someone
+ * who runs only channels lands on Channels.
+ */
+@Composable
+private fun GroupStoryPickerPage(
+    me: String,
+    conversations: List<Conversation>,
+    onPick: (com.fariin.app.data.GroupStoryTarget) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val c = Fariin.colors
+    var all by remember { mutableStateOf<List<com.fariin.app.data.GroupStoryTarget>?>(null) }
+    var channels by remember { mutableStateOf(false) }
+    var tabChosen by remember { mutableStateOf(false) }
+    val convIds = conversations.map { it.id }
+    LaunchedEffect(me, convIds) {
+        val found = com.fariin.app.data.GroupStoryRights.eligible(me, conversations)
+        all = found
+        if (!tabChosen && found.none { !it.isChannel } && found.any { it.isChannel }) channels = true
+    }
+    StorySheet("Groups & Channels", onClose = onCancel) {
+        Box(Modifier.fillMaxWidth().padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
+            com.fariin.app.ui.components.FloatingSegments(listOf("Groups", "Channels"), if (channels) 1 else 0,
+                onSelect = { channels = it == 1; tabChosen = true }, modifier = Modifier.width(220.dp))
+        }
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(top = 4.dp, bottom = 16.dp)) {
+            val list = all
+            if (list == null) {
+                Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                    com.fariin.app.ui.components.FariinSpinner(size = 28.dp, color = c.secondary)
+                }
+            } else {
+                val shown = list.filter { it.isChannel == channels }
+                if (shown.isEmpty()) {
+                    SettingsSection {
+                        Text(if (channels) "You can post a story in channels you own, or where you're an admin who may post stories."
+                            else "You can post a group story in groups you own, or where you're an admin and the owner allows it.",
+                            color = c.secondary, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
+                    }
+                } else {
+                    SettingsSection(footer = if (channels) "The followers of the channel you pick can see the story."
+                        else "Only the members of the group you pick can see the story.") {
+                        shown.forEachIndexed { i, t ->
+                            GroupStoryRow(t, onClick = { onPick(t) })
+                            if (i < shown.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 68.dp))
                         }
-                        onPost(choice, if (choice == StoryAudienceChoice.ONE_TIME) oneTime else emptySet(), chosenLists,
-                            StoryPrivacyRules.captureProtected(choice, blockShots))
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (busy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = c.onAccent)
-                else Text(if (editing == null) "Post Story" else "Update", color = c.onAccent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
     }
