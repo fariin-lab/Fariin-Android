@@ -91,11 +91,8 @@ fun GlassBarPage(
             if (!frosted) Box(Modifier.fillMaxWidth().align(Alignment.TopCenter).height(with(density) { barPx.toDp() }).background(page))
         }
         Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
-            Box(Modifier.fillMaxWidth().onSizeChanged { barPx = it.height }.then(if (frosted) Modifier.hazeEffect(haze) {
-                backgroundColor = page; blurRadius = 20.dp; noiseFactor = 0f
-                tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.72f)))
-                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-            } else Modifier)) {
+            Box(Modifier.fillMaxWidth().then(if (frosted) Modifier.frostedTopBar(haze, page, true) else Modifier)
+                .onSizeChanged { barPx = it.height }) {
                 CompositionLocalProvider(
                     LocalLiquidBackdrop provides backdrop,
                     LocalGlassWindow provides LocalView.current,

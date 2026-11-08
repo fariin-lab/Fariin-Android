@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
 import dev.chrisbanes.haze.hazeSource
@@ -306,13 +307,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         // iOS StoriesTabView bar: the ••• menu in a round glass button at the LEADING edge and
         // "Stories" centred (inline title, 17 semibold). No camera here: iOS took add-story off the
         // header (owner 2026-10-11, "I don't need it"); the camera on My Story's row posts.
-        Box(Modifier.zIndex(1f).fillMaxWidth().then(
-            if (frost) Modifier.hazeEffect(storiesHaze) {
-                backgroundColor = c.bg; blurRadius = 20.dp; noiseFactor = 0f
-                tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.72f)))
-                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-            } else Modifier.background(c.bg.copy(alpha = 0.94f))
-        ).statusBarsPadding().height(48.dp).padding(horizontal = 16.dp)) {
+        Box(Modifier.zIndex(1f).fillMaxWidth().then(Modifier.frostedTopBar(storiesHaze, c.bg, frost))
+            .statusBarsPadding().height(48.dp).padding(horizontal = 16.dp)) {
             Text(com.fariin.app.ui.chats.rememberConnectionTitle("Stories"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp))

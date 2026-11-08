@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -266,9 +267,9 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             0f to Color.Black, 0.50f to Color.Black, 0.62f to Color.Black.copy(alpha = 0.85f),
             0.74f to Color.Black.copy(alpha = 0.55f), 0.85f to Color.Black.copy(alpha = 0.25f),
             0.93f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
-        // CLEAR, NO BAR AT ALL (owner 2026-11-08, "see how it becomes"): the title and the search
-        // float over the page with nothing behind them; the rows pass under in full.
-        Box(Modifier.fillMaxWidth().statusBarsPadding().height(barH)) {
+        // The tab pages' one bar (owner 2026-11-08): frosted, melting away below its edge.
+        Box(Modifier.fillMaxWidth().then(Modifier.frostedTopBar(haze, c.bgSecondary, glass))
+            .statusBarsPadding().height(barH)) {
             Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)) {
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
