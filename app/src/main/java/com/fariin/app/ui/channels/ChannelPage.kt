@@ -145,6 +145,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     var confirmLeave by remember { mutableStateOf(false) }
     // iOS channel info rows that open a page here: Storage Used and Statistics.
     var sub by remember(info.cid) { mutableStateOf<String?>(null) }
+    var shareLink by remember { mutableStateOf<Pair<String, String>?>(null) }
     // Storage Used's value (iOS: the size, or "None"): this phone's copy of the posts' files, no network.
     val channelStorage by androidx.compose.runtime.produceState<Long?>(null, info.cid, me) {
         if (me.isEmpty()) return@produceState
@@ -189,15 +190,13 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             scope.launch {
                 val link = com.fariin.app.data.ChannelAddFollowers.link(info.cid, mapOf("username" to info.username, "isPublic" to info.isPublic))
                     ?: run { notice = com.fariin.app.data.ChannelAddFollowers.NO_LINK; return@launch }
-                ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(Intent.EXTRA_TEXT, com.fariin.app.data.ChannelAddFollowers.shareText(info.title, link)), "Share")
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                shareLink = link to com.fariin.app.data.ChannelAddFollowers.shareText(info.title, link)
             }
             return
         }
         val text = ChannelRules.shareText(info.title, info.username) ?: run { notice = "This channel has no public link."; return }
-        ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share")
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        // Our own "Share with" sheet (iOS), not the system share page; that sits in its corner.
+        shareLink = "https://fariin.com/${info.username}" to text
     }
     fun follow() {
         error = null; following = true
@@ -231,10 +230,14 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) }, containerColor = c.card,
             confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } })
     }
-    if (confirmReport) AlertDialog(onDismissRequest = { confirmReport = false }, containerColor = c.card,
-        title = { Text("Report this channel?") }, text = { Text("Fariin's moderators will review it.") },
-        confirmButton = { TextButton({ confirmReport = false; scope.launch { reported = ChannelService.report(info.cid) } }) { Text("Report", color = c.red) } },
-        dismissButton = { TextButton({ confirmReport = false }) { Text("Cancel", color = c.accent) } })
+    shareLink?.let { (url, words) -> if (me.isNotEmpty()) com.fariin.app.ui.thread.LinkShareSheet(me, url, words, onDismiss = { shareLink = null }) }
+    // A sheet, as Leave and the group's Report (owner 2026-11-07: the iPhone asks in a sheet).
+    if (confirmReport) com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmReport = false }, steps = listOf(
+        com.fariin.app.ui.components.CarefulStep(title = "Report ${info.title.ifEmpty { "this channel" }}?",
+            body = "Fariin's moderators will review it.",
+            buttons = listOf(com.fariin.app.ui.components.CarefulButton("Report Channel", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
+                scope.launch { reported = ChannelService.report(info.cid) }
+            }))))
     if (confirmLeave) com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmLeave = false }, steps = listOf(
         com.fariin.app.ui.components.CarefulStep(
             title = "Leave ${info.title.ifEmpty { "this channel" }}?",

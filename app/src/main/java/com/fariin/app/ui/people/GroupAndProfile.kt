@@ -895,6 +895,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         if (iAmMember) value = runCatching { com.fariin.app.data.GroupManage.shareCode(cid) }.getOrNull()
     }
     val inviteLink = if (iAmMember) com.fariin.app.data.GroupShareLink.of(me, conv, serverCode) else null
+    var sharingLink by remember { mutableStateOf(false) }
+    if (sharingLink && inviteLink != null) com.fariin.app.ui.thread.LinkShareSheet(me, inviteLink, onDismiss = { sharingLink = false })
     var showQr by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     // iOS GroupInfoView exportChat: this group's messages as a text file (ChatExportRun). Not for a channel.
@@ -914,11 +916,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (canEdit) TextAction("Edit", enabled = true) { editing = true }
                 GroupInfoMenu(onWallpaper = if (canEdit) ({ com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() }) else null,
-                    onShare = if (inviteLink != null) ({
-                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(android.content.Intent.EXTRA_TEXT, inviteLink)
-                    ctx.startActivity(android.content.Intent.createChooser(send, null))
-                }) else null, onQr = { showQr = true }, saveCid = cid,
+                    // Our own "Share with" sheet (iOS), the system share in its corner.
+                    onShare = if (inviteLink != null) ({ sharingLink = true }) else null, onQr = { showQr = true }, saveCid = cid,
                     onExport = if (!ChatExportRun.SHOWN || conv["channel"] == true) null else ({
                         if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group")
                     }))
