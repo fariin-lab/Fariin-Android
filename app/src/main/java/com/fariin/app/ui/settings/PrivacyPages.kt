@@ -131,6 +131,7 @@ internal const val PAGE_HIDE_FROM = "privacy:hidefrom"
 internal const val PAGE_MESSAGES = "privacy:messages"
 internal const val PAGE_CHAT_KEY = "privacy:chatkey"
 internal const val PAGE_BLOCKED = "privacy:blocked"
+internal const val PAGE_MY_REPORTS = "privacy:myreports"
 internal const val PAGE_APP_LOCK = "privacy:applock"
 internal const val PAGE_DISAPPEAR_DEFAULT = "privacy:disappear"
 
@@ -145,6 +146,7 @@ internal fun privacyRoute(page: String, push: (String) -> Unit, pop: () -> Unit)
         page == PAGE_MESSAGES -> MessagesPrivacyPage(push, pop)
         page == PAGE_CHAT_KEY -> ChatKeyPage(pop)
         page == PAGE_BLOCKED -> BlockedUsersPage(pop)
+        page == PAGE_MY_REPORTS -> MyReportsPage(pop)
         page == PAGE_APP_LOCK -> AppLockPage(pop)
         // The default timer for new chats I start (iOS PrivacySettingsView, same key).
         page == PAGE_DISAPPEAR_DEFAULT -> com.fariin.app.ui.people.DisappearingMessagesPage(
@@ -177,8 +179,12 @@ private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
                 }
             }
         }
-        SettingsSection { SettingsRow("Blocked Users", value = "${blocked.entries.size}", last = true,
-            badge = NewBadgeSpots.PRIVACY_BLOCKED) { push(PAGE_BLOCKED) } }
+        SettingsSection {
+            SettingsRow("Blocked Users", value = "${blocked.entries.size}",
+                badge = NewBadgeSpots.PRIVACY_BLOCKED) { push(PAGE_BLOCKED) }
+            // The reports I sent and what came of them (only I see them).
+            SettingsRow("My Reports", last = true) { push(PAGE_MY_REPORTS) }
+        }
         SettingsSection(footer = "Send every call through Fariin's server so the people you call can't see your IP address. Call quality may be a little lower.") {
             SwitchRow("Always Relay Calls", relay, last = true, badge = NewBadgeSpots.PRIVACY_ALWAYS_RELAY) { relay = it; calls.edit().putBoolean("calls.alwaysRelay", it).apply() }
         }

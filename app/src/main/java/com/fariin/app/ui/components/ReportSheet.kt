@@ -71,6 +71,8 @@ import com.fariin.app.data.ReportFlow
 import com.fariin.app.data.ReportReason
 import com.fariin.app.data.ReportRules
 import com.fariin.app.data.ReportSender
+import com.fariin.app.data.ReportSub
+import com.fariin.app.data.ReportSubs
 import com.fariin.app.data.ReportTarget
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.NonCancellable
@@ -84,21 +86,30 @@ fun ReportSheetHost(me: String) {
     t?.let { target -> key(target) { ReportSheet(target, me, onDismiss = { ReportFlow.done() }) } }
 }
 
+private const val P_REASONS = 0
+private const val P_SUBS = 1
+private const val P_CONFIRM = 2
+private const val P_THANKS = 3
+
 /**
- * The report sheet: the reasons (page 0), the confirm page with the note and Block (page 1), and
- * the thanks (page 2), sliding inside one sheet that fits its content, with the grabber and no X.
- * Back in the sheet and the system Back go one page back; from the reasons or the thanks they close.
+ * The report sheet: the reasons, a reason's sub-reasons, the confirm page (note, Block, Leave, the
+ * message share switch), then the thanks page with what can still be done (Block, Leave, Mute) and,
+ * for the gravest reasons, a safety box. The pages slide inside one sheet that fits its content,
+ * with the grabber and no X. Back in the sheet and the system Back go one page back; from the
+ * reasons or the thanks they close.
  */
 @Composable
 private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
     val c = Fariin.colors
     val motion = rememberSheetMotion(onDismiss)
     val scope = rememberCoroutineScope()
-    var page by remember { mutableIntStateOf(0) }
+    var page by remember { mutableIntStateOf(P_REASONS) }
     var reason by remember { mutableStateOf<ReportReason?>(null) }
+    var sub by remember { mutableStateOf<ReportSub?>(null) }
     var note by remember { mutableStateOf("") }
     var block by remember { mutableStateOf(false) }
     var leave by remember { mutableStateOf(false) }
+    var shareText by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val canBlock = ReportRules.canBlock(t, me)
@@ -110,25 +121,35 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
     if (motion.mid <= 0f) motion.mid = guess
     heights[page]?.let { h -> val stop = reportRestStop(h); SideEffect { motion.fitMid(stop) } }
 
+    fun back() {
+        if (busy) return
+        error = null
+        page = when (page) {
+            P_CONFIRM -> if (reason?.let { ReportSubs.of(it).isNotEmpty() } == true) P_SUBS else P_REASONS
+            else -> P_REASONS
+        }
+    }
+
     fun submit() {
         val r = reason ?: return
         if (busy) return
         busy = true; error = null
         scope.launch {
+            val blockNow = canBlock && block
             val refused = withContext(NonCancellable) {
-                ReportSender.send(t, r, ReportRules.note(r, note), canBlock && block)
+                ReportSender.send(t, r, ReportRules.note(r, note), blockNow, sub, shareText)
             }
             busy = false
             if (refused == null) {
-                t.onSent(canBlock && block)
+                t.onSent(blockNow)
                 if (leave) t.onLeave?.invoke()
-                page = 2
+                page = P_THANKS
             } else error = refused
         }
     }
 
     FariinSheetDialog(motion, handle = true, fill = c.bgSecondary, typing = true) { _ ->
-        BackHandler(enabled = page == 1) { if (!busy) { page = 0; error = null } }
+        BackHandler(enabled = page == P_SUBS || page == P_CONFIRM) { back() }
         val scroll = rememberScrollState()
         Box(Modifier.fillMaxSize().imePadding()) {
             // A pull down while the page is at its top moves the sheet (the reasons list can be taller than the screen).
@@ -150,16 +171,21 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
                         .onSizeChanged { heights[p] = with(density) { it.height.toDp().value } }
                         .padding(top = SheetHandleStrip, bottom = 16.dp)) {
                         when (p) {
-                            0 -> ReasonsPage(t) { picked ->
-                                if (picked != reason) note = ""
-                                reason = picked; error = null; page = 1
+                            P_REASONS -> ReasonsPage(t) { picked ->
+                                if (picked != reason) { note = ""; sub = null }
+                                reason = picked; error = null
+                                page = if (ReportSubs.of(picked).isEmpty()) P_CONFIRM else P_SUBS
                             }
-                            1 -> ConfirmPage(t, reason ?: ReportReason.OTHER, note, { note = it.take(ReportRules.NOTE_MAX) },
-                                canBlock, block, { block = it }, leave, { leave = it }, busy, error,
-                                onBack = { if (!busy) { page = 0; error = null } },
+                            P_SUBS -> SubsPage(reason ?: ReportReason.OTHER, onBack = { back() }) { picked ->
+                                sub = picked; error = null; page = P_CONFIRM
+                            }
+                            P_CONFIRM -> ConfirmPage(t, reason ?: ReportReason.OTHER, sub, note, { note = it.take(ReportRules.NOTE_MAX) },
+                                canBlock, block, { block = it }, leave, { leave = it }, shareText, { shareText = it }, busy, error,
+                                onBack = { back() },
                                 onTyping = { motion.expand() },
                                 onSubmit = { submit() })
-                            else -> ThanksPage { motion.close() }
+                            else -> ThanksPage(t, reason ?: ReportReason.OTHER, sub,
+                                offerBlock = canBlock && !block, offerLeave = t.onLeave != null && !leave) { motion.close() }
                         }
                     }
                 }
@@ -184,45 +210,58 @@ private fun ReportBar(onBack: (() -> Unit)?) {
     }
 }
 
+/** One reason row: the words and a chevron. */
 @Composable
-private fun ReasonsPage(t: ReportTarget, onPick: (ReportReason) -> Unit) {
+private fun ChevronRow(label: String, onClick: () -> Unit) {
     val c = Fariin.colors
-    ReportBar(onBack = null)
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp)) {
-        Text(ReportRules.header(t.kind), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label)
-        Text(ReportRules.privacy(t.name), fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 6.dp))
-    }
-    Spacer(Modifier.height(14.dp))
-    ReportCard {
-        ReportReason.entries.forEach { r ->
-            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(r) }.heightIn(min = 50.dp)
-                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(r.label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
-                    modifier = Modifier.size(24.dp))
-            }
-        }
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 50.dp)
+        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.secondary.copy(alpha = 0.55f),
+            modifier = Modifier.size(24.dp))
     }
 }
 
 @Composable
+private fun PageHeader(title: String, sub: String? = null) {
+    val c = Fariin.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp)) {
+        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label)
+        if (sub != null) Text(sub, fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(top = 6.dp))
+    }
+    Spacer(Modifier.height(14.dp))
+}
+
+@Composable
+private fun ReasonsPage(t: ReportTarget, onPick: (ReportReason) -> Unit) {
+    ReportBar(onBack = null)
+    PageHeader(ReportRules.header(t.kind), ReportRules.privacy(t.name))
+    ReportCard { ReportReason.entries.forEach { r -> ChevronRow(r.label) { onPick(r) } } }
+}
+
+@Composable
+private fun SubsPage(reason: ReportReason, onBack: () -> Unit, onPick: (ReportSub) -> Unit) {
+    ReportBar(onBack = onBack)
+    PageHeader(ReportSubs.title(reason) ?: reason.label)
+    ReportCard { ReportSubs.of(reason).forEach { s -> ChevronRow(s.label) { onPick(s) } } }
+}
+
+@Composable
 private fun ConfirmPage(
-    t: ReportTarget, reason: ReportReason, note: String, onNote: (String) -> Unit,
+    t: ReportTarget, reason: ReportReason, sub: ReportSub?, note: String, onNote: (String) -> Unit,
     canBlock: Boolean, block: Boolean, onBlock: (Boolean) -> Unit, leave: Boolean, onLeave: (Boolean) -> Unit,
-    busy: Boolean, error: String?,
+    shareText: Boolean, onShareText: (Boolean) -> Unit, busy: Boolean, error: String?,
     onBack: () -> Unit, onTyping: () -> Unit, onSubmit: () -> Unit,
 ) {
     val c = Fariin.colors
     val other = reason == ReportReason.OTHER
     val ready = !other || note.isNotBlank()
     ReportBar(onBack = onBack)
-    Text(ReportRules.confirmTitle(t.kind), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp))
-    Spacer(Modifier.height(14.dp))
+    PageHeader(ReportRules.confirmTitle(t.kind))
     ReportCard {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text("Reason", fontSize = 13.sp, color = c.secondary)
-            Text(reason.label, fontSize = 17.sp, color = c.label, modifier = Modifier.padding(top = 2.dp))
+            Text(ReportRules.reasonLine(reason, sub), fontSize = 17.sp, color = c.label, modifier = Modifier.padding(top = 2.dp))
         }
     }
     if (other) {
@@ -236,6 +275,12 @@ private fun ConfirmPage(
         }
         Text(ReportRules.counter(note), fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.End,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp))
+    }
+    // A single group message: its words go to the review team only with this on (contract v2.1).
+    if (ReportRules.canShareText(t)) {
+        ReportCard { SwitchRow(ReportRules.SHARE_TEXT_LABEL, shareText, busy, onShareText) }
+        Text(ReportRules.SHARE_TEXT_NOTE, fontSize = 13.sp, color = c.secondary,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp))
     }
     if (canBlock) ReportCard { SwitchRow(ReportRules.blockLabel(t.name), block, busy, onBlock) }
     // A member reporting a group or channel can leave it too (the old Report and Leave).
@@ -251,24 +296,64 @@ private fun SwitchRow(label: String, on: Boolean, busy: Boolean, onChange: (Bool
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().clickable(enabled = !busy, role = Role.Switch) { onChange(!on) }.heightIn(min = 52.dp)
         .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+        Text(label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f).padding(end = 12.dp))
         FariinSwitch(on, onCheckedChange = if (busy) null else onChange)
     }
 }
 
+/** A thanks-page action: the words, a spinner while it runs, then what it did in grey. */
+private class AfterAction(val label: String, val doneLabel: String, val run: suspend () -> Boolean)
+
 @Composable
-private fun ThanksPage(onDone: () -> Unit) {
+private fun ThanksPage(t: ReportTarget, reason: ReportReason, sub: ReportSub?, offerBlock: Boolean, offerLeave: Boolean, onDone: () -> Unit) {
     val c = Fariin.colors
+    val scope = rememberCoroutineScope()
+    val actions = remember(offerBlock, offerLeave) {
+        buildList {
+            if (offerBlock) add(AfterAction(ReportRules.blockLabel(t.name), "Blocked") {
+                ReportSender.block(t).also { if (it) t.onSent(true) }
+            })
+            if (offerLeave) add(AfterAction(ReportRules.leaveLabel(t), "Left") { t.onLeave?.invoke(); true })
+            if (ReportRules.canMute(t)) add(AfterAction(ReportRules.muteLabel(t.name), "Muted") { ReportSender.mute(t) })
+        }
+    }
+    val running = remember { mutableStateMapOf<String, Boolean>() }
+    val done = remember { mutableStateMapOf<String, Boolean>() }
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(64.dp).clip(CircleShape).background(Color(0xFF34C759)), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
         }
-        Text("Thanks for letting us know", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center,
+        Text(ReportRules.THANKS_TITLE, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 18.dp))
-        Text("We'll review it. If it breaks our rules, we'll take it down.", fontSize = 15.sp, color = c.secondary,
+        Text(ReportRules.THANKS_BODY, fontSize = 15.sp, color = c.secondary,
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-        Spacer(Modifier.height(24.dp))
     }
+    Spacer(Modifier.height(18.dp))
+    ReportRules.safetyBox(reason, sub)?.let { box ->
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(20.dp))
+            .background(c.red.copy(alpha = 0.10f)).padding(16.dp)) {
+            Text(box, fontSize = 15.sp, color = c.label)
+        }
+    }
+    if (actions.isNotEmpty()) ReportCard {
+        actions.forEach { a ->
+            val isDone = done[a.label] == true
+            val isRunning = running[a.label] == true
+            Row(Modifier.fillMaxWidth().clickable(enabled = !isDone && !isRunning, role = Role.Button) {
+                running[a.label] = true
+                scope.launch {
+                    val ok = withContext(NonCancellable) { a.run() }
+                    running[a.label] = false
+                    if (ok) done[a.label] = true else Snack.show("Couldn't do that. Check your connection and try again.")
+                }
+            }.heightIn(min = 50.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (isDone) a.doneLabel else a.label, fontSize = 17.sp, color = if (isDone) c.secondary else c.red,
+                    modifier = Modifier.weight(1f))
+                if (isRunning) FariinSpinner(size = 20.dp)
+            }
+        }
+    }
+    Spacer(Modifier.height(18.dp))
     ReportPill("Done", enabled = true, modifier = Modifier.padding(horizontal = 20.dp), onClick = onDone)
 }
 

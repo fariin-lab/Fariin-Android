@@ -230,6 +230,15 @@ internal fun MessageMenu(
                 else add(MenuItem("Pin", null, iconRes = com.fariin.app.R.drawable.ic_pin_menu, badge = NewBadgeSpots.CHAT_MENU_PIN) { actions.onPin(m) })
             }
         }
+        // Someone else's message in a group (not a channel, not a 1:1, which is end to end with no
+        // Report): the one report sheet, unless the group turned reports off.
+        if (!m.deleted && !m.isSystem && ui.isGroup && ui.channel == null && m.authorId != ui.me && m.authorId.isNotEmpty() &&
+            ui.groupDoc["groupNoReport"] != true)
+            add(MenuItem("Report", null, destructive = true, iconRes = com.fariin.app.R.drawable.ic_report, badge = NewBadgeSpots.CHAT_MENU_REPORT) {
+                com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.MESSAGE,
+                    name = ui.names[m.authorId], personUid = m.authorId, cid = ui.cid, messageId = m.id,
+                    messageText = m.text.takeIf { it.isNotBlank() && !com.fariin.app.data.CardRules.isCard(it) }))
+            })
         // On a disappearing message Delete carries a live countdown from the server's stamp only
         // (iOS deleteOrTimerRow); someone who cannot delete gets the countdown on a row of its own.
         val expires = m.expiresAtMillis?.takeIf { !m.deleted }

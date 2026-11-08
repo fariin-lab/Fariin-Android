@@ -222,7 +222,17 @@ class FirestorePeople(
     override suspend fun setBlocked(uid: String, on: Boolean): Boolean = ok {
         if (uid.isEmpty() || uid == me || uid.contains('/')) error("bad uid")
         val ref = blockedRef(uid)
-        if (on) { ref.set(mapOf("at" to FieldValue.serverTimestamp())).await(); return@ok }
+        if (on) {
+            ref.set(mapOf("at" to FieldValue.serverTimestamp())).await()
+            // As iOS BlockList.setBlocked: no shared-chat copy of the block (the blocked person could
+            // read it; an old one goes), and my live stories lose them. Best effort, after the list doc.
+            runCatching {
+                conv(Wire.directCid(me, uid)).update(mapOf("blockedBy.$me" to FieldValue.delete(),
+                    "blockedAt.$me" to FieldValue.delete(), "blockClearedAt.$me" to FieldValue.delete())).await()
+            }
+            revokeStoryAudience(uid)
+            return@ok
+        }
         val since = ref.get().await().getTimestamp("at")?.toDate()?.time ?: System.currentTimeMillis()
         val batch = db.batch()
         batch.set(db.collection("users").document(me).collection("blockHistory").document("${uid}_$since"), mapOf(
@@ -233,6 +243,20 @@ class FirestorePeople(
             conv(Wire.directCid(me, uid)).update(mapOf("blockedBy.$me" to FieldValue.delete(),
                 "blockedAt.$me" to FieldValue.delete(), "blockClearedAt.$me" to FieldValue.delete())).await()
         } catch (_: Exception) {}
+    }
+
+    /**
+     * iOS StoriesRepository.revokeAudience(for:): each live story of mine drops [uid] from its
+     * audience, the raw uid and the token form; the `public` flag stays as it is.
+     */
+    private suspend fun revokeStoryAudience(uid: String) {
+        val snap = runCatching { db.collection("stories").whereEqualTo("authorUid", me).get().await() }.getOrNull() ?: return
+        val now = System.currentTimeMillis()
+        for (d in snap.documents) {
+            val exp = d.getTimestamp("expiresAt")?.toDate()?.time ?: continue
+            if (exp <= now) continue
+            runCatching { d.reference.update("recipientUids", FieldValue.arrayRemove(StoryAudienceToken.token(uid), uid)).await() }
+        }
     }
 
     /** ChatService.setMuted: `mutedBy.<me>` = forever (9 999 999 999 999) or 0. */

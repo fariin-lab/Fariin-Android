@@ -50,4 +50,46 @@ class ReportRulesTest {
         assertEquals("You've sent a lot of reports today. Try again tomorrow.", ReportRules.errorText("RESOURCE_EXHAUSTED"))
         assertEquals(ReportSender.FAILED, ReportRules.errorText(null))
     }
+
+    @Test fun subReasons() {
+        assertTrue(ReportSubs.of(ReportReason.SPAM).isEmpty())
+        assertTrue(ReportSubs.of(ReportReason.OTHER).isEmpty())
+        assertEquals(listOf("nudity", "sexual_messages", "intimate_images", "involves_minor"), ReportSubs.of(ReportReason.NUDITY).map { it.id })
+        val minor = ReportSubs.of(ReportReason.NUDITY).last()
+        assertEquals("child_safety", ReportRules.category(ReportReason.NUDITY, minor))
+        val req = ReportRules.request(ReportTarget(ReportKind.STORY, storyId = "s1"), ReportReason.NUDITY, "", false, minor)
+        assertEquals("child_safety", req["category"]); assertEquals("involves_minor", req["sub"])
+        assertEquals("Nudity or sexual content › It involves someone under 18", ReportRules.reasonLine(ReportReason.NUDITY, minor))
+        assertEquals("Child safety › It involves someone under 18", ReportSubs.label("child_safety", "involves_minor"))
+        assertEquals("Spam", ReportSubs.label("spam", null))
+    }
+
+    @Test fun safetyBoxes() {
+        val threat = ReportSubs.of(ReportReason.VIOLENCE).first { it.id == "threat" }
+        assertTrue(ReportRules.safetyBox(ReportReason.VIOLENCE, threat) != null)
+        assertEquals(null, ReportRules.safetyBox(ReportReason.VIOLENCE, ReportSubs.of(ReportReason.VIOLENCE).first { it.id == "graphic" }))
+        assertTrue(ReportRules.safetyBox(ReportReason.SELF_HARM, null) != null)
+        assertTrue(ReportRules.safetyBox(ReportReason.NUDITY, ReportSubs.of(ReportReason.NUDITY).last()) != null)
+        assertEquals(null, ReportRules.safetyBox(ReportReason.SPAM, null))
+    }
+
+    @Test fun messageWordsOnlyForAGroupMessageWithTheSwitchOn() {
+        val msg = ReportTarget(ReportKind.MESSAGE, cid = "g1", messageId = "m1", messageText = "hi")
+        assertEquals("hi", ReportRules.request(msg, ReportReason.SPAM, "", false, null, shareText = true)["messageText"])
+        assertFalse(ReportRules.request(msg, ReportReason.SPAM, "", false, null, shareText = false).containsKey("messageText"))
+        val user = ReportTarget(ReportKind.ACCOUNT, personUid = "u2", messageText = "hi")
+        assertFalse(ReportRules.request(user, ReportReason.SPAM, "", false, null, shareText = true).containsKey("messageText"))
+    }
+
+    @Test fun myReports() {
+        assertEquals(MyReports.Status.RECEIVED, MyReports.status("open"))
+        assertEquals(MyReports.Status.ACTION_TAKEN, MyReports.status("removed"))
+        assertEquals(MyReports.Status.NO_VIOLATION, MyReports.status("no_violation"))
+        assertEquals(1_700_000_000_000L, MyReports.millis(1_700_000_000_000L))
+        assertEquals(1_700_000_000_000L, MyReports.millis(1_700_000_000L))
+        assertEquals(1_700_000_000_000L, MyReports.millis(mapOf("_seconds" to 1_700_000_000L)))
+        val list = MyReports.parse(mapOf("items" to listOf(mapOf("id" to "r1", "kind" to "user", "category" to "spam",
+            "createdAt" to 1_700_000_000_000L, "status" to "open", "targetName" to "Amina"))))
+        assertEquals("Account · Amina", MyReports.what(list.single()))
+    }
 }
