@@ -403,7 +403,7 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                         }
                     }
                     followerRows.forEach { f ->
-                        PersonLine(f.photoUrl, f.name) {
+                        PersonLine(f.photoUrl, f.name, username = f.username) {
                             if (mayRemove) RowMenu(listOf("Remove" to { confirm = f to false }, "Ban" to { confirm = f to true }))
                         }
                         if (f == rows.lastOrNull() && more) LaunchedEffect(f.uid) { load() }
@@ -639,13 +639,17 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
 // ---- Small pieces -----------------------------------------------------------------------------
 
 @Composable
-internal fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
+internal fun PersonLine(photo: String?, name: String, onClick: (() -> Unit)? = null, username: String = "", trailing: @Composable () -> Unit = {}) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
         .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(photo, 40.dp)
         Spacer(Modifier.width(12.dp))
-        Text(name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+            Text(name, fontSize = 17.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The follower's @username under the name (iOS, server listChannelFollowers `username`).
+            if (username.isNotEmpty()) Text("@$username", fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         trailing()
     }
 }

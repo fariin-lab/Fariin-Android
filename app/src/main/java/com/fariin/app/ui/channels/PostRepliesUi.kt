@@ -212,6 +212,8 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     var firstNewId: String? = null
     /** The row the list should bring into view next (my own new reply, a jump, a push's comment). */
     var scrollTarget by mutableStateOf<String?>(null)
+    /** My new top-level reply: the list goes to its very top, so the pinned reply above it shows too (iOS). */
+    var scrollTop by mutableStateOf(false)
     /** The top of the list is on screen: new replies then simply appear instead of counting in the pill. */
     var atTop = true
     var draft by mutableStateOf("")
@@ -553,7 +555,9 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
             if (list.any { it.id == id }) list.map { if (it.id == id) it.copy(send = PostReply.Send.SENDING) else it } else list + row
         }
         if (thread.isNotEmpty()) open = open + thread
-        scrollTarget = id
+        // An answer is brought into view; a new top-level reply goes to the list's very top (iOS: the
+        // pinned reply above it must not be scrolled off, "pin disappeared").
+        if (thread.isEmpty()) scrollTop = true else scrollTarget = id
         scope.launch {
             PostReplies.add(cid, mid, id, text, thread, to)
                 .onSuccess { saved ->
@@ -861,6 +865,12 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
     LaunchedEffect(s.sort) { if (items.isNotEmpty()) list.scrollToItem(0) }
     // My new reply, a jump to an "@name" or a push's comment, brought into view once it is laid out
     // (waiting while its thread's answers are still coming).
+    LaunchedEffect(s.scrollTop) {
+        if (!s.scrollTop) return@LaunchedEffect
+        withFrameNanos { }
+        s.scrollTop = false
+        list.animateScrollToItem(0)
+    }
     LaunchedEffect(s.scrollTarget, items.size) {
         val id = s.scrollTarget ?: return@LaunchedEffect
         withFrameNanos { }

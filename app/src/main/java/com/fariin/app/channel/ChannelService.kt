@@ -189,7 +189,7 @@ object ChannelService {
 
     // ---- Followers and admins (ChannelService.followers / removeFollower / dismissAdmin, ChannelAdminInvites.makeAdmin)
 
-    data class Follower(val uid: String, val name: String, val photoUrl: String?)
+    data class Follower(val uid: String, val name: String, val photoUrl: String?, val username: String = "")
     data class FollowerPage(val rows: List<Follower>, val more: Boolean)
 
     /** listChannelFollowers {cid, after?} -> {followers:[{uid, name, photoUrl, at}], more}: 50 a page, newest first. Admins only. */
@@ -199,7 +199,8 @@ object ChannelService {
             val m = f as? Map<*, *> ?: return@mapNotNull null
             val uid = m["uid"] as? String ?: return@mapNotNull null
             if (uid.isEmpty()) return@mapNotNull null
-            Follower(uid, m["name"] as? String ?: "Fariin user", (m["photoUrl"] as? String)?.takeIf { it.isNotEmpty() })
+            Follower(uid, m["name"] as? String ?: "Fariin user", (m["photoUrl"] as? String)?.takeIf { it.isNotEmpty() },
+                m["username"] as? String ?: "")
         } ?: emptyList()
         return FollowerPage(rows, d?.get("more") as? Boolean ?: false)
     }
