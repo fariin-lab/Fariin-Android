@@ -1310,3 +1310,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   private channels Quotes off by default (c17c9b75), account sheets X/no Cancel/no heart
   (82d97d47), Add files subtitle (8cf5b88e), private quote previews via hosts (fda354ac), album
   quote tiles (4af3f445).
+- 2026-11-08 ~3:20 PM: more Pixel-walk finds fixed: New Chat outline megaphone (90e11892), New Group
+  lists every 1:1 contact (02262fdd), New Channel intro link + strip (fd4e8c16), group call mic lock /
+  camera lock (d0120d49) and Raised hands section (11945224), followers @username + reply scroll
+  (847fcb3c), contact verified seal (9e52699b), glass menu on contact page, chat list, Stories
+  (28a55f80, 70855ff8, and the Stories commit). Line-ending mixes in 3 files normalized (no repo diff).
