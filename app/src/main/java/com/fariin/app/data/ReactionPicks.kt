@@ -26,6 +26,16 @@ object ReactionPicks {
         }
     }
 
+    /**
+     * The picker grid: the channel set, led by any of [picks] it does not hold (compared without the
+     * U+FE0F selector; custom reactions keep their own tab), so a default pick from outside the set
+     * (😂, 😮) can still be unticked (iOS EmojiCatalog.channelOffer, owner 2026-11-08).
+     */
+    fun offer(picks: List<String>, set: List<String> = ChannelRules.channelReactions): List<String> {
+        val extras = picks.filter { p -> !ChannelRules.containsEmoji(set, p) && !(p.startsWith("ce_") || p.startsWith("cu_") || UploadedEmoji.isKey(p)) }
+        return extras + set
+    }
+
     /** The sheet's title while picking: "6 of 12". */
     fun title(n: Int, max: Int = ChannelReactions.MAX) = "$n of $max"
 

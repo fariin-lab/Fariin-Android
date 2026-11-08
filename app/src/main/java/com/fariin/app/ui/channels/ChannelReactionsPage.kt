@@ -157,6 +157,9 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
         // Opens at 56% of the screen (owner 2026-11-07, as iOS), so the chosen bar and its caption stay
         // visible above; Material's own half step is fixed at 50%, so the body sizes itself (GrowingSheetBody).
         val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        // Picks outside the channel set lead the grid; fixed while the sheet is open, so an unticked one
+        // stays in place and can be ticked again.
+        val offer = remember { ReactionPicks.offer(list) }
         ModalBottomSheet(onDismissRequest = { closePicker() }, sheetState = sheet, containerColor = c.bgSecondary) {
           GrowingSheetBody(0.56f) {
             Box(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
@@ -178,7 +181,7 @@ fun ChannelReactionsScreen(cid: String, onBack: () -> Unit) {
             if (showsCustom && customTab) com.fariin.app.ui.thread.CustomEmojiGrid(onPick = { tapped(it) },
                 modifier = Modifier.weight(1f), picked = { ReactionPicks.isPicked(list, it) }, onNote = { note = it })
             else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp)) {
-                items(ChannelRules.channelReactions) { e ->
+                items(offer) { e ->
                     Box(Modifier.size(52.dp).clip(CircleShape).clickable { tapped(e) }, contentAlignment = Alignment.Center) {
                         Text(e, fontSize = 30.sp)
                         com.fariin.app.ui.thread.PickMark(ReactionPicks.isPicked(list, e))
