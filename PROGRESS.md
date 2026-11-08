@@ -1221,3 +1221,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
     greyed (dde0588; Android has no way into a channel's wallpaper sheet yet, asked iOS where).
   - Running: replies sheet batch (top-4 pills, one-grapheme reactions, 250 chars, top photo, Reply
     wrap, Report/Remove dialogs, open at top + new-replies pill, quotesOff tabs); boot/splash watchdog.
+- 2026-11-07 evening: on main (built and unit-tested on this PC, GitHub Actions blocked by billing):
+  - Replies v2 (4966357, 6080e7e); New Group permissions and picker (a480e28); attach select ring
+    edge (db6ea66); long-press Reply/Forward as outlined curved arrows (4607eb5); liquid-glass back
+    and bar buttons on every pushed page (4f18ba7).
+  - New Call is now a selectable picker: tap people to tick them, call one or several at once
+    (fd19345, NewCallPickTest). Several people use an ad-hoc group call room.
+  - Not yet checked on the Pixel: the owner paused phone use; waiting for his OK.
