@@ -343,8 +343,13 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         sort = s
         loadGen++
         val mine = threads.filter { it.send != PostReply.Send.SENT }
-        threads = (cache[key()] ?: emptyList()) + mine
-        order = cache[key()]?.map { it.id } ?: emptyList()
+        // No empty list on a switch (iOS 83aed9034): with no saved page for the new order yet, the
+        // rows already here stand in, newest first for Newest, until the server's page replaces them.
+        val saved = cache[key()]
+        val standIn = saved ?: threads.filter { it.send == PostReply.Send.SENT }.let { now ->
+            if (s == PostReplyRules.Sort.NEW) now.sortedByDescending { it.at } else now.sortedByDescending { it.likes } }
+        threads = standIn + mine
+        order = standIn.map { it.id }
         firstIds = order.toSet()
         laterIds.clear()
         olderCursor = ""
@@ -866,7 +871,8 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                 Text("Check your connection and try again.", fontSize = 14.sp, color = c.secondary, modifier = Modifier.padding(top = 4.dp))
                 TextButton(onClick = { s.retry() }) { Text("Try Again", color = c.label) }
             }
-            !s.loaded -> RepliesSkeleton()
+            // The loading shapes only over an empty sheet, never over replies already drawn (iOS).
+            !s.loaded && s.threads.isEmpty() -> RepliesSkeleton()
             // The owner's comment icon (the Reply bar's) and small words (iOS, owner 2026-11-07).
             s.threads.isEmpty() -> Column(Modifier.fillMaxSize().padding(horizontal = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
