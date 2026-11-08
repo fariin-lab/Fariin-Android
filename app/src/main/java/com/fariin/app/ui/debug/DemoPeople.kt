@@ -45,7 +45,6 @@ object DemoPeople : PeopleApi {
     override suspend fun isBlocked(uid: String) = uid in blocked
     override suspend fun setBlocked(uid: String, on: Boolean): Boolean { if (on) blocked.add(uid) else blocked.remove(uid); return true }
     override suspend fun setMuted(cid: String, on: Boolean) = true
-    override suspend fun report(uid: String, cid: String, reason: String) = true
     override suspend fun safetyNumber(uid: String) = "376024918350127448190365518072934106628451993072"
     override suspend fun checkUsername(h: String): Pair<Boolean, String?> {
         delay(200)

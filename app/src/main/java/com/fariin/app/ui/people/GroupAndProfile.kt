@@ -77,7 +77,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.Add
@@ -664,7 +663,6 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var adding by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(start == "add") }
     var picked by remember { mutableStateOf(setOf<String>()) }
     var askLeave by remember { mutableStateOf(false) }
-    var askReport by remember { mutableStateOf(false) }
     var askEnd by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
     val exitScope = rememberCoroutineScope()
@@ -703,37 +701,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         com.fariin.app.ui.components.Snack.show(if (ok) done else "Could not do that. Check your connection and try again.")
         return ok
     }
-    val reportFailed = "Couldn't send the report. Check your connection and try again."
-    // Report, End and Delete: the contact page's bottom sheet with the group's photo and name on top.
+    // End and Delete: the contact page's bottom sheet with the group's photo and name on top.
     val groupPhoto = (conv["avatarUrl"] as? String)?.ifEmpty { null }
     val groupName = conv["title"] as? String ?: ""
     val groupKind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true)
-    if (askReport) PersonConfirmSheet(groupPhoto, groupName, "Report Spam?",
-        "Fariin's moderators will review this group. Report and Leave also takes you out of it and stops it adding you again.",
-        listOf(
-            PersonAction("Report and Leave") {
-                // iOS: report, then leave and block the group so it cannot add me back. The report is
-                // awaited (the button spins); if it did not go, I stay in the group and can try again.
-                val sent = api.report("", cid, "group")
-                if (!sent) com.fariin.app.ui.components.Snack.show(reportFailed)
-                else {
-                    com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") {
-                        api.leaveGroup(cid)
-                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
-                            .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
-                    }
-                    com.fariin.app.ui.components.Snack.show("Thanks for reporting. You left the group.", "Undo",
-                        durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
-                    onLeft()
-                }
-                sent
-            },
-            PersonAction("Report", tonal = true) {
-                val ok = api.report("", cid, "group")
-                com.fariin.app.ui.components.Snack.show(if (ok) "Thanks. Fariin's moderators will review this group." else reportFailed)
-                ok
-            },
-        ), onDismiss = { askReport = false }, kind = groupKind)
     if (askEnd) PersonConfirmSheet(groupPhoto, groupName, "End This Group?",
         "Nobody will be able to send messages or start calls, and invite links stop working. Messages stay. This can't be undone.",
         listOf(PersonAction("End Group") { callable("endGroup", "The group has ended.") }),
@@ -1030,11 +1001,24 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
             // A group I am no longer in: no Leave (iOS: no Leave, Report, End or Delete for it).
             if (iAmMember) SettingsSection {
-                // iOS exit card: Leave Group, and Report Spam for a member who is not staff (unless the
+                // iOS exit card: Leave Group, and Report Group for a member who is not staff (unless the
                 // group turned reports off); the owner's End Group and Delete Group in their own card.
                 val canReport = !iAmAdmin && conv["groupNoReport"] != true
                 SettingsRow("Leave Group", icon = rememberVectorPainter(Icons.AutoMirrored.Outlined.Logout), titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
-                if (canReport) SettingsRow("Report Spam", icon = rememberVectorPainter(Icons.Outlined.Report), titleColor = c.red, trailing = Trailing.NONE, last = true) { askReport = true }
+                if (canReport) SettingsRow("Report Group", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_report), titleColor = c.red, trailing = Trailing.NONE, last = true) {
+                    com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.GROUP, name = groupName, cid = cid,
+                        onLeave = {
+                            // Report and Leave, as iOS: leave and block the group so it cannot add me back.
+                            com.fariin.app.data.LeaveUndo.start(cid, groupName.ifEmpty { "the group" }) {
+                                api.leaveGroup(cid)
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+                                    .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
+                            }
+                            com.fariin.app.ui.components.Snack.show("You left the group.", "Undo",
+                                durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+                            onLeft()
+                        }))
+                }
             }
             if (iAmMember && owner == me) SettingsSection {
                 val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"

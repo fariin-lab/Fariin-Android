@@ -241,7 +241,8 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
                 }
             }
         },
-        onReport = { m -> scope.launch { if (ChannelService.report(cid, m.id)) notice("Thanks. Fariin's moderators will review this post.") else notice("Couldn't send the report. Try again.") } },
+        onReport = { m -> com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.POST,
+            name = doc["title"] as? String, cid = cid, messageId = m.id)) },
         problem = problem,
         joining = joining,
         notice = notice,

@@ -84,7 +84,6 @@ interface PeopleApi {
     suspend fun isBlocked(uid: String): Boolean
     suspend fun setBlocked(uid: String, on: Boolean): Boolean
     suspend fun setMuted(cid: String, on: Boolean): Boolean
-    suspend fun report(uid: String, cid: String, reason: String): Boolean
     suspend fun safetyNumber(uid: String): String?
     suspend fun checkUsername(h: String): Pair<Boolean, String?>
     suspend fun claimUsername(h: String)
@@ -239,12 +238,6 @@ class FirestorePeople(
     /** ChatService.setMuted: `mutedBy.<me>` = forever (9 999 999 999 999) or 0. */
     override suspend fun setMuted(cid: String, on: Boolean): Boolean = ok {
         conv(cid).set(mapOf("mutedBy" to mapOf(me to if (on) 9_999_999_999_999.0 else 0.0)), SetOptions.merge()).await()
-    }
-
-    /** ChatService.report: a `reports` doc, never any message contents. */
-    override suspend fun report(uid: String, cid: String, reason: String): Boolean = ok {
-        db.collection("reports").add(mapOf("reporterUid" to me, "reportedUid" to uid, "cid" to cid, "reason" to reason,
-            "createdAt" to System.currentTimeMillis().toDouble(), "handled" to false)).await()
     }
 
     override suspend fun safetyNumber(uid: String): String? {

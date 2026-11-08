@@ -5,7 +5,6 @@ import android.content.Intent
 import com.fariin.app.data.PostedStoriesRules
 import com.fariin.app.data.Story
 import com.fariin.app.media.GallerySaver
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
@@ -34,15 +33,6 @@ object StoryMenuActions {
         withContext(Dispatchers.Main) {
             val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link)
             c.startActivity(Intent.createChooser(send, "Share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-    }
-
-    /** iOS reportStory: one `reports` document; the server reads it. */
-    suspend fun report(me: String, s: Story) {
-        runCatching {
-            FirebaseFirestore.getInstance().collection("reports").add(mapOf(
-                "type" to "story", "storyId" to s.id, "authorUid" to s.authorUid, "reporterUid" to me,
-                "createdAt" to FieldValue.serverTimestamp())).await()
         }
     }
 }

@@ -91,12 +91,6 @@ object PostReplyRules {
     /** A refresh may drop my own reply saved this recently only if the page really lacks it. */
     const val RECENT_MINE_MS = 8_000L
 
-    /** Report reasons the server takes (lib/replies.js REASONS), with their words. */
-    val REASONS = listOf(
-        "spam" to "Spam", "abuse" to "Harassment or bullying", "hate" to "Hate speech",
-        "sexual" to "Sexual content", "violence" to "Violence", "other" to "Something else",
-    )
-
     /** Replies can be written: neither the channel nor the post has them off. */
     fun repliesOn(channelOff: Boolean, postOff: Boolean): Boolean = !channelOff && !postOff
 
@@ -583,10 +577,6 @@ object PostReplies {
             }
         }
     }
-
-    suspend fun report(cid: String, mid: String, r: PostReply, reason: String): Boolean = runCatching {
-        call("reportReply", mapOf("cid" to cid, "mid" to mid, "reason" to reason) + target(r)); true
-    }.getOrDefault(false)
 
     /** Delete and ban; [all] also removes every reply they wrote in this channel. */
     suspend fun ban(cid: String, mid: String, r: PostReply, all: Boolean): Boolean = runCatching {

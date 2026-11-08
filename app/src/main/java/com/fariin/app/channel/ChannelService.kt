@@ -282,16 +282,6 @@ object ChannelService {
         }
     }
 
-    /** ChatService.report: reason "channel" for the whole channel, "message" for one post. */
-    suspend fun report(cid: String, messageId: String? = null): Boolean = try {
-        val data = hashMapOf<String, Any>("reporterUid" to me, "reportedUid" to "", "cid" to cid,
-            "reason" to if (messageId == null) "channel" else "message",
-            "createdAt" to System.currentTimeMillis().toDouble(), "handled" to false)
-        if (messageId != null) data["messageId"] = messageId
-        db.collection("reports").add(data).await()
-        true
-    } catch (_: Exception) { false }
-
     /** Protect Content (ChatService.setGroupRestricted): restrictedBy {me: true} or gone. */
     suspend fun setProtected(cid: String, on: Boolean) {
         val f = hashMapOf<String, Any>(

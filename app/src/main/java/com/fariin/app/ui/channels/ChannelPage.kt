@@ -141,7 +141,6 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     var notice by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var undo by remember { mutableStateOf(false) }
-    var confirmReport by remember { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
     // iOS channel info rows that open a page here: Storage Used and Statistics.
     var sub by remember(info.cid) { mutableStateOf<String?>(null) }
@@ -231,13 +230,6 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } })
     }
     shareLink?.let { (url, words) -> if (me.isNotEmpty()) com.fariin.app.ui.thread.LinkShareSheet(me, url, words, onDismiss = { shareLink = null }) }
-    // A sheet, as Leave and the group's Report (owner 2026-11-07: the iPhone asks in a sheet).
-    if (confirmReport) com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmReport = false }, steps = listOf(
-        com.fariin.app.ui.components.CarefulStep(title = "Report ${info.title.ifEmpty { "this channel" }}?",
-            body = "Fariin's moderators will review it.",
-            buttons = listOf(com.fariin.app.ui.components.CarefulButton("Report Channel", com.fariin.app.ui.components.CarefulKind.DESTRUCTIVE) {
-                scope.launch { reported = ChannelService.report(info.cid) }
-            }))))
     if (confirmLeave) com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmLeave = false }, steps = listOf(
         com.fariin.app.ui.components.CarefulStep(
             title = "Leave ${info.title.ifEmpty { "this channel" }}?",
@@ -342,7 +334,11 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     if (role != Role.ADMIN) {
                         if (role == Role.FOLLOWER && com.fariin.app.ui.settings.SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 52.dp))
                         FootRow(if (reported) "Reported" else "Report Channel", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report),
-                            if (reported) c.secondary else c.red) { if (!reported) confirmReport = true }
+                            if (reported) c.secondary else c.red) {
+                            if (!reported) com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.CHANNEL,
+                                name = info.title, cid = info.cid, onSent = { reported = true },
+                                onLeave = if (role == Role.FOLLOWER) ({ leave(fromUndo = false) }) else null))
+                        }
                     }
                     if (role == Role.ADMIN && team?.isOwner(me) == true) FootRow("Delete Channel", Icons.Outlined.Delete, c.red) { askDelete = true }
                     else if (role == Role.ADMIN) Text("You run this channel. Only admins can post.", fontSize = 15.sp, color = c.secondary,

@@ -40,7 +40,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.History
@@ -309,6 +308,8 @@ fun ChannelPostMenu(
     val quoteIcon = ImageVector.vectorResource(com.fariin.app.R.drawable.ic_quote)
     // The owner's comment icon (iOS ic_reply_comment), on "Turn On Replies".
     val replyIcon = ImageVector.vectorResource(com.fariin.app.R.drawable.ic_reply_comment)
+    // The outline "!" Report wears everywhere (not a red flag).
+    val reportIcon = ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report)
     val items = buildList {
         if (!m.deleted) {
             // A contact or location card is no text to copy (as the chat menu, MessageActions).
@@ -320,7 +321,7 @@ fun ChannelPostMenu(
                 add(PostItem("Quote", quoteIcon, badge = NewBadgeSpots.CHAT_MENU_QUOTE) { onDismiss(); onQuote(m) })
             // Tick several posts to forward, copy or (owner and admins) delete them together.
             if (onSelect != null) add(PostItem("Select", Icons.Outlined.CheckCircle) { onDismiss(); onSelect(m) })
-            if (ch.role != Role.ADMIN) add(PostItem("Report", Icons.Filled.Flag, destructive = true, badge = NewBadgeSpots.CHAT_MENU_REPORT) { ch.onReport(m) })
+            if (ch.role != Role.ADMIN) add(PostItem("Report", reportIcon, destructive = true, badge = NewBadgeSpots.CHAT_MENU_REPORT) { ch.onReport(m) })
         }
         // The owner and admins edit, pin and see a post's earlier versions (the history is on the server).
         if (ch.role == Role.ADMIN && !m.deleted) {

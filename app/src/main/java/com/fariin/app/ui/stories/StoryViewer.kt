@@ -3,7 +3,6 @@ package com.fariin.app.ui.stories
 import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Download
@@ -270,6 +269,8 @@ fun StoryViewer(
     // "..." > Edit Viewers on my own story (iOS ShareStorySheet editing): the audience page over it.
     var editViewersFor by remember { mutableStateOf<Story?>(null) }
     var updatingViewers by remember { mutableStateOf(false) }
+    // The report sheet is up: the story stands still under it.
+    val reportUp = com.fariin.app.data.ReportFlow.current.collectAsState().value != null
     // The first-time guide (iOS StoryGuideHost): the story stands still under it.
     var guideUp by remember { mutableStateOf(StoryGuide.isOwed(context)) }
     val pager = rememberPagerState(initialPage = startGroup.coerceIn(0, maxOf(0, initialGroups.size - 1))) { groups.size }
@@ -776,7 +777,7 @@ fun StoryViewer(
                         convs.firstOrNull { !it.isGroup && it.users.contains(st.authorUid) && it.users.contains(me) }?.isBlockedByMe(me) == true) },
                     onRepost = { st -> startRepost(st, g) },
                     me = me, group = g, card = cardOf(g), active = page == pager.currentPage && !pager.isScrollInProgress,
-                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null,
+                    paused = sheetFor != null || profileUid != null || confirmDelete != null || replyFocused || hero.live || reposting.value || guideUp || editViewersFor != null || reportUp,
                     // The bars and caption stay inside the shrinking card and fade as it shrinks (iOS);
                     // over a third of the pull they were gone in a frame on a quick swipe.
                     chrome = {
@@ -843,7 +844,9 @@ fun StoryViewer(
                         when (key) {
                             "save" -> storyScope.launch { toast = StoryMenuActions.save(context, st) }
                             "share" -> storyScope.launch { StoryMenuActions.shareLink(context, st, me) }
-                            "report" -> { storyScope.launch { StoryMenuActions.report(me, st) }; toast = "Reported" }
+                            "report" -> com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.STORY,
+                                name = if (st.groupId == null) groups.firstOrNull { it.key == st.ringKey }?.name else null,
+                                personUid = st.authorUid, storyId = st.id))
                             "viewers" -> editViewersFor = st
                         }
                     },
@@ -1316,7 +1319,7 @@ private fun StoryPage(
                                     leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
                                     onClick = { menu = false; onHide(story.authorUid) },
                                 )
-                                if (!mine && !official) item("Report", Icons.Filled.Flag, Color(0xFFFF3B30), "report")
+                                if (!mine && !official) item("Report", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report), Color(0xFFFF3B30), "report")
                             }
                         }
                     }

@@ -80,6 +80,9 @@ import com.fariin.app.data.PostReplies
 import com.fariin.app.data.PostReply
 import com.fariin.app.data.PostReplyRules
 import com.fariin.app.data.ReplyRights
+import com.fariin.app.data.ReportFlow
+import com.fariin.app.data.ReportKind
+import com.fariin.app.data.ReportTarget
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.components.AvatarKind
 import com.fariin.app.ui.components.CarefulButton
@@ -220,7 +223,6 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     var problem by mutableStateOf<String?>(null)
     /** The reply the field answers; null = the post itself. */
     var answering by mutableStateOf<PostReply?>(null)
-    var reporting by mutableStateOf<PostReply?>(null)
     var banning by mutableStateOf<PostReply?>(null)
     /** A short line over the sheet ("Thanks. We'll take a look."). */
     var toast by mutableStateOf<String?>(null)
@@ -666,8 +668,11 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         }
     }
 
-    fun report(r: PostReply, reason: String) = scope.launch {
-        toast = if (PostReplies.report(cid, mid, r, reason)) "Thanks. We'll take a look." else "Couldn't send the report."
+    /** The one report sheet, for this reply (a thread's `rid`, an answer's `rid` + `aid`). */
+    fun report(r: PostReply) {
+        val answer = r.parentId.isNotEmpty()
+        ReportFlow.ask(ReportTarget(ReportKind.REPLY, name = r.name, personUid = r.uid.ifEmpty { null }, cid = cid, messageId = mid,
+            replyId = if (answer) r.parentId else r.id, answerId = if (answer) r.id else null))
     }
 
     fun ban(r: PostReply, all: Boolean) = scope.launch {
@@ -920,7 +925,6 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
         }
     }
     }
-    s.reporting?.let { r -> ReportSheet(onDismiss = { s.reporting = null }) { reason -> s.report(r, reason) } }
     s.banning?.let { r -> BanSheet(onDismiss = { s.banning = null }) { all -> s.ban(r, all) } }
 }
 
@@ -932,28 +936,6 @@ private fun SmallLink(label: String, modifier: Modifier, center: Boolean = false
         Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
             modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onTap).padding(vertical = 6.dp, horizontal = 4.dp))
     }
-}
-
-/** "Report this reply?": the reasons the server takes, one picked, then Report. */
-@Composable
-private fun ReportSheet(onDismiss: () -> Unit, onReport: (String) -> Unit) {
-    // A centred alert, as iOS's system alert (owner 2026-11-07): a tap on a reason reports at once.
-    val c = Fariin.colors
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Report this reply?") },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                for ((key, label) in PostReplyRules.REASONS) {
-                    TextButton(onClick = { onDismiss(); onReport(key) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(label, color = c.accent, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent, fontWeight = FontWeight.SemiBold) } },
-        containerColor = c.card,
-    )
 }
 
 /** "Remove this person?": delete this reply and ban, or ban and delete every reply they wrote here. */
@@ -1163,7 +1145,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                                 PostReplyRules.Action.REPLY -> s.startAnswer(r)
                                 PostReplyRules.Action.COPY -> clipboard.setText(AnnotatedString(r.text))
                                 PostReplyRules.Action.EDIT -> s.startEdit(r)
-                                PostReplyRules.Action.REPORT -> s.reporting = r
+                                PostReplyRules.Action.REPORT -> s.report(r)
                                 PostReplyRules.Action.DELETE -> if (r.send == PostReply.Send.FAILED) s.discard(r) else s.delete(r)
                                 PostReplyRules.Action.BAN -> s.banning = r
                                 PostReplyRules.Action.RETRY -> s.retry(r)

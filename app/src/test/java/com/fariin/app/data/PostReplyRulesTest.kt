@@ -300,10 +300,6 @@ class PostReplyRulesTest {
         assertTrue(PostReplyRules.showsAdminMenu(ReplyRights(del = true)))
     }
 
-    @Test fun reasonsMatchTheServer() {
-        assertEquals(listOf("spam", "abuse", "hate", "sexual", "violence", "other"), PostReplyRules.REASONS.map { it.first })
-    }
-
     @Test fun alertPushes() {
         assertEquals("c1" to "m1", PostReplyRules.alertTarget("postReplies", "c1", "m1"))
         assertEquals("c1" to "m1", PostReplyRules.alertTarget("replyAnswer", "c1", "m1"))

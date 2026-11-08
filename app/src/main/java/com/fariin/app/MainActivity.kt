@@ -157,6 +157,8 @@ class MainActivity : ComponentActivity() {
                     if (signingOut) com.fariin.app.ui.components.BusyOverlay("Logging out…")
                     if (me != null) {
                         com.fariin.app.system.LowStorageSheet()
+                        // The one report sheet every Report in the app opens (ReportFlow.ask).
+                        com.fariin.app.ui.components.ReportSheetHost(me)
                         LaunchedEffect(Unit) { kotlinx.coroutines.delay(2_000); com.fariin.app.system.LowStorage.checkAndWarn(applicationContext) }
                     }
                 }

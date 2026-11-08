@@ -501,21 +501,13 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         VerifyEncryptionPage(cid, name, person?.photoUrl ?: conv?.photos?.get(uid), myPhotoUrl, safety, onClose = { showSafety = false })
         return
     }
-    // Report, Block, Unblock, Delete Chat: one bottom sheet that fits its words, the person's photo
+    // Block, Unblock, Delete Chat: one bottom sheet that fits its words, the person's photo
     // and name on top (owner 2026-11-07: not a centred dialog), one red action and Cancel; Block and
     // Report is gone from the block sheet, Report is its own row.
     ask?.let { what ->
         val who = name.ifEmpty { "this person" }
-        val handle = person?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" }
         val failed = "Check your connection and try again."
         val (title, body, actions) = when {
-            what == "report" -> Triple("Report ${handle ?: who}?",
-                "Fariin can't read your messages, so the report says who and why, never what was written.",
-                listOf(PersonAction("Report") {
-                    val ok = api.report(uid, cid, "spam")
-                    if (ok) com.fariin.app.ui.components.Snack.show("Thanks. Your report was sent.") else notice = failed
-                    ok
-                }))
             what == "delete" -> Triple("Delete this chat?",
                 "Every message in this chat will be removed from this device. The other person keeps their own copy.",
                 // The chat list's own Delete for Me (iOS ChatService.deleteForMe), not a second delete.
@@ -674,7 +666,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                         icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_chat_key),
                         trailing = Trailing.NONE)
                     SettingsRow("Block $name", titleColor = c.red, trailing = Trailing.NONE) { ask = "block" }
-                    SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) { ask = "report" }
+                    SettingsRow("Report $name", titleColor = c.red, trailing = Trailing.NONE, last = true) {
+                        com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.ACCOUNT,
+                            name = name, personUid = uid, cid = cid, onSent = { b -> if (b) blocked = true }))
+                    }
                 }
             }
             Spacer(Modifier.height(30.dp))
