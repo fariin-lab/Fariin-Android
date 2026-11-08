@@ -173,7 +173,7 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
                 item {
                     // Three ways in, as one rounded card (owner 2026-11-04: rounded and polished, as iOS).
                     Column(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(22.dp)).background(c.card)) {
-                        SourceRow(ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle), "Photos", "Send photos as files, in their original quality") { choosingPhotos = true }
+                        SourceRow(ImageVector.vectorResource(R.drawable.ic_sf_photo_on_rectangle), "Photos", "Original quality, sent as files") { choosingPhotos = true }
                         SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), "Browse documents", "PDFs, documents and other files", onBrowse)
                         SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Choose from gallery", "Photos or videos in full quality", onGallery)
                         SourceRow(ImageVector.vectorResource(R.drawable.ic_sf_headphones), "Browse audio", "Music and other sound files", onAudio)
