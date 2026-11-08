@@ -131,7 +131,16 @@ class StoryLibraryMulti(
     val preselected: List<Uri>,
     val reserved: Int,
     val onApply: (removed: List<Uri>, added: List<Pair<Uri, StoryMedia.Prepared>>) -> Unit,
-)
+    /**
+     * PHOTOS SENT AS FILES (Add files > Photos, iOS f46637b3, owner 2026-11-08): set, the picker shows
+     * photos only, holds up to [maxPicks], reads "Send N" and hands back the picked uris in tap order,
+     * nothing made ready (the file path reads the stored bytes itself). Null for every story door.
+     */
+    val onSendFiles: ((List<Uri>) -> Unit)? = null,
+    val maxPicks: Int = StoryCameraRules.POST_ITEMS,
+) {
+    val fileMode: Boolean get() = onSendFiles != null
+}
 
 /** A batch where some picks would not open (iOS "Couldn't add everything"): the ones that did still go on OK. */
 private class FailedBatch(val failed: Int, val removed: List<Uri>, val resolved: List<Pair<Uri, StoryMedia.Prepared>>)
@@ -145,7 +154,8 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     // one still ticked, and a tick turned off is a removal (iOS seedFromPost / initialIDs).
     val picked = remember { mutableStateListOf<Uri>().apply { multi?.preselected?.let { addAll(it.distinct()) } } }
     val initial = remember { multi?.preselected?.toSet() ?: emptySet() }
-    val limit = StoryCameraRules.pickLimit(multi?.reserved ?: 0)
+    val fileMode = multi?.fileMode == true
+    val limit = if (fileMode) (multi?.maxPicks ?: 0) else StoryCameraRules.pickLimit(multi?.reserved ?: 0)
     val fresh = picked.filter { it !in initial }
     var tooMany by remember { mutableStateOf(false) }
     var tooLongVideo by remember { mutableStateOf(false) }
@@ -171,6 +181,8 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         val still = picked.toSet()
         val removed = initial.filter { it !in still }
         val chosen = picked.filter { it !in initial }
+        // Files door: the uris as picked; the file path reads each photo's own bytes.
+        m.onSendFiles?.let { send -> if (chosen.isNotEmpty()) send(chosen); onClose(); return@add }
         if (chosen.isEmpty()) { m.onApply(removed, emptyList()); onClose(); return@add }
         resolving = true
         scope.launch {
@@ -209,14 +221,18 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     var album by remember { mutableStateOf<RecentMedia.Album?>(null) }
     val none = access == RecentMedia.Access.NONE
     val photos by produceState(emptyList<RecentMedia.Item>(), access, reload) {
-        value = if (none) emptyList() else withContext(Dispatchers.IO) { RecentMedia.load(context, limit = 2000) }
+        value = if (none) emptyList() else withContext(Dispatchers.IO) {
+            RecentMedia.load(context, limit = 2000).let { l -> if (fileMode) l.filter { !it.isVideo } else l }
+        }
     }
     val albums by produceState<List<RecentMedia.Album>?>(null, access, reload, tab == 1) {
         if (tab == 1 && !none) value = withContext(Dispatchers.IO) { RecentMedia.albums(context) }
     }
     val inAlbum by produceState(emptyList<RecentMedia.Item>(), album, reload) {
         val a = album
-        value = if (a == null) emptyList() else withContext(Dispatchers.IO) { RecentMedia.load(context, limit = 5000, bucket = a.id) }
+        value = if (a == null) emptyList() else withContext(Dispatchers.IO) {
+            RecentMedia.load(context, limit = 5000, bucket = a.id).let { l -> if (fileMode) l.filter { !it.isVideo } else l }
+        }
     }
     BackHandler(enabled = album != null) { album = null }
     val askAgain = {
@@ -239,7 +255,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                none -> AccessOff(blocked, askAgain)
+                none -> AccessOff(blocked, askAgain, fileMode)
                 album != null -> LibraryGrid(inAlbum, null, motion, if (multi != null) picked else null, tap, hold)
                 tab == 0 -> LibraryGrid(photos, if (access == RecentMedia.Access.PARTIAL) askAgain else null, motion,
                     if (multi != null) picked else null, tap, hold)
@@ -260,7 +276,8 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
                 }
             }
         }
-        if (multi != null && picked.isNotEmpty()) SelectionBar(picked, StoryCameraRules.addLabel(fresh.size), enabled = !resolving,
+        if (multi != null && picked.isNotEmpty()) SelectionBar(picked,
+            if (fileMode && fresh.isNotEmpty()) "Send ${fresh.size}" else StoryCameraRules.addLabel(fresh.size), enabled = !resolving,
             onRemove = { picked.remove(it) }, onAdd = addPicked)
     }
     preview?.let { (item, bmp) ->
@@ -271,7 +288,8 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     if (tooMany) androidx.compose.material3.AlertDialog(
         onDismissRequest = { tooMany = false },
         title = { Text("That's the limit") },
-        text = { Text("A story can hold ${StoryCameraRules.POST_ITEMS} photos and videos. Take one off to add another.") },
+        text = { Text(if (fileMode) "You can send up to $limit photos at once."
+            else "A story can hold ${StoryCameraRules.POST_ITEMS} photos and videos. Take one off to add another.") },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { tooMany = false }) { Text("OK") } },
     )
     if (tooLongVideo) androidx.compose.material3.AlertDialog(
@@ -476,11 +494,12 @@ private fun Divider() = Box(Modifier.padding(start = 20.dp).fillMaxWidth().heigh
 
 /** iOS photosAccessOff, in the same words. */
 @Composable
-private fun AccessOff(blocked: Boolean, onAllow: () -> Unit) {
+private fun AccessOff(blocked: Boolean, onAllow: () -> Unit, fileMode: Boolean = false) {
     Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("Photos access is off", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
-        Text("Allow Photos access in Settings to add photos and videos to your story.", color = Color(0xFF8E8E93), fontSize = 15.sp,
+        Text(if (fileMode) "Allow Photos access in Settings to send photos as files."
+            else "Allow Photos access in Settings to add photos and videos to your story.", color = Color(0xFF8E8E93), fontSize = 15.sp,
             textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         Text(if (blocked) "Open Settings" else "Allow Access", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -105,15 +106,36 @@ object RecentFiles {
 
 private enum class FileSort { DATE, NAME }
 
+/** How many photos one Send from Add files > Photos may carry; each is its own file message (iOS PhotoFileExport.maxPicks). */
+internal const val PHOTO_FILES_MAX = 20
+
 /**
  * The attach sheet's Files page (iOS AttachFilesPage, plus the search and sort the owner asked for
  * on 2026-11-04 from the reference app): back, title, search, sort; the Upload card opens the
  * phone's file browser; Choose from gallery goes back to the photos; Recent sends a file again.
  */
 @Composable
-internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery: () -> Unit, onAudio: () -> Unit, onSend: (Uri) -> Unit) {
+internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery: () -> Unit, onAudio: () -> Unit, onSend: (Uri) -> Unit,
+                             /** Photos ticked in the app's own library picker, in tap order, to go out as files. */
+                             onSendPhotos: (List<Uri>) -> Unit = { it.forEach(onSend) }) {
     val c = Fariin.colors
     val ctx = LocalContext.current
+    // PHOTOS AS FILES (iOS f46637b3, owner 2026-11-08): the story's own library picker (never the
+    // system one), photos only, several ticked, "Send N". The hand-off waits for that sheet to be gone.
+    var choosingPhotos by remember { mutableStateOf(false) }
+    var pickedPhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    if (choosingPhotos) {
+        val multi = remember {
+            com.fariin.app.ui.stories.StoryLibraryMulti(emptyList(), 0, { _, _ -> },
+                onSendFiles = { pickedPhotos = it }, maxPicks = PHOTO_FILES_MAX)
+        }
+        com.fariin.app.ui.stories.StoryLibrarySheet(busy = false, onPick = {}, onClose = {
+            choosingPhotos = false
+            val picked = pickedPhotos
+            pickedPhotos = emptyList()
+            if (picked.isNotEmpty()) onSendPhotos(picked)
+        }, multi = multi)
+    }
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(FileSort.DATE) }
@@ -158,6 +180,7 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
                 item {
                     // Three ways in, as one rounded card (owner 2026-11-04: rounded and polished, as iOS).
                     Column(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(22.dp)).background(c.card)) {
+                        SourceRow(Icons.Filled.PhotoLibrary, "Photos", "Send photos as files, in their original quality") { choosingPhotos = true }
                         SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_file), "Browse documents", "PDFs, documents and other files", onBrowse)
                         SourceRow(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Choose from gallery", "Photos or videos in full quality", onGallery)
                         SourceRow(Icons.Filled.Headphones, "Browse audio", "Music and other sound files", onAudio)

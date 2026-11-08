@@ -789,8 +789,56 @@ class ThreadRepository(
         }
     }
 
+    /**
+     * PHOTOS SENT AS FILES (Add files > Photos, iOS f46637b3, owner 2026-11-08): each photo is its own
+     * file message with the stored bytes as they are (ContentResolver, no decode or re-encode, the
+     * original name). The bubbles land in tick order, and the sends go one after another so the
+     * server keeps that order. A photo that cannot be read is skipped; one line gives the count.
+     */
+    fun sendDocuments(context: Context, uris: List<Uri>, onRefused: (String) -> Unit) {
+        val m = media ?: return
+        if (uris.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            val base = System.currentTimeMillis().toDouble()
+            val queued = ArrayList<Pair<String, suspend () -> Unit>>()
+            var unreadable = 0
+            var tooLarge = 0
+            uris.forEachIndexed { i, uri ->
+                val f = when (val r = FilePrep.fromUri(context, uri, m.localDir())) {
+                    is FilePrep.Companion.Result.Ok -> r.prep
+                    FilePrep.Companion.Result.TooLarge -> { tooLarge++; return@forEachIndexed }
+                    FilePrep.Companion.Result.Unreadable -> { unreadable++; return@forEachIndexed }
+                }
+                // One millisecond apart, so the bubbles sort in tick order.
+                val tap = base + i
+                val clientId = UUID.randomUUID().toString().uppercase()
+                val local = File(m.localDir(), "file-$clientId").also { it.writeBytes(f.bytes) }
+                pending[clientId] = Message(
+                    id = clientId, authorId = me, text = "", type = "file", createdAtMillis = tap, hasServerTime = false,
+                    clientTs = tap, clientId = clientId, sendState = Message.SendState.SENDING,
+                    fileName = f.name, fileSize = f.bytes.size.toLong(), localPath = local.absolutePath,
+                )
+                // The bytes are read back from this phone's copy when the send starts, so twenty
+                // photos never sit in memory at once.
+                val name = f.name
+                val preview = f.previewJpeg
+                val work: suspend () -> Unit = { sender.file(FilePrep(name, local.readBytes(), preview), false, clientId, tap) }
+                retryMedia[clientId] = work
+                queued += clientId to work
+                rebuild()
+            }
+            val skipped = listOfNotNull(
+                unreadable.takeIf { it > 0 }?.let { n -> if (n == 1) "1 photo couldn't be read, so it was skipped." else "$n photos couldn't be read, so they were skipped." },
+                tooLarge.takeIf { it > 0 }?.let { n -> if (n == 1) "1 photo is over 25 MB, so it was skipped." else "$n photos are over 25 MB, so they were skipped." },
+            )
+            if (skipped.isNotEmpty()) onRefused(skipped.joinToString(" "))
+            // One after another: each send's message is written before the next one starts.
+            for ((clientId, work) in queued) runMediaSend(clientId, work).join()
+        }
+    }
+
     /** Runs one media send; a failure leaves a red bubble whose tap runs the same work again. */
-    private fun runMediaSend(clientId: String, work: suspend () -> Unit) {
+    private fun runMediaSend(clientId: String, work: suspend () -> Unit): Job {
         val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             // A try again starts its rings over (a failed send's were settled).
             com.fariin.app.media.UploadProgress.reset(clientId)
@@ -809,6 +857,7 @@ class ThreadRepository(
         }
         com.fariin.app.media.MediaSend.register(clientId, job)
         job.start()
+        return job
     }
 
     /**

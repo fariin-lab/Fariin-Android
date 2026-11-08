@@ -331,7 +331,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlder, onRetry = vm.repo::retry,
             onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice, actions = actions,
             onSendPick = { uris, caption, once -> vm.repo.sendPick(app, uris, caption, once) },
-            onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } })
+            onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } },
+            onSendFiles = { uris -> vm.repo.sendDocuments(app, uris) { notice = it } })
     }
 }
 
