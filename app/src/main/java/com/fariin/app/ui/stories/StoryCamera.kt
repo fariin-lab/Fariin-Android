@@ -677,7 +677,7 @@ private fun StoryCamera(
                 if (textIn < 0.5f) {
                     // While recording, the library and the flip step aside.
                     Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
-                        if (recording == null) LibraryCard(onLibrary)
+                        if (recording == null) LibraryCard(refresh = active, onClick = onLibrary)
                     }
                     Spacer(Modifier.weight(1f))
                     if (recording == null && hasCamera && twoLenses) {
@@ -864,16 +864,35 @@ private fun ChromeButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 
 /** iOS libraryCard: a little deck of cards. No photo on it, so no storage permission is needed. */
 @Composable
-private fun LibraryCard(onClick: () -> Unit) {
+private fun LibraryCard(refresh: Boolean, onClick: () -> Unit) {
+    // iOS loadLibraryThumb: the newest photo or video in front, only when access was ALREADY given
+    // (this button never asks for it). Read again each time the camera comes back to the front, so
+    // a photo just taken or picked shows.
+    val context = LocalContext.current
+    val thumb by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, refresh) {
+        if (com.fariin.app.media.RecentMedia.access(context) == com.fariin.app.media.RecentMedia.Access.NONE) return@produceState
+        val newest = withContext(Dispatchers.IO) {
+            com.fariin.app.media.RecentMedia.load(context, limit = 1).firstOrNull()
+                ?.let { com.fariin.app.ui.thread.attachThumb(context, it.uri, it.isVideo, 200) }
+        }
+        if (newest != null) value = newest
+    }
+    // iOS libraryCard: one card leaning behind (30 x 38, -12 degrees), the picture in front (32 x 40)
+    // with a white 2 dp edge and 6 corners.
     Box(
         Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)
             .semantics { contentDescription = "Choose from library" },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.offset(x = (-5).dp).rotate(-12f).size(width = 28.dp, height = 36.dp).clip(RoundedCornerShape(6.dp))
+        Box(Modifier.offset(x = (-6).dp).rotate(-12f).size(width = 30.dp, height = 38.dp).clip(RoundedCornerShape(6.dp))
             .background(Color.White.copy(alpha = 0.28f)))
-        Box(Modifier.size(width = 30.dp, height = 38.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.18f))
-            .border(2.dp, Color.White, RoundedCornerShape(6.dp)))
+        Box(Modifier.size(width = 32.dp, height = 40.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.16f))) {
+            thumb?.let {
+                androidx.compose.foundation.Image(it, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize())
+            }
+            Box(Modifier.fillMaxSize().border(2.dp, Color.White, RoundedCornerShape(6.dp)))
+        }
     }
 }
 
