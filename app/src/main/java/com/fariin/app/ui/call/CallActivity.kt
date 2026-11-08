@@ -195,6 +195,8 @@ class CallActivity : ComponentActivity() {
                     androidx.activity.compose.BackHandler { finish() }
                     if (i != null) IncomingGroupCallScreen(i, onIgnore = { GroupRing.decline(); finish() }, onJoin = { muted -> acceptRing(muted) })
                 } else if (groupMode) {
+                    // System back leaves the screen, never the call (iOS has no back on a call): it shrinks.
+                    androidx.activity.compose.BackHandler(enabled = !inPip) { if (GroupCall.ui.value.cid != null) minimizeGroup() else finish() }
                     val live by GroupCall.ui.collectAsState()
                     val g = demoGroup ?: live
                     LaunchedEffect(g.joined) { if (g.joined) lobbyJoined = true }
@@ -215,7 +217,8 @@ class CallActivity : ComponentActivity() {
                     } else GroupCallScreen(g, onMic = { micToggle() }, onCamera = { cameraToggle(GroupCall.ui.value.cameraOn) },
                         onLeave = { GroupCall.leave(); finish() }, onShare = { if (demoGroup == null) shareTapped() },
                         onMinimize = { minimizeGroup() }, pip = inPip,
-                        onHand = { GroupCall.setHand(it) }, onReact = { GroupCall.react(it) })
+                        onHand = { GroupCall.setHand(it) }, onReact = { GroupCall.react(it) },
+                        onRoute = { GroupCall.setRoute(it) }, onFlip = { GroupCall.flipCamera() })
                 } else {
                     val ui by CallManager.ui.collectAsState()
                     LaunchedEffect(ui.status.phase) { if (ui.status.phase == CallPhase.IDLE) finish() }
@@ -228,6 +231,8 @@ class CallActivity : ComponentActivity() {
                             .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
                     }
                     if (inPip) { PipScreen(ui); return@FariinTheme }
+                    // System back leaves the screen, never the call: it shrinks, as the minimize button.
+                    androidx.activity.compose.BackHandler { if (ui.status.live) minimize() else finish() }
                     CallScreen(demoCam?.let { ui.copy(localVideo = it) } ?: ui,
                         onAccept = { withMic(ui.status.video, { CallManager.accept() }, { CallManager.micDenied() }) },
                         onDecline = { CallManager.decline() },
@@ -265,7 +270,10 @@ class CallActivity : ComponentActivity() {
      * (owner 2026-11-08). Every close takes its task away with it.
      */
     override fun finish() {
-        if (android.os.Build.VERSION.SDK_INT >= 21 && !isChangingConfigurations) finishAndRemoveTask() else super.finish()
+        // The task goes from recents only once no call runs: removing it while a call is live fires
+        // CallService.onTaskRemoved, which hangs up (owner 2026-11-08: Back ended his call).
+        val live = CallManager.ui.value.status.live || GroupCall.ui.value.cid != null
+        if (android.os.Build.VERSION.SDK_INT >= 21 && !isChangingConfigurations && !live) finishAndRemoveTask() else super.finish()
     }
 
     override fun onStop() {

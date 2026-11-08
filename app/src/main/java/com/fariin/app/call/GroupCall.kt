@@ -224,6 +224,8 @@ data class GroupCallUi(
     val sharing: Boolean = false,
     /** The system's consent dialog is up, or the share is being published. */
     val sharePending: Boolean = false,
+    /** Where the sound goes (iOS group call Speaker button): speaker, phone, headset or Bluetooth. */
+    val route: RouteState = RouteState(current = AudioRoute.SPEAKER),
     /** Raised hands, oldest first, mine included (iOS GroupCallSocial.raisedHands). */
     val hands: List<String> = emptyList(),
     val myHand: Boolean = false,
@@ -477,6 +479,7 @@ object GroupCall {
             try {
                 val r = LiveKit.create(app)
                 room = r
+                watchRoutes(r)
                 events = scope.launch {
                     r.events.collect { e ->
                         when (e) {
@@ -806,6 +809,47 @@ object GroupCall {
 
     fun room(): Room? = room
 
+    // ------------------------------------------------------------ sound route, camera flip
+
+    private var routeHandler: io.livekit.android.audio.AudioSwitchHandler? = null
+    private val routeListener: (List<com.twilio.audioswitch.AudioDevice>, com.twilio.audioswitch.AudioDevice?) -> Unit = { list, sel ->
+        _ui.value = _ui.value.copy(route = routeOf(list, sel))
+    }
+
+    private fun routeKind(d: com.twilio.audioswitch.AudioDevice): AudioRoute = when (d) {
+        is com.twilio.audioswitch.AudioDevice.BluetoothHeadset -> AudioRoute.BLUETOOTH
+        is com.twilio.audioswitch.AudioDevice.WiredHeadset -> AudioRoute.HEADSET
+        is com.twilio.audioswitch.AudioDevice.Earpiece -> AudioRoute.EARPIECE
+        else -> AudioRoute.SPEAKER
+    }
+
+    private fun routeOf(list: List<com.twilio.audioswitch.AudioDevice>, sel: com.twilio.audioswitch.AudioDevice?): RouteState =
+        RouteState(current = sel?.let { routeKind(it) } ?: AudioRoute.SPEAKER,
+            available = list.map { routeKind(it) }.toSet().ifEmpty { setOf(AudioRoute.SPEAKER) },
+            bluetoothName = list.firstOrNull { it is com.twilio.audioswitch.AudioDevice.BluetoothHeadset }?.name)
+
+    /** The room's own audio switch tells the button what is plugged in and what is in use. */
+    private fun watchRoutes(r: Room) {
+        routeHandler?.unregisterAudioDeviceChangeListener(routeListener)
+        val h = r.audioHandler as? io.livekit.android.audio.AudioSwitchHandler
+        routeHandler = h
+        h?.registerAudioDeviceChangeListener(routeListener)
+    }
+
+    /** iOS Speaker button: the sound to the speaker, the phone's ear, a headset or Bluetooth. */
+    fun setRoute(to: AudioRoute) {
+        val h = routeHandler ?: return
+        val d = h.availableAudioDevices.firstOrNull { routeKind(it) == to } ?: return
+        h.selectDevice(d)
+        _ui.value = _ui.value.copy(route = _ui.value.route.copy(current = to))
+    }
+
+    /** iOS More > Flip Camera: front and back camera swap. */
+    fun flipCamera() {
+        val t = room?.localParticipant?.getTrackPublication(Track.Source.CAMERA)?.track as? io.livekit.android.room.track.LocalVideoTrack ?: return
+        try { t.switchCamera() } catch (e: Exception) { Log.w("GroupCall", "flip failed", e) }
+    }
+
     /**
      * Share Screen / Stop Sharing in the capsule. True when the system's consent dialog should open
      * now; a share already on (or on its way) is stopped instead. Never while someone else shares.
@@ -867,6 +911,7 @@ object GroupCall {
         dialing = false; lastRemote = emptySet()
         CallTonePlayer.stopRingback()
         if (_ui.value.joined) CallTonePlayer.play(CallTone.GROUP_LEFT)   // iOS: the sound when I leave or am removed
+        routeHandler?.unregisterAudioDeviceChangeListener(routeListener); routeHandler = null
         room?.let { try { it.disconnect(); it.release() } catch (_: Exception) {} }
         room = null
         appContext?.let { CallService.stop(it) }

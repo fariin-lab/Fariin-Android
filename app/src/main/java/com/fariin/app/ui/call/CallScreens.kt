@@ -698,7 +698,7 @@ private fun ControlBar(ui: CallUi, chrome: Chrome, onEnd: () -> Unit, onMute: ()
             Circle(if (ui.cameraOn) ImageVector.vectorResource(R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_call_video_off), active = !ui.cameraOn,
                 label = if (ui.cameraOn) "Turn camera off" else "Turn camera on", size = size) { chrome.touch(); if (camOk) onCamera() }
         }
-        SpeakerButton(ui, size) { chrome.touch(); onRoute(it) }
+        SpeakerButton(ui.route, size) { chrome.touch(); onRoute(it) }
         Circle(if (ui.muted) ImageVector.vectorResource(R.drawable.ic_mic_off) else ImageVector.vectorResource(R.drawable.ic_mic), active = ui.muted,
             label = if (ui.muted) "Unmute" else "Mute", size = size) { chrome.touch(); onMute() }
         EndCircle("End call", size, onEnd)
@@ -732,9 +732,8 @@ private fun EndCircle(label: String, size: Dp, onClick: () -> Unit) {
  * headset or Bluetooth in, it opens the list of places the sound can go (the iOS route picker).
  */
 @Composable
-private fun SpeakerButton(ui: CallUi, size: Dp, onRoute: (AudioRoute) -> Unit) {
+private fun SpeakerButton(r: com.fariin.app.call.RouteState, size: Dp, onRoute: (AudioRoute) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    val r = ui.route
     val icon = when (r.current) {
         AudioRoute.BLUETOOTH -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_bluetooth)
         AudioRoute.HEADSET -> androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_headphones)
@@ -928,11 +927,12 @@ private fun CardVideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier
 @Composable
 fun GroupCallScreen(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit = {},
                     onMinimize: (() -> Unit)? = null, pip: Boolean = false,
-                    onHand: (Boolean) -> Unit = {}, onReact: (String) -> Unit = {}) {
+                    onHand: (Boolean) -> Unit = {}, onReact: (String) -> Unit = {},
+                    onRoute: (AudioRoute) -> Unit = {}, onFlip: () -> Unit = {}) {
     // The small window with no video anywhere: the people's faces, as the reference's floating card.
     if (pip && !g.cameraOn && g.members.none { it.video != null || it.screen != null }) { GroupPipFaces(g); return }
     androidx.compose.runtime.CompositionLocalProvider(LocalRaisedHands provides g.hands.toSet()) {
-        GroupCallStage(g, onMic, onCamera, onLeave, onShare, onMinimize, pip, onHand, onReact)
+        GroupCallStage(g, onMic, onCamera, onLeave, onShare, onMinimize, pip, onHand, onReact, onRoute, onFlip)
     }
 }
 
@@ -963,12 +963,30 @@ private fun GroupPipFaces(g: GroupCallUi) {
     }
 }
 
+/** iOS GroupCallMoreMenu's social part: the reaction row and Raise Hand / Lower Hand. */
+@Composable
+private fun GroupMoreSocial(g: GroupCallUi, onReact: (String) -> Unit, onHand: (Boolean) -> Unit) {
+    Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+        com.fariin.app.call.GroupCall.QUICK_EMOJIS.forEach { e ->
+            Box(Modifier.size(44.dp).clip(CircleShape).clickable { onReact(e) }, contentAlignment = Alignment.Center) {
+                Text(e, fontSize = 24.sp)
+            }
+        }
+    }
+    androidx.compose.material3.DropdownMenuItem(
+        text = { Text(if (g.myHand) "Lower Hand" else "Raise Hand", color = Color.White) },
+        leadingIcon = { Icon(painterResource(if (g.myHand) R.drawable.ic_sf_hand_raised_fill else R.drawable.ic_sf_hand_raised), null,
+            tint = Color.White, modifier = Modifier.size(22.dp)) },
+        onClick = { onHand(!g.myHand) })
+}
+
 /** Raised hands in the call, read by every tile layout (iOS tile.isHandRaised). */
 internal val LocalRaisedHands = androidx.compose.runtime.compositionLocalOf { emptySet<String>() }
 
 @Composable
 private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Unit, onLeave: () -> Unit, onShare: () -> Unit,
-                           onMinimize: (() -> Unit)?, pip: Boolean, onHand: (Boolean) -> Unit, onReact: (String) -> Unit) {
+                           onMinimize: (() -> Unit)?, pip: Boolean, onHand: (Boolean) -> Unit, onReact: (String) -> Unit,
+                           onRoute: (AudioRoute) -> Unit, onFlip: () -> Unit) {
     var focus by remember { mutableStateOf<String?>(null) }
     var more by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf(false) }
@@ -1027,30 +1045,27 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
             Spacer(Modifier.height(16.dp))
             if (!pip) ControlCapsule(Modifier.alpha(shown)) {
                 val shareOn = g.sharing || g.sharePending
-                ShareCircle(lit = g.sharing, on = shareOn, enabled = shareOn || (g.joined && presenter == null), size = 56.dp) {
-                    chrome.touch(); onShare()
+                // iOS bar (GroupCallView controls): More, Camera, Speaker, Mic, End. Share Screen and
+                // Flip Camera are in More; More is lit white while I share.
+                Box {
+                    Circle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_more_ios), g.sharing, "More", 56.dp) { chrome.touch(); more = true }
+                    androidx.compose.material3.DropdownMenu(more, onDismissRequest = { more = false }, containerColor = Color(0xFF2C2C2E)) {
+                        if (shareOn || (g.joined && presenter == null)) androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(if (shareOn) "Stop Sharing" else "Share Screen", color = Color.White) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_share_screen), null, tint = Color.White, modifier = Modifier.size(22.dp)) },
+                            onClick = { more = false; chrome.touch(); onShare() })
+                        if (g.cameraOn) androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Flip Camera", color = Color.White) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_flip_camera), null, tint = Color.White, modifier = Modifier.size(22.dp)) },
+                            onClick = { more = false; onFlip() })
+                        if (g.joined) GroupMoreSocial(g, onReact = { more = false; onReact(it) }, onHand = { more = false; onHand(it) })
+                    }
                 }
                 Circle(if (g.cameraOn) ImageVector.vectorResource(R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_call_video_off), !g.cameraOn,
                     if (g.cameraOn) "Turn camera off" else "Turn camera on", 56.dp) { chrome.touch(); onCamera() }
+                SpeakerButton(g.route, 56.dp) { chrome.touch(); onRoute(it) }
                 Circle(if (g.micOn) ImageVector.vectorResource(R.drawable.ic_mic) else ImageVector.vectorResource(R.drawable.ic_mic_off), !g.micOn, if (g.micOn) "Mute" else "Unmute", 56.dp) {
                     chrome.touch(); onMic()
-                }
-                // iOS GroupCallMoreMenu: Raise Hand / Lower Hand and the reaction row.
-                if (g.joined) Box {
-                    Circle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_more_ios), false, "More", 56.dp) { chrome.touch(); more = true }
-                    androidx.compose.material3.DropdownMenu(more, onDismissRequest = { more = false }, containerColor = Color(0xFF2C2C2E)) {
-                        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                            com.fariin.app.call.GroupCall.QUICK_EMOJIS.forEach { e ->
-                                Box(Modifier.size(44.dp).clip(CircleShape).clickable { more = false; onReact(e) }, contentAlignment = Alignment.Center) {
-                                    Text(e, fontSize = 24.sp)
-                                }
-                            }
-                        }
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text(if (g.myHand) "Lower Hand" else "Raise Hand", color = Color.White) },
-                            leadingIcon = { Text("\u270B", fontSize = 18.sp) },
-                            onClick = { more = false; onHand(!g.myHand) })
-                    }
                 }
                 EndCircle("End call", 56.dp, onLeave)
             }
