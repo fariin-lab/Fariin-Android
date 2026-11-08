@@ -455,7 +455,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // page or a blocked person's; hidden with the feature.
     val glowOn = com.fariin.app.data.AppFeatures.glow && uid != me && !blocked
     val glowDoor = com.fariin.app.ui.glow.rememberGlowDoor(uid, name)
-    if (nickname) { SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), onBack = { nickname = false }); return }
+    // The phone's Back closes this page too, back to the profile (owner 2026-11-07: it went to the chat).
+    if (nickname) { androidx.activity.compose.BackHandler { nickname = false }
+        SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), onBack = { nickname = false }); return }
     // The chat's timer, live (either person may change it; iOS ContactInfoView).
     val live = if (api is com.fariin.app.data.FirestorePeople) liveGroupDoc(cid) else emptyMap()
     val timer = (live["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0

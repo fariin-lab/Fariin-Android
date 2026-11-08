@@ -145,6 +145,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     // iOS channel info rows that open a page here: Storage Used and Statistics.
     var sub by remember(info.cid) { mutableStateOf<String?>(null) }
     var shareLink by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val shared = com.fariin.app.ui.people.rememberSharedMedia(info.cid, me)
+    var allMedia by remember { mutableStateOf(false) }
     // Storage Used's value (iOS: the size, or "None"): this phone's copy of the posts' files, no network.
     val channelStorage by androidx.compose.runtime.produceState<Long?>(null, info.cid, me) {
         if (me.isEmpty()) return@produceState
@@ -158,6 +160,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         }
     }
     var askDelete by remember { mutableStateOf(false) }
+    if (allMedia) { com.fariin.app.ui.people.SharedMediaScreen(info.cid, shared, onBack = { allMedia = false }); return }
     when (sub) {
         "storage" -> { com.fariin.app.ui.people.ChatStoragePage(info.cid, me, info.title, pop = { sub = null }); return }
         "stats" -> { com.fariin.app.ui.people.GroupStatsPage(info.cid, info.title, onBack = { sub = null }); return }
@@ -275,6 +278,10 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(ChannelRules.pageCountLine(shownCount), fontSize = 16.sp, color = Color(0xFF8E8E93))
+                // No description yet: whoever may edit is offered one, in grey (iOS, as a group's).
+                if (info.description.isEmpty() && canEdit) Text("Add channel description...", fontSize = 17.sp, color = c.secondary,
+                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
+                        .clickable { manage.edit(info.cid) }.padding(horizontal = 8.dp, vertical = 4.dp))
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     for (circle in ChannelRules.circles(shownRole, info.username.isNotEmpty(), muted)) {
@@ -327,6 +334,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     }
                     // Channel Type and Protect Content live on Channel Settings (as iOS).
                 }
+                // iOS: All Media under the settings card, when the channel has photos or videos.
+                if (me.isNotEmpty()) com.fariin.app.ui.people.SharedMediaCard(info.cid, shared) { allMedia = true }
                 Spacer(Modifier.height(20.dp))
                 Card {
                     // Leave first, then Report (iOS order), with the Leave Group arrow.
@@ -345,7 +354,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         modifier = Modifier.padding(16.dp))
                 }
                 if (info.createdAtMillis > 0) {
-                    Text("Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
+                    Text((if (team?.isOwner(me) == true) "Created by you. " else "") + "Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp))
                 }
                 error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }

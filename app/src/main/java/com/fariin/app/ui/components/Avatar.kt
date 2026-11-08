@@ -43,9 +43,10 @@ fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier, squircle:
         if (photoUrl.isNullOrEmpty() || failed) {
             Icon(
                 when (kind) {
-                    AvatarKind.PERSON -> Icons.Filled.Person
-                    AvatarKind.GROUP -> Icons.Filled.Groups
-                    AvatarKind.CHANNEL -> Icons.Filled.Campaign
+                    AvatarKind.PERSON -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Person)
+                    AvatarKind.GROUP -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Groups)
+                    // The iPhone's megaphone, not the one with sound lines (owner 2026-11-07).
+                    AvatarKind.CHANNEL -> androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_channel_megaphone)
                 },
                 contentDescription = null,
                 tint = Color.White,

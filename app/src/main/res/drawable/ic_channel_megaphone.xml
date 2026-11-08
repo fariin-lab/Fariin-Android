@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A channel without a photo (iOS megaphone.fill, owner 2026-11-07): the rounded mouth on the left,
+     the cone opening to the right, its rim as a tall rounded bar, and the small handle under it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- the mouth -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6.2,8.6H8.4V14.6H6.2C4.95,14.6 4,13.6 4,12.35V10.85C4,9.6 4.95,8.6 6.2,8.6Z" />
+    <!-- the cone -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.2,8.6C11.6,8.5 13.9,7.8 15.8,6.5V16.7C13.9,15.4 11.6,14.7 9.2,14.6Z" />
+    <!-- the rim -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M17.6,5.4C18.25,5.4 18.8,5.95 18.8,6.6V16.6C18.8,17.25 18.25,17.8 17.6,17.8C16.95,17.8 16.4,17.25 16.4,16.6V6.6C16.4,5.95 16.95,5.4 17.6,5.4Z" />
+    <!-- the handle -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6.9,15.4H9.6L10,17.3C10.15,18 9.65,18.6 8.95,18.6H8.7C8.25,18.6 7.85,18.35 7.65,17.95Z" />
+</vector>
