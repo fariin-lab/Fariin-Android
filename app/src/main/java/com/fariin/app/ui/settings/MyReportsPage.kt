@@ -57,7 +57,7 @@ internal fun MyReportsPage(pop: () -> Unit) {
     var open by remember { mutableStateOf<MyReport?>(null) }
     LaunchedEffect(Unit) {
         val page = MyReports.page()
-        if (page == null) failed = true else { items = page; more = page.size >= MyReports.PAGE_SIZE }
+        if (page == null) failed = true else { items = page.items; more = page.more }
     }
     open?.let { r ->
         BackHandler { open = null }
@@ -86,8 +86,8 @@ internal fun MyReportsPage(pop: () -> Unit) {
                             scope.launch {
                                 val next = MyReports.page(before = list.lastOrNull()?.createdAtMs)
                                 if (next != null) {
-                                    items = (list + next).distinctBy { it.id }
-                                    more = next.size >= MyReports.PAGE_SIZE
+                                    items = (list + next.items).distinctBy { it.id }
+                                    more = next.more
                                 } else com.fariin.app.ui.components.Snack.show("Couldn't load more. Try again.")
                                 loadingMore = false
                             }

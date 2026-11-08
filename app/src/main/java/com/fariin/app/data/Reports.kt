@@ -281,12 +281,18 @@ object MyReports {
         }
     }
 
-    /** The one call: a page of my reports older than [before] (ms); null when it failed. */
-    suspend fun page(before: Long? = null): List<MyReport>? = runCatching {
+    /** Whether the server says there are older ones (`more`); without the flag, a full page means maybe. */
+    fun more(data: Any?, got: Int): Boolean = ((data as? Map<*, *>)?.get("more") as? Boolean) ?: (got >= PAGE_SIZE)
+
+    data class Page(val items: List<MyReport>, val more: Boolean)
+
+    /** The one call: a page of my reports older than [before] (createdAt ms); null when it failed. */
+    suspend fun page(before: Long? = null): Page? = runCatching {
         val args = if (before != null) mapOf("before" to before) else emptyMap<String, Any>()
         val r = com.google.firebase.functions.FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
             .getHttpsCallable("myReports").withTimeout(20, java.util.concurrent.TimeUnit.SECONDS).call(args).await()
-        parse(r.getData())
+        val items = parse(r.getData())
+        Page(items, more(r.getData(), items.size))
     }.getOrNull()
 
     const val PAGE_SIZE = 30
