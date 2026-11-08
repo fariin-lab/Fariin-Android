@@ -19,6 +19,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import dev.chrisbanes.haze.hazeSource
@@ -2369,7 +2370,8 @@ private fun Composer(
                     Spacer(Modifier.width(12.dp))
                 }
             } else {
-                Box(Modifier.size(COMPOSER_BUTTON).floating().clickable { lightTap(); onAttach() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(COMPOSER_BUTTON).onGloballyPositioned { AttachSource.rect = it.boundsInWindow() }
+                    .floating().clickable { lightTap(); onAttach() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Add, contentDescription = "Attach", tint = c.label, modifier = Modifier.size(28.dp))
                 }
                 Spacer(Modifier.width(8.dp))

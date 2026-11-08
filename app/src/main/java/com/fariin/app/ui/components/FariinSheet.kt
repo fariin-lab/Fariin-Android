@@ -43,6 +43,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -98,15 +101,52 @@ fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = nul
     val c = Fariin.colors
     val bg = fill ?: c.bg
     LaunchedEffect(Unit) { motion.open() }
+    val at = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
     Box(Modifier.fillMaxSize()
-        .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * (1f - motion.y / motion.full).coerceIn(0f, 1f))) }
+        .drawBehind { drawRect(Color.Black.copy(alpha = 0.4f * motion.grow.value * (1f - motion.y / motion.full).coerceIn(0f, 1f))) }
         .clickable(interactionSource = null, indication = null) { motion.close() }) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 10.dp)
+            .onGloballyPositioned { at[0] = it.boundsInWindow() }
             .offset { IntOffset(0, motion.y.toInt()) }
-            .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
+            .graphicsLayer {
+                // Grown from a button (SheetMotion.source): at 0 the sheet is a circle sitting on the
+                // button, at 1 it is itself; the corners round off as it goes.
+                val g = motion.grow.value
+                val src = if (g < 1f) motion.source?.invoke() else null
+                val box = at[0]
+                if (src != null && box != null && size.width > 0f) {
+                    val inv = 1f - g
+                    val sx = src.width / size.width; val sy = src.height / size.height
+                    scaleX = sx + (1f - sx) * g; scaleY = sy + (1f - sy) * g
+                    val cx = box.left + size.width / 2f; val cy = box.top + motion.y + size.height / 2f
+                    translationX = (src.center.x - cx) * inv
+                    translationY = (src.center.y - cy) * inv
+                    val r = SheetCorner.toPx()
+                    shape = RoundedCornerShape(lerpPx(size.width / 2f, r, g), lerpPx(size.width / 2f, r, g),
+                        lerpPx(size.width / 2f, 0f, g), lerpPx(size.width / 2f, 0f, g))
+                    clip = true
+                } else {
+                    scaleX = 1f; scaleY = 1f; translationX = 0f; translationY = 0f
+                    shape = RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner); clip = true
+                }
+            }
             .drawBehind { drawRect(bg) }
+            .drawWithContent {
+                drawContent()
+                // The button's "+" over the shrunk sheet, fading as it grows (iOS: the glyph rides in).
+                val g = motion.grow.value
+                if (g < 0.5f && motion.source != null) {
+                    val a = (1f - g / 0.5f).coerceIn(0f, 1f)
+                    val arm = minOf(size.width, size.height) * 0.12f
+                    val cx = size.width / 2f; val cy = size.height / 2f
+                    val col = c.label.copy(alpha = a)
+                    val sw = minOf(size.width, size.height) * 0.025f
+                    drawLine(col, Offset(cx - arm, cy), Offset(cx + arm, cy), sw)
+                    drawLine(col, Offset(cx, cy - arm), Offset(cx, cy + arm), sw)
+                }
+            }
             .clickable(interactionSource = null, indication = null) {}) {
-            Box(Modifier.weight(1f)) {
+            Box(Modifier.weight(1f).graphicsLayer { alpha = ((motion.grow.value - 0.35f) / 0.45f).coerceIn(0f, 1f) }) {
                 content()
                 if (handle) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(SheetHandleStrip).sheetDrag(motion)) {
                     // The iOS grabber: 36 x 5, 6 dp from the top, grey that reads on a map and on a page.
@@ -117,6 +157,8 @@ fun FariinSheet(motion: SheetMotion, handle: Boolean = false, fill: Color? = nul
         }
     }
 }
+
+private fun lerpPx(a: Float, b: Float, t: Float) = a + (b - a) * t
 
 /** The sheet's top corner radius (the browser's, tuned on the phone). */
 val SheetCorner = 32.dp
@@ -213,6 +255,16 @@ class SheetMotion internal constructor(
     var mid = 0f
     /** Resting fully open (no drag or animation holding it lower). */
     val atFull: Boolean get() = y <= 0.5f
+
+    /**
+     * Set: the sheet grows out of this button (its rect in window pixels, the composer's "+") and a
+     * button or Back close shrinks it back into it (iOS AttachSheetController, owner 2026-11-07:
+     * "in iOS it animates open and close, Android doesn't"). A swipe down still slides it away.
+     */
+    var source: (() -> androidx.compose.ui.geometry.Rect?)? = null
+    /** 0 = the button, 1 = the sheet; stays 1 for a sheet with no [source]. */
+    val grow = androidx.compose.animation.core.Animatable(1f)
+    private fun sourceRect() = source?.invoke()?.takeIf { it.width > 0f && !still }
     private var raw = 0f            // the finger's own travel; y is raw with the rubber band applied
     private var job: Job? = null
     private var closing = false
@@ -229,7 +281,18 @@ class SheetMotion internal constructor(
     // Open and close by button follow the iOS sheet curve (the one the open-source "Vaul" drawer uses
     // to match it): a quick start, a soft stop, no crawl at the end. The old critically damped spring
     // spent its last ~0.25 s creeping the final pixels (frame by frame on the Pixel, 2026-11-06).
-    fun open() = run(mid, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
+    fun open() {
+        if (sourceRect() != null && !closing) {
+            // From the button: the sheet sits at its stop at once and grows there.
+            job?.cancel(); y = mid; raw = mid
+            scope.launch {
+                grow.snapTo(0f)
+                grow.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 300f, visibilityThreshold = 0.002f))
+            }
+            return
+        }
+        run(mid, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
+    }
 
     /**
      * Moves the middle stop to where the content, now measured, really ends (a sheet as tall as what
@@ -253,6 +316,15 @@ class SheetMotion internal constructor(
     fun close(velocity: Float = 0f) {
         if (closing) return
         closing = true
+        // A button, Back or a tap on the dim: back into the button it came from.
+        if (velocity <= 0f && sourceRect() != null) {
+            job?.cancel()
+            scope.launch {
+                grow.animateTo(0f, tween(300, easing = SheetEase))
+                onClosed()
+            }
+            return
+        }
         // A flick keeps its own speed (a spring started from it); a button or Back uses the curve.
         val spec: AnimationSpec<Float> =
             if (still) androidx.compose.animation.core.snap()

@@ -92,6 +92,9 @@ import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Where the composer's "+" sits on screen (window pixels), so the attach sheet grows out of it. */
+internal object AttachSource { @Volatile var rect: androidx.compose.ui.geometry.Rect? = null }
+
 /**
  * The attach sheet, after iOS AttachSheetController + AttachRecentsStrip, built on the Android
  * Photo Picker (no photo or video permission, Play policy). The sheet opens first with its sources
@@ -126,6 +129,8 @@ internal fun AttachSheet(
     // the release by speed), with the iOS detents: it opens at half, the grid's upward scroll or a
     // drag grows it to full, pulling the grid down from its top returns it to half, then closes it.
     val motion = com.fariin.app.ui.components.rememberSheetMotion(onDismiss)
+    // Grows out of the composer's "+" and shrinks back into it (iOS); not when the camera opens first.
+    motion.source = if (cameraFirst) null else ({ AttachSource.rect })
     val density = androidx.compose.ui.platform.LocalDensity.current
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
     // The sheet's top at full height sits 10 dp under the status bar (FariinSheet's frame); the
@@ -277,8 +282,11 @@ internal fun AttachSheet(
             } else if (page == SheetPage.GIFS && onGif != null) {
                 Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab { g -> onGif(g); motion.close() } }
             } else if (page == SheetPage.ALBUMS) {
-                androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().padding(top = 10.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp + navBottomDp)) {
+                // The 10 dp sits INSIDE the scroll: as an outer padding it cut the scrolled rows flat
+                // 10 dp under the sheet's rounded top and left a band there (owner screenshot,
+                // 2026-11-07). Now the rows run up to the rounded edge, as the photo grid does.
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 10.dp, bottom = 96.dp + navBottomDp)) {
                     items(albums.size) { i ->
                         val a = albums[i]
                         AlbumRow(a) { folder = a; page = SheetPage.PHOTOS }
