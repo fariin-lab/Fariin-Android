@@ -1238,3 +1238,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   up to 1.5 s on open (shared rule with iOS, 2 s slack).
 - 2026-11-07 night: select mode: swipe scrolls (the bubble cover ate drags and ticked rows: "7 messages"
   for 3 picks), top and bottom bars restyled with our floating build and menu icons.
+- 2026-11-07 night: invite link tap goes straight in when already a member, sheet opens filled (b99f629);
+  New Call picked row end-anchored with slide-then-grow (owner's reference video, via iOS session).
