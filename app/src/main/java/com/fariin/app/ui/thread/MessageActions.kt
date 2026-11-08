@@ -498,8 +498,12 @@ internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit, content: @Composabl
 @Composable
 internal fun ComposerBar(title: String, text: String, thumb: (@Composable () -> Unit)? = null, onClose: () -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().background(c.bg).padding(start = 14.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(3.dp).height(34.dp).background(c.label))
+    // A ROUNDED CARD over the composer, its sides lined up with the message box (owner 2026-11-08:
+    // the flat edge-to-edge strip), floating like the box under it; the accent bar rounded too.
+    Row(Modifier.fillMaxWidth().padding(start = COMPOSER_SIDE, end = COMPOSER_SIDE, top = 6.dp, bottom = 2.dp)
+        .floating(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+        .padding(start = 12.dp, end = 2.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(3.dp).height(34.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(c.accent))
         // A photo, video poster, GIF or sticker being replied to: its 36 square (iOS banner thumb).
         if (thumb != null) {
             Spacer(Modifier.width(10.dp))
