@@ -568,6 +568,20 @@ fun StoryViewer(
     fun close(vy: Float = 0f) {
         if (hero.committing || hero.closed) return
         if (!hero.staged || size == IntSize.Zero) { land(); return }
+        // The viewers sheet is up: the story is the row's small card. Fold the sheet first so the card
+        // grows back into the full story on its own spring (iOS closeViewers), then fly home from
+        // there. Taking the hero path straight away snapped the card to full size in one frame.
+        // Read from the state, not `sheetFor`: this runs again from the coroutine below.
+        if (sheet.id != null && !hero.live) {
+            hero.committing = true
+            scope.launch {
+                runCatching { sheet.collapse() }
+                withFrameMillis { }
+                hero.committing = false
+                close(vy)
+            }
+            return
+        }
         heroJob[0]?.cancel()
         hero.committing = true
         // The header, its name, time and X stay in the card as it shrinks home (iOS): held at what

@@ -141,6 +141,16 @@ internal class ViewersSheetState(private val scope: CoroutineScope) {
         job = scope.launch { p.animateTo(0f, springSpec, initialVelocity = velocity); id = null }
     }
 
+    /**
+     * The sheet folds in the caller's own coroutine (iOS closeViewers before a close): the card grows
+     * back into the full story on the sheet's spring, and the caller goes on once it is down.
+     */
+    suspend fun collapse(velocity: Float = 0f) {
+        if (id == null) return
+        job?.cancel()
+        try { p.animateTo(0f, springSpec, initialVelocity = velocity) } finally { id = null }
+    }
+
     /** A finger is on the sheet or the row: it owns them, any spring stops. */
     fun hold() { job?.cancel(); scope.launch { p.stop(); row.stop() } }
     fun dragTo(v: Float) { scope.launch { p.snapTo(v.coerceIn(0f, 1f)) } }
