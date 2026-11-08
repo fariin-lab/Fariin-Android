@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
  * The up arrow and the back gesture leave without a change.
  */
 @Composable
-fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: () -> Unit, onApply: (Int) -> Unit) {
+fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: () -> Unit, forNewChats: Boolean = false, onApply: (Int) -> Unit) {
     val c = Fariin.colors
     var selected by remember { mutableStateOf(current) }
     var custom by remember { mutableStateOf(false) }
@@ -70,7 +70,7 @@ fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: (
             IconButton(onClick = { onApply(selected) }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = c.accent) }
         }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top)) {
-            Text(Disappearing.pageHeader(isChannel), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
+            Text(Disappearing.pageHeader(isChannel, forNewChats), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
                 modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 2.dp))
             SettingsSection {
                 for ((label, secs) in Disappearing.presets) CheckRow(label, selected == secs) { selected = secs }

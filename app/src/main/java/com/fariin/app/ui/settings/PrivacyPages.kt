@@ -151,7 +151,7 @@ internal fun privacyRoute(page: String, push: (String) -> Unit, pop: () -> Unit)
         page == PAGE_APP_LOCK -> AppLockPage(pop)
         // The default timer for new chats I start (iOS PrivacySettingsView, same key).
         page == PAGE_DISAPPEAR_DEFAULT -> com.fariin.app.ui.people.DisappearingMessagesPage(
-            com.fariin.app.data.Disappearing.defaultSeconds, onBack = pop) { com.fariin.app.data.Disappearing.defaultSeconds = it; pop() }
+            com.fariin.app.data.Disappearing.defaultSeconds, onBack = pop, forNewChats = true) { com.fariin.app.data.Disappearing.defaultSeconds = it; pop() }
         else -> return false
     }
     return true

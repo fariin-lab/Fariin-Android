@@ -88,8 +88,10 @@ object Disappearing {
         else "$who turned off disappearing messages."
 
     /** DisappearingMessagesView header. */
-    fun pageHeader(isChannel: Boolean): String =
-        if (isChannel) "New posts in this channel disappear for every follower once the chosen time has passed since they were posted."
+    fun pageHeader(isChannel: Boolean, forNewChats: Boolean = false): String =
+        // The Settings default is not one chat: it says it applies to new chats (was "in this chat").
+        if (forNewChats) "New chats you start get this timer: their messages disappear once the chosen time has passed since they were sent."
+        else if (isChannel) "New posts in this channel disappear for every follower once the chosen time has passed since they were posted."
         else "New messages in this chat disappear once the chosen time has passed since they were sent, whether or not they have been read."
 
     const val NEW_GROUP_FOOTER = "New messages in this group disappear for everyone once this time has passed."
