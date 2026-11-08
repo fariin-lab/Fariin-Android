@@ -179,6 +179,9 @@ class CallActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         CallManager.init(this)
+        // A screen the system re-created (process restore, a configuration change) gets its first
+        // intent back: it must never dial or join again (iOS 2026-11-08: one phone placed 14 calls).
+        restored = savedInstanceState != null
         handle(intent)
         // A 1:1 call's window rect follows the screen's size (set once laid out, again after a turn).
         window.decorView.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, orr, ob ->
@@ -398,8 +401,11 @@ class CallActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        restored = false   // a new intent is a new ask
         handle(intent)
     }
+
+    private var restored = false
 
     private fun handle(i: Intent?) {
         i ?: return
@@ -449,6 +455,7 @@ class CallActivity : ComponentActivity() {
             val title = i.getStringExtra(EXTRA_NAME) ?: ""
             val start = i.getBooleanExtra(EXTRA_START, false)
             i.removeExtra(EXTRA_GROUP)
+            if (restored) { if (GroupCall.ui.value.cid == null) finish(); return }
             withMic(video, { GroupCall.join(this, cid, title, video, requireLive = !start) }, { finish() })
             return
         }
@@ -457,6 +464,7 @@ class CallActivity : ComponentActivity() {
         val video = i.getBooleanExtra(EXTRA_VIDEO, false)
         val name = i.getStringExtra(EXTRA_NAME) ?: ""
         val photo = i.getStringExtra(EXTRA_PHOTO)
+        if (restored) { if (!CallManager.ui.value.status.live) finish(); return }
         withMic(video, { CallManager.dial(this, uid, name, photo, video) }, {
             Toast.makeText(this, "Allow microphone access to make calls.", Toast.LENGTH_LONG).show()
             finish()

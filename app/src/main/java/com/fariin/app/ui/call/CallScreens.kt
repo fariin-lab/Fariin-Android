@@ -697,7 +697,8 @@ private fun ControlBar(ui: CallUi, chrome: Chrome, onEnd: () -> Unit, onMute: ()
             chrome.touch(); onShare()
         }
         // Dimmed while a share of mine runs or is being started (iOS shareBlocksCamera).
-        val camOk = ui.cameraOn || !sharingOn
+        // Locked while my outgoing call rings (iOS 30da1e203): a video call stays video until answered.
+        val camOk = (ui.cameraOn || !sharingOn) && ui.status.phase != CallPhase.OUTGOING
         Box(Modifier.alpha(if (camOk) 1f else 0.4f)) {
             Circle(if (ui.cameraOn) ImageVector.vectorResource(R.drawable.ic_call_video) else ImageVector.vectorResource(R.drawable.ic_call_video_off), active = !ui.cameraOn,
                 label = if (ui.cameraOn) "Turn camera off" else "Turn camera on", size = size) { chrome.touch(); if (camOk) onCamera() }
@@ -998,10 +999,15 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     val me = g.members.firstOrNull { it.local } ?: g.members.firstOrNull()
     val meId = me?.id
     val remotes = g.members.filter { it.id != meId }
-    LaunchedEffect(g.members.map { it.id }) { if (focus != null && remotes.none { it.id == focus }) focus = null }
+    // Gone, or no picture any more (camera and screen off): back to the grid (iOS 686b9eed5).
+    LaunchedEffect(g.members.map { Triple(it.id, it.video != null, it.screen != null) }) {
+        if (focus != null && remotes.none { it.id == focus && (it.video != null || it.screen != null) }) focus = null
+    }
     // iOS: no pin in the two-person look (the other person is the whole stage already).
     LaunchedEffect(remotes.size) { if (remotes.size < 2) focus = null }
-    val allowed = g.joined && !people && g.requests.isEmpty() && (g.cameraOn || g.members.any { it.video != null || it.screen != null })
+    // iOS fa5c76f87 (owner 2026-11-08): a group or link call's header and controls never hide.
+    val chromeMayHide = false
+    val allowed = chromeMayHide && g.joined && !people && g.requests.isEmpty() && (g.cameraOn || g.members.any { it.video != null || it.screen != null })
     // A shared screen is what the room is looking at: its presenter takes the stage unless I picked
     // someone (iOS GroupCallStage: the user's pin, then the presenter, else the grid).
     val presenter = remotes.firstOrNull { it.screen != null }?.id
@@ -1050,7 +1056,9 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                         onTile = { id ->
                             chrome.touch()
                             // A strip tile goes large (pinned); my own tile does nothing (iOS).
-                            if (id != meId && (remotes.size >= 2 || presenter != null)) focus = id
+                            // Only someone with a picture (camera or screen) goes large (iOS 686b9eed5).
+                            val t = remotes.firstOrNull { it.id == id }
+                            if (id != meId && t != null && (t.video != null || t.screen != null) && (remotes.size >= 2 || presenter != null)) focus = id
                         },
                         // iOS GroupCallFocusView: a tap on the large tile shows or hides the controls,
                         // a swipe down unpins it.

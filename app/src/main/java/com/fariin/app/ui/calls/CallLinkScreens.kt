@@ -122,7 +122,7 @@ fun CreateCallLinkScreen(onClose: () -> Unit) {
         draft = try { CallLinks.create() } catch (_: Exception) { failed = true; null }
     }
     val state = remember(draft?.roomId) { draft?.let { LinkState(it.roomId, it.key, it.name, it.approval, it.video, admin = true) } }
-    fun persist() { state?.let { CallLinks.persist(CallLinkDraft(it.roomId, it.key, it.name, it.approval ?: true, it.video ?: true)) } }
+    fun persist() { state?.let { CallLinks.persist(CallLinkDraft(it.roomId, it.key, it.name, it.approval ?: true, it.video ?: false)) } }
     val close = { persist(); onClose() }
     BackHandler { close() }
     CallLinkPage(close) { top ->
@@ -156,8 +156,8 @@ fun CallLinkDetailsScreen(roomId: String, onBack: () -> Unit) {
         val d = CallLinks.readDoc(link.roomId)
         if (d != null) {
             state.approval = d["restrictions"] == "adminApproval"
-            state.video = d["video"] != false
-        } else state.video = true
+            state.video = d["video"] == true
+        } else state.video = false
     }
     CallLinkPage(onBack) { top ->
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))

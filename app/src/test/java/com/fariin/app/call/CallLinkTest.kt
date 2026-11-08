@@ -67,7 +67,7 @@ class CallLinkTest {
     }
 
     @Test fun wireShapes() {
-        assertEquals(mapOf("roomId" to "r", "encName" to "", "restrictions" to "adminApproval", "video" to true), CallLinkWire.createBody("r"))
+        assertEquals(mapOf("roomId" to "r", "encName" to "", "restrictions" to "adminApproval", "video" to false), CallLinkWire.createBody("r"))
         assertEquals(mapOf("roomId" to "r", "link" to true, "servers" to listOf("own")), CallLinkWire.tokenRequest("r"))
         val d = CallLinkDraft("r", key.text, "Hi")
         assertEquals(setOf("key", "name", "admin", "createdAt"), CallLinkWire.listFields(d, true, "ts").keys)

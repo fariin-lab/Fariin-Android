@@ -193,7 +193,7 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
     var title by remember { mutableStateOf(CallLinkDefaults.NAME) }
     var voiceOnly by remember { mutableStateOf(!videoFromPath) }
     var cameraOn by remember { mutableStateOf(true) }
-    var micOn by remember { mutableStateOf(false) }
+    var micOn by remember { mutableStateOf(true) }   // iOS 2026-11-08: you go in with your mic on
     var cameraDenied by remember { mutableStateOf(false) }
     var cameraReady by remember { mutableStateOf(granted(ctx, Manifest.permission.CAMERA)) }
     var released by remember { mutableStateOf(false) }

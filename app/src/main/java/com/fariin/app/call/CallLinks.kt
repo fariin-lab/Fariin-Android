@@ -216,7 +216,8 @@ data class SavedCallLink(val roomId: String, val key: String, val name: String, 
 }
 
 /** A link made on the server but not yet in my list (it goes in on Done, Join, Copy or Share). */
-data class CallLinkDraft(val roomId: String, val key: String, val name: String = "", val approval: Boolean = true, val video: Boolean = true) {
+data class CallLinkDraft(val roomId: String, val key: String, val name: String = "", val approval: Boolean = true,
+                         /** Voice by default (owner 2026-11-08, iOS 6a8315ea6). */ val video: Boolean = false) {
     val title: String get() = name.ifEmpty { CallLinkDefaults.NAME }
     val linkKey: CallLinkKey? get() = CallLinkKey.ofText(key)
 }
@@ -228,7 +229,7 @@ data class LinkPeek(val title: String, val count: Int, val names: List<String>, 
 /** The wire shapes, kept pure for the tests. */
 object CallLinkWire {
     fun createBody(roomId: String): Map<String, Any> =
-        mapOf("roomId" to roomId, "encName" to "", "restrictions" to "adminApproval", "video" to true)
+        mapOf("roomId" to roomId, "encName" to "", "restrictions" to "adminApproval", "video" to false)
 
     fun listFields(draft: CallLinkDraft, first: Boolean, stamp: Any): Map<String, Any> = buildMap {
         put("key", draft.key); put("name", draft.name); put("admin", true)
