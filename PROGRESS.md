@@ -1233,3 +1233,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-07 night: Forward sheet: preview (up to 3 cards, +N), "Add a message…", send arrow; one chat
   picked lands in it (owner's ask, iOS parity). Emulator: preview and landing OK; the note needs a server
   (emulator has none), owner to try on the Pixel in kream.
+- 2026-11-07 night: Calls' New Call moved to a floating bottom-end button (owner, reference app). Chat
+  open: preloader retries (chat close, launch hold, slot free, foreground), top 20; stale saved rows held
+  up to 1.5 s on open (shared rule with iOS, 2 s slack).
