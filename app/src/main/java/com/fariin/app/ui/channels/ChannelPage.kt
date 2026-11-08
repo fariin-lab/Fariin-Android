@@ -127,7 +127,7 @@ fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> 
     else ChannelFollows.adjusted(cid, preview?.shownCount ?: base.followerCount)
     ChannelPage(base, shown, ChannelRules.role(base, me, entries.containsKey(cid)), entries[cid]?.isMuted() ?: false, onBack, onLeft,
         team = com.fariin.app.channel.ChannelAdmins.Team.from(doc), me = me, manage = manage,
-        onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack() }) else null)
+        onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack) }) else null)
 }
 
 @Composable

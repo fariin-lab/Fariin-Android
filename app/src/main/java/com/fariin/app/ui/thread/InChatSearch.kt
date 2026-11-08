@@ -57,6 +57,7 @@ import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 
 /**
  * The way in from the info pages (iOS searchFromInfoPage): the chat's own header opens its info
@@ -70,6 +71,19 @@ object InChatSearchLink {
     /** Read once by the info page as it opens: was it opened from [cid]'s chat? */
     fun takeOpenedFrom(cid: String): Boolean = (openedFrom == cid).also { openedFrom = null }
     fun request(cid: String) { requests.value = cid }
+
+    private var leftAt = 0L
+    /**
+     * An info page's Search circle: ask the chat to open search, then go back to it. Once: a second
+     * tap while the page is still fading out popped the chat as well, landing on the chat list with
+     * the request left waiting for the next time that chat opened.
+     */
+    fun searchFromInfo(cid: String, back: () -> Unit) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - leftAt < 1000) return
+        leftAt = now
+        request(cid); back()
+    }
 }
 
 /** The search words while search is open, for the bubbles' yellow marks (iOS searchTerm). */
@@ -128,7 +142,15 @@ internal class InChatSearchState {
 @Composable
 internal fun SearchTopBar(s: InChatSearchState, focus: FocusRequester, onClose: () -> Unit, onSubmit: () -> Unit) {
     val c = Fariin.colors
-    LaunchedEffect(Unit) { delay(150); try { focus.requestFocus() } catch (_: Exception) {} }   // iOS: focus 0.15 s after opening
+    // The keyboard once the page change has landed (iOS searchFromInfoPage waits for the pop too):
+    // the chat's page is RESUMED only when the info page's fade has finished, then 0.15 s as iOS.
+    val life = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withTimeoutOrNull(1500) {
+            life.currentStateFlow.first { it.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        }
+        delay(150); try { focus.requestFocus() } catch (_: Exception) {}
+    }
     Row(Modifier.fillMaxWidth().statusBarsPadding().height(64.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose, modifier = Modifier.padding(start = 4.dp, end = 8.dp).size(44.dp).floating()) {

@@ -921,7 +921,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     .clickable { editAtDescription = true; editing = true }.padding(horizontal = 8.dp, vertical = 4.dp))
             if (iAmMember) {
                 Spacer(Modifier.height(16.dp))
-                GroupCirclesRow(cid, me, conv, users.size, onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack() }) else null,
+                GroupCirclesRow(cid, me, conv, users.size, onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack) }) else null,
                     onNotice = { notice = it })
             }
             Spacer(Modifier.height(20.dp))

@@ -723,7 +723,10 @@ private fun ThreadContent(
     // The Quotes sheet a post's "N Quotes" bar opens (PostQuotesUi.kt).
     ui.channel?.let { ch -> com.fariin.app.ui.channels.PostQuotesHost(ui.cid, ui.title, ui.photoUrl, ch.info.verified, quotesOff = ch.info.quotesOff) }
     // In-chat search (InChatSearch.kt, iOS uiMode .search): opened from the info pages' Search circle.
-    val search = remember(ui.cid) { InChatSearchState() }
+    // Back from the info page's Search: the chat's first frame is already in search mode. Opened
+    // later from the effect below, the header, pinned bar and composer swapped out a frame after the
+    // chat showed, inside the info page's fade, and the list moved under them (owner 2026-11-08).
+    val search = remember(ui.cid) { InChatSearchState().also { if (InChatSearchLink.requests.value == ui.cid) it.open() } }
     val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     fun goToMatch() {

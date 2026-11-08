@@ -627,7 +627,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                     setMute(if (muted) 0.0 else com.fariin.app.data.GroupInfoCircles.FOREVER)
                 }
                 if (fromChat && uid != me) ActionTile("Search", androidx.compose.material.icons.Icons.Filled.Search, share) {
-                    com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack()
+                    com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack)
                 }
             }
             Spacer(Modifier.height(20.dp))

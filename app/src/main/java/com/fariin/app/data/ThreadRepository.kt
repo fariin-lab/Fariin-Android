@@ -1537,13 +1537,20 @@ class ThreadRepository(
      * iOS MessageSearch.loadChat: the newest 1000 messages read and opened on this phone for the
      * in-chat search. Not kept anywhere. Skipped like the thread skips them: view-once, deleted,
      * hidden for me, sent while I had them blocked, nothing to read.
+     * Off the main thread: it is called from the chat's composition, and opening up to 1000
+     * messages there froze the screen while the search keyboard was coming up (owner 2026-11-08,
+     * "Search on the profile glitches").
      */
     suspend fun searchCorpus(limit: Int = ChatSearch.CORPUS_LIMIT): List<ChatSearch.Item> = try {
+        kotlinx.coroutines.withContext(Dispatchers.Default) { readCorpus(limit) }
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptyList() }
+
+    private suspend fun readCorpus(limit: Int): List<ChatSearch.Item> {
         val snap = convRef.collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(limit.toLong())
             .get().await()
-        snap.documents.mapNotNull { d ->
+        return snap.documents.mapNotNull { d ->
             val m = Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             when {
                 HiddenMessages.isHidden(m.id) -> null
@@ -1552,7 +1559,7 @@ class ThreadRepository(
                 else -> ChatSearch.searchText(m)?.let { ChatSearch.Item(m.id, it, m.authorId, m.createdAtMillis) }
             }
         }
-    } catch (_: Exception) { emptyList() }
+    }
 
     /** iOS ensureLoaded: page older history until [id] is in the window (at most [maxPages] pages). */
     suspend fun ensureLoaded(id: String, maxPages: Int = 12): Boolean {
