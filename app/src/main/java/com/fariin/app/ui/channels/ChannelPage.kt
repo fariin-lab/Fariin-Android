@@ -398,8 +398,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         modifier = Modifier.padding(16.dp))
                 }
                 if (info.createdAtMillis > 0) {
-                    Text((if (team?.isOwner(me) == true) "Created by you.
-" else "") + "Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
+                    Text((if (team?.isOwner(me) == true) "Created by you.\n" else "") + "Created ${createdLine(ctx, info.createdAtMillis)}.", fontSize = 13.sp, color = c.secondary,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp))
                 }
                 error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }
