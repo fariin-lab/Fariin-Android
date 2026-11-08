@@ -120,7 +120,9 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
     return this
         .shadow(12.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.05f), spotColor = Color.Black.copy(alpha = 0.10f))
         .clip(shape)
-        .background(fill ?: c.card)
-        // The rim is barely there, as the glass edge is: the text colour at 7% (dark in light, light in dark).
-        .border(0.5.dp, c.label.copy(alpha = 0.07f), shape)
+        // Off the glass, the same look as the glass buttons (owner 2026-11-08: the Stories "..." was a faint
+        // white circle on a white page): their soft grey frost and the white rim.
+        .background(fill ?: if (c.dark) c.card else Color(0xFFF4F4F7))
+        .border(if (c.dark || fill != null) 0.5.dp else 1.dp,
+            if (fill != null) c.label.copy(alpha = 0.07f) else if (c.dark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.95f), shape)
 }

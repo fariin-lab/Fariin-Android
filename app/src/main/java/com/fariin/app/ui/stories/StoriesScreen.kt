@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.material.icons.filled.Search
 import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
@@ -301,6 +302,13 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // The list runs under a frosted bar (owner 2026-11-08, as Calls and Settings): the rows show
     // blurred through it as they scroll under; 48 high, no line.
     val storiesHaze = remember { dev.chrisbanes.haze.HazeState() }
+    val barScope = androidx.compose.runtime.rememberCoroutineScope()
+    // The field scrolled up under the bar: a search button takes its place (as Calls and the chat list).
+    val searchGone by remember { androidx.compose.runtime.derivedStateOf {
+        val info = listState.layoutInfo.visibleItemsInfo
+        val field = info.firstOrNull { it.key == "search" }
+        if (field == null) info.isNotEmpty() && info.first().index > 0 else field.offset + field.size * 0.1f <= 0
+    } }
     val frost = com.fariin.app.perf.rememberPowerState().glass()
     val topPad = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 48.dp
     Box(Modifier.fillMaxSize().background(c.bg)) {
@@ -312,6 +320,12 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             Text(com.fariin.app.ui.chats.rememberConnectionTitle("Stories"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp))
+            androidx.compose.animation.AnimatedVisibility(searchGone && query.isEmpty(), Modifier.align(Alignment.CenterEnd),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.6f),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.6f)) {
+                com.fariin.app.ui.components.FloatingIcon(Icons.Filled.Search, contentDescription = "Search",
+                    onClick = { barScope.launch { listState.animateScrollToItem(0) } }, circle = true)
+            }
             // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
             Box(Modifier.align(Alignment.CenterStart)) {
                 com.fariin.app.ui.components.FloatingIcon(Icons.Filled.MoreHoriz, contentDescription = "More", onClick = { moreOpen = true }, circle = true)
@@ -330,7 +344,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         }
         LazyColumn(Modifier.fillMaxSize().then(if (frost) Modifier.hazeSource(storiesHaze) else Modifier), state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = topPad, bottom = com.fariin.app.ui.shell.bottomBarInset())) {
-            item(key = "search", contentType = "search") { com.fariin.app.ui.calls.SearchField(search, { search = it }, "Search") }
+            // A little air under the bar's buttons (owner 2026-11-08: "too close" to the ••• circle).
+            item(key = "search", contentType = "search") { Box(Modifier.padding(top = 10.dp)) { com.fariin.app.ui.calls.SearchField(search, { search = it }, "Search") } }
             // The field replaces the page rather than filtering it in place (iOS): one list of
             // matches in the list's own rows under "Friends", or "No Results".
             if (query.isNotEmpty()) {
