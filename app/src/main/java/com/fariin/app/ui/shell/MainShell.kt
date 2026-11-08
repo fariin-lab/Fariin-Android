@@ -374,7 +374,8 @@ private fun FloatingTabBar(
             shadow = null,
             // No blur pass (measured on the Pixel: the blur took the median frame from 13 to 18 ms
             // while scrolling); a slightly thicker frosted surface keeps the labels readable instead.
-            onDrawSurface = { drawRect(if (c.dark) surface.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.55f)) },
+            // Thicker (owner 2026-11-08: the rows were readable through it): only soft shapes show now.
+            onDrawSurface = { drawRect(if (c.dark) surface.copy(alpha = 0.84f) else Color.White.copy(alpha = 0.86f)) },
         )
     } else if (glass) {
         Modifier.hazeEffect(haze) {
@@ -384,7 +385,7 @@ private fun FloatingTabBar(
             // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
             inputScale = HazeInputScale.Fixed(1f / 3)
             // Frosted white by day, the dark surface at night, both thin enough to show what passes under.
-            tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = 0.60f) else Color.White.copy(alpha = 0.72f)))
+            tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = 0.84f) else Color.White.copy(alpha = 0.86f)))
         }
     } else Modifier.background(surface.copy(alpha = 0.97f))
     Row(
