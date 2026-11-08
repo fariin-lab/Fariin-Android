@@ -358,7 +358,9 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
         text = { Text("Check your connection and try again.") },
         confirmButton = { TextButton({ failed = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     val list = requests.filter { it.id !in gone }
-    BarPage("Message Requests", onBack = onBack, body = c.bg) { top ->
+    // The white page with the shared frosted top (as Archive and the other pages); the bar was a grey band.
+    com.fariin.app.ui.components.GlassBarPage(false, Modifier.background(c.bg), page = c.bg, frosted = true,
+        bar = { PageBar("Message Requests", onBack = onBack) }) { top -> Column(Modifier.fillMaxSize()) {
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         if (list.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -366,7 +368,7 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
                 Spacer(Modifier.height(6.dp))
                 Text("Messages from people you haven't chatted with yet will appear here.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
             }
-            return@BarPage
+            return@Column
         }
         Text("Messages from people you haven’t chatted with before arrive here as requests. To reply, accept the request.",
             fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
@@ -388,6 +390,7 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
                 }
             }
         }
+    }
     }
 }
 
