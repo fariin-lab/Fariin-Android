@@ -266,15 +266,9 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             0f to Color.Black, 0.50f to Color.Black, 0.62f to Color.Black.copy(alpha = 0.85f),
             0.74f to Color.Black.copy(alpha = 0.55f), 0.85f to Color.Black.copy(alpha = 0.25f),
             0.93f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
-        // FROSTED, EXACTLY THE BAR (owner 2026-11-08): the rows show blurred through it as they scroll
-        // under; no line, and no long fading tail below it (that tail was the band he did not want).
-        Box(Modifier.fillMaxWidth().then(
-            if (glass) Modifier.hazeEffect(haze) {
-                backgroundColor = c.bgSecondary; blurRadius = 20.dp; noiseFactor = 0f
-                tints = listOf(dev.chrisbanes.haze.HazeTint(c.bgSecondary.copy(alpha = 0.72f)))
-                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
-            } else Modifier.background(c.bgSecondary.copy(alpha = 0.94f))
-        ).statusBarsPadding().height(barH)) {
+        // CLEAR, NO BAR AT ALL (owner 2026-11-08, "see how it becomes"): the title and the search
+        // float over the page with nothing behind them; the rows pass under in full.
+        Box(Modifier.fillMaxWidth().statusBarsPadding().height(barH)) {
             Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)) {
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,

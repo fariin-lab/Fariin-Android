@@ -1,5 +1,9 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.zIndex
@@ -293,11 +297,22 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // A second tap on Stories: to the top.
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
 
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding()) {
+    // The list runs under a frosted bar (owner 2026-11-08, as Calls and Settings): the rows show
+    // blurred through it as they scroll under; 48 high, no line.
+    val storiesHaze = remember { dev.chrisbanes.haze.HazeState() }
+    val frost = com.fariin.app.perf.rememberPowerState().glass()
+    val topPad = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 48.dp
+    Box(Modifier.fillMaxSize().background(c.bg)) {
         // iOS StoriesTabView bar: the ••• menu in a round glass button at the LEADING edge and
         // "Stories" centred (inline title, 17 semibold). No camera here: iOS took add-story off the
         // header (owner 2026-10-11, "I don't need it"); the camera on My Story's row posts.
-        Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp)) {
+        Box(Modifier.zIndex(1f).fillMaxWidth().then(
+            if (frost) Modifier.hazeEffect(storiesHaze) {
+                backgroundColor = c.bg; blurRadius = 20.dp; noiseFactor = 0f
+                tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.72f)))
+                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
+            } else Modifier.background(c.bg.copy(alpha = 0.94f))
+        ).statusBarsPadding().height(48.dp).padding(horizontal = 16.dp)) {
             Text(com.fariin.app.ui.chats.rememberConnectionTitle("Stories"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp))
@@ -317,7 +332,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                 }
             }
         }
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
+        LazyColumn(Modifier.fillMaxSize().then(if (frost) Modifier.hazeSource(storiesHaze) else Modifier), state = listState,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = topPad, bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             item(key = "search", contentType = "search") { com.fariin.app.ui.calls.SearchField(search, { search = it }, "Search") }
             // The field replaces the page rather than filtering it in place (iOS): one list of
             // matches in the list's own rows under "Friends", or "No Results".
