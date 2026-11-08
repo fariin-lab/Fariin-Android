@@ -349,7 +349,8 @@ private fun ShareLayout(ui: CallUi, chrome: Chrome, remote: VideoTrack?, local: 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Them: their camera, never their screen (it rides on that same track). Me: my live camera.
                 ShareTile(remote.takeIf { ui.remoteCameraOn && !ui.remoteScreen }, false, ui.peerName, ui.peerPhoto, tileH) { chrome.tap(true) }
-                ShareTile(local.takeIf { ui.cameraOn && !ui.sharing }, ui.frontCamera, "You", null, tileH) { chrome.tap(true) }
+                // My own tile showed the grey person (owner 2026-11-08, screen share): my profile photo.
+                ShareTile(local.takeIf { ui.cameraOn && !ui.sharing }, ui.frontCamera, "You", rememberMyPhoto(), tileH) { chrome.tap(true) }
             }
         }
     }
@@ -1448,4 +1449,18 @@ private fun LiveKitVideo(track: io.livekit.android.room.track.VideoTrack, modifi
         (r.tag as? io.livekit.android.room.track.VideoTrack)?.removeRenderer(r)
         r.release()
     })
+}
+
+
+/** My own profile photo, from this phone's copy first, then the server (calls' own tiles). */
+@Composable
+internal fun rememberMyPhoto(): String? {
+    val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val photo by androidx.compose.runtime.produceState<String?>(null, me) {
+        if (me == null) return@produceState
+        val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
+        value = runCatching { ref.get(com.google.firebase.firestore.Source.CACHE).await().getString("photoUrl") }.getOrNull()?.ifEmpty { null }
+            ?: runCatching { ref.get().await().getString("photoUrl") }.getOrNull()?.ifEmpty { null }
+    }
+    return photo
 }
