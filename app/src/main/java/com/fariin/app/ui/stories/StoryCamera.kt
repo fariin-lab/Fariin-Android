@@ -33,7 +33,6 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
-import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -464,7 +463,7 @@ private fun StoryCamera(
     /** iOS captureWithScreenFlashIfNeeded: front lens + flash on = white screen at full brightness,
      *  120 ms for the exposure to see the light, the photo, then the screen put back 350 ms later. */
     fun shoot() {
-        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        storyHaptic(view, StoryHaptic.MEDIUM)   // iOS: medium on the shutter
         if (!StoryCameraRules.needsScreenFlash(flashOn, front, hasFlash)) { takePhoto(); return }
         if (busy || camera == null) return
         scope.launch {
@@ -492,7 +491,7 @@ private fun StoryCamera(
         runCatching { c.cameraControl.startFocusAndMetering(action) }
         focusAt = at
         focusTaps++
-        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        storyHaptic(view, StoryHaptic.LIGHT)   // iOS: light on the focus tap
     }
 
     fun currentZoom(): Float = camera?.cameraInfo?.zoomState?.value?.zoomRatio ?: 1f
@@ -504,7 +503,7 @@ private fun StoryCamera(
     fun holdStart() {
         locked = false; lockedByThisTouch = false; lockProgress = 0f
         zoomAtRecordStart = currentZoom()
-        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        storyHaptic(view, StoryHaptic.MEDIUM)   // iOS: medium as the recording starts
         startRecording()
     }
 
@@ -515,7 +514,7 @@ private fun StoryCamera(
             lockProgress = StoryCameraRules.lockProgress(dxDp)
             if (StoryCameraRules.reachesLock(dxDp)) {
                 locked = true; lockedByThisTouch = true; lockProgress = 1f
-                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                storyHaptic(view, StoryHaptic.RIGID)   // iOS: rigid as the slide reaches the lock
             }
         }
         StoryCameraRules.dragZoom(zoomAtRecordStart, upDp, dxDp, lensMax)?.let { setZoom(it); pillZoom = -1f }
@@ -526,7 +525,7 @@ private fun StoryCamera(
         if (!hasCamera || !twoLenses || recording != null) return
         front = !front
         pillZoom = 1f
-        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        storyHaptic(view, StoryHaptic.LIGHT)   // iOS flipCamera: light
     }
 
     fun holdEnd() {
@@ -610,6 +609,7 @@ private fun StoryCamera(
                     tint = if (flashOn) Color(0xFFFFD60A) else Color.White) {
                     flashOn = !flashOn
                     if (recording != null && hasFlash) camera?.cameraControl?.enableTorch(flashOn)
+                    storyHaptic(view, StoryHaptic.LIGHT)   // iOS: light on the flash
                 }
             }
         }
@@ -657,7 +657,7 @@ private fun StoryCamera(
                             // finger's release is then the tail of a lock, not a press on stop.
                             if (!locked) lockedByThisTouch = true
                             locked = true; lockProgress = 1f
-                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            storyHaptic(view, StoryHaptic.RIGID)   // iOS lockButton: rigid
                         }
                     }
                 }
