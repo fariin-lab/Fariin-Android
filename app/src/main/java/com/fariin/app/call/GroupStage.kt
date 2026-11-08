@@ -234,6 +234,10 @@ object FaceCluster {
 
 /** Who goes where on the stage (iOS GroupCallGridView.plan with its sticky cells, kept simple). */
 object GroupStagePlan {
+    /** iOS GroupCallPriority.newestFirst: the latest to join first; ties by id. */
+    fun newestFirst(people: List<GroupMember>): List<GroupMember> =
+        people.sortedWith(compareByDescending<GroupMember> { it.joinedAtMs }.thenBy { it.id })
+
     /**
      * The grid's order: with 2+ others, my tile first (iOS 2026-10-27), then the others in the order
      * they came. When they do not all fit ([capacity] cells, mine included), an active speaker who

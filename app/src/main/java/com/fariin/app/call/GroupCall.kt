@@ -190,6 +190,8 @@ data class GroupMember(
     val screen: VideoTrack? = null,
     /** An admin muted them (the server-set `micBlocked` attribute): only an admin's "Allow to Speak" lifts it. */
     val micBlocked: Boolean = false,
+    /** When this phone first saw them in the room (iOS joinedAt): the strip lists the newest first. */
+    val joinedAtMs: Long = 0L,
 )
 
 /** Someone at a call link's door (callLinks/{roomId}/requests/{uid}, status pending). */
@@ -613,6 +615,9 @@ object GroupCall {
         }
     }
 
+    /** uid -> when first seen in this room (iOS CallTile.joinedAt). Cleared with the call. */
+    private val firstSeen = HashMap<String, Long>()
+
     private fun refresh() {
         val r = room ?: return
         if (r.remoteParticipants.isNotEmpty()) someoneCame = true
@@ -645,8 +650,10 @@ object GroupCall {
                 local = p === r.localParticipant,
                 screen = (scr?.track as? VideoTrack)?.takeIf { scr?.muted != true },
                 micBlocked = p.attributes["micBlocked"] == "1",
+                joinedAtMs = firstSeen.getOrPut(uid) { System.currentTimeMillis() },
             )
         }
+        firstSeen.keys.retainAll(all.mapNotNull { it.identity?.value }.toSet())
         val meUid = r.localParticipant.identity?.value ?: ""
         val myRole = GroupCallAdmin.groupRole(team, meUid)
             ?: r.localParticipant.attributes["role"]?.let { CallRole.of(it) } ?: passRole
@@ -926,7 +933,7 @@ object GroupCall {
         requestReg?.remove(); requestReg = null
         requestsReg?.remove(); requestsReg = null
         groupReg?.remove(); groupReg = null
-        team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false
+        team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear()
         ticks?.cancel(); ticks = null
         tracker.update(emptySet(), Long.MAX_VALUE / 2)
         if (link != null && _ui.value.waiting) {

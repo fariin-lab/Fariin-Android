@@ -1219,7 +1219,7 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
                 SharingCard(onStopShare, onLargeTap, Modifier.weight(1f).fillMaxWidth()
                     .padding(start = com.fariin.app.call.GroupCallMetrics.INSET.dp, end = com.fariin.app.call.GroupCallMetrics.INSET.dp,
                         top = com.fariin.app.call.GroupCallMetrics.INSET.dp))
-                Strip(remotes, meId, speaker, iAmSharing, onTile, Modifier)
+                Strip(com.fariin.app.call.GroupStagePlan.newestFirst(remotes), meId, speaker, iAmSharing, onTile, Modifier)
             }
             big != null -> FocusStage(big, remotes, me, speaker, pinned == big.id, onTile, onLargeTap, onUnpin)
             else -> {
@@ -1263,7 +1263,8 @@ private fun FocusStage(big: GroupMember, remotes: List<GroupMember>, me: GroupMe
                        onTile: (String) -> Unit, onLargeTap: () -> Unit, onUnpin: () -> Unit) {
     val m = com.fariin.app.call.GroupCallMetrics
     val presenting = big.screen != null
-    val stripPeople = remotes.filter { it.id != big.id || presenting }
+    // iOS GroupCallStripView: newest first (GroupCallPriority.newestFirst).
+    val stripPeople = com.fariin.app.call.GroupStagePlan.newestFirst(remotes.filter { it.id != big.id || presenting })
     val hands = LocalRaisedHands.current
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth().padding(m.INSET.dp)

@@ -155,4 +155,10 @@ class GroupStagePlanTest {
         assertEquals(60f, GroupStagePlan.avatarSize(96f, 96f))
         assertEquals(56f, GroupStagePlan.avatarSize(417f, 100f), 0.01f)
     }
+
+    @Test fun stripListsTheNewestFirst() {
+        fun m(id: String, at: Long) = GroupMember(id, id, speaking = false, micOn = true, video = null, joinedAtMs = at)
+        val order = GroupStagePlan.newestFirst(listOf(m("a", 1), m("c", 3), m("b", 3))).map { it.id }
+        assertEquals(listOf("b", "c", "a"), order)   // newest first, a tie by id
+    }
 }
