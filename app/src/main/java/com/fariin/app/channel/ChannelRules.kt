@@ -342,7 +342,9 @@ data class ChannelInfo(
                 createdAtMillis = Conversation.millis(d["createdAt"]),
                 names = (d["names"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) -> if (k is String && v is String) k to v else null }?.toMap() ?: emptyMap(),
                 repliesOff = d["repliesOff"] as? Boolean ?: true,
-                quotesOff = d["quotesOff"] as? Boolean ?: false,
+                // A private channel starts with Quotes off (iOS e5086b91b, owner 2026-11-08): no stored
+                // choice reads as off; turning it on in Channel Settings sticks. The server reads it alike.
+                quotesOff = d["quotesOff"] as? Boolean ?: !isPublic,
             )
         }
 
