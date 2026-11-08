@@ -1304,3 +1304,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Pixel owns no channel since kk was deleted on the server); channel All Media card width
   (163370df); swipe-delete on call link rows (40019387, unchecked: no links); channel story faces
   as squircles (808931ea); report sheet X + red Submit (bd74dfb2).
+- 2026-11-08 later afternoon, iOS day-commits brought over: reply answers "A ▸ B" (9dd79bb4),
+  Top/Newest keeps rows (a73d9f52), keyboard closes after reply send (144f96d8), one-step reply
+  report (9f522390), header photo tap = story / hold = photo (cacf6fe9), solid Follow (b460e475),
+  private channels Quotes off by default (c17c9b75), account sheets X/no Cancel/no heart
+  (82d97d47), Add files subtitle (8cf5b88e), private quote previews via hosts (fda354ac), album
+  quote tiles (4af3f445).
