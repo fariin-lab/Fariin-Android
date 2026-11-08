@@ -1298,3 +1298,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 night: channels open on their posts at once: top-up after the server answers
   (71e5ab46), saved copy leaves deleted posts out, rows held while older pages come, no
   "cache behind" hold for channels (iOS item 8). VE3 checked on the Pixel: post in the first frame.
+- 2026-11-08 afternoon, self-driven pass on the Pixel vs iOS (owner asleep, asked me to hunt):
+  portrait-only app (98b6b5a4); group/channel/profile photo from our own photo library sheet
+  (630fba31); Edit Group and Edit Channel as sheets (6f48cbca, ed5ec4da; channel unchecked, the
+  Pixel owns no channel since kk was deleted on the server); channel All Media card width
+  (163370df); swipe-delete on call link rows (40019387, unchecked: no links); channel story faces
+  as squircles (808931ea); report sheet X + red Submit (bd74dfb2).
