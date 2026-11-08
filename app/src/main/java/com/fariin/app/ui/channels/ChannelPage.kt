@@ -34,7 +34,6 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
@@ -56,6 +55,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.fariin.app.ui.components.GlassActionCircle
+import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Search
 import kotlinx.coroutines.tasks.await
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.QrCode2
@@ -283,11 +285,12 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
                         .clickable { manage.edit(info.cid) }.padding(horizontal = 8.dp, vertical = 4.dp))
                 Spacer(Modifier.height(18.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                // iOS followerCircles: equal shares of the row (the page's own 16 dp margins).
+                Row(Modifier.fillMaxWidth()) {
                     for (circle in ChannelRules.circles(shownRole, info.username.isNotEmpty(), muted)) {
                         // A follower's Search is dimmed when the page was not opened from the channel (iOS).
                         val dim = circle.dimmed || (circle.action == Action.SEARCH && onSearch == null)
-                        ActionCircle(iconFor(circle.action), circle.label, dim) { tap(circle.action, circle.dimmed) }
+                        ActionCircle(circle.action, circle.label, dim, Modifier.weight(1f)) { tap(circle.action, circle.dimmed) }
                     }
                 }
                 Spacer(Modifier.height(20.dp))
@@ -372,34 +375,23 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     }
 }
 
-@androidx.compose.runtime.Composable
-private fun iconFor(a: Action): ImageVector = when (a) {
-    Action.FOLLOW -> Icons.Filled.Add
-    Action.LEAVE -> Icons.AutoMirrored.Outlined.ExitToApp
-    Action.SHARE -> Icons.Outlined.Share
-    Action.SEARCH -> Icons.Filled.Search
-    Action.MUTE -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off)
-    Action.UNMUTE -> ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
-}
-
+/** The circle for [a], with the glyph iOS draws for it (followerCircles). */
 @Composable
-private fun ActionCircle(icon: ImageVector, label: String, dimmed: Boolean, onClick: () -> Unit) {
-    val c = Fariin.colors
-    Column(Modifier.width(72.dp).alpha(if (dimmed) 0.45f else 1f).clickable(onClick = onClick).semantics { contentDescription = label },
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
-            // The owner's bells for Mute / Unmute, as iOS (ic_bell_off mutes, ic_bell unmutes).
-            val own = when (label) {
-                "Mute" -> com.fariin.app.R.drawable.ic_bell_off; "Unmute" -> com.fariin.app.R.drawable.ic_bell
-                "Leave" -> com.fariin.app.R.drawable.ic_channel_leave; "Share" -> com.fariin.app.R.drawable.ic_link_share
-                else -> null
-            }
-            if (own != null) Icon(androidx.compose.ui.res.painterResource(own), null, tint = c.label, modifier = Modifier.size(24.dp))
-            else Icon(icon, null, tint = c.label, modifier = Modifier.size(24.dp))
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(label, fontSize = 13.sp, color = c.label, maxLines = 1)
+private fun ActionCircle(a: Action, label: String, dimmed: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    // The owner's own drawings where iOS uses them ("ic_channel_leave", the bells); the SF Symbols
+    // (plus, square.and.arrow.up, magnifyingglass) as the matching outline icons.
+    val own = when (a) {
+        Action.LEAVE -> com.fariin.app.R.drawable.ic_channel_leave
+        Action.MUTE -> com.fariin.app.R.drawable.ic_bell_off
+        Action.UNMUTE -> com.fariin.app.R.drawable.ic_bell
+        else -> null
     }
+    if (own != null) GlassActionCircle(label, androidx.compose.ui.res.painterResource(own), modifier, dimmed = dimmed, onClick = onClick)
+    else GlassActionCircle(label, when (a) {
+        Action.FOLLOW -> Icons.Filled.Add
+        Action.SHARE -> Icons.Outlined.IosShare
+        else -> Icons.Outlined.Search
+    }, modifier, dimmed = dimmed, onClick = onClick)
 }
 
 @Composable

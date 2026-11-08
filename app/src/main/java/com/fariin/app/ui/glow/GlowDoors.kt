@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import com.fariin.app.data.Glow
 import com.fariin.app.ui.components.FariinMenu
 import com.fariin.app.ui.components.FloatingIcon
+import com.fariin.app.ui.components.GlassActionCircle
+import androidx.compose.foundation.layout.fillMaxWidth
 import com.fariin.app.ui.components.floating
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.CoroutineScope
@@ -81,27 +83,18 @@ fun GlowDoorHost(door: GlowDoor) {
     GlowWriteFailed(door.failed) { door.failed = false }
 }
 
-/** The action row's Glow circle, in the row's own look (a 52 floating circle, 13 sp label). */
+/** The action row's Glow circle, in the row's own look (the shared glass circle, iOS PosterActionIcon). */
 @Composable
-fun GlowActionTile(door: GlowDoor) {
-    val c = Fariin.colors
+fun GlowActionTile(door: GlowDoor, modifier: Modifier = Modifier) {
     val s by Glow.state.collectAsState()
     var menu by remember { mutableStateOf(false) }
     val glowing = s.glowing.contains(door.uid)
     val label = if (s.known && glowing) "Remove Glowing" else "Glow Story"
-    Box {
-        Column(
-            Modifier.clip(RoundedCornerShape(16.dp))
-                .clickable(enabled = s.known) { if (glowing) menu = true else door.intro = true }
-                .padding(4.dp).alpha(if (s.known) 1f else 0.35f)
-                .semantics { contentDescription = label },
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
-                GlowMark(24.dp, filled = s.known && glowing)
-            }
-            Spacer(Modifier.height(6.dp))
-            Text("Glow", fontSize = 13.sp, color = c.label)
+    Box(modifier.semantics { contentDescription = label }) {
+        // iOS draws "ic_glow" at 0.42 of the 60 circle.
+        GlassActionCircle("Glow", Modifier.fillMaxWidth(), dimmed = !s.known, enabled = s.known,
+            onClick = { if (glowing) menu = true else door.intro = true }) { col ->
+            GlowMark(60.dp * 0.42f, filled = s.known && glowing, tint = col)
         }
         RemoveGlowingMenu(menu, onDismiss = { menu = false }) { menu = false; door.remove() }
     }

@@ -1094,12 +1094,14 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
             if (!ok) onNotice(circles.MUTE_FAILED)
         }
     }
-    val off = Modifier.alpha(0.45f)
-    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), if (ready) Modifier else off) { call(video = false) }
-        ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), if (ready) Modifier else off) { call(video = true) }
-        Box {
-            ActionTile(if (muted) "Unmute" else "Mute", if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off)) { muteOpen = true }
+    // iOS actionsRow: equal shares of the row, inside the page's 16 dp margins.
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        val share = Modifier.weight(1f)
+        ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), share, dimmed = !ready) { call(video = false) }
+        ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), share, dimmed = !ready) { call(video = true) }
+        Box(share) {
+            ActionTile(if (muted) "Unmute" else "Mute", if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off),
+                Modifier.fillMaxWidth()) { muteOpen = true }
             androidx.compose.material3.DropdownMenu(muteOpen, onDismissRequest = { muteOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                 border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                 Text(if (muted) circles.mutedLabel(until, now, android.text.format.DateFormat.is24HourFormat(ctx)) else circles.MUTE_HEADER,
@@ -1112,7 +1114,7 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
                 }
             }
         }
-        ActionTile("Search", Icons.Filled.Search, if (onSearch != null) Modifier else off) { onSearch?.invoke() }
+        ActionTile("Search", Icons.Filled.Search, share, dimmed = onSearch == null) { onSearch?.invoke() }
     }
 }
 

@@ -605,26 +605,28 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Spacer(Modifier.height(16.dp))
             // Spread over the width: with Search too, five circles at a fixed 28 dp gap ran past the
             // edge and the last label wrapped letter by letter into a tall empty band.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ActionTile("Message", androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline) { onOpenChat(cid) }
-                if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor)
+            // iOS actionsRow: equal shares, inside the page's 16 dp margins.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                val share = Modifier.weight(1f)
+                ActionTile("Message", androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline, share) { onOpenChat(cid) }
+                if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor, share)
                 // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
                 if (uid != me && !blocked) {
                     val ctx = androidx.compose.ui.platform.LocalContext.current
                     val photo = person?.photoUrl ?: conv?.photos?.get(uid)
-                    ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice)) {
+                    ActionTile("Voice", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), share) {
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = false)
                     }
-                    ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video)) {
+                    ActionTile("Video", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), share) {
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = true)
                     }
                 }
                 ActionTile(if (muted) "Unmute" else "Mute",
                     if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
-                    else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off)) {
+                    else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), share) {
                     setMute(if (muted) 0.0 else com.fariin.app.data.GroupInfoCircles.FOREVER)
                 }
-                if (fromChat && uid != me) ActionTile("Search", androidx.compose.material.icons.Icons.Filled.Search) {
+                if (fromChat && uid != me) ActionTile("Search", androidx.compose.material.icons.Icons.Filled.Search, share) {
                     com.fariin.app.ui.thread.InChatSearchLink.request(cid); onBack()
                 }
             }
@@ -823,28 +825,22 @@ private fun ChangeWallpaperItem(onClick: () -> Unit) {
 }
 
 @Composable
-internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    // iOS glassActions: an icon-only floating circle with its name under it.
-    val c = Fariin.colors
-    Column(modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(52.dp).floating(), contentAlignment = Alignment.Center) {
-            // Fariin's own drawings, as iOS PosterActionIcon (filled bubble, phone, camera and the
-            // owner's bells); the stock outline glyphs read as old (owner 2026-11-04).
-            val own = when (text) {
-                "Message" -> com.fariin.app.R.drawable.ic_chat
-                "Voice" -> com.fariin.app.R.drawable.ic_tab_calls
-                "Video" -> com.fariin.app.R.drawable.ic_video_fill
-                "Mute" -> com.fariin.app.R.drawable.ic_bell_off
-                "Unmute" -> com.fariin.app.R.drawable.ic_bell
-                else -> null
-            }
-            if (own != null) Icon(androidx.compose.ui.res.painterResource(own), contentDescription = null, tint = c.label, modifier = Modifier.size(24.dp))
-            else Icon(icon, contentDescription = null, tint = c.label, modifier = Modifier.size(24.dp))
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(text, fontSize = 13.sp, color = c.label, maxLines = 1, softWrap = false)
+internal fun ActionTile(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier,
+                        dimmed: Boolean = false, onClick: () -> Unit) {
+    // iOS glassActions / PosterActionIcon: the glass circle with its name under it.
+    // Fariin's own drawings, as iOS (filled bubble, phone, camera and the owner's bells); the stock
+    // outline glyphs read as old (owner 2026-11-04).
+    val own = when (text) {
+        "Message" -> com.fariin.app.R.drawable.ic_chat
+        "Voice" -> com.fariin.app.R.drawable.ic_tab_calls
+        "Video" -> com.fariin.app.R.drawable.ic_video_fill
+        "Mute" -> com.fariin.app.R.drawable.ic_bell_off
+        "Unmute" -> com.fariin.app.R.drawable.ic_bell
+        else -> null
     }
+    if (own != null) com.fariin.app.ui.components.GlassActionCircle(text, androidx.compose.ui.res.painterResource(own), modifier,
+        dimmed = dimmed, onClick = onClick)
+    else com.fariin.app.ui.components.GlassActionCircle(text, icon, modifier, dimmed = dimmed, onClick = onClick)
 }
 
 /**
