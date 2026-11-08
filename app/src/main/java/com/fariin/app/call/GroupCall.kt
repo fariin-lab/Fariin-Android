@@ -192,6 +192,8 @@ data class GroupMember(
     val micBlocked: Boolean = false,
     /** When this phone first saw them in the room (iOS joinedAt): the strip lists the newest first. */
     val joinedAtMs: Long = 0L,
+    /** When their current screen share started here (iOS shareStartedAt): the newest share takes the stage. */
+    val screenSinceMs: Long = 0L,
 )
 
 /** Someone at a call link's door (callLinks/{roomId}/requests/{uid}, status pending). */
@@ -617,6 +619,7 @@ object GroupCall {
 
     /** uid -> when first seen in this room (iOS CallTile.joinedAt). Cleared with the call. */
     private val firstSeen = HashMap<String, Long>()
+    private val screenSince = HashMap<String, Long>()
 
     private fun refresh() {
         val r = room ?: return
@@ -651,6 +654,8 @@ object GroupCall {
                 screen = (scr?.track as? VideoTrack)?.takeIf { scr?.muted != true },
                 micBlocked = p.attributes["micBlocked"] == "1",
                 joinedAtMs = firstSeen.getOrPut(uid) { System.currentTimeMillis() },
+                screenSinceMs = if ((scr?.track as? VideoTrack) != null && scr?.muted != true)
+                    screenSince.getOrPut(uid) { System.currentTimeMillis() } else { screenSince.remove(uid); 0L },
             )
         }
         firstSeen.keys.retainAll(all.mapNotNull { it.identity?.value }.toSet())
@@ -933,7 +938,7 @@ object GroupCall {
         requestReg?.remove(); requestReg = null
         requestsReg?.remove(); requestsReg = null
         groupReg?.remove(); groupReg = null
-        team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear()
+        team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear(); screenSince.clear()
         ticks?.cancel(); ticks = null
         tracker.update(emptySet(), Long.MAX_VALUE / 2)
         if (link != null && _ui.value.waiting) {

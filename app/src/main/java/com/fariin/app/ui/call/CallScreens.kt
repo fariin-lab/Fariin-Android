@@ -1018,7 +1018,8 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     val allowed = chromeMayHide && g.joined && !people && g.requests.isEmpty() && (g.cameraOn || g.members.any { it.video != null || it.screen != null })
     // A shared screen is what the room is looking at: its presenter takes the stage unless I picked
     // someone (iOS GroupCallStage: the user's pin, then the presenter, else the grid).
-    val presenter = remotes.firstOrNull { it.screen != null }?.id
+    // Two sharing at once: the newest share takes the stage (iOS updateMode, shareStartedAt).
+    val presenter = remotes.filter { it.screen != null }.maxByOrNull { it.screenSinceMs }?.id
     var announced by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(presenter) {
         val p = remotes.firstOrNull { it.id == presenter }
