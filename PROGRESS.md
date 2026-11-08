@@ -1264,3 +1264,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   edge; measured against the reference app on the Pixel. Chat list bar pinned again. Tab bar frost 86%.
   Calls/Stories: search shrinks in place into a bar button; glass buttons on frosted bars blur too; white
   rim instead of dark hairline. Pixel: 2% janky frames on fast scrolls.
+- 2026-11-08 afternoon (edit-photo-sheet 905eed0e): no Material icons left in the app (two agents +
+  ui/call by hand; ~165 own SF-style ic_sf_* drawings, iOS rule saved). Glass menu (GlassMenu.kt) with a
+  jelly morph on the channel More. Info pages without a bar strip; channel owner circles as iOS; Send to N.
+  iOS session's call card (rounded app under OngoingCallBar, full width) and PiP restyle merged. 1:1
+  screen share shows my photo on my tile. Not on main yet; Pixel install waits for the call to end.
