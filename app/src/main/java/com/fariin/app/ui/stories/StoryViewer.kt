@@ -1,5 +1,14 @@
 package com.fariin.app.ui.stories
 
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.LooksOne
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -1254,7 +1263,7 @@ private fun StoryPage(
             Column(
                 Modifier.fillMaxWidth()
                     .graphicsLayer { alpha = chrome() }
-                    .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent)))
+                    .drawBehind { drawRect(TopScrim, size = androidx.compose.ui.geometry.Size(size.width, 90.dp.toPx())) }
                     .padding(bottom = 18.dp),
             ) {
                 // iOS: 8 from the card's top, 16 in from the sides, bars 2 tall and 2 apart.
@@ -1274,27 +1283,52 @@ private fun StoryPage(
                             kind = com.fariin.app.ui.components.AvatarKind.of(group.key.startsWith(StoryGroup.GROUP_PREFIX), false))
                         Spacer(Modifier.width(13.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            val name = if (mine) "My Story" else group.name.ifEmpty { "Fariin user" }
+                            // iOS UserView: the author's own name (mine too) with the white tick, the
+                            // age 13 at 70 %; my story puts the age beside the name and the audience,
+                            // with its icon, under both.
+                            val name = group.name.ifEmpty { if (mine) "My Story" else "Fariin user" }
                             val age = StoryRules.timeAgo(story.createdAtMs)
                             if (mine) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                    HeaderTick(group.key)
                                     Spacer(Modifier.width(6.dp))
                                     Text(age, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1)
                                 }
-                                Text(customTitle(story) ?: StoryRules.audienceTitle(story), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AudienceGlyph(story)
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(customTitle(story) ?: StoryRules.audienceTitle(story), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1)
+                                }
                             } else {
-                                Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                    HeaderTick(group.key)
+                                }
                                 Text(age, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1)
                             }
                         }
                     }
                     run {
                         Box {
-                            // The three-dot overflow (Android's), white, in the 44 target iOS gives its menu.
-                            Box(Modifier.size(44.dp).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color.White, modifier = Modifier.size(24.dp))
+                            // iOS StoryMoreGlyph: two white lines (21 and 14.4 long, 1.8 thick, 7.1 apart,
+                            // left aligned) in the 44 target iOS gives its menu.
+                            Box(Modifier.size(44.dp).clickable { menu = true }.semantics { contentDescription = "More" },
+                                contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(32.dp).drawBehind {
+                                    val t = 1.8.dp.toPx(); val gap = 7.1.dp.toPx()
+                                    val left = (size.width - 21.dp.toPx()) / 2f
+                                    val top = (size.height - (2 * t + gap)) / 2f
+                                    val shade = Color.Black.copy(alpha = 0.3f)
+                                    for ((w, y) in listOf(21.dp.toPx() to top, 14.4.dp.toPx() to top + t + gap)) {
+                                        drawRoundRect(shade, androidx.compose.ui.geometry.Offset(left, y + 1f), androidx.compose.ui.geometry.Size(w, t),
+                                            androidx.compose.ui.geometry.CornerRadius(t / 2f))
+                                        drawRoundRect(Color.White, androidx.compose.ui.geometry.Offset(left, y), androidx.compose.ui.geometry.Size(w, t),
+                                            androidx.compose.ui.geometry.CornerRadius(t / 2f))
+                                    }
+                                })
                             }
                             androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 val item: @Composable (String, androidx.compose.ui.graphics.vector.ImageVector, Color?, String) -> Unit = { t, icon, tint, key ->
@@ -1494,7 +1528,7 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
                 Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(8.dp))
-            Text(StoryRules.viewsLabel(count, full), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(StoryRules.viewsLabel(count, full), color = Color.White, fontSize = 15.sp, maxLines = 1)
             if ((summary?.repostCount ?: 0) > 0) {
                 Spacer(Modifier.width(18.dp))
                 Text("Reposts ${summary!!.repostCount}", color = Color.White, fontSize = 15.sp)
@@ -1508,7 +1542,7 @@ private fun OwnerBar(story: Story, summary: StoryViewSummary?, onViews: () -> Un
         }
         Spacer(Modifier.weight(1f))
         if (onDelete != null) Box(Modifier.size(44.dp).clickable { onDelete() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Delete, contentDescription = "Delete story", tint = Color.White)
+            Icon(Icons.Outlined.Delete, contentDescription = "Delete story", tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -1841,5 +1875,43 @@ private fun ChannelStoryFooter(story: Story, service: StoryService, receipts: Bo
             Box(Modifier.size(44.dp).clickable(onClick = onShare), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Share, "Share", tint = Color.White, modifier = Modifier.size(22.dp))
             }
+    }
+}
+
+/** iOS topScrim: the reference's eased eight stops, black 40 % at the top to nothing (scrimStops). */
+private val TopScrim = Brush.verticalGradient(
+    *listOf(0f to 1f, 0.142857f to 0.959096f, 0.285714f to 0.830299f, 0.428571f to 0.621569f,
+        0.571429f to 0.378431f, 0.714286f to 0.169701f, 0.857143f to 0.040904f, 1f to 0f)
+        .map { (at, a) -> at to Color.Black.copy(alpha = 0.4f * a) }.toTypedArray(),
+)
+
+/** iOS UserView verifiedTick: a white seal at 12 after the name, for a verified author or Fariin. */
+@Composable
+private fun HeaderTick(key: String) {
+    if (key.isEmpty() || key.startsWith(StoryGroup.GROUP_PREFIX)) return
+    val official = key == com.fariin.app.data.OfficialChannel.CID
+    val ctx = LocalContext.current
+    if (!official) LaunchedEffect(key) { com.fariin.app.data.VerifiedPeople.warm(ctx.applicationContext, key) }
+    val kinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
+    if (!official && com.fariin.app.data.VerifiedPeople.badge(kinds, key) == null) return
+    Spacer(Modifier.width(4.dp))
+    Icon(Icons.Filled.Verified, contentDescription = "Verified", tint = Color.White, modifier = Modifier.size(12.dp))
+}
+
+/** iOS audienceBadge glyph, 12 white at 85 %: globe, one, sparkles, folder, people, group or channel. */
+@Composable
+private fun AudienceGlyph(s: Story) {
+    val tint = Color.White.copy(alpha = 0.85f)
+    val m = Modifier.size(12.dp)
+    when {
+        s.oneTime -> Icon(Icons.Outlined.LooksOne, null, tint = tint, modifier = m)
+        s.audienceLabel == "everyone" -> Icon(Icons.Filled.Public, null, tint = tint, modifier = m)
+        s.audienceLabel == "glowers" -> Icon(Icons.Filled.AutoAwesome, null, tint = tint, modifier = m)
+        s.audienceLabel == "custom" -> Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_story_folder), null, tint = tint, modifier = m)
+        s.audienceLabel == "group" -> {
+            val channel = s.groupId?.let { com.fariin.app.data.GroupStoryRules.isChannel(it, com.fariin.app.data.ChatsNow.list) } == true
+            Icon(if (channel) Icons.Filled.Campaign else Icons.Filled.Groups, null, tint = tint, modifier = m)
+        }
+        else -> Icon(Icons.Filled.People, null, tint = tint, modifier = m)
     }
 }
