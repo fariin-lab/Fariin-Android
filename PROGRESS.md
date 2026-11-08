@@ -1278,3 +1278,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 evening: channel owner's Share circle no longer greyed on a private channel (iOS shares the
   invite link; Android stopped at "no public link"). Group More circle opens the glass menu (as the
   channel's), Export Chat in it. Both checked on the Pixel.
+- 2026-11-08 evening: Add Story button on group/channel pages (b2394861). Link-call ring reaches
+  Android (app e025f259 + server linkCallInvite deployed by iOS session, 6f18be4a): untested, needs
+  two phones. Back on a live call shrinks it instead of hanging up (my finishAndRemoveTask fired
+  onTaskRemoved). Group call bar as iOS with Speaker + Flip Camera. Group call gap list (33 items,
+  6 starred) from the iOS comparison: next are the large-tile behaviour, sharer card, raised-hands
+  pill, two-person view, Not here yet + nudge bell.
