@@ -1228,3 +1228,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   - New Call is now a selectable picker: tap people to tick them, call one or several at once
     (fd19345, NewCallPickTest). Several people use an ad-hoc group call room.
   - Not yet checked on the Pixel: the owner paused phone use; waiting for his OK.
+- 2026-11-07 evening: New Call checked on the fariin_pixel emulator (picker ticks, strip, search; no call
+  placed). Its back/search were not glass (missed by the sweep): fixed, strip now rides in the bar.
