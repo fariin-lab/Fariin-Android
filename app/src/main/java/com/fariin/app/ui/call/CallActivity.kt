@@ -173,6 +173,8 @@ class CallActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Portrait, as the whole app (iOS); the 1:1 screen opens it up only for their shared screen.
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         // The call screens are always dark: light status and navigation bar icons.
         enableEdgeToEdge(androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))

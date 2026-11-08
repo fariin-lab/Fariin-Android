@@ -216,6 +216,14 @@ fun CallScreen(
     val theirScreen = ui.remoteScreen && connected && (remoteVideo != null || ui.peerUid == "demo")
     var shareFull by remember { mutableStateOf(false) }
     LaunchedEffect(theirScreen) { if (!theirScreen) shareFull = false }
+    // Portrait always (iOS OrientationLock), except their shared screen full size: the phone may turn
+    // to watch it sideways (iOS CallView landscapeWanted). Back to portrait when it closes.
+    val orientAct = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    androidx.compose.runtime.DisposableEffect(shareFull) {
+        orientAct?.requestedOrientation = if (shareFull) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER
+            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        onDispose { orientAct?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+    }
     val shareLayout = connected && (ui.sharing || (theirScreen && !shareFull))
     // A share (mine or theirs) starts with the controls hidden; a tap brings them (iOS, 2026-10-10).
     LaunchedEffect(shareLayout) { if (shareLayout) chrome.visible = false }

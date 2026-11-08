@@ -61,6 +61,7 @@
         <!-- The map's key, filled in at build time from google-services.json (app/build.gradle.kts). -->
         <meta-data android:name="com.google.android.geo.API_KEY" android:value="${mapsApiKey}" />
         <activity
+            android:screenOrientation="portrait"
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
@@ -171,6 +172,7 @@
         </activity-alias>
         <!-- Fariin in the share sheet: text, links, photos, videos, files (system/ShareActivity). -->
         <activity
+            android:screenOrientation="portrait"
             android:name=".system.ShareActivity"
             android:exported="true"
             android:label="@string/share_label"
@@ -223,6 +225,7 @@
         </receiver>
         <!-- App Lock cover (security/AppLock.kt). -->
         <activity
+            android:screenOrientation="portrait"
             android:name=".security.LockActivity"
             android:exported="false"
             android:excludeFromRecents="true"
@@ -282,11 +285,13 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
         <!-- Fariin's own browser for links (ui/browser/BrowserActivity.kt). -->
-        <activity android:name=".ui.browser.BrowserActivity" android:exported="false"
+        <activity android:screenOrientation="portrait"
+            android:name=".ui.browser.BrowserActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:theme="@style/Theme.Fariin.Sheet" />
         <!-- Fariin's own PDF reader for received PDFs (ui/files/PdfViewerActivity.kt, iOS PDFViewerSheet), a sheet over the chat. -->
-        <activity android:name=".ui.files.PdfViewerActivity" android:exported="false"
+        <activity android:screenOrientation="portrait"
+            android:name=".ui.files.PdfViewerActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:theme="@style/Theme.Fariin.Sheet" />
         <!-- Android Auto: message notifications readable and answerable in the car (2026-11-06). -->
