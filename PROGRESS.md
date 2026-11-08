@@ -1269,3 +1269,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   jelly morph on the channel More. Info pages without a bar strip; channel owner circles as iOS; Send to N.
   iOS session's call card (rounded app under OngoingCallBar, full width) and PiP restyle merged. 1:1
   screen share shows my photo on my tile. Not on main yet; Pixel install waits for the call to end.
+- 2026-11-08 evening (01e895bf, on main after green CI): group info as iOS, checked on the Pixel item by
+  item: no bar title (back + Edit), fifth More circle holds the old menu, Voice/Video grey on any phone
+  call ("You're already on a call"), public link row fariin.com/<name> with QR, owner Clear Messages
+  (clearGroupMessages loop), Storage "None", two-line footer. Info pages (group, channel, profile) use the
+  frosted top; PageBar draws no grey band there. Untested on device: link row (no public group on the
+  Pixel), greying during a call, the clear itself.
