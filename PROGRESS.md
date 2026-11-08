@@ -1321,3 +1321,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~3:55 PM: every pushed page frosted by default (147c3aa3; light + dark checked);
   Edit Profile photo library = ours (from 630fba31, checked). Group read tick = slowest current
   member on both apps (members added later hold it back): same on iOS, left as is.
+- 2026-11-08 ~4:05 PM: in-app browser insets (1d1d18d9: X no longer covers the page), default
+  disappearing page wording (d8b34045, iOS told). Checked fine: in-chat search, message Info, story
+  camera + text mode, Edit Profile photo library, wallpaper page, Privacy subpages, Help & About.
