@@ -137,6 +137,10 @@ class ThreadRepository(
     @Volatile private var live = false
     @Volatile private var msgFailed = false
 
+    /** This chat is a channel, as the chat list or my followed channels know it. */
+    private fun isChannelChat(): Boolean = CryptoHub.listedConversation(cid)?.isChannel == true || _state.value.conv["channel"] == true ||
+        com.fariin.app.channel.ChannelFollows.docs.value[cid]?.get("channel") == true
+
     fun start() {
         if (msgReg != null) return
         // The phone's copy first (iOS ThreadMessageCache), so the chat opens full, offline too;
@@ -152,7 +156,9 @@ class ThreadRepository(
                 // jump. The listener (warm from ChatHistoryPreloader) answers first; past 1.5 s the saved
                 // rows show and the new ones glide in at the bottom.
                 val listTime = CryptoHub.listedConversation(cid)?.displayUpdatedAt(me) ?: 0.0
-                val stale = ChatHistoryPreloader.behind(listTime, saved.maxOf { it.createdAtMillis })
+                // Never for a channel (iOS 2026-11-08): settings and edits move its updatedAt with no
+                // new row, so the hold fired on every open and it showed empty for up to a second.
+                val stale = !isChannelChat() && ChatHistoryPreloader.behind(listTime, saved.maxOf { it.createdAtMillis })
                 if (!stale) {
                     seeded = true
                     _state.update { it.copy(messages = order.sort(saved), loaded = true) }
@@ -420,7 +426,9 @@ class ThreadRepository(
             _state.value.messages.filter { it.sendState == null && it.rowId !in all && !Disappearing.isExpired(it, now) } + all.values else all.values
         val sorted = order.sort(shown)
         _state.update { it.copy(messages = sorted, loaded = loaded ?: it.loaded) }
-        if (live) LocalCache.saveThread(me, cid, sorted)
+        // A channel never shows a deleted post: its saved copy leaves them out, so the 60 kept rows
+        // reach back to real posts (VE3: the newest 60 were all deleted, every open began empty).
+        if (live) LocalCache.saveThread(me, cid, if (isChannelChat()) sorted.filter { !it.deleted } else sorted)
         scheduleBurn(Disappearing.nextExpiry(stamped, now))
         if (due.isNotEmpty()) burn(due)
     }

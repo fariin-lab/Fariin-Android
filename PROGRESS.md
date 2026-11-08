@@ -1295,3 +1295,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Still to check from abdik-f8's list: duplicate ring on receive, channel empty-flash, replies sheet
   details, Quotes off on private channels, report sheet look, expired call links, swipe-to-delete
   link rows, link join speed.
+- 2026-11-08 night: channels open on their posts at once: top-up after the server answers
+  (71e5ab46), saved copy leaves deleted posts out, rows held while older pages come, no
+  "cache behind" hold for channels (iOS item 8). VE3 checked on the Pixel: post in the first frame.

@@ -254,6 +254,12 @@ fun ThreadScreen(
                     val kept = com.fariin.app.channel.ChannelRules.shownMessages(ui.messages, admin)
                     // Pages spent with history still left: say so as "no more" so the screen settles.
                     ui.copy(messages = kept, canLoadOlder = ui.canLoadOlder && (kept.isNotEmpty() || topUps < TOP_UP_PAGES))
+                }.let { fresh ->
+                    // The server's first page can be all deleted posts while the saved copy had real ones:
+                    // keep the rows on screen while older pages are still coming, never a blank flash.
+                    val held = remember(ui.cid) { arrayOf<ThreadUi?>(null) }
+                    if (fresh.messages.isNotEmpty() || ui.channel == null) { held[0] = fresh; fresh }
+                    else if (fresh.canLoadOlder && held[0] != null) fresh.copy(messages = held[0]!!.messages) else fresh
                 }
                 if (ui.channel != null) {
                     val kept = shownUi.messages.size
