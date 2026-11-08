@@ -438,6 +438,16 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         edits.drawingOnTop = false
         edits.texts.add(t)
     }
+    // iOS addSticker: the tray's sticker in the middle of the card, 150 pt across, moving like text.
+    fun addSticker(pic: android.graphics.Bitmap) {
+        val k = StoryEditRules.SPACE / space.width.coerceAtLeast(1f)
+        val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, space.height * k / 2)
+        t.image = pic
+        t.imageW = STORY_STICKER_WIDTH
+        t.imageH = STORY_STICKER_WIDTH * pic.height / pic.width.coerceAtLeast(1)
+        edits.drawingOnTop = false
+        edits.texts.add(t)
+    }
     fun openPen() { penSnapshot = edits.strokes.toList(); drawing = true }
     fun closePen(discard: Boolean) {
         if (discard) { edits.strokes.clear(); edits.strokes.addAll(penSnapshot) }
@@ -581,7 +591,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         if (canEdit && flight == null) StoryEditCanvas(
             edits, space, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = { stroking = it },
-            onTapText = { if (!it.isChip) editingId = it.id },
+            onTapText = { if (!it.isChip && it.image == null) editingId = it.id },
             onDrag = { _, p ->
                 dragging = true
                 val hot = StoryEditRules.isOverTrash(p.x, p.y, bin.x, bin.y, binSize, binSlop)
@@ -808,7 +818,11 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             }
         }
         if (editingId >= 0) edits.texts.firstOrNull { it.id == editingId }?.let { StoryTextEditor(it, space, onDone = { finishText() }) }
-        if (stickerTray) StickerTray(onClose = { stickerTray = false },
+        if (stickerTray) StoryStickerTray(onClose = { stickerTray = false },
+            onSticker = { g ->
+                stickerTray = false
+                scope.launch { StoryStickers.bitmap(ctx, g)?.let { addSticker(it) } }
+            },
             onTime = { stickerTray = false; addChip("🕒 " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date()), null) },
             onLink = { stickerTray = false; askLink = true },
             onPlace = { stickerTray = false; askPlace = true })
@@ -871,32 +885,6 @@ suspend fun prepareStoryMedia(context: android.content.Context, uri: Uri): Resul
         }
     }
 
-/** iOS StoryStickerSheet's action pills: Location, Link, Time, on the dark tray. */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-@Composable
-private fun StickerTray(onClose: () -> Unit, onTime: () -> Unit, onLink: () -> Unit, onPlace: () -> Unit) {
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onClose, containerColor = Color(0xFF1C1C1E)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TrayPill("📍", "Location", Color(0xFFFF453A), NewBadgeSpots.STORY_STICKERS_LOCATION, onPlace)
-            TrayPill("🔗", "Link", Color(0xFF0A84FF), NewBadgeSpots.STORY_STICKERS_LINK, onLink)
-            TrayPill("🕒", "Time", Color(0xFFFF9F0A), NewBadgeSpots.STORY_STICKERS_TIME, onTime)
-        }
-    }
-}
-
-@Composable
-private fun TrayPill(glyph: String, title: String, tint: Color, badge: String, onClick: () -> Unit) {
-    // Three pills fill a small phone's width, so the "New" sits on the pill's corner, not beside it.
-    Box {
-        Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(glyph, fontSize = 16.sp)
-            Spacer(Modifier.width(6.dp))
-            Text(title, color = tint, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        }
-        NewCornerPill(isNew(badge))
-    }
-}
 
 /** One line for a Link or Location chip; Done adds it. */
 @Composable

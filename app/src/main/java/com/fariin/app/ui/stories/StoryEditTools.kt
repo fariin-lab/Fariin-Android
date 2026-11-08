@@ -100,6 +100,12 @@ class StoryTextItem(val id: Long, cx: Float, cy: Float) {
     var isChip = false
     /** What a tap on the posted chip opens (Link, Location); null for Time. */
     var link: String? = null
+    /** A tray sticker (iOS StickerOverlay): its picture, drawn [imageW] x [imageH] edit units, never typed into. */
+    var image: android.graphics.Bitmap? = null
+    var imageW = 0f
+    var imageH = 0f
+    /** Something to draw: a sticker, or words. */
+    val hasContent get() = image != null || text.isNotBlank()
 
     private var cached: StaticLayout? = null
     private var cacheKey: Any? = null
@@ -165,6 +171,13 @@ fun buildStoryTextLayout(text: String, font: Font, bg: Bg, color: Int): StaticLa
 
 private fun boxW(l: StaticLayout, bg: Bg) = l.width + 2 * StoryEditRules.padH(bg)
 private fun boxH(l: StaticLayout, bg: Bg) = l.height + 2 * StoryEditRules.padV(bg)
+/** The item's own box in edit units: a sticker's picture, or the text's badge. */
+private fun itemW(t: StoryTextItem) = if (t.image != null) t.imageW else boxW(t.layout(), t.bg)
+private fun itemH(t: StoryTextItem) = if (t.image != null) t.imageH else boxH(t.layout(), t.bg)
+private val stickerPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+
+/** iOS StickerOverlay.baseWidth: 150 pt across before any pinch. */
+const val STORY_STICKER_WIDTH = 150f * 3f
 
 /**
  * Draws the edits in edit space onto [c] (already scaled so one unit is one edit-space unit). The
@@ -190,7 +203,16 @@ fun drawStoryEdits(
     }
     fun texts() {
         for (t in e.texts) {
-            if (t.id == skip || t.text.isBlank()) continue
+            if (t.id == skip || !t.hasContent) continue
+            val pic = t.image
+            if (pic != null) {
+                c.save()
+                c.translate(t.cx, t.cy); c.rotate(t.rotation); c.scale(t.scale, t.scale)
+                rect.set(-t.imageW / 2, -t.imageH / 2, t.imageW / 2, t.imageH / 2)
+                c.drawBitmap(pic, null, rect, stickerPaint)
+                c.restore()
+                continue
+            }
             val l = layoutOf(t)
             val w = boxW(l, t.bg); val h = boxH(l, t.bg)
             c.save()
@@ -224,9 +246,7 @@ fun bakeStoryEdits(c: android.graphics.Canvas, pxPerUnit: Float, e: StoryEdits, 
 /** Topmost text under edit-space point (x, y), or null. */
 fun hitText(e: StoryEdits, x: Float, y: Float, slop: Float): StoryTextItem? =
     e.texts.lastOrNull { t ->
-        t.text.isNotBlank() && t.layout().let { l ->
-            StoryEditRules.hitsBox(x, y, t.cx, t.cy, boxW(l, t.bg), boxH(l, t.bg), t.scale, t.rotation, slop)
-        }
+        t.hasContent && StoryEditRules.hitsBox(x, y, t.cx, t.cy, itemW(t), itemH(t), t.scale, t.rotation, slop)
     }
 
 /**

@@ -178,7 +178,7 @@ object Giphy {
     }
 
     /** Trending with no words, else a search (iOS search): 30 GIFs, rated up to PG-13. */
-    suspend fun search(context: Context, q: String): List<StickerGifRules.Gif> = withContext(Dispatchers.IO) {
+    suspend fun search(context: Context, q: String, stickers: Boolean = false): List<StickerGifRules.Gif> = withContext(Dispatchers.IO) {
         val k = key(context) ?: return@withContext emptyList()
         val t = q.trim()
         val path = if (t.isEmpty()) "trending" else "search"
@@ -187,7 +187,7 @@ object Giphy {
             if (t.isNotEmpty()) append("&q=").append(URLEncoder.encode(t, "UTF-8"))
         }
         try {
-            val c = URL("https://api.giphy.com/v1/gifs/$path?$qs").openConnection() as HttpURLConnection
+            val c = URL("https://api.giphy.com/v1/${if (stickers) "stickers" else "gifs"}/$path?$qs").openConnection() as HttpURLConnection
             c.connectTimeout = 10_000; c.readTimeout = 10_000
             try { StickerGifRules.parseGiphy(c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
         } catch (_: Exception) { emptyList() }
