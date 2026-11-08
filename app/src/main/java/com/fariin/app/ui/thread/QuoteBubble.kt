@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +40,28 @@ import com.fariin.app.data.QuoteStore
 import com.fariin.app.ui.components.Avatar
 import com.fariin.app.ui.components.AvatarKind
 import com.fariin.app.ui.theme.Fariin
+
+/** iOS quoteAlbumTiles: 2 side by side, 3 = one tall + two stacked, 4 = two by two, 2 dp gaps. */
+@Composable
+private fun QuoteAlbumTiles(urls: List<String>) {
+    val gap = 2.dp
+    @Composable
+    fun tile(u: String, m: Modifier) = coil3.compose.AsyncImage(u, null, contentScale = ContentScale.Crop, modifier = m)
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+        when (urls.size) {
+            2 -> { tile(urls[0], Modifier.weight(1f).fillMaxHeight()); tile(urls[1], Modifier.weight(1f).fillMaxHeight()) }
+            3 -> {
+                tile(urls[0], Modifier.weight(1f).fillMaxHeight())
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    tile(urls[1], Modifier.weight(1f).fillMaxWidth()); tile(urls[2], Modifier.weight(1f).fillMaxWidth())
+                }
+            }
+            else -> for (col in 0..1) Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                tile(urls[col], Modifier.weight(1f).fillMaxWidth()); tile(urls[col + 2], Modifier.weight(1f).fillMaxWidth())
+            }
+        }
+    }
+}
 
 /**
  * A quoted channel post in a bubble (iOS quote card, owner 2026-11-06, his reference). It sits
@@ -116,7 +140,10 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     Box(Modifier.fillMaxWidth().height(min(220.dp, maxWidth * 0.75f)).clip(RoundedCornerShape(10.dp))
                         .background(c.secondary.copy(alpha = 0.15f))) {
-                        coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        // An album shows every picture, up to four, as tiles (iOS 5d2ef4c95).
+                        val album = card?.images.orEmpty().take(4)
+                        if (album.size >= 2) QuoteAlbumTiles(album)
+                        else coil3.compose.AsyncImage(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     }
                 }
             } else if (image != null) {
