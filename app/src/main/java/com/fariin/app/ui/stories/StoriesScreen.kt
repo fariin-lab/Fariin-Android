@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -145,6 +146,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var tooLong by remember { mutableStateOf(false) }
     var dayLimit by remember { mutableStateOf(false) }
     val upload by StoryUploads.state.collectAsState()
+    val pendingJpeg by StoryUploads.pending.collectAsState()
+    val pendingImage = remember(pendingJpeg) {
+        pendingJpeg?.let { b -> runCatching { android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() }.getOrNull() }
+    }
     // The story's own library sheet (StoryLibrary.kt, iOS StoryLibraryPicker), never the system
     // picker. It stays open under the editor, so closing the editor comes back to it (iOS).
     var library by remember { mutableStateOf(false) }
@@ -313,7 +318,18 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
                     is StoryUploads.State.Failed -> u.message
                     null -> null
                 }
-                if (mine != null && newest != null) {
+                if (upload == StoryUploads.State.Uploading) {
+                    // iOS: while it uploads, My Story shows the picture going up and the ring turns
+                    // round my face; the post's flight lands on this card (StoryPostFlight).
+                    StoryRow(
+                        thumbUrl = newest?.listThumb ?: "", title = "My Story", subtitle = "Uploading…",
+                        authorPhoto = profile?.photoUrl, seen = true, camera = true,
+                        thumbImage = pendingImage, uploading = true,
+                        backThumbUrl = if (pendingImage != null) newest?.listThumb else mine?.stories?.let { it.getOrNull(it.size - 2) }?.listThumb,
+                        originKey = StoryPostFlight.UPLOAD_KEY,
+                        onClick = { mine?.let { viewing = listOf(it) to 0 } }, onCamera = addStory, menu = myMenu,
+                    )
+                } else if (mine != null && newest != null) {
                     StoryRow(
                         thumbUrl = newest.listThumb, title = "My Story", subtitle = uploadLine ?: StoryList.ago(newest.createdAtMs, now),
                         authorPhoto = profile?.photoUrl, seen = !mine.hasUnseen, camera = true,
@@ -506,7 +522,8 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     if (library) StoryLibrarySheet(busy = libraryBusy, onPick = pickFromLibrary, onClose = { library = false })
     composing?.let { m ->
         StoryComposerDialog(me, m, conversations, onClose = { composing = null; composingText = false },
-            onPosted = { composing = null; composingText = false; camera = false; library = false }, textStory = composingText)
+            onPosted = { composing = null; composingText = false; camera = false; library = false }, textStory = composingText,
+            flyHome = true, onFlightStart = { camera = false; library = false })
     }
 }
 
@@ -562,6 +579,10 @@ private fun StoryRow(
     squircle: Boolean = false,
     /** The ring this card opens: the viewer zooms out of it and shrinks back into it. */
     originKey: String? = null,
+    /** A picture not uploaded yet (the story going up), drawn instead of [thumbUrl]. */
+    thumbImage: androidx.compose.ui.graphics.ImageBitmap? = null,
+    /** The story is uploading: the face's ring turns (iOS isUploading). */
+    uploading: Boolean = false,
     onClick: () -> Unit = {},
     onCamera: () -> Unit = {},
     menu: List<RowAction> = emptyList(),
@@ -618,6 +639,7 @@ private fun StoryRow(
                 // story still reads as a card on the white page instead of a hole beside the back card.
                 Box(Modifier.matchParentSize().zIndex(1f).border(0.5.dp, c.label.copy(alpha = 0.12f), shape))
                 when {
+                    thumbImage != null -> androidx.compose.foundation.Image(thumbImage, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     // Debug demo data only: a plain colour instead of a picture.
                     thumbUrl.startsWith("demo:") -> Box(Modifier.fillMaxSize().background(demoColor(thumbUrl)))
                     thumbUrl.isNotEmpty() -> AsyncImage(thumbUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -643,14 +665,15 @@ private fun StoryRow(
                     Modifier.align(Alignment.BottomEnd).offset(x = 7.dp, y = 5.dp).size(30.4.dp).clip(CircleShape)
                         .background(c.bg)
                         .then(
-                            if (seenFlags.isNotEmpty()) Modifier
+                            if (seenFlags.isNotEmpty() || uploading) Modifier
                             else if (seen) Modifier.border(ring, if (c.dark) Color(0xFF505052) else Color(0xFFCACACA), CircleShape)
                             else Modifier.border(ring, UnseenRing, CircleShape),
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Avatar(authorPhoto, 26.dp, squircle = squircle, kind = com.fariin.app.ui.components.AvatarKind.of(squircle, false))
-                    if (seenFlags.isNotEmpty()) StoryRing(seenFlags, Modifier.fillMaxSize(), lineWidth = 1.2.dp)
+                    if (uploading) UploadSpinRing(Modifier.fillMaxSize(), UnseenRing, 1.2.dp)
+                    else if (seenFlags.isNotEmpty()) StoryRing(seenFlags, Modifier.fillMaxSize(), lineWidth = 1.2.dp)
                 }
             }
         }

@@ -117,12 +117,15 @@ object StoryUploads {
     }
 
     val state = MutableStateFlow<State?>(null)
+    /** The picture being posted, for the uploading My Story card (iOS storyBudget.inFlight image). */
+    val pending = MutableStateFlow<ByteArray?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start(context: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice, picked: Set<String>,
               hours: Int, convs: List<Conversation>, captureSwitch: Boolean = false,
               lists: List<com.fariin.app.data.StoryListDoc> = emptyList()) {
         state.value = State.Uploading
+        pending.value = media.jpeg
         // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
         val myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
         val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
@@ -157,6 +160,7 @@ object StoryUploads {
                 }
                 result
             }
+            pending.value = null
             com.fariin.app.data.StoryLimits.refresh(me)
         }
     }
@@ -230,15 +234,23 @@ fun StoryComposerDialog(
     onPosted: () -> Unit = onClose,
     /** A finished text story (iOS onTextStory): straight to "Who can see your story"; back returns to the card. */
     textStory: Boolean = false,
+    /**
+     * After Post Story the picture flies into My Story in the list behind (iOS StoryPostFlight);
+     * [onFlightStart] lets the screens between (camera, library) go first so the list shows.
+     * Off (the repost from the viewer): the editor closes at once as before.
+     */
+    flyHome: Boolean = false,
+    onFlightStart: () -> Unit = {},
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
-        StoryComposer(me, media, conversations, onClose, onPosted, textStory)
+        StoryComposer(me, media, conversations, onClose, onPosted, textStory, flyHome, onFlightStart)
     }
 }
 
 @Composable
-private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false) {
+private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations: List<Conversation>, onClose: () -> Unit, onPosted: () -> Unit, textStory: Boolean = false,
+                          flyHome: Boolean = false, onFlightStart: () -> Unit = {}) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var caption by remember { mutableStateOf("") }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
@@ -289,6 +301,11 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     var baking by remember { mutableStateOf(false) }
     var posted by remember { mutableStateOf(media) }
     var cardRect by remember { mutableStateOf(Rect.Zero) }
+    // The post's flight home: the picture, where it starts, its corners. Null until Post Story.
+    var flight by remember { mutableStateOf<Triple<androidx.compose.ui.graphics.ImageBitmap, Rect, Float>?>(null) }
+    // The editor's black and the share sheet leave as the flight starts (iOS: black 0.15 s, sheet 0.3 s).
+    val leaveBlack = remember { androidx.compose.animation.core.Animatable(1f) }
+    val leaveSheet = remember { androidx.compose.animation.core.Animatable(0f) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     var captionArmed by remember { mutableStateOf(true) }
     val navBottom = WindowInsets.navigationBars.getBottom(density)
@@ -368,9 +385,9 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
     BackHandler(enabled = drawing && editingId < 0) { cancelPen() }
     BackHandler(enabled = !drawing && editingId < 0 && !audience && !edits.isEmpty) { askDiscard = true }
 
-    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { box = it }) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = leaveBlack.value)).onSizeChanged { box = it }) {
         val navDp = with(density) { navBottom.toDp() }
-        if (card.width > 1f) Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, card.top.toInt()) }
+        if (card.width > 1f && flight == null) Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, card.top.toInt()) }
             .size(with(density) { card.width.toDp() }, with(density) { card.height.toDp() })
             .clip(RoundedCornerShape(CARD_CORNER)).background(Color(0xFF1C1C1E))) {
             // The wash: the picture's own colours behind a photo that does not fill the card.
@@ -388,7 +405,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
             // A video plays here, looping, as on iOS (it only said "Video · 5 s" over its first frame).
             media.video?.let { v -> StoryEditVideo(v.file) }
         }
-        if (canEdit) StoryEditCanvas(
+        if (canEdit && flight == null) StoryEditCanvas(
             edits, img, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = { stroking = it },
             onTapText = { if (!it.isChip) editingId = it.id },
@@ -402,7 +419,7 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
                 dragging = false; trashHot = false
             },
         )
-        val chrome = !drawing && !dragging && editingId < 0
+        val chrome = !drawing && !dragging && editingId < 0 && flight == null
         // Close inside the frame's top corner (iOS).
         if (chrome) Box(Modifier.statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
             .clickable { close() }, contentAlignment = Alignment.Center) {
@@ -533,12 +550,22 @@ private fun StoryComposer(me: String, media: StoryMedia.Prepared, conversations:
         if (baking) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)).clickable {}, contentAlignment = Alignment.Center) {
             com.fariin.app.ui.components.FariinSpinner(size = 44.dp, stroke = 5.dp, color = Color.White)
         }
-        if (audience) {
+        if (audience) Box(Modifier.fillMaxSize().graphicsLayer { translationY = leaveSheet.value * box.height }) {
             ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
+                if (flight != null) return@ShareStoryAudiencePage
                 StoryUploads.start(ctx, me, posted, caption, choice, picked, hours, storyConvs(conversations), capture, lists)
-                onPosted()
+                val pic = if (flyHome) runCatching { BitmapFactory.decodeByteArray(posted.jpeg, 0, posted.jpeg.size)?.asImageBitmap() }.getOrNull() else null
+                if (pic == null) { onPosted(); return@ShareStoryAudiencePage }
+                // From the picture as the card shows it: a photo that fills the card wears its 40 corners.
+                val from = if (cardRect.width > 1f) cardRect else card
+                val fills = from.height >= card.height - 1f && from.width >= card.width - 1f
+                flight = Triple(pic, from, if (fills) with(density) { CARD_CORNER.toPx() } else 0f)
+                onFlightStart()
+                scope.launch { leaveBlack.animateTo(0f, androidx.compose.animation.core.tween(150)) }
+                scope.launch { leaveSheet.animateTo(1f, androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
             }
         }
+        flight?.let { (pic, from, radius) -> PostFlightLayer(pic, from, radius, onDone = onPosted) }
     }
     val red = Color(0xFFE5484D)
     if (askClearAll) AlertDialog(
