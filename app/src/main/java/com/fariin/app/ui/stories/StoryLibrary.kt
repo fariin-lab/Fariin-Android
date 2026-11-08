@@ -9,6 +9,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -59,7 +61,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -155,6 +160,9 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     }
     // One door for the tile's tap: a tick here, the editor in the camera's door.
     val tap: (RecentMedia.Item) -> Unit = { item -> if (multi != null) toggle(item) else onPick(item.uri) }
+    // The long press's lifted picture (iOS StoryPhotoPreview), with the tile's picture to size it.
+    var preview by remember { mutableStateOf<Pair<RecentMedia.Item, androidx.compose.ui.graphics.ImageBitmap?>?>(null) }
+    val hold: (RecentMedia.Item, androidx.compose.ui.graphics.ImageBitmap?) -> Unit = { item, bmp -> preview = item to bmp }
     // Add: only the new ticks are made ready (iOS addPicked), in tap order, then the whole change at once.
     val addPicked: () -> Unit = add@{
         val m = multi ?: return@add
@@ -231,9 +239,9 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 none -> AccessOff(blocked, askAgain)
-                album != null -> LibraryGrid(inAlbum, null, motion, if (multi != null) picked else null, tap)
+                album != null -> LibraryGrid(inAlbum, null, motion, if (multi != null) picked else null, tap, hold)
                 tab == 0 -> LibraryGrid(photos, if (access == RecentMedia.Access.PARTIAL) askAgain else null, motion,
-                    if (multi != null) picked else null, tap)
+                    if (multi != null) picked else null, tap, hold)
                 else -> {
                     val list = albums
                     if (list == null) FariinSpinner(Modifier.align(Alignment.Center), size = 28.dp, color = Color.White)
@@ -247,6 +255,11 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         }
         if (multi != null && picked.isNotEmpty()) SelectionBar(picked, StoryCameraRules.addLabel(fresh.size), enabled = !resolving,
             onRemove = { picked.remove(it) }, onAdd = addPicked)
+    }
+    preview?.let { (item, bmp) ->
+        // The one action is the tap itself, so the menu can never mean something the grid does not.
+        StoryLibraryPreview(item, bmp, if (multi != null) "Select" else "Add to Story",
+            onAction = { preview = null; tap(item) }, onDismiss = { preview = null })
     }
     if (tooMany) androidx.compose.material3.AlertDialog(
         onDismissRequest = { tooMany = false },
@@ -342,7 +355,8 @@ private fun LibrarySwitch(tab: Int, onPick: (Int) -> Unit, modifier: Modifier = 
 @Composable
 private fun LibraryGrid(items: List<RecentMedia.Item>, onMore: (() -> Unit)?, motion: com.fariin.app.ui.components.SheetMotion,
                         /** The ticks in tap order while selecting several; null = no ticks drawn. */
-                        picked: List<Uri>?, onTap: (RecentMedia.Item) -> Unit) {
+                        picked: List<Uri>?, onTap: (RecentMedia.Item) -> Unit,
+                        onHold: (RecentMedia.Item, androidx.compose.ui.graphics.ImageBitmap?) -> Unit) {
     val grid = rememberLazyGridState()
     LazyVerticalGrid(
         GridCells.Fixed(4),
@@ -365,7 +379,7 @@ private fun LibraryGrid(items: List<RecentMedia.Item>, onMore: (() -> Unit)?, mo
             }
         }
         items(items, key = { it.uri.toString() }) { r ->
-            LibraryTile(r, tick = if (picked == null) -1 else picked.indexOf(r.uri) + 1) { onTap(r) }
+            LibraryTile(r, tick = if (picked == null) -1 else picked.indexOf(r.uri) + 1, onHold = { b -> onHold(r, b) }) { onTap(r) }
         }
     }
 }
@@ -376,13 +390,21 @@ private fun LibraryGrid(items: List<RecentMedia.Item>, onMore: (() -> Unit)?, mo
  * and the picture under it dimmed (the dim stays off the tick, iOS).
  */
 @Composable
-private fun LibraryTile(item: RecentMedia.Item, tick: Int, onClick: () -> Unit) {
+private fun LibraryTile(item: RecentMedia.Item, tick: Int, onHold: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit, onTap: () -> Unit) {
     val context = LocalContext.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, item.uri) {
         value = withContext(Dispatchers.IO) { attachThumb(context, item.uri, item.isVideo, 256) }
     }
-    Box(Modifier.aspectRatio(1f).background(Color(0xFF1C1C1E)).clickable(onClick = onClick)
-        .semantics { contentDescription = if (item.isVideo) "Video" else "Photo" }) {
+    val click by rememberUpdatedState(onTap)
+    val held by rememberUpdatedState(onHold)
+    // A tap picks, a long press lifts the preview; a scroll that starts on the tile cancels both.
+    Box(Modifier.aspectRatio(1f).background(Color(0xFF1C1C1E))
+        .pointerInput(item.uri) { detectTapGestures(onLongPress = { held(bmp) }, onTap = { click() }) }
+        .semantics {
+            contentDescription = if (item.isVideo) "Video" else "Photo"
+            onClick { click(); true }
+            onLongClick(label = "Preview") { held(bmp); true }
+        }) {
         bmp?.let {
             Image(it, null, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (tick > 0) 0.55f else 1f })
