@@ -1305,6 +1305,8 @@ internal fun RepliesComposer(s: PostRepliesState) {
                 }
                 // The chat's send button (iOS 2026-11-07): a white up arrow on a 40x34 blue pill, inside the
                 // field on the right, there only while the field has words; it scales and fades in.
+                val sendKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+                val sendFocus = androidx.compose.ui.platform.LocalFocusManager.current
                 val can = PostReplyRules.cleanDraft(s.draft) != null
                 androidx.compose.animation.AnimatedVisibility(can,
                     enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(150)) +
@@ -1312,7 +1314,11 @@ internal fun RepliesComposer(s: PostRepliesState) {
                     exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) +
                         androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(120), targetScale = 0.7f)) {
                     Box(Modifier.padding(start = 6.dp, end = 0.dp).size(width = 40.dp, height = 34.dp).clip(RoundedCornerShape(17.dp))
-                        .background(c.blue).clickable(onClickLabel = "Send") { s.send() }, contentAlignment = Alignment.Center) {
+                        .background(c.blue).clickable(onClickLabel = "Send") {
+                            s.send()
+                            // The keyboard closes after Send (iOS 7c20b4077); the sheet shows the new reply.
+                            sendKeyboard?.hide(); sendFocus.clearFocus()
+                        }, contentAlignment = Alignment.Center) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
