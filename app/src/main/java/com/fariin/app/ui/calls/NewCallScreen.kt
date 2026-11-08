@@ -47,6 +47,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -257,11 +259,39 @@ private fun Header(text: String) {
 @Composable
 private fun PickedStrip(chosen: List<CallTarget>, onUnpick: (CallTarget) -> Unit, onVoice: () -> Unit, onVideo: () -> Unit) {
     val c = Fariin.colors
+    // Anchored at its END (owner's reference, 2026-11-07): laid out from the right, newest first, so
+    // the newest pick is always at the right edge and the oldest slide off the left (a swipe brings
+    // them back); while they fit they stay at the left. A pick: the row slides left one slot
+    // (150 ms), then the face grows in from 20 %. A removal: the face shrinks away and the row
+    // slides right to close the gap, a hidden one coming back in at the left.
+    val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val shown = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val newest = chosen.lastOrNull()?.id
+    // A face is forgotten only once it is unpicked (scrolled out of view, it comes back as it was).
+    LaunchedEffect(chosen) { val ids = chosen.map { it.id }.toSet(); shown.keys.retainAll(ids) }
+    LaunchedEffect(newest, chosen.size) {
+        if (newest != null && shown[newest] != true) rowState.animateScrollToItem(0)
+    }
+    val slide = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(150)
     Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.Top) {
-        LazyRow(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
-            items(chosen, key = { "c-" + it.id }) { t ->
-                Column(Modifier.width(66.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-                    .clickable(onClickLabel = "Remove ${t.name}") { onUnpick(t) }.padding(vertical = 4.dp),
+        LazyRow(Modifier.weight(1f), state = rowState, reverseLayout = true,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Start,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
+            items(chosen.asReversed(), key = { "c-" + it.id }) { t ->
+                // A face seen before keeps its size; a new one waits for the slide, then grows in.
+                val grow = remember { androidx.compose.animation.core.Animatable(if (shown[t.id] == true) 1f else 0.2f) }
+                LaunchedEffect(t.id) {
+                    if (grow.value < 1f) { kotlinx.coroutines.delay(150); grow.animateTo(1f, androidx.compose.animation.core.tween(150)) }
+                    shown[t.id] = true
+                }
+                val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val pressed by press.collectIsPressedAsState()
+                Column(Modifier.animateItem(fadeInSpec = null, placementSpec = slide,
+                        fadeOutSpec = androidx.compose.animation.core.tween(150))
+                    .graphicsLayer { val k = grow.value; scaleX = k; scaleY = k }
+                    .width(66.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .clickable(interactionSource = press, indication = null, onClickLabel = "Remove ${t.name}") { onUnpick(t) }
+                    .graphicsLayer { alpha = if (pressed) 0.6f else 1f }.padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(54.dp)) {
                         Avatar(t.photo, 52.dp, Modifier.align(Alignment.Center))
