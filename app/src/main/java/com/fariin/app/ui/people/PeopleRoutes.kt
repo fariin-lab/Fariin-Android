@@ -109,6 +109,6 @@ fun EditProfileSheetHost(api: PeopleApi) {
     if (!EditProfileSheet.open.value) return
     val motion = com.fariin.app.ui.components.rememberSheetMotion { EditProfileSheet.open.value = false }
     com.fariin.app.ui.components.FariinSheetDialog(motion, fill = com.fariin.app.ui.theme.Fariin.colors.bgSecondary, typing = true) {
-        EditProfileScreen(api, onBack = { motion.close() }, inSheet = true)
+        EditProfileScreen(api, onBack = { motion.close() }, inSheet = true, sheet = motion)
     }
 }

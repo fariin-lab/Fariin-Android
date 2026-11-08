@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.sheetDrag
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -137,7 +138,9 @@ private fun TextAction(text: String, enabled: Boolean, busy: Boolean = false, on
 @Composable
 fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                       /** In the sheet: no status-bar gap above the bar (the sheet already sits under it). */
-                      inSheet: Boolean = false) {
+                      inSheet: Boolean = false,
+                      /** The sheet it sits in: a pull down on the bar, or on the page at its top, moves and closes it (iOS). */
+                      sheet: com.fariin.app.ui.components.SheetMotion? = null) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     var me by remember { mutableStateOf<Person?>(null) }
@@ -196,7 +199,8 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         // The contact page's bottom sheet; Cancel is Keep Editing.
         if (askDiscard) PersonConfirmSheet(me?.photoUrl, me?.name.orEmpty(), "Discard changes?", "Your changes are not saved yet.",
             listOf(PersonAction("Discard Changes", plain = true) { onBack(); true }), onDismiss = { askDiscard = false })
-        Box(Modifier.fillMaxWidth().then(if (inSheet) Modifier.padding(top = 8.dp) else Modifier.statusBarsPadding()).height(64.dp).padding(horizontal = 12.dp)) {
+        Box(Modifier.fillMaxWidth().then(if (sheet != null) Modifier.sheetDrag(sheet) else Modifier)
+            .then(if (inSheet) Modifier.padding(top = 8.dp) else Modifier.statusBarsPadding()).height(64.dp).padding(horizontal = 12.dp)) {
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close") { close() },
                 contentAlignment = Alignment.Center) { Icon(androidx.compose.material.icons.Icons.Filled.Close, null, tint = c.label) }
             Text("Edit Profile", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
@@ -215,7 +219,9 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
             }
             }
         }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        val pageScroll = rememberScrollState()
+        Column(Modifier.fillMaxSize().then(if (sheet != null) Modifier.sheetDrag(sheet, atTop = { pageScroll.value == 0 }) else Modifier)
+            .verticalScroll(pageScroll), horizontalAlignment = Alignment.CenterHorizontally) {
             var photoMenu by remember { mutableStateOf(false) }
             Spacer(Modifier.height(8.dp))
             Box(Modifier.clip(CircleShape).clickable { photoMenu = true }, contentAlignment = Alignment.Center) {
