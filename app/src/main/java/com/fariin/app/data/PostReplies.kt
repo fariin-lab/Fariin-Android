@@ -387,8 +387,11 @@ object PostReplyRules {
     fun canEdit(r: PostReply, off: Boolean, now: Long): Boolean =
         r.mine && r.send == PostReply.Send.SENT && !off && r.at > 0 && now - r.at <= EDIT_MS
 
-    /** Answers an open thread shows before "View N more replies". */
-    const val ANSWERS_FIRST = 3
+    /**
+     * FIVE AT A TIME (iOS ab0a283a, owner 2026-11-08): a thread of five or fewer shows them all on
+     * "View N replies"; a longer one shows five, and each "View N more replies" adds five more.
+     */
+    const val ANSWERS_FIRST = 5
 
     /** "View 1 more reply", "View 4 more replies". */
     fun moreAnswers(n: Int): String = "View $n more " + if (n == 1) "reply" else "replies"
