@@ -273,6 +273,21 @@ fun ChannelEditRoute(cid: String, me: String, onClose: () -> Unit) {
         description = start.description, channel = true)
 }
 
+/** Edit Channel as the iOS sheet over the channel page (EditGroupView is a .sheet), pulled down to close. */
+@Composable
+fun ChannelEditSheet(cid: String, me: String, onClosed: () -> Unit) {
+    val ctx = LocalContext.current
+    val doc = com.fariin.app.ui.people.liveGroupDoc(cid)
+    val api = remember(me) { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.get(ctx.applicationContext)) }
+    val motion = com.fariin.app.ui.components.rememberSheetMotion(onClosed)
+    com.fariin.app.ui.components.FariinSheetDialog(motion, fill = Fariin.colors.bgSecondary, typing = true) {
+        if (doc.isEmpty()) { Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)); return@FariinSheetDialog }
+        val start = remember(doc.isNotEmpty()) { ChannelInfo.from(cid, doc) }
+        com.fariin.app.ui.people.EditGroupScreen(api, cid, start.title.ifEmpty { "Channel" }, start.avatarUrl, onClose = { motion.close() },
+            description = start.description, channel = true, sheet = motion)
+    }
+}
+
 // ---- Followers (iOS ChannelFollowersView) -------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)

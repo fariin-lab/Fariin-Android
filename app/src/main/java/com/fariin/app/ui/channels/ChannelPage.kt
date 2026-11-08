@@ -155,6 +155,9 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         }
     }
     var askDelete by remember { mutableStateOf(false) }
+    // iOS: Edit Channel is a sheet over this page.
+    var editSheet by remember { mutableStateOf(false) }
+    if (editSheet) ChannelEditSheet(info.cid, me, onClosed = { editSheet = false })
     if (allMedia) { com.fariin.app.ui.people.SharedMediaScreen(info.cid, shared, onBack = { allMedia = false }); return }
     when (sub) {
         "storage" -> { com.fariin.app.ui.people.ChatStoragePage(info.cid, me, info.title, pop = { sub = null }); return }
@@ -294,7 +297,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // iOS: the Add Story mark for whoever may post, then Edit; the rest is under More.
                     com.fariin.app.ui.stories.GroupStoryButton(me, info.cid, onLeave = onBack)
-                    if (canEdit) com.fariin.app.ui.components.FloatingTextAction("Edit") { manage.edit(info.cid) }
+                    if (canEdit) com.fariin.app.ui.components.FloatingTextAction("Edit") { editSheet = true }
                 }
             })
         }) { top ->
@@ -303,7 +306,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
                 val photoChoice = com.fariin.app.ui.people.headerPhotoOrStory(info.cid, info.title.ifEmpty { "Channel" }, info.avatarUrl, me, emptyList())
                 Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL,
-                    modifier = if (photoChoice != null) Modifier.clickable(onClick = photoChoice) else if (canEdit) Modifier.clickable { manage.edit(info.cid) } else Modifier)
+                    modifier = if (photoChoice != null) Modifier.clickable(onClick = photoChoice) else if (canEdit) Modifier.clickable { editSheet = true } else Modifier)
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(info.title.ifEmpty { "Channel" }, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label,
@@ -318,7 +321,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 // No description yet: whoever may edit is offered one, in grey (iOS, as a group's).
                 if (info.description.isEmpty() && canEdit) Text("Add channel description...", fontSize = 17.sp, color = c.secondary,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
-                        .clickable { manage.edit(info.cid) }.padding(horizontal = 8.dp, vertical = 4.dp))
+                        .clickable { editSheet = true }.padding(horizontal = 8.dp, vertical = 4.dp))
                 Spacer(Modifier.height(18.dp))
                 // iOS followerCircles: equal shares of the row (the page's own 16 dp margins).
                 Row(Modifier.fillMaxWidth()) {
