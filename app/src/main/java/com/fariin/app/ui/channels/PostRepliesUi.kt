@@ -671,10 +671,23 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     }
 
     /** The one report sheet, for this reply (a thread's `rid`, an answer's `rid` + `aid`). */
+    /** A reply's report waiting for its one yes (iOS 69a5b01f6: one step, no reasons list). */
+    var quickReport by mutableStateOf<ReportTarget?>(null)
+
     fun report(r: PostReply) {
         val answer = r.parentId.isNotEmpty()
-        ReportFlow.ask(ReportTarget(ReportKind.REPLY, name = r.name, personUid = r.uid.ifEmpty { null }, cid = cid, messageId = mid,
-            replyId = if (answer) r.parentId else r.id, answerId = if (answer) r.id else null))
+        quickReport = ReportTarget(ReportKind.REPLY, name = r.name, personUid = r.uid.ifEmpty { null }, cid = cid, messageId = mid,
+            replyId = if (answer) r.parentId else r.id, answerId = if (answer) r.id else null)
+    }
+
+    /** "Report this reply?" said yes: a plain report (Something else, no note, no block). */
+    fun sendQuickReport() {
+        val t = quickReport ?: return
+        quickReport = null
+        scope.launch {
+            val refused = com.fariin.app.data.ReportSender.send(t, com.fariin.app.data.ReportReason.OTHER, "", block = false)
+            toast = refused ?: "Reported. Thanks for letting us know."
+        }
     }
 
     fun ban(r: PostReply, all: Boolean) = scope.launch {
@@ -829,6 +842,13 @@ private fun SortSwitch(s: PostRepliesState) {
 /** The Replies tab's list: skeleton while loading, a failed page with Retry, the empty words, or the threads. */
 @Composable
 internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
+    if (s.quickReport != null) {
+        val c = Fariin.colors
+        androidx.compose.material3.AlertDialog(onDismissRequest = { s.quickReport = null }, containerColor = c.card,
+            title = { Text("Report this reply?") },
+            confirmButton = { androidx.compose.material3.TextButton({ s.sendQuickReport() }) { Text("Report", color = c.red) } },
+            dismissButton = { androidx.compose.material3.TextButton({ s.quickReport = null }) { Text("Cancel", color = c.accent) } })
+    }
     val c = Fariin.colors
     val list = rememberLazyListState()
     val items = replyItems(s)
