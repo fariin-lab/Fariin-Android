@@ -532,32 +532,7 @@ fun StoryViewer(
         scope.launch { withFrameMillis { }; withFrameMillis { }; onClose() }
     }
 
-    /** Every way out: the swipe, the X, back, the last story ending. Same landing for all of them. */
-    fun close(vy: Float = 0f) {
-        if (hero.committing || hero.closed) return
-        if (!hero.staged || size == IntSize.Zero) { land(); return }
-        heroJob[0]?.cancel()
-        hero.committing = true
-        // The header, its name, time and X stay in the card as it shrinks home (iOS): held at what
-        // they show now (all of it after a tap on X), not faded on the card's size.
-        hero.chromeHold = StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 1.4f).coerceIn(0f, 1f)
-        if (!hero.live) { hero.center = rest(); hero.f = 0f }
-        hero.live = true
-        val a = anchorFor(currentKey())
-        if (a == null && com.fariin.app.ui.components.Motion.on) {
-            // The slot may be a frame behind (the list re-laid out under the viewer): look once more
-            // before giving up on it, so the card never drops off the bottom when its slot is there.
-            scope.launch {
-                withFrameMillis { }
-                val again = anchorFor(currentKey())
-                hero.committing = false
-                if (again != null) closeTo(again, vy) else closeTo(null, vy)
-            }
-            return
-        }
-        closeTo(a, vy)
-    }
-
+    /** The flight home from where the card is now: into slot [a], or off the bottom with none. */
     fun closeTo(a: Rect?, vy: Float) {
         hero.committing = true
         if (!com.fariin.app.ui.components.Motion.on) {
@@ -587,6 +562,32 @@ fun StoryViewer(
         }
         // A flight that never lands must not trap anyone in the viewer: 1.2s is four times the flight.
         scope.launch { delay(1200); land() }
+    }
+
+    /** Every way out: the swipe, the X, back, the last story ending. Same landing for all of them. */
+    fun close(vy: Float = 0f) {
+        if (hero.committing || hero.closed) return
+        if (!hero.staged || size == IntSize.Zero) { land(); return }
+        heroJob[0]?.cancel()
+        hero.committing = true
+        // The header, its name, time and X stay in the card as it shrinks home (iOS): held at what
+        // they show now (all of it after a tap on X), not faded on the card's size.
+        hero.chromeHold = StoryMotion.chrome(hero.f) * (1f - sheet.fraction * 1.4f).coerceIn(0f, 1f)
+        if (!hero.live) { hero.center = rest(); hero.f = 0f }
+        hero.live = true
+        val a = anchorFor(currentKey())
+        if (a == null && com.fariin.app.ui.components.Motion.on) {
+            // The slot may be a frame behind (the list re-laid out under the viewer): look once more
+            // before giving up on it, so the card never drops off the bottom when its slot is there.
+            scope.launch {
+                withFrameMillis { }
+                val again = anchorFor(currentKey())
+                hero.committing = false
+                if (again != null) closeTo(again, vy) else closeTo(null, vy)
+            }
+            return
+        }
+        closeTo(a, vy)
     }
 
     fun dragBegin() {
