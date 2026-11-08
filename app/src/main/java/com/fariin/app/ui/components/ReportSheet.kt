@@ -170,7 +170,7 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
                         .onSizeChanged { heights[p] = with(density) { it.height.toDp().value } }
                         .padding(top = SheetHandleStrip, bottom = 16.dp)) {
                         when (p) {
-                            P_REASONS -> ReasonsPage(t) { picked ->
+                            P_REASONS -> ReasonsPage(t, onClose = { motion.close() }) { picked ->
                                 if (picked != reason) { note = ""; sub = null }
                                 reason = picked; error = null
                                 page = if (ReportSubs.of(picked).isEmpty()) P_CONFIRM else P_SUBS
@@ -197,9 +197,14 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
 
 /** The sheet's top line: the title in the middle, Back at the start when there is a page behind. */
 @Composable
-private fun ReportBar(onBack: (() -> Unit)?) {
+private fun ReportBar(onBack: (() -> Unit)?, onClose: (() -> Unit)? = null) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 8.dp)) {
+        // iOS fef36f16b: an X on the first page (the later pages have Back).
+        if (onBack == null && onClose != null) Box(Modifier.align(Alignment.CenterStart).padding(start = 4.dp).size(40.dp).floating(CircleShape)
+            .clickable(role = Role.Button, onClickLabel = "Close", onClick = onClose), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
+        }
         if (onBack != null) Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape)
             .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack), contentAlignment = Alignment.Center) {
             Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Back", tint = c.label,
@@ -232,8 +237,8 @@ private fun PageHeader(title: String, sub: String? = null) {
 }
 
 @Composable
-private fun ReasonsPage(t: ReportTarget, onPick: (ReportReason) -> Unit) {
-    ReportBar(onBack = null)
+private fun ReasonsPage(t: ReportTarget, onClose: () -> Unit, onPick: (ReportReason) -> Unit) {
+    ReportBar(onBack = null, onClose = onClose)
     PageHeader(ReportRules.header(t.kind), ReportRules.privacy(t.name))
     ReportCard { ReportReason.entries.forEach { r -> ChevronRow(r.label) { onPick(r) } } }
 }
@@ -287,7 +292,7 @@ private fun ConfirmPage(
     if (error != null) Text(error, fontSize = 15.sp, color = c.red, textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp))
     Spacer(Modifier.height(18.dp))
-    ReportPill(if (busy) null else "Submit report", enabled = ready && !busy, modifier = Modifier.padding(horizontal = 20.dp)) { onSubmit() }
+    ReportPill(if (busy) null else "Submit report", enabled = ready && !busy, modifier = Modifier.padding(horizontal = 20.dp), fill = c.red) { onSubmit() }
 }
 
 @Composable
@@ -365,9 +370,11 @@ private fun ReportCard(content: @Composable () -> Unit) {
 
 /** The full-width main button; [label] null spins. */
 @Composable
-private fun ReportPill(label: String?, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun ReportPill(label: String?, enabled: Boolean, modifier: Modifier = Modifier, fill: androidx.compose.ui.graphics.Color? = null,
+                       onClick: () -> Unit) {
     val c = Fariin.colors
-    Box(modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(c.accent)
+    // iOS 6c895ff19: 50 high capsules; Submit is red, Done the app's action colour.
+    Box(modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(fill ?: c.accent)
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .then(if (enabled || label == null) Modifier else Modifier.alpha(0.45f)),
         contentAlignment = Alignment.Center) {
