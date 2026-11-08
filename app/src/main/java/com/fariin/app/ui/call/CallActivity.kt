@@ -206,12 +206,15 @@ class CallActivity : ComponentActivity() {
                     val g = demoGroup ?: live
                     LaunchedEffect(g.joined) { if (g.joined) lobbyJoined = true }
                     val inLobby = lobbyKey != null && !lobbyJoined
-                    LaunchedEffect(g.cid, g.connecting, g.notice, inLobby) {
-                        if (demoGroup == null && g.cid == null && !g.connecting && !inLobby) {
-                            g.notice?.let { Toast.makeText(this@CallActivity, it, Toast.LENGTH_LONG).show(); GroupCall.clearNotice() }
-                            finish()
-                        }
-                    }
+                    // A call that ended, failed or refused: with a notice, an alert and OK closes the screen
+                    // (iOS GroupCallView noticeShown, decision D25); without one, the screen just goes.
+                    val over = demoGroup == null && g.cid == null && !g.connecting && !inLobby
+                    LaunchedEffect(over, g.notice) { if (over && g.notice == null) finish() }
+                    if (over && g.notice != null) androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { GroupCall.clearNotice(); finish() },
+                        title = { androidx.compose.material3.Text(g.notice!!) },
+                        confirmButton = { androidx.compose.material3.TextButton({ GroupCall.clearNotice(); finish() }) {
+                            androidx.compose.material3.Text("OK") } })
                     // In the call the note is the pill under the header (iOS GroupCallTopToast); the
                     // system toast only where that pill is not drawn (the lobby, picture in picture).
                     LaunchedEffect(g.toast, inLobby, inPip) {
