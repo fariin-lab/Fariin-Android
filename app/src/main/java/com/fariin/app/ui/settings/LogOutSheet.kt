@@ -42,7 +42,8 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
     val handle = profile?.handle.orEmpty()
     val name = profile?.name.orEmpty()
     FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
-        AccountSheetFrame(motion, closeEnabled = !busy) {
+        // The X (iOS 8d936377c, no Cancel): with texts still waiting it is the old Wait (a send is tried now).
+        AccountSheetFrame(motion, closeEnabled = !busy, onClose = { wait[0] = warning != null; motion.close() }) {
             Avatar(profile?.photoUrl, 56.dp)
             if (name.isNotEmpty()) Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
                 textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -53,9 +54,6 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
             SheetPill(if (warning != null) "Log Out Anyway" else "Log Out", c.red, busy = busy,
                 modifier = Modifier.padding(top = 24.dp)) {
                 if (!busy) { busy = true; onSignOut() }
-            }
-            SheetCancel(label = if (warning != null) "Wait" else "Cancel", enabled = !busy) {
-                wait[0] = warning != null; motion.close()
             }
         }
     }

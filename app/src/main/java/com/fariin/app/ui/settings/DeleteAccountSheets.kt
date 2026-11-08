@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.floating
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -146,10 +147,7 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
     LaunchedEffect(typing, ime) { if (typing && ime > 0) into.bringIntoView() }
     FariinSheetDialog(motion, fill = c.bgSecondary, typing = true) { _ ->
         AccountSheetFrame(motion, closeEnabled = true) {
-            Box(Modifier.size(56.dp).clip(CircleShape).background(c.red.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_heart_fill), contentDescription = null, tint = c.red, modifier = Modifier.size(28.dp))
-            }
-            Box(Modifier.height(16.dp))
+            // No heart icon above it (iOS e04e926e4).
             Title("We're sorry to see you go")
             Text("Tell us what happened so we can do better. Your answer goes only to the Fariin team.", fontSize = 15.sp,
                 color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -217,7 +215,6 @@ private fun ConfirmSheet(handle: String, dueText: String, busy: Boolean, error: 
             if (error != null) Text(error, fontSize = 15.sp, color = c.red, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             SheetPill("Delete Account", c.red, busy = busy, modifier = Modifier.padding(top = 20.dp)) { onDelete() }
-            SheetCancel(enabled = !busy) { motion.close() }
         }
     }
 }
@@ -248,7 +245,7 @@ private fun restStop(heightDp: Float): Float {
  */
 @Composable
 @Suppress("UNUSED_PARAMETER")
-internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, content: @Composable () -> Unit) {
+internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, onClose: (() -> Unit)? = null, content: @Composable () -> Unit) {
     val density = LocalDensity.current
     var contentDp by remember { mutableFloatStateOf(0f) }
     if (contentDp > 0f) { val stop = restStop(contentDp); SideEffect { motion.fitMid(stop) } }
@@ -264,6 +261,14 @@ internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, conte
             .padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) { content() }
         Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
+        // iOS 8d936377c / f2137acb4: an X at the top right instead of a Cancel under the button.
+        Box(Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 16.dp).size(44.dp)
+            .floating(CircleShape)
+            .clickable(enabled = closeEnabled, onClickLabel = "Close") { (onClose ?: { motion.close() })() }
+            .graphicsLayer { alpha = if (closeEnabled) 1f else 0.4f },
+            contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = Fariin.colors.label, modifier = Modifier.size(18.dp))
+        }
     }
 }
 
