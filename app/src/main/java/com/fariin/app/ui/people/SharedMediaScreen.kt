@@ -140,13 +140,14 @@ private fun viewingOf(item: SharedMedia.Item, all: List<SharedMedia.Item>): View
  * Drawn only when the chat has photos or videos (iOS: no media, no card).
  */
 @Composable
-internal fun SharedMediaCard(cid: String, state: SharedMediaState, onSeeAll: () -> Unit) {
+internal fun SharedMediaCard(cid: String, state: SharedMediaState, inset: androidx.compose.ui.unit.Dp = 16.dp, onSeeAll: () -> Unit) {
     val strip = state.lists.media.take(SharedMedia.STRIP)
     if (strip.isEmpty()) return
     val c = Fariin.colors
     var viewing by remember { mutableStateOf<Viewing?>(null) }
     ProvideChatMedia(cid) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        // [inset]: a page whose column is already inset (the channel page) passes 0, so the card lines up.
+        Column(Modifier.fillMaxWidth().padding(horizontal = inset, vertical = 8.dp)) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card).clickable(onClick = onSeeAll)
                 .padding(vertical = 14.dp)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {

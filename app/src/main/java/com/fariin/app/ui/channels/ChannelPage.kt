@@ -379,7 +379,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     // Channel Type and Protect Content live on Channel Settings (as iOS).
                 }
                 // iOS: All Media under the settings card, when the channel has photos or videos.
-                if (me.isNotEmpty()) com.fariin.app.ui.people.SharedMediaCard(info.cid, shared) { allMedia = true }
+                if (me.isNotEmpty()) com.fariin.app.ui.people.SharedMediaCard(info.cid, shared, inset = 0.dp) { allMedia = true }
                 Spacer(Modifier.height(20.dp))
                 Card {
                     // Leave first, then Report (iOS order), with the Leave Group arrow.
