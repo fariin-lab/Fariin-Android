@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 
 /** What the Chats tab draws. */
@@ -106,11 +107,14 @@ class ChatsViewModel(
                 if (!s.fromCache && crypto != null) com.fariin.app.data.DeliveryReceipts.mark(ChatList.visible(s.conversations, me), me)
             }
         }
-        .map { s ->
+        // A chat with only a draft (or a call going on) stays listed (iOS visible).
+        .combine(com.fariin.app.local.Drafts.map.map { it.keys }.distinctUntilChanged()
+            .combine(LiveCallRow.live) { d, call -> LiveCallRow.cid(me, call)?.let { d + it } ?: d }) { s, k -> s to k }
+        .map { (s, keep) ->
             when (s) {
                 ConversationsRepository.State.Loading -> ChatsUiState(loading = true)
                 is ConversationsRepository.State.Loaded ->
-                    ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me).let { list ->
+                    ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me, keep).let { list ->
                         // A closed chat whose newest message ran out on the timer: the preview is
                         // blanked until the server rewrites the summary (iOS burnedIfDue).
                         val now = System.currentTimeMillis().toDouble()
