@@ -119,6 +119,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Favorite
 import com.kyant.backdrop.backdrops.layerBackdrop
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -1109,39 +1110,59 @@ fun ChatRow(
     val c = Fariin.colors
     val context = LocalContext.current
     val unread = if (conv.isBlockedByMe(me)) 0 else conv.unread(me)
-    val now = System.currentTimeMillis().toDouble()
-    val muted = conv.isMuted(me, now)
+    // iOS clockTick: wakes at a mute's end and just past midnight, so the bell and "Yesterday" stay right.
+    var clockTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(conv.mutedBy[me] ?: 0.0) {
+        while (true) {
+            val nowMs = System.currentTimeMillis()
+            val mute = conv.mutedBy[me] ?: 0.0
+            val midnight = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 5); set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val next = if (mute > nowMs) minOf(mute.toLong(), midnight) else midnight
+            kotlinx.coroutines.delay(maxOf(1_000L, next - nowMs))
+            clockTick++
+        }
+    }
+    val muted = remember(conv, me, clockTick) { conv.isMuted(me, System.currentTimeMillis().toDouble()) }
     val keys = (keysState ?: CryptoHub.keysEpoch.collectAsState()).value
     // Battery/lag audit 2026-11-06: no box is opened during composition. A line opened before
     // shows at once; a new one opens on a background thread, the old words staying until then.
-    val photoLabel: (String) -> String = { raw ->
-        // iOS photoPreviewLabel: with the little picture beside it the emoji goes ("Photo", not "📷 Photo").
-        if (!conv.lastImageUrl.isNullOrEmpty()) listOf("📷 ", "🎥 ", "🎬 ").firstOrNull { raw.startsWith(it) }?.let { raw.removePrefix(it) } ?: raw else raw
-    }
-    val cachedPreview = remember(conv, me, keys) { ChatList.cachedPreviewLine(conv, me, decryptor) { null }?.let(photoLabel) }
+    val cachedPreview = remember(conv, me, keys) { ChatList.cachedRowPreview(conv, me, decryptor) { null } }
     // Only a line not opened before starts a background job (most rows have theirs cached).
-    val openedPreview = if (cachedPreview != null) null else androidx.compose.runtime.produceState<String?>(null, conv, me, keys) {
+    val openedPreview = if (cachedPreview != null) null else androidx.compose.runtime.produceState<ChatList.RowPreview?>(null, conv, me, keys) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            photoLabel(ChatList.previewLine(conv, me, decryptor) { null })
+            ChatList.rowPreview(conv, me, decryptor) { null }
         }
     }.value
-    val preview = cachedPreview ?: openedPreview ?: ""
+    val preview = cachedPreview ?: openedPreview ?: ChatList.RowPreview("")
+    // Live lines from the chat's own `typing` field (no extra read), self-clearing after 15 s
+    // unless the sender refreshes it (iOS activityExpired).
+    var activityExpired by remember(conv.id) { mutableStateOf(false) }
+    LaunchedEffect(conv.typingRawKey) {
+        activityExpired = false
+        if (conv.typing.isEmpty() && conv.recording.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(com.fariin.app.data.MessageRules.TYPING_EXPIRY_MS)
+        activityExpired = true
+    }
+    val recording = if (activityExpired) null else ChatList.recordingLabel(conv, me)
+    val typing = if (activityExpired) null else ChatList.typingLabel(conv, me)
+    // A call with this chat going on now: the green line above everything.
+    val liveCall by LiveCallRow.live.collectAsState()
+    val onCall = liveCall?.takeIf { LiveCallRow.cid(me, it) == conv.id }
+    // An unheard newest voice note: its mic in the accent colour.
+    val ctx0 = LocalContext.current
+    LaunchedEffect(Unit) { com.fariin.app.data.PlayedVoice.init(ctx0.applicationContext) }
+    val played by com.fariin.app.data.PlayedVoice.upTo.collectAsState()
+    val voiceUnplayed = remember(conv, me, played) { com.fariin.app.data.PlayedVoice.lastVoiceUnplayed(conv, me, played) }
     // iOS: a chat with unsent words in its box says "Draft:" (red) and the words, not the last line.
     // Only this chat's draft: reading the whole map redrew every row whenever any chat's draft
     // changed, which leaving a chat does (it saves or clears that chat's draft).
     val drafts = draftsState ?: com.fariin.app.local.Drafts.map.collectAsState()
     val draftState = remember(conv.id) { derivedStateOf { drafts.value[conv.id] } }
     val draft = draftState.value
-    // iOS previewRow: a small grey glyph before a pin notice, a contact or a location.
-    val glyph = if (draft.isNullOrEmpty()) ChatList.previewIcon(preview) else null
-    val line = if (glyph != null) androidx.compose.ui.text.buildAnnotatedString {
-        appendInlineContent("glyph", "[icon]"); append(" "); append(preview)
-    } else if (draft.isNullOrEmpty()) androidx.compose.ui.text.AnnotatedString(preview) else
-        androidx.compose.ui.text.buildAnnotatedString {
-            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.red)); append("Draft: "); pop()
-            append(draft.replace('\n', ' '))
-        }
-    val time = remember(conv.displayUpdatedAt(me)) { timeLabel(conv.displayUpdatedAt(me), DateFormat.is24HourFormat(context)) }
+    val time = remember(conv.displayUpdatedAt(me), clockTick) { timeLabel(conv.displayUpdatedAt(me), DateFormat.is24HourFormat(context)) }
 
     Row(
         Modifier.fillMaxWidth()
@@ -1208,12 +1229,8 @@ fun ChatRow(
                         color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    // The blue verified tick beside a verified channel's name (iOS chat list).
-                    if (conv.verified) {
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Filled.Verified, contentDescription = "Verified",
-                            tint = c.blue, modifier = Modifier.size(16.dp))
-                    }
+                    // The person's tick in a 1:1, a group's or channel's by kind, or SCAM / FAKE (iOS).
+                    ChatRowVerifiedMark(conv, me)
                     if (muted) {
                         Spacer(Modifier.width(6.dp))
                         Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted",
@@ -1224,22 +1241,10 @@ fun ChatRow(
                 Text(time, style = MaterialTheme.typography.labelMedium, color = if (unread > 0) c.accent else c.secondary, maxLines = 1)
             }
             Row(verticalAlignment = Alignment.Top) {
-                // The last photo or video poster beside the words (iOS lastImageUrl, media worker).
-                com.fariin.app.ui.thread.ChatListThumb(conv, draft.isNullOrEmpty())
-                // Two lines tall always, so every row is the same height (iOS, the hidden " \n ").
-                Text(
-                    line, style = MaterialTheme.typography.bodyMedium, color = c.secondary,
-                    inlineContent = if (glyph == null) emptyMap() else mapOf("glyph" to androidx.compose.foundation.text.InlineTextContent(
-                        androidx.compose.ui.text.Placeholder(14.sp, 14.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
-                        Icon(when (glyph) {
-                            ChatList.PreviewIcon.PIN -> Icons.Filled.PushPin
-                            ChatList.PreviewIcon.CONTACT -> Icons.Filled.Person
-                            ChatList.PreviewIcon.LOCATION -> Icons.Filled.LocationOn
-                        }, contentDescription = null, tint = c.secondary, modifier = Modifier.fillMaxSize())
-                    }),
-                    maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                // Icons, thumbnails, live lines and drafts in iOS's order; two lines tall always, so
+                // every row is the same height (iOS, the hidden " \n ").
+                ChatRowPreviewText(conv, me, preview, draft, onCall, recording, typing, voiceUnplayed,
+                    modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1250,7 +1255,11 @@ fun ChatRow(
                         Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = c.tertiary, modifier = Modifier.size(16.dp))
                     }
                     // Never beside a call: it is a record, not a message with a sent / read state (iOS).
-                    if (conv.lastIsMine(me) && !conv.isChannel && !(preview.startsWith("↗ ") || preview.startsWith("📞 ") || preview.startsWith("📹 "))) Ticks(conv, me)
+                    if (conv.lastIsMine(me) && !conv.isChannel && !ChatList.lastIsCall(conv)) Ticks(conv, me)
+                    // Someone reacted to my message: one grey heart, never the emoji itself (iOS).
+                    if (preview.heart) {
+                        Icon(Icons.Filled.Favorite, contentDescription = "Reaction", tint = c.secondary, modifier = Modifier.size(15.dp))
+                    }
                     if (conv.hasUnreadReply(me)) {
                         Box(Modifier.size(20.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Someone replied to you",
