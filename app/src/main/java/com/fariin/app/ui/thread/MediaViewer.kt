@@ -122,7 +122,9 @@ sealed class Viewing {
      * and Delete.
      */
     data class Photo(val url: String, val enc: EncMeta?, val once: Pair<String, String>? = null,
-                     val msg: Message? = null, val albumIndex: Int? = null) : Viewing()
+                     val msg: Message? = null, val albumIndex: Int? = null,
+                     /** A group's or channel's photos to page over, [msg]'s own page among them (chatGallery). */
+                     val gallery: List<ViewerRules.Page>? = null) : Viewing()
     data class Video(val url: String, val enc: EncMeta?, val msg: Message? = null, val albumIndex: Int? = null) : Viewing()
     /** Ready-made pages (All Media), starting on [start]. */
     data class Pages(val pages: List<ViewerRules.Page>, val start: Int) : Viewing()
@@ -143,9 +145,24 @@ class ViewerHost(
     val allowViewOnce: Boolean = false,
 )
 
+/**
+ * A single photo tapped in a group or channel opens in a pager over every photo the chat has loaded
+ * (iOS openChatPhoto, owner 2026-11-08). A 1:1 chat, a view-once photo and an album tile (its own
+ * album pager) are left as they are.
+ */
+internal fun withChatGallery(v: Viewing, messages: List<Message>, groupLike: Boolean): Viewing {
+    if (!groupLike || v !is Viewing.Photo || v.once != null || v.albumIndex != null) return v
+    val m = v.msg ?: return v
+    if (m.viewOnce) return v
+    val pages = ViewerRules.chatGallery(messages)
+    if (pages.size < 2 || pages.none { it.key == m.id }) return v
+    return v.copy(gallery = pages)
+}
+
 internal fun viewerPages(v: Viewing): Pair<List<ViewerRules.Page>, Int> = when (v) {
     is Viewing.Pages -> v.pages to v.start
-    is Viewing.Photo -> v.msg?.let { ViewerRules.chatPages(it, v.albumIndex, v.once) }?.takeIf { it.first.isNotEmpty() }
+    is Viewing.Photo -> v.gallery?.let { g -> v.msg?.let { m -> g.indexOfFirst { it.key == m.id } }?.takeIf { it >= 0 }?.let { g to it } }
+        ?: v.msg?.let { ViewerRules.chatPages(it, v.albumIndex, v.once) }?.takeIf { it.first.isNotEmpty() }
         ?: (listOf(ViewerRules.Page(v.url, null, false, v.url, v.enc, once = v.once)) to 0)
     is Viewing.Video -> v.msg?.let { ViewerRules.chatPages(it, v.albumIndex) }?.takeIf { it.first.isNotEmpty() }
         ?: (listOf(ViewerRules.Page(v.url, null, true, v.url, v.enc)) to 0)

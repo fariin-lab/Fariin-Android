@@ -51,6 +51,29 @@ object ViewerRules {
         )) to 0
     }
 
+    /**
+     * A GROUP'S OR CHANNEL'S PHOTOS SWIPE (iOS b7a1efa7 chatPhotoGallery, owner 2026-11-08): every
+     * photo the chat has loaded, oldest to newest, an album's photos in their place under their
+     * "<id>-<index>" keys. View-once, GIFs, unsent and deleted messages are never in it.
+     */
+    fun chatGallery(messages: List<Message>): List<Page> {
+        val items = if (messages.size > 1 && messages.first().createdAtMillis > messages.last().createdAtMillis) messages.reversed() else messages
+        val out = ArrayList<Page>()
+        for (m in items) {
+            if (m.deleted || m.viewOnce || m.sendState != null || m.isGif) continue
+            when (m.mediaKind) {
+                Message.MediaKind.ALBUM -> m.album.forEachIndexed { i, a -> if (!a.isVideo) out += albumPage(m, i, a) }
+                Message.MediaKind.PHOTO -> {
+                    val url = m.localPath ?: m.imageUrl ?: continue
+                    out += Page(key = m.id, messageId = m.id, isVideo = false, url = url,
+                        enc = if (m.localPath != null) null else m.enc, authorId = m.authorId, atMillis = m.createdAtMillis)
+                }
+                else -> {}
+            }
+        }
+        return out
+    }
+
     private fun albumPage(m: Message, i: Int, a: Message.AlbumItem) = Page(
         key = "${m.id}-$i", messageId = m.id, isVideo = a.isVideo,
         url = a.videoUrl ?: a.imageUrl, enc = if (a.isVideo) a.videoEnc else a.enc,

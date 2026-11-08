@@ -1015,7 +1015,7 @@ private fun ThreadContent(
                                     if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
                             ) {
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
-                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
+                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
                                     // A picture, video or album post's pills sit inside its bubble (MediaRow).
@@ -1068,7 +1068,7 @@ private fun ThreadContent(
                                         ReactNow.set(m, next)
                                         actions.onReact(m, next)
                                     }) {
-                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = it }
+                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // iOS: a pill opens who reacted (channels keep their own chips).
                                     ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { reactorsFor = m.rowId }
                                 }
