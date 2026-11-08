@@ -165,6 +165,9 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     /** Open threads showing all their answers, not only the first three ("View N more replies"). */
     var expanded by mutableStateOf<Set<String>>(emptySet())
         private set
+    /** How many answers each open thread shows (missing = [PostReplyRules.ANSWERS_FIRST]); Hide resets it. */
+    var shownAnswers by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
     /** The row lit for a moment (a jump to an "@name", a push's comment). */
     var flashId by mutableStateOf<String?>(null)
         private set
@@ -456,10 +459,11 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         }
     }
 
-    /** "View N more replies": the rest of an open thread's answers (the next page fetched if needed). */
-    fun showAllAnswers(rid: String) {
-        expanded = expanded + rid
-        if (answerNext[rid].orEmpty().isNotEmpty() && answers[rid].orEmpty().size <= PostReplyRules.ANSWERS_FIRST)
+    /** "View N more replies": five more answers, the next page fetched when the loaded ones run out. */
+    fun showMoreAnswers(rid: String) {
+        val next = (shownAnswers[rid] ?: PostReplyRules.ANSWERS_FIRST) + PostReplyRules.ANSWERS_FIRST
+        shownAnswers = shownAnswers + (rid to next)
+        if (answers[rid].orEmpty().size < next && answerNext[rid].orEmpty().isNotEmpty())
             scope.launch { loadAnswers(rid, more = true) }
     }
 
@@ -475,7 +479,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     }
 
     fun toggleThread(rid: String) {
-        if (rid in open) { open = open - rid; return }
+        if (rid in open) { open = open - rid; expanded = expanded - rid; shownAnswers = shownAnswers - rid; return }
         open = open + rid
         if (rid !in answersLoaded) scope.launch { loadAnswers(rid, more = false) }
     }
@@ -790,10 +794,12 @@ private fun replyItems(s: PostRepliesState): List<ReplyItem> = buildList {
         if (total <= 0) return
         val isOpen = r.id in s.open
         if (isOpen) {
-            // The first three answers, then "View N more replies" (iOS); all of them once asked for.
-            val all = r.id in s.expanded || total <= PostReplyRules.ANSWERS_FIRST
-            (if (all) got else got.take(PostReplyRules.ANSWERS_FIRST)).forEach { add(ReplyItem.Answer(it)) }
-            if (!all) add(ReplyItem.MoreCount(r.id, total - minOf(got.size, PostReplyRules.ANSWERS_FIRST)))
+            // Five answers, then "View N more replies" adds five each tap (iOS ab0a283a); all of them
+            // when the thread is wanted whole (my own answer landing, a jump to an "@name").
+            val cap = if (r.id in s.expanded) Int.MAX_VALUE else (s.shownAnswers[r.id] ?: PostReplyRules.ANSWERS_FIRST)
+            val all = total <= cap
+            (if (all) got else got.take(cap)).forEach { add(ReplyItem.Answer(it)) }
+            if (!all) add(ReplyItem.MoreCount(r.id, total - minOf(got.size, cap)))
             else if (s.answerNext[r.id].orEmpty().isNotEmpty()) add(ReplyItem.More(r.id))
         }
         add(ReplyItem.Toggle(r.id, total, isOpen))
@@ -887,7 +893,7 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                                 Modifier.fillMaxWidth().padding(vertical = 4.dp), center = true) { s.loadOlder() }
                         }
                         is ReplyItem.MoreCount -> SmallLink(PostReplyRules.moreAnswers(row.n),
-                            Modifier.fillMaxWidth().threadLineThrough().padding(start = 108.dp, bottom = 8.dp)) { s.showAllAnswers(row.rid) }
+                            Modifier.fillMaxWidth().threadLineThrough().padding(start = 108.dp, bottom = 8.dp)) { s.showMoreAnswers(row.rid) }
                         ReplyItem.PinLabel -> Row(Modifier.padding(start = 16.dp + 40.dp + 24.dp, top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.PushPin, null, tint = c.secondary, modifier = Modifier.size(12.dp))
