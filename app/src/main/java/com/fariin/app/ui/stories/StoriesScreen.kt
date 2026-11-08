@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.glassMenuAnchor
 import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
@@ -220,6 +221,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var hiddenCollapsed by rememberSaveable { mutableStateOf(false) }
     var posted by rememberSaveable { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
+    val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
     // The Settings pages pushed from the menu (Stories, then its audience pages); empty = closed.
     val privacyPages = remember { androidx.compose.runtime.mutableStateListOf<String>() }
     var hideTarget by remember { mutableStateOf<StoryGroup?>(null) }
@@ -323,19 +325,19 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             }
             // iOS moreMenu: one entry, Story privacy, straight to the Stories page in Settings.
             Box(Modifier.align(Alignment.CenterStart)) {
-                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { moreOpen = true }, circle = true)
+                com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { moreOpen = true }, circle = true,
+                    modifier = Modifier.glassMenuAnchor(moreAnchor))
                 if (glowUnread) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(8.dp).clip(CircleShape).background(c.accent))
-                androidx.compose.material3.DropdownMenu(moreOpen, onDismissRequest = { moreOpen = false },
-                    shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Story privacy", color = c.label) },
-                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock), contentDescription = null, tint = c.label) },
-                        onClick = { moreOpen = false; privacyPages.add(com.fariin.app.ui.settings.PAGE_STORIES) })
-                    if (glowOn) androidx.compose.material3.DropdownMenuItem(text = { Text("Notifications", color = c.label) },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell), contentDescription = null, tint = c.label) },
-                        trailingIcon = if (glowUnread) { { Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent)) } } else null,
-                        onClick = { moreOpen = false; glowNotifs = true })
-                }
             }
+        }
+        // The ••• menu: the glass menu grown from its button, over the whole page (owner: everywhere).
+        Box(Modifier.zIndex(2f).fillMaxSize()) {
+            com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
+                add(com.fariin.app.ui.components.GlassMenuItem("Story privacy", androidx.compose.ui.res.painterResource(R.drawable.ic_sf_lock)) {
+                    privacyPages.add(com.fariin.app.ui.settings.PAGE_STORIES) })
+                if (glowOn) add(com.fariin.app.ui.components.GlassMenuItem(if (glowUnread) "Notifications \u2022" else "Notifications",
+                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_bell)) { glowNotifs = true })
+            }, backdrop = null, onDismiss = { moreOpen = false })
         }
         LazyColumn(Modifier.fillMaxSize().then(if (frost) Modifier.hazeSource(storiesHaze) else Modifier), state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = topPad, bottom = com.fariin.app.ui.shell.bottomBarInset())) {
