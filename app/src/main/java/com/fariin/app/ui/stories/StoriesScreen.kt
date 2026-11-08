@@ -39,8 +39,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -147,19 +145,24 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     var tooLong by remember { mutableStateOf(false) }
     var dayLimit by remember { mutableStateOf(false) }
     val upload by StoryUploads.state.collectAsState()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            prepareStoryMedia(context, uri)
-                .onSuccess { composing = it; pickError = null }
-                .onFailure { if (it is StoryMedia.TooLong) tooLong = true else pickError = it.message ?: "Couldn't open this file." }
+    // The story's own library sheet (StoryLibrary.kt, iOS StoryLibraryPicker), never the system
+    // picker. It stays open under the editor, so closing the editor comes back to it (iOS).
+    var library by remember { mutableStateOf(false) }
+    var libraryBusy by remember { mutableStateOf(false) }
+    val pickFromLibrary: (android.net.Uri) -> Unit = { uri ->
+        if (!libraryBusy) {
+            libraryBusy = true
+            scope.launch {
+                prepareStoryMedia(context, uri)
+                    .onSuccess { composing = it; pickError = null }
+                    .onFailure { if (it is StoryMedia.TooLong) tooLong = true else pickError = it.message ?: "Couldn't open this file." }
+                libraryBusy = false
+            }
         }
     }
-    // The story camera (StoryCamera.kt); its gallery button opens the picker, as iOS onLibrary.
+    // The story camera (StoryCamera.kt); its gallery button opens the library, as iOS onLibrary.
     var camera by rememberSaveable { mutableStateOf(false) }
-    val openLibrary: () -> Unit = {
-        if (live) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-    }
+    val openLibrary: () -> Unit = { if (live) library = true }
     // The day's allowance is asked before the camera opens (iOS composeStory), from the counter read
     // when the tab shows; it fails open, and the rules are what hold the line.
     val limits = com.fariin.app.data.StoryLimits
@@ -243,7 +246,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     // whole tab went.
     LaunchedEffect(active) {
         if (!active) {
-            viewing = null; camera = false; composing = null; composingText = false; posted = false; tooLong = false; dayLimit = false
+            viewing = null; camera = false; library = false; composing = null; composingText = false; posted = false; tooLong = false; dayLimit = false
             privacyPages.clear(); glowPage = false; glowNotifs = false; hideTarget = null; moreOpen = false
         }
     }
@@ -395,7 +398,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     if (camera) {
         // A capture goes through the same prepare and composer as a picked item.
         StoryCameraDialog(
-            active = composing == null, error = pickError,
+            active = composing == null && !library, error = pickError,
             onCaptured = { uri ->
                 scope.launch {
                     prepareStoryMedia(context, uri)
@@ -500,9 +503,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         text = { Text(limits.dayAlertText()) },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { dayLimit = false }) { Text("OK") } },
     )
+    if (library) StoryLibrarySheet(busy = libraryBusy, onPick = pickFromLibrary, onClose = { library = false })
     composing?.let { m ->
         StoryComposerDialog(me, m, conversations, onClose = { composing = null; composingText = false },
-            onPosted = { composing = null; composingText = false; camera = false }, textStory = composingText)
+            onPosted = { composing = null; composingText = false; camera = false; library = false }, textStory = composingText)
     }
 }
 

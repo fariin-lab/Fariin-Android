@@ -134,7 +134,7 @@ import kotlin.math.roundToInt
  * The story camera (iOS StoryCameraView), opened by the chat list's camera button, the Stories
  * tab's add button and the launcher's New Story. Tap the shutter for a photo, hold it to record
  * (up to 60 s, letting go stops), flip between the lenses, flash where the lens has one, and the
- * gallery button bottom left opens the system photo and video picker.
+ * gallery button bottom left opens the story library sheet (StoryLibrary.kt).
  *
  * A capture is written to cache/story-camera and handed back as a content Uri, so it goes through
  * the same StoryMedia.prepare and StoryComposer as a picked item; there is no second upload path.
