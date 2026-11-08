@@ -21,6 +21,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -58,7 +69,13 @@ import com.fariin.app.ui.components.floating
 @Composable
 internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Forward to",
                           /** Pick one chat (Quote): a tap hands that chat back and closes; no ticks, no Send. */
-                          pickOne: Boolean = false, onSend: (List<String>) -> Unit) {
+                          pickOne: Boolean = false,
+                          /** What is being forwarded, shown small beside the message box. */
+                          preview: List<com.fariin.app.data.Message> = emptyList(),
+                          /** Set: the bottom is the composer (preview, "Add a message…", send arrow) and
+                           *  Send hands back the picked chats and the typed note (may be empty). */
+                          onSendNote: ((List<String>, String) -> Unit)? = null,
+                          onSend: (List<String>) -> Unit = {}) {
     val c = Fariin.colors
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
@@ -108,7 +125,11 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                     }
                 }
             }
-            if (pickOne) Spacer(Modifier.height(16.dp)) else Box(
+            if (pickOne) Spacer(Modifier.height(16.dp))
+            else if (onSendNote != null) ForwardComposer(preview, chats.filter { it.id in chosen }, me) { note ->
+                onSendNote(chosen.toList(), note); onDismiss()
+            }
+            else Box(
                 Modifier.fillMaxWidth().padding(16.dp).height(50.dp)
                     .floating(CircleShape, fill = if (chosen.isEmpty()) c.secondary.copy(alpha = 0.3f) else c.blue)
                     .clickable(enabled = chosen.isNotEmpty()) { onSend(chosen.toList()); onDismiss() },
@@ -128,4 +149,101 @@ internal fun forwardable(conv: Conversation, me: String): Boolean {
     if (conv.users.isNotEmpty() && me !in conv.users) return false
     if (!conv.isGroup && conv.startedBy == me && !conv.accepted) return false
     return true
+}
+
+/**
+ * The forward sheet's bottom (iOS ForwardPicker.forwardComposer, plus the owner's 2026-11-07 ask to
+ * see what is going): what is forwarded, small, then "Add a message…" with the round send arrow.
+ * The preview is up to three cards fanned behind each other and a "+N" past three: enough to tell a
+ * photo from a voice note without a header eating the list. Picked chats show as faces above once
+ * there are two or more. The note goes out as its own message after the forwards, in every chat.
+ */
+@Composable
+private fun ForwardComposer(preview: List<com.fariin.app.data.Message>, picked: List<Conversation>, me: String,
+                            onSend: (String) -> Unit) {
+    val c = Fariin.colors
+    var note by remember { mutableStateOf("") }
+    val ready = picked.isNotEmpty()
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp)) {
+        if (picked.size > 1) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)
+            .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy((-8).dp)) {
+            picked.forEach { p ->
+                Box(Modifier.size(30.dp).clip(CircleShape).background(com.fariin.app.ui.components.sheetFill).padding(2.dp)) {
+                    Avatar(p.displayPhoto(me), 26.dp, squircle = p.isChannel,
+                        kind = com.fariin.app.ui.components.AvatarKind.of(p.isGroup, p.isChannel))
+                }
+            }
+        }
+        if (preview.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            PreviewStack(preview)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(if (preview.size > 1) "${preview.size} messages" else "Forwarding", fontSize = 13.sp, color = c.secondary)
+                Text(forwardSnippet(preview.first()), fontSize = 15.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.Bottom) {
+            Box(Modifier.weight(1f).heightIn(min = 42.dp).clip(RoundedCornerShape(21.dp)).background(c.card)
+                .border(0.5.dp, c.label.copy(alpha = 0.08f), RoundedCornerShape(21.dp))
+                .padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
+                if (note.isEmpty()) Text("Add a message…", fontSize = 17.sp, color = c.secondary)
+                BasicTextField(note, { note = it }, maxLines = 4, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                    cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.size(42.dp).clip(CircleShape).background(if (ready) c.blue else c.secondary.copy(alpha = 0.3f))
+                .clickable(enabled = ready) { onSend(note.trim()) }
+                .sendLabel(if (picked.size > 1) "Send to ${picked.size} chats" else "Send"),
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.ArrowUpward, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+        }
+    }
+}
+
+private fun Modifier.sendLabel(label: String) =
+    this.then(Modifier.semantics { contentDescription = label; role = androidx.compose.ui.semantics.Role.Button })
+
+/** The fanned cards: up to three, the first on top, a "+N" chip when there are more. */
+@Composable
+private fun PreviewStack(msgs: List<com.fariin.app.data.Message>) {
+    val c = Fariin.colors
+    val shown = msgs.take(3)
+    Box(Modifier.width(44.dp + 6.dp * (shown.size - 1)).height(44.dp)) {
+        shown.asReversed().forEachIndexed { i, m ->
+            val depth = shown.size - 1 - i
+            Box(Modifier.padding(start = 6.dp * depth).size(44.dp)
+                .graphicsLayer { alpha = 1f - 0.25f * depth }
+                .clip(RoundedCornerShape(8.dp)).background(c.card)
+                .border(0.5.dp, c.label.copy(alpha = 0.1f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                if (hasReplyThumb(m)) ReplyThumb(m, 44.dp)
+                else Icon(forwardIcon(m), null, tint = c.secondary, modifier = Modifier.size(22.dp))
+            }
+        }
+        if (msgs.size > 3) Box(Modifier.align(Alignment.BottomEnd).clip(CircleShape).background(c.label.copy(alpha = 0.75f))
+            .padding(horizontal = 5.dp, vertical = 1.dp)) {
+            Text("+${msgs.size - 3}", fontSize = 11.sp, color = c.bg, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+private fun forwardIcon(m: com.fariin.app.data.Message) = when (m.mediaKind) {
+    com.fariin.app.data.Message.MediaKind.VOICE -> Icons.Filled.Mic
+    com.fariin.app.data.Message.MediaKind.FILE -> Icons.Filled.Description
+    com.fariin.app.data.Message.MediaKind.VIDEO -> Icons.Filled.PlayArrow
+    com.fariin.app.data.Message.MediaKind.PHOTO, com.fariin.app.data.Message.MediaKind.ALBUM -> Icons.Filled.Image
+    else -> Icons.AutoMirrored.Filled.Notes
+}
+
+/** One line for what is forwarded: the chat list's words for media, the text itself otherwise. */
+private fun forwardSnippet(m: com.fariin.app.data.Message): String = when {
+    m.isSticker -> "Sticker"
+    m.isGif -> "GIF"
+    m.mediaKind == com.fariin.app.data.Message.MediaKind.ALBUM -> "🖼 ${m.album.size} photos" + m.text.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+    m.mediaKind == com.fariin.app.data.Message.MediaKind.FILE -> "📄 " + (m.fileName ?: "File")
+    m.mediaKind == com.fariin.app.data.Message.MediaKind.PHOTO && m.text.isNotBlank() -> "📷 " + m.text
+    m.mediaKind == com.fariin.app.data.Message.MediaKind.VIDEO && m.text.isNotBlank() -> "🎥 " + m.text
+    else -> com.fariin.app.data.MessageInfoRules.snippet(m).ifBlank { "Message" }
 }

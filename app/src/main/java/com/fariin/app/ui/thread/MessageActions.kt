@@ -102,6 +102,9 @@ data class ThreadActions(
     /** Opens the forward picker for a message (ThreadScreen sets it), then sends to the chats picked. */
     val onForward: (Message) -> Unit = {},
     val onForwardTo: (Message, List<String>) -> Unit = { _, _ -> },
+    /** Forward [msgs] to the chats picked, then the typed note as its own message in each; one chat
+     *  picked opens that chat (iOS ForwardPicker: watching it arrive is the confirmation). */
+    val onForwardWithNote: (List<Message>, List<String>, String) -> Unit = { _, _, _ -> },
     /** Quote a channel post: opens the pick-one chat sheet (ThreadScreen sets it), then makes the
      *  quote on the server and opens the chat picked with it above the composer. */
     val onQuote: (Message) -> Unit = {},

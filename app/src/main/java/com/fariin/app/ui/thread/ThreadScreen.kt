@@ -371,13 +371,15 @@ private fun ThreadContent(
     val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
-    forwardFor?.let { m -> ForwardSheet(ui.me, onDismiss = { forwardFor = null }) { targets -> actions.onForwardTo(m, targets) } }
+    forwardFor?.let { m -> ForwardSheet(ui.me, onDismiss = { forwardFor = null }, preview = listOf(m),
+        onSendNote = { targets, note -> actions.onForwardWithNote(listOf(m), targets, note) }) }
     // Quote a channel post (iOS ForwardPicker pick-one mode): the same chats, one tap picks.
     var quoteFor by remember { mutableStateOf<Message?>(null) }
     quoteFor?.let { m -> ForwardSheet(ui.me, onDismiss = { quoteFor = null }, title = "Quote in", pickOne = true) { t ->
         t.firstOrNull()?.let { actions.onQuoteTo(m, it) } } }
     bulkForward?.let { msgs ->
-        ForwardSheet(ui.me, onDismiss = { bulkForward = null }) { targets -> actions.onForwardManyTo(msgs, targets); selected.clear() }
+        ForwardSheet(ui.me, onDismiss = { bulkForward = null }, preview = msgs,
+            onSendNote = { targets, note -> actions.onForwardWithNote(msgs, targets, note); selected.clear() })
     }
     com.fariin.app.ui.settings.BubbleStyleSheet.Host(ui.cid.ifEmpty { null })   // the menu's "Bubble Style" (MessageActions.kt)
     menuFor?.let { m0 ->

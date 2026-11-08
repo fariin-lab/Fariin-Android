@@ -270,6 +270,31 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
                     else "The server refused $refused deletes. Those messages are still there."
             }
         },
+        // The sheet's Send (owner 2026-11-07, the reference's forward): the forwards oldest first,
+        // then the note as its own message in each chat. One chat picked opens it at once, so the
+        // forward is seen arriving; the work runs off this screen so leaving it does not stop it.
+        onForwardWithNote = { msgs, targets, note ->
+            val land = targets.singleOrNull()?.takeIf { it != cid }
+            val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+            work.launch {
+                var failedChats = 0
+                for (m in msgs.sortedBy { it.createdAtMillis }) {
+                    failedChats += com.fariin.app.media.Forwarder.forward(app, me, crypto, m, cid, targets).size
+                }
+                if (note.isNotBlank()) for (t in targets.distinct().take(com.fariin.app.media.MediaRules.FORWARD_CHATS_AT_ONCE)) {
+                    com.fariin.app.data.ThreadRepository(t, me, crypto, work).sendText(note)
+                }
+                val said = when {
+                    failedChats == 0 -> if (land != null) null else if (targets.size > 1) "Forwarded to ${targets.size} chats" else "Forwarded"
+                    failedChats == msgs.size * targets.size -> "Couldn't forward. Try again."
+                    else -> "Some messages couldn't be forwarded."
+                }
+                if (said != null) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    if (land != null) com.fariin.app.ui.components.Snack.show(said) else notice = said
+                }
+            }
+            if (land != null) nav.chat(land)
+        },
         onForwardManyTo = { msgs, targets ->
             vm.viewModelScope.launch {
                 var failedChats = 0
