@@ -110,6 +110,8 @@ internal fun AttachSheet(
     onDismiss: () -> Unit,
     onSendMedia: (uris: List<Uri>, caption: String, viewOnce: Boolean) -> Unit,
     onSendFile: (Uri) -> Unit,
+    /** Add files > Photos: several photos as files, in tap order (one message each). */
+    onSendFiles: (List<Uri>) -> Unit = { it.forEach(onSendFile) },
     /** A group where members may send neither photos nor videos: the grid is closed and says why. */
     mediaOff: String? = null,
     /** The Poll button (groups only, as iOS); the sheet goes down and the poll composer opens. */
@@ -278,7 +280,8 @@ internal fun AttachSheet(
                     onBrowse = { files.launch(arrayOf("*/*")) },
                     onGallery = { files.launch(arrayOf("image/*", "video/*")) },
                     onAudio = { files.launch(arrayOf("audio/*")) },
-                    onSend = { u -> RecentFiles.record(context, u); onSendFile(u); motion.close() })
+                    onSend = { u -> RecentFiles.record(context, u); onSendFile(u); motion.close() },
+                    onSendPhotos = { l -> onSendFiles(l); motion.close() })
             } else if (page == SheetPage.GIFS && onGif != null) {
                 Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab { g -> onGif(g); motion.close() } }
             } else if (page == SheetPage.ALBUMS) {

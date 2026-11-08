@@ -229,6 +229,8 @@ fun ThreadScreen(
     /** The attach sheet's sends (media worker): photos/videos + caption + view-once, and a file. */
     onSendPick: (List<Uri>, String, Boolean) -> Unit = { l, _, _ -> l.firstOrNull()?.let(onSendPhoto) },
     onSendFile: (Uri) -> Unit = {},
+    /** Several files at once, in order (Add files > Photos). */
+    onSendFiles: (List<Uri>) -> Unit = { it.forEach(onSendFile) },
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val text = remember {
@@ -264,7 +266,7 @@ fun ThreadScreen(
                     Box(Modifier.fillMaxSize().background(Fariin.colors.bg), contentAlignment = Alignment.Center) {
                         com.fariin.app.ui.components.FariinSpinner()
                     }
-                else ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile)
+                else ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile, onSendFiles)
             }
         }
         // The status bar's icons follow the chat header over a dark-topped animated wallpaper while the
@@ -296,6 +298,7 @@ private fun ThreadContent(
     actions: ThreadActions,
     onSendPick: (List<Uri>, String, Boolean) -> Unit,
     onSendFile: (Uri) -> Unit,
+    onSendFiles: (List<Uri>) -> Unit,
 ) {
     val c = Fariin.colors
     // Long-press menu, delete question, info, reply and edit targets (MessageActions.kt).
@@ -1292,6 +1295,7 @@ private fun ThreadContent(
                         if (stop != null) actions.onNotice(stop) else onSendPick(uris, cap, once)
                     },
                     onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
+                    onSendFiles = { l -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFiles(l) },
                     mediaOff = mediaOff,
                     // iOS: the Poll tile is in groups only, held back like the other kinds.
                     onPoll = if (ui.isGroup) ({
