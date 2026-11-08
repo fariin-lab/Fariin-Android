@@ -62,7 +62,7 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
     }
     .then(if (glass) androidx.compose.ui.Modifier.hazeEffect(haze) {
         // Mostly blur, a light tint: a colour band is what shows where a bar ends (reference: ~0.4).
-        backgroundColor = page; blurRadius = 26.dp; noiseFactor = 0f
+        backgroundColor = page; blurRadius = 14.dp; noiseFactor = 0f   // softer: the reference keeps what is under readable (dark-mode compare)
         tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.42f)))
         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
         // Solid down the bar, then a long, soft ease to nothing over the tail.

@@ -336,7 +336,9 @@ fun ChatListScreen(
     // The bar leaves with a scroll down and comes back at once with any scroll up (owner 2026-11-07,
     // the reference feed app on his Pixel): more chats on screen, no band over them. Searching and
     // selecting keep it in place (their bars are what you are working with).
-    val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior(barState)
+    // Pinned again with the frosted top (owner 2026-11-08: "we don't need the [hiding] bar any more"; when it
+    // left, only a thin frosted strip stayed behind the clock and rows showed half sharp under it).
+    val scroll = TopAppBarDefaults.pinnedScrollBehavior(barState)
     val pinBar = TopAppBarDefaults.pinnedScrollBehavior(barState)
     // Frosted once the list has moved under it, the page colour at rest; the search field scrolls
     // away with the list and a search button takes its place in the bar.
