@@ -330,10 +330,17 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                             val tag = "link:" + r.roomId
                             var menu by remember { mutableStateOf(false) }
                             Box {
-                                PickableRow(selecting, tag in picked, onToggle = { toggle(tag) }) {
-                                    CallLinkRow(r, callTimeLabel(r.createdAtMs, DateFormat.is24HourFormat(ctx), now),
-                                        onOpen = { if (com.fariin.app.call.CallManager.ui.value.status.live) CallActivity.startRing(ctx) else nav.joinLink(r.key, true) },
-                                        onInfo = { nav.callLink(r.roomId) }, onLongClick = { menu = true })
+                                // iOS 2026-11-08: swipe left on a link row = Delete, the same confirm as the menu's.
+                                com.fariin.app.ui.chats.SwipeActionsRow(tag, enabled = !selecting, leading = emptyList(),
+                                    trailing = listOf(com.fariin.app.ui.chats.SwipeAction("Delete",
+                                        painterResource(R.drawable.ic_sf_trash), c.red) { picked = setOf(tag); askDelete = true })) {
+                                    Box(Modifier.background(c.bg)) {
+                                        PickableRow(selecting, tag in picked, onToggle = { toggle(tag) }) {
+                                            CallLinkRow(r, callTimeLabel(r.createdAtMs, DateFormat.is24HourFormat(ctx), now),
+                                                onOpen = { if (com.fariin.app.call.CallManager.ui.value.status.live) CallActivity.startRing(ctx) else nav.joinLink(r.key, true) },
+                                                onInfo = { nav.callLink(r.roomId) }, onLongClick = { menu = true })
+                                        }
+                                    }
                                 }
                                 // iOS linkMenu: the same items, in the same order, as a call row.
                                 RowMenu(menu, { menu = false }, callUp, chats = null,
