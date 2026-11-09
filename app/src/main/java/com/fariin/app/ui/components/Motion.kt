@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.compose.composable
 import com.fariin.app.perf.PowerSaving
 import com.fariin.app.perf.rememberPowerState
 
@@ -191,4 +192,4 @@ fun androidx.navigation.NavGraphBuilder.page(
     arguments: List<androidx.navigation.NamedNavArgument> = emptyList(),
     deepLinks: List<androidx.navigation.NavDeepLink> = emptyList(),
     content: @Composable androidx.compose.animation.AnimatedContentScope.(NavBackStackEntry) -> Unit,
-) = androidx.navigation.compose.composable(route, arguments, deepLinks) { entry -> PageFrame(entry.id) { content(entry) } }
+) = composable(route, arguments, deepLinks) { entry: NavBackStackEntry -> PageFrame(entry.id) { content(entry) } }
