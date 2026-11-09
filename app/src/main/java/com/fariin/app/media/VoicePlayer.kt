@@ -81,6 +81,14 @@ object VoicePlayer {
         tick()
     }
 
+    /**
+     * A tap or drag on the waveform of a note that is not loaded (iOS seek before the first play): the
+     * spot is kept, and play starts from it.
+     */
+    fun stash(id: String, positionMs: Long) {
+        _state.value = _state.value.copy(paused = _state.value.paused + (id to positionMs.coerceAtLeast(0)))
+    }
+
     fun stop() {
         save()
         VoiceEar.stop()

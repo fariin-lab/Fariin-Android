@@ -1452,3 +1452,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   away -> loudspeaker; holds across a run; never while a call is up) and HEADPHONES OUT PAUSES the
   note (ExoPlayer audio-becoming-noisy) instead of carrying on out loud. Tested raise-to-ear with
   the emulator's proximity sensor: screen-off lock taken when near, released and MODE_NORMAL when far.
+- 2026-11-08 ~10:05 PM: a tap or drag on a voice note's waveform before it is played now keeps the
+  spot and play starts there (iOS VoiceNotePlayer.seek "works BEFORE the first play"); it did
+  nothing until the note was loaded. Checked: tap mid-wave shows 0:02, play runs the last second.

@@ -397,7 +397,8 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Waveform(m.waveform, progress, tint, Modifier.weight(1f).height(20.dp)) { f ->
-                        if (mine) VoicePlayer.seek(m.rowId, f)
+                        // iOS: works before the first play too; the spot is kept and play starts there.
+                        if (mine) VoicePlayer.seek(m.rowId, f) else if (durMs > 0) VoicePlayer.stash(m.rowId, (f * durMs).toLong())
                     }
                     // iOS speedPill: shown always, not only once playing (a pill that appears later
                     // grows the bubble), and it sets the chat's speed before the first play too.
