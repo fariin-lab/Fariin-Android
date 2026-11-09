@@ -279,7 +279,7 @@ internal fun AttachSheet(
                     onSend = { u -> RecentFiles.record(context, u); onSendFile(u); motion.close() },
                     onSendPhotos = { l -> onSendFiles(l); motion.close() })
             } else if (page == SheetPage.GIFS && onGif != null) {
-                Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab { g -> onGif(g); motion.close() } }
+                Box(Modifier.fillMaxSize().padding(bottom = 84.dp + navBottomDp)) { GifTab(onGif = { g -> onGif(g); motion.close() }) }
             } else if (page == SheetPage.ALBUMS) {
                 // The 10 dp sits INSIDE the scroll: as an outer padding it cut the scrolled rows flat
                 // 10 dp under the sheet's rounded top and left a band there (owner screenshot,

@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -226,27 +230,38 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
     var searchOpen by remember { mutableStateOf(false) }
     // A GIF sent from the search sheet goes to the Recent tab too (iOS pick).
     val sendGif: (StickerGifRules.Gif) -> Unit = { g -> GifRecents.note(ctx, me, g); onGif(g) }
-    Box(Modifier.fillMaxWidth().height(320.dp).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-        if (gifs) GifTab(me, onGif) else StickerTab(me, onSticker)
-        // Top row: Search (GIFs only), the switch in the middle.
-        Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
-            if (gifs) {
-                Box(Modifier.align(Alignment.CenterStart).size(32.dp).floating(CircleShape).clickable { searchOpen = true },
-                    contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search GIFs", tint = c.label, modifier = Modifier.size(18.dp))
-                }
-            }
-            Row(Modifier.align(Alignment.Center).height(32.dp).floating(RoundedCornerShape(16.dp)).padding(3.dp)) {
+    // iOS StickerKeyboardView (owner 2026-11-09, "like our design in iOS"): a card with rounded top
+    // corners; the shelves row on top (packs, or the GIF moods); GIFs | Stickers floating at the
+    // foot, 200 wide; on GIFs a round search as tall as the switch at the foot's right. Scrolling
+    // into the grid sends the top row up and the switch down; scrolling back brings both.
+    var barsHidden by remember { mutableStateOf(false) }
+    val hide by androidx.compose.animation.core.animateFloatAsState(if (barsHidden) 1f else 0f,
+        androidx.compose.animation.core.tween(220), label = "bars")
+    // Rounded all round like the iPhone keyboard (owner 2026-11-09): the top corners, and the bottom
+    // ones following the phone's own screen corners, with a thin light rim.
+    val panelShape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp, bottomStart = 40.dp, bottomEnd = 40.dp)
+    Box(Modifier.fillMaxWidth().height(320.dp).clip(panelShape)
+        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+        .border(1.dp, Color.White.copy(alpha = if (c.dark) 0.12f else 0.7f), panelShape)) {
+        if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it })
+        else StickerTab(me, onSticker, hide = hide, onScrolledIn = { barsHidden = it })
+        Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+            .graphicsLayer { translationY = hide * 60.dp.toPx(); alpha = 1f - hide }) {
+            Row(Modifier.align(Alignment.Center).width(200.dp).height(38.dp).floating(RoundedCornerShape(19.dp)).padding(3.dp)) {
                 for ((label, isGif) in listOf("GIFs" to true, "Stickers" to false)) {
                     val on = gifs == isGif
-                    Box(Modifier.height(26.dp).clip(RoundedCornerShape(13.dp))
+                    Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(16.dp))
                         .background(if (on) c.label.copy(alpha = 0.12f) else Color.Transparent)
-                        .clickable { gifs = isGif; StickerCatalog.setLastTabGifs(ctx, isGif) }
-                        .padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                        .clickable(enabled = hide < 0.5f) { gifs = isGif; barsHidden = false; StickerCatalog.setLastTabGifs(ctx, isGif) },
+                        contentAlignment = Alignment.Center) {
                         Text(label, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (on) c.label else c.secondary)
                     }
                 }
+            }
+            if (gifs) Box(Modifier.align(Alignment.CenterEnd).size(38.dp).floating(CircleShape)
+                .clickable(enabled = hide < 0.5f) { searchOpen = true }, contentAlignment = Alignment.Center) {
+                Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search GIFs", tint = c.label, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -256,7 +271,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
 private const val TOP_BAND = 48
 
 @Composable
-private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
+private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float = 0f, onScrolledIn: (Boolean) -> Unit = {}) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     // The admin panel's order, on/off and server packs (iOS StickerStore), the shipped order meanwhile.
@@ -277,9 +292,9 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
     creating?.let { u -> StickerCreatorPage(u, onClose = { creating = null }) { made -> creating = null; onSticker(made) } }
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
         LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 52.dp),
+            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 60.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             for (shelf in shelves) {
                 item(key = "h:${shelf.id}", span = { GridItemSpan(maxLineSpan) }) {
@@ -307,9 +322,9 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit) {
                 }
             }
         }
-        // The pack strip in its floating bar at the foot (stripAtFoot): 28 cells, 24 pictures, 8 apart.
-        LazyRow(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp, start = 10.dp, end = 10.dp)
-            .height(34.dp).floating(RoundedCornerShape(17.dp)),
+        // The pack row on top, centred, no glass behind it (iOS, owner 2026-10-31): 28 cells, 24 pictures, 8 apart.
+        LazyRow(Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 10.dp, end = 10.dp).height(34.dp)
+            .graphicsLayer { translationY = -hide * 48.dp.toPx(); alpha = 1f - hide },
             contentPadding = PaddingValues(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             items(shelves.size) { i ->
@@ -333,13 +348,13 @@ private fun isTgs(ctx: android.content.Context, s: StickerRef): Boolean =
  * is the browse default, the rest are ready-made searches.
  */
 private enum class GifCategory(val term: String, val label: String) {
-    FAVORITES("", "Favorites"), RECENT("", "Recent"), TRENDING("", "Trending"), HAPPY("happy", "Happy"),
+    RECENT("", "Recent"), FAVORITES("", "Favorites"), TRENDING("", "Trending"), HAPPY("happy", "Happy"),
     LOVE("love", "Love"), SAD("sad", "Sad"), PARTY("party", "Party"), THUMBS_UP("thumbs up", "Thumbs up");
 
     val local: Boolean get() = this == FAVORITES || this == RECENT
 
     val icon: androidx.compose.ui.graphics.vector.ImageVector @Composable get() = when (this) {
-        FAVORITES -> ImageVector.vectorResource(R.drawable.ic_sf_star_fill)
+        FAVORITES -> ImageVector.vectorResource(R.drawable.ic_star_outline)
         RECENT -> ImageVector.vectorResource(R.drawable.ic_sf_clock)
         TRENDING -> ImageVector.vectorResource(R.drawable.ic_sf_flame)
         HAPPY -> ImageVector.vectorResource(R.drawable.ic_sf_face_smiling)
@@ -354,6 +369,8 @@ private enum class GifCategory(val term: String, val label: String) {
 internal fun GifTab(
     me: String = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
     onGif: (StickerGifRules.Gif) -> Unit,
+    hide: Float = 0f,
+    onScrolledIn: (Boolean) -> Unit = {},
 ) {
     val ctx = LocalContext.current
     // Every GIF sent from here (the panel or the attach sheet) goes to the Recent tab first (iOS pick).
@@ -372,25 +389,28 @@ internal fun GifTab(
         value = null
         if (!category.local) value = Giphy.search(ctx, category.term)
     }
-    Box(Modifier.fillMaxSize()) {
-        val pad = PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 52.dp)
+    val grid = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+    LaunchedEffect(category) { grid.scrollToItem(0); onScrolledIn(false) }
+    Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
+        val pad = PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 60.dp)
         when (category) {
-            GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send,
+            GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send, state = grid,
                 emptyTitle = "No favourites yet", emptyText = "Hold a GIF and choose Add to Favourites.")
-            GifCategory.RECENT -> GifGrid(local, pad, me = me, onRecentTab = true, onGif = send,
+            GifCategory.RECENT -> GifGrid(local, pad, me = me, onRecentTab = true, onGif = send, state = grid,
                 emptyTitle = "No recent GIFs", emptyText = "GIFs you send will appear here.")
-            else -> GifGrid(fetched, pad, me = me, onGif = send)
+            else -> GifGrid(fetched, pad, me = me, onGif = send, state = grid)
         }
-        // The row floats at the foot, the media tabs' look: the chosen one on a capsule fill.
-        Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp, start = 10.dp, end = 10.dp)
-            .fillMaxWidth().height(34.dp).floating(RoundedCornerShape(17.dp)).padding(3.dp),
-            verticalAlignment = Alignment.CenterVertically) {
+        // The mood row on top, centred, on the panel itself (iOS PanelGifGrid): 28 cells 8 apart, the
+        // chosen one on a soft rounded square.
+        Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).height(34.dp)
+            .graphicsLayer { translationY = -hide * 48.dp.toPx(); alpha = 1f - hide },
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             for (cat in GifCategory.entries) {
                 val on = cat == category
-                Box(Modifier.weight(1f).height(28.dp).clip(RoundedCornerShape(14.dp))
-                    .background(if (on) c.label.copy(alpha = 0.12f) else Color.Transparent)
-                    .clickable { category = cat }, contentAlignment = Alignment.Center) {
-                    Icon(cat.icon, contentDescription = cat.label, tint = if (on) c.label else c.secondary, modifier = Modifier.size(18.dp))
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
+                    .background(if (on) c.label.copy(alpha = 0.1f) else Color.Transparent)
+                    .clickable(enabled = hide < 0.5f) { category = cat }, contentAlignment = Alignment.Center) {
+                    Icon(cat.icon, contentDescription = cat.label, tint = if (on) c.label else c.secondary, modifier = Modifier.size(22.dp))
                 }
             }
         }
@@ -405,6 +425,7 @@ internal fun GifTab(
 @Composable
 private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, query: String = "", me: String,
                     onRecentTab: Boolean = false, emptyTitle: String? = null, emptyText: String? = null,
+                    state: androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState? = null,
                     onGif: (StickerGifRules.Gif) -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
@@ -425,6 +446,7 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
     // corners; the top and bottom padding stay as they were.
     val edge = androidx.compose.foundation.layout.PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
     LazyVerticalStaggeredGrid(StaggeredGridCells.Fixed(3), modifier = Modifier.fillMaxSize(), contentPadding = edge,
+        state = state ?: androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState(),
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalItemSpacing = 2.dp) {
         val items = list ?: emptyList()
         items(items.size, key = { items[it].id }) { i ->
@@ -488,4 +510,25 @@ internal fun GifSearchSheet(me: String, onDismiss: () -> Unit, onPick: (StickerG
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 6.dp))
         }
     }
+}
+
+
+/**
+ * iOS: scrolling down into the grid hides the panel's bars, scrolling back up shows them (and they
+ * always show at the very top). Read from the scroll itself (direction of each step), not from item
+ * positions, which only change once a whole row has passed.
+ */
+@Composable
+internal fun Modifier.scrollHide(onScrolledIn: (Boolean) -> Unit): Modifier {
+    val latest by androidx.compose.runtime.rememberUpdatedState(onScrolledIn)
+    val conn = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset,
+                                     source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y < -2f) latest(true) else if (available.y > 2f) latest(false)
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+    return this.nestedScroll(conn)
 }
