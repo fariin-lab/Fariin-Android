@@ -102,11 +102,15 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(shown, key = { it.id }) { conv ->
                     val on = conv.id in chosen
-                    Column(Modifier.clip(RoundedCornerShape(14.dp)).clickable {
+                    // No grey box on a tap (owner 2026-11-08): the ring and tick are the feedback, as iOS.
+                    Column(Modifier.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
                         if (on) chosen.remove(conv.id) else if (chosen.size < MediaRules.FORWARD_CHATS_AT_ONCE) chosen += conv.id
                     }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(68.dp)) {
-                            Avatar(conv.displayPhoto(me), 64.dp, Modifier.align(Alignment.Center), squircle = conv.isChannel,
+                        // iOS: a chosen chat gets a ring in the label colour, the photo drawn a little smaller inside it.
+                        val ring = if (conv.isChannel) RoundedCornerShape(24.dp) else CircleShape
+                        val inner by androidx.compose.animation.core.animateDpAsState(if (on) 58.dp else 64.dp, label = "pick")
+                        Box(Modifier.size(68.dp).then(if (on) Modifier.border(2.5.dp, c.label, ring) else Modifier)) {
+                            Avatar(conv.displayPhoto(me), inner, Modifier.align(Alignment.Center), squircle = conv.isChannel,
                                 kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
                             // iOS: a black tick badge (white in dark mode).
                             if (on) Box(Modifier.align(Alignment.BottomEnd).size(24.dp).clip(CircleShape).background(c.label)

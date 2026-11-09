@@ -148,8 +148,10 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     translationY = cy0 * (1f - k)
                     // Jelly: the glass widens first and drops after (x leads, y lags), so it stretches out
                     // of the button instead of zooming; the overshoot of [grow] gives the bounce.
-                    val kx = if (closing) k.coerceAtLeast(0f) else if (k >= 1f) k else Math.pow(k.coerceAtLeast(0f).toDouble(), 0.6).toFloat()
-                    val ky = if (closing) k.coerceAtLeast(0f) else if (k >= 1f) 1f + (k - 1f) * 1.6f else Math.pow(k.coerceAtLeast(0f).toDouble(), 1.5).toFloat()
+                    // Both sides grow together, out of the round button and back into it (owner 2026-11-08:
+                    // the width-first jelly read as "coming out flat").
+                    val kx = k.coerceAtLeast(0f)
+                    val ky = k.coerceAtLeast(0f)
                     scaleX = (sx + (1f - sx) * kx) * (1f + 0.025f * lean.value)
                     scaleY = (sy + (1f - sy) * ky) * (1f - 0.015f * lean.value)
                     alpha = (k * 6f).coerceIn(0f, 1f)   // only the last bit of the fold fades

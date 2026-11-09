@@ -301,6 +301,9 @@ object ChannelAddFollowers {
     }
 
     /** ChannelService.shareLink: the public address, else the primary invite link (made on the spot if missing). */
+    /** The channel's invite link if it already has one (read only), fetched as its page opens so Share is instant. */
+    suspend fun existingLink(cid: String): String? = runCatching { GroupManage.listLinks(cid).primary?.url }.getOrNull()
+
     suspend fun link(cid: String, doc: Map<String, Any?>): String? {
         val name = doc["username"] as? String ?: ""
         if (doc["isPublic"] == true && name.isNotEmpty()) return "https://fariin.com/$name"

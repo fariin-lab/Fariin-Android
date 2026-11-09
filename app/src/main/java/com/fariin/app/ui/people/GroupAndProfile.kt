@@ -1040,7 +1040,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 // iOS exit card: Leave Group, and Report Group for a member who is not staff (unless the
                 // group turned reports off); the owner's End Group and Delete Group in their own card.
                 val canReport = !iAmAdmin && conv["groupNoReport"] != true
-                SettingsRow("Leave Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_channel_leave)), titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
+                SettingsRow("Leave Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_leave)), titleColor = c.red, trailing = Trailing.NONE, last = !canReport) { askLeave = true }
                 if (canReport) SettingsRow("Report Group", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_report), titleColor = c.red, trailing = Trailing.NONE, last = true) {
                     com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.GROUP, name = groupName, cid = cid,
                         onLeave = {

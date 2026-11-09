@@ -211,9 +211,15 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     LaunchedEffect(role) { if (role != Role.VISITOR) following = false }
     LaunchedEffect(undo) { if (undo) { delay(5000); undo = false } }
 
+    // A private channel's link, read once the page opens: Share then shows its sheet at once
+    // (owner 2026-11-08: "it comes out a little late", the tap waited on the network).
+    val mayInvite = info.username.isEmpty() && role == Role.ADMIN && team?.can(me, com.fariin.app.channel.ChannelAdmins.Right.INVITE_USERS) == true
+    var preLink by remember(info.cid) { mutableStateOf<String?>(null) }
+    LaunchedEffect(info.cid, mayInvite) { if (mayInvite && preLink == null) preLink = com.fariin.app.data.ChannelAddFollowers.existingLink(info.cid) }
     fun share() {
         // A private channel: its invite link, for an admin who may invite (iOS 1280e92d, More > Share Channel).
-        if (info.username.isEmpty() && role == Role.ADMIN && team?.can(me, com.fariin.app.channel.ChannelAdmins.Right.INVITE_USERS) == true) {
+        if (mayInvite) {
+            preLink?.let { shareLink = it to com.fariin.app.data.ChannelAddFollowers.shareText(info.title, it); return }
             scope.launch {
                 val link = com.fariin.app.data.ChannelAddFollowers.link(info.cid, mapOf("username" to info.username, "isPublic" to info.isPublic))
                     ?: run { notice = com.fariin.app.data.ChannelAddFollowers.NO_LINK; return@launch }

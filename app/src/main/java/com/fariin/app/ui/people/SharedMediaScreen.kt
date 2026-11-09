@@ -210,13 +210,20 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
     val tab = tabs[pager.currentPage]
     val media = SharedMedia.filtered(state.lists.media, filter)
     ProvideChatMedia(cid) {
-        com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bg), page = c.bg, bar = {
-            Box(Modifier.fillMaxWidth().background(c.bg).statusBarsPadding()) {
-                com.fariin.app.ui.components.FariinTopBar(
-                    "All Media", onBack = onBack,
-                    // Never "0 photos, 0 videos" while still loading (iOS 2026-10-17).
-                    subtitle = if (state.loaded) SharedMedia.subtitle(tab, state.lists, media) else " ",
-                    actions = {
+        // Floating header (owner 2026-11-08, iOS): no solid band. The back and ••• circles and the
+        // tab capsule float over the grid, which scrolls under them, frosted.
+        com.fariin.app.ui.components.GlassColumnPage(true, Modifier.background(c.bg), page = c.bg, barEstimate = 120.dp, bar = {
+            Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+                // Back circle, the title centred over its count, the ••• circle (owner's iOS shot 2026-11-08).
+                Box(Modifier.fillMaxWidth().height(64.dp)) {
+                    com.fariin.app.ui.components.FloatingBack(onBack, Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
+                    Column(Modifier.align(Alignment.Center).padding(horizontal = 72.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("All Media", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1)
+                        // Never "0 photos, 0 videos" while still loading (iOS 2026-10-17).
+                        Text(if (state.loaded) SharedMedia.subtitle(tab, state.lists, media) else " ", fontSize = 13.sp,
+                            color = c.secondary, maxLines = 1)
+                    }
+                    Row(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)) {
                         // No menu on an empty tab (iOS showsMoreMenu): Show is the only thing in it here.
                         if (tab == SharedMedia.Tab.MEDIA && state.lists.media.isNotEmpty()) Box {
                             IconButton({ menu = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", tint = c.label) }
@@ -229,36 +236,34 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                                 }
                             }
                         }
-                    },
-                )
-            }
-        }) { top ->
-            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
-            // The tabs as one floating capsule with the chosen one in a pill (iOS segmented picker),
-            // in place of Material's underlined tab row.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(40.dp)
-                .floating(CircleShape).padding(3.dp)) {
-                tabs.forEachIndexed { i, t ->
-                    val on = pager.currentPage == i
-                    Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape).background(if (on) c.fieldFill else Color.Transparent)
-                        .clickable { scope.launch { pager.animateScrollToPage(i) } }
-                        .semantics { role = androidx.compose.ui.semantics.Role.Tab; selected = on },
-                        contentAlignment = Alignment.Center) {
-                        Text(t.label, style = MaterialTheme.typography.labelLarge, color = if (on) c.label else c.secondary,
-                            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                    }
+                }
+                // The tabs as one floating glass capsule with the chosen one in a pill (iOS segmented picker).
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).height(44.dp)
+                    .floating(CircleShape).padding(3.dp)) {
+                    tabs.forEachIndexed { i, t ->
+                        val on = pager.currentPage == i
+                        Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape).background(if (on) c.fieldFill else Color.Transparent)
+                            .clickable { scope.launch { pager.animateScrollToPage(i) } }
+                            .semantics { role = androidx.compose.ui.semantics.Role.Tab; selected = on },
+                            contentAlignment = Alignment.Center) {
+                            Text(t.label, style = MaterialTheme.typography.labelLarge, color = if (on) c.label else c.secondary,
+                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                        }
                     }
                 }
             }
+        }) { top ->
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                 when (tabs[page]) {
-                    SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded) { viewing = viewingOf(it, media) }
-                    SharedMedia.Tab.FILES -> Rows(state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, ImageVector.vectorResource(R.drawable.ic_file)) {
+                    SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded, top) { viewing = viewingOf(it, media) }
+                    SharedMedia.Tab.FILES -> Rows(top, state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, ImageVector.vectorResource(R.drawable.ic_file)) {
                         items(state.lists.files, key = { it.id }) { m -> FileRow(m) }
                     }
-                    SharedMedia.Tab.VOICE -> Rows(state.loaded, state.lists.voice.isEmpty(), SharedMedia.Tab.VOICE, ImageVector.vectorResource(R.drawable.ic_mic)) {
+                    SharedMedia.Tab.VOICE -> Rows(top, state.loaded, state.lists.voice.isEmpty(), SharedMedia.Tab.VOICE, ImageVector.vectorResource(R.drawable.ic_mic)) {
                         items(state.lists.voice, key = { it.id }) { m -> VoiceRow(cid, m) }
                     }
-                    SharedMedia.Tab.LINKS -> Rows(state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)) {
+                    SharedMedia.Tab.LINKS -> Rows(top, state.loaded, state.lists.links.isEmpty(), SharedMedia.Tab.LINKS, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)) {
                         items(state.lists.links, key = { it.first.id }) { (m, link) -> LinkRow(m, link) }
                     }
                 }
@@ -270,11 +275,11 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
 
 /** Three square columns with a hairline gap, under date headings (iOS grid + sections). */
 @Composable
-private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, onOpen: (SharedMedia.Item) -> Unit) {
+private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, top: androidx.compose.ui.unit.Dp, onOpen: (SharedMedia.Item) -> Unit) {
     val c = Fariin.colors
     val sections = remember(media) { SharedMedia.sections(media, System.currentTimeMillis().toDouble()) }
-    if (loaded && media.isEmpty()) { EmptyTab(SharedMedia.Tab.MEDIA, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album)); return }
-    LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(2.dp),
+    if (loaded && media.isEmpty()) { Box(Modifier.padding(top = top)) { EmptyTab(SharedMedia.Tab.MEDIA, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album)) }; return }
+    LazyVerticalGrid(GridCells.Fixed(3), Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 2.dp, end = 2.dp, top = top + 2.dp, bottom = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // While the first answer is on its way: grey tiles, not a spinner (iOS gridSkeleton).
         if (!loaded && media.isEmpty()) items(12) { Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f))) }
@@ -289,10 +294,10 @@ private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, onOpen: (S
 }
 
 @Composable
-private fun Rows(loaded: Boolean, empty: Boolean, tab: SharedMedia.Tab, icon: ImageVector,
+private fun Rows(top: androidx.compose.ui.unit.Dp, loaded: Boolean, empty: Boolean, tab: SharedMedia.Tab, icon: ImageVector,
                  content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
-    if (loaded && empty) { EmptyTab(tab, icon); return }
-    LazyColumn(Modifier.fillMaxSize(), content = content)
+    if (loaded && empty) { Box(Modifier.padding(top = top)) { EmptyTab(tab, icon) }; return }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = top), content = content)
 }
 
 @Composable
