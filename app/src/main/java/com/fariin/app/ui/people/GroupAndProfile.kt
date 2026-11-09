@@ -1091,8 +1091,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                     androidx.compose.ui.res.painterResource(R.drawable.ic_qr)) { showQr = true })
             }
             add(com.fariin.app.ui.components.GlassMenuItem("Save to Photos: " + (if (saveOn) "On" else "Off"),
-                androidx.compose.ui.res.painterResource(R.drawable.ic_save_down), divider = true) {
-                saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, cid, saveOn) })
+                androidx.compose.ui.res.painterResource(R.drawable.ic_save_down), divider = true,
+                    submenu = listOf(true, false).map { on -> com.fariin.app.ui.components.GlassMenuItem(if (on) "On" else "Off", null, checked = saveOn == on) {
+                        saveOn = on; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, cid, on) } }))
             if (ChatExportRun.SHOWN && conv["channel"] != true) add(com.fariin.app.ui.components.GlassMenuItem("Export Chat",
                 androidx.compose.ui.res.painterResource(R.drawable.ic_save_down)) {
                 if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group") })

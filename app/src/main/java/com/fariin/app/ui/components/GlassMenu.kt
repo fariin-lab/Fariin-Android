@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fariin.app.ui.theme.Fariin
@@ -58,9 +59,12 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** One row of a [GlassMenu]; [divider] draws a line above it. */
-class GlassMenuItem(val title: String, val icon: Painter, val danger: Boolean = false, val divider: Boolean = false,
-                    /** The chosen one of a set (a filter): a tick at the row's end. */ val checked: Boolean = false,
-                    val onClick: () -> Unit)
+class GlassMenuItem(val title: String, val icon: Painter?, val danger: Boolean = false, val divider: Boolean = false,
+                    /** The chosen one of a set (a filter): a tick at the row's end (in the icon's place when there is none). */ val checked: Boolean = false,
+                    /** Choices that open in place of the menu (iOS inline submenu: "Save to Photos: Off" then On / Off). */
+                    val submenu: List<GlassMenuItem>? = null,
+                    internal val header: Boolean = false,
+                    val onClick: () -> Unit = {})
 
 /** Where a menu's button sits in the window, so the menu can grow out of it. */
 class GlassMenuAnchor { var rect by mutableStateOf<Rect?>(null) }
@@ -83,6 +87,10 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     val c = Fariin.colors
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    // An open submenu: its row on top (tap it to go back), a line, then its choices.
+    var sub by remember(open) { mutableStateOf<GlassMenuItem?>(null) }
+    val rows = sub?.let { s -> listOf(GlassMenuItem(s.title, s.icon, header = true)) +
+        s.submenu.orEmpty().mapIndexed { i, x -> if (i == 0) GlassMenuItem(x.title, x.icon, x.danger, true, x.checked, onClick = x.onClick) else x } } ?: items
     // 0 = folded into the button, 1 = open. A spring with a little give, as the reference.
     val grow = remember { Animatable(0f) }
     var shown by remember { mutableStateOf(false) }
@@ -152,10 +160,12 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                 .then(glassMod)
                 .glassRim(c)
                 // Finger tracking: the pill follows the row under the finger; lifting on a row picks it.
-                .pointerInput(items) {
+                .pointerInput(rows) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
-                        fun rowAt(y: Float) = if (rowH <= 0) -1 else (y / rowH).toInt().coerceIn(0, items.lastIndex)
+                        // Ours: the page's tap-outside layer must not close the menu (a submenu stays open).
+                        down.consume()
+                        fun rowAt(y: Float) = if (rowH <= 0) -1 else (y / rowH).toInt().coerceIn(0, rows.lastIndex)
                         pressed = rowAt(down.position.y)
                         scope.launch { pill.snapTo(pressed.toFloat()) }
                         scope.launch { lean.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 600f)) }
@@ -164,7 +174,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                             val ev = awaitPointerEvent()
                             val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                             last = ch.position
-                            if (!ch.pressed) break
+                            if (!ch.pressed) { ch.consume(); break }
                             val r = rowAt(ch.position.y)
                             if (r != pressed) { pressed = r; scope.launch { pill.animateTo(r.toFloat(), spring(dampingRatio = 0.8f, stiffness = 900f)) } }
                             ch.consume()
@@ -173,7 +183,14 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                         val inside = last.y >= 0 && last.y <= this.size.height && last.x >= 0 && last.x <= this.size.width
                         val pick = pressed
                         pressed = -1
-                        if (inside && pick in items.indices) { onDismiss(); items[pick].onClick() }
+                        if (inside && pick in rows.indices) {
+                            val row = rows[pick]
+                            when {
+                                row.submenu != null -> sub = row
+                                row.header -> sub = null
+                                else -> { onDismiss(); row.onClick() }
+                            }
+                        }
                     }
                 }
                 .padding(vertical = 6.dp),
@@ -186,15 +203,22 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     .padding(horizontal = 6.dp).fillMaxWidth().height(with(density) { rowH.toDp() })
                     .background(c.label.copy(alpha = if (c.dark) 0.14f else 0.08f), RoundedCornerShape(18.dp)))
                 Column {
-                    items.forEachIndexed { i, it ->
-                        if (it.divider) Box(Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(0.5.dp).background(c.separator))
+                    rows.forEachIndexed { i, it ->
+                        if (it.divider && i > 0) Box(Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(0.5.dp).background(c.separator))
                         Row(Modifier.fillMaxWidth().height(52.dp).onGloballyPositioned { if (i == 0) rowH = it.size.height }
                             .padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(it.icon, null, tint = if (it.danger) c.red else c.label, modifier = Modifier.size(22.dp))
+                            val tick = androidx.compose.ui.graphics.vector.rememberVectorPainter(
+                                androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark))
+                            if (it.icon != null) Icon(it.icon, null, tint = if (it.danger) c.red else c.label, modifier = Modifier.size(22.dp))
+                            else Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                                if (it.checked) Icon(tick, "Selected", tint = c.label, modifier = Modifier.size(18.dp)) }
                             Spacer(Modifier.width(14.dp))
-                            Text(it.title, fontSize = 17.sp, color = if (it.danger) c.red else c.label, maxLines = 2,
-                                modifier = Modifier.weight(1f))
-                            if (it.checked) Icon(androidx.compose.ui.graphics.vector.rememberVectorPainter(
+                            Text(it.title, fontSize = 17.sp, fontWeight = if (it.header) FontWeight.SemiBold else null,
+                                color = if (it.danger) c.red else c.label, maxLines = 2, modifier = Modifier.weight(1f))
+                            if (it.header || it.submenu != null) Icon(androidx.compose.ui.graphics.vector.rememberVectorPainter(
+                                androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_chevron_down)),
+                                null, tint = c.label, modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (it.header) 0f else -90f })
+                            if (it.checked && it.icon != null) Icon(androidx.compose.ui.graphics.vector.rememberVectorPainter(
                                 androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark)),
                                 "Selected", tint = c.label, modifier = Modifier.size(18.dp))
                         }

@@ -422,8 +422,9 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 if (info.username.isNotEmpty()) add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
                     androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_qr)) { showQr = true })
                 add(com.fariin.app.ui.components.GlassMenuItem("Save to Photos: " + (if (saveOn) "On" else "Off"),
-                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_save_down), divider = true) {
-                    saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, info.cid, saveOn) })
+                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_save_down), divider = true,
+                        submenu = listOf(true, false).map { on -> com.fariin.app.ui.components.GlassMenuItem(if (on) "On" else "Off", null, checked = saveOn == on) {
+                            saveOn = on; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, info.cid, on) } }))
             }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
         }
         AnimatedVisibility(undo, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(24.dp)) {
