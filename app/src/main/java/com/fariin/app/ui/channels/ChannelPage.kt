@@ -1,6 +1,8 @@
 package com.fariin.app.ui.channels
 
 import androidx.compose.foundation.combinedClickable
+import com.fariin.app.ui.photo.profilePhotoSource
+import androidx.compose.ui.graphics.graphicsLayer
 import com.fariin.app.R
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.ui.components.glassMenuAnchor
@@ -312,8 +314,14 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     // The page runs under its bar, so back and Edit are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
     val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
+    // The photo viewer (iOS GroupInfoView for a channel: ProfilePhotoViewer landsSquare + squareCrop
+    // + squircle): out of the rounded square, landing on a 1:1 square, never through a circle. The
+    // bar's items step aside until it has landed back.
+    val photo = com.fariin.app.ui.photo.rememberProfilePhotoState()
+    val photoHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         com.fariin.app.ui.components.GlassBarPage(underBar, modifier = if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier, frosted = true, bar = {
+            Box(Modifier.graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }) {
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             // The ••• menu holds Change Wallpaper for the same people (iOS Group Info's first menu
             // section): back to the chat, which opens the channel's shared picker for every follower.
@@ -324,14 +332,25 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     if (canEdit) com.fariin.app.ui.components.FloatingTextAction("Edit") { editSheet = true }
                 }
             })
+            }
         }) { top ->
             Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top).padding(horizontal = 16.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
-                val photoChoice = com.fariin.app.ui.people.headerPhotoOrStory(info.cid, info.title.ifEmpty { "Channel" }, info.avatarUrl, me, emptyList())
+                // iOS: tap = the story when there is one, else the photo; a hold is always the photo.
+                val photoChoice = com.fariin.app.ui.people.headerPhotoOrStory(info.cid, info.title.ifEmpty { "Channel" }, info.avatarUrl, me, emptyList(),
+                    onPhoto = if (photo.hasPhoto) ({ photo.show() }) else null)
                 Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL,
-                    modifier = if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
-                        onLongClickLabel = "View photo", onLongClick = photoChoice.hold) else if (canEdit) Modifier.clickable { editSheet = true } else Modifier)
+                    onResolved = photo::resolved,
+                    modifier = Modifier.profilePhotoSource(photo).then(
+                    if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
+                        onLongClickLabel = "View photo", onLongClick = photoChoice.hold)
+                    else if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
+                        onLongClickLabel = "View photo", onLongClick = {
+                            photoHaptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            photo.show()
+                        }).semantics { contentDescription = "Channel photo" }
+                    else if (canEdit) Modifier.clickable { editSheet = true } else Modifier))
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(info.title.ifEmpty { "Channel" }, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label,
@@ -467,6 +486,9 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Text("Undo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent)
             }
         }
+        // Over everything on the page: the channel's photo, out of its rounded square and back.
+        com.fariin.app.ui.photo.ProfilePhotoViewer(photo, info.avatarUrl,
+            style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true, squareCrop = true, squircle = true))
     }
 }
 

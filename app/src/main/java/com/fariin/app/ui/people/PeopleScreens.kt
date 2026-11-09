@@ -1,6 +1,11 @@
 package com.fariin.app.ui.people
 
 import com.fariin.app.ui.components.glassMenuAnchor
+import com.fariin.app.ui.photo.profilePhotoSource
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
@@ -581,9 +586,20 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var moreOpen by remember { mutableStateOf(false) }
     val menuBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
     val menuGlass = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= 33
+    // The photo viewer (iOS ProfilePhotoViewer): the photo grows out of the avatar over this page.
+    // Back, Edit and the menu step aside while it is up and fade back AS the close begins (iOS
+    // chromeHiddenForPhoto), not after the photo has landed.
+    val photo = com.fariin.app.ui.photo.rememberProfilePhotoState()
+    val chromeAlpha by androidx.compose.animation.core.animateFloatAsState(
+        if (photo.open && !photo.closing) 0f else 1f,
+        if (photo.open && !photo.closing) androidx.compose.animation.core.snap()
+        else androidx.compose.animation.core.tween(280, easing = androidx.compose.animation.core.LinearOutSlowInEasing),
+        label = "photoChrome")
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(Modifier.fillMaxSize()) {
     com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary)
         .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true, bar = {
+        Box(Modifier.graphicsLayer { alpha = chromeAlpha }) {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
@@ -596,6 +612,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             }
             else if (fromChat || addToGroup != null) com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios),
                 contentDescription = "More", onClick = { moreOpen = true }, modifier = Modifier.padding(end = 4.dp).glassMenuAnchor(moreAnchor))
+        }
         }
     }) { top ->
         exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
@@ -621,7 +638,15 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         LaunchedEffect(Unit) { kotlinx.coroutines.delay(1500); waited = true }
         if (person == null && !waited) return@GlassBarPage
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp)
+            // A tap opens the photo; a hold does too, with a tick (iOS: tap = story when there is one,
+            // else the photo; this page has no story ring on Android, so a tap is the photo).
+            Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp, onResolved = photo::resolved,
+                modifier = Modifier.profilePhotoSource(photo)
+                    .then(if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
+                        onLongClickLabel = "View photo", onLongClick = {
+                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            photo.show()
+                        }).semantics { contentDescription = "Profile photo" } else Modifier))
             Spacer(Modifier.height(10.dp))
             // The verified seal after the name (iOS VerifiedMark, 20): it was missing on this page.
             val vCtx = androidx.compose.ui.platform.LocalContext.current
@@ -727,6 +752,9 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         if (clearMine != null) add(com.fariin.app.ui.components.GlassMenuItem("Clear My Messages",
             androidx.compose.ui.res.painterResource(R.drawable.ic_sf_trash), danger = true, divider = true) { clearMine() })
     }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
+    // Over everything on the page: the round photo, out of the avatar and back into it.
+    com.fariin.app.ui.photo.ProfilePhotoViewer(photo, person?.photoUrl ?: conv?.photos?.get(uid),
+        bar = com.fariin.app.ui.photo.ProfilePhotoBar(leavesOnClose = true))
     }
 }
 

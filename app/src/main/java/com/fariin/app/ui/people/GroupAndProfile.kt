@@ -1,6 +1,7 @@
 package com.fariin.app.ui.people
 
 import androidx.compose.foundation.combinedClickable
+import com.fariin.app.ui.photo.profilePhotoSource
 import com.fariin.app.ui.components.glassMenuAnchor
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.fariin.app.R
@@ -928,9 +929,15 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     var moreOpen by remember { mutableStateOf(false) }
     val menuBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
     val menuGlass = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= 33
+    // The photo viewer (iOS GroupInfoView: ProfilePhotoViewer landsSquare + squareCrop): out of the
+    // round photo, landing on the whole picture as a 1:1 square. Back, Add Story and Edit step aside
+    // until it has landed back (iOS hides the back button while showGroupPhoto).
+    val photo = com.fariin.app.ui.photo.rememberProfilePhotoState()
+    val groupPhotoUrl = (conv["avatarUrl"] as? String)?.ifEmpty { null }
     Box(Modifier.fillMaxSize()) {
     com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary)
         .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true, bar = {
+        Box(Modifier.graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }) {
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
@@ -943,14 +950,26 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 if (canEdit) TextAction("Edit", enabled = true) { editing = true }
             }
         })
+        }
     }) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
             // A story and a photo: the tap asks which (iOS dd1a37ac); else as before.
-            val photoChoice = headerPhotoOrStory(cid, conv["title"] as? String ?: "Group", conv["avatarUrl"] as? String, me, chats)
-            Avatar(conv["avatarUrl"] as? String, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
-                modifier = if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
+            // iOS (owner 2026-11-08): tap = the story when there is one, else the photo; a hold is
+            // always the photo. No photo: whoever may edit goes to Edit Group.
+            val photoChoice = headerPhotoOrStory(cid, conv["title"] as? String ?: "Group", groupPhotoUrl, me, chats,
+                onPhoto = if (photo.hasPhoto) ({ photo.show() }) else null)
+            val photoHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+            Avatar(groupPhotoUrl, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
+                onResolved = photo::resolved,
+                modifier = Modifier.profilePhotoSource(photo).then(
+                if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
                     onLongClickLabel = "View photo", onLongClick = photoChoice.hold).semantics { contentDescription = "Group photo" }
-                else if (canEdit) Modifier.clickable(onClickLabel = "Edit group") { editing = true }.semantics { contentDescription = "Group photo" } else Modifier)
+                else if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
+                    onLongClickLabel = "View photo", onLongClick = {
+                        photoHaptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        photo.show()
+                    }).semantics { contentDescription = "Group photo" }
+                else if (canEdit) Modifier.clickable(onClickLabel = "Edit group") { editing = true }.semantics { contentDescription = "Group photo" } else Modifier))
             Spacer(Modifier.height(10.dp))
             Text(conv["title"] as? String ?: "Group", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
@@ -1132,6 +1151,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 if (exportJob == null) exportJob = ChatExportRun.Job(cid, conv["title"] as? String ?: "Group") })
         }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
     }
+    // Over everything on the page: the group's photo, out of its circle and back into it.
+    com.fariin.app.ui.photo.ProfilePhotoViewer(photo, groupPhotoUrl,
+        style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true, squareCrop = true))
     }
 }
 
@@ -1438,24 +1460,21 @@ internal object GroupStepBack {
  */
 @Composable
 internal fun headerPhotoOrStory(cid: String, name: String, photoUrl: String?, me: String,
-                                conversations: List<com.fariin.app.data.Conversation>): HeaderPhotoActions? {
+                                conversations: List<com.fariin.app.data.Conversation>,
+                                /** Opens the page's own photo viewer (ProfilePhotoViewer); null = no photo on screen. */
+                                onPhoto: (() -> Unit)? = null): HeaderPhotoActions? {
     val feed by com.fariin.app.data.LiveStories.state.collectAsState()
     val hidden by com.fariin.app.data.StoryMutes.set.collectAsState()
     val ring = com.fariin.app.data.StoryRings.forGroup(cid, name, photoUrl, feed, hidden)
-    var showPhoto by remember { mutableStateOf(false) }
     var story by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
-    if (showPhoto && !photoUrl.isNullOrEmpty())
-        // As ready-made pages: no bubble on screen to zoom out of, so the plain window fade.
-        com.fariin.app.ui.thread.MediaViewer(com.fariin.app.ui.thread.Viewing.Pages(
-            listOf(com.fariin.app.data.ViewerRules.Page(photoUrl, null, false, photoUrl, null)), 0)) { showPhoto = false }
     story?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(me, listOf(g), 0, conversations, onClose = { story = null }) }
     // iOS 5ed8c7786 (owner 2026-11-08): no "Select an action" sheet any more. A tap opens the
     // story, a hold opens the photo.
     if (ring == null) return null
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     return HeaderPhotoActions(tap = { story = ring },
-        hold = if (photoUrl.isNullOrEmpty()) null else ({
-            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); showPhoto = true }))
+        hold = if (photoUrl.isNullOrEmpty() || onPhoto == null) null else ({
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onPhoto() }))
 }
 
 /** A group's or channel's header photo while it has a story: tap = the story, hold = the photo. */

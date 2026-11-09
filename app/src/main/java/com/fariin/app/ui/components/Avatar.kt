@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
@@ -32,9 +33,18 @@ import com.fariin.app.ui.theme.Fariin
  */
 @Composable
 fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier, squircle: Boolean = false,
-           kind: AvatarKind = AvatarKind.PERSON) {
+           kind: AvatarKind = AvatarKind.PERSON,
+           /**
+            * What was really drawn (iOS AvatarView.onPhotoResolved): true with the bitmap once a photo
+            * is on screen, false for the silhouette. A profile's photo viewer opens only on a photo.
+            */
+           onResolved: ((Boolean, androidx.compose.ui.graphics.ImageBitmap?) -> Unit)? = null) {
     val shape = if (squircle) RoundedCornerShape(size * 0.3f) else CircleShape
     var failed by remember(photoUrl) { mutableStateOf(false) }
+    if (onResolved != null && (photoUrl.isNullOrEmpty() || failed)) {
+        val report by androidx.compose.runtime.rememberUpdatedState(onResolved)
+        androidx.compose.runtime.LaunchedEffect(photoUrl, failed) { report(false, null) }
+    }
     Box(
         modifier.size(size).clip(shape).background(Fariin.colors.placeholderFill),
         contentAlignment = Alignment.Center,
@@ -60,6 +70,9 @@ fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier, squircle:
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(size),
                 onError = { failed = true },
+                onSuccess = if (onResolved == null) null else ({ s ->
+                    onResolved(true, (s.result.image as? coil3.BitmapImage)?.bitmap?.asImageBitmap())
+                }),
             )
         }
     }

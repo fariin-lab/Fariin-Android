@@ -3,6 +3,7 @@ package com.fariin.app.ui.settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.ui.components.frostedTopBar
+import com.fariin.app.ui.photo.profilePhotoSource
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -195,13 +196,31 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
     val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { scroll.value > 0 } }
     val glassAlpha by com.fariin.app.ui.components.rememberEdgeAlpha(underBar)
     val glass = com.fariin.app.perf.rememberPowerState().glass()
+    // My photo, opened from the circle (iOS SettingsView: ProfilePhotoViewer landsSquare): it grows
+    // out of the circle and lands as the whole picture, square. Drawn over everything (TopOverlay),
+    // the tab bar hidden while it is up and the bar reading "Profile photo" with its X.
+    val photo = com.fariin.app.ui.photo.rememberProfilePhotoState()
+    val shownPhotoUrl by androidx.compose.runtime.rememberUpdatedState(profile?.photoUrl)
+    if (photo.open) androidx.compose.runtime.DisposableEffect(Unit) {
+        val page: @Composable () -> Unit = {
+            com.fariin.app.ui.photo.ProfilePhotoViewer(photo, shownPhotoUrl,
+                style = com.fariin.app.ui.photo.ProfilePhotoStyle(landsSquare = true),
+                bar = com.fariin.app.ui.photo.ProfilePhotoBar(height = 48.dp, title = "Profile photo"))
+        }
+        com.fariin.app.ui.components.TopOverlay.content = page
+        com.fariin.app.ui.shell.TabBarVisibility.hidden = true
+        onDispose {
+            if (com.fariin.app.ui.components.TopOverlay.content === page) com.fariin.app.ui.components.TopOverlay.content = null
+            com.fariin.app.ui.shell.TabBarVisibility.hidden = false
+        }
+    }
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         val barH = 48.dp   // a bit shorter (owner 2026-11-08)
         Column(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
             .verticalScroll(scroll).statusBarsPadding().padding(top = barH)
             .padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             val people = com.fariin.app.ui.people.LocalPeopleNav.current
-            ProfileHeader(profile, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
+            ProfileHeader(profile, photo, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
             if (myQrOpen.value) MyQrSheet(profile, onClose = { myQrOpen.value = false }, onScan = { push(PAGE_SCAN) })
             Spacer(Modifier.height(8.dp))
             // The admin panel's "New" pills (config/features newBadges). No Subscriptions row on
@@ -260,7 +279,9 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
         // The tab pages' one bar (owner 2026-11-08): frosted, melting away below its edge.
         Box(Modifier.fillMaxWidth().then(Modifier.frostedTopBar(haze, c.bgSecondary, glass))
             .statusBarsPadding().height(barH)) {
-            Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)) {
+            // The title and Search step aside while my photo is open (the viewer's bar is there).
+            Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)
+                .graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }) {
                 Text(com.fariin.app.ui.chats.rememberConnectionTitle("Settings"), fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label,
                     modifier = Modifier.align(Alignment.Center))
@@ -275,7 +296,8 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
  *  centred, the name bold under it with the verified mark, @username under that, then the two
  *  actions (Edit profile, Share profile). */
 @Composable
-private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -> Unit) {
+private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.ProfilePhotoState,
+                          onEdit: () -> Unit, onShare: () -> Unit) {
     val c = Fariin.colors
     Column(Modifier.fillMaxWidth()) {
         Column(
@@ -283,9 +305,14 @@ private fun ProfileHeader(profile: MyProfile?, onEdit: () -> Unit, onShare: () -
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Named for screen readers (it was a nameless button): the photo, and what a tap does.
-            Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable(onClickLabel = "Edit profile", onClick = onEdit)
+            // iOS: a photo on screen opens it; no photo is not a dead tap, it opens the editor.
+            Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape)
+                .clickable(onClickLabel = if (photo.hasPhoto) "View photo" else "Edit profile") {
+                    if (!photo.show()) onEdit()
+                }
                 .semantics { contentDescription = "Your profile photo" }) {
-                Avatar(profile?.photoUrl, 120.dp)
+                Avatar(profile?.photoUrl, 120.dp, onResolved = photo::resolved,
+                    modifier = Modifier.profilePhotoSource(photo))
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
