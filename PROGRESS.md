@@ -1468,3 +1468,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~10:17 PM: location: Attach > Location asks permission, finds the place (plus code, city),
   Exact / Approximate, Send Location -> card in the chat. Map tiles blank on the debug build only
   (Maps "Authorization failure": the key is limited to the release signing).
+- 2026-11-08 ~10:21 PM: Restricted Chat: page and rules as iOS, switch on writes restrictedBy, the
+  "turned on Restricted chat" line arrives, and the other side's screen is protected (screenshots
+  come out black). Menu rows are hidden by code (!restricted on Forward/Copy/Save); the menu itself
+  could not be captured (no screenshots there). Turned off again.
