@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -442,25 +444,40 @@ private fun ChatKeyPage(pop: () -> Unit) {
     val c = Fariin.colors
     ScrollPage("Chat Key", pop) {
         ErrorNote(error)
+        val footer = "Anyone with your Chat Key can message and call you. Share it only with people you trust."
         if (set == true) {
-            SettingsSection(header = "Your Chat Key", footer = "Share it only with people you want to hear from. Anyone who knows it can message and call you directly.") {
-                // Set from another phone: the server keeps only a scrambled copy, so this phone can only say so
-                // (iOS ChatPinPage); making a new key here puts it on screen.
-                Text(pin?.chunked(1)?.joinToString(" ") ?: "Your Chat Key was set on another device.", fontSize = if (pin != null) 32.sp else 15.sp,
-                    color = if (pin != null) c.label else c.secondary, modifier = Modifier.padding(20.dp))
-            }
-            SettingsSection {
-                if (pin != null) SettingsRow("Share Chat Key", trailing = Trailing.NONE) {
-                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(android.content.Intent.EXTRA_TEXT, "My Chat Key on Fariin is $pin. Enter it to message me directly.")
-                    ctx.startActivity(android.content.Intent.createChooser(send, null))
+            // iOS ChatPinPage: the key in large digits with Copy and Share under it, in one card.
+            SettingsSection(header = "Your Chat Key", footer = footer) {
+                val p = pin
+                if (p != null) Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(p.chunked(1).joinToString(" "), fontSize = 34.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+                    Spacer(Modifier.height(10.dp))
+                    var copied by remember { mutableStateOf(false) }
+                    LaunchedEffect(copied) { if (copied) { kotlinx.coroutines.delay(2000); copied = false } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        KeyPill(if (copied) "Copied" else "Copy", if (copied) com.fariin.app.R.drawable.ic_sf_checkmark else com.fariin.app.R.drawable.ic_sf_doc_on_doc, Modifier.weight(1f)) {
+                            (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                                .setPrimaryClip(android.content.ClipData.newPlainText("Chat Key", p))
+                            copied = true
+                        }
+                        KeyPill("Share", com.fariin.app.R.drawable.ic_link_share, Modifier.weight(1f)) {
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(android.content.Intent.EXTRA_TEXT, "My Chat Key on Fariin is $p. Enter it to message me directly.")
+                            ctx.startActivity(android.content.Intent.createChooser(send, null))
+                        }
+                    }
                 }
+                // Set from another phone: the server keeps only a scrambled copy (iOS ChatPinPage).
+                else Text("Your Chat Key was set on another device.", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
+            }
+            SettingsSection(footer = "Resetting gives you a new key and the old one stops working. People who already used it stay in your chats.") {
                 SettingsRow("Reset Chat Key", trailing = Trailing.NONE) { confirmReset = true }
                 SettingsRow("Remove Chat Key", trailing = Trailing.NONE, titleColor = c.red, last = true) { confirmRemove = true }
             }
         } else {
-            SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
-                SettingsRow(if (busy) "Making your key…" else "Make My Chat Key", trailing = Trailing.NONE, titleColor = c.accent, last = true,
+            SettingsSection(footer = footer) {
+                SettingsRow("Create Chat Key", trailing = Trailing.NONE, titleColor = c.accent, last = true,
                     accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) {
                     // What a Chat Key is, first (iOS); Got it makes the key.
                     if (!busy) intro = true
@@ -538,5 +555,17 @@ private fun AppLockPage(pop: () -> Unit) {
         SettingsSection(footer = "Hide Fariin's content in the app switcher and block screenshots. Always on while App Lock is on.") {
             SwitchRow("Screen Security", on || screen, enabled = !on, last = true) { screen = it; AppLock.setScreenSecurity(ctx, it) }
         }
+    }
+}
+
+/** iOS ChatPinPage's Copy / Share capsules under the key. */
+@Composable
+private fun KeyPill(label: String, icon: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = Fariin.colors
+    Row(modifier.height(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.fieldFill).clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(icon), null, tint = c.label, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
     }
 }

@@ -205,10 +205,11 @@ private fun ReportBar(onBack: (() -> Unit)?, onClose: (() -> Unit)? = null) {
             .clickable(role = Role.Button, onClickLabel = "Close", onClick = onClose), contentAlignment = Alignment.Center) {
             Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
         }
-        if (onBack != null) Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape)
+        // Back in the same white circle as the X (iOS).
+        if (onBack != null) Box(Modifier.align(Alignment.CenterStart).padding(start = 4.dp).size(40.dp).floating(CircleShape)
             .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack), contentAlignment = Alignment.Center) {
             Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Back", tint = c.label,
-                modifier = Modifier.padding(start = 6.dp).size(20.dp))
+                modifier = Modifier.size(18.dp))
         }
         Text("Report", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
     }

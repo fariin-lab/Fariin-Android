@@ -1289,6 +1289,27 @@ def set_group_wallpaper(uid, data):
 HANDLERS.update({"setGroupWallpaper": set_group_wallpaper})
 
 
+# Chat Key (generateChatPin / chatPinStatus / removeChatPin): enough for the settings page locally.
+# The real server keeps only a hash; the stub keeps a flag on chatPins/<uid>.
+def chat_pin_status(uid, data):
+    d = get(f"chatPins/{uid}")
+    return {"set": bool(d)}
+
+
+def generate_chat_pin(uid, data):
+    import random
+    pin = "".join(random.choice("0123456789") for _ in range(6))
+    write(f"chatPins/{uid}", {"set": True})
+    return {"pin": pin}
+
+
+def remove_chat_pin(uid, data):
+    remove(f"chatPins/{uid}")
+    return {"ok": True}
+
+
+HANDLERS.update({"chatPinStatus": chat_pin_status, "generateChatPin": generate_chat_pin, "removeChatPin": remove_chat_pin})
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         name = self.path.rstrip("/").split("/")[-1]
