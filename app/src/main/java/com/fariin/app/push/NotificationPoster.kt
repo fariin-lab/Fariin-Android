@@ -121,8 +121,14 @@ object NotificationPoster {
             return
         }
 
-        val senderIcon = IconCompat.createWithBitmap(circle(senderPhoto, group = false))
-        val sender = Person.Builder().setName(spec.senderName).setKey(spec.senderUid).setIcon(senderIcon).build()
+        // A GROUP'S FACE AND NAME (iOS, owner 2026-11-09: "show group avatar and group name"): in a
+        // group the group itself is the line's sender, and the line reads "Sender: message". A
+        // channel post already arrives with the channel as its sender (server aid/sn/sp).
+        val senderIcon = IconCompat.createWithBitmap(
+            if (spec.isGroup) circle(groupPhoto, group = true) else circle(senderPhoto, group = false))
+        val sender = if (spec.isGroup)
+            Person.Builder().setName(spec.groupName ?: spec.title).setKey("g:" + spec.key).setIcon(senderIcon).build()
+        else Person.Builder().setName(spec.senderName).setKey(spec.senderUid).setIcon(senderIcon).build()
         val mePerson = Person.Builder().setName("You").setKey(me.ifEmpty { "me" }).build()
 
         // The chat's earlier lines stay under the new one, as one conversation.
@@ -134,13 +140,9 @@ object NotificationPoster {
             // A line whose timer has run out is not carried under the new one.
             if (!NotifExpiry.lineGone(it.extras.getLong(EXTRA_EXPIRES, 0L), nowMs)) style.addMessage(it)
         }
-        val line = NotificationCompat.MessagingStyle.Message(spec.line, nowMs, sender)
+        val line = NotificationCompat.MessagingStyle.Message(if (spec.isGroup) spec.body else spec.line, nowMs, sender)
         spec.expiresAtMs?.let { line.extras.putLong(EXTRA_EXPIRES, it) }
         style.addMessage(line)
-        if (spec.isGroup) {
-            style.setConversationTitle(spec.groupName ?: spec.title)
-            style.isGroupConversation = true
-        }
         b.setStyle(style)
 
         // The conversation shortcut (needed for Android's Conversations section, the share sheet

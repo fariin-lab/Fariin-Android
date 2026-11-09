@@ -323,4 +323,20 @@ class PostReplyRulesTest {
         assertEquals("2d", PostReplyRules.age(now - 2 * 86_400_000L, now))
         assertEquals("6w", PostReplyRules.age(now - 42 * 86_400_000L, now))
     }
+
+    @Test fun mentionsFindHandlesNotEmails() {
+        val m = PostReplyRules.mentions("hi @nan.ali and @roodo, mail a@b.com")
+        assertEquals(listOf("nan.ali", "roodo"), m.map { it.second })
+        assertEquals(3..10, m[0].first)
+        assertTrue(PostReplyRules.mentions("no handles").isEmpty())
+    }
+
+    @Test fun typingMentionOnlyAtTheEnd() {
+        assertEquals(0 to "", PostReplyRules.typingMention("@"))
+        assertEquals(3 to "na", PostReplyRules.typingMention("hi @na"))
+        assertNull(PostReplyRules.typingMention("hi @na "))
+        assertNull(PostReplyRules.typingMention("mail a@b"))
+        assertNull(PostReplyRules.typingMention("@" + "x".repeat(33)))
+        assertEquals("hi @nan.ali ", PostReplyRules.pickMention("hi @na", "nan.ali"))
+    }
 }

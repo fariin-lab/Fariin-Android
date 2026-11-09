@@ -88,6 +88,33 @@ object PostReplyRules {
     /** The longest reply the server takes. */
     const val MAX_LENGTH = 250   // server addReply (owner 2026-11-07), was 1000
 
+    /** "@handle" in a reply's words (iOS 75e323de3): not after a letter, digit, _ or dot; inner dots allowed. */
+    private val mentionRe = Regex("(?<![A-Za-z0-9_.])@([A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*)")
+
+    /** Each @handle in [text]: the range of "@handle" and the handle without its "@". */
+    fun mentions(text: String): List<Pair<IntRange, String>> =
+        if ('@' !in text) emptyList() else mentionRe.findAll(text).map { it.range to it.groupValues[1] }.toList()
+
+    /**
+     * The "@word" being typed at the end of the reply field (iOS): its "@" at the start or after a
+     * space or new line, no space after it, at most 32 letters. Returns the "@"'s index and the
+     * letters after it ("" right after the "@"), or null when the end is not such a word.
+     */
+    fun typingMention(draft: String): Pair<Int, String>? {
+        val at = draft.lastIndexOf('@')
+        if (at < 0) return null
+        if (at > 0 && !draft[at - 1].isWhitespace()) return null
+        val word = draft.substring(at + 1)
+        if (word.length > 32 || word.any { it.isWhitespace() }) return null
+        return at to word
+    }
+
+    /** The draft with the typed "@word" swapped for "@handle " (a space after it). */
+    fun pickMention(draft: String, handle: String): String {
+        val (at, _) = typingMention(draft) ?: return draft
+        return draft.substring(0, at) + "@" + handle + " "
+    }
+
     /** A refresh may drop my own reply saved this recently only if the page really lacks it. */
     const val RECENT_MINE_MS = 8_000L
 
@@ -465,7 +492,7 @@ object PostReplyRules {
     fun alertTarget(kind: String?, cid: String?, mid: String?): Pair<String, String>? {
         // "replyReact" (owner 2026-11-09, Activity): someone reacted to my comment; same tap route.
         // "postQuote": someone quoted my post (Activity); it opens my post's sheet.
-        if (kind != "postReplies" && kind != "replyAnswer" && kind != "replyReact" && kind != "postQuote") return null
+        if (kind != "postReplies" && kind != "replyAnswer" && kind != "replyReact" && kind != "postQuote" && kind != "postMention") return null
         if (cid.isNullOrEmpty() || mid.isNullOrEmpty()) return null
         if (!com.fariin.app.channel.ChannelRules.safeId(cid) || !com.fariin.app.channel.ChannelRules.safeId(mid)) return null
         return cid to mid

@@ -153,7 +153,10 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
             Avatar(i.fromPhoto.ifEmpty { if (i.fromUid.isEmpty()) i.chPhoto else "" }.ifEmpty { null }, 56.dp,
                 squircle = i.fromUid.isEmpty(), kind = if (i.fromUid.isEmpty()) AvatarKind.CHANNEL else AvatarKind.PERSON)
             Box(Modifier.align(Alignment.BottomEnd).offset(x = 3.dp, y = 3.dp).size(24.dp).clip(CircleShape).background(c.bgSecondary).padding(2.dp)) {
-                Avatar(i.chPhoto.ifEmpty { null }, 20.dp, squircle = true, kind = AvatarKind.CHANNEL)
+                // A mention: a small blue "@" badge instead of the channel's photo.
+                if (i.isMention) Box(Modifier.size(20.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
+                    Text("@", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                } else Avatar(i.chPhoto.ifEmpty { null }, 20.dp, squircle = true, kind = AvatarKind.CHANNEL)
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -181,6 +184,21 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
                 }
                 if (i.text.isNotEmpty()) Text(i.text, fontSize = 15.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(ActivityRules.postLine(i), fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else if (i.isMention) {
+                // "Nan mentioned you · 5m" / their words, @handles blue / "In VE3 · On the post: …" (CHANNEL-SYNC-SPEC 10).
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(i.fromName.ifEmpty { "Someone" }) }
+                        append(" mentioned you")
+                    }, fontSize = 15.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(" · " + shortAgo(i.at), fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                }
+                if (i.text.isNotEmpty()) Text(buildAnnotatedString {
+                    append(i.text)
+                    com.fariin.app.data.PostReplyRules.mentions(i.text).forEach { (r, _) -> addStyle(SpanStyle(color = c.blue), r.first, r.last + 1) }
+                }, fontSize = 15.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("In " + i.chTitle.ifEmpty { "a channel" } + if (i.post.isNotEmpty()) " · On the post: ${i.post}" else "",
+                    fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             } else if (i.isReact) {
                 // Design 3 (owner 2026-11-09): "Roodo, kream and 12 others" / "reacted to your comment in VE3".
                 Row(verticalAlignment = Alignment.CenterVertically) {

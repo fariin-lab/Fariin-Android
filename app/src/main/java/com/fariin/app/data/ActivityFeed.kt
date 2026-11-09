@@ -55,11 +55,13 @@ data class ActivityItem(
     val isReact get() = kind == "react"
     val isQuote get() = kind == "quote"
     val isComment get() = kind == "comment"
+    /** My @handle in somebody's comment or answer (server, CHANNEL-SYNC-SPEC 10). */
+    val isMention get() = kind == "mention"
 
     companion object {
         fun parse(id: String, d: Map<String, Any?>): ActivityItem? {
             val kind = d["kind"] as? String ?: return null
-            if (kind != "reply" && kind != "react" && kind != "quote" && kind != "comment") return null
+            if (kind != "reply" && kind != "react" && kind != "quote" && kind != "comment" && kind != "mention") return null
             val cid = d["cid"] as? String ?: return null
             val mid = d["mid"] as? String ?: return null
             fun m(k: String) = d[k] as? Map<*, *> ?: emptyMap<String, Any?>()
@@ -120,6 +122,7 @@ object ActivityRules {
             "react" -> "$n reacted ${s.emoji} to your comment".replace("  ", " ")
             "quote" -> "$n quoted your post" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
             "comment" -> "$n commented: ${s.text}"
+            "mention" -> "$n mentioned you" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
             else -> "$n replied to your comment: ${s.text}"
         }
     }
