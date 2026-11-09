@@ -339,7 +339,13 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
       val midTop = winDp - sheetH
       val fullTop = statusDp + 8.dp
       val top = midTop + (fullTop - midTop) * frac
-      val tall = (winDp - lift - top).coerceAtLeast(200.dp)
+      // Closing (the X, owner 2026-11-09): the TOP edge stops following the keyboard (it used to
+      // drop to 70% first, then close). The sheet's bottom fills in behind the leaving keyboard.
+      val live = (winDp - lift - top).coerceAtLeast(200.dp)
+      var frozen by remember { mutableStateOf<androidx.compose.ui.unit.Dp?>(null) }   // the top edge, held
+      val closeFocus = androidx.compose.ui.platform.LocalFocusManager.current
+      val closeKeys = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+      val tall = frozen?.let { (winDp - lift - it).coerceAtLeast(200.dp) } ?: live
       Column(Modifier.fillMaxWidth().height(tall).then(if (imeDp > navDp) Modifier else Modifier.navigationBarsPadding())) {
         RepliesSheetTop(tab, repliesShown, replies, showQuotes = !quotesOff, onPick = {
             tab = it
@@ -349,7 +355,13 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                 keyboard?.hide()
                 focus.clearFocus()
             }
-        }, onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { close() } })
+        }, onClose = {
+            // The keyboard leaves WITH the sheet (iOS), not after it: it used to stay up while the
+            // sheet slid away underneath it, then drop on its own.
+            frozen = top
+            closeFocus.clearFocus(force = true); closeKeys?.hide()
+            scope.launch { sheetState.hide() }.invokeOnCompletion { close() }
+        })
         if (tab == 0) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 RepliesList(replies, Modifier.fillMaxSize())
