@@ -1887,7 +1887,9 @@ private fun LinkApprovalRow(roomId: String) {
             Text("Approve New People", color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
             val v = value
             when {
-                v != null -> androidx.compose.material3.Switch(checked = v, enabled = !saving, onCheckedChange = { on ->
+                // The iOS-shaped switch, green always as iOS CallLinkApprovalRow (not Material's).
+                v != null -> com.fariin.app.ui.components.FariinSwitch(checked = v, enabled = !saving, onColor = Green,
+                    offColor = Color.White.copy(alpha = 0.2f), onCheckedChange = { on ->
                     val before = v
                     value = on; saving = true
                     scope.launch {
@@ -1895,7 +1897,7 @@ private fun LinkApprovalRow(roomId: String) {
                         if (!ok) { value = before; GroupCall.say("Couldn't change that. Try again.") }
                         saving = false
                     }
-                }, colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Green))
+                })
                 failed -> Text("Couldn't load. Retry", color = Color(0xFF0A84FF), fontSize = 15.sp,
                     modifier = Modifier.clickable { scope.launch { load() } })
                 else -> FariinSpinner(size = 18.dp, color = Color.White)

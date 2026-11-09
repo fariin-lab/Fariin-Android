@@ -1416,3 +1416,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   confirm sheet's options and Story Privacy's mode rows now mark the choice with the iOS tick at the
   row's end. Call Type checked on the emulator. (Chat-row swipe stays Archive-only: owner's
   2026-11-06 Android choice.)
+- 2026-11-08 ~9:30 PM: the link call's "Approve New People" switch was Material's; now the iOS-shaped
+  FariinSwitch, green as iOS (FariinSwitch gained optional on/off track colours for dark call
+  sheets). Compile-checked; the sheet needs a live link call to see.

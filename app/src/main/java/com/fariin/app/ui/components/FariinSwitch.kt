@@ -36,12 +36,17 @@ fun FariinSwitch(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     @Suppress("UNUSED_PARAMETER") colors: SwitchColors? = null,
+    /** A fixed track colour when on, for a screen that is dark whatever the theme (the call sheets, iOS green). */
+    onColor: Color? = null,
+    /** A fixed track colour when off, for the same screens. */
+    offColor: Color? = null,
 ) {
     val c = Fariin.colors
     // On: black in light mode, white in dark mode (owner 2026-11-06, was green). On white the knob
     // turns dark so it still reads.
-    val track by animateColorAsState(if (checked) (if (c.dark) Color.White else Color.Black) else c.label.copy(alpha = 0.16f), label = "switchTrack")
-    val knob by animateColorAsState(if (checked && c.dark) Color(0xFF1C1C1E) else Color.White, label = "switchKnob")
+    val track by animateColorAsState(if (checked) (onColor ?: if (c.dark) Color.White else Color.Black)
+        else (offColor ?: c.label.copy(alpha = 0.16f)), label = "switchTrack")
+    val knob by animateColorAsState(if (checked && c.dark && onColor == null) Color(0xFF1C1C1E) else Color.White, label = "switchKnob")
     val x by animateDpAsState(if (checked) 22.dp else 2.dp, spring(dampingRatio = 0.75f, stiffness = 600f), label = "switchKnob")
     val tap = if (onCheckedChange != null)
         Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange,
