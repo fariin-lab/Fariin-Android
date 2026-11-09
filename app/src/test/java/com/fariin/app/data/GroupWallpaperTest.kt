@@ -22,7 +22,9 @@ class GroupWallpaperTest {
         val r = reader("wallpaper.__default__" to "g:ocean", "wallpaper.grp" to "g:rose")
         assertNull(ChatLookRules.groupWallpaper(null, none))
         assertEquals(ChatWallpaper.Gradient("rose"), ChatLookRules.wallpaper("grp", r, null))
-        assertEquals(ChatWallpaper.Gradient("ocean"), ChatLookRules.wallpaper("other", r, null))
+        // With no pick of its own a group is plain (the Settings wallpaper is for 1:1 chats only).
+        assertEquals(ChatWallpaper.None, ChatLookRules.wallpaper("other", r, null))
+        assertEquals(ChatWallpaper.Gradient("ocean"), ChatLookRules.wallpaper("u1_u2", r, null))
     }
 
     @Test fun officialChatNeverHasOne() {

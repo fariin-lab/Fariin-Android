@@ -27,16 +27,22 @@ class ChatLookTest {
     @Test fun chatPickBeatsSettingsAndOfficialHasNone() {
         val r = reader("wallpaper.__default__" to "g:ocean", "wallpaper.a" to "none")
         assertEquals(ChatWallpaper.None, ChatLookRules.wallpaper("a", r))
-        assertEquals(ChatWallpaper.Gradient("ocean"), ChatLookRules.wallpaper("b", r))
+        assertEquals(ChatWallpaper.Gradient("ocean"), ChatLookRules.wallpaper("u1_u2", r))
+        // Owner 2026-11-09: the Settings wallpaper is for one-to-one chats only; a group shows plain.
+        assertEquals(ChatWallpaper.None, ChatLookRules.wallpaper("b", r))
         assertEquals(ChatWallpaper.None, ChatLookRules.wallpaper(OfficialChannel.CID, r))
     }
 
     @Test fun autoColourFollowsIosOrder() {
         // Settings wallpaper Blaze, nothing chosen: Auto = Ember.
         val r1 = reader("wallpaper.__default__" to "g:g-blaze")
-        assertEquals(ChatColorSpec(listOf(0xE57C00, 0x5E0000)), ChatLookRules.color("x", r1))
+        assertEquals(ChatColorSpec(listOf(0xE57C00, 0x5E0000)), ChatLookRules.color("u1_u2", r1))
+        // A group never takes the Settings wallpaper's pairing...
+        assertNull(ChatLookRules.color("x", r1))
         // A colour chosen in Settings beats the Settings wallpaper's pairing.
         val r2 = reader("wallpaper.__default__" to "g:g-blaze", "chatColor.__default__" to "s:CF163E")
+        assertEquals(ChatColorSpec(listOf(0xCF163E)), ChatLookRules.color("u1_u2", r2))
+        // ...but a colour picked in Settings applies everywhere.
         assertEquals(ChatColorSpec(listOf(0xCF163E)), ChatLookRules.color("x", r2))
         // The chat's own patterned theme pairs with its bubbleHex.
         val r3 = reader("wallpaper.y" to "g:ocean", "chatColor.__default__" to "s:CF163E")

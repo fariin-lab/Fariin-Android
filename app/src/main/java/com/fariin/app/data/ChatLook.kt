@@ -221,6 +221,9 @@ object ChatLookRules {
     fun wallpaper(cid: String, read: (String) -> String?, group: ChatWallpaper? = null): ChatWallpaper {
         if (cid == OfficialChannel.CID) return ChatWallpaper.None
         group?.let { return it }
+        // Owner 2026-11-09 (iOS e651ae8d8): the Settings wallpaper is for one-to-one chats only. A
+        // group or channel shows a wallpaper only when set from inside it, else the plain page.
+        if (com.fariin.app.crypto.Wire.isGroupCid(cid)) return ChatWallpaper.parse(read(wallKey(cid)))
         return ChatWallpaper.parse(read(wallKey(cid)) ?: read(WALL_DEFAULT))
     }
 
@@ -273,6 +276,9 @@ object ChatLookRules {
         if (cid != OfficialChannel.CID && read(wallKey(cid)) != null) {
             return wallpaper(cid, read).pairedColor ?: globalChosen(read)
         }
+        // A group or channel never takes the Settings WALLPAPER's paired colour (its wallpaper is not
+        // there); a colour picked in Settings still applies everywhere (owner 2026-11-09).
+        if (com.fariin.app.crypto.Wire.isGroupCid(cid)) return globalChosen(read)
         return globalColor(read)
     }
 
