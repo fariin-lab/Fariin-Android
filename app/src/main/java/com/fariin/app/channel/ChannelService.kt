@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -93,6 +94,20 @@ object ChannelService {
         ChannelFollows.bias(cid, -1)
         val r = try { call("unfollowChannel", mapOf("cid" to cid)) } catch (e: Exception) { ChannelFollows.bias(cid, +1); throw e }
         ChannelFollows.adoptCount(cid, r)
+    }
+
+    private val warmedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    /** Fire-and-forget {warm:true} calls to the functions a channel page is about to use. */
+    fun warm(cid: String) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - (warmedAt[cid] ?: -120_000L) < 60_000L) return
+        warmedAt[cid] = now
+        val follows = ChannelFollows.entries.value.containsKey(cid)
+        for (name in listOf("reactChannelPost", "channelViews", if (follows) "unfollowChannel" else "followChannel")) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                runCatching { fn.getHttpsCallable(name).withTimeout(10, TimeUnit.SECONDS).call(mapOf("cid" to cid, "warm" to true)).await() }
+            }
+        }
     }
 
     /** The post's counts with my change in them, as the server answers (null if it sent none). */

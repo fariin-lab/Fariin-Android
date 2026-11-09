@@ -173,6 +173,9 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
     // pending local write could leave a doc without `users` in the phone's cache.
     val maybeGuest = docInfo == null && com.fariin.app.crypto.Wire.isGroupCid(cid) &&
         me !in ((doc["users"] as? List<*>) ?: emptyList<Any>())
+    // Wake the server's channel functions as the page opens (iOS ChannelService.warm), so the first
+    // reaction does not wait 1-2 s for a cold start. At most once a minute per channel.
+    LaunchedEffect(cid) { ChannelService.warm(cid) }
     LaunchedEffect(cid, maybeGuest) {
         if (!maybeGuest || preview != null) return@LaunchedEffect
         try {
@@ -216,9 +219,12 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         canReact = ChannelRules.canReact(info, role, guest = false),
         offered = ChannelRules.offered(info.reactMode, liveList),
         pickable = ChannelRules.pickable(info.reactMode, liveList),
-        mine = { mid -> ChannelFollows.myReaction(cid, mid) },
-        held = { mid -> ChannelFollows.confirmedReaction(cid, mid) },
-        counts = { m -> ChannelFollows.countsFor(cid, m.id, m.reactionCounts) },
+        // The lambdas read the collected maps themselves, so a changed pick makes new lambdas and the
+        // posts redraw at once. They used to read the store directly: equal lambdas, the list skipped
+        // and my reaction showed late (owner's Pixel, VE3, 2026-11-09; found by the iOS session).
+        mine = { mid -> pending[cid]?.get(mid)?.let { it.ifEmpty { null } } ?: rx[cid]?.get(mid) },
+        held = { mid -> rx[cid]?.get(mid) },
+        counts = { m -> served["$cid/${m.id}"] ?: m.reactionCounts },
         onFollow = {
             problem = null; joining = true
             scope.launch {
@@ -231,14 +237,11 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         onMute = { until -> scope.launch { if (!ChannelService.setMuted(cid, until != null, until ?: 0.0)) notice("Couldn't change that. Try again.") } },
         onReact = { m, e ->
             ChannelFollows.setPending(cid, m.id, e)
-            scope.launch {
-                try {
-                    val counts = ChannelService.react(cid, m.id, e)
-                    ChannelFollows.settle(cid, m.id, counts, e)
-                } catch (ex: Exception) {
-                    ChannelFollows.dropPending(cid, m.id)
-                    notice(ChannelService.errorText(ex, "Couldn't react. Try again."))
-                }
+            // One request per post at a time, always the newest wish (iOS ChannelFollows.react):
+            // fast taps raced and the counts jumped about.
+            com.fariin.app.channel.ChannelReactQueue.want(scope, cid, m.id, e) { ex ->
+                ChannelFollows.dropPending(cid, m.id)
+                notice(ChannelService.errorText(ex, "Couldn't react. Try again."))
             }
         },
         onReport = { m -> com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.POST,
