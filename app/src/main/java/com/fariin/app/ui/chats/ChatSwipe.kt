@@ -166,6 +166,9 @@ internal fun SwipeToActRow(
     content: @Composable () -> Unit,
 ) {
     val dir = if (leading) 1f else -1f
+    // The gesture handler outlives recompositions (keyed on id): it must call the CURRENT action, or
+    // a second swipe repeats the first (the Activity row's Unpin pinned it again).
+    val action by androidx.compose.runtime.rememberUpdatedState(onAction)
     // The row follows the finger directly: one number, written in the drag callback and read only
     // while placing and drawing (owner 2026-11-06: "not smooth, it keeps jumping" — each move used to
     // launch its own coroutine, and those could land out of order).
@@ -266,9 +269,9 @@ internal fun SwipeToActRow(
                                     val v = tracker.calculateVelocity().x
                                     // Gone: the row stays off-screen until the list drops it; if it is still here
                                     // a moment later (the change did not happen), it comes back.
-                                    if (leading) { if (armed || v > 2500f) onAction(); settle(0f, v) }
+                                    if (leading) { if (armed || v > 2500f) action(); settle(0f, v) }
                                     else if (armed || v < -2500f) settle(-widthPx, v) {
-                                        onAction()
+                                        action()
                                         kotlinx.coroutines.delay(1500)
                                         androidx.compose.animation.core.animate(x, 0f, 0f,
                                             spring(dampingRatio = 0.85f, stiffness = 500f)) { v, _ -> x = v }

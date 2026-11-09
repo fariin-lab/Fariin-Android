@@ -280,6 +280,8 @@ fun ChatListScreen(
     val activityPin by com.fariin.app.data.ActivityFeed.pinned.collectAsState()
     val activityShown = !showArchive && filter == FILTER_ALL && activity?.let { it.at > 0 } == true
     val activityPinned = activityShown && activityPin
+    // "Activity" is found by the chat search like a chat title.
+    val activitySearchHit = query.isNotBlank() && activity?.let { it.at > 0 } == true && "Activity".contains(query.trim(), ignoreCase = true)
     val activityIndex = if (activityShown && !activityPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
     val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
@@ -549,7 +551,7 @@ fun ChatListScreen(
                     }
                 // A search with nothing found: in the middle of what the keyboard leaves, worded as the
                 // Settings search (and iOS) say it.
-                shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() && query.isNotBlank() ->
+                shown.isEmpty() && !officialShown && !activitySearchHit && newPeople.isEmpty() && groupHits.isEmpty() && query.isNotBlank() ->
                     Box(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()).imePadding().padding(32.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("No Results", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
@@ -567,7 +569,7 @@ fun ChatListScreen(
                     }
                 // iOS wording, each with its line under it. The main list has no button (iOS: nothing
                 // else on a fresh account); Groups offers New Group, Channels Find Channels.
-                shown.isEmpty() && !officialShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { when {
+                shown.isEmpty() && !officialShown && !activitySearchHit && !activityShown && newPeople.isEmpty() && groupHits.isEmpty() -> Box(Modifier.padding(top = pad.calculateTopPadding())) { when {
                     query.isNotBlank() -> Centered(null, "No results", null)
                     showArchive -> Centered(fi(R.drawable.ic_archive), "Nothing archived", "Chats you archive and stories you hide will show here.")
                     filter == FILTER_UNREAD -> Centered(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), "No unread chats", "You're all caught up.")
