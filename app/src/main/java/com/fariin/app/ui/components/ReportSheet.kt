@@ -118,6 +118,10 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
     val heights = remember { mutableStateMapOf<Int, Float>() }
     val guess = reportRestStop(560f)
     if (motion.mid <= 0f) motion.mid = guess
+    // A fitted sheet: a pull up only stretches and springs back, never parks it at full height, so
+    // the next step can shrink to its own size (owner's Pixel 2026-11-09: a short step sat full
+    // height after the list had been pushed up). The note field still raises it for the keyboard.
+    SideEffect { motion.midIsTop = true }
     heights[page]?.let { h -> val stop = reportRestStop(h); SideEffect { motion.fitMid(stop) } }
 
     fun back() {
