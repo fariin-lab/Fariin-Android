@@ -1398,3 +1398,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~9:00 PM: composer camera photo now opens straight in the photo editor (iOS
   ThreadView CameraPicker -> editImage), closing it returns to the chat; before it landed as one
   pick in the library grid (and asked for library access first). Sent and received on emulators.
+- 2026-11-08 ~9:02 PM: the composer camera no longer asks for photo-library access first (the sheet
+  under it auto-asked). Tested with media access revoked: shutter -> editor, X -> back to the chat.

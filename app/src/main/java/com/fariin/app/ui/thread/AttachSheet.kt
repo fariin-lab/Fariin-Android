@@ -163,7 +163,8 @@ internal fun AttachSheet(
         onDispose { lifecycle.removeObserver(obs) }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        if (access == RecentMedia.Access.NONE && mediaOff == null && !asked) {
+        // Not for the composer camera: a photo taken there needs no library access (iOS asks none).
+        if (access == RecentMedia.Access.NONE && mediaOff == null && !asked && !cameraFirst) {
             asked = true
             askPhotos.launch(RecentMedia.permissions())
         }
