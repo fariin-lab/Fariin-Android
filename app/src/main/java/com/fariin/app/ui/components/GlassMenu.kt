@@ -86,13 +86,16 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     // 0 = folded into the button, 1 = open. A spring with a little give, as the reference.
     val grow = remember { Animatable(0f) }
     var shown by remember { mutableStateOf(false) }
+    // Folding back: both sides shrink together into the button. The jelly (width leads, height lags)
+    // is for opening only; on the way back it left a wide flat strip (owner 2026-11-08: "goes back flat").
+    var closing by remember { mutableStateOf(false) }
     LaunchedEffect(open) {
         // Out of the button on a soft spring, and back into it the same way (owner: the way it
         // goes back must be seen), not a quick fade.
         // A LIVING MORPH, not a flat zoom (owner's video 2026-11-08): a slower spring with a real
         // overshoot on the way out, a firm one back.
-        if (open) { shown = true; grow.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 150f)) }
-        else if (shown) { grow.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 260f, visibilityThreshold = 0.01f)); shown = false }
+        if (open) { closing = false; shown = true; grow.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 150f)) }
+        else if (shown) { closing = true; grow.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 260f, visibilityThreshold = 0.01f)); shown = false }
     }
     if (!shown) return
     BackHandler { onDismiss() }
@@ -121,7 +124,8 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
             effects = { vibrancy(); blur(24.dp.toPx()); lens(14.dp.toPx(), 28.dp.toPx()) },
             shadow = null, highlight = null,
             // Thick frost (owner: rows under it showed through, "On >" read in the menu).
-            onDrawSurface = { drawRect((if (c.dark) c.card else Color.White).copy(alpha = if (c.dark) 0.88f else 0.9f)) },
+            // Near solid, as the long-press menu (owner 2026-11-08: "too soft, you can see the background").
+            onDrawSurface = { drawRect((if (c.dark) c.card else Color.White).copy(alpha = if (c.dark) 0.96f else 0.97f)) },
         ) else Modifier.background((if (c.dark) c.card else Color(0xFFF7F7F9)).copy(alpha = 0.97f), shape)
         Column(
             Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }
@@ -136,8 +140,8 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     translationY = cy0 * (1f - k)
                     // Jelly: the glass widens first and drops after (x leads, y lags), so it stretches out
                     // of the button instead of zooming; the overshoot of [grow] gives the bounce.
-                    val kx = if (k >= 1f) k else Math.pow(k.coerceAtLeast(0f).toDouble(), 0.6).toFloat()
-                    val ky = if (k >= 1f) 1f + (k - 1f) * 1.6f else Math.pow(k.coerceAtLeast(0f).toDouble(), 1.5).toFloat()
+                    val kx = if (closing) k.coerceAtLeast(0f) else if (k >= 1f) k else Math.pow(k.coerceAtLeast(0f).toDouble(), 0.6).toFloat()
+                    val ky = if (closing) k.coerceAtLeast(0f) else if (k >= 1f) 1f + (k - 1f) * 1.6f else Math.pow(k.coerceAtLeast(0f).toDouble(), 1.5).toFloat()
                     scaleX = (sx + (1f - sx) * kx) * (1f + 0.025f * lean.value)
                     scaleY = (sy + (1f - sy) * ky) * (1f - 0.015f * lean.value)
                     alpha = (k * 6f).coerceIn(0f, 1f)   // only the last bit of the fold fades

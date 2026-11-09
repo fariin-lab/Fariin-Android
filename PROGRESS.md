@@ -1527,3 +1527,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~11:24 PM: OWNER (Pixel vs iPhone): the attach sheet's send bar after picking photos
   had a forward arrow (+ count) and the one-time "1" as its own button on the left. Now as iOS: the
   caption field with the "1" inside at its end, then a round blue up-arrow Send. Checked.
+- 2026-11-08 ~11:28 PM: OWNER: the ••• glass menu was too see-through and closed "flat". Surface now
+  near solid (0.97 / 0.96 dark), and the fold back shrinks both sides together into the button (the
+  open's jelly, width first and height after, had left a wide flat strip on the way back). Build ok;
+  the emulator cannot record video to check the motion, so this needs a look on the Pixel.
