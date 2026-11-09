@@ -341,12 +341,16 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
       val navDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
       val statusDp = maxOf(pageStatusDp, with(density) { WindowInsets.statusBars.getTop(this).toDp() })
       val winDp = with(density) { windowH.toDp() }
-      val lift = (imeDp - navDp).coerceAtLeast(0.dp)
+      // The bottom sheet rides up by the WHOLE keyboard inset (navigation bar included); taking the
+      // bar off put the top that much too high, under the clock (Pixel 2026-11-09).
+      val lift = imeDp.coerceAtLeast(0.dp)
       var liftMax by remember { mutableStateOf(280.dp) }
       if (lift > liftMax) liftMax = lift
       val frac = (lift / liftMax).coerceIn(0f, 1f)
       val midTop = winDp - sheetH
-      val fullTop = statusDp + 8.dp
+      // The sheet's grab handle (48 dp, the bottom sheet's own) sits ABOVE this column, so the
+      // column's top is the handle's height lower than the sheet's.
+      val fullTop = statusDp + 8.dp + 48.dp
       val top = midTop + (fullTop - midTop) * frac
       // Closing (the X, owner 2026-11-09): the TOP edge stops following the keyboard (it used to
       // drop to 70% first, then close). The sheet's bottom fills in behind the leaving keyboard.
