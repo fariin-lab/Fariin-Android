@@ -18,6 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "com.fariin.app"
+        resValue("bool", "fariin_debug_appcheck", "false")
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -80,6 +81,18 @@ android {
             matchingFallbacks += listOf("release")
             configure<CrashlyticsExtension> { mappingFileUploadEnabled = false }
         }
+        // The owner's Pixel at the REAL speed (owner 2026-11-09: "the app is extremely laggy"): release
+        // code (R8, AOT, baseline profile) signed with the debug key, so it installs over the debug
+        // build with the same data and keeps that install's App Check debug token. Real backend.
+        // Never uploaded anywhere. ./gradlew assemblePixelfast
+        create("pixelfast") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            proguardFile("proguard-pixelfast.pro")
+            resValue("bool", "fariin_debug_appcheck", "true")
+            configure<CrashlyticsExtension> { mappingFileUploadEnabled = false }
+        }
     }
     sourceSets.getByName("benchmark").res.srcDir("src/debug/res")
 
@@ -131,6 +144,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
+    "pixelfastImplementation"("com.google.firebase:firebase-appcheck-debug")
     // The launch screen (Android 12 API, back-ported), and the app-wide foreground/background signal.
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.process)
