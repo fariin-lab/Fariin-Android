@@ -424,6 +424,8 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         SettingsSection(footer = "Show a preview card for links you type or paste. Your phone contacts the site to build it, before the message is sent.") {
             SwitchRow("Link Previews", links, last = true, badge = NewBadgeSpots.CHATS_LINK_PREVIEWS) { links = it; p.edit().putBoolean("linkPreviewsEnabled", it).apply() }
         }
+        // Swipe Actions (iOS ChatsSettingsView): off by default; on shows the two picks.
+        SwipeActionsSection()
         SettingsSection(header = "New Chats from Your Chat Key", footer = "When someone uses your Chat Key to message you, the chat goes to Archived, muted.") {
             SwitchRow("Automatically Archive", archive, last = true, badge = NewBadgeSpots.CHATS_AUTO_ARCHIVE) { archive = it; p.edit().putBoolean("unknownChats.autoArchive", it).apply() }
         }
@@ -626,6 +628,41 @@ private fun SecurityNotificationsPage(pop: () -> Unit) {
                     try { ref!!.set(mapOf("securityAlerts" to v), SetOptions.merge()).await() }
                     catch (e: Exception) { on = was; error = "This setting could not be saved. ${e.localizedMessage ?: ""}".trim() }
                 }
+            }
+        }
+    }
+}
+
+/** Settings > Chats: the Swipe Actions switch and, when on, Slide Up For / Slide Down For. */
+@Composable
+private fun SwipeActionsSection() {
+    val ctx = LocalContext.current
+    val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val sa = com.fariin.app.ui.thread.SwipeActions
+    if (!sa.allowed(me)) return
+    var on by remember { mutableStateOf(sa.on(ctx, me)) }
+    var up by remember { mutableStateOf(sa.up(ctx, me)) }
+    var down by remember { mutableStateOf(sa.down(ctx, me)) }
+    SettingsSection(footer = if (on) sa.FOOTER_ON else sa.FOOTER_OFF) {
+        SwitchRow("Swipe Actions", on, last = !on) { on = it; sa.setOn(ctx, me, it) }
+        if (on) {
+            PickRow("Slide Up For", up, last = false) { up = it; sa.setUp(ctx, me, it) }
+            PickRow("Slide Down For", down, last = true) { down = it; sa.setDown(ctx, me, it) }
+        }
+    }
+}
+
+@Composable
+private fun PickRow(title: String, value: com.fariin.app.ui.thread.SwipeActions.Pick, last: Boolean,
+                    onPick: (com.fariin.app.ui.thread.SwipeActions.Pick) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Box {
+        SettingsRow(title, value = value.label, last = last) { open = true }
+        com.fariin.app.ui.components.GlassDropdown(expanded = open, onDismissRequest = { open = false },
+            offset = androidx.compose.ui.unit.DpOffset(200.dp, 0.dp)) {
+            com.fariin.app.ui.thread.SwipeActions.Pick.entries.forEach { p ->
+                androidx.compose.material3.DropdownMenuItem(text = { Text(p.label) }, onClick = { open = false; onPick(p) },
+                    trailingIcon = if (p == value) ({ androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark), null) }) else null)
             }
         }
     }

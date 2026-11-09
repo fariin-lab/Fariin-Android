@@ -375,6 +375,26 @@ private fun ThreadContent(
     val uiNow = androidx.compose.runtime.rememberUpdatedState(ui)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Swipe Actions (Settings > Chats, off by default): the capsule's Up and Down slots for a message.
+    val swipeCtx = androidx.compose.ui.platform.LocalContext.current
+    val swipeOn = remember(ui.me) { SwipeActions.on(swipeCtx, ui.me) }
+    fun swipeMenu(m: com.fariin.app.data.Message): (() -> Pair<SwipeActions.Slot?, SwipeActions.Slot?>)? {
+        if (!swipeOn || !SwipeActions.hasMenu(m)) return null
+        return {
+            val u = uiNow.value
+            val restricted = com.fariin.app.data.ChatRestrictions.isOn(u.cid)
+            val quoteOk = u.channel?.info?.quotesOff == false
+            fun slot(p: SwipeActions.Pick) = SwipeActions.slot(p, m, restricted, quoteOk,
+                copy = { t -> clipboard.setText(androidx.compose.ui.text.AnnotatedString(t)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
+                save = { actions.onSave(m) }, forward = { actions.onForward(m) },
+                share = { t ->
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, t)
+                    swipeCtx.startActivity(android.content.Intent.createChooser(send, null))
+                },
+                quote = { actions.onQuote(m) })
+            slot(SwipeActions.up(swipeCtx, u.me)) to slot(SwipeActions.down(swipeCtx, u.me))
+        }
+    }
     var viewing by remember { mutableStateOf<Viewing?>(null) }
     viewing?.let { v -> MediaViewer(v, viewerHost(ui, actions, onSendPick)) { viewing = null } }
     // Leaving the chat no longer stops its note (iOS VoiceNotePlayer): it plays on, with the bar elsewhere.
@@ -1002,7 +1022,7 @@ private fun ThreadContent(
                                 // A long press opens the message menu like any bubble; it used to fall
                                 // through to the bubble's tap and ask "Call them?" (Pixel, 2026-11-04).
                                 // A swipe replies, as on every other bubble (iOS allows Reply on a call).
-                                SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }) {
+                                SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }, menu = swipeMenu(m)) {
                                 Box(Modifier.fillMaxWidth()
                                     .onPlaced { coords[0] = it }
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }
@@ -1070,7 +1090,7 @@ private fun ThreadContent(
                                     })
                                 }
                             }
-                            else -> SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }) {
+                            else -> SwipeRow(enabled = MessageRules.canSwipeReply(m, mayReply), onReply = { replyTo = m; editing = null }, menu = swipeMenu(m)) {
                                 Column(Modifier.fillMaxWidth()
                                     .onPlaced { coords[0] = it }
                                     .graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }

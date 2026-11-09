@@ -43,6 +43,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -448,34 +452,124 @@ internal object SwipeReplyMath {
  * A swipe-able row: the content follows the finger to the left, the reply arrow fades in and grows
  * at the row's right edge, and on release everything goes back in a plain 0.2 s ease (iOS: no
  * spring). The drag offset is read only in layout and draw, so a swipe does not recompose the row.
+ *
+ * [menu] (Swipe Actions, on): past the reply point a glass capsule opens around the arrow with the
+ * Up pick above Reply and the Down pick below; the finger's height picks one (dead zone 12, a slot
+ * every 44, hysteresis 6), a light tick on each change, a dimmed slot is skipped; lifting does it.
  */
 @Composable
-internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit, content: @Composable () -> Unit) {
+internal fun SwipeRow(enabled: Boolean, onReply: () -> Unit,
+                      menu: (() -> Pair<SwipeActions.Slot?, SwipeActions.Slot?>)? = null,
+                      content: @Composable () -> Unit) {
     val dx = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    val trigger = with(LocalDensity.current) { SWIPE_REPLY_DP.dp.toPx() }
+    val density = LocalDensity.current
+    val trigger = with(density) { SWIPE_REPLY_DP.dp.toPx() }
     val view = androidx.compose.ui.platform.LocalView.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val back = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
-    // The drag loop starts once; it calls the newest reply action (the newest copy of the message),
-    // so replying to a message edited since its row was drawn quotes its current words.
     val latest = androidx.compose.runtime.rememberUpdatedState(onReply)
+    val latestMenu = androidx.compose.runtime.rememberUpdatedState(menu)
     val showArrow by remember { androidx.compose.runtime.derivedStateOf { dx.floatValue < -4f } }
-    Box(Modifier.fillMaxWidth().swipeToReply(enabled, onReply = { latest.value() }, onArm = { view.lightTap() },
-        onRelease = {
-            val from = dx.floatValue
+    // The open capsule: its two outer slots, and which is picked (-1 up, 0 reply, 1 down).
+    var slots by remember { androidx.compose.runtime.mutableStateOf<Pair<SwipeActions.Slot?, SwipeActions.Slot?>?>(null) }
+    var picked by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val dead = with(density) { 12.dp.toPx() }
+    val step = with(density) { 44.dp.toPx() }
+    val hyst = with(density) { 6.dp.toPx() }
+    fun release() {
+        val from = dx.floatValue
+        back[0]?.cancel()
+        back[0] = scope.launch {
+            androidx.compose.animation.core.animate(from, 0f, animationSpec = androidx.compose.animation.core.tween(200)) { v, _ -> dx.floatValue = v }
+        }
+    }
+    val gesture = if (!enabled) Modifier else Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var armed = false
+            var crossY = 0f
+            // Only a mostly sideways start is ours; up and down scroll the chat.
+            val start = awaitHorizontalTouchSlopOrCancellation(down.id) { ch, _ ->
+                ch.consume()
+            } ?: return@awaitEachGesture
             back[0]?.cancel()
-            back[0] = scope.launch {
-                androidx.compose.animation.core.animate(from, 0f,
-                    animationSpec = androidx.compose.animation.core.tween(200)) { v, _ -> dx.floatValue = v }
+            var y: Float
+            var lastX = start.position.x
+            var raw = (down.position.x - start.position.x).coerceAtLeast(0f)
+            if (raw <= 0f) return@awaitEachGesture   // a swipe to the right is not ours
+            while (true) {
+                val ev = awaitPointerEvent()
+                val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                if (!ch.pressed) break
+                raw = (raw - (ch.position.x - lastX)).coerceAtLeast(0f)
+                lastX = ch.position.x; y = ch.position.y
+                ch.consume()
+                dx.floatValue = -SwipeReplyMath.eased(raw, trigger)
+                if (raw >= trigger && !armed) {
+                    armed = true; crossY = y; view.lightTap()
+                    slots = latestMenu.value?.invoke(); picked = 0
+                } else if (raw < trigger && armed) {
+                    // Back under the reply point: the capsule folds, Reply again; lifting here cancels.
+                    armed = false; slots = null; picked = 0
+                }
+                val sl = slots
+                if (armed && sl != null) {
+                    val off = y - crossY
+                    val edge = dead + step / 2f
+                    val want = when {
+                        off < -(edge + (if (picked == -1) -hyst else hyst)) -> -1
+                        off > edge + (if (picked == 1) -hyst else hyst) -> 1
+                        else -> 0
+                    }
+                    val usable = when (want) { -1 -> sl.first?.run != null; 1 -> sl.second?.run != null; else -> true }
+                    val next = if (usable) want else 0
+                    if (next != picked) { picked = next; view.lightTap() }
+                }
             }
-        }) { back[0]?.cancel(); dx.floatValue = it }) {
-        if (showArrow) Icon(ImageVector.vectorResource(R.drawable.ic_menu_reply), null, tint = Fariin.colors.secondary,
+            val sl = slots
+            val fire: (() -> Unit)? = if (!armed) null else when (picked) {
+                -1 -> sl?.first?.run
+                1 -> sl?.second?.run
+                else -> ({ latest.value() })
+            }
+            slots = null; picked = 0
+            release()
+            fire?.invoke()
+        }
+    }
+    Box(Modifier.fillMaxWidth().then(gesture).then(if (slots != null) Modifier.zIndex(1f) else Modifier)) {
+        if (showArrow && slots == null) Icon(ImageVector.vectorResource(R.drawable.ic_menu_reply), null, tint = Fariin.colors.secondary,
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).size(22.dp)
                 .graphicsLayer {
                     val p = SwipeReplyMath.progress(-dx.floatValue, trigger)
                     alpha = p; scaleX = SwipeReplyMath.arrowScale(p); scaleY = scaleX
                 })
         Box(Modifier.offset { IntOffset(dx.floatValue.roundToInt(), 0) }) { content() }
+        slots?.let { sl -> SwipeCapsule(sl, picked, Modifier.align(Alignment.CenterEnd).padding(end = 6.dp)) }
+    }
+}
+
+/** iOS capsule: 44 x 132 glass, the picked icon on a grey disc; a dimmed slot does nothing. */
+@Composable
+private fun SwipeCapsule(sl: Pair<SwipeActions.Slot?, SwipeActions.Slot?>, picked: Int, modifier: Modifier) {
+    val c = Fariin.colors
+    androidx.compose.foundation.layout.Column(modifier.width(44.dp).height(132.dp)
+        .floating(androidx.compose.foundation.shape.RoundedCornerShape(22.dp)),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly) {
+        CapsuleSlot(sl.first?.icon, sl.first?.label ?: "", picked == -1, sl.first?.run != null)
+        CapsuleSlot(R.drawable.ic_menu_reply, "Reply", picked == 0, true)
+        CapsuleSlot(sl.second?.icon, sl.second?.label ?: "", picked == 1, sl.second?.run != null)
+    }
+}
+
+@Composable
+private fun CapsuleSlot(icon: Int?, label: String, on: Boolean, usable: Boolean) {
+    val c = Fariin.colors
+    Box(Modifier.size(36.dp).clip(CircleShape).background(if (on) c.secondary.copy(alpha = 0.3f) else Color.Transparent),
+        contentAlignment = Alignment.Center) {
+        if (icon != null) Icon(ImageVector.vectorResource(icon), label, tint = c.label.copy(alpha = if (usable) 1f else 0.3f),
+            modifier = Modifier.size(18.dp))
     }
 }
 
