@@ -1479,3 +1479,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   the text starts with my name or "Someone", never others' notices, not in channels (their own
   wording). Before, only the timer and pin lines did. (Earlier tonight I wrongly logged "created the
   group" as matching; I had read the channel rewrite.) Checked on the emulator.
+- 2026-11-08 ~10:33 PM: Restricted Chat request flow as iOS: the other side's switch asks "Ask Alice
+  Test to turn it off?" -> Send Request -> "Waiting for ... to answer"; the owner gets a tappable
+  "... asked to turn off Restricted chat." notice -> Keep On / Turn Off; Turn Off clears both sides.
