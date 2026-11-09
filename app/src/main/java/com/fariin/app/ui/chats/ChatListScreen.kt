@@ -197,6 +197,8 @@ fun ChatListScreen(
         listMode = mode
     }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // "Select chats" from the menu (owner 2026-11-09, as iOS Edit): select mode with nothing picked yet.
+    var selectMode by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     // A chat whose Delete was swiped (not the selection): the same question, about this one chat.
     var swipeDelete by remember { mutableStateOf<Conversation?>(null) }
@@ -209,13 +211,13 @@ fun ChatListScreen(
             }
         }
     }
-    val selecting = selected.isNotEmpty()
+    val selecting = selectMode || selected.isNotEmpty()
     val online = rememberOnline()
     val link by com.fariin.app.data.ConnectionStatus.state.collectAsState()
     val linkLabel = com.fariin.app.data.ConnectionStatus.label(link)
 
     // System back peels one layer at a time: selection, then search, then the archive page.
-    BackHandler(enabled = active && selecting) { selected = emptySet() }
+    BackHandler(enabled = active && selecting) { selected = emptySet(); selectMode = false }
     BackHandler(enabled = active && !selecting && searching) { searching = false; query = "" }
     BackHandler(enabled = active && !selecting && !searching && showArchive) { showArchive = false }
 
@@ -305,7 +307,7 @@ fun ChatListScreen(
     }
     val act: (String, suspend (Conversation) -> Boolean) -> Unit = { done, write ->
         val list = selectedConvs
-        selected = emptySet()
+        selected = emptySet(); selectMode = false
         scope.launch {
             val ok = list.map { write(it) }.all { it }
             Snack.show(if (ok) done else "Couldn't save. Check your connection and try again.")
@@ -408,7 +410,7 @@ fun ChatListScreen(
                         allMuted = selectedConvs.all { it.isMuted(me, System.currentTimeMillis().toDouble()) },
                         allUnread = selectedConvs.all { it.hasUnreadMark(me) },
                         archive = showArchive,
-                        onClose = { selected = emptySet() },
+                        onClose = { selected = emptySet(); selectMode = false },
                         onPin = {
                             val on = !selectedConvs.all { it.isPinned(me) }
                             if (!on || !ChatListActions.pinsFull(me, state.chats, selectedConvs.count { !it.isPinned(me) })) {
@@ -421,7 +423,7 @@ fun ChatListScreen(
                         onArchive = {
                             val on = !showArchive
                             val list = selectedConvs
-                            selected = emptySet()
+                            selected = emptySet(); selectMode = false
                             scope.launch {
                                 list.forEach { ChatListActions.setArchived(me, it, on) }
                                 val n = list.size
@@ -442,7 +444,7 @@ fun ChatListScreen(
                             SingleChatActions(
                                 infoLabel = when { one.isChannel -> "Channel Info"; one.isGroup -> "Group Info"; else -> "View Contact" },
                                 onInfo = {
-                                    selected = emptySet()
+                                    selected = emptySet(); selectMode = false
                                     if (person) people.contact(one.otherUid(me)) else people.group(one.id)
                                 },
                             )
@@ -484,6 +486,10 @@ fun ChatListScreen(
                                 // In the Archive the search stays a button; the list itself has the field below.
                                 if (showArchive || searchGone) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), contentDescription = "Search", onClick = { searching = true },
                                     modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
+                                // Explore (owner 2026-11-09): a round glass button with our compass, the one
+                                // way in from the chat list; it opens the same Find Channels page.
+                                if (!showArchive) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_compass), contentDescription = "Explore",
+                                    onClick = channels.find, modifier = Modifier.padding(end = 8.dp))
                                 if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
@@ -501,6 +507,7 @@ fun ChatListScreen(
                                             Snack.show(if (list.isEmpty()) "No unread chats" else "All chats marked as read")
                                         }
                                     },
+                                    onSelect = { selectMode = true },
                                     onNewGroup = people.newGroup,
                                     onNewChannel = channels.create,
                                     onFindChannels = channels.find,
@@ -829,7 +836,7 @@ fun ChatListScreen(
         val one = single?.takeIf { singleKind == DeleteKind.HIDE && !it.isGroup && me != com.fariin.app.ui.debug.DemoChats.ME }
         fun done() {
             confirmDelete = false
-            if (swipeDelete == null) selected = emptySet()
+            if (swipeDelete == null) { selected = emptySet(); selectMode = false }
             swipeDelete = null
         }
         com.fariin.app.ui.components.CarefulSheet(onDismiss = { confirmDelete = false; swipeDelete = null }, steps = listOf(
@@ -892,7 +899,7 @@ private fun SelectionBar(
     var muteOpen by remember { mutableStateOf(false) }
     val c = Fariin.colors
     TopAppBar(
-        title = { Text("$count", style = MaterialTheme.typography.titleLarge) },
+        title = { Text(if (count == 0) "Select Chats" else "$count", style = MaterialTheme.typography.titleLarge) },
         navigationIcon = { FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Cancel", onClick = onClose, modifier = Modifier.padding(start = 12.dp, end = 4.dp)) },
         actions = {
           // The actions share one floating capsule, as the chat screen's call buttons do.
@@ -987,21 +994,24 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
 private fun OverflowMenu(
     anchor: com.fariin.app.ui.components.GlassMenuAnchor, onOpen: (List<com.fariin.app.ui.components.GlassMenuItem>) -> Unit,
     filter: Int, onFilter: (Int) -> Unit, requests: Int, onRequests: () -> Unit, onChatKey: () -> Unit, onArchive: () -> Unit,
-    onMarkAllRead: () -> Unit, onNewGroup: () -> Unit, onNewChannel: () -> Unit, onFindChannels: () -> Unit, onSettings: () -> Unit,
+    onMarkAllRead: () -> Unit, onSelect: () -> Unit, onNewGroup: () -> Unit, onNewChannel: () -> Unit, onFindChannels: () -> Unit, onSettings: () -> Unit,
 ) {
     // iOS's own set, in its order: the filters (the chosen one ticked), then Message Requests, Chat Key,
     // Archive, then Mark All Read; New Group / Channel live under the pen, Settings is a tab.
     fun item(text: String, icon: Int, checked: Boolean = false, divider: Boolean = false, onClick: () -> Unit) = icon to
         { p: androidx.compose.ui.graphics.painter.Painter -> com.fariin.app.ui.components.GlassMenuItem(text, p, divider = divider, checked = checked, onClick = onClick) }
+    // Owner 2026-11-09 (iOS Chats bar, the Android way): Select chats and Mark All Read first, then
+    // the "Show" filters, then the rest.
     val rows = listOf(
-        item("All", R.drawable.ic_menu_read, filter == FILTER_ALL) { onFilter(FILTER_ALL) },
+        item("Select Chats", R.drawable.ic_sf_checkmark_circle, onClick = onSelect),
+        item("Mark All Read", R.drawable.ic_menu_read, onClick = onMarkAllRead),
+        item("All Chats", R.drawable.ic_menu_read, filter == FILTER_ALL, divider = true) { onFilter(FILTER_ALL) },
         item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) },
         item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) },
         item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) },
         item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", R.drawable.ic_message_request, divider = true, onClick = onRequests),
         item("Chat Key", R.drawable.ic_chat_key, onClick = onChatKey),
         item("Archive", R.drawable.ic_archive, onClick = onArchive),
-        item("Mark All Read", R.drawable.ic_sf_checkmark_circle, divider = true, onClick = onMarkAllRead),
     )
     val painters = rows.map { androidx.compose.ui.res.painterResource(it.first) }
     FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More",
