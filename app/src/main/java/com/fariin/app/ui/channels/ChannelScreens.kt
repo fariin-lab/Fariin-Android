@@ -189,6 +189,9 @@ fun NewChannelScreen(me: String, onBack: () -> Unit, onDone: (String) -> Unit) {
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val picker = com.fariin.app.ui.photo.rememberCirclePhotoPicker { photo = it }
     if (picker.pending != null) { picker.Host("Channel photo", "Shown in chats and on the channel page"); return }
+    // The phone's Back on the form goes to the intro, as the bar's arrow does (owner 2026-11-09: it
+    // left the whole flow and skipped the drawing).
+    androidx.activity.compose.BackHandler(enabled = step == 1) { if (!creating) step = 0 }
     when (step) {
         0 -> Intro(onBack) { step = 1 }
         1 -> Details(name, about, creating, error, photo, picker, onRemovePhoto = { photo = null },

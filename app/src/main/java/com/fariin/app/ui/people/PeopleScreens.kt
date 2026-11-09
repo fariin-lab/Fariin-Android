@@ -127,7 +127,13 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
     }
     // @handle and verified for each person: the cached profile first, then one read each (iOS reads
     // the on-disk cache only; a missing handle simply has no second line).
-    val profiles = remember { androidx.compose.runtime.mutableStateMapOf<String, Person>() }
+    // Seeded from memory BEFORE the first frame (owner's video 2026-11-09: the rows drew without
+    // their @handle line, then it popped in and every row jumped down).
+    val profiles = remember {
+        androidx.compose.runtime.mutableStateMapOf<String, Person>().apply {
+            for (conv in people) { val u = com.fariin.app.crypto.Wire.otherUid(conv.id, me); ProfileMemo.get(u)?.let { put(u, it) } }
+        }
+    }
     LaunchedEffect(people) {
         for (conv in people) {
             val uid = com.fariin.app.crypto.Wire.otherUid(conv.id, me)
@@ -166,7 +172,11 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                             Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
                         }
                     }
-                    if (!p?.handle.isNullOrEmpty()) Text("@" + p!!.handle, fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                    // The line's room is kept while the handle loads, so its arrival moves nothing.
+                    when {
+                        !p?.handle.isNullOrEmpty() -> Text("@" + p!!.handle, fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                        p == null -> Text(" ", fontSize = 13.sp, maxLines = 1)
+                    }
                 }
             }
             if (divider) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 68.dp))
