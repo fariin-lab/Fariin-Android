@@ -52,6 +52,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -432,11 +435,43 @@ private fun NewGroupPicker(api: PeopleApi, people: List<Person>, chosen: List<Pe
         // +1 = me; at the cap the header says so, as the next tap does nothing (iOS).
         Text(if (chosen.size >= maxOthers) "Members · ${chosen.size + 1} max" else "Members · ${chosen.size + 1}",
             fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(start = 32.dp, top = 4.dp))
-        LazyRow(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-            items(chosen, key = { it.uid }) { p ->
-                Column(Modifier.width(64.dp).clickable { onToggle(p) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Avatar(p.photoUrl, 48.dp)
-                    Text(p.shownName, fontSize = 12.sp, color = c.label, maxLines = 1)
+        // As the call page's picked row (owner 2026-11-09): anchored at its END, the newest pick at the
+        // right edge and the oldest sliding off the left; a pick slides the row and grows in, an x
+        // takes one off and the row slides back to close the gap. In a white card, as iOS.
+        val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val shown = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+        val newest = chosen.lastOrNull()?.uid
+        LaunchedEffect(chosen) { val ids = chosen.map { it.uid }.toSet(); shown.keys.retainAll(ids) }
+        LaunchedEffect(newest, chosen.size) { if (newest != null && shown[newest] != true) rowState.animateScrollToItem(0) }
+        val slide = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(150)
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card)) {
+            LazyRow(Modifier.fillMaxWidth().padding(vertical = 10.dp), state = rowState, reverseLayout = true,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Start,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
+                items(chosen.asReversed(), key = { it.uid }) { p ->
+                    val grow = remember { androidx.compose.animation.core.Animatable(if (shown[p.uid] == true) 1f else 0f) }
+                    LaunchedEffect(p.uid) {
+                        if (grow.value < 1f) {
+                            if (rowState.canScrollForward || rowState.canScrollBackward) kotlinx.coroutines.delay(150)
+                            grow.snapTo(0.2f)
+                            grow.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 520f))
+                        }
+                        shown[p.uid] = true
+                    }
+                    Column(Modifier.animateItem(fadeInSpec = null, placementSpec = slide, fadeOutSpec = androidx.compose.animation.core.tween(150))
+                        .graphicsLayer { val k = grow.value; scaleX = k; scaleY = k; alpha = if (k <= 0f) 0f else minOf(1f, k * 1.6f) }
+                        .width(70.dp).clickable(onClickLabel = "Remove ${p.shownName}") { onToggle(p) },
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(56.dp)) {
+                            Avatar(p.photoUrl, 52.dp, Modifier.align(Alignment.Center))
+                            Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(c.card).padding(2.dp)
+                                .clip(CircleShape).background(c.tertiary), contentAlignment = Alignment.Center) {
+                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(9.dp))
+                            }
+                        }
+                        Text(p.shownName, fontSize = 13.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp))
+                    }
                 }
             }
         }
