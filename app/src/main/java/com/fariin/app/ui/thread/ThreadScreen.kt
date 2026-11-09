@@ -846,7 +846,11 @@ private fun ThreadContent(
     androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassHaze provides edgeHaze, LocalOnWallpaper provides walled,
         com.fariin.app.ui.components.LocalLiquidBackdrop provides (if (liquid) liquidBackdrop else null),
         com.fariin.app.ui.components.LocalGlassWindow provides androidx.compose.ui.platform.LocalView.current) {
-    Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid)).imePadding()) {
+    // Not while a sheet with its own field covers the chat (post replies): the chat behind stays
+    // still and only the sheet's field rides the keyboard (owner's Pixel 2026-11-09: the posts behind
+    // jumped up).
+    Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid))
+        .then(if (com.fariin.app.ui.components.SheetKeyboard.covering) Modifier else Modifier.imePadding())) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
             val all = com.fariin.app.data.PinRules.sheetOrder(pins) { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] }

@@ -1,5 +1,8 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.WindowInsets
 import com.fariin.app.R
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.graphics.graphicsLayer
@@ -305,13 +308,26 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     // field made it full). One height, no taller stop: the keyboard does not grow it, the field rides
     // above the keyboard inside it.
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val sheetH = with(density) { (androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height * 0.70f).toDp() }
+    // Measured once, at open: a later resize (the keyboard) must not change it.
+    val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
+    val sheetH = remember { with(density) { (windowH * 0.70f).toDp() } }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = close, sheetState = sheetState,
         containerColor = sheetFill, shape = SheetShape,
         // The column below takes the navigation bar and the keyboard itself, so the field rides on the keyboard.
         contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) }) {
-      Column(Modifier.fillMaxWidth().height(sheetH).navigationBarsPadding().imePadding()) {
+      // The sheet already rides up by the keyboard's height (the bottom sheet does that itself); our own
+      // imePadding moved the field a second time and the sheet's top hit the status bar: a blink and
+      // a double jump (owner's Pixel 2026-11-09). Now the sheet gets shorter by the keyboard as it
+      // comes up, frame by frame, so its top edge stays put and only the field rides the keyboard.
+      androidx.compose.runtime.DisposableEffect(Unit) {
+          com.fariin.app.ui.components.SheetKeyboard.covering = true
+          onDispose { com.fariin.app.ui.components.SheetKeyboard.covering = false }
+      }
+      val imeDp = with(density) { WindowInsets.ime.getBottom(this).toDp() }
+      val navDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
+      val tall = (sheetH - (imeDp - navDp).coerceAtLeast(0.dp)).coerceAtLeast(200.dp)
+      Column(Modifier.fillMaxWidth().height(tall).then(if (imeDp > navDp) Modifier else Modifier.navigationBarsPadding())) {
         RepliesSheetTop(tab, repliesShown, replies, showQuotes = !quotesOff, onPick = {
             tab = it
             if (it == 1) {
