@@ -274,10 +274,13 @@ fun ChatListScreen(
     val officialAt = official.latest?.sortAt ?: 0.0
     val officialPinned = officialShown && !showArchive && official.state.pinned
     val officialIndex = if (officialShown && !officialPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < officialAt }.let { if (it < 0) rest.size else it } else rest.size
-    // Activity (owner 2026-11-09): a row only while something is unread, placed by its latest time.
+    // Activity (owner 2026-11-09): a row like any chat once the account has any activity, placed by
+    // its latest time; pinnable (kept on this phone). Not in the Archive or a filtered list.
     val activity by com.fariin.app.data.ActivityFeed.summary.collectAsState()
-    val activityShown = activity?.let { it.unread > 0 } == true
-    val activityIndex = if (activityShown) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
+    val activityPin by com.fariin.app.data.ActivityFeed.pinned.collectAsState()
+    val activityShown = !showArchive && filter == FILTER_ALL && activity?.let { it.at > 0 } == true
+    val activityPinned = activityShown && activityPin
+    val activityIndex = if (activityShown && !activityPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
     val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -650,6 +653,20 @@ fun ChatListScreen(
                             }
                         }
                     }
+                    val activityItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+                        item(key = "activity", contentType = "chat") {
+                            Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
+                                // Swipe RIGHT: Pin / Unpin, the chat rows' swipe look; no long-press menu.
+                                SwipeToActRow("activity", enabled = !selecting && !searching, label = if (activityPinned) "Unpin" else "Pin",
+                                    icon = if (activityPinned) R.drawable.ic_sf_pin else R.drawable.ic_sf_pin_fill, fill = c.blue, leading = true,
+                                    onAction = { com.fariin.app.data.ActivityFeed.setPinned(appCtx, !activityPinned) }) {
+                                    ActivityChatRow(activity!!, onOpen = {
+                                        if (!selecting) { if (searching) { searching = false; query = "" }; people.activity() }
+                                    })
+                                }
+                            }
+                        }
+                    }
                     // THE SEARCH PAGE (iOS ChatSearchPage, owner 2026-11-03: "supposed to be a separate
                     // page"): nothing of the chat list while it is up. Empty: Recent. Typed: Chats,
                     // Groups, Channels, then Global Search.
@@ -680,8 +697,11 @@ fun ChatListScreen(
                             val oneToOne = shown.filter { !it.isGroup && !it.isChannel }
                             val groupsHit = shown.filter { it.isGroup && !it.isChannel }
                             val channelsHit = shown.filter { it.isChannel }
-                            if (oneToOne.isNotEmpty() || officialShown) {
+                            // "Activity" is found like a chat title.
+                            val activityHit = activity?.let { it.at > 0 } == true && "Activity".contains(q, ignoreCase = true)
+                            if (oneToOne.isNotEmpty() || officialShown || activityHit) {
                                 item(key = "h-s-chats") { SectionHeader("Chats") }
+                                if (activityHit) activityItem()
                                 if (officialShown) officialItem()
                                 items(oneToOne, key = { it.id }, contentType = { "chat" }) { row(it) }
                             }
@@ -695,8 +715,9 @@ fun ChatListScreen(
                             }
                         }
                     }
-                    if (!searching && (pinned.isNotEmpty() || officialPinned)) {
+                    if (!searching && (pinned.isNotEmpty() || officialPinned || activityPinned)) {
                         item(key = "h-pinned") { SectionHeader("Pinned") }
+                        if (activityPinned) activityItem()
                         if (officialPinned) officialItem()
                         items(pinned, key = { it.id }, contentType = { "chat" }) {
                             Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
@@ -706,16 +727,9 @@ fun ChatListScreen(
                     // A chat that gets a new message glides to its new place instead of jumping.
                     if (!searching) {
                         // The chats with the Official row and the Activity row each at its own time.
-                        val activityItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
-                            if (!showArchive && filter == FILTER_ALL) item(key = "activity", contentType = "chat") {
-                                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
-                                    ActivityChatRow(activity!!, onOpen = { if (!selecting) people.activity() })
-                                }
-                            }
-                        }
                         val inserts = buildList {
                             if (officialShown && !officialPinned) add(officialIndex to officialItem)
-                            if (activityShown) add(activityIndex to activityItem)
+                            if (activityShown && !activityPinned) add(activityIndex to activityItem)
                         }.sortedBy { it.first }
                         var from = 0
                         for ((at, insert) in inserts) {
@@ -1440,17 +1454,17 @@ private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, onOpen: () -
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f).padding(top = 7.dp, bottom = 9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = c.label,
+                Text("Activity", style = MaterialTheme.typography.titleMedium, fontWeight = if (s.unread > 0) FontWeight.Bold else FontWeight.Medium, color = c.label,
                     maxLines = 1, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 Text(timeLabel(s.at, android.text.format.DateFormat.is24HourFormat(context)), style = MaterialTheme.typography.labelMedium,
-                    color = c.blue, maxLines = 1)
+                    color = if (s.unread > 0) c.blue else c.secondary, maxLines = 1)
             }
             Row(verticalAlignment = Alignment.Top) {
                 Text(com.fariin.app.data.ActivityRules.preview(s), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
                     maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape).background(c.blue)
+                if (s.unread > 0) Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape).background(c.blue)
                     .padding(horizontal = 6.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
                     Text(if (s.unread > 99) "99+" else "${s.unread}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                 }

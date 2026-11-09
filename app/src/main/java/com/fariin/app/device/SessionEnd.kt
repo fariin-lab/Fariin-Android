@@ -102,6 +102,7 @@ object SessionEnd {
     }
 
     private fun wipe(c: Context) {
+        com.fariin.app.data.ActivityFeed.clearPin(c)
         NotifStore.clearAccount(c)
         NotificationPoster.clearAll(c)
         com.fariin.app.system.FariinWidget.clear(c)

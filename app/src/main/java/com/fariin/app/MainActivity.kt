@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
         androidx.compose.runtime.DisposableEffect(me) {
             com.fariin.app.channel.ChannelFollows.start(me)
             com.fariin.app.data.ActivityFeed.start(me)
+            com.fariin.app.data.ActivityFeed.loadPin(applicationContext, me)
             onDispose { com.fariin.app.channel.ChannelFollows.stop(); com.fariin.app.data.ActivityFeed.stop() }
         }
         // Feature switches (config/features) and the glow relationship (iOS RootView).

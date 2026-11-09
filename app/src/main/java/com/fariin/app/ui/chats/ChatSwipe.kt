@@ -161,17 +161,20 @@ internal fun SwipeToActRow(
     @androidx.annotation.DrawableRes icon: Int,
     fill: Color,
     onAction: () -> Unit,
+    /** Swiped to the RIGHT instead (the Activity row's Pin, owner 2026-11-09); the row springs back. */
+    leading: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val dir = if (leading) 1f else -1f
     // The row follows the finger directly: one number, written in the drag callback and read only
     // while placing and drawing (owner 2026-11-06: "not smooth, it keeps jumping" — each move used to
     // launch its own coroutine, and those could land out of order).
     var x by remember(id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var widthPx by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
-    val armed by remember(id) { androidx.compose.runtime.derivedStateOf { -x > widthPx / 3f } }
+    val armed by remember(id) { androidx.compose.runtime.derivedStateOf { x * dir > widthPx / 3f } }
     // Whether the row is pulled at all. At rest (nearly always, and every row a scroll brings in)
     // the action capsule is not built: its words, mark and two springs cost each new row for nothing.
-    val pulled by remember(id) { androidx.compose.runtime.derivedStateOf { x < 0f } }
+    val pulled by remember(id) { androidx.compose.runtime.derivedStateOf { x * dir > 0f } }
     val scope = rememberCoroutineScope()
     var settleJob by remember(id) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     LaunchedEffect(enabled) { if (!enabled) { settleJob?.cancel(); x = 0f } }
@@ -195,7 +198,7 @@ internal fun SwipeToActRow(
     Box(Modifier.fillMaxWidth().onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }.clipToBounds()) {
         // The capsule: as wide as the uncovered space less the gap, laid out and drawn from x only.
         // 4 dp above and below (owner 2026-11-06: "ours looks thin"; fuller, still not the full row).
-        if (pulled) Box(Modifier.matchParentSize().padding(vertical = 4.dp, horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+        if (pulled) Box(Modifier.matchParentSize().padding(vertical = 4.dp, horizontal = 8.dp), contentAlignment = if (leading) Alignment.CenterStart else Alignment.CenterEnd) {
             val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
             LaunchedEffect(armed) { if (armed) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
             val tone by androidx.compose.animation.core.animateFloatAsState(if (armed) 1f else 0f,
@@ -205,13 +208,13 @@ internal fun SwipeToActRow(
             Box(
                 Modifier.fillMaxHeight()
                     .layout { m, k ->
-                        val w = (-x - gapPx * 2).coerceAtLeast(0f).roundToInt()
+                        val w = (x * dir - gapPx * 2).coerceAtLeast(0f).roundToInt()
                         val p = m.measure(k.copy(minWidth = w, maxWidth = w))
                         layout(w, p.height) { p.place(0, 0) }
                     }
                     .graphicsLayer {
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50); clip = true
-                        alpha = if (x < -gapPx * 2) 1f else 0f
+                        alpha = if (x * dir > gapPx * 2) 1f else 0f
                     }
                     .drawBehind {
                         drawRect(androidx.compose.ui.graphics.lerp(c.blue.copy(alpha = 0.16f), c.blue, tone))
@@ -221,7 +224,7 @@ internal fun SwipeToActRow(
                 Column(Modifier.graphicsLayer {
                     scaleX = pop; scaleY = pop
                     // The mark fades in once there is room for it.
-                    alpha = ((-x - with(density) { 56.dp.toPx() }) / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
+                    alpha = ((x * dir - with(density) { 56.dp.toPx() }) / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
                 }, horizontalAlignment = Alignment.CenterHorizontally) {
                     val ink = androidx.compose.ui.graphics.lerp(c.blue, Color.White, tone)
                     Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = null, tint = ink, modifier = Modifier.size(24.dp))
@@ -235,14 +238,14 @@ internal fun SwipeToActRow(
                 .offset { IntOffset(x.roundToInt(), 0) }
                 // The row as a card while it is pulled: corners round and it lifts with the drag.
                 .graphicsLayer {
-                    val t = (-x / (maxRadiusPx * 4f)).coerceIn(0f, 1f)
+                    val t = (x * dir / (maxRadiusPx * 4f)).coerceIn(0f, 1f)
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(maxRadiusPx * t)
-                    clip = x < 0f
+                    clip = x * dir > 0f
                     shadowElevation = liftPx * t
                 }
                 // Opaque while pulled, so only the part the finger uncovers shows the action. At rest
                 // the page under it is the same colour: no second fill of every row on every frame.
-                .drawBehind { if (x < 0f) drawRect(c.bg) }
+                .drawBehind { if (x * dir > 0f) drawRect(c.bg) }
                 .then(if (!enabled) Modifier else Modifier.pointerInput(id) {
                     // Never steals a scroll (owner 2026-11-06): the row only takes the finger once it has
                     // moved past the touch slop clearly to the LEFT, at least twice as far sideways as up
@@ -263,7 +266,8 @@ internal fun SwipeToActRow(
                                     val v = tracker.calculateVelocity().x
                                     // Gone: the row stays off-screen until the list drops it; if it is still here
                                     // a moment later (the change did not happen), it comes back.
-                                    if (armed || v < -2500f) settle(-widthPx, v) {
+                                    if (leading) { if (armed || v > 2500f) onAction(); settle(0f, v) }
+                                    else if (armed || v < -2500f) settle(-widthPx, v) {
                                         onAction()
                                         kotlinx.coroutines.delay(1500)
                                         androidx.compose.animation.core.animate(x, 0f, 0f,
@@ -277,12 +281,12 @@ internal fun SwipeToActRow(
                                 if (ch.isConsumed) break      // the list is already scrolling
                                 tx += d.x; ty += d.y
                                 if (kotlin.math.abs(tx) > slop || kotlin.math.abs(ty) > slop) {
-                                    if (tx < 0f && kotlin.math.abs(tx) > kotlin.math.abs(ty) * 2f) {
+                                    if (tx * dir > 0f && kotlin.math.abs(tx) > kotlin.math.abs(ty) * 2f) {
                                         dragging = true; settleJob?.cancel(); ch.consume()
                                     } else break
                                 }
                             } else {
-                                x = (x + d.x).coerceIn(-widthPx, 0f)
+                                x = if (leading) (x + d.x).coerceIn(0f, widthPx) else (x + d.x).coerceIn(-widthPx, 0f)
                                 ch.consume()
                             }
                         }

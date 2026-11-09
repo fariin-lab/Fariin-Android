@@ -177,6 +177,24 @@ object ActivityFeed {
 
     fun stopItems() { itemsReg?.remove(); itemsReg = null }
 
+    // PINNED (owner 2026-11-09): kept on this phone per account (the app cannot write activity docs).
+    private const val PIN_FILE = "fariin_activity"
+    private val _pinned = MutableStateFlow(false)
+    val pinned: StateFlow<Boolean> = _pinned
+    fun loadPin(c: android.content.Context, me: String) {
+        _pinned.value = me.isNotEmpty() && c.getSharedPreferences(PIN_FILE, 0).getBoolean("pinned.$me", false)
+    }
+    fun setPinned(c: android.content.Context, on: Boolean) {
+        if (owner.isEmpty()) return
+        c.getSharedPreferences(PIN_FILE, 0).edit().putBoolean("pinned.$owner", on).apply()
+        _pinned.value = on
+    }
+    /** Log Out: the pin goes with the account. */
+    fun clearPin(c: android.content.Context) {
+        c.getSharedPreferences(PIN_FILE, 0).edit().clear().apply()
+        _pinned.value = false
+    }
+
     /** Everything read (no ids), or just these. The row on the chat list leaves at once. */
     suspend fun markRead(ids: List<String>? = null): Boolean {
         if (ids == null) _summary.value = _summary.value?.copy(unread = 0)
