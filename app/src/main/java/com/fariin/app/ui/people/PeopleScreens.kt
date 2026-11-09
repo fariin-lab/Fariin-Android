@@ -458,7 +458,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         }
     }
     var soundsOpen by remember { mutableStateOf(false) }
-    if (soundsOpen) { ContactSoundsPage(muteUntil, onMute = { setMute(it) }, onBack = { soundsOpen = false }); return }
+    if (soundsOpen) { ContactSoundsPage(muteUntil, onMute = { setMute(it) }, cid = cid, onBack = { soundsOpen = false }); return }
     // iOS reachedMeWithMyKey: they opened this chat with my Chat Key (the server's acceptedVia "pin").
     val reachedWithMyKey = uid != me && live["acceptedVia"] == "pin" && live["acceptedBy"] == uid
     var timerOpen by remember { mutableStateOf(false) }

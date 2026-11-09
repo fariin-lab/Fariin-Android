@@ -681,7 +681,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         ContactSoundsPage(muteUntil, onMute = { until ->
             muteOverride = until
             scope.launch { if (!writeContactMute(cid, me, until)) muteOverride = null }
-        }, onBack = { soundsOpen = false })
+        }, cid = cid, onBack = { soundsOpen = false })
         return
     }
     val storageCtx = LocalContext.current.applicationContext

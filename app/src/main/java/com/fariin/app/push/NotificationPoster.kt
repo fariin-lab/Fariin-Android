@@ -94,7 +94,9 @@ object NotificationPoster {
         val pending = PendingIntent.getActivity(c, spec.key.hashCode(), tap,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        val b = NotificationCompat.Builder(c, spec.channel.id)
+        // A chat with its own message sound posts on that tone's channel (MessageTones).
+        val channelId = if (spec.channel == NotifChannel.MESSAGES && spec.opensChat) MessageTones.channelId(c, spec.key, spec.channel.id) else spec.channel.id
+        val b = NotificationCompat.Builder(c, channelId)
             .setSmallIcon(R.drawable.ic_stat_fariin)
             .setColor(Color.rgb(0x1E, 0x88, 0xE5))
             .setContentTitle(spec.title)
