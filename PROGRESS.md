@@ -1472,3 +1472,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   "turned on Restricted chat" line arrives, and the other side's screen is protected (screenshots
   come out black). Menu rows are hidden by code (!restricted on Forward/Copy/Save); the menu itself
   could not be captured (no screenshots there). Turned off again.
+- 2026-11-08 ~10:23 PM: Verify Encryption page as iOS (QR, 12 groups, Scan their code); Alice's and
+  Bobby's safety numbers are the same 60 digits on both phones.
