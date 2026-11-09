@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.res.vectorResource
@@ -35,7 +36,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -459,7 +459,7 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
                     }
                 }
             }
-            DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+            GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                 if (ch.muted) DropdownMenuItem(text = { Text("Unmute") }, onClick = { menu = false; ch.onMute(null) })
                 else {
                     for ((label, hours) in listOf("1 hour" to 1, "8 hours" to 8, "1 day" to 24, "1 week" to 168)) {

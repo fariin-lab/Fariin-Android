@@ -1,5 +1,6 @@
 package com.fariin.app.ui.glow
 
+import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -28,7 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -289,7 +289,7 @@ private fun PeriodHeader(report: InsightsReport, period: InsightsPeriod, onPick:
                     Spacer(Modifier.width(6.dp))
                     Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), null, tint = c.label, modifier = Modifier.size(16.dp))
                 }
-                DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
+                GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
                     for (p in InsightsPeriod.entries) DropdownMenuItem(text = { Text(p.title, color = c.label) },
                         trailingIcon = if (p == period) { { Text("✓", color = c.label) } } else null,
                         onClick = { open = false; onPick(p) })

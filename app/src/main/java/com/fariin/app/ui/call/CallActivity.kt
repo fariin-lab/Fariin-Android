@@ -210,7 +210,7 @@ class CallActivity : ComponentActivity() {
                     // (iOS GroupCallView noticeShown, decision D25); without one, the screen just goes.
                     val over = demoGroup == null && g.cid == null && !g.connecting && !inLobby
                     LaunchedEffect(over, g.notice) { if (over && g.notice == null) finish() }
-                    if (over && g.notice != null) androidx.compose.material3.AlertDialog(
+                    if (over && g.notice != null) com.fariin.app.ui.components.GlassAlert(
                         onDismissRequest = { GroupCall.clearNotice(); finish() },
                         title = { androidx.compose.material3.Text(g.notice!!) },
                         confirmButton = { androidx.compose.material3.TextButton({ GroupCall.clearNotice(); finish() }) {

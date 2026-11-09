@@ -183,7 +183,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     // Clear Messages (iOS, owner only): every post goes for everyone; the followers stay.
     var askClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
-    if (askClear) androidx.compose.material3.AlertDialog(onDismissRequest = { askClear = false },
+    if (askClear) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { askClear = false },
         title = { Text("Clear all messages?") },
         text = { Text("All posts in this channel will be deleted for everyone. Your followers stay. You can't undo this.") },
         confirmButton = { androidx.compose.material3.TextButton({
@@ -206,7 +206,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
         }) { Text("Clear", color = c.red) } },
         dismissButton = { androidx.compose.material3.TextButton({ askClear = false }) { Text("Cancel", color = c.accent) } },
         containerColor = c.card)
-    if (askDelete) androidx.compose.material3.AlertDialog(onDismissRequest = { askDelete = false },
+    if (askDelete) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { askDelete = false },
         title = { Text("Delete Channel?") },
         text = { Text("This deletes the channel and all its posts for every follower.") },
         confirmButton = { androidx.compose.material3.TextButton({
@@ -287,7 +287,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     }
 
     notice?.let { n ->
-        AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) }, containerColor = c.card,
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notice = null }, text = { Text(n) }, containerColor = c.card,
             confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } })
     }
     if (showQr) com.fariin.app.ui.settings.ChannelQrSheet(info.title.ifEmpty { "Channel" }, "https://fariin.com/" + info.username,
@@ -542,7 +542,7 @@ private fun ChannelMoreMenu(open: Boolean, onDismiss: () -> Unit, onWallpaper: (
     val c = Fariin.colors
     val ctx = LocalContext.current
     var saveOn by remember(saveCid, open) { mutableStateOf(com.fariin.app.media.AutoSaveMedia.savesMedia(ctx, saveCid)) }
-    androidx.compose.material3.DropdownMenu(open, onDismissRequest = onDismiss, shape = com.fariin.app.ui.components.FariinMenu.shape,
+    com.fariin.app.ui.components.GlassDropdown(open, onDismissRequest = onDismiss, shape = com.fariin.app.ui.components.FariinMenu.shape,
         border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
         if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
             leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },

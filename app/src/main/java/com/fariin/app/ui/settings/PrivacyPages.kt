@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -489,7 +489,7 @@ private fun ChatKeyPage(pop: () -> Unit) {
 @Composable
 internal fun YesNo(title: String, text: String, yes: String, destructive: Boolean = true, onYes: () -> Unit, onNo: () -> Unit) {
     val c = Fariin.colors
-    AlertDialog(
+    GlassAlert(
         onDismissRequest = onNo,
         title = { Text(title) }, text = { Text(text) },
         confirmButton = { TextButton(onClick = onYes) { Text(yes, color = if (destructive) c.red else c.accent) } },

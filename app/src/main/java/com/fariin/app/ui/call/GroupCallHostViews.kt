@@ -1,5 +1,6 @@
 package com.fariin.app.ui.call
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.res.vectorResource
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -23,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -86,7 +86,7 @@ fun HostDialogs(g: GroupCallUi, confirm: HostConfirm?, onDone: () -> Unit) {
         null -> {}
     }
     g.adminError?.let { text ->
-        AlertDialog(onDismissRequest = { GroupCall.clearAdminError() }, containerColor = DialogFill,
+        GlassAlert(onDismissRequest = { GroupCall.clearAdminError() }, containerColor = DialogFill,
             title = { Text(text, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
             confirmButton = { TextButton(onClick = { GroupCall.clearAdminError() }) { Text("OK", color = Color(0xFF0A84FF)) } })
     }
@@ -94,7 +94,7 @@ fun HostDialogs(g: GroupCallUi, confirm: HostConfirm?, onDone: () -> Unit) {
 
 @Composable
 private fun HostAlert(title: String, message: String, action: String, onDone: () -> Unit, run: () -> Unit) {
-    AlertDialog(onDismissRequest = onDone, containerColor = DialogFill,
+    GlassAlert(onDismissRequest = onDone, containerColor = DialogFill,
         title = { Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = { Text(message, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp) },
         confirmButton = { TextButton(onClick = { onDone(); run() }) { Text(action, color = Danger, fontWeight = FontWeight.SemiBold) } },

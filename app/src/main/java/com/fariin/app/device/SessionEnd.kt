@@ -1,7 +1,7 @@
 package com.fariin.app.device
 
+import com.fariin.app.ui.components.GlassAlert
 import android.content.Context
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -146,7 +146,7 @@ object SessionEnd {
 fun SignedOutNotice(reason: DeviceRecord.Reason, onDismiss: () -> Unit) {
     val lost = SessionEnd.unsentLine(SessionEnd.droppedByRevoke, afterRevoke = true)
     val done = { SessionEnd.droppedByRevoke = 0; onDismiss() }
-    AlertDialog(
+    GlassAlert(
         onDismissRequest = done,
         title = { Text(DeviceRecord.noticeTitle(reason)) },
         text = { Text(DeviceRecord.noticeMessage(reason) + (lost?.let { "\n\n$it" } ?: "")) },

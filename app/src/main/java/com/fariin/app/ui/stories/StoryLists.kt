@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -30,8 +32,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -480,7 +480,7 @@ fun CustomStoryDetailPage(id: String, people: List<StoryPerson>, onBack: () -> U
             }
         }
     }
-    if (confirmDelete) AlertDialog(
+    if (confirmDelete) GlassAlert(
         onDismissRequest = { confirmDelete = false },
         title = { Text("Delete \"${a.name}\"?") },
         text = { Text("The list goes. Stories you already sent to it are not affected and still expire on their own.") },
@@ -544,7 +544,7 @@ fun NewAudienceButton(canAddCustom: Boolean, onCustom: () -> Unit, onOneTime: ((
             Spacer(Modifier.width(4.dp))
             Text("New", color = c.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        GlassDropdown(expanded = open, onDismissRequest = { open = false }) {
             NewItem("New Custom Story", "Visible only to specific people.", painterResource(R.drawable.ic_story_folder), canAddCustom) { open = false; onCustom() }
             NewItem("Groups & Channels", "Post to a group or channel you run.", rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members)), onGroup != null) { open = false; onGroup?.invoke() }
             NewItem("One-Time Story", "Can only be viewed once by each recipient.", rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_flame)), onOneTime != null) { open = false; onOneTime?.invoke() }

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.glow
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -24,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -147,7 +147,7 @@ private fun PersonRow(p: GlowPerson, glowersSide: Boolean, glowing: Boolean, onO
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { open = true }, contentAlignment = Alignment.Center) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Remove this Glower", tint = c.secondary, modifier = Modifier.size(18.dp))
                 }
-                DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
+                GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
                     DropdownMenuItem(text = { Text("Remove this Glower", color = c.red) }, onClick = { open = false; onRemoveGlower() })
                 }
             }

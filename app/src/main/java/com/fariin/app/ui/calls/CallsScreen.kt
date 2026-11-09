@@ -1,5 +1,6 @@
 package com.fariin.app.ui.calls
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
@@ -25,7 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -236,16 +236,16 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     }
     if (askDelete) {
         val linkCount = picked.count { it.startsWith("link:") }
-        androidx.compose.material3.AlertDialog(onDismissRequest = { askDelete = false }, containerColor = c.card,
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { askDelete = false }, containerColor = c.card,
             title = { Text(com.fariin.app.data.HiddenCalls.deleteTitle(picked.size - linkCount, linkCount)) },
             confirmButton = { androidx.compose.material3.TextButton({ askDelete = false; deletePicked() }) { Text("Delete", color = c.red) } },
             dismissButton = { androidx.compose.material3.TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } })
     }
-    if (linkFailed) androidx.compose.material3.AlertDialog(onDismissRequest = { linkFailed = false }, containerColor = c.card,
+    if (linkFailed) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { linkFailed = false }, containerColor = c.card,
         text = { Text("Couldn't delete the call link. Check your connection and try again.") },
         confirmButton = { androidx.compose.material3.TextButton({ linkFailed = false }) { Text("OK", color = c.accent) } })
     pendingCall?.let { (call, video) ->
-        androidx.compose.material3.AlertDialog(onDismissRequest = { pendingCall = null }, containerColor = c.card,
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { pendingCall = null }, containerColor = c.card,
             title = { Text(if (video) "Video call" else "Voice call") },
             text = { Text("${if (video) "Video call" else "Call"} ${call.name}?") },
             confirmButton = { androidx.compose.material3.TextButton({ pendingCall = null; callBack(ctx, call, video) }) { Text("Call", color = c.accent) } },
@@ -452,7 +452,7 @@ private fun CreateLinkRow(onClick: () -> Unit) {
 private fun RowMenu(open: Boolean, onDismiss: () -> Unit, callUp: Boolean, chats: (() -> Unit)?,
                     onVideo: () -> Unit, onVoice: () -> Unit, onSelect: () -> Unit, onDelete: () -> Unit, videoFirst: Boolean = false) {
     val c = Fariin.colors
-    DropdownMenu(expanded = open, onDismissRequest = onDismiss, containerColor = c.card) {
+    GlassDropdown(expanded = open, onDismissRequest = onDismiss, containerColor = c.card) {
         val item: @Composable (String, androidx.compose.ui.graphics.painter.Painter, Color, Boolean, () -> Unit) -> Unit = { text, icon, ink, enabled, run ->
             DropdownMenuItem(text = { Text(text, color = if (enabled) ink else c.secondary) },
                 leadingIcon = { Icon(icon, null, tint = if (enabled) ink else c.secondary) },

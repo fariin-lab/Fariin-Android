@@ -1,5 +1,6 @@
 package com.fariin.app.ui.auth
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
 import android.app.Activity
@@ -28,7 +29,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -203,7 +203,7 @@ fun PasswordPage(auth: AuthRepository, onBack: () -> Unit, onForgot: (String) ->
             }
         }
     }
-    if (done) AlertDialog(onDismissRequest = { done = false; onBack() },
+    if (done) GlassAlert(onDismissRequest = { done = false; onBack() },
         title = { Text("Password saved") },
         text = { Text(if (isFirst) "You can now sign in with $address and this password." else "Your old password no longer works.") },
         confirmButton = { TextButton(onClick = { done = false; onBack() }) { Text("Done") } })
@@ -270,7 +270,7 @@ fun ResetCodePage(auth: AuthRepository, address: String, onBack: () -> Unit, onD
             ErrorLine(error)
         }
     }
-    if (saved) AlertDialog(onDismissRequest = onDone, title = { Text("Password saved") },
+    if (saved) GlassAlert(onDismissRequest = onDone, title = { Text("Password saved") },
         text = { Text("Your old password no longer works.") }, confirmButton = { TextButton(onClick = onDone) { Text("Done") } })
 }
 
@@ -337,7 +337,7 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
         }
     }
     toDelete?.let { r ->
-        AlertDialog(onDismissRequest = { toDelete = null }, title = { Text("Delete passkey?") },
+        GlassAlert(onDismissRequest = { toDelete = null }, title = { Text("Delete passkey?") },
             text = { Text("You will no longer be able to sign in to Fariin with this passkey.") },
             confirmButton = { TextButton(onClick = { toDelete = null; scope.launch { try { Passkeys.delete(r.id); load() } catch (e: Exception) { error = AuthRepository.codeMessageFor(e) } } }) { Text("Delete", color = c.red) } },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel") } })

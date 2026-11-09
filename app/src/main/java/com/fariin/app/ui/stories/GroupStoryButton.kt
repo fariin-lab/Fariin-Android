@@ -1,6 +1,6 @@
 package com.fariin.app.ui.stories
 
-import androidx.compose.material3.AlertDialog
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,7 +42,7 @@ fun GroupStoryButton(me: String, cid: String, onLeave: () -> Unit) {
     })
     if (tooSmall) {
         val ch = s.target.isChannel
-        AlertDialog(onDismissRequest = { tooSmall = false }, containerColor = c.card,
+        GlassAlert(onDismissRequest = { tooSmall = false }, containerColor = c.card,
             title = { Text(if (ch) "Channel stories aren't open yet" else "Group stories aren't open yet") },
             text = { Text(if (ch) "Stories open when this channel reaches ${s.need} followers. It has ${s.have} now."
                           else "Stories open when this group reaches ${s.need} members. It has ${s.have} now.") },

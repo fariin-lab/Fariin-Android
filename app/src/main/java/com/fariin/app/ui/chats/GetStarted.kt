@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.res.vectorResource
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -160,7 +160,7 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
                             Spacer(Modifier.height(6.dp))
                             Text(card.title, fontSize = 13.sp, color = c.label, maxLines = 1)
                         }
-                        DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
+                        GlassDropdown(menu, onDismissRequest = { menu = false }, containerColor = c.card) {
                             DropdownMenuItem(text = { Text("Hide", color = c.red) }, onClick = { menu = false; onRemove(card) })
                         }
                     }

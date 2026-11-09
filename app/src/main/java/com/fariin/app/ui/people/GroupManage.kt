@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -43,7 +44,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -290,7 +290,7 @@ private fun BusyMark() = com.fariin.app.ui.components.BarBusyPill()
 @Composable
 private fun Problem(text: String?, onDone: () -> Unit) {
     val c = Fariin.colors
-    if (text != null) AlertDialog(onDismissRequest = onDone, containerColor = c.card, title = { Text("Could not do that") },
+    if (text != null) GlassAlert(onDismissRequest = onDone, containerColor = c.card, title = { Text("Could not do that") },
         text = { Text(text) }, confirmButton = { TextButton(onDone) { Text("OK", color = c.accent) } })
 }
 
@@ -660,7 +660,7 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
             kind = if (one) com.fariin.app.ui.components.AvatarKind.PERSON else com.fariin.app.ui.components.AvatarKind.of(true, doc["channel"] == true))
     }
     removeError?.let { e ->
-        AlertDialog(onDismissRequest = { removeError = null }, containerColor = c.card, title = { Text("Could not remove") }, text = { Text(e) },
+        GlassAlert(onDismissRequest = { removeError = null }, containerColor = c.card, title = { Text("Could not remove") }, text = { Text(e) },
             confirmButton = { TextButton({ removeError = null }) { Text("OK", color = c.accent) } })
     }
     @Composable
@@ -697,7 +697,7 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
                 androidx.compose.material3.IconButton({ sortOpen = true }, modifier = com.fariin.app.ui.components.barGlass()) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_sf_line3_decrease), "Sort", tint = c.label)
                 }
-                androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+                com.fariin.app.ui.components.GlassDropdown(sortOpen, onDismissRequest = { sortOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     listOf("By Name" to false, "Admins First" to true).forEach { (label, v) ->
                         androidx.compose.material3.DropdownMenuItem(text = { Text(label, color = c.label) },
                             trailingIcon = { if (adminsFirst == v) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) },
@@ -989,7 +989,7 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
             if (done) { Snack.show("The $noun is now private"); onBack() }
             done
         }), onDismiss = { confirmPrivate = false }, kind = com.fariin.app.ui.components.AvatarKind.of(true, ch))
-    if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not save") },
+    if (problem != null) GlassAlert(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not save") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     val barScroll = rememberScrollState()
     BarPage("$Noun Type", onBack, action = {
@@ -1129,7 +1129,7 @@ private fun GroupLinksPage(cid: String, onBack: () -> Unit, onEdit: (GroupLink?)
             }
         }
     }
-    if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't change the link") },
+    if (problem != null) GlassAlert(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't change the link") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     // The confirms: the contact page's bottom sheet with the group's photo and name. Same work as
     // change(), awaited so the button spins; a short note once it worked, the old message if not.
@@ -1321,7 +1321,7 @@ private fun LinkEditPage(cid: String, link: GroupLink?, onDone: () -> Unit) {
     var saving by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     val isChannel = liveGroupDoc(cid)["channel"] == true
-    if (problem != null) AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't save the link") },
+    if (problem != null) GlassAlert(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Couldn't save the link") },
         text = { Text(problem ?: "") }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     val barScroll = rememberScrollState()
     BarPage(if (link == null) "New Link" else "Edit Link", onDone, action = {

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.call
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.Manifest
@@ -42,7 +43,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -442,7 +442,7 @@ fun CallLinkRequestStack(requests: List<LinkRequest>, modifier: Modifier = Modif
     if (showAll) CallLinkBulkRequestsSheet(requests) { showAll = false }
     details?.let { d ->
         // The details (iOS CallLinkRequestDetailsSheet), as a dialog with its buttons on the right.
-        AlertDialog(onDismissRequest = { details = null },
+        GlassAlert(onDismissRequest = { details = null },
             icon = { Avatar(d.photo, 72.dp) },
             title = { Text(d.name, textAlign = TextAlign.Center) },
             text = { Text("Would like to join", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
@@ -527,7 +527,7 @@ fun CallLinkBulkRequestsSheet(requests: List<LinkRequest>, onClose: () -> Unit) 
     }
     confirm?.let { (approve, uids) ->
         val n = uids.size
-        AlertDialog(onDismissRequest = { confirm = null },
+        GlassAlert(onDismissRequest = { confirm = null },
             title = { Text(if (approve) (if (n == 1) "Let 1 person in?" else "Let all $n people in?") else (if (n == 1) "Deny 1 request?" else "Deny all $n requests?")) },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
             confirmButton = {

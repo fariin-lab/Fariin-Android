@@ -1,8 +1,8 @@
 package com.fariin.app.ui.chats
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -49,7 +49,7 @@ object MuteFor {
 @Composable
 internal fun MuteForMenu(expanded: Boolean, onDismiss: () -> Unit, onPick: (label: String, until: Double) -> Unit) {
     val c = Fariin.colors
-    DropdownMenu(expanded, onDismissRequest = onDismiss, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
+    GlassDropdown(expanded, onDismissRequest = onDismiss, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
         Text(GroupInfoCircles.MUTE_HEADER, fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         MuteFor.CHOICES.forEach { (label, hours) ->
             DropdownMenuItem(text = { Text(label, color = c.label) }, onClick = { onDismiss(); onPick(label, MuteFor.until(hours)) })

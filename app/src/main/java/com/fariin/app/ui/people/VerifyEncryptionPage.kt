@@ -99,7 +99,7 @@ internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: Stri
             "mismatch" -> "Numbers don't match" to "The scanned code doesn't match your safety number. Your messages are still encrypted, but you couldn't confirm $peerName's device. Try scanning again, or compare the numbers by hand."
             else -> "Not a Fariin code" to "That QR code isn't a Fariin verification code. Ask $peerName to open Encryption on their side."
         }
-        AlertDialog(onDismissRequest = { outcome = null }, containerColor = c.card, title = { Text(title) }, text = { Text(text) },
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { outcome = null }, containerColor = c.card, title = { Text(title) }, text = { Text(text) },
             confirmButton = { TextButton({ outcome = null }) { Text(if (o == "match") "Done" else "OK", color = c.accent) } })
     }
 

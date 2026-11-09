@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.runtime.LaunchedEffect
@@ -25,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.fariin.app.ui.components.floating
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -336,7 +336,7 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
     }
     val c = Fariin.colors
     val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete)
-    AlertDialog(
+    GlassAlert(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         confirmButton = {

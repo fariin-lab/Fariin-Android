@@ -1,5 +1,6 @@
 package com.fariin.app.ui.glow
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
@@ -27,7 +28,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -146,7 +146,7 @@ fun GlowStoryCardView(card: GlowStoryCard, seen: Boolean, onOpen: () -> Unit, on
             }
         }
         // The hold: the same two actions wherever a glower's story is drawn.
-        DropdownMenu(menu, onDismissRequest = { menu = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
+        GlassDropdown(menu, onDismissRequest = { menu = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
             DropdownMenuItem(text = { Text("Send Message") }, onClick = { menu = false; onMessage() },
                 leadingIcon = { Icon(painterResource(R.drawable.ic_menu_chat), null, tint = c.label) })
             DropdownMenuItem(text = { Text("View Profile") }, onClick = { menu = false; onFace() },

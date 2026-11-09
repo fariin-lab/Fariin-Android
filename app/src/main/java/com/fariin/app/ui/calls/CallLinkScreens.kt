@@ -1,5 +1,6 @@
 package com.fariin.app.ui.calls
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import android.content.ClipData
@@ -28,7 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -258,7 +258,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
             catch (_: Exception) { editing = false; error = "Couldn't save the name" }
         }
     }
-    if (askDelete && saved != null) AlertDialog(
+    if (askDelete && saved != null) GlassAlert(
         onDismissRequest = { askDelete = false },
         title = { Text("Delete this call link?") },
         text = { Text(if (saved.admin) "No one will be able to join with it any more." else "It will be removed from your calls.") },
@@ -271,7 +271,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
         dismissButton = { TextButton({ askDelete = false }) { Text("Cancel", color = c.accent) } },
         containerColor = c.card,
     )
-    error?.let { e -> AlertDialog(onDismissRequest = { error = null }, title = { Text(e) }, text = { Text(NET_ERROR) },
+    error?.let { e -> GlassAlert(onDismissRequest = { error = null }, title = { Text(e) }, text = { Text(NET_ERROR) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
 }
 
@@ -312,7 +312,7 @@ private fun SwitchRow(title: String, sub: String, on: Boolean?, onChange: (Boole
 private fun NameDialog(initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     val c = Fariin.colors
     var text by remember { mutableStateOf(initial) }
-    AlertDialog(
+    GlassAlert(
         onDismissRequest = onDismiss,
         title = { Text("Call Name") },
         text = {

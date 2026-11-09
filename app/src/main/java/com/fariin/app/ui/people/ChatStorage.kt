@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -30,7 +31,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -199,7 +199,7 @@ internal fun ChatStoragePage(cid: String, me: String, title: String, pop: () -> 
                                 Spacer(Modifier.width(5.dp))
                                 Text(sort.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.label)
                             }
-                            DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, containerColor = c.card) {
+                            GlassDropdown(sortOpen, onDismissRequest = { sortOpen = false }, containerColor = c.card) {
                                 ChatStorageRules.Sort.entries.forEach { s ->
                                     DropdownMenuItem(text = { Text(s.label, color = c.label) }, onClick = { sort = s; sortOpen = false },
                                         trailingIcon = if (s == sort) ({ Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) }) else null)

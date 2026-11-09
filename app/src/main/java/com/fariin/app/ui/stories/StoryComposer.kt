@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -37,7 +39,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -70,7 +71,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -875,7 +875,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                             Text("$hours", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-                    DropdownMenu(hoursMenu, onDismissRequest = { hoursMenu = false }) {
+                    GlassDropdown(hoursMenu, onDismissRequest = { hoursMenu = false }) {
                         Text("Choose how long the story will be visible.", fontSize = 13.sp, color = Fariin.colors.secondary,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).width(220.dp))
                         StoryRules.HOURS.forEach { h ->
@@ -996,17 +996,17 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
         flight?.let { (pic, from, radius) -> PostFlightLayer(pic, from, radius, onDone = onPosted) }
     }
     val red = Color(0xFFE5484D)
-    if (askClearAll) AlertDialog(
+    if (askClearAll) GlassAlert(
         onDismissRequest = { askClearAll = false }, title = { Text("Clear all drawing?") },
         confirmButton = { TextButton({ edits.strokes.clear(); askClearAll = false }) { Text("Clear All", color = red) } },
         dismissButton = { TextButton({ askClearAll = false }) { Text("Cancel") } },
     )
-    if (askDiscardPen) AlertDialog(
+    if (askDiscardPen) GlassAlert(
         onDismissRequest = { askDiscardPen = false }, title = { Text("Discard your drawing?") },
         confirmButton = { TextButton({ askDiscardPen = false; closePen(true) }) { Text("Discard", color = red) } },
         dismissButton = { TextButton({ askDiscardPen = false }) { Text("Keep Drawing") } },
     )
-    if (askDiscard) AlertDialog(
+    if (askDiscard) GlassAlert(
         onDismissRequest = { askDiscard = false }, title = { Text("Discard this story?") },
         confirmButton = { TextButton({ askDiscard = false; onClose() }) { Text("Discard", color = red) } },
         dismissButton = { TextButton({ askDiscard = false }) { Text("Cancel") } },
@@ -1030,7 +1030,7 @@ suspend fun prepareStoryMedia(context: android.content.Context, uri: Uri): Resul
 @Composable
 private fun ChipPrompt(title: String, hint: String, onDone: (String) -> Unit, onCancel: () -> Unit) {
     var text by remember { mutableStateOf("") }
-    androidx.compose.material3.AlertDialog(onDismissRequest = onCancel,
+    com.fariin.app.ui.components.GlassAlert(onDismissRequest = onCancel,
         title = { Text(title) },
         text = {
             androidx.compose.material3.OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text(hint) })

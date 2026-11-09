@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -83,7 +83,7 @@ internal fun EditPhotoSheet(
                     .clickable { askRemove = true }, contentAlignment = Alignment.Center) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus), "Remove photo", tint = c.label)
                 }
-                DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card,
                     offset = androidx.compose.ui.unit.DpOffset(40.dp, (-60).dp)) {
                     DropdownMenuItem(text = { Text("Camera", fontSize = 17.sp) },

@@ -437,7 +437,7 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
                     modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()
                         .background(c.secondary.copy(alpha = 0.15f))
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
-                androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                     val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(if (favourite) "Remove from Favourites" else "Add to Favourites") },

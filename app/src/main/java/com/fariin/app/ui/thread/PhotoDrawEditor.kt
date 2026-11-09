@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassAlert
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -32,7 +33,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -299,12 +299,12 @@ private fun EditorBody(
 
     val red = Color(0xFFE5484D)
     // The story pen's two questions, in its words.
-    if (askClearAll) AlertDialog(
+    if (askClearAll) GlassAlert(
         onDismissRequest = { askClearAll = false }, title = { Text("Clear all drawing?") },
         confirmButton = { TextButton({ edits.strokes.clear(); askClearAll = false }) { Text("Clear All", color = red) } },
         dismissButton = { TextButton({ askClearAll = false }) { Text("Cancel") } },
     )
-    if (askDiscard) AlertDialog(
+    if (askDiscard) GlassAlert(
         onDismissRequest = { askDiscard = false }, title = { Text("Discard your drawing?") },
         confirmButton = { TextButton({ askDiscard = false; leavePen() }) { Text("Discard", color = red) } },
         dismissButton = { TextButton({ askDiscard = false }) { Text("Keep Drawing") } },

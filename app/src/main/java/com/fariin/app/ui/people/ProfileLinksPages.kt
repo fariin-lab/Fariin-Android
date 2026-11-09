@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
@@ -25,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -141,7 +141,7 @@ private fun ProfileLinkEditPage(existing: ProfileLink?, onSave: (ProfileLink) ->
             }
         }
     }
-    if (confirm && onDelete != null) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Delete this link?") },
+    if (confirm && onDelete != null) GlassAlert(onDismissRequest = { confirm = false }, title = { Text("Delete this link?") },
         confirmButton = { TextButton({ confirm = false; onDelete() }) { Text("Delete Link", color = c.red) } },
         dismissButton = { TextButton({ confirm = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
 }

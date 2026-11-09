@@ -254,7 +254,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                 }
                 // Anchored at the right under the value (a modifier on the menu itself does not move it).
                 Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp)) {
-                androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card) {
+                com.fariin.app.ui.components.GlassDropdown(menu, onDismissRequest = { menu = false }, containerColor = Fariin.colors.card) {
                     for (d in SettingsRules.autoSignOut) androidx.compose.material3.DropdownMenuItem(
                         text = { Text(SettingsRules.autoSignOutLabel(d), color = Fariin.colors.label) },
                         trailingIcon = { if (auto == d) androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = Fariin.colors.accent) },

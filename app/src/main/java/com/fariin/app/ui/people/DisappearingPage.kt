@@ -101,7 +101,7 @@ private fun CustomTimeDialog(seconds: Int, onDismiss: () -> Unit, onSet: (Int) -
     val seed = remember { Disappearing.customSeed(seconds) }
     var unit by remember { mutableStateOf(seed.first) }
     var value by remember { mutableStateOf(seed.second) }
-    AlertDialog(onDismissRequest = onDismiss, containerColor = c.card, title = { Text("Custom Time") },
+    com.fariin.app.ui.components.GlassAlert(onDismissRequest = onDismiss, containerColor = c.card, title = { Text("Custom Time") },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -157,7 +157,7 @@ internal fun NewGroupTimerSection(seconds: Int, onChange: (Int) -> Unit) {
             }
             // Anchored at the right under the value (a modifier on the menu itself does not move it).
             Box(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp)) {
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+            com.fariin.app.ui.components.GlassDropdown(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                 val choices = Disappearing.newGroupChoices.toMutableList()
                 // The Settings default, when it is none of these.
                 if (choices.none { it.second == seconds }) choices.add(Disappearing.newGroupLabel(seconds) to seconds)
@@ -183,9 +183,9 @@ internal fun DisappearingEditor(api: PeopleApi, cid: String, isGroup: Boolean, c
     var pending by remember { mutableStateOf<Int?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     fun write(s: Int) = scope.launch { if (!api.setDisappear(cid, s)) error = Disappearing.NOT_CHANGED }
-    error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) }, containerColor = c.card,
+    error?.let { e -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { error = null }, text = { Text(e) }, containerColor = c.card,
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }) }
-    pending?.let { s -> AlertDialog(onDismissRequest = { pending = null }, containerColor = c.card,
+    pending?.let { s -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { pending = null }, containerColor = c.card,
         title = { Text(Disappearing.CONFIRM_TITLE) }, text = { Text(Disappearing.confirmText(s)) },
         confirmButton = { TextButton({ pending = null; write(s) }) { Text("Turn On", color = c.accent) } },
         dismissButton = { TextButton({ pending = null }) { Text("Cancel", color = c.accent) } }) }
