@@ -1366,3 +1366,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~8:03 PM: two-person messaging on the emulators: typing..., send, read ticks, heart
   reaction both sides, reply with quote both sides. Fixed: Reply and Edit now open the keyboard
   (iOS beginReply / Edit set inputFocused); before, the reply bar came up with no keyboard.
+- 2026-11-08 ~8:08 PM: edit (prefill, "edited" on the other side) and delete for everyone (alert,
+  placeholders both sides) tested on the emulators. Fixed as iOS: the send button is a tick while
+  editing; a reply's quote reads "This message was deleted" once its original is deleted (and
+  "Photo" for a view-once original) instead of the stale copied words.

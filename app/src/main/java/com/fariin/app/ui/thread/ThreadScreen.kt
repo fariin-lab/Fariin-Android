@@ -2048,7 +2048,14 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
         Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text(name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (isMe) Color.White else bar, maxLines = 1)
             // A story reply quotes the story itself (iOS status quote): "Story" and its picture.
-            Text(if (r.isStatus) "Story" else com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text, fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.85f) else c.label,
+            // iOS replyLabel: the quote is a copy baked into the reply, so once the original is seen
+            // deleted its words are not shown any more; a view-once original is named, not quoted.
+            Text(when {
+                r.isStatus -> "Story"
+                original?.deleted == true -> "This message was deleted"
+                original?.viewOnce == true -> "Photo"
+                else -> com.fariin.app.data.CardRules.previewWord(r.text) ?: r.text
+            }, fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.85f) else c.label,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (r.isStatus && !r.storyThumb.isNullOrEmpty()) {
@@ -2506,7 +2513,9 @@ private fun Composer(
                     },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+                    // iOS: a tick while editing (the change is saved, not sent), the arrow otherwise.
+                    Icon(ImageVector.vectorResource(if (prefill != null) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_arrow_up),
+                        contentDescription = if (prefill != null) "Save" else "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             } else Box(Modifier.size(COMPOSER_BUTTON)) {
                 // The lock target floats over the mic while the hold runs and comes down to meet
