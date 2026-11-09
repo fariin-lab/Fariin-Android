@@ -1423,3 +1423,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   (and our glass menu) read the words, then the icon at the end. Switched leadingIcon -> trailingIcon
   inside DropdownMenuItem only (script with a bracket-depth check). The audio-route picker keeps its
   route icon first, as iOS's own route list, with the tick at the end. Checked on the Calls row menu.
+- 2026-11-08 ~9:37 PM: dark mode walk on the emulator (chat list, 1:1 chat, contact page, Settings,
+  Calls, Stories, group chat, attach sheet): no contrast or colour gaps found.
