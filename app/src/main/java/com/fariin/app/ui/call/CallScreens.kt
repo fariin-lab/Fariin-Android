@@ -979,23 +979,6 @@ private fun GroupPipFaces(g: GroupCallUi) {
     }
 }
 
-/** iOS GroupCallMoreMenu's social part: the reaction row and Raise Hand / Lower Hand. */
-@Composable
-private fun GroupMoreSocial(g: GroupCallUi, onReact: (String) -> Unit, onHand: (Boolean) -> Unit) {
-    Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-        com.fariin.app.call.GroupCall.QUICK_EMOJIS.forEach { e ->
-            Box(Modifier.size(44.dp).clip(CircleShape).clickable { onReact(e) }, contentAlignment = Alignment.Center) {
-                Text(e, fontSize = 24.sp)
-            }
-        }
-    }
-    androidx.compose.material3.DropdownMenuItem(
-        text = { Text(if (g.myHand) "Lower Hand" else "Raise Hand", color = Color.White) },
-        leadingIcon = { Icon(painterResource(if (g.myHand) R.drawable.ic_sf_hand_raised_fill else R.drawable.ic_sf_hand_raised), null,
-            tint = Color.White, modifier = Modifier.size(22.dp)) },
-        onClick = { onHand(!g.myHand) })
-}
-
 /** Raised hands in the call, read by every tile layout (iOS tile.isHandRaised). */
 internal val LocalRaisedHands = androidx.compose.runtime.compositionLocalOf { emptySet<String>() }
 
@@ -1102,17 +1085,6 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                 // Flip Camera are in More; More is lit white while I share.
                 Box {
                     Circle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_more_ios), g.sharing, "More", 56.dp) { chrome.touch(); more = true }
-                    androidx.compose.material3.DropdownMenu(more, onDismissRequest = { more = false }, containerColor = Color(0xFF2C2C2E)) {
-                        if (shareOn || (g.joined && presenter == null)) androidx.compose.material3.DropdownMenuItem(
-                            text = { Text(if (shareOn) "Stop Sharing" else "Share Screen", color = Color.White) },
-                            leadingIcon = { Icon(painterResource(R.drawable.ic_share_screen), null, tint = Color.White, modifier = Modifier.size(22.dp)) },
-                            onClick = { more = false; chrome.touch(); onShare() })
-                        if (g.cameraOn) androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Flip Camera", color = Color.White) },
-                            leadingIcon = { Icon(painterResource(R.drawable.ic_flip_camera), null, tint = Color.White, modifier = Modifier.size(22.dp)) },
-                            onClick = { more = false; onFlip() })
-                        if (g.joined) GroupMoreSocial(g, onReact = { more = false; onReact(it) }, onHand = { more = false; onHand(it) })
-                    }
                 }
                 // A voice-only call: the camera dimmed and still (iOS cameraLocked).
                 Box(Modifier.alpha(if (g.cameraLocked) 0.35f else 1f)) {
@@ -1164,6 +1136,40 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.clip(CircleShape).background(Color(0xFF1C1C1E).copy(alpha = 0.75f)).padding(horizontal = 16.dp, vertical = 8.dp))
                     }
+                }
+            }
+        }
+        // iOS GroupCallMoreMenu: the reaction row in its own capsule, then one card: Raise / Lower Hand,
+        // Share Screen (or Stop Sharing), Flip Camera, each the words then its icon at the end.
+        if (more && !pip) {
+            Box(Modifier.fillMaxSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null) { more = false })
+            val shareOn = g.sharing || g.sharePending
+            Column(Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 16.dp, bottom = 10.dp + BarHeight + 12.dp)
+                .width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (g.joined) Row(Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(Color(0xFF2C2C2E).copy(alpha = 0.92f))
+                    .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    com.fariin.app.call.GroupCall.QUICK_EMOJIS.forEach { e ->
+                        Box(Modifier.weight(1f).height(44.dp).clickable { more = false; onReact(e) }
+                            .semantics { contentDescription = "React with $e" }, contentAlignment = Alignment.Center) { Text(e, fontSize = 28.sp) }
+                    }
+                }
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF2C2C2E).copy(alpha = 0.92f))) {
+                    @Composable
+                    fun row(title: String, icon: Int, first: Boolean, action: () -> Unit) {
+                        if (!first) Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(0.5.dp).background(Color.White.copy(alpha = 0.14f)))
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { more = false; action() }.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(title, color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                            Icon(painterResource(icon), null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    if (g.joined) row(if (g.myHand) "Lower Hand" else "Raise Hand",
+                        if (g.myHand) R.drawable.ic_sf_hand_raised_fill else R.drawable.ic_sf_hand_raised, true) { onHand(!g.myHand) }
+                    if (shareOn || (g.joined && presenter == null && !g.cameraLocked)) row(
+                        if (g.sharing) "Stop Sharing" else if (g.sharePending) "Cancel Sharing" else "Share Screen",
+                        R.drawable.ic_share_screen, !g.joined) { chrome.touch(); onShare() }
+                    if (g.cameraOn) row("Flip Camera", R.drawable.ic_flip_camera, false) { onFlip() }
                 }
             }
         }
@@ -1259,6 +1265,10 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
         val h = maxHeight.value
         val big = remotes.firstOrNull { it.id == focus }
         when {
+            // Alone and sharing: the same sharing card with Stop Sharing (iOS GroupCallStagePager iAmSharing).
+            remotes.isEmpty() && iAmSharing -> SharingCard(onStopShare, onLargeTap, Modifier.fillMaxSize()
+                .padding(start = com.fariin.app.call.GroupCallMetrics.INSET.dp, end = com.fariin.app.call.GroupCallMetrics.INSET.dp,
+                    top = com.fariin.app.call.GroupCallMetrics.INSET.dp, bottom = com.fariin.app.call.GroupCallMetrics.INSET.dp))
             remotes.isEmpty() -> if (me != null) MemberTile(me, true, false, Modifier.fillMaxSize(), alone = true, iAmSharing = iAmSharing) {}
             // iOS GroupCallDuoShareView: two people and a shared screen (either side's): the screen, or
             // my sharing card, in one big rounded card; the two people side by side under it.
@@ -1607,7 +1617,7 @@ private fun MemberTile(
                     textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 10.dp))
             }
             // iOS tile hand mark: the white circle at the top start (the large tile has its own chip).
-            if (m.id in LocalRaisedHands.current && !large && !(pip && w < 60)) RaisedHandChip(null, Modifier.align(Alignment.TopStart).padding(inset))
+            if (!isMe && m.id in LocalRaisedHands.current && !large && !(pip && w < 60)) RaisedHandChip(null, Modifier.align(Alignment.TopStart).padding(inset))
             if (m.poor && !(pip && w < 60)) {
                 Box(Modifier.align(if (large) Alignment.TopEnd else Alignment.TopStart).padding(inset).size(22.dp).clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
