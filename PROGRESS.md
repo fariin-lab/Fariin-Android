@@ -75,6 +75,7 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 - 2026-11-09 01:40 CI green on cf8bf0a6; main fast-forwarded 8ae7f07b..cf8bf0a6 (everything from this session up to the New Group strip).
 - 2026-11-09 01:45 dark-mode check of the glass sweep: GlassAlert (Block) good; GlassMenu let the page rows show through SHARP (surface at 96% was not enough there), now a solid surface in both modes. Rim and shape unchanged.
 - 2026-11-09 01:53 Swipe Actions for ALL users (owner: "all users Android and iOS"; iOS gate removed too, abdik-f8). Settings > Chats switch (off by default) + Slide Up For (Forward) / Slide Down For (Copy): Copy, Forward, Share, Quote, None. Swipe left past the reply point: 44x132 glass capsule, finger height picks (dead 12 / step 44 / hysteresis 6), tick per change, dimmed slots skipped, back under the point cancels. No capsule on photos/videos/albums. Tested on emulator-5556: capsule, slide to Forward, cancel.
+- 2026-11-09 01:58 e021daa5 New Channel intro drawing (owner art via abdik-f8), light+dark checked on emulator-5556; this build (all of today incl. Swipe Actions, Message Sound, voice drafts, glass) INSTALLED ON THE PIXEL (real backend) for the owner to test.
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes
