@@ -135,8 +135,9 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
             shadow = null, highlight = null,
             // Thick frost (owner: rows under it showed through, "On >" read in the menu).
             // Near solid, as the long-press menu (owner 2026-11-08: "too soft, you can see the background").
-            onDrawSurface = { drawRect((if (c.dark) c.card else Color.White).copy(alpha = if (c.dark) 0.96f else 0.97f)) },
-        ) else Modifier.background((if (c.dark) c.card else Color(0xFFF7F7F9)).copy(alpha = 0.97f), shape)
+            // Solid (dark check 2026-11-09: the rows showed through, sharp).
+            onDrawSurface = { drawRect(if (c.dark) c.card else Color.White) },
+        ) else Modifier.background((if (c.dark) c.card else Color(0xFFF7F7F9)), shape)
         Column(
             Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }
                 .width(260.dp)
