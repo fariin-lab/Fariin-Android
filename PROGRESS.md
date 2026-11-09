@@ -61,6 +61,7 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 - 2026-11-08 23:55 fff13aab/ee451ece/3af4e0e0: Followers page iOS icons + skeleton row; channel bottom gap 30dp; CodeBoxes = one-time-code field (keyboard offers the emailed code; check on the Pixel); channel Sounds & Notifications opens a Mute page (Message Sound per chat does NOT exist on Android yet: open item).
 - 2026-11-09 00:05 5c59c5b0..2e06d854: channel Mute circle = glass times menu with caption; pinned bar iOS size (48dp); glass agent merged (GlassAlert/GlassDropdown, 152 sites, 65f54c14); Block = centred glass alert (Block / Block and Report / Cancel); Leave Group = centred glass alert. Calls (i) already opens the profile on current builds.
 - 2026-11-09 00:12 59f9be6a: story camera slides up/down as one sheet (no window fade, no black strip), shutter 74/62. Lesson: the glass agent and I both drove emulator-5554; give agents their own emulator.
+- 2026-11-09 00:17 long-press message menu: press and slide without lifting, a grey pill follows the finger row to row with a tick (SEGMENT_FREQUENT_TICK / CLOCK_TICK), lift picks, lift outside picks nothing; a card that scrolls keeps plain taps. Tested on emulator-5556 (slide to Select, lift outside, plain tap Reply once).
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes

@@ -11,6 +11,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -416,29 +418,89 @@ internal object Frames {
     }
 }
 
-/** iOS CMActionsCard: 250 wide, 45 rows, 10 above and below, icon 24 at 24 in, 12 to the words. */
+/**
+ * iOS CMActionsCard: 250 wide, 45 rows, 10 above and below, icon 24 at 24 in, 12 to the words.
+ * Press and slide without lifting (owner 2026-11-08, as iOS): a grey pill follows the finger from
+ * row to row with a light tick on each new row, and lifting on a row picks it. A card long enough
+ * to scroll keeps plain taps, so it can still scroll.
+ */
 @Composable
 private fun ActionsCard(rows: List<MenuRow>, onPick: (MenuRow) -> Unit) {
     val c = Fariin.colors
     val shape = RoundedCornerShape(33.dp)
-    Column(Modifier.fillMaxSize().floating(shape).verticalScroll(rememberScrollState()).padding(vertical = 10.dp)) {
-        for (r in rows) {
-            val src = remember { MutableInteractionSource() }
-            val pressed by src.collectIsPressedAsState()
-            val tint = if (r.destructive) c.red else c.label
-            Box(Modifier.fillMaxWidth().height(45.dp)
-                .clickable(interactionSource = src, indication = null) { onPick(r) }) {
-                if (pressed) Box(Modifier.matchParentSize().padding(horizontal = 10.dp, vertical = 1.dp)
-                    .clip(RoundedCornerShape(22.dp)).background(c.label.copy(alpha = 0.08f)))
-                Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(r.icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column(if (r.isNew) Modifier.weight(1f, fill = false) else Modifier) {
-                        Text(r.title, color = tint, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        // Whole-width digits, so the line does not shiver as the seconds change.
-                        r.countdown?.let { Text(it, color = tint, fontSize = 13.sp, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum")) }
+    val scroll = rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    val rowPx = with(density) { 45.dp.toPx() }
+    val padPx = with(density) { 10.dp.toPx() }
+    var pressed by remember { androidx.compose.runtime.mutableIntStateOf(-1) }
+    val pill = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val latestRows by androidx.compose.runtime.rememberUpdatedState(rows)
+    fun tick() {
+        view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 34) android.view.HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
+            else android.view.HapticFeedbackConstants.CLOCK_TICK)
+    }
+    val slide = Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            if (scroll.maxValue > 0) return@awaitEachGesture   // a scrolling card: the rows' own taps
+            fun rowAt(y: Float): Int {
+                val i = ((y - padPx) / rowPx).toInt()
+                return if (y < padPx || i !in latestRows.indices) -1 else i
+            }
+            down.consume()
+            pressed = rowAt(down.position.y)
+            if (pressed >= 0) scope.launch { pill.snapTo(pressed.toFloat()) }
+            var last = down.position
+            while (true) {
+                // Before the rows see it (Initial), so a plain tap is picked once, here.
+                val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                last = ch.position
+                ch.consume()
+                if (!ch.pressed) break
+                val inside = last.x >= 0 && last.x <= size.width
+                val r = if (inside) rowAt(last.y) else -1
+                if (r != pressed) {
+                    if (r >= 0) {
+                        tick()
+                        if (pressed < 0) scope.launch { pill.snapTo(r.toFloat()) }
+                        else scope.launch { pill.animateTo(r.toFloat(), androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 900f)) }
                     }
-                    if (r.isNew) com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp))
+                    pressed = r
+                }
+            }
+            val pick = pressed
+            pressed = -1
+            if (pick in latestRows.indices) onPick(latestRows[pick])
+        }
+    }
+    Box(Modifier.fillMaxSize().floating(shape)) {
+        // The grey pill under the finger, gliding between rows.
+        if (pressed >= 0) Box(Modifier.fillMaxWidth().height(45.dp)
+            .graphicsLayer { translationY = padPx + pill.value * rowPx - scroll.value }
+            .padding(horizontal = 10.dp, vertical = 1.dp)
+            .clip(RoundedCornerShape(22.dp)).background(c.label.copy(alpha = 0.08f)))
+        Column(Modifier.fillMaxSize().then(slide).verticalScroll(scroll).padding(vertical = 10.dp)) {
+            for (r in rows) {
+                val src = remember { MutableInteractionSource() }
+                val tapped by src.collectIsPressedAsState()
+                val tint = if (r.destructive) c.red else c.label
+                Box(Modifier.fillMaxWidth().height(45.dp)
+                    .clickable(interactionSource = src, indication = null) { onPick(r) }) {
+                    if (tapped) Box(Modifier.matchParentSize().padding(horizontal = 10.dp, vertical = 1.dp)
+                        .clip(RoundedCornerShape(22.dp)).background(c.label.copy(alpha = 0.08f)))
+                    Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(r.icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(if (r.isNew) Modifier.weight(1f, fill = false) else Modifier) {
+                            Text(r.title, color = tint, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            // Whole-width digits, so the line does not shiver as the seconds change.
+                            r.countdown?.let { Text(it, color = tint, fontSize = 13.sp, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum")) }
+                        }
+                        if (r.isNew) com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp))
+                    }
                 }
             }
         }
