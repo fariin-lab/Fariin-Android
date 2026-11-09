@@ -1437,3 +1437,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   the call) and the green iOS-shaped approval switch (the switch shape is the owner's own choice).
 - 2026-11-08 ~9:48 PM: select mode (menu Select, tap a second message, "2 Selected", Delete /
   Forward / Copy bar) and bulk "Delete 2 messages?" for everyone: placeholders on both sides.
+- 2026-11-08 ~9:50 PM: group Message Info ("Read by 1", Bobby; same rows as iOS MessageInfoView) and
+  Bubble Style from the message menu (preview, colour, Save, this chat only) checked.
