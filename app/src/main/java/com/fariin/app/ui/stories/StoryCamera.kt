@@ -162,14 +162,18 @@ fun StoryCameraDialog(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val hidden = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp + 80).dp.toPx() }
     val y = remember { androidx.compose.animation.core.Animatable(hidden) }
+    val fade = remember { androidx.compose.animation.core.Animatable(1f) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var closing by remember { mutableStateOf(false) }
     val latestClose by androidx.compose.runtime.rememberUpdatedState(onClose)
     fun close() {
         if (closing) return
         closing = true
+        // Closing is a quick fade, not a slide back down (owner 2026-11-09, after the reference
+        // app on his Pixel: its camera page fades away in under a tenth of a second, "you don't
+        // feel anything"). Opening keeps the rise.
         scope.launch {
-            y.animateTo(hidden, androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+            fade.animateTo(0f, androidx.compose.animation.core.tween(110, easing = androidx.compose.animation.core.LinearEasing))
             latestClose()
         }
     }
@@ -193,7 +197,7 @@ fun StoryCameraDialog(
     val page: @Composable () -> Unit = remember {
         {
             androidx.activity.compose.BackHandler { close() }
-            Box(Modifier.fillMaxSize().graphicsLayer { translationY = y.value }.background(Color.Black)
+            Box(Modifier.fillMaxSize().graphicsLayer { translationY = y.value; alpha = fade.value }.background(Color.Black)
                 .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {   // nothing reaches the page below
                 StoryCamera(latestActive, latestError, { latestCaptured(it) }, { latestLibrary() }, { close() }, { latestText(it) })
             }
