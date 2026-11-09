@@ -14,6 +14,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1095,7 +1096,12 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
         }
     // A jump to it or a push's comment lights the row for a moment.
     val lit by androidx.compose.animation.animateColorAsState(
-        if (s.flashId == r.id) c.accent.copy(alpha = 0.14f) else Color.Transparent,
+        when {
+            s.flashId == r.id -> c.accent.copy(alpha = 0.14f)
+            // The reply being answered stays lit while the field is open (iOS secondarySystemFill).
+            s.answering?.id == r.id -> c.label.copy(alpha = 0.06f)
+            else -> Color.Transparent
+        },
         androidx.compose.animation.core.tween(300), label = "replyFlash")
     Column(Modifier.fillMaxWidth().then(lineModifier).background(lit).padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(Modifier.padding(start = side + 24.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1313,17 +1319,33 @@ internal fun RepliesComposer(s: PostRepliesState) {
             }
             s.answering?.let { a ->
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Replying to ${a.name}", fontSize = 12.sp, color = c.secondary, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    IconButton({ s.answering = null }, Modifier.size(28.dp)) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Stop replying", tint = c.secondary, modifier = Modifier.size(14.dp))
-                    }
+                    // iOS: "Replying to yourself" on my own reply, then " · Cancel" as a word, no x
+                    // (owner's Pixel 2026-11-09: it said "Replying to Roodo" on his own reply).
+                    val cancelKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+                    val cancelFocus = androidx.compose.ui.platform.LocalFocusManager.current
+                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                        append("Replying to ")
+                        pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold))
+                        append(if (a.mine) "yourself" else a.name)
+                        pop()
+                    }, fontSize = 13.sp, color = c.label, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(" · ", fontSize = 13.sp, color = c.secondary)
+                    // Cancel clears the reply and closes the keyboard (iOS).
+                    Text("Cancel", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
+                        modifier = Modifier.clickable(onClickLabel = "Stop replying") {
+                            s.answering = null; cancelFocus.clearFocus(); cancelKeyboard?.hide()
+                        }.padding(vertical = 6.dp))
                 }
             }
             Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.fieldFill)
                 .padding(start = 18.dp, end = 5.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Replying to someone else: their name in blue before the cursor (drawn, never sent; iOS).
+                val token = s.answering?.takeIf { !it.mine }?.name
+                if (token != null) Text(token, fontSize = 16.sp, color = c.blue, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(end = 6.dp).widthIn(max = 160.dp))
                 Box(Modifier.weight(1f).padding(vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
-                    if (s.draft.isEmpty()) Text("Add a reply…", fontSize = 16.sp, color = c.tertiary)
+                    if (s.draft.isEmpty() && token == null) Text("Add a reply…", fontSize = 16.sp, color = c.tertiary)
                     BasicTextField(
                         value = s.draft,
                         onValueChange = { s.draft = it.take(PostReplyRules.MAX_LENGTH); s.problem = null },
