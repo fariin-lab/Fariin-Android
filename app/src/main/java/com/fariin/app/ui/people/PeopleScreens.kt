@@ -492,7 +492,27 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     // Block, Unblock, Delete Chat: one bottom sheet that fits its words, the person's photo
     // and name on top (owner 2026-11-07: not a centred dialog), one red action and Cancel; Block and
     // Report is gone from the block sheet, Report is its own row.
-    ask?.let { what ->
+    // Block: the centred glass alert with Block, Block and Report, Cancel (owner 2026-11-08, his iOS
+    // shot; this replaces the 2026-11-07 sheet for Block only). Report keeps its own big sheet.
+    if (ask == "block") {
+        val who = name.ifEmpty { "this person" }
+        fun block(then: () -> Unit = {}) = scope.launch {
+            if (api.setBlocked(uid, true)) { blocked = true; then() } else notice = "Check your connection and try again."
+        }
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { ask = null }, title = "Block $who?",
+            message = "Blocked users will not be able to call you or send you messages.",
+            actions = listOf(
+                com.fariin.app.ui.components.GlassAlertAction("Block", com.fariin.app.ui.components.GlassAlertStyle.Red) { block() },
+                com.fariin.app.ui.components.GlassAlertAction("Block and Report", com.fariin.app.ui.components.GlassAlertStyle.Red) {
+                    block {
+                        com.fariin.app.data.ReportFlow.ask(com.fariin.app.data.ReportTarget(com.fariin.app.data.ReportKind.ACCOUNT,
+                            name = name, personUid = uid, cid = cid, onSent = { }))
+                    }
+                },
+                com.fariin.app.ui.components.GlassAlertAction("Cancel") { },
+            ))
+    }
+    ask?.takeIf { it != "block" }?.let { what ->
         val who = name.ifEmpty { "this person" }
         val failed = "Check your connection and try again."
         val (title, body, actions) = when {
