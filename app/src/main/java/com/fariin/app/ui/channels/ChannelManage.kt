@@ -390,11 +390,11 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
         }, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
                 if (mayInvite) SettingsSection {
-                    SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_add_member)),
-                        titleColor = c.accent, trailing = Trailing.NONE,
+                    SettingsRow(if (adding) "Adding…" else "Add Followers", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person_plus)),
+                        trailing = Trailing.NONE,
                         accessory = if (adding) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) { if (!adding) picking = true }
-                    SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy)),
-                        titleColor = c.accent, trailing = Trailing.NONE, last = true) { shareLink() }
+                    SettingsRow("Invite via Link", icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link)),
+                        trailing = Trailing.NONE, last = true) { shareLink() }
                 }
                 SettingsSection(header = ChannelRules.followersLine(shown), footer = ChannelAdmins.FOLLOWERS_FOOTER) {
                     admins.forEach { uid ->
@@ -409,7 +409,13 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
                         if (f == rows.lastOrNull() && more) LaunchedEffect(f.uid) { load() }
                     }
                     when {
-                        loading -> com.fariin.app.ui.components.LoadingRow()
+                        // A grey row where the next follower will be, not a spinner (iOS skeleton, owner 2026-11-08).
+                        loading -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            com.fariin.app.ui.components.SkeletonCircle(40.dp)
+                            Spacer(Modifier.width(12.dp))
+                            com.fariin.app.ui.components.SkeletonBlock(170.dp, height = 14.dp, radius = 7.dp)
+                        }
                         failed -> Note(ChannelAdmins.FOLLOWERS_FAILED)
                         followerRows.isEmpty() && !more -> Note(ChannelAdmins.NO_FOLLOWERS)
                     }

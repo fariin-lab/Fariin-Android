@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Our own drawing in the iOS outline style, for the place iOS uses "person.badge.plus": an outline
+     person with a filled round plus badge at the lower right. Not Material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M6.1,7.6a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <path android:pathData="M3.4,19.4C3.4,15.9 6.1,13.5 9.5,13.5C10.6,13.5 11.6,13.7 12.5,14.2"
+        android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    <!-- The badge: a filled circle with the plus cut out of it. -->
+    <path android:fillType="evenOdd" android:fillColor="#FF000000"
+        android:pathData="M17.6,13.2a4.4,4.4 0 1,1 0,8.8a4.4,4.4 0 1,1 0,-8.8Z
+            M16.95,15.3h1.3v1.65h1.65v1.3h-1.65v1.65h-1.3v-1.65h-1.65v-1.3h1.65Z" />
+</vector>

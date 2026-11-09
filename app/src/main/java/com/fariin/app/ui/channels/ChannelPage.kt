@@ -413,7 +413,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp))
                 }
                 error?.let { Text(it, fontSize = 13.sp, color = c.red, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }
-                Spacer(Modifier.height(80.dp))
+                Spacer(Modifier.height(30.dp))   // as the group page; 80 left a big empty band (owner 2026-11-08)
             }
         }
         run {
