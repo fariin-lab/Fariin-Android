@@ -1392,3 +1392,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   plain hang-up, so the blocked person sees "call ended" and no block tell. Group calls untouched.
   In setBlocked, so every block door does it. Tested on the emulators (both sides ended). Spec sent
   to the iOS session (iOS has the same gap: block only gates new calls).
+- 2026-11-08 ~8:57 PM: voice notes between the emulators (hold to record, slide-to-cancel bar,
+  lock, send, play). Fixed as iOS VoiceMessageView: the speed pill shows always (was only while
+  this note was the player), and a note that played to the end reads its length again, not 0:00.

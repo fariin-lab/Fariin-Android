@@ -336,7 +336,7 @@ internal fun PlayBadge(side: Dp, modifier: Modifier = Modifier) {
 
 /**
  * A voice note, after iOS VoiceMessageView: a 44 disc, the waveform (20 high) with the speed pill
- * beside it while playing, the length (or the time played) under it, the time and ticks at the
+ * always beside it, the length (or the time played) under it, the time and ticks at the
  * bottom right. Tap the wave to jump there.
  */
 @Composable
@@ -399,21 +399,23 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                     Waveform(m.waveform, progress, tint, Modifier.weight(1f).height(20.dp)) { f ->
                         if (mine) VoicePlayer.seek(m.rowId, f)
                     }
-                    if (mine) {
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            Modifier.width(40.dp).height(22.dp).clip(RoundedCornerShape(50)).background(tint.copy(alpha = 0.2f))
-                                .clickable { VoicePlayer.cycleRate(cid) },
-                            contentAlignment = Alignment.Center,
-                        ) { Text(MediaRules.rateLabel(rate), fontSize = 12.sp, color = tint) }
-                    }
+                    // iOS speedPill: shown always, not only once playing (a pill that appears later
+                    // grows the bubble), and it sets the chat's speed before the first play too.
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier.width(40.dp).height(22.dp).clip(RoundedCornerShape(50)).background(tint.copy(alpha = 0.2f))
+                            .clickable { VoicePlayer.cycleRate(cid) },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(MediaRules.rateLabel(rate), fontSize = 12.sp, color = tint) }
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                    // iOS: the time played while playing or paused part-way, else the note's length
+                    // (a note that played to the end reads its length again, not 0:00).
                     val label = when {
                         failed -> "Can't play"
-                        mine || pos > 0 -> MediaRules.durationLabel(pos / 1000.0)
-                        else -> MediaRules.durationLabel(total)
+                        playing || (progress > 0f && progress < 0.999f) -> MediaRules.durationLabel(pos / 1000.0)
+                        else -> MediaRules.durationLabel(if (total > 0) total else durMs / 1000.0)
                     }
                     Text(label, style = TextStyle(fontSize = 11.sp, fontFeatureSettings = "tnum",
                         color = (if (isMe) Color.White else c.label).copy(alpha = 0.8f)))
