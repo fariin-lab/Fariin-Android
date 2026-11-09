@@ -283,10 +283,13 @@ private fun ChannelIntroArt(modifier: Modifier = Modifier) {
         t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
             androidx.compose.animation.core.tween(4000, easing = androidx.compose.animation.core.LinearEasing)), label = "swayPhase")
     } else null
+    // Dark mode: the art without the white sticker edge (owner 2026-11-09). Picked by the app's own
+    // Light/Dark choice, not a night resource folder, which would follow the phone instead.
+    val dark = com.fariin.app.data.AppearancePrefs.isDark()
     Box(modifier.heightIn(max = 300.dp).aspectRatio(1329f / 1657f, matchHeightConstraintsFirst = true)) {
-        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.channel_intro_base), null,
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(if (dark) R.drawable.channel_intro_base_dark else R.drawable.channel_intro_base), null,
             contentScale = androidx.compose.ui.layout.ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
-        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.channel_intro_bouquet), null,
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(if (dark) R.drawable.channel_intro_bouquet_dark else R.drawable.channel_intro_bouquet), null,
             contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
             modifier = Modifier.fillMaxSize().drawWithContent {
                 val p = phase?.value ?: 0f
