@@ -59,12 +59,25 @@ import kotlinx.coroutines.launch
  * The up arrow and the back gesture leave without a change.
  */
 @Composable
-fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: () -> Unit, forNewChats: Boolean = false, onApply: (Int) -> Unit) {
+fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: () -> Unit, forNewChats: Boolean = false,
+                             /** Non-null: drawn as an iOS sheet (X, title, tick) inside [com.fariin.app.ui.components.FariinSheetDialog]. */
+                             sheet: com.fariin.app.ui.components.SheetMotion? = null, onApply: (Int) -> Unit) {
     val c = Fariin.colors
     var selected by remember { mutableStateOf(current) }
     var custom by remember { mutableStateOf(false) }
-    BackHandler(onBack = onBack)
+    if (sheet == null) BackHandler(onBack = onBack)
     if (custom) CustomTimeDialog(selected, onDismiss = { custom = false }) { selected = it; custom = false }
+    val rows: @Composable () -> Unit = {
+        Text(Disappearing.pageHeader(isChannel, forNewChats), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
+            modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 2.dp))
+        SettingsSection {
+            for ((label, secs) in Disappearing.presets) CheckRow(label, selected == secs) { selected = secs }
+            val isCustom = selected != 0 && !Disappearing.isPreset(selected)
+            CheckRow(if (isCustom) "Custom Time (${Disappearing.label(selected)})" else "Custom Time", isCustom, last = true) { custom = true }
+        }
+    }
+    // From a profile or group page: a sheet that rises from the bottom (iOS .sheet), owner 2026-11-08.
+    if (sheet != null) { com.fariin.app.ui.components.SheetPage(sheet, "Disappearing Messages", onDone = { onApply(selected) }) { rows() }; return }
     val barScroll = rememberScrollState()
     BarPage("Disappearing Messages", onBack = onBack, action = {
             IconButton(onClick = { onApply(selected) }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = "Done", tint = c.accent) }
@@ -177,13 +190,17 @@ internal fun DisappearingEditor(api: PeopleApi, cid: String, isGroup: Boolean, c
         confirmButton = { TextButton({ pending = null; write(s) }) { Text("Turn On", color = c.accent) } },
         dismissButton = { TextButton({ pending = null }) { Text("Cancel", color = c.accent) } }) }
     if (!open) return false
-    DisappearingMessagesPage(current, onBack = onClose) { s ->
-        onClose()
-        when {
-            s == current -> {}
-            isGroup && s > 0 -> pending = s
-            else -> write(s)
+    // A sheet over the profile or group page (iOS), not a page in its place: the caller keeps drawing.
+    val motion = com.fariin.app.ui.components.rememberSheetMotion(onClose)
+    com.fariin.app.ui.components.FariinSheetDialog(motion, fill = c.bgSecondary) {
+        DisappearingMessagesPage(current, onBack = { motion.close() }, sheet = motion) { s ->
+            motion.close()
+            when {
+                s == current -> {}
+                isGroup && s > 0 -> pending = s
+                else -> write(s)
+            }
         }
     }
-    return true
+    return false
 }

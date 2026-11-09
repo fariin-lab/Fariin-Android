@@ -6,6 +6,7 @@ import com.fariin.app.R
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import com.fariin.app.ui.components.sheetDrag
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -69,7 +70,7 @@ import com.fariin.app.ui.theme.Fariin
  */
 @Composable
 internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: String?, myPhoto: String?,
-                                  number: String?, onClose: () -> Unit) {
+                                  number: String?, sheet: com.fariin.app.ui.components.SheetMotion? = null, onClose: () -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("fariin_verify", android.content.Context.MODE_PRIVATE) }
@@ -77,7 +78,8 @@ internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: Stri
     var verified by remember(number) { mutableStateOf(number != null && prefs.getBoolean(key(number), false)) }
     var scanning by remember { mutableStateOf(false) }
     var outcome by remember { mutableStateOf<String?>(null) }
-    BackHandler { if (scanning) scanning = false else onClose() }
+    // In a sheet the dialog owns Back (it closes the sheet); only the scanner needs its own.
+    BackHandler(enabled = sheet == null || scanning) { if (scanning) scanning = false else onClose() }
 
     if (scanning) {
         VerifyScanner(onClose = { scanning = false }) { code ->
@@ -101,13 +103,15 @@ internal fun VerifyEncryptionPage(cid: String, peerName: String, peerPhoto: Stri
             confirmButton = { TextButton({ outcome = null }) { Text(if (o == "match") "Done" else "OK", color = c.accent) } })
     }
 
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp)) {
+    val scroll = rememberScrollState()
+    Column(Modifier.fillMaxSize().background(c.bg).then(if (sheet == null) Modifier.statusBarsPadding() else Modifier).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().then(if (sheet != null) Modifier.sheetDrag(sheet).padding(top = 8.dp) else Modifier).height(64.dp).padding(horizontal = 16.dp)) {
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).floating(CircleShape).clickable(onClickLabel = "Close", onClick = onClose),
                 contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
             Text("Encryption", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        Column(Modifier.weight(1f).then(if (sheet != null) Modifier.sheetDrag(sheet, atTop = { scroll.value == 0 }) else Modifier)
+            .verticalScroll(scroll).padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(8.dp))
             // The two faces overlap and the lock sits where they meet (a seal once verified).

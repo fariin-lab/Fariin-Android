@@ -434,8 +434,13 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val glowOn = com.fariin.app.data.AppFeatures.glow && uid != me && !blocked
     val glowDoor = com.fariin.app.ui.glow.rememberGlowDoor(uid, name)
     // The phone's Back closes this page too, back to the profile (owner 2026-11-07: it went to the chat).
-    if (nickname) { androidx.activity.compose.BackHandler { nickname = false }
-        SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), onBack = { nickname = false }); return }
+    // Edit opens a sheet over the profile (owner 2026-11-08: "a sheet that comes from down to up").
+    if (nickname) {
+        val nickMotion = com.fariin.app.ui.components.rememberSheetMotion { nickname = false }
+        com.fariin.app.ui.components.FariinSheetDialog(nickMotion, fill = c.bgSecondary, typing = true) {
+            SetNicknamePage(uid, person?.photoUrl ?: conv?.photos?.get(uid), sheet = nickMotion, onBack = { nickMotion.close() })
+        }
+    }
     // The chat's timer, live (either person may change it; iOS ContactInfoView).
     val live = if (api is com.fariin.app.data.FirestorePeople) liveGroupDoc(cid) else emptyMap()
     val timer = (live["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0
@@ -478,8 +483,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     if (showSafety) {
         var myPhotoUrl by remember { mutableStateOf<String?>(null) }
         LaunchedEffect(Unit) { myPhotoUrl = api.profile(me)?.photoUrl }
-        VerifyEncryptionPage(cid, name, person?.photoUrl ?: conv?.photos?.get(uid), myPhotoUrl, safety, onClose = { showSafety = false })
-        return
+        // A sheet over the profile, as iOS (owner 2026-11-08).
+        val safetyMotion = com.fariin.app.ui.components.rememberSheetMotion { showSafety = false }
+        com.fariin.app.ui.components.FariinSheetDialog(safetyMotion, fill = c.bg) {
+            VerifyEncryptionPage(cid, name, person?.photoUrl ?: conv?.photos?.get(uid), myPhotoUrl, safety, sheet = safetyMotion, onClose = { safetyMotion.close() })
+        }
     }
     // Block, Unblock, Delete Chat: one bottom sheet that fits its words, the person's photo
     // and name on top (owner 2026-11-07: not a centred dialog), one red action and Cancel; Block and

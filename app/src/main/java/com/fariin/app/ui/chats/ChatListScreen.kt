@@ -219,7 +219,7 @@ fun ChatListScreen(
         .filter {
             when (filter) {
                 FILTER_UNREAD -> !showArchive && it.hasUnreadMark(me)
-                FILTER_GROUPS -> !showArchive && it.isGroup
+                FILTER_GROUPS -> !showArchive && it.isGroup && !it.isChannel
                 FILTER_CHANNELS -> !showArchive && it.isChannel
                 else -> true
             }

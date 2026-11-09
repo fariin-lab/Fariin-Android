@@ -58,7 +58,7 @@ import com.fariin.app.ui.theme.Fariin
  * phone only (ContactNames). Save keeps it, back leaves it as it was, Delete clears both.
  */
 @Composable
-fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
+fun SetNicknamePage(uid: String, photoUrl: String?, sheet: com.fariin.app.ui.components.SheetMotion? = null, onBack: () -> Unit) {
     val c = Fariin.colors
     val saved = remember(uid) { ContactNames.card(uid) }
     var first by remember(uid) { mutableStateOf(saved.first) }
@@ -73,11 +73,7 @@ fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
         confirmButton = { TextButton({ confirmDelete = false; ContactNames.remove(uid); onBack() }) { Text("Delete", color = c.red) } },
         dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
 
-    val barScroll = rememberScrollState()
-    BarPage("Set nickname", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding(), action = {
-            com.fariin.app.ui.components.FloatingTextAction("Save", enabled = changed) { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }
-        }) { top ->
-        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) {
+    val body: @Composable () -> Unit = {
             Spacer(Modifier.height(8.dp))
             Avatar(photoUrl, 120.dp)
             Spacer(Modifier.height(12.dp))
@@ -101,7 +97,20 @@ fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
                 Text("Delete", fontSize = 17.sp, color = c.red,
                     modifier = Modifier.fillMaxWidth().clickable { confirmDelete = true }.padding(16.dp))
             }
+    }
+    // From the profile's Edit: a sheet with X and a tick (iOS .sheet), owner 2026-11-08.
+    if (sheet != null) {
+        com.fariin.app.ui.components.SheetPage(sheet, "Set nickname", doneEnabled = changed,
+            onDone = { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }) {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { body() }
         }
+        return
+    }
+    val barScroll = rememberScrollState()
+    BarPage("Set nickname", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding(), action = {
+            com.fariin.app.ui.components.FloatingTextAction("Save", enabled = changed) { ContactNames.setCard(uid, ContactCard(first, last, note)); onBack() }
+        }) { top ->
+        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top), horizontalAlignment = Alignment.CenterHorizontally) { body() }
     }
 }
 
