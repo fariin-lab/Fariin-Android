@@ -464,7 +464,8 @@ object PostReplyRules {
      */
     fun alertTarget(kind: String?, cid: String?, mid: String?): Pair<String, String>? {
         // "replyReact" (owner 2026-11-09, Activity): someone reacted to my comment; same tap route.
-        if (kind != "postReplies" && kind != "replyAnswer" && kind != "replyReact") return null
+        // "postQuote": someone quoted my post (Activity); it opens my post's sheet.
+        if (kind != "postReplies" && kind != "replyAnswer" && kind != "replyReact" && kind != "postQuote") return null
         if (cid.isNullOrEmpty() || mid.isNullOrEmpty()) return null
         if (!com.fariin.app.channel.ChannelRules.safeId(cid) || !com.fariin.app.channel.ChannelRules.safeId(mid)) return null
         return cid to mid

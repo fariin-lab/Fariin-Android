@@ -15,7 +15,7 @@ import kotlinx.coroutines.tasks.await
  */
 data class ActivityItem(
     val id: String,
-    /** "reply" or "react". */
+    /** "reply", "react", "quote" or "comment" (on my channel's post, for its owner). */
     val kind: String,
     val at: Double,
     val read: Boolean,
@@ -47,19 +47,26 @@ data class ActivityItem(
     val emoji: String,
     val others: Int,
     val rx: Map<String, Int>,
+    /** Quote: the public channel the quote sits in (null = not public; then only my post opens). */
+    val whereCid: String = "",
+    val whereMid: String = "",
+    val whereTitle: String = "",
 ) {
     val isReact get() = kind == "react"
+    val isQuote get() = kind == "quote"
+    val isComment get() = kind == "comment"
 
     companion object {
         fun parse(id: String, d: Map<String, Any?>): ActivityItem? {
             val kind = d["kind"] as? String ?: return null
-            if (kind != "reply" && kind != "react") return null
+            if (kind != "reply" && kind != "react" && kind != "quote" && kind != "comment") return null
             val cid = d["cid"] as? String ?: return null
             val mid = d["mid"] as? String ?: return null
             fun m(k: String) = d[k] as? Map<*, *> ?: emptyMap<String, Any?>()
             fun Map<*, *>.s(k: String) = this[k] as? String ?: ""
             val mine = m("mine"); val from = m("from"); val nw = m("new")
             val from2 = d["from2"] as? Map<*, *>
+            val where = d["where"] as? Map<*, *>
             val rx = (d["rx"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
                 val n = (v as? Number)?.toInt() ?: 0
                 (k as? String)?.takeIf { n > 0 }?.let { it to n }
@@ -74,6 +81,7 @@ data class ActivityItem(
                 hasFrom2 = from2 != null, from2Uid = from2?.s("u") ?: "", from2Name = from2?.s("n") ?: "", from2Photo = from2?.s("p") ?: "",
                 text = d["text"] as? String ?: "", newRid = nw.s("rid"), newAid = nw.s("aid"),
                 emoji = d["emoji"] as? String ?: "", others = (d["others"] as? Number)?.toInt() ?: 0, rx = rx,
+                whereCid = where?.s("cid") ?: "", whereMid = where?.s("mid") ?: "", whereTitle = where?.s("title") ?: "",
             )
         }
     }
@@ -108,13 +116,21 @@ object ActivityRules {
     /** The chat list preview. */
     fun preview(s: ActivitySummary): String {
         val n = s.name.ifEmpty { "Someone" }
-        return if (s.kind == "react") "$n reacted ${s.emoji} to your comment".replace("  ", " ")
-        else "$n replied to your comment: ${s.text}"
+        return when (s.kind) {
+            "react" -> "$n reacted ${s.emoji} to your comment".replace("  ", " ")
+            "quote" -> "$n quoted your post" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
+            "comment" -> "$n commented: ${s.text}"
+            else -> "$n replied to your comment: ${s.text}"
+        }
     }
 
     /** Up to 3 pills, most used first. */
     fun pills(rx: Map<String, Int>): List<Pair<String, Int>> =
         rx.entries.sortedByDescending { it.value }.take(3).map { it.key to it.value }
+
+    /** "Your post in VE3: …" (a quote's line about my post). */
+    fun postLine(i: ActivityItem): String =
+        "Your post in ${i.chTitle.ifEmpty { "a channel" }}" + if (i.post.isNotEmpty()) ": ${i.post}" else ""
 
     /** What the tap flashes: their reply for a reply, my comment for a reaction. */
     fun focus(i: ActivityItem): ReplyFocus? =
@@ -203,4 +219,29 @@ object ActivityFeed {
                 .call(if (ids == null) emptyMap<String, Any>() else mapOf("ids" to ids)).await()
         }.isSuccess
     }
+}
+
+
+/** The people who reacted to one of my comments (server `getReplyReactors`, author only, 60 a page). */
+data class Reactor(val uid: String, val name: String, val photo: String, val handle: String, val emoji: String, val atMs: Long)
+data class ReactorsPage(val people: List<Reactor>, val rx: Map<String, Int>, val total: Int, val next: String)
+
+object ReplyReactors {
+    suspend fun page(cid: String, mid: String, rid: String, aid: String, emoji: String = "", cursor: String = ""): ReactorsPage? = try {
+        val args = mutableMapOf<String, Any>("cid" to cid, "mid" to mid, "rid" to rid, "aid" to aid, "emoji" to emoji)
+        if (cursor.isNotEmpty()) args["cursor"] = cursor
+        val r = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("getReplyReactors")
+            .call(args).await().getData() as? Map<*, *>
+        if (r == null) null else ReactorsPage(
+            people = (r["people"] as? List<*>).orEmpty().mapNotNull { x ->
+                val m = x as? Map<*, *> ?: return@mapNotNull null
+                val u = m["u"] as? String ?: return@mapNotNull null
+                Reactor(u, m["n"] as? String ?: "", m["p"] as? String ?: "", m["h"] as? String ?: "", m["e"] as? String ?: "",
+                    (m["at"] as? Number)?.toLong() ?: 0L)
+            },
+            rx = (r["rx"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) -> (k as? String)?.let { it to ((v as? Number)?.toInt() ?: 0) } }
+                .filter { it.second > 0 }.toMap(),
+            total = (r["total"] as? Number)?.toInt() ?: 0,
+            next = r["next"] as? String ?: "")
+    } catch (_: Exception) { null }
 }
