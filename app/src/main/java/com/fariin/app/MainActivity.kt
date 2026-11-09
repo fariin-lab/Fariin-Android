@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.fariin.app.ui.components.page
 import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
 import okio.Path.Companion.toOkioPath
@@ -314,6 +315,16 @@ class MainActivity : ComponentActivity() {
             val shell = remember { ShellMotion() }
             val top by nav.currentBackStackEntryAsState()
             val onTop = top?.destination?.route.let { it == null || it == "main" }
+            // Every page change moves on PageMotion's own time (see there): begun in the composition
+            // that first sees the new top page, so its first frame is already placed off screen.
+            val pm = com.fariin.app.ui.components.PageMotion
+            top?.id?.let { id ->
+                if (id != pm.top) {
+                    val old = pm.top
+                    pm.begin(id, old, isForward = old == null || nav.currentBackStack.value.any { it.id == old })
+                }
+            }
+            LaunchedEffect(top?.id) { pm.play() }
             val inertBack = remember { object : OnBackPressedDispatcherOwner {
                 override val onBackPressedDispatcher = OnBackPressedDispatcher()
                 override val lifecycle get() = this@MainActivity.lifecycle
@@ -349,7 +360,7 @@ class MainActivity : ComponentActivity() {
                         clip = true
                     } else Modifier)) {
             Box(Modifier.fillMaxSize().graphicsLayer {
-                alpha = if (shell.shown || com.fariin.app.ui.components.Motion.cover >= 0f) shell.alpha else 0f
+                alpha = if (pm.top == null || pm.shows(pm.mainId)) 1f else 0f
                 translationX = shell.shift * size.width
             }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
                 CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides if (onTop) this@MainActivity else inertBack) {
@@ -367,23 +378,13 @@ class MainActivity : ComponentActivity() {
                 channelRoutes(nav, me, chats = { chats.chats })
                 // A real (see-through) box, never an empty page: with nothing to measure, the page
                 // change back to it could freeze half way (owner 2026-11-03, the stuck back arrow).
-                composable("main", exitTransition = {
-                    // A chat slides itself in once drawn (EnterSlide): the list stays composed under it till then.
-                    val m = com.fariin.app.ui.components.Motion
-                    if (!m.on) androidx.compose.animation.ExitTransition.None
-                    else if (targetState.destination.route == "thread/{cid}") m.holdOut() else m.pageUnder()
-                }) { Box(Modifier.fillMaxSize()); shell.Follow(transition) }
-                composable("thread/{cid}", enterTransition = {
-                    val m = com.fariin.app.ui.components.Motion
-                    if (!m.on) androidx.compose.animation.EnterTransition.None
-                    else if (initialState.destination.route == "main") m.holdIn() else m.pageIn()
-                }) { entry ->
-                    val cid = entry.arguments?.getString("cid") ?: return@composable
-                    // From the list the chat builds off screen and then slides (EnterSlide); from any
-                    // other page (a profile's "Message") the nav host's slide as every page.
-                    val fromList = androidx.compose.runtime.remember { nav.previousBackStackEntry?.destination?.route == "main" }
-                    if (fromList) com.fariin.app.ui.components.EnterSlide { ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() }) }
-                    else ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
+                composable("main") { entry ->
+                    Box(Modifier.fillMaxSize())
+                    androidx.compose.runtime.SideEffect { pm.mainId = entry.id }
+                }
+                page("thread/{cid}") { entry ->
+                    val cid = entry.arguments?.getString("cid") ?: return@page
+                    ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
                 }
             }
             }
@@ -532,16 +533,8 @@ private class ShellMotion {
     val alpha: Float get() = 1f
     /** The list drifts left under a page sliding in, and back as it leaves (Motion, the iOS push):
      *  the "main" page's own transition, read here, with the same curves as the page on top. */
-    val shift: Float get() {
-        // A chat sliding itself in (EnterSlide) drives the list directly.
-        val c = com.fariin.app.ui.components.Motion.cover
-        if (c >= 0f) return -com.fariin.app.ui.components.Motion.UNDER_SHIFT * c
-        val (entering, p) = progress() ?: return 0f
-        if (!com.fariin.app.ui.components.Motion.on) return 0f
-        val m = com.fariin.app.ui.components.Motion
-        return if (entering) -m.UNDER_SHIFT * (1f - m.BackEase.transform(p))
-        else -m.UNDER_SHIFT * m.PageEase.transform(p)
-    }
+    /** The list moves with the page over it (PageMotion, the iOS push). */
+    val shift: Float get() = com.fariin.app.ui.components.PageMotion.let { it.offset(it.mainId) }
 
     @Composable
     fun Follow(tr: Transition<EnterExitState>) {

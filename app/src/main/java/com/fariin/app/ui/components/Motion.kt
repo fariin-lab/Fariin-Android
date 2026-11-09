@@ -60,32 +60,27 @@ object Motion {
     /** Back: the uncovered page drifts back in from the left. */
     fun pageBackUnder(): EnterTransition = slideInHorizontally(tween(PAGE_BACK_MS, easing = BackEase)) { -(it * UNDER_SHIFT).toInt() }
 
-    /**
-     * How far a page sliding in by [EnterSlide] covers the list, 0 to 1; -1 when no such slide is
-     * running (the list then follows the nav host's own transition).
-     */
-    var cover by androidx.compose.runtime.mutableFloatStateOf(-1f)
+    /** The nav host's part: nothing visible (PageMotion moves the pages), only long enough that
+     *  both pages stay composed while they move. A real change (0.99) so it is never skipped. */
+    const val HOLD_MS = 1_200
+    fun holdIn(): EnterTransition = fadeIn(tween(HOLD_MS), initialAlpha = 0.99f)
+    fun holdOut(): ExitTransition = fadeOut(tween(HOLD_MS), targetAlpha = 0.99f)
 
-    /** The nav host's part while [EnterSlide] moves the page: nothing visible, just long enough
-     *  that the list under it stays composed until the slide has landed. */
-    const val HOLD_MS = 900
-    fun holdIn(): EnterTransition = fadeIn(tween(HOLD_MS), initialAlpha = 1f)
-    fun holdOut(): ExitTransition = fadeOut(tween(HOLD_MS), targetAlpha = 1f)
-
+    // The nav host only holds both pages; PageMotion moves them (see there).
     fun enter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        if (!on) EnterTransition.None else pageIn()
+        if (!on) EnterTransition.None else holdIn()
     }
 
     fun exit(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (!on) ExitTransition.None else pageUnder()
+        if (!on) ExitTransition.None else holdOut()
     }
 
     fun popEnter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        if (!on) EnterTransition.None else pageBackUnder()
+        if (!on) EnterTransition.None else holdIn()
     }
 
     fun popExit(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (!on) ExitTransition.None else pageOut()
+        if (!on) ExitTransition.None else holdOut()
     }
 
     /** A soft spring with a little bounce: reaction chips, badges. */
@@ -107,40 +102,93 @@ object Motion {
 fun animationsOn(): Boolean = rememberPowerState().animations
 
 
+
+
 /**
- * A page that slides in from the tap without skipping (owner's Pixel 2026-11-09). A chat's first
- * frames are heavy (~180 ms over four frames on a Pixel 5); a normal slide timed on the clock
- * jumped to 90% in its second frame and looked like no slide at all. This one runs on its own
- * time, which moves at most one frame's worth per frame drawn: a slow frame only delays it, it
- * never skips ahead, so the whole slide is seen. Coming back to the page from one above it, it
- * does not slide again (the nav host's back motion plays).
+ * Every page change of the app's nav host, as the iOS push (owner's Pixel 2026-11-09).
+ *
+ * Why not the nav host's own slide: a page's first frames are heavy (a chat ~180 ms over four
+ * frames on a Pixel 5, a profile or a chat coming back under a closing page as well). A slide timed
+ * on the clock jumped most of its way in one of those frames and looked like no slide, or showed a
+ * blank page under one going back. This motion runs on its own time, which moves at most one 60 Hz
+ * frame per frame drawn: a slow frame only delays it, never skips it, and it starts on the tap.
+ *
+ * Forward: the new page slides in from the right edge, the page under it drifts a third left.
+ * Back: reversed, a little quicker. Pages are solid the whole way, nothing is see-through.
  */
-@Composable
-fun EnterSlide(content: @Composable () -> Unit) {
-    var done by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(!Motion.on) }
-    val x = androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(if (done) 0f else 1f) }
-    // Set while composing, not in an effect: the list follows from this same frame.
-    androidx.compose.runtime.remember { if (!done) Motion.cover = 0f; 0 }
-    if (!done) androidx.compose.runtime.LaunchedEffect(Unit) {
+object PageMotion {
+    /** 0 to 1 through the current change (already eased); 1 = settled. */
+    var e by androidx.compose.runtime.mutableFloatStateOf(1f)
+        private set
+    var forward by androidx.compose.runtime.mutableStateOf(true)
+        private set
+    /** The page arriving on top (forward) or being uncovered (back), and the one it replaces. */
+    var top: String? by androidx.compose.runtime.mutableStateOf(null)
+        private set
+    var other: String? by androidx.compose.runtime.mutableStateOf(null)
+        private set
+    /** The "main" entry (the chat list shell drawn outside the nav host). */
+    var mainId: String? by androidx.compose.runtime.mutableStateOf(null)
+
+    private var run = 0
+
+    /** A new top page: from the composition that first sees it, so its first frame is placed right. */
+    fun begin(newTop: String, oldTop: String?, isForward: Boolean) {
+        if (newTop == top) return
+        run++
+        other = oldTop; top = newTop; forward = isForward
+        e = if (oldTop == null || !Motion.on) 1f else 0f
+    }
+
+    /** Plays the change begun last; called from an effect keyed on the top page. */
+    suspend fun play() {
+        if (e >= 1f) return
+        val mine = run
+        val ms = if (forward) Motion.PAGE_MS else Motion.PAGE_BACK_MS
+        val ease = if (forward) Motion.PageEase else Motion.BackEase
         try {
             var last = androidx.compose.runtime.withFrameNanos { it }
             var v = 0f
-            while (v < Motion.PAGE_MS) {
+            while (v < ms && mine == run) {
                 val t = androidx.compose.runtime.withFrameNanos { it }
                 v += ((t - last) / 1_000_000f).coerceAtMost(MAX_STEP_MS)
                 last = t
-                val e = Motion.PageEase.transform((v / Motion.PAGE_MS).coerceAtMost(1f))
-                x.floatValue = 1f - e
-                Motion.cover = e
+                e = ease.transform((v / ms).coerceAtMost(1f))
             }
         } finally {
-            x.floatValue = 0f; done = true; Motion.cover = -1f
+            if (mine == run) e = 1f
         }
     }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (Motion.cover >= 0f) Motion.cover = -1f } }
-    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
-        .graphicsLayer { translationX = x.floatValue * size.width }) { content() }
+
+    /** Where a page sits, as a share of the width (0 = in place, 1 = off to the right). */
+    fun offset(id: String?): Float {
+        if (id == null) return 0f
+        val p = e
+        return when (id) {
+            top -> if (forward) 1f - p else -Motion.UNDER_SHIFT * (1f - p)
+            other -> if (forward) -Motion.UNDER_SHIFT * p else p
+            else -> 0f
+        }
+    }
+
+    /** Whether a page is on screen at all: the top one, or the one it is replacing while that moves. */
+    fun shows(id: String?): Boolean = id != null && (id == top || (id == other && e < 1f))
 }
 
-/** The most [EnterSlide]'s own time moves in one frame: a 60 Hz frame. */
+/** The most [PageMotion]'s own time moves in one frame: a 60 Hz frame. */
 private const val MAX_STEP_MS = 17f
+
+/** A nav host page placed by [PageMotion]. */
+@Composable
+fun PageFrame(id: String, content: @Composable () -> Unit) {
+    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
+        .graphicsLayer { translationX = PageMotion.offset(id) * size.width }) { content() }
+}
+
+/** [composable] with the page placed by [PageMotion]. */
+fun androidx.navigation.NavGraphBuilder.page(
+    route: String,
+    arguments: List<androidx.navigation.NamedNavArgument> = emptyList(),
+    deepLinks: List<androidx.navigation.NavDeepLink> = emptyList(),
+    content: @Composable androidx.compose.animation.AnimatedContentScope.(NavBackStackEntry) -> Unit,
+) = androidx.navigation.compose.composable(route, arguments, deepLinks) { entry -> PageFrame(entry.id) { content(entry) } }

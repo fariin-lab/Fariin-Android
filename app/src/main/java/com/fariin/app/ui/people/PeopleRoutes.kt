@@ -8,7 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.composable
+import com.fariin.app.ui.components.page
 import com.fariin.app.data.Conversation
 import com.fariin.app.data.PeopleApi
 import com.google.firebase.firestore.FirebaseFirestore
@@ -22,46 +22,46 @@ fun NavGraphBuilder.peopleRoutes(
     groupDoc: @Composable (String) -> Map<String, Any?>,
 ) {
     val openChat: (String) -> Unit = { cid -> nav.navigate("thread/$cid") { popUpTo("main"); launchSingleTop = true } }
-    composable("newchat") {
+    page("newchat") {
         NewChatScreen(api, chats(), onBack = { nav.popBackStack() }, onOpenChat = openChat, onNewGroup = { nav.navigate("newgroup") })
     }
     // Activity (owner 2026-11-09): a row opens that channel, that post's Replies, on the comment.
-    composable("activity") {
+    page("activity") {
         com.fariin.app.ui.settings.ActivityScreen(onBack = { nav.popBackStack() }, onOpen = { i ->
             com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.ActivityRules.focus(i)
             com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = i.cid to i.mid
             nav.navigate("thread/${i.cid}") { launchSingleTop = true }
         })
     }
-    composable("requests") { MessageRequestsScreen(api, requests(), onBack = { nav.popBackStack() }, onOpenChat = openChat) }
-    composable("contact/{uid}") { e ->
-        val uid = e.arguments?.getString("uid") ?: return@composable
+    page("requests") { MessageRequestsScreen(api, requests(), onBack = { nav.popBackStack() }, onOpenChat = openChat) }
+    page("contact/{uid}") { e ->
+        val uid = e.arguments?.getString("uid") ?: return@page
         val conv = chats().firstOrNull { !it.isGroup && it.users.contains(uid) }
         ContactInfoScreen(api, uid, conv, onBack = { nav.popBackStack() }, onOpenChat = openChat)
     }
     // ?open= the welcome card's step (add, link, edit): that page alone, closing back to the chat.
-    composable("group/{cid}?open={open}", arguments = listOf(androidx.navigation.navArgument("open") {
+    page("group/{cid}?open={open}", arguments = listOf(androidx.navigation.navArgument("open") {
         type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null })) { e ->
-        val cid = e.arguments?.getString("cid") ?: return@composable
+        val cid = e.arguments?.getString("cid") ?: return@page
         GroupInfoScreen(api, groupDoc(cid), cid, chats(), onBack = { nav.popBackStack() },
             onLeft = { nav.popBackStack("main", false) }, onOpenPerson = { nav.navigate("contact/$it") },
             start = e.arguments?.getString("open"), onOpenChat = openChat)
     }
-    composable("newgroup") { NewGroupScreen(api, chats(), onBack = { nav.popBackStack() }, onCreated = openChat) }
-    composable("editprofile") { EditProfileScreen(api, onBack = { nav.popBackStack() }) }
-    composable("myprofile") { com.fariin.app.ui.glow.MyProfileRoute(api.me, chats(), onBack = { nav.popBackStack() }) }
+    page("newgroup") { NewGroupScreen(api, chats(), onBack = { nav.popBackStack() }, onCreated = openChat) }
+    page("editprofile") { EditProfileScreen(api, onBack = { nav.popBackStack() }) }
+    page("myprofile") { com.fariin.app.ui.glow.MyProfileRoute(api.me, chats(), onBack = { nav.popBackStack() }) }
     // Calls tab: New Call, call links (ui/calls).
-    composable("newcall") {
+    page("newcall") {
         com.fariin.app.ui.calls.NewCallScreen(api.me, chats(), onBack = { nav.popBackStack() },
             onCreateLink = { nav.navigate("calllink/new") { popUpTo("newcall") { inclusive = true } } })
     }
-    composable("calllink/new") { com.fariin.app.ui.calls.CreateCallLinkScreen(onClose = { nav.popBackStack() }) }
-    composable("calllink/{roomId}") { e ->
-        val id = e.arguments?.getString("roomId") ?: return@composable
+    page("calllink/new") { com.fariin.app.ui.calls.CreateCallLinkScreen(onClose = { nav.popBackStack() }) }
+    page("calllink/{roomId}") { e ->
+        val id = e.arguments?.getString("roomId") ?: return@page
         com.fariin.app.ui.calls.CallLinkDetailsScreen(id, onBack = { nav.popBackStack() })
     }
-    composable("joinlink/{key}/{video}") { e ->
-        val key = e.arguments?.getString("key") ?: return@composable
+    page("joinlink/{key}/{video}") { e ->
+        val key = e.arguments?.getString("key") ?: return@page
         com.fariin.app.ui.calls.JoinLinkScreen(key, e.arguments?.getString("video") != "voice", onBack = { nav.popBackStack() })
     }
 }
