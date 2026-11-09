@@ -57,8 +57,11 @@ class FariinApp : Application() {
                     .build()
         }
         CoroutineSafety.install()   // an uncaught server refusal in a coroutine no longer closes the app
-        com.fariin.app.ui.thread.Emoji3DArt.preload(this)   // reaction art ready before the first long press
-        com.fariin.app.media.ChatSounds.init(this)
+        // Not needed for the first frame (owner 2026-11-09: the app felt heavy to open; the reference
+        // app keeps start-up to the minimum and does the rest after): the sent sound off the main
+        // thread, and the reaction art a few seconds later so it does not compete with the first frames.
+        Thread({ runCatching { com.fariin.app.media.ChatSounds.init(this) } }, "sounds-init").apply { isDaemon = true }.start()
+        android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -132,7 +135,7 @@ class FariinApp : Application() {
         // Update campaigns: the last answer shows at once, then the server is asked (iOS AppUpdateGate).
         if (!local) com.fariin.app.system.AppUpdateGate.start(this)
         // The home screen widget follows App Lock and Message Preview as they are switched.
-        com.fariin.app.system.FariinWidget.init(this)
+        android.os.Handler(mainLooper).postDelayed({ com.fariin.app.system.FariinWidget.init(this) }, 1_500)
     }
 
     companion object {

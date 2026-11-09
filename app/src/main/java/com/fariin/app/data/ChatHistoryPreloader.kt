@@ -63,6 +63,7 @@ object ChatHistoryPreloader {
         if (me.isEmpty()) return
         lastList = conversations; lastMe = me
         if (openChat != null || ThreadRepository.anyOpen()) return
+        warmSaved(conversations, me)
         val held = LAUNCH_HOLD_MS - (SystemClock.elapsedRealtime() - launchedAt)
         if (held > 0) {
             if (!holdRetry) { holdRetry = true; scope.launch { kotlinx.coroutines.delay(held + 50); retry() } }
@@ -85,6 +86,25 @@ object ChatHistoryPreloader {
             if (warming.size >= MAX_CONCURRENT) break
             warm(c, me)
         }
+    }
+
+    private val savedWarm = HashSet<String>()
+    /**
+     * The phone's own saved copy of the top chats, read into memory in the background (owner
+     * 2026-11-09: opening a chat lagged). A chat's first open read its file, unsealed it and parsed
+     * it on the main thread; now that is already done when the row is tapped, as the reference app
+     * keeps its chats' rows ready. Local only (no network), so it runs on every phone, cheap ones too.
+     */
+    private fun warmSaved(conversations: List<Conversation>, me: String) {
+        val ids = conversations.sortedByDescending { it.displayUpdatedAt(me) }.take(TOP_CHATS).map { it.id }.filter { savedWarm.add("$me/$it") }
+        if (ids.isEmpty()) return
+        scope.launch { for (id in ids) runCatching { com.fariin.app.local.LocalCache.loadThread(me, id) } }
+    }
+
+    /** A finger is on a chat row: read its saved copy now, before the tap lands. */
+    fun touch(me: String, cid: String) {
+        if (me.isEmpty() || !savedWarm.add("$me/$cid")) return
+        scope.launch { runCatching { com.fariin.app.local.LocalCache.loadThread(me, cid) } }
     }
 
     @Synchronized
