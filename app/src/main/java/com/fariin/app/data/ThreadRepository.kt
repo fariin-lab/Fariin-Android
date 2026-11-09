@@ -143,6 +143,7 @@ class ThreadRepository(
 
     fun start() {
         if (msgReg != null) return
+        clearStuckSends()
         // The phone's copy first (iOS ThreadMessageCache), so the chat opens full, offline too;
         // the listener's first answer replaces it.
         if (liveDocs.isEmpty() && _state.value.messages.isEmpty()) {
@@ -847,7 +848,11 @@ class ThreadRepository(
 
     /** Runs one media send; a failure leaves a red bubble whose tap runs the same work again. */
     private fun runMediaSend(clientId: String, work: suspend () -> Unit): Job {
-        val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
+        // On the app's scope, not the chat's: leaving the chat right after Send cancelled the chat's
+        // scope between the upload and the attach, so the clip landed in Storage but the message
+        // stayed "uploading" forever on the other phone (iOS item 24, 2026-11-09). Only the
+        // person's own Cancel (MediaSend.cancel, which cancels this job) stops it now.
+        val job = SendScope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             // A try again starts its rings over (a failed send's were settled).
             com.fariin.app.media.UploadProgress.reset(clientId)
             try {
@@ -876,7 +881,7 @@ class ThreadRepository(
     private fun mediaSendEnded(clientId: String, e: Exception): Boolean {
         val send = com.fariin.app.media.MediaSend
         val cancelled = send.wasCancelled(clientId) || e is kotlinx.coroutines.CancellationException
-        if (cancelled) send.announcedId(clientId)?.let { id -> scope.launch(Dispatchers.IO) { cancelAnnounced(id) } }
+        if (cancelled) send.announcedId(clientId)?.let { id -> SendScope.launch(Dispatchers.IO) { cancelAnnounced(id) } }
         send.finish(clientId)
         if (!cancelled) return false
         com.fariin.app.media.UploadProgress.done(clientId)
@@ -920,6 +925,24 @@ class ThreadRepository(
         // The echo will hold only the items left: its picked pictures must line up with them.
         localUris[clientId]?.let { uris -> if (uris.size == m.album.size) localUris[clientId] = left.map { uris[it] } }
         rebuild()
+    }
+
+    /**
+     * iOS ThreadView.clearStuckSends: my own messages still `uploading` 30 minutes after they were
+     * made never got their file (the send died before the attach, item 24), so the other side would
+     * spin forever. They are taken down. Younger ones are left for a send that may still be running.
+     */
+    private fun clearStuckSends() {
+        SendScope.launch(Dispatchers.IO) {
+            val cutoff = System.currentTimeMillis() - 30 * 60 * 1000L
+            val snap = runCatching {
+                convRef.collection("messages").whereEqualTo("authorId", me).whereEqualTo("uploading", true).get().await()
+            }.getOrNull() ?: return@launch
+            for (d in snap.documents) {
+                val made = d.getTimestamp("createdAt")?.toDate()?.time ?: continue
+                if (made < cutoff) cancelAnnounced(d.id)
+            }
+        }
     }
 
     /** iOS cancelAnnounced: the document goes and the chat list line is rewritten from what is left. */
@@ -1803,3 +1826,6 @@ class ThreadRepository(
             "fwdChannel", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
     }
 }
+
+/** Sends that must outlive the chat screen (media uploads and their attach): the app's lifetime. */
+internal val SendScope: CoroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)

@@ -66,6 +66,7 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 - 2026-11-09 00:30 story editor from the library: closing (X) flies the picture back into its tile while the black fades to the grid (iOS, owner video). Checked at 10x animator scale on emulator-5556. Note: the emulators are PerfClass LOW, so animations and glass default OFF there; turned on via the app prefs (power.animations / power.blur) on emulator-5556 only.
 - 2026-11-09 00:34 sent photos / albums / GIFs / stickers now fly up from the composer like texts (SendMotion.Kind.MEDIA, start scale 0.85); checked at 10x on emulator-5556.
 - 2026-11-09 00:35 story editor Next: the bake spinner and dim wait 300 ms (owner video: a spinner blinked 2 frames before the Share Story sheet). Build green; needs his Pixel to confirm.
+- 2026-11-09 00:40 iOS item 24 (real bug): media sends ran on the chat ViewModel scope, so leaving the chat right after Send cancelled the attach (clip in Storage, message stuck uploading:true, spins forever on the other phone). Now on an app-level SendScope; own uploading messages older than 30 min are taken down on chat open (iOS clearStuckSends). Tested: photo sent then Back at once -> doc has imageUrl+enc, no uploading. Still open: an app KILL mid-upload (needs WorkManager / resume record like iOS).
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes
