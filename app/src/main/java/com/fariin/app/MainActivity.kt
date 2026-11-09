@@ -183,7 +183,8 @@ class MainActivity : ComponentActivity() {
         // Channels I follow (their own list: followers are not in a channel's `users`).
         androidx.compose.runtime.DisposableEffect(me) {
             com.fariin.app.channel.ChannelFollows.start(me)
-            onDispose { com.fariin.app.channel.ChannelFollows.stop() }
+            com.fariin.app.data.ActivityFeed.start(me)
+            onDispose { com.fariin.app.channel.ChannelFollows.stop(); com.fariin.app.data.ActivityFeed.stop() }
         }
         // Feature switches (config/features) and the glow relationship (iOS RootView).
         androidx.compose.runtime.DisposableEffect(me) {

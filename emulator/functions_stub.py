@@ -1318,6 +1318,23 @@ def set_chat_pin(uid, data):
 HANDLERS.update({"setChatPin": set_chat_pin})
 HANDLERS.update({"chatPinStatus": chat_pin_status, "generateChatPin": generate_chat_pin, "removeChatPin": remove_chat_pin})
 
+
+def mark_activity_read(uid, data):
+    """groups markActivityRead (Activity, 2026-11-09): ids, or none = all; recomputes summary.unread."""
+    ids = (data or {}).get("ids")
+    left = 0
+    for did, d in list_docs(f"users/{uid}/activity"):
+        if ids is None or did in ids:
+            if not d.get("read"):
+                write(f"users/{uid}/activity/{did}", {"read": True})
+        elif not d.get("read"):
+            left += 1
+    write(f"users/{uid}/activityMeta/summary", {"unread": left})
+    return {"ok": True}
+
+
+HANDLERS.update({"markActivityRead": mark_activity_read})
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         name = self.path.rstrip("/").split("/")[-1]

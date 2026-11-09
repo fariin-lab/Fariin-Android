@@ -25,6 +25,14 @@ fun NavGraphBuilder.peopleRoutes(
     composable("newchat") {
         NewChatScreen(api, chats(), onBack = { nav.popBackStack() }, onOpenChat = openChat, onNewGroup = { nav.navigate("newgroup") })
     }
+    // Activity (owner 2026-11-09): a row opens that channel, that post's Replies, on the comment.
+    composable("activity") {
+        com.fariin.app.ui.settings.ActivityScreen(onBack = { nav.popBackStack() }, onOpen = { i ->
+            com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.ActivityRules.focus(i)
+            com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = i.cid to i.mid
+            nav.navigate("thread/${i.cid}") { launchSingleTop = true }
+        })
+    }
     composable("requests") { MessageRequestsScreen(api, requests(), onBack = { nav.popBackStack() }, onOpenChat = openChat) }
     composable("contact/{uid}") { e ->
         val uid = e.arguments?.getString("uid") ?: return@composable
@@ -61,6 +69,7 @@ fun NavGraphBuilder.peopleRoutes(
 fun peopleNav(nav: NavHostController, api: PeopleApi? = null) = PeopleNav(
     newChat = { nav.navigate("newchat") { launchSingleTop = true } },
     requests = { nav.navigate("requests") { launchSingleTop = true } },
+    activity = { nav.navigate("activity") { launchSingleTop = true } },
     contact = { nav.navigate("contact/$it") { launchSingleTop = true } },
     group = { nav.navigate("group/$it") { launchSingleTop = true } },
     groupStep = { cid, step -> nav.navigate("group/$cid?open=$step") { launchSingleTop = true } },

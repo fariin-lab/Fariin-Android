@@ -6,6 +6,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 data class PeopleNav(
     val newChat: () -> Unit = {},
     val requests: () -> Unit = {},
+    /** The Activity page (replies and reactions to my comments). */
+    val activity: () -> Unit = {},
     val contact: (String) -> Unit = {},
     val group: (String) -> Unit = {},
     /** A group's page opened straight at one step (the welcome card): "add", "link" or "edit". */

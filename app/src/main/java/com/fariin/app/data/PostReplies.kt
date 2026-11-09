@@ -463,7 +463,8 @@ object PostReplyRules {
      * "replyAnswer" for "X replied to you"): the channel and post it opens, or null for any other push.
      */
     fun alertTarget(kind: String?, cid: String?, mid: String?): Pair<String, String>? {
-        if (kind != "postReplies" && kind != "replyAnswer") return null
+        // "replyReact" (owner 2026-11-09, Activity): someone reacted to my comment; same tap route.
+        if (kind != "postReplies" && kind != "replyAnswer" && kind != "replyReact") return null
         if (cid.isNullOrEmpty() || mid.isNullOrEmpty()) return null
         if (!com.fariin.app.channel.ChannelRules.safeId(cid) || !com.fariin.app.channel.ChannelRules.safeId(mid)) return null
         return cid to mid

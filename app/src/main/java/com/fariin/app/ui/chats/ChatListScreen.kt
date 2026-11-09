@@ -274,6 +274,10 @@ fun ChatListScreen(
     val officialAt = official.latest?.sortAt ?: 0.0
     val officialPinned = officialShown && !showArchive && official.state.pinned
     val officialIndex = if (officialShown && !officialPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < officialAt }.let { if (it < 0) rest.size else it } else rest.size
+    // Activity (owner 2026-11-09): a row only while something is unread, placed by its latest time.
+    val activity by com.fariin.app.data.ActivityFeed.summary.collectAsState()
+    val activityShown = activity?.let { it.unread > 0 } == true
+    val activityIndex = if (activityShown) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
     val selectedConvs = (state.chats + state.archived).filter { it.id in selected }
     val byId = remember(state.chats, state.archived) { (state.chats + state.archived).associateBy { it.id } }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -701,11 +705,27 @@ fun ChatListScreen(
                     }
                     // A chat that gets a new message glides to its new place instead of jumping.
                     if (!searching) {
-                        items(rest.subList(0, officialIndex), key = { it.id }, contentType = { "chat" }) {
-                            Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                        // The chats with the Official row and the Activity row each at its own time.
+                        val activityItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+                            if (!showArchive && filter == FILTER_ALL) item(key = "activity", contentType = "chat") {
+                                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) {
+                                    ActivityChatRow(activity!!, onOpen = { if (!selecting) people.activity() })
+                                }
+                            }
                         }
-                        if (officialShown && !officialPinned) officialItem()
-                        items(rest.subList(officialIndex, rest.size), key = { it.id }, contentType = { "chat" }) {
+                        val inserts = buildList {
+                            if (officialShown && !officialPinned) add(officialIndex to officialItem)
+                            if (activityShown) add(activityIndex to activityItem)
+                        }.sortedBy { it.first }
+                        var from = 0
+                        for ((at, insert) in inserts) {
+                            items(rest.subList(from, at), key = { it.id }, contentType = { "chat" }) {
+                                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
+                            }
+                            insert()
+                            from = at
+                        }
+                        items(rest.subList(from, rest.size), key = { it.id }, contentType = { "chat" }) {
                             Box(Modifier.animateItem(fadeInSpec = null, placementSpec = rowPlace, fadeOutSpec = null)) { row(it) }
                         }
                     }
@@ -1406,3 +1426,35 @@ private fun TopPeersRow(peers: List<Conversation>, me: String, onOpen: (Conversa
 
 /** The story rows on screen, each able to record its photo's place for the viewer (see ChatRow). */
 private val StoryOriginRecorders = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
+
+
+/** The chat list's Activity row (shared contract): grey face with a white bell, the latest event, the unread count. */
+@Composable
+private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, onOpen: () -> Unit) {
+    val c = Fariin.colors
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.padding(vertical = 10.dp).size(56.dp).clip(CircleShape).background(Color(0xFF8E8E93)), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_bell), contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f).padding(top = 7.dp, bottom = 9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = c.label,
+                    maxLines = 1, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                Text(timeLabel(s.at, android.text.format.DateFormat.is24HourFormat(context)), style = MaterialTheme.typography.labelMedium,
+                    color = c.blue, maxLines = 1)
+            }
+            Row(verticalAlignment = Alignment.Top) {
+                Text(com.fariin.app.data.ActivityRules.preview(s), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
+                    maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape).background(c.blue)
+                    .padding(horizontal = 6.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
+                    Text(if (s.unread > 99) "99+" else "${s.unread}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                }
+            }
+        }
+    }
+}

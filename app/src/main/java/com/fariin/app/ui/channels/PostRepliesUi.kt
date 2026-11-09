@@ -439,7 +439,8 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         val f = focusWanted ?: return
         if (threads.none { it.id == f.rid }) {
             // Not on the pages read so far: a few more pages are looked through, then it is let go.
-            if (olderCursor.isNotEmpty() && laterIds.size < 4 * 30) loadOlder() else if (loaded) focusWanted = null
+            if (olderCursor.isNotEmpty() && laterIds.size < 4 * 30) loadOlder()
+            else if (loaded) { focusWanted = null; if (olderCursor.isEmpty()) toast = "This reply was deleted" }
             return
         }
         focusWanted = null
@@ -456,7 +457,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
             while (answers[thread].orEmpty().none { it.id == answer } && answerNext[thread].orEmpty().isNotEmpty() && tries++ < 5)
                 loadAnswers(thread, more = true)
             if (answers[thread].orEmpty().any { it.id == answer }) { scrollTarget = answer; flash(answer) }
-            else { scrollTarget = thread; flash(thread) }
+            else { scrollTarget = thread; flash(thread); if (answerNext[thread].orEmpty().isEmpty()) toast = "This reply was deleted" }
         }
     }
 
