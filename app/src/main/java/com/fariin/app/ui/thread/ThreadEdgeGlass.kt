@@ -101,15 +101,6 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         val heightDp = barDp + 32.dp
         val solid = (barDp * 0.55f / heightDp).coerceIn(0f, 0.8f)
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
-        // The blur slips for single frames in the first ~200 ms after the page appears (owner's
-        // Pixel 2026-11-09: a bubble or a photo's card showed sharp under the status bar, "the header
-        // blur makes movement"). Until the open has settled the plain edge (the page colour in soft
-        // steps) lies over it, then fades into the glass.
-        val cover = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(1f) }
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            kotlinx.coroutines.delay(BLUR_WARM_MS)
-            cover.animateTo(0f, androidx.compose.animation.core.tween(220))
-        }
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
             tints = emptyList()
@@ -118,16 +109,6 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
             inputScale = HazeInputScale.None
             progressive = com.fariin.app.ui.components.edgeStages(solid)
             this.alpha = alpha
-        })
-        // Drawn over the blur, so a frame where the blur slips can never show the messages sharp.
-        if (!walled) Box(modifier.fillMaxWidth().height(barDp + EDGE_FADE).drawBehind {
-            val a2 = cover.value * alpha
-            if (a2 > 0f) {
-                // Solid behind the bar itself (the 81 % of the plain edge let a slip show faintly), then easing out.
-                val bar = (size.height - EDGE_FADE.toPx()).coerceAtLeast(0f) / size.height
-                drawRect(Brush.verticalGradient(0f to c.bg, bar to c.bg, (bar + (1f - bar) * 0.5f) to c.bg.copy(alpha = c.bg.alpha * 0.5f),
-                    1f to c.bg.copy(alpha = 0f)), alpha = a2)
-            }
         })
     } else if (!walled) {
         // No blur on this phone (Android < 12, a LOW phone, Battery Saver): the page colour over the
@@ -139,6 +120,3 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         })
     }
 }
-
-/** How long after a chat appears its header blur is taken to be drawing (4 frames seen, with room). */
-private const val BLUR_WARM_MS = 450L

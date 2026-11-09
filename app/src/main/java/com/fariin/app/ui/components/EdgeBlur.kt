@@ -39,6 +39,10 @@ fun rememberEdgeAlpha(under: Boolean, startOn: Boolean = false): androidx.compos
     val born = androidx.compose.runtime.remember { android.os.SystemClock.uptimeMillis() }
     androidx.compose.runtime.LaunchedEffect(under) {
         val target = if (under) 1f else 0f
+        // Off only when it stays off a moment: while a chat's list re-lays out (the server's answer
+        // replacing the saved rows) it says "nothing under" for a frame or two, and the blur went to
+        // nothing for those frames, the messages sharp under the header (owner's Pixel 2026-11-09).
+        if (!under) kotlinx.coroutines.delay(OFF_AFTER_MS)
         if (android.os.SystemClock.uptimeMillis() - born < 700) a.snapTo(target)
         else a.animateTo(target, androidx.compose.animation.core.tween(220))
     }
@@ -89,3 +93,6 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
             1f to page.copy(alpha = 0f), startY = 0f, endY = band), size = androidx.compose.ui.geometry.Size(size.width, band))
     }
     .padding(bottom = tail)
+
+/** How long "nothing under the bar" must last before the edge goes (a re-layout's frame or two never counts). */
+private const val OFF_AFTER_MS = 250L

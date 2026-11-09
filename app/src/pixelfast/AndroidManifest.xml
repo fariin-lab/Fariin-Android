@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- pixelfast (the owner's Pixel, never shipped): profileable, so start-up can be sampled on the phone. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <profileable android:shell="true" tools:targetApi="29" />
+    </application>
+</manifest>

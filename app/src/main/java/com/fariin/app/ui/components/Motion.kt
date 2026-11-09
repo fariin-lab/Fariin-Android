@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.composable
@@ -185,8 +186,14 @@ private const val MAX_STEP_MS = 17f
 /** A nav host page placed by [PageMotion]. */
 @Composable
 fun PageFrame(id: String, content: @Composable () -> Unit) {
+    // Moved in placement, not in a draw layer: the header's blur (Haze) finds where the page is
+    // from placement, and a layer-only move left it a frame behind, so it drew the messages sharp
+    // for single frames while the page slid (owner's Pixel 2026-11-09).
     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
-        .graphicsLayer { translationX = PageMotion.offset(id) * size.width }) { content() }
+        .layout { m, c ->
+            val p = m.measure(c)
+            layout(p.width, p.height) { p.place((PageMotion.offset(id) * p.width).toInt(), 0) }
+        }) { content() }
 }
 
 /** [composable] with the page placed by [PageMotion]. */

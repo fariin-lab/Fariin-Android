@@ -109,6 +109,13 @@ class FariinApp : Application() {
         // The phone's own copies (chat list, newest messages, drafts, the send queue) and the
         // app-wide front/back hooks (presence, reconnect).
         com.fariin.app.local.LocalCache.init(this)
+        // The saved chat list, read and opened now on its own thread (owner 2026-11-09: "close the app
+        // and open, never comfortable"). The list asked for it only after its first frame was built,
+        // and the launch logo waited ~140 ms more for the disk; now it is in memory by then.
+        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            Thread({ runCatching { com.fariin.app.local.LocalCache.loadChats(uid) } }, "chats-prefetch")
+                .apply { priority = Thread.MAX_PRIORITY }.start()
+        }
         com.fariin.app.local.Drafts.init(this)
         com.fariin.app.local.SendQueue.init(this)
         // The time zone rules and date formats load on first use, about 100 ms on a cheap phone,
