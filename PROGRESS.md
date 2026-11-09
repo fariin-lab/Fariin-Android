@@ -1517,3 +1517,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   from Your Chat Key, Clear Chat History. Message Text Size removed (iOS has none; bubbles use one
   size, the phone's text size still scales it), Quick Reaction and Night Mode only in Appearance (were
   duplicated here). Checked on the emulator.
+- 2026-11-08 ~11:18 PM: Settings > Stories: Android does list custom stories (the owner's iPhone list
+  "f" is on @kream, the Pixel is @roodo); the audience rows now carry the › as iOS. Checked.

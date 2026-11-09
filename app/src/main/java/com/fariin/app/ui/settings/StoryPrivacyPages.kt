@@ -102,6 +102,9 @@ internal fun StoryAudienceRows(push: (String) -> Unit) {
                     Text(l.name, style = MaterialTheme.typography.bodyLarge, color = Fariin.colors.label, maxLines = 1)
                     Text(StoryPrivacyRules.customSubtitle(l), style = MaterialTheme.typography.bodyMedium, color = Fariin.colors.secondary, maxLines = 1)
                 }
+                // The arrow every row that opens a page has (iOS StorySettingsView, owner 2026-11-08).
+                androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null,
+                    tint = Fariin.colors.tertiary, modifier = Modifier.size(14.dp))
             }
             if (i != custom.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = Fariin.colors.separator, modifier = Modifier.padding(start = 64.dp))
         }
@@ -129,6 +132,9 @@ private fun AudienceBadgeRow(badge: @Composable () -> Unit, title: String, sub: 
             Text(title, style = MaterialTheme.typography.bodyLarge, color = Fariin.colors.label, maxLines = 1)
             Text(sub, style = MaterialTheme.typography.bodyMedium, color = Fariin.colors.secondary, maxLines = 1)
         }
+            // The arrow every row that opens a page has (iOS StorySettingsView, owner 2026-11-08).
+            androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null,
+                tint = Fariin.colors.tertiary, modifier = Modifier.size(14.dp))
     }
     if (!last && SHOW_ROW_LINES) HorizontalDivider(thickness = 0.5.dp, color = Fariin.colors.separator, modifier = Modifier.padding(start = 68.dp))
 }
