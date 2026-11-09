@@ -94,10 +94,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         com.fariin.app.data.LeaveUndo.onFailure = { com.fariin.app.ui.components.Snack.show(it, long = true) }
         splash.setKeepOnScreenCondition { keepSplash }
-        // The logo goes the moment the list is ready, no slow fade over it (owner 2026-11-09: the
-        // Pixel spent another ~250 ms fading the logo out over a list that was already there; iOS
-        // cuts straight from the launch screen to the app).
-        splash.setOnExitAnimationListener { it.remove() }
         window.decorView.postDelayed({ keepSplash = false }, SPLASH_MAX_MS)
         enableEdgeToEdge()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
