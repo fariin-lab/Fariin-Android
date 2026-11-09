@@ -33,40 +33,39 @@ object Motion {
     /** Read outside composition (NavHost transition lambdas are not composable). */
     val on: Boolean get() = PowerSaving.state.value.animations
 
-    // THE REFERENCE APP'S PAGE MOTION (its ActionBarLayout.startLayoutAnimation, studied 2026-11-04
-    // after the owner felt a flicker): only the page on top moves. Opening, the new page fades in
-    // while sliding 48 dp in from the right; back, the top page fades out while sliding 48 dp right.
-    // The page underneath stands still, no slide and no fade. 150 ms on DecelerateInterpolator(1.5).
-    const val PAGE_MS = 150
-    /** Back is a short fade. */
-    const val PAGE_BACK_MS = 90
-    /** DecelerateInterpolator(1.5): 1 - (1 - t)^3. */
-    val PageEase = androidx.compose.animation.core.Easing { t -> 1f - (1f - t) * (1f - t) * (1f - t) }
-    /** 48 dp in pixels (NavHost transition lambdas are not composable, so the screen's own density). */
-    val pageShiftPx: Int get() = (48f * android.content.res.Resources.getSystem().displayMetrics.density).toInt()
+    // PAGE MOTION, the iOS push (owner 2026-11-09, Pixel next to the iPhone: the old 150 ms fade-in
+    // over 48 dp "taps right away", and the list showed through the half-faded chat). Now the new
+    // page is solid the whole way and slides in from the right edge; the page under it drifts a
+    // third of the way left (parallax), so the eye follows one sheet of paper moving. Back is the
+    // same, reversed, a little quicker. Nothing is ever see-through.
+    const val PAGE_MS = 320
+    /** Back is a little quicker than opening. */
+    const val PAGE_BACK_MS = 260
+    /** How far the page underneath drifts, as a share of the width (iOS: about 0.3). */
+    const val UNDER_SHIFT = 0.3f
+    /** An iOS-like ease out: quick start, long soft landing (cubic-bezier 0.2, 0.9, 0.3, 1). */
+    val PageEase = CubicBezierEasing(0.2f, 0.9f, 0.3f, 1f)
+    /** The back curve: starts at the finger's pace, lands softly. */
+    val BackEase = CubicBezierEasing(0.25f, 0.6f, 0.3f, 1f)
 
-    fun pageIn(): EnterTransition =
-        slideInHorizontally(tween(PAGE_MS, easing = PageEase)) { pageShiftPx } + fadeIn(tween(PAGE_MS, easing = PageEase))
-    /**
-     * Back: the page fades away in a few frames, no slide, uncovering the one under it, as the big
-     * Android messenger does (owner's video, 2026-11-04: its chat was gone in 3 or 4 frames; ours
-     * slid the whole width over 20). Predictive back is off, so this only plays after release.
-     */
-    fun pageOut(): ExitTransition = fadeOut(tween(PAGE_BACK_MS, easing = PageEase))
-    /** The page underneath: shown as it is, the whole time the top page moves. */
-    fun pageStill(): ExitTransition =
-        fadeOut(tween(PAGE_MS, easing = androidx.compose.animation.core.Easing { if (it < 1f) 0f else 1f }))
+    fun pageIn(): EnterTransition = slideInHorizontally(tween(PAGE_MS, easing = PageEase)) { it }
+    /** Back: the top page slides off to the right, solid. */
+    fun pageOut(): ExitTransition = slideOutHorizontally(tween(PAGE_BACK_MS, easing = BackEase)) { it }
+    /** Opening: the page underneath drifts left. */
+    fun pageUnder(): ExitTransition = slideOutHorizontally(tween(PAGE_MS, easing = PageEase)) { -(it * UNDER_SHIFT).toInt() }
+    /** Back: the uncovered page drifts back in from the left. */
+    fun pageBackUnder(): EnterTransition = slideInHorizontally(tween(PAGE_BACK_MS, easing = BackEase)) { -(it * UNDER_SHIFT).toInt() }
 
     fun enter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         if (!on) EnterTransition.None else pageIn()
     }
 
     fun exit(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        if (!on) ExitTransition.None else pageStill()
+        if (!on) ExitTransition.None else pageUnder()
     }
 
     fun popEnter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        EnterTransition.None
+        if (!on) EnterTransition.None else pageBackUnder()
     }
 
     fun popExit(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {

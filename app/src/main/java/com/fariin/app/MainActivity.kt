@@ -93,6 +93,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         com.fariin.app.data.LeaveUndo.onFailure = { com.fariin.app.ui.components.Snack.show(it, long = true) }
         splash.setKeepOnScreenCondition { keepSplash }
+        // The logo goes the moment the list is ready, no slow fade over it (owner 2026-11-09: the
+        // Pixel spent another ~250 ms fading the logo out over a list that was already there; iOS
+        // cuts straight from the launch screen to the app).
+        splash.setOnExitAnimationListener { it.remove() }
         window.decorView.postDelayed({ keepSplash = false }, SPLASH_MAX_MS)
         enableEdgeToEdge()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -512,9 +516,16 @@ private class ShellMotion {
         return entering to p
     }
 
-    /** The list under a page stands still while the page on top moves (Motion: the reference app's rule). */
     val alpha: Float get() = 1f
-    val shift: Float get() = 0f
+    /** The list drifts left under a page sliding in, and back as it leaves (Motion, the iOS push):
+     *  the "main" page's own transition, read here, with the same curves as the page on top. */
+    val shift: Float get() {
+        val (entering, p) = progress() ?: return 0f
+        if (!com.fariin.app.ui.components.Motion.on) return 0f
+        val m = com.fariin.app.ui.components.Motion
+        return if (entering) -m.UNDER_SHIFT * (1f - m.BackEase.transform(p))
+        else -m.UNDER_SHIFT * m.PageEase.transform(p)
+    }
 
     @Composable
     fun Follow(tr: Transition<EnterExitState>) {

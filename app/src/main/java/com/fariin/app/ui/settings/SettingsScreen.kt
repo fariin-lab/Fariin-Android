@@ -121,17 +121,16 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
     }
     // The grey page under the white section cards (iOS grouped background).
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)) {
-      // Pages move as the chats do (Motion): a short slide and a crossfade, so the tapped row's
-      // grey is still there while the next page arrives (it used to swap with no motion at all).
+      // Pages move as the chats do (Motion): the iOS push, solid pages, parallax underneath.
       androidx.compose.animation.AnimatedContent(targetState = stack, label = "settings", transitionSpec = {
         val m = com.fariin.app.ui.components.Motion
         val forward = targetState.size >= initialState.size
         when {
             !m.on -> androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
             // Opening: the new page comes in on top, the one under it stands still.
-            forward -> m.pageIn() togetherWith m.pageStill()
-            // Back: the top page leaves, drawn above the page it uncovers.
-            else -> (androidx.compose.animation.EnterTransition.None togetherWith m.pageOut()).apply { targetContentZIndex = -1f }
+            forward -> m.pageIn() togetherWith m.pageUnder()
+            // Back: the top page slides off, drawn above the page it uncovers, which drifts back in.
+            else -> (m.pageBackUnder() togetherWith m.pageOut()).apply { targetContentZIndex = -1f }
         }
       }) { shownStack ->
         val page = shownStack.lastOrNull()

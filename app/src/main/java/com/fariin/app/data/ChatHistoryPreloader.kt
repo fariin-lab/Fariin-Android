@@ -35,8 +35,11 @@ object ChatHistoryPreloader {
     // Shared with iOS 2026-11-07: the top 20 of the list.
     private const val TOP_CHATS = 20
 
-    /** How long an opening chat waits for its listener before drawing saved rows that are behind. */
-    const val OPEN_WAIT_MS = 1_500L
+    /** How long an opening chat waits for its listener before drawing saved rows that are behind.
+     *  About the page slide's length (Motion.PAGE_MS): the wait hides under the slide, and the page
+     *  is never seen empty (owner's Pixel 2026-11-09: 1.5 s showed a blank chat). Rows newer than
+     *  the saved ones then glide in at the bottom. */
+    const val OPEN_WAIT_MS = 350L
 
     /** Behind (shared with iOS): the list's last activity is newer than the newest saved row, 2 s slack. */
     fun behind(listTime: Double, cachedNewest: Double?): Boolean =
@@ -99,13 +102,13 @@ object ChatHistoryPreloader {
         val ids = conversations.sortedByDescending { it.displayUpdatedAt(me) }.take(TOP_CHATS).map { it.id }.filter { savedWarm.add("$me/$it") }
         if (ids.isEmpty()) return
         // Oldest first, so the newest (the likeliest taps) are the freshest in the memory cache.
-        scope.launch { for (id in ids.asReversed()) runCatching { com.fariin.app.local.LocalCache.loadThread(me, id) } }
+        scope.launch { for (id in ids.asReversed()) runCatching { com.fariin.app.ui.thread.ReactionArt.warm(com.fariin.app.local.LocalCache.loadThread(me, id)) } }
     }
 
     /** A finger is on a chat row: read its saved copy now, before the tap lands. */
     fun touch(me: String, cid: String) {
         if (me.isEmpty() || !savedWarm.add("$me/$cid")) return
-        scope.launch { runCatching { com.fariin.app.local.LocalCache.loadThread(me, cid) } }
+        scope.launch { runCatching { com.fariin.app.ui.thread.ReactionArt.warm(com.fariin.app.local.LocalCache.loadThread(me, cid)) } }
     }
 
     @Synchronized

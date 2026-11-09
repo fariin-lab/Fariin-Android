@@ -68,15 +68,12 @@ fun ReactionGlyph(key: String, textSize: TextUnit, boxSize: Dp, modifier: Modifi
     val uploaded = com.fariin.app.data.UploadedEmoji.isKey(key)
     // An uploaded one may still be downloading: drawn when its file lands.
     val landed by com.fariin.app.data.UploadedEmoji.landed.collectAsState()
-    val asset = if (uploaded) "uploaded/$key" else "custom_reactions/$key.tgs"
-    val json by produceState<String?>(null, asset, if (uploaded) landed else 0) {
-        value = withContext(Dispatchers.IO) {
-            if (uploaded) com.fariin.app.data.UploadedEmoji.json(key)
-            else runCatching { GZIPInputStream(ctx.assets.open(asset)).bufferedReader().use { it.readText() } }.getOrNull()
-        }
+    // Parsed once and kept (ReactionArt), so a chat opened again draws its reactions on the first
+    // frame instead of an empty chip that fills a beat later (Pixel recording 2026-11-09).
+    val comp by produceState(ReactionArt.cached(key), key, if (uploaded) landed else 0) {
+        if (value == null) value = withContext(Dispatchers.IO) { ReactionArt.load(ctx, key) }
     }
-    val j = json ?: run { Box(modifier.size(boxSize)); return }
-    val comp by rememberLottieComposition(LottieCompositionSpec.JsonString(j), cacheKey = asset)
+    if (comp == null) { Box(modifier.size(boxSize)); return }
     // A few plays, then it rests on its last frame: played forever, every chip on screen (and every
     // tile of the picker) kept the CPU drawing for as long as the chat stayed open. With Power
     // Saving > Animations off it shows that frame from the start.
@@ -103,6 +100,39 @@ fun Emoji3D(emoji: String, textSize: TextUnit, boxSize: Dp, modifier: Modifier =
     val b = bmp
     if (b == null) Box(modifier.size(boxSize))
     else androidx.compose.foundation.Image(b, emoji, modifier = modifier.size(boxSize))
+}
+
+/** The custom reactions, parsed once: unzipping and parsing a .tgs takes a few frames each time. */
+object ReactionArt {
+    private val comps = android.util.LruCache<String, com.airbnb.lottie.LottieComposition>(64)
+    @Volatile private var app: android.content.Context? = null
+
+    fun init(ctx: android.content.Context) { app = ctx.applicationContext }
+    fun cached(key: String): com.airbnb.lottie.LottieComposition? = comps.get(key)
+
+    /** Off the main thread. Null for an uploaded one still downloading (drawn when it lands). */
+    fun load(ctx: android.content.Context, key: String): com.airbnb.lottie.LottieComposition? {
+        comps.get(key)?.let { return it }
+        val uploaded = com.fariin.app.data.UploadedEmoji.isKey(key)
+        val asset = if (uploaded) "uploaded/$key" else "custom_reactions/$key.tgs"
+        val json = if (uploaded) com.fariin.app.data.UploadedEmoji.json(key)
+            else runCatching { GZIPInputStream(ctx.assets.open(asset)).bufferedReader().use { it.readText() } }.getOrNull()
+        json ?: return null
+        val c = runCatching { com.airbnb.lottie.LottieCompositionFactory.fromJsonStringSync(json, asset).value }.getOrNull() ?: return null
+        comps.put(key, c)
+        return c
+    }
+
+    /** The custom reactions on saved messages, parsed ahead (called off the main thread). */
+    fun warm(messages: List<com.fariin.app.data.Message>) {
+        val ctx = app ?: return
+        val keys = LinkedHashSet<String>()
+        for (m in messages.asReversed().take(40)) {
+            for (k in m.reactionCounts.keys) if (CustomReaction.isCustom(k)) keys += k
+            for (k in m.reactions.values) if (CustomReaction.isCustom(k)) keys += k
+        }
+        for (k in keys) if (comps.get(k) == null) load(ctx, k)
+    }
 }
 
 object Emoji3DArt {

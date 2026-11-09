@@ -47,7 +47,9 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         return
     }
     var live by remember(cid) { mutableStateOf(false) }
-    var mayStart by remember(cid) { mutableStateOf(false) }
+    // Seeded from the chat list's copy so the buttons are there on the first frame of the open,
+    // not a beat later when the listener answers (Pixel recording 2026-11-09).
+    var mayStart by remember(cid) { mutableStateOf(com.fariin.app.data.CryptoHub.listedConversation(cid)?.mayStartCall(me) == true) }
     DisposableEffect(cid) {
         val reg = GroupCall.watchActive(cid) { live = it }
         val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid)

@@ -154,7 +154,7 @@ class ThreadRepository(
             if (saved.isNotEmpty()) {
                 // Safety net (shared rules 2026-11-07): when the list knows a newer message than the
                 // saved rows, they are not drawn, so the chat does not open on old rows and then
-                // jump. The listener (warm from ChatHistoryPreloader) answers first; past 1.5 s the saved
+                // jump. The listener (warm from ChatHistoryPreloader) answers first; past 350 ms the saved
                 // rows show and the new ones glide in at the bottom.
                 val listTime = CryptoHub.listedConversation(cid)?.displayUpdatedAt(me) ?: 0.0
                 // Never for a channel (iOS 2026-11-08): settings and edits move its updatedAt with no
