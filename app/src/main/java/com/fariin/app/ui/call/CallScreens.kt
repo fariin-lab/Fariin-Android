@@ -1,5 +1,8 @@
 package com.fariin.app.ui.call
 
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.fariin.app.ui.components.FariinSpinner
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -1518,6 +1521,22 @@ private fun MemberTile(
                     .background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
                     Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White, modifier = Modifier.size(if (compact) 9.dp else 16.dp))
                 }
+            }
+            // iOS GroupCallTileView: media still arriving = a spinner over the photo; a camera that is on
+            // and never shows = "Can't show video" (a tap explains).
+            if (scr == null && v == null && m.connecting) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center) { FariinSpinner(size = if (w > 102) 32.dp else 20.dp, color = Color.White) }
+            else if (scr == null && v == null && m.videoUnavailable) {
+                var why by remember { mutableStateOf(false) }
+                Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { why = true },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Icon(ImageVector.vectorResource(R.drawable.ic_call_video_off), null, tint = Color.White, modifier = Modifier.size(if (w > 102) 24.dp else 16.dp))
+                    if (w > 102) Text("Can't show video", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, modifier = Modifier.padding(top = 6.dp))
+                }
+                if (why) AlertDialog(onDismissRequest = { why = false }, title = { Text("Can't show video") },
+                    text = { Text("${m.name}'s video can't be shown right now. Their connection may be weak.") },
+                    confirmButton = { TextButton({ why = false }) { Text("OK") } })
             }
             // I am sharing my screen (owner 2026-10-28): my own tile says so (iOS sharingCard).
             if (isMe && iAmSharing) Column(Modifier.fillMaxSize().background(ShareCardFill.copy(alpha = 0.92f)),

@@ -194,6 +194,10 @@ data class GroupMember(
     val joinedAtMs: Long = 0L,
     /** When their current screen share started here (iOS shareStartedAt): the newest share takes the stage. */
     val screenSinceMs: Long = 0L,
+    /** Their camera (or their first media) is still arriving: a spinner over the photo (iOS isConnecting). */
+    val connecting: Boolean = false,
+    /** Their camera is on but no picture came within the wait (iOS videoUnavailable): "Can't show video". */
+    val videoUnavailable: Boolean = false,
 )
 
 /** Someone at a call link's door (callLinks/{roomId}/requests/{uid}, status pending). */
@@ -620,6 +624,24 @@ object GroupCall {
     /** uid -> when first seen in this room (iOS CallTile.joinedAt). Cleared with the call. */
     private val firstSeen = HashMap<String, Long>()
     private val screenSince = HashMap<String, Long>()
+    private val cameraWaitSince = HashMap<String, Long>()
+
+    /**
+     * iOS GroupCallStage tile states for someone else: their camera is published and on but no track
+     * yet = connecting for 8 s, then unavailable; no media at all within 5 s of arriving = connecting.
+     * 0 = normal, 1 = connecting, 2 = unavailable. A refresh tick ends the waits by itself.
+     */
+    private fun mediaState(p: Participant, uid: String, cam: io.livekit.android.room.track.TrackPublication?): Int {
+        if (p === room?.localParticipant) return 0
+        val now = System.currentTimeMillis()
+        if (cam != null && cam.muted != true && cam.track == null) {
+            val since = cameraWaitSince.getOrPut(uid) { now }
+            return if (now - since < 8_000) 1 else 2
+        }
+        cameraWaitSince.remove(uid)
+        val arrived = firstSeen[uid] ?: now
+        return if (p.trackPublications.isEmpty() && now - arrived < 5_000 && now - joinedAtMs > 5_000) 1 else 0
+    }
 
     private fun refresh() {
         val r = room ?: return
@@ -656,6 +678,8 @@ object GroupCall {
                 joinedAtMs = firstSeen.getOrPut(uid) { System.currentTimeMillis() },
                 screenSinceMs = if ((scr?.track as? VideoTrack) != null && scr?.muted != true)
                     screenSince.getOrPut(uid) { System.currentTimeMillis() } else { screenSince.remove(uid); 0L },
+                connecting = mediaState(p, uid, cam) == 1,
+                videoUnavailable = mediaState(p, uid, cam) == 2,
             )
         }
         firstSeen.keys.retainAll(all.mapNotNull { it.identity?.value }.toSet())
@@ -759,7 +783,14 @@ object GroupCall {
     /** iOS: the speaker tracker is fed on every room change and on a 0.25 s tick. */
     private fun startSpeakerTicks(r: Room) {
         ticks?.cancel()
-        ticks = scope.launch { while (room === r) { tickSpeaker(); delay(250) } }
+        ticks = scope.launch {
+            var n = 0
+            while (room === r) {
+                tickSpeaker(); delay(250)
+                // A tile waiting for media (connecting / can't show) moves on by itself, once a second.
+                if (++n % 4 == 0 && _ui.value.members.any { it.connecting }) refresh()
+            }
+        }
     }
 
     private fun tickSpeaker() {
@@ -938,7 +969,7 @@ object GroupCall {
         requestReg?.remove(); requestReg = null
         requestsReg?.remove(); requestsReg = null
         groupReg?.remove(); groupReg = null
-        team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear(); screenSince.clear()
+        team = null; linkKey = null; passRole = CallRole.PARTICIPANT; sawMicBlocked = false; firstSeen.clear(); screenSince.clear(); cameraWaitSince.clear()
         ticks?.cancel(); ticks = null
         tracker.update(emptySet(), Long.MAX_VALUE / 2)
         if (link != null && _ui.value.waiting) {
