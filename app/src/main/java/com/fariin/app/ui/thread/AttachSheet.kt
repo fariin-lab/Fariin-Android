@@ -346,39 +346,35 @@ internal fun AttachSheet(
                 }
             } else {
                 Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (onePhoto && allowViewOnce) {
-                        Box(
-                            Modifier.size(44.dp).floating(fill = if (viewOnce) c.accent else null)
-                                .clickable { viewOnce = !viewOnce },
-                            contentAlignment = Alignment.Center,
-                        ) { Text("1", color = if (viewOnce) c.onAccent else c.label, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Box(
-                        Modifier.weight(1f).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
-                        contentAlignment = Alignment.CenterStart,
+                    // iOS (owner 2026-11-08): the caption field with the one-time "1" inside it at the end,
+                    // then the round blue Send with the up arrow (was a forward arrow, a count, and the
+                    // "1" as its own button on the left).
+                    Row(
+                        Modifier.weight(1f).heightIn(min = 44.dp).floating(RoundedCornerShape(22.dp)).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
-                        BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                            cursorBrush = SolidColor(c.accent), maxLines = 5,
-                            // Typing opens the sheet fully: at half height the caption sat under the
-                            // keyboard (Pixel 2026-11-05).
-                            modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
+                        Box(Modifier.weight(1f).padding(vertical = 4.dp), contentAlignment = Alignment.CenterStart) {
+                            if (caption.isEmpty()) Text(if (viewOnce) "View once" else "Add a caption", fontSize = 17.sp, color = c.secondary)
+                            BasicTextField(caption, { caption = it }, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                                cursorBrush = SolidColor(c.accent), maxLines = 5,
+                                // Typing opens the sheet fully: at half height the caption sat under the
+                                // keyboard (Pixel 2026-11-05).
+                                modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (f.isFocused) sheetScope.launch { repeat(3) { kotlinx.coroutines.delay(150); motion.expand() } } })
+                        }
+                        if (onePhoto && allowViewOnce) Box(
+                            Modifier.padding(start = 6.dp).size(30.dp).clip(CircleShape)
+                                .then(if (viewOnce) Modifier.background(c.accent) else Modifier.border(1.5.dp, c.label, CircleShape))
+                                .clickable { viewOnce = !viewOnce }.semantics { contentDescription = "View once" },
+                            contentAlignment = Alignment.Center,
+                        ) { Text("1", color = if (viewOnce) c.onAccent else c.label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
-                        Modifier.height(44.dp).floating(RoundedCornerShape(22.dp), fill = c.blue)
-                            .clickable { onSendMedia(picked.toList(), caption, viewOnce); motion.close() }
-                            .padding(horizontal = 16.dp),
+                        Modifier.size(44.dp).clip(CircleShape).background(c.blue)
+                            .clickable { onSendMedia(picked.toList(), caption, viewOnce); motion.close() },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_share_turn_right), "Send", tint = Color.White, modifier = Modifier.size(18.dp))
-                            if (picked.size > 1) {
-                                Spacer(Modifier.width(4.dp))
-                                Text("${picked.size}", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                            }
-                        }
+                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_up), "Send", tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
             }

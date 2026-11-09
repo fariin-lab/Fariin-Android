@@ -1524,3 +1524,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   never made cards for our own profile links at all (own links returned null unless a group invite).
   Now as iOS profileDraft: fariin.com/u/<handle> gets a card from the account (name, @handle, photo;
   "Unavailable" for a released name), never by scraping the site. Checked: composer card and sent card.
+- 2026-11-08 ~11:24 PM: OWNER (Pixel vs iPhone): the attach sheet's send bar after picking photos
+  had a forward arrow (+ count) and the one-time "1" as its own button on the left. Now as iOS: the
+  caption field with the "1" inside at its end, then a round blue up-arrow Send. Checked.
