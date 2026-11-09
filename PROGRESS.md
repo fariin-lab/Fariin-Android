@@ -1482,3 +1482,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~10:33 PM: Restricted Chat request flow as iOS: the other side's switch asks "Ask Alice
   Test to turn it off?" -> Send Request -> "Waiting for ... to answer"; the owner gets a tappable
   "... asked to turn off Restricted chat." notice -> Keep On / Turn Off; Turn Off clears both sides.
+- 2026-11-08 ~10:52 PM: OPEN BUG (next session, first): "typing…" / "recording…" on the other side
+  drops after ~1-7 s instead of lasting until 15 s after the value last changed (iOS expiry), in 1:1
+  and groups. The value stays in Firestore the whole time (polled), so it is the receiver: a debug
+  log in ThreadRoute showed the 15 s tick firing ~7 s after a NEW value with since=15147, i.e. timed
+  from the previous value. Suspects: a second ThreadRoute for the same cid kept in the back stack,
+  or typingSince/LaunchedEffect keyed on the map object. Repro on the emulators: write
+  typing.<alice> = "text-<now>" via the emulator REST and watch Bobby's header.
