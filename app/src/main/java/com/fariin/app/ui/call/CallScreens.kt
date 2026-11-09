@@ -1626,6 +1626,11 @@ private fun GroupCallParticipantsSheet(g: GroupCallUi, meId: String?, onFocus: (
                 }
                 Spacer(Modifier.height(20.dp))
             }
+            // iOS approvalRow: the link's owner turns Approve New People on or off from the call.
+            if (g.linkCreator && g.linkRoom != null) {
+                LinkApprovalRow(g.linkRoom!!)
+                Spacer(Modifier.height(20.dp))
+            }
             if (g.linkCreator && g.requests.isNotEmpty()) {
                 SheetSection {
                     Row(Modifier.fillMaxWidth().height(48.dp).clickable { showRequests = true }.padding(horizontal = 16.dp),
@@ -1795,6 +1800,41 @@ private fun NotHereYet(g: GroupCallUi, meId: String?) {
     }
     toast?.let { Text(it, color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) }
     Spacer(Modifier.height(20.dp))
+}
+
+/** iOS GroupCallParticipantsSheet.approvalRow: the switch, a spinner while it loads, Retry if it could not. */
+@Composable
+private fun LinkApprovalRow(roomId: String) {
+    val scope = rememberCoroutineScope()
+    var value by remember(roomId) { mutableStateOf<Boolean?>(null) }
+    var failed by remember(roomId) { mutableStateOf(false) }
+    var saving by remember(roomId) { mutableStateOf(false) }
+    suspend fun load() {
+        failed = false
+        val d = runCatching { com.fariin.app.call.CallLinks.readDoc(roomId) }.getOrNull()
+        if (d != null) value = d["restrictions"] == "adminApproval" else if (value == null) failed = true
+    }
+    LaunchedEffect(roomId) { load() }
+    SheetSection {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Approve New People", color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+            val v = value
+            when {
+                v != null -> androidx.compose.material3.Switch(checked = v, enabled = !saving, onCheckedChange = { on ->
+                    val before = v
+                    value = on; saving = true
+                    scope.launch {
+                        val ok = runCatching { com.fariin.app.call.CallLinks.setApproval(roomId, on) }.isSuccess
+                        if (!ok) { value = before; GroupCall.say("Couldn't change that. Try again.") }
+                        saving = false
+                    }
+                }, colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Green))
+                failed -> Text("Couldn't load. Retry", color = Color(0xFF0A84FF), fontSize = 15.sp,
+                    modifier = Modifier.clickable { scope.launch { load() } })
+                else -> FariinSpinner(size = 18.dp, color = Color.White)
+            }
+        }
+    }
 }
 
 /**
