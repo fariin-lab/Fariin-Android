@@ -1435,3 +1435,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   users expect; the owner held to it on 2026-11-06). Kept: behaviour fixes (keyboard on Reply/Edit,
   edit tick, camera -> editor, member-card actions, quotes of deleted messages, voice pill, block ends
   the call) and the green iOS-shaped approval switch (the switch shape is the owner's own choice).
+- 2026-11-08 ~9:48 PM: select mode (menu Select, tap a second message, "2 Selected", Delete /
+  Forward / Copy bar) and bulk "Delete 2 messages?" for everyone: placeholders on both sides.
