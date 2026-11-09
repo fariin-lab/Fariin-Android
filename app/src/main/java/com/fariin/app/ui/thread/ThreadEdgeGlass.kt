@@ -101,10 +101,25 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         val heightDp = barDp + 32.dp
         val solid = (barDp * 0.55f / heightDp).coerceIn(0f, 0.8f)
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
+        // The blur needs a few frames after the page appears before it has the messages to blur
+        // (owner's Pixel 2026-11-09: a bubble showed sharp under the status bar for ~4 frames, then
+        // turned to glass, "the header blur makes movement"). Until then the plain edge (the page
+        // colour in soft steps) covers it, and it fades away once the blur is surely drawing.
+        val cover = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(1f) }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(BLUR_WARM_MS)
+            cover.animateTo(0f, androidx.compose.animation.core.tween(180))
+        }
+        if (!walled) Box(modifier.fillMaxWidth().height(barDp + EDGE_FADE).drawBehind {
+            val a2 = cover.value * alpha
+            if (a2 > 0f) drawRect(edgeAlphaBrush(c.bg, size.height, EDGE_FADE.toPx()), alpha = a2)
+        })
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
             tints = emptyList()
-            inputScale = HazeInputScale.Fixed(1f / 3)
+            // Full size (was a third): the scaled copy dropped out for single frames, drawing the
+            // messages sharp under the header (owner's Pixel 2026-11-09, "the header blur makes movement").
+            inputScale = HazeInputScale.None
             progressive = com.fariin.app.ui.components.edgeStages(solid)
             this.alpha = alpha
         })
@@ -118,3 +133,6 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         })
     }
 }
+
+/** How long after a chat appears its header blur is taken to be drawing (4 frames seen, with room). */
+private const val BLUR_WARM_MS = 160L
