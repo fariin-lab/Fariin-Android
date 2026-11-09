@@ -178,7 +178,41 @@ object Giphy {
     }
 
     /** Trending with no words, else a search (iOS search): 30 GIFs, rated up to PG-13. */
-    suspend fun search(context: Context, q: String, stickers: Boolean = false): List<StickerGifRules.Gif> = withContext(Dispatchers.IO) {
+    // iOS GifPickerView.trendingCache + PanelGifGrid.moodGifs (owner 2026-11-09, "like iOS"): the
+    // last list of each tab is kept, so the panel paints at once and refreshes quietly behind.
+    // Trending also survives a restart (public GIPHY links and sizes only, 40 at most).
+    private const val TRENDING = "giphy.trending.v1"
+    private val lists = java.util.concurrent.ConcurrentHashMap<String, List<StickerGifRules.Gif>>()
+
+    /** The last list for these words ("" = Trending), or null if none yet. */
+    fun cached(context: Context, q: String): List<StickerGifRules.Gif>? {
+        val t = q.trim()
+        lists[t]?.let { return it }
+        if (t.isNotEmpty()) return null
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(TRENDING, null) ?: return null
+        return try {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).map { i -> arr.getJSONObject(i).let {
+                StickerGifRules.Gif(it.getString("id"), it.getString("url"), it.getDouble("w"), it.getDouble("h")) } }
+                .also { if (it.isNotEmpty()) lists[""] = it }
+        } catch (_: Exception) { null }
+    }
+
+    private fun remember(context: Context, q: String, list: List<StickerGifRules.Gif>) {
+        if (list.isEmpty()) return
+        val t = q.trim()
+        lists[t] = list
+        if (t.isEmpty()) {
+            val arr = org.json.JSONArray()
+            list.take(40).forEach { g -> arr.put(org.json.JSONObject().put("id", g.id).put("url", g.url).put("w", g.width).put("h", g.height)) }
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(TRENDING, arr.toString()).apply()
+        }
+    }
+
+    suspend fun search(context: Context, q: String, stickers: Boolean = false): List<StickerGifRules.Gif> =
+        fetch(context, q, stickers).also { if (!stickers) remember(context, q, it) }
+
+    private suspend fun fetch(context: Context, q: String, stickers: Boolean = false): List<StickerGifRules.Gif> = withContext(Dispatchers.IO) {
         val k = key(context) ?: return@withContext emptyList()
         val t = q.trim()
         val path = if (t.isEmpty()) "trending" else "search"

@@ -207,7 +207,7 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
     Column(Modifier.width(w.dp).clip(shape).background(fill)) {
         if (hasHeader) Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) { header() }
         Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))) {
-            AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF",
+            AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
                 contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) { MetaCapsule { meta() } }
         }
@@ -385,9 +385,14 @@ internal fun GifTab(
             else -> null
         }
     }
-    val fetched by produceState<List<StickerGifRules.Gif>?>(null, category) {
-        value = null
-        if (!category.local) value = Giphy.search(ctx, category.term)
+    // The tab's last list shows at once (iOS); the fresh one replaces it when it lands, and a failed
+    // refresh keeps the old list rather than blanking the grid.
+    val fetched by produceState(if (category.local) null else Giphy.cached(ctx, category.term), category) {
+        value = if (category.local) null else Giphy.cached(ctx, category.term)
+        if (!category.local) {
+            val fresh = Giphy.search(ctx, category.term)
+            if (fresh.isNotEmpty() || value == null) value = fresh
+        }
     }
     val grid = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
     LaunchedEffect(category) { grid.scrollToItem(0); onScrolledIn(false) }
@@ -455,7 +460,7 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
             val ratio = 1f
             var menu by remember { mutableStateOf(false) }
             Box {
-                AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", contentScale = ContentScale.Crop,
+                AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()
                         .background(c.secondary.copy(alpha = 0.15f))
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
