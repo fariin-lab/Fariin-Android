@@ -16,6 +16,9 @@ class MessageRulesTest {
     @Test fun editWindowIsFifteenMinutes() {
         assertTrue(MessageRules.canEdit(msg(ageMs = 14 * 60_000.0), me, now))
         assertFalse(MessageRules.canEdit(msg(ageMs = 15 * 60_000.0), me, now))
+        // A channel post has no window (iOS, owner 2026-11-05).
+        assertTrue(MessageRules.canEdit(msg(ageMs = 3 * 24 * 3600_000.0), me, now, channel = true))
+        assertFalse(MessageRules.canEdit(msg(author = "them", ageMs = 60_000.0), me, now, channel = true))
         assertFalse(MessageRules.canEdit(msg(author = "them"), me, now))
         assertFalse(MessageRules.canEdit(msg().copy(forwarded = true), me, now))
         assertFalse(MessageRules.canEdit(msg(type = "audio"), me, now))

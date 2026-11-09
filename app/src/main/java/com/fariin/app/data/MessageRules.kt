@@ -24,10 +24,11 @@ object MessageRules {
     private fun unopened(m: Message) = m.text == Wire.LOCKED || m.text == Wire.NOT_READY
 
     /** ThreadView.canEdit: mine, not forwarded, has words, delivered, inside the window. */
-    fun canEdit(m: Message, me: String, nowMs: Double): Boolean =
+    fun canEdit(m: Message, me: String, nowMs: Double, channel: Boolean = false): Boolean =
         m.authorId == me && !m.forwarded && !m.deleted && m.type != "audio" && !m.isCall && !m.isSystem &&
             !m.viewOnce && m.text.isNotEmpty() && !unopened(m) && m.sendState == null &&
-            nowMs - m.createdAtMillis < EDIT_WINDOW_MS
+            // iOS: a channel post has no window (owner 2026-11-05); the rules drop it for channels too.
+            (channel || nowMs - m.createdAtMillis < EDIT_WINDOW_MS)
 
     /** ThreadView.canDeleteForEveryone. [adminMayDelete]: I hold the group "Delete messages" right. */
     fun canDeleteForEveryone(m: Message, me: String, adminMayDelete: Boolean = false, authorIsOwner: Boolean = false,

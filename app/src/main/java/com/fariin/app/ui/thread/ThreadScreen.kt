@@ -477,7 +477,7 @@ private fun ThreadContent(
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
             onSelect = if (com.fariin.app.data.SelectRules.selectable(m)) ({ selected.clear(); selected.add(it.rowId) }) else null,
-            onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble()) && !com.fariin.app.data.CardRules.isCard(m.text))
+            onEdit = if (MessageRules.canEdit(m, ui.me, System.currentTimeMillis().toDouble(), channel = true) && !com.fariin.app.data.CardRules.isCard(m.text))
                 ({ editing = it; replyTo = null }) else null,
             onEditHistory = { historyFor = it },
             pinned = if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) (m.id in ui.pinnedIds) else null,

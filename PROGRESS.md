@@ -1455,3 +1455,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~10:05 PM: a tap or drag on a voice note's waveform before it is played now keeps the
   spot and play starts there (iOS VoiceNotePlayer.seek "works BEFORE the first play"); it did
   nothing until the note was loaded. Checked: tap mid-wave shows 0:02, play runs the last second.
+- 2026-11-08 ~10:09 PM: a channel post had the chats' 15-minute edit window; iOS lets the owner and
+  admins edit a post at any age (owner 2026-11-05, the rules drop the window for channels).
+  MessageRules.canEdit(channel = true) for the channel post menu, with a test. Checked: hour-old
+  post offers Edit, saves "First post edited".
