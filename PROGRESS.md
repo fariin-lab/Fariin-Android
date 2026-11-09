@@ -1384,3 +1384,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~8:41 PM: emulators: make admin (confirm sheet, toast, Bobby's card gains admin tools),
   ban (confirm, "removed" line, Bobby's open chat keeps messages + "You're no longer a member"),
   unban + add back (Bobby's open chat gets the composer back live). All as iOS.
+- 2026-11-08 ~8:48 PM: emulators: text story (tap-to-type as iOS, share sheet, Post), shows on the
+  other side under Recent Stories, first-view tips, viewer count 1, story reply lands in the 1:1 as
+  "replied to your story" + thumbnail. No gaps found.
