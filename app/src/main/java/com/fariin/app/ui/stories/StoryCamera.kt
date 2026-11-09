@@ -157,9 +157,37 @@ fun StoryCameraDialog(
     /** A finished TEXT story, already drawn to the picture that posts (iOS onTextStory). */
     onTextStory: (com.fariin.app.data.StoryMedia.Prepared) -> Unit = {},
 ) {
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    // The camera rises from the bottom as one sheet and goes back down the same way (iOS full-screen
+    // cover; owner 2026-11-08: it faded in and out with its buttons hanging over the Stories list).
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val hidden = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp + 80).dp.toPx() }
+    val y = remember { androidx.compose.animation.core.Animatable(hidden) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+    val latestClose by androidx.compose.runtime.rememberUpdatedState(onClose)
+    fun close() {
+        if (closing) return
+        closing = true
+        scope.launch {
+            y.animateTo(hidden, androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+            latestClose()
+        }
+    }
+    LaunchedEffect(Unit) { y.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f)) }
+    Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()   // no grey band over the status bar
-        StoryCamera(active, error, onCaptured, onLibrary, onClose, onTextStory)
+        val view = androidx.compose.ui.platform.LocalView.current
+        // Only our slide moves it: the window's own fade made the buttons linger over the list.
+        androidx.compose.runtime.SideEffect {
+            (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { w ->
+                w.setWindowAnimations(0)
+                // Clear window: during the slide the list shows above the camera, not a black strip.
+                w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            }
+        }
+        Box(Modifier.fillMaxSize().graphicsLayer { translationY = y.value }) {
+            StoryCamera(active, error, onCaptured, onLibrary, { close() }, onTextStory)
+        }
     }
 }
 
@@ -641,7 +669,7 @@ private fun StoryCamera(
                         onTap = { if (recording == null) shoot() },
                         onHoldStart = ::holdStart, onHoldMove = ::holdMove, onHoldEnd = ::holdEnd,
                     )
-                } else Spacer(Modifier.size(84.dp))
+                } else Spacer(Modifier.size(74.dp))
                 if (recording != null) {
                     Box(Modifier.offset(x = 78.dp)) {
                         LockButton(locked, lockProgress) {
@@ -908,10 +936,11 @@ private fun Shutter(
     val move by rememberUpdatedState(onHoldMove)
     val end by rememberUpdatedState(onHoldEnd)
     val busyNow by rememberUpdatedState(isRecording)
-    val inner by animateDpAsState(if (!recording) 70.dp else if (locked) 34.dp else 62.dp, tween(200), label = "shutter")
+    // iOS size (owner 2026-11-08: "it's big"): 74 ring, 62 white.
+    val inner by animateDpAsState(if (!recording) 62.dp else if (locked) 30.dp else 54.dp, tween(200), label = "shutter")
     val corner by animateDpAsState(if (locked && recording) 8.dp else 36.dp, tween(200), label = "shutterCorner")
     Box(
-        Modifier.size(84.dp).border(5.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+        Modifier.size(74.dp).border(4.5.dp, Color.White.copy(alpha = 0.55f), CircleShape)
             .semantics { contentDescription = if (recording) "Stop recording" else "Take photo, hold to record" }
             .pointerInput(Unit) {
                 awaitEachGesture {
