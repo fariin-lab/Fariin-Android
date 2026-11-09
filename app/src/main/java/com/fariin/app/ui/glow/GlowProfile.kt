@@ -1,5 +1,7 @@
 package com.fariin.app.ui.glow
 
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.blur
 import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -188,16 +190,33 @@ fun GlowProfilePage(me: String, profile: MyProfile?, onEdit: () -> Unit, onBack:
                         Box(Modifier.align(Alignment.TopCenter).padding(top = barBottom)) { Avatar(null, 110.dp) }
                     }
                 }
-                // Identity: rides up into the photo's fade while the photo is big.
-                Column(Modifier.fillMaxWidth().offset(y = if (hasPhoto && !circle) -(heroHeight * 0.10f) else 0.dp),
+                // Identity: rides up into the photo's fade while the photo is big. Over the photo
+                // (owner 2026-11-09, unreadable on black-and-white photos): a soft dark fade behind the
+                // words only, and a light shadow on them. Nothing else on the page changes.
+                val overPhoto = hasPhoto && !circle
+                val lift = if (overPhoto) androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(
+                    Color.Black.copy(alpha = 0.35f), androidx.compose.ui.geometry.Offset(0f, 2.5f), 7.5f)) else androidx.compose.ui.text.TextStyle.Default
+                Box(Modifier.fillMaxWidth().offset(y = if (overPhoto) -(heroHeight * 0.10f) else 0.dp)) {
+                if (overPhoto) Box(Modifier.matchParentSize()
+                    .layout { m, k ->
+                        // 28 dp above and below, 60 dp each side, past the words.
+                        val ex = 60.dp.roundToPx(); val ey = 28.dp.roundToPx()
+                        val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(k.maxWidth + 2 * ex, k.maxHeight + 2 * ey))
+                        layout(k.maxWidth, k.maxHeight) { p.place(-ex, -ey) }
+                    }
+                    .blur(14.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded)
+                    .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to Color.Black.copy(alpha = 0.34f),
+                        0.7f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)))
+                Column(Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(profile?.name.orEmpty(), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Label, textAlign = TextAlign.Center)
-                    profile?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 17.sp, color = Secondary) }
+                    Text(profile?.name.orEmpty(), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Label, textAlign = TextAlign.Center, style = lift)
+                    profile?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 17.sp, color = if (overPhoto) Color.White else Secondary, style = lift) }
                     profile?.about?.takeIf { it.isNotEmpty() }?.let {
-                        Text(it, fontSize = 15.sp, color = Secondary, textAlign = TextAlign.Center,
+                        Text(it, fontSize = 15.sp, color = if (overPhoto) Color.White else Secondary, textAlign = TextAlign.Center, style = lift,
                             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 2.dp))
                     }
                     profile?.links?.let { com.fariin.app.ui.people.ProfileLinkChips(it, Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) }
+                }
                 }
                 val title = profile?.handle?.ifEmpty { null } ?: profile?.name?.ifEmpty { null } ?: "Glow"
                 if (AppFeatures.glow) StatsCard(glow.glowers.size, glow.glowing.size, faces,
