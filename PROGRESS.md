@@ -1403,3 +1403,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~9:05 PM: emulators + functions_stub: new channel flow (intro, name, Channel Type
   page, Done), channel welcome card, Broadcast post with views/time/share. No gaps found. Chat-list
   search checked: names only, same as iOS (message text is ciphertext there).
+- 2026-11-08 ~9:08 PM: link lobby with the stub (no media server, no groupCallToken): an approval
+  link opens the lobby with "Ask to Join", the warm call goes once, no pass is pre-fetched (right:
+  a pass request on an approval link is a knock), peek every 5 s, no crash. A non-approval link's
+  pre-fetch still needs the live server to test.
