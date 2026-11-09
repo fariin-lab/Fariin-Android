@@ -1447,3 +1447,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   the note sent straight after it starts by itself (system lines skipped; any other message or a
   one-time note ends the run), also after leaving the chat. New media/VoiceRun (the open chat
   publishes its messages). Tested: two notes in a row, play the first, the second follows.
+- 2026-11-08 ~10:01 PM: voice notes, two iOS VoiceNotePlayer behaviours Android lacked:
+  RAISE TO EAR (new media/VoiceEar: proximity near while a note plays -> earpiece + screen off,
+  away -> loudspeaker; holds across a run; never while a call is up) and HEADPHONES OUT PAUSES the
+  note (ExoPlayer audio-becoming-noisy) instead of carrying on out loud. Tested raise-to-ear with
+  the emulator's proximity sensor: screen-off lock taken when near, released and MODE_NORMAL when far.

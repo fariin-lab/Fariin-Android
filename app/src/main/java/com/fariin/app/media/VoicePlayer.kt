@@ -83,6 +83,7 @@ object VoicePlayer {
 
     fun stop() {
         save()
+        VoiceEar.stop()
         player?.release(); player = null
         ticker?.cancel()
         _state.value = _state.value.copy(id = null, playing = false, positionMs = 0, cid = null)
@@ -96,9 +97,10 @@ object VoicePlayer {
 
     /** The run's next voice note (VoiceRun), fetched and played as a tap on it would; heard, so marked played. */
     private suspend fun playNext(context: Context, cid: String, after: String) {
-        val n = VoiceRun.nextAfter(cid, after) ?: return
-        val url = n.localPath ?: n.audioUrl ?: return
-        val f = VoiceRun.media?.file(url, n.enc) ?: return
+        // The run is over (or the next note cannot be had): raise-to-ear lets go of the audio.
+        val n = VoiceRun.nextAfter(cid, after) ?: run { if (_state.value.id == null) VoiceEar.stop(); return }
+        val url = n.localPath ?: n.audioUrl ?: run { VoiceEar.stop(); return }
+        val f = VoiceRun.media?.file(url, n.enc) ?: run { if (_state.value.id == null) VoiceEar.stop(); return }
         if (_state.value.id != null) return   // something else started meanwhile
         com.fariin.app.data.PlayedVoice.markPlayed(context, cid, n.createdAtMillis)
         toggle(context, n.rowId, cid, f, n.authorId)
@@ -111,6 +113,8 @@ object VoicePlayer {
         val p = ExoPlayer.Builder(context.applicationContext).build()
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
+        // iOS: headphones out must not put a private note on the speaker; it pauses instead.
+        p.setHandleAudioBecomingNoisy(true)
         p.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
         p.playbackParameters = PlaybackParameters(rate(cid))
         p.addListener(object : Player.Listener {
@@ -137,6 +141,7 @@ object VoicePlayer {
         _state.value.paused[id]?.let { p.seekTo(it) }
         p.play()
         player = p
+        VoiceEar.watch(context) { player }   // raise to ear, as iOS
         _state.value = _state.value.copy(id = id, playing = true, failed = _state.value.failed - id, cid = cid, author = author)
         ticker?.cancel()
         ticker = main.launch { while (isActive) { tick(); delay(50) } }
