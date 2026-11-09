@@ -52,7 +52,7 @@ import kotlinx.coroutines.tasks.await
 /**
  * "Add to a Group" from someone's profile (iOS AddToGroupView): my groups, A to Z; a tap asks
  * "Add New Member" and adds them. Not the new-group flow, only existing groups. A group they are
- * already in says "Already a member"; one where I may not add says why, both dimmed.
+ * already in says "Already a member"; one where I may not add says why; the name stays in full colour, only the grey line explains (iOS fix 23).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +98,7 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
                             Avatar(g.displayPhoto(me), 44.dp, kind = com.fariin.app.ui.components.AvatarKind.GROUP)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(g.displayName(me), fontSize = 17.sp, color = if (off) c.secondary else c.label, maxLines = 1)
+                                Text(g.displayName(me), fontSize = 17.sp, color = c.label, maxLines = 1)
                                 Text(if (already) "Already a member" else blocked ?: GroupRules.memberCount(g.users.size), fontSize = 13.sp, color = c.secondary)
                             }
                             if (working == g.id) com.fariin.app.ui.components.FariinSpinner(size = 20.dp)
