@@ -1381,3 +1381,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~8:36 PM: group member card matched to iOS: Message / Voice / Video circles under the
   name (anyone but me), tag row says Add / Edit Tag (Add / Edit My Tag on my own card) with a tag
   icon (new ic_sf_tag, our own drawing) instead of the sticker one. Message opens the 1:1 (tested).
+- 2026-11-08 ~8:41 PM: emulators: make admin (confirm sheet, toast, Bobby's card gains admin tools),
+  ban (confirm, "removed" line, Bobby's open chat keeps messages + "You're no longer a member"),
+  unban + add back (Bobby's open chat gets the composer back live). All as iOS.
