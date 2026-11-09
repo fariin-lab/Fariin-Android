@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,6 +93,12 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     var sub by remember(open) { mutableStateOf<GlassMenuItem?>(null) }
     val rows = sub?.let { s -> listOf(GlassMenuItem(s.title, s.icon, header = true)) +
         s.submenu.orEmpty().mapIndexed { i, x -> if (i == 0) GlassMenuItem(x.title, x.icon, x.danger, true, x.checked, onClick = x.onClick) else x } } ?: items
+    // The finger handler below reads these live instead of being keyed on them. Keyed on [rows], it was
+    // torn down mid-tap: the press itself recomposes this menu (the pill), the submenu's rows are a new
+    // list on every pass, so the handler restarted between finger down and up and the lift was lost
+    // (owner 2026-11-09: "Save to Photos" On / Off did nothing and the menu stayed open).
+    val liveRows by rememberUpdatedState(rows)
+    val liveDismiss by rememberUpdatedState(onDismiss)
     // 0 = folded into the button, 1 = open. A spring with a little give, as the reference.
     val grow = remember { Animatable(0f) }
     var shown by remember { mutableStateOf(false) }
@@ -165,12 +172,15 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                 .then(glassMod)
                 .glassRim(c)
                 // Finger tracking: the pill follows the row under the finger; lifting on a row picks it.
-                .pointerInput(rows) {
+                .pointerInput(open) {   // open: [sub] is a new state per opening
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         // Ours: the page's tap-outside layer must not close the menu (a submenu stays open).
                         down.consume()
-                        fun rowAt(y: Float) = if (rowH <= 0 || y < captionH) -1 else ((y - captionH) / rowH).toInt().coerceIn(0, rows.lastIndex)
+                        // Finger y is in the glass box, which has 6 dp of padding above the caption and rows.
+                        val padTop = 6.dp.toPx()
+                        fun rowAt(y: Float) = if (rowH <= 0 || y < padTop + captionH) -1
+                            else ((y - padTop - captionH) / rowH).toInt().coerceIn(0, liveRows.lastIndex)
                         pressed = rowAt(down.position.y)
                         scope.launch { pill.snapTo(pressed.toFloat()) }
                         scope.launch { lean.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 600f)) }
@@ -188,12 +198,13 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                         val inside = last.y >= 0 && last.y <= this.size.height && last.x >= 0 && last.x <= this.size.width
                         val pick = pressed
                         pressed = -1
-                        if (inside && pick in rows.indices) {
-                            val row = rows[pick]
+                        val now = liveRows
+                        if (inside && pick in now.indices) {
+                            val row = now[pick]
                             when {
                                 row.submenu != null -> sub = row
                                 row.header -> sub = null
-                                else -> { onDismiss(); row.onClick() }
+                                else -> { liveDismiss(); row.onClick() }
                             }
                         }
                     }
