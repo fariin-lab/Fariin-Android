@@ -1330,3 +1330,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~5:40 PM: group call strip newest first (37f40c6a, test), call-end notice as an alert
   with OK (973b1244, untested live). Manage Storage checked: type split differs from iOS by design
   (Android's own caches), left.
+- 2026-11-08 ~6 PM: group call gaps closed: newest presenter wins (bb4ec244), tile connecting /
+  "Can't show video" (e301fc1e), two-person header name/Muted/clock (eb81b47d), tile fade-in
+  (676e8ac0), reactions overlay (this). All built; need a real call to see.
