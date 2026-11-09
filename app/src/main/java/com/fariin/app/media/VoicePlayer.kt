@@ -94,6 +94,16 @@ object VoicePlayer {
         if (p.isPlaying) p.pause() else { if (p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play() }
     }
 
+    /** The run's next voice note (VoiceRun), fetched and played as a tap on it would; heard, so marked played. */
+    private suspend fun playNext(context: Context, cid: String, after: String) {
+        val n = VoiceRun.nextAfter(cid, after) ?: return
+        val url = n.localPath ?: n.audioUrl ?: return
+        val f = VoiceRun.media?.file(url, n.enc) ?: return
+        if (_state.value.id != null) return   // something else started meanwhile
+        com.fariin.app.data.PlayedVoice.markPlayed(context, cid, n.createdAtMillis)
+        toggle(context, n.rowId, cid, f, n.authorId)
+    }
+
     private fun start(context: Context, id: String, cid: String, file: File, author: String) {
         save()
         player?.release()
@@ -115,6 +125,8 @@ object VoicePlayer {
                     ticker?.cancel()
                     // Released just after this callback returns, not from inside it.
                     if (player === p) { player = null; main.launch { p.release() } }
+                    // iOS followOn: the next note sent straight after this one plays by itself.
+                    main.launch { playNext(context.applicationContext, cid, id) }
                 } else tick()
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {

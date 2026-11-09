@@ -1443,3 +1443,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Fixed: the voice-note bar over the chat list stayed forever after a note finished (the player kept
   it "open"); now a finished note closes, as iOS barVisible ("started, not yet finished or closed").
   Tested: bar while playing away from the chat, gone when it ends.
+- 2026-11-08 ~9:57 PM: voice notes now play as a run, as iOS VoiceNotePlayer.followOn: when one ends,
+  the note sent straight after it starts by itself (system lines skipped; any other message or a
+  one-time note ends the run), also after leaving the chat. New media/VoiceRun (the open chat
+  publishes its messages). Tested: two notes in a row, play the first, the second follows.
