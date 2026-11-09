@@ -119,14 +119,11 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
 @Composable
 private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
     val c = Fariin.colors
-    val pills = if (i.isReact && i.others > 0) ActivityRules.pills(i.rx) else emptyList()
-    Row(Modifier.fillMaxWidth().clickable(onClick = onTap).heightIn(min = if (pills.isNotEmpty()) 92.dp else 80.dp)
+    val pic = i.thumb.isNotEmpty()
+    Row(Modifier.fillMaxWidth().clickable(onClick = onTap).heightIn(min = if (i.isReact) 92.dp else 80.dp)
         .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        // A reaction (owner 2026-11-09): no face, the latest emoji 30 sp in a plain grey circle.
-        // A reply: the person's face with the channel's squircle as a badge.
-        if (i.isReact) Box(Modifier.size(56.dp).clip(CircleShape).background(c.label.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-            Text(i.emoji, fontSize = 30.sp)
-        } else Box(Modifier.size(56.dp)) {
+        if (i.isReact) ReactFaces(i) else Box(Modifier.size(56.dp)) {
+            // A reply: the person's face with the channel's squircle as a badge.
             Avatar(i.fromPhoto.ifEmpty { if (i.fromUid.isEmpty()) i.chPhoto else "" }.ifEmpty { null }, 56.dp,
                 squircle = i.fromUid.isEmpty(), kind = if (i.fromUid.isEmpty()) AvatarKind.CHANNEL else AvatarKind.PERSON)
             Box(Modifier.align(Alignment.BottomEnd).offset(x = 3.dp, y = 3.dp).size(24.dp).clip(CircleShape).background(c.bgSecondary).padding(2.dp)) {
@@ -135,34 +132,64 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(ActivityRules.who(i)) }
-                    append(if (i.isReact) " reacted in " else " in ")
-                    append(i.chTitle.ifEmpty { "a channel" })
-                }, fontSize = 15.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Text(" · " + shortAgo(i.at), fontSize = 13.sp, color = c.secondary, maxLines = 1)
-            }
-            if (!i.isReact && i.text.isNotEmpty()) Text(i.text, fontSize = 15.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(ActivityRules.mineLine(i), fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (pills.isNotEmpty()) Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                pills.forEach { (e, n) ->
-                    Row(Modifier.clip(CircleShape).background(c.label.copy(alpha = 0.08f)).padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(e, fontSize = 13.sp)
-                        Spacer(Modifier.width(4.dp))
-                        Text(com.fariin.app.channel.ChannelRules.compactCount(n), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+            if (i.isReact) {
+                // Design 3 (owner 2026-11-09): "Roodo, kream and 12 others" / "reacted to your comment in VE3".
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(ActivityRules.reactNames(i), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (!pic) Text(" " + shortAgo(i.at), fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                }
+                Text(ActivityRules.reactLine(i) + if (pic) " · " + shortAgo(i.at) else "", fontSize = 15.sp, color = c.secondary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val pills = ActivityRules.pills(i.rx).ifEmpty { if (i.emoji.isNotEmpty()) listOf(i.emoji to 1) else emptyList() }
+                if (pills.isNotEmpty()) Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    pills.forEach { (e, n) ->
+                        Row(Modifier.clip(CircleShape).background(c.label.copy(alpha = 0.08f)).padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(e, fontSize = 13.sp)
+                            Spacer(Modifier.width(4.dp))
+                            Text(com.fariin.app.channel.ChannelRules.compactCount(n), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                        }
                     }
                 }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(ActivityRules.who(i)) }
+                        append(" in ")
+                        append(i.chTitle.ifEmpty { "a channel" })
+                    }, fontSize = 15.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(" · " + shortAgo(i.at), fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                }
+                if (i.text.isNotEmpty()) Text(i.text, fontSize = 15.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(ActivityRules.mineLine(i), fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         // The post's picture on the right (owner 2026-11-09): 56 dp, radius 12; a video gets a play mark.
-        if (i.thumb.isNotEmpty()) {
+        if (pic) {
             Spacer(Modifier.width(10.dp))
             Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(c.label.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
                 AsyncImage(i.thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
                 if (i.thumbKind == "video") Icon(ImageVector.vectorResource(R.drawable.ic_sf_play_fill), null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
+        }
+    }
+}
+
+/** Who reacted: one face, or two 40 dp faces stacked in the 56 dp box (the newest bottom-right, ringed). */
+@Composable
+private fun ReactFaces(i: ActivityItem) {
+    val c = Fariin.colors
+    fun photo(u: String, p: String) = p.ifEmpty { if (u.isEmpty()) i.chPhoto else "" }.ifEmpty { null }
+    if (!i.hasFrom2) {
+        Avatar(photo(i.fromUid, i.fromPhoto), 56.dp, squircle = i.fromUid.isEmpty(), kind = if (i.fromUid.isEmpty()) AvatarKind.CHANNEL else AvatarKind.PERSON)
+        return
+    }
+    Box(Modifier.size(56.dp)) {
+        Avatar(photo(i.from2Uid, i.from2Photo), 40.dp, modifier = Modifier.align(Alignment.TopStart),
+            squircle = i.from2Uid.isEmpty(), kind = if (i.from2Uid.isEmpty()) AvatarKind.CHANNEL else AvatarKind.PERSON)
+        Box(Modifier.align(Alignment.BottomEnd).offset(x = 2.5.dp, y = 2.5.dp).size(45.dp).clip(CircleShape).background(c.bgSecondary).padding(2.5.dp)) {
+            Avatar(photo(i.fromUid, i.fromPhoto), 40.dp, squircle = i.fromUid.isEmpty(), kind = if (i.fromUid.isEmpty()) AvatarKind.CHANNEL else AvatarKind.PERSON)
         }
     }
 }

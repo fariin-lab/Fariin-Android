@@ -34,6 +34,11 @@ data class ActivityItem(
     val fromUid: String,
     val fromName: String,
     val fromPhoto: String,
+    /** React: the person before the newest (server `from2`); empty when only one reacted. */
+    val hasFrom2: Boolean = false,
+    val from2Uid: String = "",
+    val from2Name: String = "",
+    val from2Photo: String = "",
     /** Reply: their words, and where their reply is. */
     val text: String,
     val newRid: String,
@@ -54,6 +59,7 @@ data class ActivityItem(
             fun m(k: String) = d[k] as? Map<*, *> ?: emptyMap<String, Any?>()
             fun Map<*, *>.s(k: String) = this[k] as? String ?: ""
             val mine = m("mine"); val from = m("from"); val nw = m("new")
+            val from2 = d["from2"] as? Map<*, *>
             val rx = (d["rx"] as? Map<*, *>).orEmpty().mapNotNull { (k, v) ->
                 val n = (v as? Number)?.toInt() ?: 0
                 (k as? String)?.takeIf { n > 0 }?.let { it to n }
@@ -65,6 +71,7 @@ data class ActivityItem(
                 thumbKind = d["thumbKind"] as? String ?: "",
                 mineRid = mine.s("rid"), mineAid = mine.s("aid"), mineText = mine.s("t"),
                 fromUid = from.s("u"), fromName = from.s("n"), fromPhoto = from.s("p"),
+                hasFrom2 = from2 != null, from2Uid = from2?.s("u") ?: "", from2Name = from2?.s("n") ?: "", from2Photo = from2?.s("p") ?: "",
                 text = d["text"] as? String ?: "", newRid = nw.s("rid"), newAid = nw.s("aid"),
                 emoji = d["emoji"] as? String ?: "", others = (d["others"] as? Number)?.toInt() ?: 0, rx = rx,
             )
@@ -81,6 +88,19 @@ object ActivityRules {
         val n = i.fromName.ifEmpty { i.chTitle.ifEmpty { "Someone" } }
         return if (i.isReact && i.others > 0) "$n and ${i.others} ${if (i.others == 1) "other" else "others"}" else n
     }
+
+    /** Design 3: "Roodo", "Roodo and kream", "Roodo, kream and 12 others". */
+    fun reactNames(i: ActivityItem): String {
+        val n1 = i.fromName.ifEmpty { i.chTitle.ifEmpty { "Someone" } }
+        if (!i.hasFrom2) return if (i.others > 0) "$n1 and ${i.others} ${if (i.others == 1) "other" else "others"}" else n1
+        val n2 = i.from2Name.ifEmpty { i.chTitle.ifEmpty { "someone" } }
+        val more = i.others - 1
+        return if (more <= 0) "$n1 and $n2" else "$n1, $n2 and $more ${if (more == 1) "other" else "others"}"
+    }
+
+    /** "reacted to your comment in VE3" ("your reply" for an answer of mine). */
+    fun reactLine(i: ActivityItem): String =
+        "reacted to your ${if (i.mineAid.isNotEmpty()) "reply" else "comment"} in ${i.chTitle.ifEmpty { "a channel" }}"
 
     /** "Your comment: …" or "Your reply: …" (mine was an answer). */
     fun mineLine(i: ActivityItem): String = (if (i.mineAid.isNotEmpty()) "Your reply: " else "Your comment: ") + i.mineText
