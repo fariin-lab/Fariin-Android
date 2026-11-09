@@ -1,5 +1,9 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.draw.drawWithContent
 import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -234,13 +238,11 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
             // The channel drawing (owner 2026-11-09: a phone planted in a pot, posts growing out of it,
             // being watered). Straight on the page in both modes: its own white sticker edge outlines it
             // on dark; no card, tint or shadow. Fitted, never cropped, about 300 dp tall.
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.channel_intro), contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).weight(1f, fill = false))
+            ChannelIntroArt(Modifier.weight(1f, fill = false))
             Spacer(Modifier.height(22.dp))
             Text("Start a channel", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = c.label)
             Spacer(Modifier.height(10.dp))
-            Text("Share news, photos and videos with as many people as you like.", fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center)
+            Text("Plant an idea. Watch it grow.", fontSize = 17.sp, color = c.secondary, textAlign = TextAlign.Center, maxLines = 1)
         }
         // The guidelines link, as the form page and iOS (it opens the help page).
         val introCtx = androidx.compose.ui.platform.LocalContext.current
@@ -250,13 +252,48 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
             append("Channel Guidelines")
             pop()
             append(".")
-        }, fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center,
+        }, fontSize = 12.sp, color = c.secondary, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).clickable {
                 runCatching { introCtx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse("https://help.fariin.com/channels/channel-guidelines"))) }
             })
-        Spacer(Modifier.height(12.dp))
+        // Just above the button (owner 2026-11-09).
+        Spacer(Modifier.height(2.dp))
         BigButton("Create Channel", enabled = true, onClick = onNext)
+    }
+}
+
+/**
+ * The channel drawing in two layers (owner 2026-11-09): the table, pot and woman still, the plant of
+ * posts swaying gently over them. The sway is one skew of the top layer about the soil line (y 920 of
+ * 1657), so the bottom row never moves and there is no seam: a row at y shifts by s * (920 - y) / 920,
+ * s a sine of +/-18 image px over 4 s. One GPU transform a frame, only while the page shows; still
+ * when the phone's animations are off.
+ */
+@Composable
+private fun ChannelIntroArt(modifier: Modifier = Modifier) {
+    val moving = com.fariin.app.ui.thread.systemAnimationsOn()
+    val phase = if (moving) {
+        val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "sway")
+        t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(4000, easing = androidx.compose.animation.core.LinearEasing)), label = "swayPhase")
+    } else null
+    Box(modifier.heightIn(max = 300.dp).aspectRatio(1329f / 1657f, matchHeightConstraintsFirst = true)) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.channel_intro_base), null,
+            contentScale = androidx.compose.ui.layout.ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.channel_intro_bouquet), null,
+            contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
+            modifier = Modifier.fillMaxSize().drawWithContent {
+                val p = phase?.value ?: 0f
+                val k = 18f * kotlin.math.sin(p * 2f * kotlin.math.PI.toFloat()) / 920f   // the skew, image px / image px
+                val pivotY = size.height * (920f / 1657f)
+                drawIntoCanvas { cv ->
+                    cv.save()
+                    cv.translate(0f, pivotY); cv.skew(-k, 0f); cv.translate(0f, -pivotY)
+                    drawContent()
+                    cv.restore()
+                }
+            })
     }
 }
 
