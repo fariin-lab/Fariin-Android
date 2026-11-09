@@ -55,7 +55,7 @@ import kotlinx.coroutines.launch
 
 /**
  * The Disappearing Messages page (iOS DisappearingMessagesView): what it does, the presets as
- * ticked rows in one rounded card, Custom Time, and a check at the top end that applies the choice.
+ * radio rows in one rounded card, Custom Time, and a check at the top end that applies the choice.
  * The up arrow and the back gesture leave without a change.
  */
 @Composable
@@ -73,11 +73,9 @@ fun DisappearingMessagesPage(current: Int, isChannel: Boolean = false, onBack: (
             Text(Disappearing.pageHeader(isChannel, forNewChats), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
                 modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 2.dp))
             SettingsSection {
-                // iOS: a tick in a fixed gutter at the start; Custom Time shows its value in grey and an arrow.
-                for ((label, secs) in Disappearing.presets) CheckRow(label, selected == secs, leadingCheck = true) { selected = secs }
+                for ((label, secs) in Disappearing.presets) CheckRow(label, selected == secs) { selected = secs }
                 val isCustom = selected != 0 && !Disappearing.isPreset(selected)
-                CheckRow("Custom Time", isCustom, last = true, leadingCheck = true,
-                    detail = if (isCustom) Disappearing.label(selected) else null, chevron = true) { custom = true }
+                CheckRow(if (isCustom) "Custom Time (${Disappearing.label(selected)})" else "Custom Time", isCustom, last = true) { custom = true }
             }
         }
     }

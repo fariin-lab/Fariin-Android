@@ -308,16 +308,16 @@ private fun Browser(start: String, motion: SheetMotion) {
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Forward") }, enabled = canForward,
-                                trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null) },
+                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null) },
                                 onClick = { menu = false; web?.goForward() })
-                            DropdownMenuItem(text = { Text("Share") }, trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_link_share), null) }, onClick = {
+                            DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_link_share), null) }, onClick = {
                                 menu = false
                                 runCatching {
                                     ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
                                         .putExtra(Intent.EXTRA_TEXT, url), null))
                                 }
                             })
-                            DropdownMenuItem(text = { Text("Copy link") }, trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), null) }, onClick = {
+                            DropdownMenuItem(text = { Text("Copy link") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), null) }, onClick = {
                                 menu = false
                                 (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                     .setPrimaryClip(ClipData.newPlainText("link", url))

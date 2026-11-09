@@ -1316,7 +1316,7 @@ private fun StoryPage(
                                 val item: @Composable (String, androidx.compose.ui.graphics.vector.ImageVector, Color?, String) -> Unit = { t, icon, tint, key ->
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(t, color = tint ?: Color.Unspecified) },
-                                        trailingIcon = { Icon(icon, contentDescription = null, tint = tint ?: androidx.compose.material3.LocalContentColor.current, modifier = Modifier.size(22.dp)) },
+                                        leadingIcon = { Icon(icon, contentDescription = null, tint = tint ?: androidx.compose.material3.LocalContentColor.current, modifier = Modifier.size(22.dp)) },
                                         onClick = { menu = false; onMenuAction(story, key) })
                                 }
                                 // Fariin's own story offers Save and nothing else (iOS StorySaveSeam).
@@ -1333,7 +1333,7 @@ private fun StoryPage(
                                     val notifyOn = story.authorUid in com.fariin.app.data.StoryNotify.on.collectAsState().value
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(com.fariin.app.data.StoryNotifyRules.menuTitle(notifyOn)) },
-                                        trailingIcon = {
+                                        leadingIcon = {
                                             Icon(androidx.compose.ui.res.painterResource(if (notifyOn) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
                                                 contentDescription = null, modifier = Modifier.size(22.dp))
                                         },
@@ -1344,7 +1344,7 @@ private fun StoryPage(
                                 if (!mine && !official && canRepost(story)) item("Share Story", ImageVector.vectorResource(R.drawable.ic_link_share), null, "share")
                                 if (!mine && !official) androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("Hide Stories") },
-                                    trailingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
+                                    leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
                                     onClick = { menu = false; onHide(story.authorUid) },
                                 )
                                 if (!mine && !official) item("Report", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report), Color(0xFFFF3B30), "report")

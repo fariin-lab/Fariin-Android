@@ -524,7 +524,7 @@ private fun NewItem(title: String, subtitle: String, icon: Painter, enabled: Boo
                 Text(subtitle, fontSize = 13.sp, color = Fariin.colors.secondary)
             }
         },
-        trailingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp)) },
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp)) },
         enabled = enabled, onClick = onClick,
     )
 }

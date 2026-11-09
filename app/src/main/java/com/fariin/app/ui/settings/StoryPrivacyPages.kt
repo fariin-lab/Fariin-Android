@@ -254,20 +254,17 @@ internal fun StoryMyChatsPage(pop: () -> Unit) {
 private fun ModeRow(title: String, detail: String?, selected: Boolean, edit: Boolean, last: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        androidx.compose.material3.RadioButton(selected = selected, onClick = onClick,
+            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.accent))
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = c.label)
             if (detail != null) Text(detail, style = MaterialTheme.typography.bodyMedium, color = c.secondary)
         }
-        if (edit) Text("Edit", color = c.accent, fontSize = 15.sp, modifier = Modifier.padding(end = 10.dp))
-        // iOS: the chosen mode carries a tick at the end, no radio circle.
-        Box(Modifier.width(22.dp)) {
-            if (selected) androidx.compose.material3.Icon(
-                androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark),
-                null, tint = c.accent, modifier = Modifier.size(20.dp))
-        }
+        if (edit) Text("Edit", color = c.accent, fontSize = 15.sp)
     }
     if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }

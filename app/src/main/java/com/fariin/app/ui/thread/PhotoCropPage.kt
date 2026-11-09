@@ -267,7 +267,7 @@ internal fun PhotoCropPage(source: Bitmap, onCancel: () -> Unit, onDone: (Bitmap
                                 "3:4" to 3f / 4f, "16:9" to 16f / 9f, "9:16" to 9f / 16f).forEach { (label, r) ->
                                 DropdownMenuItem(
                                     text = { Text(label) },
-                                    trailingIcon = { Box(Modifier.size(24.dp)) { if (aspect == r) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null) } },
+                                    leadingIcon = { Box(Modifier.size(24.dp)) { if (aspect == r) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), contentDescription = null) } },
                                     onClick = { menu = false; setAspect(r) },
                                 )
                             }

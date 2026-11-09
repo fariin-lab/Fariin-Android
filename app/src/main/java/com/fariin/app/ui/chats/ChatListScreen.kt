@@ -873,13 +873,13 @@ private fun SelectionBar(
                 IconButton(onClick = { more = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More") }
                 DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                     DropdownMenuItem(text = { Text(if (allUnread) "Mark as Read" else "Mark as Unread") },
-                        trailingIcon = { Icon(if (allUnread) fi(R.drawable.ic_menu_read) else fi(R.drawable.ic_menu_unread), null) },
+                        leadingIcon = { Icon(if (allUnread) fi(R.drawable.ic_menu_read) else fi(R.drawable.ic_menu_unread), null) },
                         onClick = { more = false; onReadToggle() })
-                    DropdownMenuItem(text = { Text("Select All") }, trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), null) },
+                    DropdownMenuItem(text = { Text("Select All") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), null) },
                         onClick = { more = false; onSelectAll() })
                     // One chat picked: straight to its info page.
                     single?.let { s ->
-                        DropdownMenuItem(text = { Text(s.infoLabel) }, trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_info_circle), null) },
+                        DropdownMenuItem(text = { Text(s.infoLabel) }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_info_circle), null) },
                             onClick = { more = false; s.onInfo() })
                     }
                 }

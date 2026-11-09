@@ -87,10 +87,10 @@ internal fun EditPhotoSheet(
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card,
                     offset = androidx.compose.ui.unit.DpOffset(40.dp, (-60).dp)) {
                     DropdownMenuItem(text = { Text("Camera", fontSize = 17.sp) },
-                        trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null, tint = c.label) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null, tint = c.label) },
                         onClick = { menu = false; onCamera() })
                     DropdownMenuItem(text = { Text("Photo Library", fontSize = 17.sp) },
-                        trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null, tint = c.label) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null, tint = c.label) },
                         onClick = { menu = false; onLibrary() })
                 }
             }

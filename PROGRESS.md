@@ -1429,3 +1429,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   votes, results bar + 100% on his side, "1 vote · View results" on Alice's. Fixed: New Poll's title
   is centred in the bar (iOS inline navigationTitle), it sat on the left by the X. Sticker send and
   receive also checked (time on its own line under the sticker, as iOS).
+- 2026-11-08 ~9:46 PM: REVERTED my own convention swaps from tonight (6c6d3fab, b52991eb, 9e0f81a2,
+  aa3b755e): radio buttons -> ticks, menu icons moved to the end, New Poll title centred. They broke
+  the Rules at the top of this file (ANDROID WAY: same features and words as iOS, controls as Android
+  users expect; the owner held to it on 2026-11-06). Kept: behaviour fixes (keyboard on Reply/Edit,
+  edit tick, camera -> editor, member-card actions, quotes of deleted messages, voice pill, block ends
+  the call) and the green iOS-shaped approval switch (the switch shape is the owner's own choice).

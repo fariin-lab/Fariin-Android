@@ -1510,11 +1510,11 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
     Box(Modifier.padding(start = 8.dp)) {
         com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, circle = true)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Search") }, trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null) },
+            DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null) },
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })
             ui.muted?.let { muted ->
                 DropdownMenuItem(text = { Text(if (muted) "Unmute" else "Mute") },
-                    trailingIcon = { Icon(if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), null) },
+                    leadingIcon = { Icon(if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), null) },
                     onClick = { open = false; onToggleMute() })
             }
         }

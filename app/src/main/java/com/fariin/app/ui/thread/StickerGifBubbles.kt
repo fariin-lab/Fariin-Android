@@ -441,14 +441,14 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
                     val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(if (favourite) "Remove from Favourites" else "Add to Favourites") },
-                        trailingIcon = { Icon(if (favourite) ImageVector.vectorResource(R.drawable.ic_sf_star_fill) else ImageVector.vectorResource(R.drawable.ic_star_outline), null) },
+                        leadingIcon = { Icon(if (favourite) ImageVector.vectorResource(R.drawable.ic_sf_star_fill) else ImageVector.vectorResource(R.drawable.ic_star_outline), null) },
                         onClick = {
                             menu = false
                             if (favourite) GifFavorites.remove(ctx, me, g.url) else GifFavorites.add(ctx, me, g)
                         })
                     if (onRecentTab) androidx.compose.material3.DropdownMenuItem(
                         text = { Text("Remove from Recent", color = c.red) },
-                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), null, tint = c.red) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_clock), null, tint = c.red) },
                         onClick = { menu = false; GifRecents.forget(ctx, me, g.url) })
                 }
             }

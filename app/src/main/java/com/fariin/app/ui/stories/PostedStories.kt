@@ -196,10 +196,10 @@ fun PostedStoriesPage(
                         // iOS hold menu: Edit Viewers, Share (only a story that went to Everyone), Delete.
                         DropdownMenu(expanded = menuFor == s.id, onDismissRequest = { menuFor = null }) {
                             if (PostedStoriesRules.canEditViewers(s)) DropdownMenuItem(text = { Text("Edit Viewers") },
-                                trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), contentDescription = null) },
+                                leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), contentDescription = null) },
                                 onClick = { menuFor = null; editViewers = s })
                             if (PostedStoriesRules.canShare(s)) DropdownMenuItem(text = { Text("Share") },
-                                trailingIcon = { Icon(painterResource(R.drawable.ic_link_share), contentDescription = null, modifier = Modifier.size(24.dp)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.ic_link_share), contentDescription = null, modifier = Modifier.size(24.dp)) },
                                 onClick = {
                                     menuFor = null
                                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
@@ -207,7 +207,7 @@ fun PostedStoriesPage(
                                     ctx.startActivity(android.content.Intent.createChooser(send, "Share"))
                                 })
                             DropdownMenuItem(text = { Text("Delete", color = c.red) },
-                                trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) },
+                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) },
                                 onClick = { menuFor = null; confirmDelete = s })
                         }
                     }

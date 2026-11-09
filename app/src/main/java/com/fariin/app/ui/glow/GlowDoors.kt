@@ -113,9 +113,9 @@ fun GlowOverflow(door: GlowDoor, more: @Composable (close: () -> Unit) -> Unit =
         FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true })
         DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
             if (glowing) DropdownMenuItem(text = { Text("Remove Glowing", color = c.red) },
-                onClick = { open = false; door.remove() }, trailingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })
+                onClick = { open = false; door.remove() }, leadingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })
             else DropdownMenuItem(text = { Text("Glow Story", color = if (s.known) c.label else c.secondary) }, enabled = s.known,
-                onClick = { open = false; door.intro = true }, trailingIcon = { GlowMark(20.dp, tint = if (s.known) c.label else c.secondary) })
+                onClick = { open = false; door.intro = true }, leadingIcon = { GlowMark(20.dp, tint = if (s.known) c.label else c.secondary) })
             more { open = false }
         }
     }

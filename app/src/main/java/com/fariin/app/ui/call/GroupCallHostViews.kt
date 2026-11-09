@@ -115,20 +115,20 @@ fun HostMenuItems(g: GroupCallUi, m: GroupMember, canBlock: Boolean, onConfirm: 
     val me = g.members.firstOrNull { it.local }?.id
     if (onPin != null && pinned != null) {
         DropdownMenuItem(text = { Text(if (pinned) "Unpin" else "Pin", color = Color.White) },
-            trailingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_pin), null, tint = Color.White) }, onClick = { close(); onPin() })
+            leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_pin), null, tint = Color.White) }, onClick = { close(); onPin() })
     }
     if (!GroupCallAdmin.mayModerate(me, g.myRole, m)) return
     if (!shownBlocked(g, m)) {
-        DropdownMenuItem(text = { Text("Mute", color = Color.White) }, trailingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White) },
+        DropdownMenuItem(text = { Text("Mute", color = Color.White) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off), null, tint = Color.White) },
             onClick = { close(); GroupCall.tapMic(m.id, mute = true) })
     } else {
-        DropdownMenuItem(text = { Text("Allow to Speak", color = Color.White) }, trailingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), null, tint = Color.White) },
+        DropdownMenuItem(text = { Text("Allow to Speak", color = Color.White) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), null, tint = Color.White) },
             onClick = { close(); GroupCall.tapMic(m.id, mute = false) })
     }
-    DropdownMenuItem(text = { Text("Remove from call", color = Danger) }, trailingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person_minus), null, tint = Danger) },
+    DropdownMenuItem(text = { Text("Remove from call", color = Danger) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person_minus), null, tint = Danger) },
         onClick = { close(); onConfirm(HostConfirm.Remove(m)) })
     if (canBlock) {
-        DropdownMenuItem(text = { Text("Remove and Block", color = Danger) }, trailingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), null, tint = Danger) },
+        DropdownMenuItem(text = { Text("Remove and Block", color = Danger) }, leadingIcon = { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), null, tint = Danger) },
             onClick = { close(); onConfirm(HostConfirm.Block(m)) })
     }
 }

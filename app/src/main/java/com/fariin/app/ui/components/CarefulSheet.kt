@@ -48,7 +48,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.sp
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.launch
@@ -142,16 +141,14 @@ fun CarefulSheet(onDismiss: () -> Unit, steps: List<CarefulStep>, step: Int = 0,
                         s.options.forEachIndexed { n, (key, label) ->
                             Row(
                                 Modifier.fillMaxWidth().clickable(role = Role.RadioButton) { s.onSelect(key) }
-                                    .heightIn(min = 50.dp).padding(start = 16.dp, end = 16.dp),
+                                    .heightIn(min = 50.dp).padding(start = 6.dp, end = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                // iOS: a tick at the end of the chosen row, no radio circle.
-                                Text(label, fontSize = 16.sp, color = c.label, modifier = Modifier.weight(1f))
-                                if (key == s.selected) androidx.compose.material3.Icon(
-                                    androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark),
-                                    null, tint = c.blue, modifier = Modifier.size(20.dp))
+                                RadioButton(selected = key == s.selected, onClick = null, modifier = Modifier.padding(horizontal = 10.dp),
+                                    colors = RadioButtonDefaults.colors(selectedColor = c.blue, unselectedColor = c.secondary))
+                                Text(label, fontSize = 16.sp, color = c.label)
                             }
-                            if (n < s.options.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+                            if (n < s.options.lastIndex) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 50.dp))
                         }
                     }
                 }
