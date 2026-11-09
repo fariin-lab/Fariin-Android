@@ -278,9 +278,18 @@ object Requests {
 
     enum class Stance { OPEN, AWAITING_REPLY, INCOMING, FIRST_MESSAGE }
 
-    /** MessageRequests.rawStance (the MsgPolicy switches are server-side admin settings, on). */
+    /** MessageRequests.stance: [rawStance] with the admin panel's switch applied (MsgPolicy). */
     fun stance(c: Conversation, me: String, unfriendedBy: String = ""): Stance {
         if (c.reqOff && !c.isGroup) return Stance.OPEN
+        return when (val s = rawStance(c, me, unfriendedBy)) {
+            Stance.OPEN -> s
+            Stance.INCOMING -> if (MsgPolicy.requestsOn(me)) s else Stance.OPEN        // MY setting
+            else -> if (MsgPolicy.requestsOn(Wire.otherUid(c.id, me))) s else Stance.OPEN  // THEIR setting
+        }
+    }
+
+    /** MessageRequests.rawStance: the two fields, no admin switch. */
+    fun rawStance(c: Conversation, me: String, unfriendedBy: String = ""): Stance {
         if (c.isGroup || c.startedBy.isEmpty() || c.accepted) return Stance.OPEN
         if (c.lastSender.isEmpty()) {
             return if (c.startedBy != me && unfriendedBy == me) Stance.AWAITING_REPLY else Stance.FIRST_MESSAGE

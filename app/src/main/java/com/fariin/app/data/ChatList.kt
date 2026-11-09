@@ -31,7 +31,9 @@ object ChatList {
     fun isIncomingRequest(c: Conversation, me: String): Boolean {
         if (c.isGroup || c.reqOff) return false
         if (c.startedBy.isEmpty() || c.accepted) return false
-        // TODO: iOS also asks MsgPolicy (the person's "message requests on" switch).
+        // I am the one being asked: MY setting (iOS MessageRequests.stance). With requests off the
+        // stranger's chat is an ordinary chat in the main list.
+        if (!MsgPolicy.requestsOn(me)) return false
         return c.lastSender.isNotEmpty() && c.lastSender != me
     }
 

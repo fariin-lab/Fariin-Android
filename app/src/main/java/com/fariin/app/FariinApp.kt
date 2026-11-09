@@ -63,6 +63,7 @@ class FariinApp : Application() {
         Thread({ runCatching { com.fariin.app.media.ChatSounds.init(this) } }, "sounds-init").apply { isDaemon = true }.start()
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
         com.fariin.app.data.ContactNames.init(this)
+        com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // The benchmark build (release code, debug key, never shipped) may use the local backend too.

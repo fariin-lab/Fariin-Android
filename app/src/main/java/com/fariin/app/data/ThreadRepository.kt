@@ -285,6 +285,7 @@ class ThreadRepository(
                 if (gone != _state.value.otherDeleted) _state.update { it.copy(otherDeleted = gone) }
             }
             val d = snap?.data ?: return@addSnapshotListener
+            MsgPolicy.record(other, d)   // their own Message Requests override (admin panel)
             _state.update { it.copy(otherPrivacy = Presence.privacyOf(d)) }
             notePresence()
         }
@@ -497,6 +498,10 @@ class ThreadRepository(
 
     fun sendBlockedReason(conv: Conversation?): String? {
         if (conv == null || conv.isGroup || conv.startedBy.isEmpty() || conv.accepted) return null
+        // owner 2026-11-09: with Message Requests OFF for the other person (admin panel), or a chat
+        // whose first message went while they were off (`reqOff`), this is an ordinary chat:
+        // no "waiting to accept" bar (iOS MessageRequests.stance).
+        if (conv.reqOff || !MsgPolicy.requestsOn(Wire.otherUid(conv.id, me))) return null
         return when {
             conv.lastSender.isEmpty() && conv.startedBy == me -> null
             conv.lastSender.isEmpty() -> "Message requests are not on Android yet."
@@ -1264,14 +1269,22 @@ class ThreadRepository(
         if (members != null) crypto.sealForGroup(text, members, cid) else crypto.encryptForConversation(cid, text)
 
     /** iOS sendImage / sendAudio always make sure the 1:1 doc has both of us and a time. */
-    private suspend fun seedDirect(other: String) {
+    private suspend fun seedDirect(other: String, reqOff: Boolean = false) {
         val seed = mutableMapOf<String, Any>("users" to listOf(me, other), "updatedAt" to FieldValue.serverTimestamp())
         // iOS sendMessage: a chat born from its first send takes the Settings default timer. Only
         // when the server says the chat is not there yet, so a timer someone chose is never undone.
         val def = Disappearing.defaultSeconds
         if (def > 0 && CryptoHub.listedConversation(cid) == null &&
             runCatching { !convRef.get(Source.SERVER).await().exists() }.getOrDefault(false)) seed["disappearSeconds"] = def
-        convRef.set(seed, SetOptions.merge()).await()
+        if (!reqOff) { convRef.set(seed, SetOptions.merge()).await(); return }
+        try {
+            convRef.set(seed + ("reqOff" to true), SetOptions.merge()).await()
+        } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+            // The stamp alone was refused (the switch came back on, or they wrote first): the
+            // message still goes, as an ordinary first message (iOS).
+            if (e.code != com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) throw e
+            convRef.set(seed, SetOptions.merge()).await()
+        }
     }
 
     /** End-to-end encrypted bytes go up as application/octet-stream (storage.rules `chat/`). */
@@ -1323,14 +1336,21 @@ class ThreadRepository(
                 val d = convRef.get().await()
                 isKnock(d.getString("startedBy") ?: "", d.getBoolean("accepted") ?: false, d.getString("lastSender") ?: "")
             } catch (_: Exception) { false }
-        if (knocking) {
+        // iOS: before a first message, read the live switch once, since the rules read it.
+        val firstMessage = knocking || local == null
+        if (firstMessage) MsgPolicy.confirm(other)
+        val requestsOff = !MsgPolicy.requestsOn(other)
+        // A first message sent while requests are OFF for them stays an ordinary chat if they come
+        // back on: stamped `reqOff` with the seed (rules reqOffStampOk), as iOS.
+        val stampReqOff = knocking && requestsOff && local?.reqOff != true
+        if (knocking && !requestsOff) {
             require(t.codePointCount(0, t.length) <= FIRST_MESSAGE_LIMIT) { "a first message is at most $FIRST_MESSAGE_LIMIT characters" }
             require(reply == null) { "a first message is plain text" }
             countKnock()
         }
         // The seed, only when this phone's list does not already show both of us in it (iOS
         // `seedNeeded`; a brand-new chat is never opened from the Android list yet).
-        if (local == null || !(local.users.contains(me) && local.users.contains(other))) seedDirect(other)
+        if (stampReqOff || local == null || !(local.users.contains(me) && local.users.contains(other))) seedDirect(other, stampReqOff)
         val batch = db.batch()
         val msg = hashMapOf<String, Any>(
             "text" to cipher,
