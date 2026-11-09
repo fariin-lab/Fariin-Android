@@ -58,6 +58,9 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 - 2026-11-08 23:39 a9521d00: glass menu inline submenu (Save to Photos: Off > On / Off, as iOS); no line above a first row (member's menu); menu now consumes taps (the tap-outside layer was closing it).
 - 2026-11-08 23:48 f20aecf3: All Media header floats (centred title, tabs capsule in the frosted header); Share with: ring on chosen chats, no grey press box; private channel invite link prefetched so Share is instant; own Leave Group outline icon; glass menu grows evenly (no flat stretch). a2d2ee8f: Add to a Group names full colour (iOS fix 23).
 - 2026-11-08 23:40 agent started (own worktree): GlassAlert + GlassDropdown, swap ~98 AlertDialog / 54 DropdownMenu sites to crisp liquid glass (owner's standing order). After it lands: Block and Leave Group become centred glass alerts with stacked pills (owner's iOS shots).
+- 2026-11-08 23:55 fff13aab/ee451ece/3af4e0e0: Followers page iOS icons + skeleton row; channel bottom gap 30dp; CodeBoxes = one-time-code field (keyboard offers the emailed code; check on the Pixel); channel Sounds & Notifications opens a Mute page (Message Sound per chat does NOT exist on Android yet: open item).
+- 2026-11-09 00:05 5c59c5b0..2e06d854: channel Mute circle = glass times menu with caption; pinned bar iOS size (48dp); glass agent merged (GlassAlert/GlassDropdown, 152 sites, 65f54c14); Block = centred glass alert (Block / Block and Report / Cancel); Leave Group = centred glass alert. Calls (i) already opens the profile on current builds.
+- 2026-11-09 00:12 59f9be6a: story camera slides up/down as one sheet (no window fade, no black strip), shutter 74/62. Lesson: the glass agent and I both drove emulator-5554; give agents their own emulator.
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes
