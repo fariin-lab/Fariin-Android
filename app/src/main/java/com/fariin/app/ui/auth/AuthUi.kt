@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -332,9 +333,15 @@ internal fun CodeBoxes(code: String, onChange: (String) -> Unit, invalid: Boolea
         BasicTextField(
             value = code, onValueChange = { onChange(CodeEntry.clean(it)) }, singleLine = true,
             textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp), cursorBrush = SolidColor(Color.Transparent),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+            // A one-time-code field: the keyboard then offers the code from the email or text above its keys,
+            // so nobody has to open Gmail (iOS .oneTimeCode, owner 2026-11-08). A plain number pad: the
+            // password pad hides the keyboard's suggestion strip.
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done, autoCorrectEnabled = false),
             modifier = Modifier.matchParentSize().alpha(0.01f).focusRequester(focusRequester)
-                .onFocusChanged { focused = it.isFocused }.semantics { contentDescription = "Code" },
+                .onFocusChanged { focused = it.isFocused }.semantics {
+                    contentDescription = "Code"
+                    contentType = androidx.compose.ui.autofill.ContentType.SmsOtpCode
+                },
         )
         Box(Modifier.matchParentSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
             try { focusRequester.requestFocus() } catch (_: Exception) {}
