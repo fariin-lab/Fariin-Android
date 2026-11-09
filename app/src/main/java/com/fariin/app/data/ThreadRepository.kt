@@ -462,10 +462,25 @@ class ThreadRepository(
         Disappearing.askBurn(cid, fresh.map { it.id })
     }
 
+    private class Parsed(val data: Map<String, Any?>, val pending: Boolean, val epoch: Int, val message: Message)
+    /**
+     * Each update re-built the whole page (60 to 120 messages), opening every sealed message again on
+     * the main thread, twice per send (metadata too). A message whose fields, pending state and the
+     * keys it was opened with are unchanged is not opened again (the reference app keeps parsed
+     * messages too; speed work 2026-11-09).
+     */
+    private val parsed = java.util.concurrent.ConcurrentHashMap<String, Parsed>()   // pins parse on IO too
+
     private fun parse(d: DocumentSnapshot): Message {
         val data = d.data ?: emptyMap()
-        val m = Message.fromFirestore(d.id, data, cid) { raw, author -> crypto.decrypt(raw, cid, author) }
-        return if (d.metadata.hasPendingWrites() && m.authorId == me) m.copy(sendState = Message.SendState.SENDING) else m
+        val pending = d.metadata.hasPendingWrites()
+        val epoch = CryptoHub.keysEpoch.value
+        parsed[d.id]?.let { p -> if (p.pending == pending && p.epoch == epoch && p.data == data) return p.message }
+        val m0 = Message.fromFirestore(d.id, data, cid) { raw, author -> crypto.decrypt(raw, cid, author) }
+        val m = if (pending && m0.authorId == me) m0.copy(sendState = Message.SendState.SENDING) else m0
+        if (parsed.size > 400) parsed.clear()
+        parsed[d.id] = Parsed(data, pending, epoch, m)
+        return m
     }
 
     // ------------------------------------------------------------------ send
