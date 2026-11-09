@@ -105,23 +105,23 @@ internal fun OnceBubbleRow(kind: OnceRules.Kind, opened: Boolean, isMe: Boolean,
     }
     Row(
         Modifier.clip(RoundedCornerShape(12.dp)).then(tap)
-            .widthIn(min = 162.dp).padding(horizontal = 4.dp, vertical = 7.dp),
+            // Compact (owner 2026-11-09: the one-time card was too big on both sides).
+            .widthIn(min = 140.dp).padding(horizontal = 2.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DashedOnceRing(ring, showOne = true, side = 40.dp, stroke = 2.dp, digitSize = 18.sp)
-        Spacer(Modifier.width(14.dp))
+        DashedOnceRing(ring, showOne = true, side = 30.dp, stroke = 1.6.dp, digitSize = 14.sp)
+        Spacer(Modifier.width(10.dp))
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(OnceRules.label(kind, false), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, color = ink)
+                Text(OnceRules.label(kind, false), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, color = ink)
                 if (sending) {
                     Spacer(Modifier.width(8.dp))
                     CircularProgressIndicator(color = ink, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
                 }
             }
-            Spacer(Modifier.height(1.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(OnceRules.hint(kind, isMe), fontSize = 13.sp, maxLines = 1, color = sub)
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(10.dp))
                 meta()
             }
         }
