@@ -253,7 +253,10 @@ class CallActivity : ComponentActivity() {
                         onShare = { if (ui.peerUid == "demo") demoShare() else shareTapped() },
                         onCallAgain = { withMic(ui.status.video, { CallManager.callAgain(this@CallActivity) }, { CallManager.closeNoAnswer() }) },
                         onVoiceMessage = { voiceMessageAfterNoAnswer() },
-                        onCloseNoAnswer = { CallManager.closeNoAnswer() })
+                        onCloseNoAnswer = { CallManager.closeNoAnswer() },
+                        // Design B's two new rows (owner 2026-11-09): the chat, and the other kind of call.
+                        onMessage = { voiceMessageAfterNoAnswer() },
+                        onSwitchKind = { withMic(!ui.status.video, { CallManager.callAgain(this@CallActivity, video = !ui.status.video) }, { CallManager.closeNoAnswer() }) })
                 }
             }
         }

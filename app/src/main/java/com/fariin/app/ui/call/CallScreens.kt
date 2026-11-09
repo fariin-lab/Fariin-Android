@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -135,8 +136,6 @@ private val Backdrop = Color.Black
 private val PipFill = Color(0xFF1B1D21)
 private val Red = Color(0xFFFF3B30)
 private val Green = Color(0xFF34C759)
-/** iOS noAnswerBar's tint (0x22C55E). */
-private val NoAnswerGreen = Color(0xFF22C55E)
 // The dark glass of iOS's call screens: a light veil on black with a faint white rim.
 private val Glass = Color.White.copy(alpha = 0.14f)
 private val GlassRim = Color.White.copy(alpha = 0.18f)
@@ -196,6 +195,7 @@ fun CallScreen(
     onMute: () -> Unit, onRoute: (AudioRoute) -> Unit, onCamera: () -> Unit, onFlip: () -> Unit,
     onMinimize: (() -> Unit)? = null, onShare: () -> Unit = {},
     onCallAgain: () -> Unit = {}, onVoiceMessage: () -> Unit = {}, onCloseNoAnswer: () -> Unit = {},
+    onMessage: () -> Unit = {}, onSwitchKind: () -> Unit = {},
 ) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(ui.status.connectedAtMs) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
@@ -269,7 +269,8 @@ fun CallScreen(
                 left = if (onMinimize != null && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED) {
                     { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_collapse), "Minimize call", 48.dp) { chrome.touch(); onMinimize() } }
                 } else null,
-                modifier = Modifier.alpha(shown).semantics { isTraversalGroup = true; traversalIndex = -2f },
+                // The No answer sheet carries the name and the reason itself (design B, owner 2026-11-09).
+                modifier = Modifier.alpha(if (s.phase == CallPhase.ENDED && ui.noAnswer) 0f else shown).semantics { isTraversalGroup = true; traversalIndex = -2f },
                 // No shade over the flat colour and the photo (owner 2026-11-06: it read as a
                 // shadow); video under the header still gets it, for the white words.
                 scrim = !showFace,
@@ -277,7 +278,7 @@ fun CallScreen(
             Spacer(Modifier.weight(1f))
             when (s.phase) {
                 CallPhase.INCOMING -> IncomingButtons(s.video, onAccept, onDecline)
-                CallPhase.ENDED -> if (ui.noAnswer) NoAnswerCard(s, onCallAgain, onVoiceMessage, onCloseNoAnswer)
+                CallPhase.ENDED -> if (ui.noAnswer) NoAnswerSheet(ui, s, onCallAgain, onVoiceMessage, onMessage, onSwitchKind, onCloseNoAnswer)
                     else Spacer(Modifier.height(BarHeight))
                 else -> ControlBar(ui, chrome, onEnd, onMute, onRoute, onCamera, onShare, Modifier.alpha(shown))
             }
@@ -660,42 +661,75 @@ private fun LabeledCircle(icon: ImageVector, label: String, color: Color, onClic
 }
 
 /**
- * iOS noAnswerBar: under "No answer" / "Couldn't connect", one card with the way forward as a wide
- * green button (Call again, or Try again after a failed connect), and Voice message and Close under it.
+ * iOS noAnswerBar, design "B · Sheet" (owner 2026-11-09, picked from four; the green-button card was
+ * "the ugliest design"): a sheet at the bottom with who (photo, name), why ("No answer", "Couldn't
+ * connect"...), an X, then plain rows: Call again / Try again (white, the main one), Record voice
+ * message, Send a message, and the other kind of call. One surface; the rows are plain with a press
+ * tint, nothing glass inside it.
  */
 @Composable
-private fun NoAnswerCard(s: com.fariin.app.call.CallStatus, onCallAgain: () -> Unit, onVoiceMessage: () -> Unit, onClose: () -> Unit) {
-    val retry = if (s.endReason == com.fariin.app.call.EndReason.FAILED) "Try again" else "Call again"
+private fun NoAnswerSheet(
+    ui: CallUi, s: com.fariin.app.call.CallStatus,
+    onCallAgain: () -> Unit, onVoiceMessage: () -> Unit, onMessage: () -> Unit, onSwitchKind: () -> Unit, onClose: () -> Unit,
+) {
+    val failed = s.endReason == com.fariin.app.call.EndReason.FAILED
     Column(
-        Modifier.padding(horizontal = 16.dp).fillMaxWidth().darkGlass(RoundedCornerShape(30.dp)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        Modifier.padding(horizontal = 8.dp).fillMaxWidth().clip(RoundedCornerShape(34.dp))
+            .background(Color(0xD91C1612)).border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(34.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth().height(54.dp).clip(CircleShape).background(NoAnswerGreen).clickable(onClick = onCallAgain)
-                .semantics { contentDescription = retry },
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(if (s.video) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_voice), null, tint = Color.White, modifier = Modifier.size(22.dp))
+        Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Avatar(ui.peerPhoto, 48.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(ui.peerName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text("${CallMachine.endedWords(s)} · ${if (s.video) "video call" else "voice call"}",
+                    color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
             Spacer(Modifier.width(8.dp))
-            Text(retry, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).pressTint(CircleShape, onClose)
+                .semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) {
+                Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), null, tint = Color.White, modifier = Modifier.size(14.dp))
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            NoAnswerSecondary(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), "Voice message", Modifier.weight(1f), onVoiceMessage)
-            NoAnswerSecondary(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_xmark), "Close", Modifier.weight(1f), onClose)
-        }
+        NoAnswerRow(if (s.video) com.fariin.app.R.drawable.ic_call_video else com.fariin.app.R.drawable.ic_call_voice,
+            if (failed) "Try again" else "Call again", primary = true, onClick = onCallAgain)
+        NoAnswerRow(com.fariin.app.R.drawable.ic_mic, "Record voice message", onClick = onVoiceMessage)
+        NoAnswerRow(com.fariin.app.R.drawable.ic_chat, "Send a message", onClick = onMessage)
+        NoAnswerRow(if (s.video) com.fariin.app.R.drawable.ic_call_voice else com.fariin.app.R.drawable.ic_call_video,
+            if (s.video) "Voice call instead" else "Video call instead", onClick = onSwitchKind)
     }
 }
 
+/** One sheet row: the icon in a small rounded square, then the words. The main one is white. */
 @Composable
-private fun NoAnswerSecondary(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun NoAnswerRow(icon: Int, label: String, primary: Boolean = false, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
     Row(
-        modifier.height(46.dp).darkGlass(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label },
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+        Modifier.fillMaxWidth().height(54.dp).clip(shape).background(if (primary) Color.White else Color.Transparent)
+            .pressTint(shape, onClick).semantics { contentDescription = label }.padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+            .background(if (primary) Color.Black else Color.White.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(icon), null, tint = Color.White, modifier = Modifier.size(17.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(label, color = if (primary) Color.Black else Color.White, fontSize = 16.sp,
+            fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium)
     }
+}
+
+/** A soft white tint while pressed, cleared on lift (no ripple, no glass). */
+@Composable
+private fun Modifier.pressTint(shape: androidx.compose.ui.graphics.Shape, onClick: () -> Unit): Modifier {
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    return this.background(Color.White.copy(alpha = if (pressed) 0.12f else 0f), shape)
+        .clickable(interactionSource = source, indication = null, onClick = onClick)
 }
 
 /** The dark capsule the round buttons sit in (iOS controlBar background). */

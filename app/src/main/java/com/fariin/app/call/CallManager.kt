@@ -1034,10 +1034,11 @@ object CallManager {
     fun closeNoAnswer() { if (status.phase == CallPhase.ENDED && _ui.value.noAnswer) reset() }
 
     /** The No answer page's Call again / Try again: the same person, the same kind of call. */
-    fun callAgain(context: Context) {
+    /** [video]: null for the same kind of call; the No answer sheet's "Video/Voice call instead" flips it. */
+    fun callAgain(context: Context, video: Boolean? = null) {
         val u = _ui.value
         if (status.phase != CallPhase.ENDED || !u.noAnswer || u.peerUid.isEmpty()) return
-        val video = u.status.video
+        val video = video ?: u.status.video
         reset()
         dial(context, u.peerUid, u.peerName, u.peerPhoto, video)
     }
