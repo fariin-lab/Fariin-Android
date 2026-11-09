@@ -165,7 +165,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
     if (picker.pending != null) { picker.Host("Avatar", "Shown in chats, stories and groups"); return }
     if (page == "links") { ProfileLinksPage(api.me, links, onChanged = { links = it }, onBack = { page = "" }); return }
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }
-    error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
+    error?.let { e -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     Column(Modifier.fillMaxSize().background(c.bgSecondary)) {
         val changed = me != null && (name != (me?.name ?: "").trim() || about.trim() != (me?.about ?: "").trim() ||
@@ -522,7 +522,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
     val picker = rememberCirclePhotoPicker { photo = it }
     val pick = picker.launch
     if (picker.pending != null) { picker.Host("Group photo", "Shown in chats and on the group page"); return }
-    error?.let { e -> AlertDialog(onDismissRequest = { error = null }, text = { Text(e) },
+    error?.let { e -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { error = null }, text = { Text(e) },
         confirmButton = { TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     // The bar floats: back in its circle, Next / Create in a capsule (iOS NewGroupView's glass bar buttons).
     val bar: @Composable (String, () -> Unit, @Composable () -> Unit) -> Unit = { t, back, action ->
@@ -584,7 +584,7 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     // iOS: a tap offers Take Photo / Choose Photo (and Remove once one is set).
                     var slotMenu by remember { mutableStateOf(false) }
-                    androidx.compose.material3.DropdownMenu(expanded = slotMenu, onDismissRequest = { slotMenu = false }) {
+                    com.fariin.app.ui.components.GlassDropdown(expanded = slotMenu, onDismissRequest = { slotMenu = false }) {
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
                             leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { slotMenu = false; picker.takePhoto() })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
@@ -754,7 +754,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val showStats = iAmMember && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
     // iOS: the Search circle goes back to the group's chat and opens its search; only from that chat.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
-    notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
+    notice?.let { n -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
     if (askLeave) {
         val plan = GroupRules.leavePlan(me, "", conv)
@@ -803,10 +803,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         var addNote by remember { mutableStateOf<String?>(null) }
         var addError by remember { mutableStateOf<String?>(null) }
         fun done() { adding = false; picked = emptySet() }
-        addError?.let { e -> AlertDialog(onDismissRequest = { addError = null }, containerColor = c.card,
+        addError?.let { e -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { addError = null }, containerColor = c.card,
             title = { Text("Couldn't add members") }, text = { Text(e) },
             confirmButton = { TextButton({ addError = null }) { Text("OK", color = c.accent) } }) }
-        addNote?.let { n -> AlertDialog(onDismissRequest = { addNote = null }, containerColor = c.card, text = { Text(n) },
+        addNote?.let { n -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { addNote = null }, containerColor = c.card, text = { Text(n) },
             confirmButton = { TextButton({ addNote = null; if (picked.any { it in users }) done() }) { Text("OK", color = c.accent) } }) }
         BarPage("Add Members", onBack = { adding = false }, action = {
                 TextAction("Add", picked.isNotEmpty() && !addBusy, busy = addBusy) {
@@ -1132,7 +1132,7 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
     val ready = !systemCall && circles.callReady(groupCall.cid, oneCall.status.live, cid, ended, mayStart, live)
     val title = conv["title"] as? String ?: "Group"
     var solo by remember { mutableStateOf(false) }
-    if (solo) AlertDialog(onDismissRequest = { solo = false }, title = { Text(circles.SOLO_TITLE) }, text = { Text(circles.SOLO_TEXT) },
+    if (solo) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { solo = false }, title = { Text(circles.SOLO_TITLE) }, text = { Text(circles.SOLO_TEXT) },
         confirmButton = { TextButton({ solo = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     fun call(video: Boolean) {
         if (systemCall) { com.fariin.app.ui.components.Snack.show("You're already on a call"); return }
@@ -1168,7 +1168,7 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
         Box(share) {
             ActionTile(if (muted) "Unmute" else "Mute", if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off),
                 Modifier.fillMaxWidth()) { muteOpen = true }
-            androidx.compose.material3.DropdownMenu(muteOpen, onDismissRequest = { muteOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+            com.fariin.app.ui.components.GlassDropdown(muteOpen, onDismissRequest = { muteOpen = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                 border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                 Text(if (muted) circles.mutedLabel(until, now, android.text.format.DateFormat.is24HourFormat(ctx)) else circles.MUTE_HEADER,
                     fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))

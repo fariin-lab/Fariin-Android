@@ -1,5 +1,6 @@
 package com.fariin.app.ui.official
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
 import androidx.compose.foundation.Image
@@ -28,7 +29,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -127,7 +127,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
     }
 
     pendingReject?.let { cid ->
-        AlertDialog(onDismissRequest = { pendingReject = null }, title = { Text(OfficialChannel.REJECT_TITLE) },
+        GlassAlert(onDismissRequest = { pendingReject = null }, title = { Text(OfficialChannel.REJECT_TITLE) },
             text = { Text(OfficialChannel.REJECT_MESSAGE) },
             confirmButton = { TextButton({
                 pendingReject = null
@@ -151,19 +151,19 @@ fun OfficialChatScreen(onBack: () -> Unit) {
         }
     }
     pendingDelete?.let { ids ->
-        AlertDialog(onDismissRequest = { pendingDelete = null },
+        GlassAlert(onDismissRequest = { pendingDelete = null },
             title = { Text(if (ids.size == 1) "Delete this message?" else "Delete ${ids.size} messages?") },
             confirmButton = { TextButton({ OfficialChannel.hide(ids); pendingDelete = null; picked.clear() }) { Text("Delete for Me", color = c.red) } },
             dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
     // Delete All in the selection bar clears the whole chat for me (iOS showClearConfirm).
     if (confirmClear) {
-        AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear this chat?") },
+        GlassAlert(onDismissRequest = { confirmClear = false }, title = { Text("Clear this chat?") },
             confirmButton = { TextButton({ OfficialChannel.clearHistory(); confirmClear = false; picked.clear() }) { Text("Clear", color = c.red) } },
             dismissButton = { TextButton({ confirmClear = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
     rejectResult?.let { text ->
-        AlertDialog(onDismissRequest = { rejectResult = null }, text = { Text(text) },
+        GlassAlert(onDismissRequest = { rejectResult = null }, text = { Text(text) },
             confirmButton = { TextButton({ rejectResult = null }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     }
 
@@ -214,7 +214,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                         if (muted) "Notifications off" else "Notifications on",
                         onClick = { muteOpen = true }, modifier = Modifier.padding(end = 8.dp))
                     val circles = com.fariin.app.data.GroupInfoCircles
-                    androidx.compose.material3.DropdownMenu(muteOpen, onDismissRequest = { muteOpen = false },
+                    com.fariin.app.ui.components.GlassDropdown(muteOpen, onDismissRequest = { muteOpen = false },
                         shape = com.fariin.app.ui.components.FariinMenu.shape,
                         border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                         val until = view.state.mutedUntil
@@ -354,7 +354,7 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
                 modifier = Modifier.fillMaxWidth().clickable { if (ticked != null) onToggle() else onTap(b) }.padding(vertical = 12.dp, horizontal = 14.dp))
         }
     }
-    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+    com.fariin.app.ui.components.GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
         // The chat's quick reaction bar (QuickReaction.bar), mine filled; the same one again takes it back.
         Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             for (e in com.fariin.app.data.MessageRules.QUICK_REACTIONS) {
@@ -443,7 +443,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
             }
         }
     }
-    androidx.compose.material3.DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = Fariin.colors.card,
+    com.fariin.app.ui.components.GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = Fariin.colors.card,
         offset = androidx.compose.ui.unit.DpOffset(88.dp, 0.dp)) {
         val pinned = view.state.pinned
         val archived = view.state.archived

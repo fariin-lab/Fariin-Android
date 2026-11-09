@@ -1,6 +1,7 @@
 package com.fariin.app.ui.call
 
-import androidx.compose.material3.AlertDialog
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.material3.TextButton
 import com.fariin.app.ui.components.FariinSpinner
 import androidx.compose.ui.res.vectorResource
@@ -69,7 +70,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.fariin.app.call.AudioRoute
 import com.fariin.app.call.CallMachine
 import com.fariin.app.call.CallRouting
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateOf
 import com.fariin.app.call.CallPhase
@@ -775,7 +775,7 @@ private fun SpeakerButton(r: com.fariin.app.call.RouteState, size: Dp, onRoute: 
                 CallRouting.Tap.Picker -> open = true
             }
         })
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        GlassDropdown(expanded = open, onDismissRequest = { open = false }) {
             for (route in CallRouting.pickerList(r)) {
                 DropdownMenuItem(
                     text = { Text(CallRouting.label(route, r.bluetoothName)) },
@@ -1562,7 +1562,7 @@ private fun MemberTile(
     Box(modifier) {
         if (glow > 0f) Box(Modifier.matchParentSize().graphicsLayer { alpha = glow }
             .shadow(14.dp, shape, clip = false, ambientColor = Green.copy(alpha = 0.35f), spotColor = Green.copy(alpha = 0.75f)))
-        if (tileMenu != null) DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }, containerColor = Color(0xFF2C2C2E)) {
+        if (tileMenu != null) GlassDropdown(menuOpen, onDismissRequest = { menuOpen = false }, containerColor = Color(0xFF2C2C2E)) {
             Text(m.name, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
             HostMenuItems(tileMenu.g, m, canBlock = GroupCallAdmin.ownsLink(tileMenu.g.linkRoom != null, tileMenu.g.myRole, tileMenu.g.linkCreator), onConfirm = tileMenu.onConfirm, close = { menuOpen = false },
                 pinned = if (tileMenu.canPin) tileMenu.pinnedId == m.id else null, onPin = { tileMenu.onPin(m.id) })
@@ -1620,7 +1620,7 @@ private fun MemberTile(
                     if (w > 102) Text("Can't show video", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, modifier = Modifier.padding(top = 6.dp))
                 }
-                if (why) AlertDialog(onDismissRequest = { why = false }, title = { Text("Can't show video") },
+                if (why) GlassAlert(onDismissRequest = { why = false }, title = { Text("Can't show video") },
                     text = { Text("${m.name}'s video can't be shown right now. Their connection may be weak.") },
                     confirmButton = { TextButton({ why = false }) { Text("OK") } })
             }
@@ -1928,7 +1928,7 @@ private fun HostRowControls(g: GroupCallUi, m: GroupMember, canBlock: Boolean, o
                 contentAlignment = Alignment.Center) {
                 Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_more_ios), null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
             }
-            DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = Color(0xFF2C2C2E)) {
+            GlassDropdown(menu, onDismissRequest = { menu = false }, containerColor = Color(0xFF2C2C2E)) {
                 HostMenuItems(g, m, canBlock, onConfirm, close = { menu = false })
             }
         }

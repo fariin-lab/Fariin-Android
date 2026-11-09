@@ -1,5 +1,7 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.activity.compose.BackHandler
@@ -26,8 +28,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -155,7 +155,7 @@ fun PostedStoriesPage(
                     Spacer(Modifier.width(4.dp))
                     Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_down), contentDescription = "Filter", tint = c.label, modifier = Modifier.size(16.dp))
                 }
-                DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
+                GlassDropdown(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
                     PostedStoriesRules.Filter.entries.forEach { f ->
                         DropdownMenuItem(text = { Text(f.title, fontWeight = if (f == filter) FontWeight.SemiBold else FontWeight.Normal) },
                             onClick = { filter = f; filterMenu = false })
@@ -194,7 +194,7 @@ fun PostedStoriesPage(
                         },
                         onHold = { if (!editing) menuFor = s.id }) {
                         // iOS hold menu: Edit Viewers, Share (only a story that went to Everyone), Delete.
-                        DropdownMenu(expanded = menuFor == s.id, onDismissRequest = { menuFor = null }) {
+                        GlassDropdown(expanded = menuFor == s.id, onDismissRequest = { menuFor = null }) {
                             if (PostedStoriesRules.canEditViewers(s)) DropdownMenuItem(text = { Text("Edit Viewers") },
                                 leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members), contentDescription = null) },
                                 onClick = { menuFor = null; editViewers = s })
@@ -263,7 +263,7 @@ fun PostedStoriesPage(
     }
     }
     updateError?.let { msg ->
-        AlertDialog(
+        GlassAlert(
             onDismissRequest = { updateError = null },
             title = { Text("Couldn't update") }, text = { Text(msg) },
             confirmButton = { TextButton(onClick = { updateError = null }) { Text("OK") } },
@@ -271,7 +271,7 @@ fun PostedStoriesPage(
     }
     if (confirmDeleteSelected) {
         val n = selected.size
-        AlertDialog(
+        GlassAlert(
             onDismissRequest = { confirmDeleteSelected = false },
             title = { Text("Delete $n ${if (n == 1) "story" else "stories"}?") },
             text = { Text("This cannot be undone. People who already saw them keep what they saw.") },
@@ -280,7 +280,7 @@ fun PostedStoriesPage(
         )
     }
     confirmDelete?.let { s ->
-        AlertDialog(
+        GlassAlert(
             onDismissRequest = { confirmDelete = null },
             title = { Text("Delete this story?") },
             text = { Text("It will also be deleted for everyone who received it.") },

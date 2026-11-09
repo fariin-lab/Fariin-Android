@@ -1,5 +1,7 @@
 package com.fariin.app.ui.glow
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.Image
@@ -18,8 +20,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -103,7 +103,7 @@ fun GlowingCapsule(compact: Boolean = false, onRemove: () -> Unit) {
 @Composable
 fun RemoveGlowingMenu(open: Boolean, onDismiss: () -> Unit, onRemove: () -> Unit) {
     val c = Fariin.colors
-    DropdownMenu(open, onDismissRequest = onDismiss, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
+    GlassDropdown(open, onDismissRequest = onDismiss, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
         DropdownMenuItem(text = { Text("Remove Glowing", color = c.red) }, onClick = onRemove,
             leadingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })
     }
@@ -114,7 +114,7 @@ fun RemoveGlowingMenu(open: Boolean, onDismiss: () -> Unit, onRemove: () -> Unit
 fun GlowWriteFailed(show: Boolean, onDismiss: () -> Unit) {
     if (!show) return
     val c = Fariin.colors
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Couldn't update") }, text = { Text("Try again in a moment.") },
+    GlassAlert(onDismissRequest = onDismiss, title = { Text("Couldn't update") }, text = { Text("Try again in a moment.") },
         confirmButton = { TextButton(onDismiss) { Text("OK", color = c.accent) } }, containerColor = c.card)
 }
 

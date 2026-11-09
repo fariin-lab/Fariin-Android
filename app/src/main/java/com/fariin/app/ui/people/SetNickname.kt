@@ -67,7 +67,7 @@ fun SetNicknamePage(uid: String, photoUrl: String?, onBack: () -> Unit) {
     var confirmDelete by remember { mutableStateOf(false) }
     val changed = ContactCard(first, last, note) != saved
 
-    if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
+    if (confirmDelete) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { confirmDelete = false },
         title = { Text("Delete nickname and note?") },
         text = { Text("This removes the name and note you saved. Their profile name shows again.") },
         confirmButton = { TextButton({ confirmDelete = false; ContactNames.remove(uid); onBack() }) { Text("Delete", color = c.red) } },

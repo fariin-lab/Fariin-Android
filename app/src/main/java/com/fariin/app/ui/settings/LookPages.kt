@@ -1,5 +1,7 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -50,8 +52,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -137,7 +137,7 @@ private fun ResetMenu(wallpaperPage: Boolean) {
     fun resetColor() = ChatLookStore.setDefaultColor(ctx, null)
     Box {
         IconButton(onClick = { open = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "Reset options", tint = c.label) }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+        GlassDropdown(expanded = open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
             DropdownMenuItem(text = { Text(if (wallpaperPage) "Reset Wallpaper" else "Reset Bubble Color") },
                 onClick = { open = false; if (wallpaperPage) resetWallpaper() else resetColor() })
@@ -145,7 +145,7 @@ private fun ResetMenu(wallpaperPage: Boolean) {
                 onClick = { open = false; confirm = true })
         }
     }
-    if (confirm) AlertDialog(
+    if (confirm) GlassAlert(
         onDismissRequest = { confirm = false },
         title = { Text(if (wallpaperPage) "Reset wallpaper and bubble color?" else "Reset bubble color and wallpaper?") },
         text = { Text("Chats go back to no wallpaper and the Auto color. Chats with their own keep it.") },
@@ -329,7 +329,7 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
                     add { m ->
                         Box(m) {
                             WallTile(ChatWallpaper.Photo(id), current, Modifier.fillMaxWidth(), onLong = { deleting = id }) { previewing = ChatWallpaper.Photo(id) }
-                            DropdownMenu(expanded = deleting == id, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                            GlassDropdown(expanded = deleting == id, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                                 border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                                 DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { deleting = null; ChatLookStore.deleteFromLibrary(ctx, id) })
                             }
@@ -706,7 +706,7 @@ internal fun ChatColorGrid(chosen: ChatColorSpec?, ring: Boolean = true, onPick:
                     ColorCircle(ring && chosen == p, Modifier.fillMaxWidth(), onLong = { deleting = p }, onTap = { onPick(p) }) {
                         Box(Modifier.fillMaxSize().clip(CircleShape).background(p.brush()))
                     }
-                    DropdownMenu(expanded = deleting == p, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                    GlassDropdown(expanded = deleting == p, onDismissRequest = { deleting = null }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                         border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                         DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { deleting = null; ChatLookStore.removeCustom(ctx, p) })
                     }

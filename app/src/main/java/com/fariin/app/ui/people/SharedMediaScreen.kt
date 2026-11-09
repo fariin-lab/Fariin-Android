@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.vectorResource
@@ -40,7 +41,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -220,7 +220,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
                         // No menu on an empty tab (iOS showsMoreMenu): Show is the only thing in it here.
                         if (tab == SharedMedia.Tab.MEDIA && state.lists.media.isNotEmpty()) Box {
                             IconButton({ menu = true }, modifier = com.fariin.app.ui.components.barGlass()) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", tint = c.label) }
-                            DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+                            GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                                 Text("Show", style = MaterialTheme.typography.labelMedium, color = c.secondary,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                                 SharedMedia.Filter.entries.forEach { f ->

@@ -324,7 +324,7 @@ private fun Details(name: String, about: String, creating: Boolean, error: Strin
                         else Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_group_camera), "Set Channel Photo",
                             tint = c.label, modifier = Modifier.size(26.dp))
                     }
-                    androidx.compose.material3.DropdownMenu(expanded = photoMenu, onDismissRequest = { photoMenu = false }) {
+                    com.fariin.app.ui.components.GlassDropdown(expanded = photoMenu, onDismissRequest = { photoMenu = false }) {
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") }, onClick = { photoMenu = false; picker.takePhoto() })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") }, onClick = { photoMenu = false; picker.launch() })
                         if (photo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },

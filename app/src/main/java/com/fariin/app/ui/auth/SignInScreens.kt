@@ -1,5 +1,6 @@
 package com.fariin.app.ui.auth
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import android.app.Activity
@@ -36,7 +37,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -421,7 +421,7 @@ private fun SavedAccountRow(a: SavedAccount, photo: Bitmap?, lastUsed: Boolean, 
             if (resuming) Busy(c.label, 20)
             else Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = c.tertiary)
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+        GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("Remove from This Phone", color = c.red) }, onClick = { menu = false; onForget() })
         }
     }

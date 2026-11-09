@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassDropdown
 import android.content.Intent
 import android.text.format.DateFormat
 import android.widget.Toast
@@ -43,7 +44,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -549,7 +549,7 @@ private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: ()
         var open by remember { mutableStateOf(false) }
         Box {
             FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", onClick = { open = true }, circle = true)
-            DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
+            GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
                 containerColor = FariinMenu.container) { menu { open = false } }
         }
     }
@@ -581,7 +581,7 @@ private fun PhotoBar(b: ViewerRules.Buttons, onShare: () -> Unit, onDraw: () -> 
             var open by remember { mutableStateOf(false) }
             Box {
                 BarButton(painterResource(R.drawable.ic_save_down), "Save") { if (b.saveAll > 1) open = true else onSave() }
-                DropdownMenu(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
+                GlassDropdown(open, onDismissRequest = { open = false }, shape = FariinMenu.shape, border = FariinMenu.border,
                     containerColor = FariinMenu.container) {
                     MenuRow("Save All (${b.saveAll})", painterResource(R.drawable.ic_sf_photo_on_rectangle)) { open = false; onSaveAll() }
                     MenuRow("Save This", painterResource(R.drawable.ic_save_down)) { open = false; onSave() }
@@ -730,7 +730,7 @@ private fun rememberSaver(media: ChatMedia): (List<ViewerRules.Page>) -> Unit {
     // A small dialog over the viewer offers the way back instead.
     if (blocked) {
         val c = com.fariin.app.ui.theme.Fariin.colors
-        androidx.compose.material3.AlertDialog(
+        com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = { blocked = false },
             title = { androidx.compose.material3.Text("Storage access is off") },
             text = { androidx.compose.material3.Text("Fariin needs storage access to save photos and videos. Turn it on in Settings.") },

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -31,7 +32,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -775,7 +775,7 @@ private fun RepliesAdminMenu(s: PostRepliesState) {
     var open by remember { mutableStateOf(false) }
     Box {
         RoundTopButton(ImageVector.vectorResource(R.drawable.ic_more_ios), "Reply settings") { open = true }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+        GlassDropdown(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
             border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             if (s.may.settings) {
                 DropdownMenuItem(text = { Text(PostReplyRules.postToggleLabel(s.postOff), color = c.label) },
@@ -848,7 +848,7 @@ private fun SortSwitch(s: PostRepliesState) {
 internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
     if (s.quickReport != null) {
         val c = Fariin.colors
-        androidx.compose.material3.AlertDialog(onDismissRequest = { s.quickReport = null }, containerColor = c.card,
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { s.quickReport = null }, containerColor = c.card,
             title = { Text("Report this reply?") },
             confirmButton = { androidx.compose.material3.TextButton({ s.sendQuickReport() }) { Text("Report", color = c.red) } },
             dismissButton = { androidx.compose.material3.TextButton({ s.quickReport = null }) { Text("Cancel", color = c.accent) } })
@@ -977,7 +977,7 @@ private fun SmallLink(label: String, modifier: Modifier, center: Boolean = false
 @Composable
 private fun BanSheet(onDismiss: () -> Unit, onBan: (Boolean) -> Unit) {
     val c = Fariin.colors
-    androidx.compose.material3.AlertDialog(
+    com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = onDismiss,
         title = { Text("Remove this person?") },
         text = { Text("They leave the channel and can't come back or reply.") },
@@ -1145,7 +1145,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                             )
                         }
                         .padding(horizontal = 14.dp, vertical = 10.dp))
-                DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     // The chat's react bar (iOS): the same six, in the same order, mine marked; a pick
                     // closes the menu, the same one again takes mine back.

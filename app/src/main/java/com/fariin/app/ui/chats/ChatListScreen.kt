@@ -1,5 +1,6 @@
 package com.fariin.app.ui.chats
 
+import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.glassMenuAnchor
 import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.ui.semantics.contentDescription
@@ -44,9 +45,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -871,7 +870,7 @@ private fun SelectionBar(
             IconButton(onClick = onDelete) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = "Delete") }
             Box {
                 IconButton(onClick = { more = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More") }
-                DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                GlassDropdown(expanded = more, onDismissRequest = { more = false }) {
                     DropdownMenuItem(text = { Text(if (allUnread) "Mark as Read" else "Mark as Unread") },
                         leadingIcon = { Icon(if (allUnread) fi(R.drawable.ic_menu_read) else fi(R.drawable.ic_menu_unread), null) },
                         onClick = { more = false; onReadToggle() })
@@ -1373,7 +1372,7 @@ private fun TopPeersRow(peers: List<Conversation>, me: String, onOpen: (Conversa
                     Text(first, fontSize = 11.sp, lineHeight = 13.sp, color = c.label, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 64.dp))
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Remove", color = c.red) }, onClick = { menu = false; onRemove(conv) })
                 }
             }

@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.components.floating
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -24,8 +26,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -180,7 +180,7 @@ internal fun PinnedBar(
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(44.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.12f))) {
                     Icon(painterResource(R.drawable.ic_pin_bar), "Pinned message", tint = c.label, modifier = Modifier.size(22.dp))
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
+                GlassDropdown(expanded = menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                     if (ui.canPin) DropdownMenuItem(
                         text = { Text("Unpin") },
                         leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
@@ -263,7 +263,7 @@ internal fun PinnedMessagesSheet(
                                         Icon(ImageVector.vectorResource(R.drawable.ic_sf_arrow_right), "Go to Message", tint = c.secondary)
                                     }
                                 }
-                                DropdownMenu(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
+                                GlassDropdown(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                                     DropdownMenuItem(
                                         text = { Text("Unpin") },
                                         leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
@@ -360,7 +360,7 @@ internal fun BulkDeleteDialog(picked: List<Message>, ui: ThreadUi, onDismiss: ()
         onPlan(SelectRules.plan(picked, everyone, ui.me, ui.isGroup, ui.adminMayDelete))
     }
     val n = picked.size
-    AlertDialog(
+    GlassAlert(
         onDismissRequest = onDismiss,
         title = { Text("Delete $n message${if (n == 1) "" else "s"}?") },
         text = if (hasMine && split.onlyMe > 0) {

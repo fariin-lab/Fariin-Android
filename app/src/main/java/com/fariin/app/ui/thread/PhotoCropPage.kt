@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassDropdown
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -261,7 +261,7 @@ internal fun PhotoCropPage(source: Bitmap, onCancel: () -> Unit, onDone: (Bitmap
                     Box {
                         var menu by remember { mutableStateOf(false) }
                         CropTool(ImageVector.vectorResource(R.drawable.ic_sf_aspectratio), "Aspect ratio", if (aspect == null) Color.White else CropBlue) { menu = true }
-                        DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        GlassDropdown(menu, onDismissRequest = { menu = false }) {
                             val original = img.width / img.height.toFloat()
                             listOf("Original" to original, "Free" to null, "Square" to 1f, "4:5" to 4f / 5f,
                                 "3:4" to 3f / 4f, "16:9" to 16f / 9f, "9:16" to 9f / 16f).forEach { (label, r) ->

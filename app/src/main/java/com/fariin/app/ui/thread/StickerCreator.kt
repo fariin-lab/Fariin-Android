@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassAlert
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -30,7 +31,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -202,11 +202,11 @@ internal fun StickerCreatorPage(photo: Uri, onClose: () -> Unit, onSend: (Sticke
                 Spacer(Modifier.height(12.dp))
             }
         }
-        if (noArt) AlertDialog(onDismissRequest = onClose, title = { Text("Couldn't Make a Sticker") },
+        if (noArt) GlassAlert(onDismissRequest = onClose, title = { Text("Couldn't Make a Sticker") },
             text = { Text("This photo couldn't be made into a sticker. Try another one.") },
             confirmButton = { TextButton(onClick = onClose) { Text("OK") } })
         saveError?.let { msg ->
-            AlertDialog(onDismissRequest = { saveError = null }, title = { Text("Couldn't Save") }, text = { Text(msg) },
+            GlassAlert(onDismissRequest = { saveError = null }, title = { Text("Couldn't Save") }, text = { Text(msg) },
                 confirmButton = { TextButton(onClick = { saveError = null }) { Text("OK") } })
         }
     }

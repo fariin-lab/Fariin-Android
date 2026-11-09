@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.R
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.ime
@@ -68,7 +69,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1031,7 +1031,7 @@ fun StoryViewer(
     }
 
     confirmDelete?.let { s ->
-        AlertDialog(
+        GlassAlert(
             onDismissRequest = { confirmDelete = null },
             title = { Text("Delete this story?") },
             text = { Text("It will also be deleted for everyone who received it.") },
@@ -1312,7 +1312,7 @@ private fun StoryPage(
                                     }
                                 })
                             }
-                            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                                 val item: @Composable (String, androidx.compose.ui.graphics.vector.ImageVector, Color?, String) -> Unit = { t, icon, tint, key ->
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(t, color = tint ?: Color.Unspecified) },

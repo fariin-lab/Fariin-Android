@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -28,8 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -340,7 +340,7 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
     LaunchedEffect(cid) { load() }
 
     confirm?.let { (f, ban) ->
-        AlertDialog(onDismissRequest = { confirm = null }, containerColor = c.card,
+        GlassAlert(onDismissRequest = { confirm = null }, containerColor = c.card,
             title = { Text(ChannelAdmins.removeTitle(ban)) }, text = { Text(ChannelAdmins.removeBody(ban)) },
             confirmButton = { TextButton({
                 confirm = null
@@ -378,7 +378,7 @@ fun ChannelFollowersScreen(cid: String, me: String, onBack: () -> Unit, chats: (
         }
         return
     }
-    if (linkInstead.isNotEmpty()) AlertDialog(onDismissRequest = { linkInstead = emptyList() }, containerColor = c.card,
+    if (linkInstead.isNotEmpty()) GlassAlert(onDismissRequest = { linkInstead = emptyList() }, containerColor = c.card,
         title = { Text("Send Invite Link") }, text = { Text(com.fariin.app.data.ChannelAddFollowers.inviteInstead(linkInstead)) },
         confirmButton = { TextButton({ linkInstead = emptyList(); shareLink() }) { Text("Share Link", color = c.accent) } },
         dismissButton = { TextButton({ linkInstead = emptyList() }) { Text("Cancel", color = c.accent) } })
@@ -436,7 +436,7 @@ fun ChannelAdminsScreen(cid: String, me: String, onBack: () -> Unit, onOpen: (St
     suspend fun reload() { runCatching { ChannelService.pendingAdmins(cid) }.onSuccess { pending = it } }
     LaunchedEffect(cid, mayAdd) { if (mayAdd) reload() }
     revoking?.let { p ->
-        AlertDialog(onDismissRequest = { revoking = null }, containerColor = c.card,
+        GlassAlert(onDismissRequest = { revoking = null }, containerColor = c.card,
             title = { Text("Revoke admin invite for ${p.name}?") },
             text = { Text("If you revoke it, ${p.name} can no longer use it to become an admin of this channel.") },
             confirmButton = { TextButton({
@@ -507,7 +507,7 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
     }
     LaunchedEffect(cid) { load() }
     asking?.let { f ->
-        AlertDialog(onDismissRequest = { asking = null }, containerColor = c.card,
+        GlassAlert(onDismissRequest = { asking = null }, containerColor = c.card,
             title = { Text("Make ${f.name} an admin?") }, text = { Text(ChannelAdmins.MAKE_ADMIN_BODY) },
             confirmButton = { TextButton({
                 asking = null; busy = true
@@ -579,10 +579,10 @@ fun ChannelAdminScreen(cid: String, me: String, uid: String, onBack: () -> Unit)
         }
     }
     problem?.let { p ->
-        AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
+        GlassAlert(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
             text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } })
     }
-    if (confirmDismiss) AlertDialog(onDismissRequest = { confirmDismiss = false }, containerColor = c.card,
+    if (confirmDismiss) GlassAlert(onDismissRequest = { confirmDismiss = false }, containerColor = c.card,
         title = { Text("Dismiss $name as admin?") },
         confirmButton = { TextButton({
             confirmDismiss = false; saving = true
@@ -665,7 +665,7 @@ private fun RowMenu(items: List<Pair<String, () -> Unit>>) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton({ open = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), "More", tint = c.secondary) }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+        GlassDropdown(open, onDismissRequest = { open = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
             items.forEach { (label, act) ->
                 DropdownMenuItem(text = { Text(label, color = if (label == "Ban") banOrange() else c.red) }, onClick = { open = false; act() })
             }

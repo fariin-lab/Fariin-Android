@@ -222,7 +222,7 @@ class MainActivity : ComponentActivity() {
         // and a call then rang with nothing to answer (owner's Pixel 2026-11-05). Asked once, the way
         // calling apps do; "Not now" is remembered.
         var askFullScreen by remember { mutableStateOf(com.fariin.app.call.CallScreenAccess.shouldAsk(ctx)) }
-        if (askFullScreen && !explain) androidx.compose.material3.AlertDialog(
+        if (askFullScreen && !explain) com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = { com.fariin.app.call.CallScreenAccess.later(ctx); askFullScreen = false },
             title = { androidx.compose.material3.Text("Show calls on your screen") },
             text = { androidx.compose.material3.Text("Allow Fariin to show incoming calls full screen, so you can answer when your phone is locked or Fariin is closed.") },

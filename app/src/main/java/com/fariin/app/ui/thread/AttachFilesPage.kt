@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassDropdown
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -159,7 +159,7 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
                 IconButton(onClick = { searching = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search", tint = c.label) }
                 Box {
                     IconButton(onClick = { sortMenu = true }) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_sort), "Sort", tint = c.label) }
-                    DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }, containerColor = c.card) {
+                    GlassDropdown(sortMenu, onDismissRequest = { sortMenu = false }, containerColor = c.card) {
                         listOf(FileSort.DATE to "Sort by date", FileSort.NAME to "Sort by name").forEach { (s, label) ->
                             DropdownMenuItem(text = { Text(label, color = c.label) }, onClick = { sort = s; sortMenu = false },
                                 trailingIcon = { if (sort == s) Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.accent) })

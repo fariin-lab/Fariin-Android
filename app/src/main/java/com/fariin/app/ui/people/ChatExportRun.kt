@@ -1,12 +1,12 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassAlert
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -123,7 +123,7 @@ fun ChatExportDialog(job: ChatExportRun.Job, onDone: () -> Unit) {
         }
         onDone()
     }
-    AlertDialog(onDismissRequest = onDone,
+    GlassAlert(onDismissRequest = onDone,
         title = { Text("Export Chat") },
         text = {
             Row(verticalAlignment = Alignment.CenterVertically) {

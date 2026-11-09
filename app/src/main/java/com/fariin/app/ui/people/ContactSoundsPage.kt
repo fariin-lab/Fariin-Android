@@ -1,8 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,7 +53,7 @@ internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, onBack
             Box {
                 SettingsRow("Mute", icon = painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell),
                     value = value, last = true) { menu = true }
-                DropdownMenu(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+                GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
                     if (muted) DropdownMenuItem(text = { Text("Unmute", color = c.label) }, onClick = { menu = false; onMute(0.0) })
                     GroupInfoCircles.MUTE_CHOICES.forEach { (label, hours) ->

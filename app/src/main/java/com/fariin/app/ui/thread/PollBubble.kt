@@ -1,5 +1,7 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.GlassAlert
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,8 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -300,7 +300,7 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
             }
         }
     }
-    if (confirmStop) AlertDialog(
+    if (confirmStop) GlassAlert(
         onDismissRequest = { confirmStop = false },
         title = { Text("Stop this poll?") },
         text = { Text("No one will be able to vote anymore.") },
@@ -319,7 +319,7 @@ private fun PollResultsSheet(m: Message, poll: PollCard, ctx: PollContext, votes
         },
     )
     stopError?.let { e ->
-        AlertDialog(onDismissRequest = { stopError = null }, title = { Text("Could not stop the poll") },
+        GlassAlert(onDismissRequest = { stopError = null }, title = { Text("Could not stop the poll") },
             text = { Text(e) }, confirmButton = { TextButton({ stopError = null }) { Text("OK") } })
     }
 }
@@ -423,7 +423,7 @@ internal fun PollComposer(onDismiss: () -> Unit, onSend: (String) -> Unit) {
                             Text("Ends", fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
                             Text(ends.label, fontSize = 17.sp, color = c.secondary)
                         }
-                        DropdownMenu(expanded = endsMenu, onDismissRequest = { endsMenu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
+                        GlassDropdown(expanded = endsMenu, onDismissRequest = { endsMenu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                             PollRules.EndChoice.entries.forEach { e ->
                                 DropdownMenuItem(text = { Text(e.label) }, onClick = { ends = e; endsMenu = false })
                             }

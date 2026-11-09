@@ -1,5 +1,6 @@
 package com.fariin.app.ui.browser
 
+import com.fariin.app.ui.components.GlassDropdown
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -39,7 +40,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -306,7 +306,7 @@ private fun Browser(start: String, motion: SheetMotion) {
                         Box(Modifier.size(36.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
                             Icon(ImageVector.vectorResource(R.drawable.ic_sf_line3), "Menu", tint = c.label, modifier = Modifier.size(20.dp))
                         }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Forward") }, enabled = canForward,
                                 leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null) },
                                 onClick = { menu = false; web?.goForward() })

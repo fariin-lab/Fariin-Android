@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.background
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,7 +103,7 @@ internal fun CallBubble(
         }
     }
     if (asking && peerUid != null) {
-        AlertDialog(
+        GlassAlert(
             onDismissRequest = { asking = false },
             title = { Text(StickerGifRules.callBackTitle(look.video)) },
             text = { Text(StickerGifRules.callBackQuestion(look.video, title)) },

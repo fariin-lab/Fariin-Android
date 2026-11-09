@@ -1,11 +1,11 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassAlert
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -94,7 +94,7 @@ internal fun rememberBubbleLinkTap(ui: ThreadUi, onNotice: (String) -> Unit): (T
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) }) }
     storyOpen?.let { g -> com.fariin.app.ui.stories.StoryViewerDialog(now.me, listOf(g), 0,
         com.fariin.app.data.ChatsNow.list, onClose = { storyOpen = null }) }
-    if (notFound) AlertDialog(
+    if (notFound) GlassAlert(
         onDismissRequest = { notFound = false },
         title = { Text("Sorry, this user doesn't seem to exist.") },
         confirmButton = { TextButton(onClick = { notFound = false }) { Text("OK") } },

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -32,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -638,7 +638,7 @@ private fun ViewerRow(
                 // Dark like the sheet it opens from (iOS draws the row's menu in the dark style).
                 androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(
                     surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Send message") },
                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_chat), contentDescription = null) },
                         onClick = { menu = false; onSendMessage() })
@@ -744,7 +744,7 @@ private fun ReplyRow(
         }
         androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme(
             surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                 if (!r.isReaction) DropdownMenuItem(text = { Text("Copy") },
                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) },
                     onClick = { menu = false; clipboard.setText(androidx.compose.ui.text.AnnotatedString(r.text)) })

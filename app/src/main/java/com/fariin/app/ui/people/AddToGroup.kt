@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.foundation.clickable
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -109,7 +109,7 @@ internal fun AddToGroupSheet(api: PeopleApi, uid: String, name: String, onDismis
         }
     }
     pending?.let { g ->
-        AlertDialog(onDismissRequest = { pending = null },
+        GlassAlert(onDismissRequest = { pending = null },
             title = { Text("Add New Member") },
             text = { Text("Add \"$name\" to \"${g.displayName(me)}\"?") },
             confirmButton = {

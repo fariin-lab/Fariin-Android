@@ -346,7 +346,7 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
     var failed by remember { mutableStateOf(false) }
     var gone by remember { mutableStateOf(setOf<String>()) }
     pendingDelete?.let { conv ->
-        AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("Delete this request?") },
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { pendingDelete = null }, title = { Text("Delete this request?") },
             text = { Text("The conversation is deleted and they can’t send you another request for ${Requests.DECLINE_COOLDOWN_DAYS} days. This does not block them.") },
             confirmButton = { TextButton({
                 pendingDelete = null
@@ -354,7 +354,7 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
             }) { Text("Delete", color = c.red) } },
             dismissButton = { TextButton({ pendingDelete = null }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     }
-    if (failed) AlertDialog(onDismissRequest = { failed = false }, title = { Text("Couldn't do that") },
+    if (failed) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { failed = false }, title = { Text("Couldn't do that") },
         text = { Text("Check your connection and try again.") },
         confirmButton = { TextButton({ failed = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     val list = requests.filter { it.id !in gone }
@@ -522,7 +522,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         PersonConfirmSheet(person?.photoUrl ?: conv?.photos?.get(uid), name, title, body, actions, onDismiss = { ask = null })
     }
     if (glowOn) com.fariin.app.ui.glow.GlowDoorHost(glowDoor)
-    notice?.let { n -> AlertDialog(onDismissRequest = { notice = null }, text = { Text(n) },
+    notice?.let { n -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notice = null }, text = { Text(n) },
         confirmButton = { TextButton({ notice = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
 
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
@@ -887,7 +887,7 @@ private fun NewContactPage(api: PeopleApi, onBack: () -> Unit, onOpenChat: (Stri
             }
         }
     }
-    if (notFound) androidx.compose.material3.AlertDialog(onDismissRequest = { notFound = false },
+    if (notFound) com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notFound = false },
         text = { Text("Sorry, this user doesn't seem to exist.") },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { notFound = false }) { Text("OK") } })
 }

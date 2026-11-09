@@ -288,14 +288,14 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         StoryLibraryPreview(item, bmp, if (multi != null) "Select" else "Add to Story",
             onAction = { preview = null; tap(item) }, onDismiss = { preview = null })
     }
-    if (tooMany) androidx.compose.material3.AlertDialog(
+    if (tooMany) com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = { tooMany = false },
         title = { Text("That's the limit") },
         text = { Text(if (fileMode) "You can send up to $limit photos at once."
             else "A story can hold ${StoryCameraRules.POST_ITEMS} photos and videos. Take one off to add another.") },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { tooMany = false }) { Text("OK") } },
     )
-    if (tooLongVideo) androidx.compose.material3.AlertDialog(
+    if (tooLongVideo) com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = { tooLongVideo = false },
         title = { Text(StoryLimits.TOO_LONG_TITLE) },
         text = { Text(StoryLimits.TOO_LONG_TEXT) },
@@ -307,7 +307,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
             failedBatch = null
             if (f.resolved.isNotEmpty()) { multi?.onApply?.invoke(f.removed, f.resolved); onClose() }
         }
-        androidx.compose.material3.AlertDialog(
+        com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = ok,
             title = { Text("Couldn't add everything") },
             text = {

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.settings
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -29,7 +30,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -216,7 +216,7 @@ internal fun BubbleStyleChooser(
             }
         }
     }
-    if (plusNote) AlertDialog(onDismissRequest = { plusNote = false },
+    if (plusNote) GlassAlert(onDismissRequest = { plusNote = false },
         title = { Text("Fariin Plus") },
         text = { Text("This style is part of Fariin Plus, coming soon. The free styles are ready to use now.") },
         confirmButton = { TextButton({ plusNote = false }) { Text("OK", color = c.accent) } }, containerColor = c.card)

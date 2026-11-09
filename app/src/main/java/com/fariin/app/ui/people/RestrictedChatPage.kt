@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.R
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -108,7 +108,7 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
             }
         }
     }
-    if (askRequest) AlertDialog(onDismissRequest = { askRequest = false }, title = { Text("Ask $them to turn it off?") },
+    if (askRequest) GlassAlert(onDismissRequest = { askRequest = false }, title = { Text("Ask $them to turn it off?") },
         text = { Text("$them turned on Restricted Chat, so only they can turn it off. They'll see your request in the chat.") },
         confirmButton = { TextButton({ askRequest = false; ChatRestrictions.scope.launch { ChatRestrictions.requestOff(cid, me, myName()) } }) {
             Text("Send Request", color = c.accent) } },

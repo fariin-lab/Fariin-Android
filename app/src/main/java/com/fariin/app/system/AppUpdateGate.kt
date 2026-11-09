@@ -1,5 +1,6 @@
 package com.fariin.app.system
 
+import com.fariin.app.ui.components.GlassAlert
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -157,7 +157,7 @@ fun AppUpdateLayer() {
                 }
             }
         }
-    } else AlertDialog(onDismissRequest = { AppUpdateGate.notNow(ctx) },
+    } else GlassAlert(onDismissRequest = { AppUpdateGate.notNow(ctx) },
         title = { Text(u.title) }, text = { if (u.message.isNotEmpty()) Text(u.message) },
         confirmButton = { TextButton(onClick = { AppUpdateGate.openStore(ctx, u) }) { Text("Update") } },
         dismissButton = { TextButton(onClick = { AppUpdateGate.notNow(ctx) }) { Text("Not Now") } })

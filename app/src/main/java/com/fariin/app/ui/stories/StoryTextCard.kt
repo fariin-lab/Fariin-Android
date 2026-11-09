@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
@@ -39,7 +40,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -513,7 +513,7 @@ internal fun StoryTextCard(
         }
     }
 
-    if (askDiscard) AlertDialog(
+    if (askDiscard) GlassAlert(
         onDismissRequest = { askDiscard = false; setFocus(true) },
         title = { Text("Discard this status?") },
         confirmButton = { TextButton({ askDiscard = false; onClose() }) { Text("Discard", color = Color(0xFFE5484D)) } },

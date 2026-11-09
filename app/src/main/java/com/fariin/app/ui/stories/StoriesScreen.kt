@@ -552,7 +552,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
         }
     }
     hideTarget?.let { g ->
-        androidx.compose.material3.AlertDialog(
+        com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = { hideTarget = null },
             title = { Text("Hide Stories?") },
             text = { Text("New story updates from ${g.name.ifEmpty { "this person" }} won't appear at the top of the stories list anymore.") },
@@ -570,7 +570,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     (upload as? StoryUploads.State.Failed)?.takeIf { live && active }?.let { f ->
         val waiting = remember(f) { com.fariin.app.data.StoryOutbox.hasWaiting(context, me) }
         val dismiss = { StoryUploads.state.value = null }
-        androidx.compose.material3.AlertDialog(
+        com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = dismiss,
             title = { Text("Couldn't post story") },
             text = { Text(if (waiting) f.message + "\n\nIt will be tried again automatically when you're back online." else f.message) },
@@ -583,13 +583,13 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             dismissButton = if (waiting) ({ androidx.compose.material3.TextButton(onClick = dismiss) { Text("OK") } }) else null,
         )
     }
-    if (tooLong) androidx.compose.material3.AlertDialog(
+    if (tooLong) com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = { tooLong = false },
         title = { Text(com.fariin.app.data.StoryLimits.TOO_LONG_TITLE) },
         text = { Text(com.fariin.app.data.StoryLimits.TOO_LONG_TEXT) },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { tooLong = false }) { Text("OK") } },
     )
-    if (dayLimit) androidx.compose.material3.AlertDialog(
+    if (dayLimit) com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = { dayLimit = false },
         title = { Text(com.fariin.app.data.StoryLimits.DAY_TITLE) },
         text = { Text(limits.dayAlertText()) },
@@ -830,7 +830,7 @@ private fun StoryRow(
             }
         }
     }
-    androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false },
+    com.fariin.app.ui.components.GlassDropdown(expanded = menuOpen, onDismissRequest = { menuOpen = false },
         offset = androidx.compose.ui.unit.DpOffset(96.dp, 0.dp)) {
         menu.forEach { a ->
             androidx.compose.material3.DropdownMenuItem(

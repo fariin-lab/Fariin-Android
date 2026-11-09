@@ -1,11 +1,11 @@
 package com.fariin.app.ui.thread
 
+import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.thread.bubbles.artBubble
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.layout.layout
@@ -433,7 +433,7 @@ private fun ThreadContent(
     callBackFor?.let { cm ->
         val peer = com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me)
         val callCtx = androidx.compose.ui.platform.LocalContext.current
-        androidx.compose.material3.AlertDialog(
+        com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = { callBackFor = null },
             title = { Text(com.fariin.app.data.StickerGifRules.callBackTitle(cm.callVideo)) },
             text = { Text(com.fariin.app.data.StickerGifRules.callBackQuestion(cm.callVideo, ui.title)) },
@@ -461,7 +461,7 @@ private fun ThreadContent(
                 com.fariin.app.data.ChatRestrictions.answer(ui.cid, ui.me, myName, accept)
             }
         }
-        androidx.compose.material3.AlertDialog(onDismissRequest = { restrictAnswer = false }, title = { Text("Turn off Restricted chat?") },
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { restrictAnswer = false }, title = { Text("Turn off Restricted chat?") },
             text = { Text("${ui.title} asked you to turn it off. If you do, they can forward, copy and save from this chat again.") },
             confirmButton = { androidx.compose.material3.TextButton({ answer(true) }) { Text("Turn Off", color = Fariin.colors.red) } },
             dismissButton = { androidx.compose.material3.TextButton({ answer(false) }) { Text("Keep On", color = Fariin.colors.accent) } })
@@ -1509,7 +1509,7 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(start = 8.dp)) {
         com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, circle = true)
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        GlassDropdown(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null) },
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })
             ui.muted?.let { muted ->

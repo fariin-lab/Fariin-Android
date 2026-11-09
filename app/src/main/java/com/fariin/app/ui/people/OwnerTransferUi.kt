@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
 
@@ -21,7 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -106,7 +106,7 @@ internal fun TransferOwnership(cid: String, isChannel: Boolean, heir: String, na
                 com.fariin.app.ui.components.FariinSpinner(size = 36.dp, stroke = 4.dp)
             }
         }
-        "password" -> AlertDialog(onDismissRequest = { password = ""; onEnd() }, containerColor = c.card,
+        "password" -> GlassAlert(onDismissRequest = { password = ""; onEnd() }, containerColor = c.card,
             title = { Text(OwnerTransfer.PASSWORD_TITLE) },
             text = {
                 Column {
@@ -123,12 +123,12 @@ internal fun TransferOwnership(cid: String, isChannel: Boolean, heir: String, na
                 Text("Confirm", color = if (password.isNotEmpty()) c.accent else c.secondary) } },
             dismissButton = { TextButton({ password = ""; onEnd() }) { Text("Cancel", color = c.accent) } })
         // No Create Password page opens from here on Android yet, so iOS's Settings wording with OK only.
-        "nopassword" -> AlertDialog(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.NO_PASSWORD_TITLE) },
+        "nopassword" -> GlassAlert(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.NO_PASSWORD_TITLE) },
             text = { Text(OwnerTransfer.noPasswordMessage(isChannel, hasAddress = false)) },
             confirmButton = { TextButton(onEnd) { Text("OK", color = c.accent) } })
-        "refused" -> AlertDialog(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.CANT_TITLE) },
+        "refused" -> GlassAlert(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.CANT_TITLE) },
             text = { Text(message) }, confirmButton = { TextButton(onEnd) { Text("OK", color = c.accent) } })
-        "failed" -> AlertDialog(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.FAILED_TITLE) },
+        "failed" -> GlassAlert(onDismissRequest = onEnd, containerColor = c.card, title = { Text(OwnerTransfer.FAILED_TITLE) },
             text = { Text(message) },
             confirmButton = { TextButton({ step = "password" }) { Text("Try Again", color = c.accent) } },
             dismissButton = { TextButton(onEnd) { Text("Cancel", color = c.accent) } })
@@ -208,7 +208,7 @@ internal fun JoinRequestsPage(cid: String, onBack: () -> Unit) {
             busy = busy - uid
         }
     }
-    problem?.let { p -> AlertDialog(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
+    problem?.let { p -> GlassAlert(onDismissRequest = { problem = null }, containerColor = c.card, title = { Text("Could not do that") },
         text = { Text(p) }, confirmButton = { TextButton({ problem = null }) { Text("OK", color = c.accent) } }) }
     val barScroll = rememberScrollState()
     BarPage(JoinRequests.title(isChannel), onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
