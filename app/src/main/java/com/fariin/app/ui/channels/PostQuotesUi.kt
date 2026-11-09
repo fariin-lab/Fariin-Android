@@ -310,9 +310,18 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
     val density = androidx.compose.ui.platform.LocalDensity.current
     // Measured once, at open: a later resize (the keyboard) must not change it.
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
+    // Read here, on the page: inside the sheet's own window the status bar reads 0, and the sheet's
+    // top went up under the clock with the keyboard open (Pixel 2026-11-09).
+    val pageStatusDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
     val sheetH = remember { with(density) { (windowH * 0.70f).toDp() } }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // The X (owner 2026-11-09, his recording): ONE move. The sheet slides off the bottom while the
+    // keyboard leaves and the shade fades, driven here, not by the bottom sheet's own hide, which
+    // waited for the keyboard to finish and then slid: two moves, "it feels cut".
+    val slide = remember { androidx.compose.animation.core.Animatable(0f) }
     ModalBottomSheet(onDismissRequest = close, sheetState = sheetState,
+        modifier = Modifier.graphicsLayer { translationY = slide.value * size.height },
+        scrimColor = androidx.compose.material3.BottomSheetDefaults.ScrimColor.let { it.copy(alpha = it.alpha * (1f - slide.value)) },
         containerColor = sheetFill, shape = SheetShape,
         // The column below takes the navigation bar and the keyboard itself, so the field rides on the keyboard.
         contentWindowInsets = { androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0) }) {
@@ -330,7 +339,7 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
       // from 70% to the top as the keyboard rises, and back as it falls.
       val imeDp = with(density) { WindowInsets.ime.getBottom(this).toDp() }
       val navDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
-      val statusDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
+      val statusDp = maxOf(pageStatusDp, with(density) { WindowInsets.statusBars.getTop(this).toDp() })
       val winDp = with(density) { windowH.toDp() }
       val lift = (imeDp - navDp).coerceAtLeast(0.dp)
       var liftMax by remember { mutableStateOf(280.dp) }
@@ -356,11 +365,14 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
                 focus.clearFocus()
             }
         }, onClose = {
-            // The keyboard leaves WITH the sheet (iOS), not after it: it used to stay up while the
-            // sheet slid away underneath it, then drop on its own.
+            // The keyboard leaves WITH the sheet (iOS); the top edge is held so the keyboard's
+            // leaving does not drop the sheet to 70% on the way out.
             frozen = top
             closeFocus.clearFocus(force = true); closeKeys?.hide()
-            scope.launch { sheetState.hide() }.invokeOnCompletion { close() }
+            scope.launch {
+                slide.animateTo(1f, androidx.compose.animation.core.tween(280, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                close()
+            }
         })
         if (tab == 0) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
