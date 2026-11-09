@@ -179,8 +179,8 @@ private fun ReasonSheet(code: String?, text: String, onPick: (String) -> Unit, o
                             if (f.isFocused) motion.expand()   // full height, so the keyboard has room under it
                         })
                 }
+                // No Cancel under it (iOS: the X at the top right closes, on both steps).
                 SheetPill("Continue", c.accent, ink = c.onAccent, enabled = ready, modifier = Modifier.padding(top = 24.dp)) { go[0] = true; motion.close() }
-                SheetCancel { motion.close() }
             }
         }
     }
@@ -258,7 +258,8 @@ internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, onClo
         // Measured inside the scroll (unbounded), so this is the content's own height with its padding.
         Column(Modifier.fillMaxWidth().sheetDrag(motion, atTop = { scroll.value == 0 }).verticalScroll(scroll)
             .onSizeChanged { contentDp = with(density) { it.height.toDp().value } }
-            .padding(horizontal = 24.dp).padding(top = 32.dp, bottom = 16.dp),
+            // Starts under the X (16 top + 44): a centred title ran beneath it, "go" hidden (owner 2026-11-08).
+            .padding(horizontal = 24.dp).padding(top = 66.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) { content() }
         Box(Modifier.fillMaxWidth().height(28.dp).sheetDrag(motion))
         // iOS 8d936377c / f2137acb4: an X at the top right instead of a Cancel under the button.

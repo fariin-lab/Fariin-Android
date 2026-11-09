@@ -1497,3 +1497,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   group sender names; old "You ..." notices stay as written after a rename (iOS rule). Reaction from
   the other side -> chip with their face -> Reactions sheet (All 1, heart 1, Bobby Test). Poll
   Results sheet (votes per option, Stop Poll with confirm) -> pollClosed saved. No gaps found.
+- 2026-11-08 ~11:02 PM: OWNER REPORT (Pixel photo): the account sheets' X sat over the end of the
+  centred title ("We're sorry to see you go" lost "go"). The content now starts under the X row (66 dp).
+  Also the reasons step still had a Cancel under Continue (82d97d47 removed it only on the confirm
+  step); gone, as iOS: the X closes on both steps. Checked on the emulator. Log Out uses the same frame.
