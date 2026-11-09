@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -66,6 +69,12 @@ import com.google.firebase.firestore.Source
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateBounds
+import kotlinx.coroutines.flow.first
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.alpha
 import kotlinx.coroutines.tasks.await
 import java.text.DateFormat
 import java.util.Date
@@ -191,6 +200,13 @@ internal object SecurityCheckup {
         lastCompleted = System.currentTimeMillis()
     }
 
+    /** A fresh scan (the sheet's open): every row back to Checking, so no answer shows before it exists. */
+    fun clearForScan() {
+        if (scannedUid != uid()) resetForNewAccount()
+        passkey = Status.Checking; password = Status.Checking; devices = Status.Checking; chatKey = Status.Checking
+        lastCompleted = null
+    }
+
     /** Asks all four again; each row changes when its own answer lands. */
     suspend fun run(ctx: Context) {
         if (running) { rerun = true; return }
@@ -289,8 +305,7 @@ internal fun securityCheckupRoute(page: String, profile: MyProfile?, demo: Boole
     return true
 }
 
-/** The Devices page header (iOS DevicesHeader): the padlock art, the line, then Security Checkup as a
- *  grouped row (owner 2026-11-09: no big black button). */
+/** The Devices page header (iOS DevicesHeader): the padlock art, the line and the Security Checkup button. */
 @Composable
 internal fun DevicesCheckupHeader(onCheckup: () -> Unit) {
     val c = Fariin.colors
@@ -306,8 +321,10 @@ internal fun DevicesCheckupHeader(onCheckup: () -> Unit) {
             withStyle(SpanStyle(color = c.accent)) { append("account security") }
             append(" and check active devices")
         }, fontSize = 17.sp, color = c.label, textAlign = TextAlign.Center, modifier = Modifier.clickable(onClick = onCheckup))
+        // The wide capsule again (owner 2026-11-09, after trying the row on the Pixel).
+        Spacer(Modifier.size(18.dp))
+        WideButton("Security Checkup", onCheckup)
     }
-    SettingsSection { SettingsRow("Security Checkup", subtitle = "Review your account", last = true, onClick = onCheckup) }
 }
 
 @Composable
@@ -342,39 +359,51 @@ private fun SecurityCheckupPage(profile: MyProfile?, demo: Boolean, push: (Strin
     val barScroll = rememberScrollState()
     BarPage("Security Checkup", onBack = pop, under = underBar(barScroll)) { top ->
         Column(Modifier.weight(1f).verticalScroll(barScroll).padding(top = top + 8.dp, bottom = 16.dp)) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Avatar(profile?.photoUrl, 96.dp)
-                Spacer(Modifier.size(10.dp))
-                Text("Security Checkup", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label)
-                Spacer(Modifier.size(4.dp))
-                val last = chk.lastCompleted
-                Text(SecurityCheckupRules.checkedLine(last, System.currentTimeMillis(), last?.let { SecurityCheckup.ago(it) } ?: ""),
-                    fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
-            }
-            if (g.missing.isNotEmpty()) SettingsSection(footer = "Set these up to keep your account safe if your phone is lost or someone learns your password.") {
-                for (e in g.missing) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_circle), c.blue, e.missingTitle, e.why, e === g.missing.last()) { open(e.id) }
-            }
-            if (g.failed.isNotEmpty()) SettingsSection(header = "Couldn't check") {
-                for (e in g.failed) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_triangle), Orange, e.title, "Check your connection and try again.", e === g.failed.last()) {
-                    scope.launch { SecurityCheckup.run(ctx) }
-                }
-            }
-            if (g.rest.isNotEmpty()) SettingsSection(header = g.restHeader) {
-                for (e in g.rest) {
-                    val s = e.status
-                    if (s is SecurityCheckupRules.Status.Done) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), Green, e.title, s.line, e === g.rest.last()) { open(e.id) }
-                    else CheckupRow(null, c.secondary, e.title, "Checking…", e === g.rest.last(), null)
-                }
-            }
-            // The rest of the tools (requests, block, report, scams) live on fariin.com/safety.
-            Text("How Fariin keeps you safe", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp).clickable { openWeb(ctx, "https://fariin.com/safety") }.padding(8.dp))
+            CheckupContent(profile, ::open, onRetry = { scope.launch { SecurityCheckup.run(ctx) } })
         }
         Box(Modifier.fillMaxWidth().background(c.bgSecondary).padding(horizontal = 20.dp, vertical = 8.dp)
             .padding(bottom = com.fariin.app.ui.shell.bottomBarInset())) {
             WideButton("Continue", pop)
         }
     }
+}
+
+
+/** The checkup's header, groups and safety link: the same on the old page and the sheet. */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.CheckupContent(profile: MyProfile?, open: (String) -> Unit, onRetry: () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val chk = SecurityCheckup
+    val entries = SecurityCheckupRules.entries(chk.passkey, chk.password, chk.devices, chk.chatKey, chk.unreviewed.size)
+    val g = SecurityCheckupRules.groups(entries)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Avatar(profile?.photoUrl, 96.dp)
+        Spacer(Modifier.size(10.dp))
+        Text("Security Checkup", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label)
+        Spacer(Modifier.size(4.dp))
+        val last = chk.lastCompleted
+        Text(SecurityCheckupRules.checkedLine(last, System.currentTimeMillis(), last?.let { SecurityCheckup.ago(it) } ?: ""),
+            fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
+    }
+    if (g.missing.isNotEmpty()) SettingsSection(footer = "Set these up to keep your account safe if your phone is lost or someone learns your password.") {
+        for (e in g.missing) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_circle), c.blue, e.missingTitle, e.why, e === g.missing.last()) { open(e.id) }
+    }
+    if (g.failed.isNotEmpty()) SettingsSection(header = "Couldn't check") {
+        for (e in g.failed) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_triangle), Orange, e.title, "Check your connection and try again.", e === g.failed.last()) {
+            onRetry()
+        }
+    }
+    if (g.rest.isNotEmpty()) SettingsSection(header = g.restHeader) {
+        for (e in g.rest) {
+            val s = e.status
+            if (s is SecurityCheckupRules.Status.Done) CheckupRow(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), Green, e.title, s.line, e === g.rest.last()) { open(e.id) }
+            else CheckupRow(null, c.secondary, e.title, "Checking…", e === g.rest.last(), null)
+        }
+    }
+    // The rest of the tools (requests, block, report, scams) live on fariin.com/safety.
+    Text("How Fariin keeps you safe", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp).clickable { openWeb(ctx, "https://fariin.com/safety") }.padding(8.dp))
 }
 
 /** A row like SettingsRow, but the icon keeps its own colour (green tick, blue mark) and the title stays plain. */
@@ -478,5 +507,270 @@ private fun SecurityShieldIcon(modifier: Modifier) {
             lineTo(cx + cw, cy)
         }
         drawPath(check, c.blue, style = stroke)
+    }
+}
+
+/**
+ * The Security Checkup as iOS draws it (owner 2026-11-09): a bottom sheet over Devices, as tall as
+ * its rows plus the Continue bar (scrolling only when they do not fit). Each setup page opens as its
+ * own sheet with an X; closing one asks the checkup again.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+internal fun SecurityCheckupSheet(onClose: () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val me = FirebaseAuth.getInstance().currentUser?.uid
+    val demo = me == null
+    val profile = if (me != null) remember(me) { com.fariin.app.data.MyProfileRepository().listen(me) }.collectAsState(initial = null).value else null
+    val state = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var sub by remember { mutableStateOf<String?>(null) }
+    // The first scan is ScanCheckup's. Back from a setup sheet: no new scan, the rows refresh in place.
+    var subSeen by remember { mutableStateOf(false) }
+    LaunchedEffect(sub) { if (sub != null) subSeen = true else if (subSeen && !demo) SecurityCheckup.run(ctx) }
+    fun close() { scope.launch { state.hide() }.invokeOnCompletion { onClose() } }
+    fun open(id: String) {
+        when (id) {
+            "passkey" -> sub = "passkey"
+            "password" -> sub = "password"
+            "chatKey" -> sub = "chatKey"
+            // New devices get "Is this you?"; nothing new: back to the Devices list.
+            else -> if (SecurityCheckup.unreviewed.isEmpty()) close() else sub = "review"
+        }
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onClose, sheetState = state, containerColor = c.bgSecondary) {
+        ScanCheckup(profile, demo, ::open, onRetry = { scope.launch { SecurityCheckup.run(ctx) } }, onContinue = { close() })
+    }
+    val page = sub
+    if (page != null) {
+        val subState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        fun closeSub(then: () -> Unit = {}) { scope.launch { subState.hide() }.invokeOnCompletion { sub = null; then() } }
+        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { sub = null }, sheetState = subState,
+            containerColor = c.bgSecondary, dragHandle = null) {
+            androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalBackIsClose provides true) {
+                Box(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
+                    val auth = remember { com.fariin.app.data.AuthRepository() }
+                    when {
+                        page == "passkey" -> com.fariin.app.ui.auth.PasskeysPage(auth, { closeSub() }, demoRows = if (demo) emptyList() else null)
+                        page == "password" -> com.fariin.app.ui.auth.PasswordPage(auth, { closeSub() }, onForgot = { sub = "reset:$it" }, demoOpen = demo)
+                        page.startsWith("reset:") -> com.fariin.app.ui.auth.ResetCodePage(auth, page.removePrefix("reset:"), { sub = "password" },
+                            onDone = { closeSub() }, demo = demo)
+                        page == "chatKey" -> ChatKeyPage { closeSub() }
+                        page == "review" -> DeviceReviewPage(onClose = { closeSub() },
+                            onYes = { SecurityCheckup.confirmDevices(it); closeSub() },
+                            // "No, it's not me": both sheets close, back to the Devices list to sign it out.
+                            onNo = { closeSub { close() } })
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+/**
+ * THE SCAN (owner 2026-11-09, "a real bank-style scan"). Honest: every open asks the server again
+ * and a row resolves only when ITS answer lands; the only thing added is pacing (the first row no
+ * sooner than 450 ms, 280 ms between rows, 1.5 s at least in all). Then the ring closes, the header
+ * says the result, and the one card re-forms into the final groups with the rows sliding (no pops).
+ */
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+@Composable
+private fun ScanCheckup(profile: MyProfile?, demo: Boolean, open: (String) -> Unit, onRetry: () -> Unit, onContinue: () -> Unit) {
+    val c = Fariin.colors
+    val ctx = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    val moving = com.fariin.app.ui.thread.systemAnimationsOn()
+    val chk = SecurityCheckup
+    val entries = SecurityCheckupRules.entries(chk.passkey, chk.password, chk.devices, chk.chatKey, chk.unreviewed.size)
+    val ids = entries.map { it.id }
+    // How far the scan has got: rows shown, rows resolved (and what to), the finish, the settle.
+    var shown by remember { mutableStateOf(0) }
+    var resolved by remember { mutableStateOf<Map<String, SecurityCheckupRules.Status>>(emptyMap()) }
+    var finished by remember { mutableStateOf(false) }
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val t0 = System.currentTimeMillis()
+        if (demo) SecurityCheckup.demo() else { SecurityCheckup.clearForScan(); launch { SecurityCheckup.run(ctx) } }
+        var lastAt = t0
+        for (i in ids.indices) {
+            // Shown in order: the first at 450 ms, then 280 ms apart.
+            val showAt = maxOf(t0 + 450, lastAt + 280)
+            kotlinx.coroutines.delay(maxOf(0L, showAt - System.currentTimeMillis()))
+            shown = i + 1
+            lastAt = System.currentTimeMillis()
+        }
+        // Each resolves in order once its answer exists, 280 ms after the one before at least.
+        for (id in ids) {
+            val st = androidx.compose.runtime.snapshotFlow {
+                SecurityCheckupRules.entries(chk.passkey, chk.password, chk.devices, chk.chatKey, chk.unreviewed.size).first { it.id == id }.status
+            }.first { it != SecurityCheckupRules.Status.Checking }
+            kotlinx.coroutines.delay(maxOf(0L, lastAt + 280 - System.currentTimeMillis()))
+            resolved = resolved + (id to st)
+            lastAt = System.currentTimeMillis()
+            view.performHapticFeedback(if (st is SecurityCheckupRules.Status.Done)
+                android.view.HapticFeedbackConstants.CLOCK_TICK else android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+        kotlinx.coroutines.delay(maxOf(0L, t0 + 1500 - System.currentTimeMillis()))
+        finished = true
+        val allGood = resolved.values.all { it is SecurityCheckupRules.Status.Done }
+        if (android.os.Build.VERSION.SDK_INT >= 30) view.performHapticFeedback(
+            if (allGood) android.view.HapticFeedbackConstants.CONFIRM else android.view.HapticFeedbackConstants.REJECT)
+        kotlinx.coroutines.delay(450L + 300L)   // the ring closes (250) and fades (200), then 300 ms
+        settled = true
+    }
+    // During the scan a row shows what it resolved to; once settled, the live answer (a refresh in place).
+    fun statusOf(e: SecurityCheckupRules.Entry) = if (settled) e.status else resolved[e.id] ?: SecurityCheckupRules.Status.Checking
+    val shownEntries = entries.take(shown).map { it.copy(status = statusOf(it)) }
+    val missingCount = if (finished) resolved.values.count { it == SecurityCheckupRules.Status.Missing } else 0
+    val allSet = finished && missingCount == 0
+
+    Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 8.dp)) {
+            // HEADER: the photo with its scan ring, the title, the line that turns into the result.
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                ScanAvatar(profile?.photoUrl, finished, allSet, moving)
+                Spacer(Modifier.size(10.dp))
+                Text("Security Checkup", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label)
+                Spacer(Modifier.size(4.dp))
+                val result = if (!finished) "Checking your account…" else when (missingCount) {
+                    0 -> "Everything is set up"
+                    1 -> "1 thing to set up"
+                    else -> "$missingCount things to set up"
+                }
+                androidx.compose.animation.Crossfade(targetState = result, label = "result") { t ->
+                    Text(t, fontSize = 15.sp, fontWeight = if (finished) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (finished) c.label else c.secondary, textAlign = TextAlign.Center)
+                }
+                val note by androidx.compose.animation.core.animateFloatAsState(if (finished) 1f else 0f, label = "note")
+                Text("We checked your account against the server just now.", fontSize = 13.sp, color = c.secondary,
+                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp).alpha(note))
+            }
+            // ROWS: one card while scanning; settled, the missing ones in their own card above "Set up".
+            // Each row keeps its identity and slides (animateBounds) to its new place. The room for
+            // the final layout is there from the start, so the sheet does not grow under the eye.
+            val finalRoom = (entries.size * 68 + 120).dp
+            androidx.compose.animation.SharedTransitionLayout(Modifier.fillMaxWidth().heightIn(min = finalRoom)) {
+                val scope = this
+                val missing = if (settled) shownEntries.filter { it.status == SecurityCheckupRules.Status.Missing } else emptyList()
+                val failed = if (settled) shownEntries.filter { it.status == SecurityCheckupRules.Status.Failed } else emptyList()
+                val rest = shownEntries.filter { it !in missing && it !in failed }
+                val slide = Modifier.animateBounds(scope, boundsTransform = { _, _ -> androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 380f) })
+                Column(Modifier.fillMaxWidth()) {
+                    if (missing.isNotEmpty()) {
+                        ScanCard { for ((i, e) in missing.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == missing.lastIndex, moving, slide, open, onRetry) } }
+                        Text("Set these up to keep your account safe if your phone is lost or someone learns your password.",
+                            fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp).padding(top = 6.dp, bottom = 8.dp))
+                    }
+                    // A check that could not run: its own group, a tap asks again (iOS).
+                    if (failed.isNotEmpty()) {
+                        Text("Couldn't check", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.secondary,
+                            modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 16.dp, bottom = 6.dp))
+                        ScanCard { for ((i, e) in failed.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == failed.lastIndex, moving, slide, open, onRetry) } }
+                    }
+                    if (settled && rest.isNotEmpty()) Text(if (missing.isEmpty() && failed.isEmpty()) "Everything is set up" else "Set up",
+                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.secondary,
+                        modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 16.dp, bottom = 6.dp))
+                    if (rest.isNotEmpty()) ScanCard { for ((i, e) in rest.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == rest.lastIndex, moving, slide, open, onRetry) } }
+                }
+            }
+            val tail by androidx.compose.animation.core.animateFloatAsState(if (settled) 1f else 0f, androidx.compose.animation.core.tween(200), label = "tail")
+            Text("How Fariin keeps you safe", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp).alpha(tail)
+                    .clickable(enabled = settled) { openWeb(ctx, "https://fariin.com/safety") }.padding(8.dp))
+        }
+        val cont by androidx.compose.animation.core.animateFloatAsState(if (settled) 1f else 0.4f, androidx.compose.animation.core.tween(200), label = "cont")
+        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).alpha(cont)) {
+            WideButton("Continue") { if (settled) onContinue() }
+        }
+    }
+}
+
+@Composable
+private fun ScanCard(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
+        .background(Fariin.colors.card), content = content)
+}
+
+/** One check: in from 8 dp lower; a spinner until its answer, then the icon springs in. */
+@Composable
+private fun ScanRow(e: SecurityCheckupRules.Entry, last: Boolean, moving: Boolean, modifier: Modifier, open: (String) -> Unit, onRetry: () -> Unit) {
+    val c = Fariin.colors
+    val s = e.status
+    val appear = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.LinearOutSlowInEasing)) }
+    val title = if (s == SecurityCheckupRules.Status.Missing) e.missingTitle else e.title
+    val sub = when (s) {
+        SecurityCheckupRules.Status.Checking -> "Checking…"
+        SecurityCheckupRules.Status.Missing -> e.why
+        SecurityCheckupRules.Status.Failed -> "Check your connection and try again."
+        is SecurityCheckupRules.Status.Done -> s.line
+    }
+    val tap: (() -> Unit)? = when (s) {
+        SecurityCheckupRules.Status.Checking -> null
+        SecurityCheckupRules.Status.Failed -> onRetry
+        else -> ({ open(e.id) })
+    }
+    val kind = when (s) {
+        SecurityCheckupRules.Status.Checking -> 0
+        is SecurityCheckupRules.Status.Done -> 1
+        SecurityCheckupRules.Status.Missing -> 2
+        SecurityCheckupRules.Status.Failed -> 3
+    }
+    Column(modifier.graphicsLayer { alpha = appear.value; if (moving) translationY = (1f - appear.value) * 8.dp.toPx() }) {
+        Row(Modifier.fillMaxWidth().then(if (tap != null) Modifier.clickable(onClick = tap) else Modifier)
+            .heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(38.dp), contentAlignment = Alignment.CenterStart) {
+                androidx.compose.animation.AnimatedContent(targetState = kind, label = "icon", transitionSpec = {
+                    (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(150)) +
+                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(dampingRatio = 0.6f), initialScale = 0.6f)) togetherWith
+                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+                }) { k ->
+                    when (k) {
+                        0 -> if (moving) com.fariin.app.ui.components.FariinSpinner(size = 18.dp) else Spacer(Modifier.size(18.dp))
+                        1 -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), null, tint = Green, modifier = Modifier.size(24.dp))
+                        2 -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_circle), null, tint = c.blue, modifier = Modifier.size(24.dp))
+                        else -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_exclamation_triangle), null, tint = Orange, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 17.sp, color = c.label)
+                androidx.compose.animation.Crossfade(sub, label = "sub") { Text(it, fontSize = 15.sp, color = c.secondary) }
+            }
+            if (tap != null && kind != 3) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null,
+                tint = c.secondary.copy(alpha = 0.55f), modifier = Modifier.padding(start = 4.dp).size(20.dp))
+        }
+        if (!last) HorizontalDivider(Modifier.padding(start = 54.dp), thickness = 0.5.dp, color = c.separator)
+    }
+}
+
+/** The photo with the scan ring: an arc spinning while checking, which sweeps shut and fades; then a check badge if all is set. */
+@Composable
+private fun ScanAvatar(photo: String?, finished: Boolean, allSet: Boolean, moving: Boolean) {
+    val c = Fariin.colors
+    val spinner = androidx.compose.animation.core.rememberInfiniteTransition(label = "scan")
+    val spin = if (moving && !finished) spinner.animateFloat(0f, 360f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing)), label = "spin").value
+        else 0f
+    val sweep by androidx.compose.animation.core.animateFloatAsState(if (finished) 360f else 100f, androidx.compose.animation.core.tween(250), label = "sweep")
+    val ringAlpha by androidx.compose.animation.core.animateFloatAsState(if (finished) 0f else 1f,
+        androidx.compose.animation.core.tween(200, delayMillis = 250), label = "ringAlpha")
+    val badge by androidx.compose.animation.core.animateFloatAsState(if (finished && allSet) 1f else 0f,
+        androidx.compose.animation.core.spring(dampingRatio = 0.6f), label = "badge")
+    Box(Modifier.size(106.dp), contentAlignment = Alignment.Center) {
+        Avatar(photo, 96.dp)
+        Canvas(Modifier.matchParentSize()) {
+            if (ringAlpha <= 0f) return@Canvas
+            val w = 3.dp.toPx()
+            drawArc(c.accent.copy(alpha = ringAlpha), startAngle = spin - 90f, sweepAngle = sweep, useCenter = false,
+                topLeft = Offset(w / 2, w / 2), size = androidx.compose.ui.geometry.Size(size.width - w, size.height - w),
+                style = Stroke(width = w, cap = StrokeCap.Round))
+        }
+        if (badge > 0.01f) Box(Modifier.align(Alignment.BottomEnd).graphicsLayer { val k = 0.6f + 0.4f * badge; scaleX = k; scaleY = k; alpha = badge.coerceIn(0f, 1f) }
+            .size(28.dp).clip(CircleShape).background(c.bgSecondary).padding(2.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.onAccent, modifier = Modifier.size(14.dp))
+        }
     }
 }

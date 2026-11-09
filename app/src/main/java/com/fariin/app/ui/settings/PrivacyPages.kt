@@ -414,7 +414,7 @@ internal object ChatKey {
 
 /** iOS ChatPinPage / ChatPinSetSheet: make a key, show and share it, make a new one, or turn it off. */
 @Composable
-private fun ChatKeyPage(pop: () -> Unit) {
+internal fun ChatKeyPage(pop: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     remember { ChatKey.bind(ctx) }

@@ -83,11 +83,16 @@ internal fun glassBar(): Boolean {
 @Composable
 fun FloatingBack(onBack: () -> Unit, modifier: Modifier = Modifier, contentDescription: String = "Back", circle: Boolean = false) {
     val c = Fariin.colors
+    val close = LocalBackIsClose.current
     IconButton(onClick = onBack, modifier = modifier.size(44.dp).then(if (circle || glassBar()) Modifier.floating() else Modifier)) {
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = contentDescription, tint = c.label,
+        if (close) Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
+        else Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = contentDescription, tint = c.label,
             modifier = Modifier.padding(start = 6.dp).size(20.dp))
     }
 }
+
+/** A page shown as its own sheet (the Security Checkup's setup pages, as iOS): its back is an X. */
+val LocalBackIsClose = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 /**
  * A tab or pushed page's bar: an optional floating back, the title at the start, the actions as

@@ -74,7 +74,12 @@ internal const val PAGE_SEC_NOTIFS = "account:secnotifs"
 @Composable
 internal fun moreRoute(page: String, push: (String) -> Unit, pop: () -> Unit): Boolean {
     when {
-        page == PAGE_DEVICES -> DevicesPage(pop, onCheckup = { push(PAGE_CHECKUP) })
+        page == PAGE_DEVICES -> {
+            // The checkup is a sheet over Devices (iOS), not a page.
+            var checkup by remember { mutableStateOf(false) }
+            DevicesPage(pop, onCheckup = { checkup = true })
+            if (checkup) SecurityCheckupSheet(onClose = { checkup = false })
+        }
         page == PAGE_NOTIFS -> NotificationsPage(pop)
         page == PAGE_CHATS -> ChatsSettingsPage(push, pop)
         page == PAGE_QUICK -> QuickReactionPage(pop)
