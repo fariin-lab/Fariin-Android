@@ -70,6 +70,7 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 - 2026-11-09 00:41 text story: closing the keyboard no longer jumps (bottom gap was ime+68 while up, then switched to the resting reserve the frame it hit zero; now max of the two, continuous). Frames checked on emulator-5556.
 - 2026-11-09 00:44 story viewers sheet: second, tall stop (92% of the screen) like iOS large detent; pull up on the header or push the list up grows it, pull down returns to the middle then closes. Tested on emulator-5556 with a local test story.
 - 2026-11-09 00:48 voice drafts: a locked or paused note left unsent is kept per chat (VoiceDrafts: file in filesDir/voice-drafts, length + levels in prefs) and comes back paused on return (play, send, bin, carry on). Tested on emulator-5556: lock, pause, Back, reopen -> restored; bin -> gone. Not covered: process death while still recording unlocked.
+- 2026-11-09 01:04 a5fd0944 + next: Chat Key page as iOS (key card with Copy/Share pills, iOS footers, Create Chat Key); Report later steps Back in a circle (Report sheet already fits each step, checked); "What is a Chat Key?" sheet sized to its measured content (Got it was cut off under the edge). Stub gained chatPinStatus/generateChatPin/setChatPin. Next: Swipe Actions switch missing in Chats settings (iOS has it), Message Sound.
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes

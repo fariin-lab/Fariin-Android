@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,12 +62,19 @@ internal fun ChatKeyIntroSheet(onDismiss: () -> Unit, onContinue: () -> Unit) {
     val windowH = LocalWindowInfo.current.containerSize.height
     val statusTop = WindowInsets.statusBars.getTop(density)
     val navBottom = WindowInsets.navigationBars.getBottom(density)
-    motion.mid = with(density) { windowH - statusTop - 10.dp.toPx() - SheetHeight.toPx() - navBottom }.coerceAtLeast(0f)
+    // Measured, not guessed: with larger text 620 dp left "Got it" under the screen's edge (2026-11-09).
+    var contentH by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val restH = if (contentH > 0) contentH.toFloat() else with(density) { SheetHeight.toPx() }
+    val wantMid = with(density) { windowH - statusTop - 10.dp.toPx() - restH - navBottom }.coerceAtLeast(0f)
+    // The first guess opens it; the measured height then moves the open sheet (fitMid), not just the number.
+    if (motion.mid <= 0f) motion.mid = wantMid
+    androidx.compose.runtime.SideEffect { motion.fitMid(wantMid) }
     // iOS uses the outgoing-bubble blue here (Theme.defaultBubble), the app's one blue.
     val accent = c.blue
     FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
         Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp),
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .onSizeChanged { if (it.height > 0) contentH = it.height }.padding(horizontal = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("🔑", fontSize = 80.sp, modifier = Modifier.padding(top = 36.dp))
                 Text("What is a Chat Key?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label,

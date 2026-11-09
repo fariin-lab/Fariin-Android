@@ -1308,6 +1308,14 @@ def remove_chat_pin(uid, data):
     return {"ok": True}
 
 
+def set_chat_pin(uid, data):
+    pin = (data or {}).get("pin", "")
+    if pin: write(f"chatPins/{uid}", {"set": True})
+    else: remove(f"chatPins/{uid}")
+    return {"ok": True}
+
+
+HANDLERS.update({"setChatPin": set_chat_pin})
 HANDLERS.update({"chatPinStatus": chat_pin_status, "generateChatPin": generate_chat_pin, "removeChatPin": remove_chat_pin})
 
 class Handler(BaseHTTPRequestHandler):
