@@ -780,7 +780,7 @@ private fun CallLogCard(call: com.fariin.app.data.CallEntry, me: String) {
 private fun ShareProfileItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Share Profile", color = c.label) },
-        leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label,
+        trailingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share), null, tint = c.label,
             modifier = Modifier.size(24.dp)) }, onClick = onClick)
 }
 
@@ -789,7 +789,7 @@ private fun ShareProfileItem(onClick: () -> Unit) {
 private fun ClearMineItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Clear My Messages", color = c.red) },
-        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = onClick)
+        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Export Chat" (ChatExportRun), above Clear My Messages as iOS orders it. */
@@ -797,7 +797,7 @@ private fun ClearMineItem(onClick: () -> Unit) {
 internal fun ExportChatItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Export Chat", color = c.label) },
-        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) }, onClick = onClick)
+        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) }, onClick = onClick)
 }
 
 /** iOS ContactInfoView menu: "Add to a Group" (AddToGroup.kt). */
@@ -805,14 +805,14 @@ internal fun ExportChatItem(onClick: () -> Unit) {
 private fun AddToGroupItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Add to a Group", color = c.label) },
-        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_add_member), null, tint = c.label) }, onClick = onClick)
+        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_add_member), null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable
 private fun ChangeWallpaperItem(onClick: () -> Unit) {
     val c = Fariin.colors
     androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) }, onClick = onClick)
+        trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) }, onClick = onClick)
 }
 
 @Composable

@@ -512,17 +512,17 @@ private fun ChannelMoreMenu(open: Boolean, onDismiss: () -> Unit, onWallpaper: (
     androidx.compose.material3.DropdownMenu(open, onDismissRequest = onDismiss, shape = com.fariin.app.ui.components.FariinMenu.shape,
         border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
         if (onWallpaper != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Change Wallpaper", color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
+            trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_wallpaper), null, tint = c.label) },
             onClick = { onDismiss(); onWallpaper() })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Share Channel", color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_link_share), null, tint = c.label) },
+            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_link_share), null, tint = c.label) },
             onClick = { onDismiss(); onShare() })
         if (onQr != null) androidx.compose.material3.DropdownMenuItem(text = { Text("QR Code", color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
+            trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_qr), null, tint = c.label) },
             onClick = { onDismiss(); onQr() })
         androidx.compose.material3.HorizontalDivider(color = c.separator)
         androidx.compose.material3.DropdownMenuItem(text = { Text("Save to Photos: " + (if (saveOn) "On" else "Off"), color = c.label) },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) },
+            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_save_down), null, tint = c.label) },
             onClick = { saveOn = !saveOn; com.fariin.app.media.AutoSaveMedia.setChat(ctx, saveCid, saveOn); onDismiss() })
     }
 }

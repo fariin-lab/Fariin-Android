@@ -586,11 +586,11 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                     var slotMenu by remember { mutableStateOf(false) }
                     androidx.compose.material3.DropdownMenu(expanded = slotMenu, onDismissRequest = { slotMenu = false }) {
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Take Photo") },
-                            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { slotMenu = false; picker.takePhoto() })
+                            trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null) }, onClick = { slotMenu = false; picker.takePhoto() })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Choose Photo") },
-                            leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { slotMenu = false; pick() })
+                            trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), null) }, onClick = { slotMenu = false; pick() })
                         if (photo != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Remove Photo", color = c.red) },
-                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = { slotMenu = false; photo = null })
+                            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) }, onClick = { slotMenu = false; photo = null })
                     }
                     Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)).clickable(onClickLabel = "Set Group Photo") { slotMenu = true }, contentAlignment = Alignment.Center) {
                         val p = photo

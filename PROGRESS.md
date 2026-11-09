@@ -1419,3 +1419,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~9:30 PM: the link call's "Approve New People" switch was Material's; now the iOS-shaped
   FariinSwitch, green as iOS (FariinSwitch gained optional on/off track colours for dark call
   sheets). Compile-checked; the sheet needs a live link call to see.
+- 2026-11-08 ~9:35 PM: every Material dropdown item (57 in 22 files) drew its icon first; iOS menus
+  (and our glass menu) read the words, then the icon at the end. Switched leadingIcon -> trailingIcon
+  inside DropdownMenuItem only (script with a bracket-depth check). The audio-route picker keeps its
+  route icon first, as iOS's own route list, with the tick at the end. Checked on the Calls row menu.

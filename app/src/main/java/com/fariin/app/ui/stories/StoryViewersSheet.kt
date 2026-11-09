@@ -640,15 +640,15 @@ private fun ViewerRow(
                     surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Send message") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_chat), contentDescription = null) },
+                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_chat), contentDescription = null) },
                         onClick = { menu = false; onSendMessage() })
                     DropdownMenuItem(
                         text = { Text(if (isHidden) "Don't hide my stories from ${v.name}" else "Hide my stories from ${v.name}") },
-                        leadingIcon = { Icon(if (isHidden) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views_off), contentDescription = null) },
+                        trailingIcon = { Icon(if (isHidden) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views) else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views_off), contentDescription = null) },
                         onClick = { menu = false; onToggleHidden() })
                     // Destructive and last.
                     DropdownMenuItem(text = { Text("Block ${v.name}", color = Fariin.colors.red) },
-                        leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), contentDescription = null, tint = Fariin.colors.red) },
+                        trailingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_block), contentDescription = null, tint = Fariin.colors.red) },
                         onClick = { menu = false; onBlock() })
                 }
                 }
@@ -746,10 +746,10 @@ private fun ReplyRow(
             surfaceContainer = Color(0xFF2C2C2E), onSurface = Color.White, onSurfaceVariant = Color.White)) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 if (!r.isReaction) DropdownMenuItem(text = { Text("Copy") },
-                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) },
+                    trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) },
                     onClick = { menu = false; clipboard.setText(androidx.compose.ui.text.AnnotatedString(r.text)) })
                 if (canDelete) DropdownMenuItem(text = { Text("Delete", color = Fariin.colors.red) },
-                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = Fariin.colors.red) },
+                    trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = Fariin.colors.red) },
                     onClick = { menu = false; onDelete() })
             }
         }

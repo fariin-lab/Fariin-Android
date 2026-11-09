@@ -105,7 +105,7 @@ fun RemoveGlowingMenu(open: Boolean, onDismiss: () -> Unit, onRemove: () -> Unit
     val c = Fariin.colors
     DropdownMenu(open, onDismissRequest = onDismiss, shape = FariinMenu.shape, border = FariinMenu.border, containerColor = c.card) {
         DropdownMenuItem(text = { Text("Remove Glowing", color = c.red) }, onClick = onRemove,
-            leadingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })
+            trailingIcon = { GlowMark(20.dp, filled = true, tint = c.red) })
     }
 }
 

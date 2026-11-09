@@ -183,12 +183,12 @@ internal fun PinnedBar(
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                     if (ui.canPin) DropdownMenuItem(
                         text = { Text("Unpin") },
-                        leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
+                        trailingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
                         onClick = { menu = false; onUnpin(pid) },
                     )
                     DropdownMenuItem(
                         text = { Text("See All") },
-                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_list_bullet), null, Modifier.size(22.dp)) },
+                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_list_bullet), null, Modifier.size(22.dp)) },
                         onClick = { menu = false; onSeeAll() },
                     )
                 }
@@ -266,7 +266,7 @@ internal fun PinnedMessagesSheet(
                                 DropdownMenu(expanded = rowMenu == m.id, onDismissRequest = { rowMenu = null }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                                     DropdownMenuItem(
                                         text = { Text("Unpin") },
-                                        leadingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
+                                        trailingIcon = { Icon(painterResource(R.drawable.ic_pin_menu), null, Modifier.size(22.dp)) },
                                         onClick = { rowMenu = null; onUnpin(m.id) },
                                     )
                                 }

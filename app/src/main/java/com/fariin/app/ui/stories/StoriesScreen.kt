@@ -835,7 +835,7 @@ private fun StoryRow(
         menu.forEach { a ->
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text(a.title, color = if (a.destructive) c.red else c.label) },
-                leadingIcon = { Icon(painterResource(a.icon), contentDescription = null, tint = if (a.destructive) c.red else c.label, modifier = Modifier.size(22.dp)) },
+                trailingIcon = { Icon(painterResource(a.icon), contentDescription = null, tint = if (a.destructive) c.red else c.label, modifier = Modifier.size(22.dp)) },
                 onClick = { menuOpen = false; a.run() },
             )
         }

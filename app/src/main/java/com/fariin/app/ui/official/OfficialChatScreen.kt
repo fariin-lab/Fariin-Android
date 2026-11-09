@@ -366,13 +366,13 @@ private fun AnnouncementCard(a: Announcement, time: String, buttons: List<Announ
         }
         HorizontalDivider(color = c.separator)
         androidx.compose.material3.DropdownMenuItem(text = { Text("Copy") }, onClick = { menu = false; onCopy() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) })
+            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_doc_on_doc), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Forward") }, onClick = { menu = false; onForward() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), contentDescription = null) })
+            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_menu_forward), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Select") }, onClick = { menu = false; onSelect() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), contentDescription = null) })
+            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_circle), contentDescription = null) })
         androidx.compose.material3.DropdownMenuItem(text = { Text("Delete", color = c.red) }, onClick = { menu = false; onDelete() },
-            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) })
+            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), contentDescription = null, tint = c.red) })
     }
     }
     // My reaction as a chip under the card; a tap takes it back.

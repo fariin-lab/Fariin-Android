@@ -455,7 +455,7 @@ private fun RowMenu(open: Boolean, onDismiss: () -> Unit, callUp: Boolean, chats
     DropdownMenu(expanded = open, onDismissRequest = onDismiss, containerColor = c.card) {
         val item: @Composable (String, androidx.compose.ui.graphics.painter.Painter, Color, Boolean, () -> Unit) -> Unit = { text, icon, ink, enabled, run ->
             DropdownMenuItem(text = { Text(text, color = if (enabled) ink else c.secondary) },
-                leadingIcon = { Icon(icon, null, tint = if (enabled) ink else c.secondary) },
+                trailingIcon = { Icon(icon, null, tint = if (enabled) ink else c.secondary) },
                 enabled = enabled, onClick = { onDismiss(); run() })
         }
         val voice = painterResource(R.drawable.ic_call_voice)

@@ -559,7 +559,7 @@ private fun ViewerHeader(title: String, date: String, video: Boolean, onBack: ()
 private fun MenuRow(text: String, icon: Painter, destructive: Boolean = false, onClick: () -> Unit) {
     val tint = if (destructive) Fariin.colors.red else Fariin.colors.label
     DropdownMenuItem(text = { Text(text, color = tint) }, onClick = onClick,
-        leadingIcon = { Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp)) })
+        trailingIcon = { Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp)) })
 }
 
 /** iOS bottomBar: 48 round buttons, Share at the start, Delete (mine) or Save (theirs) at the end. */
