@@ -1407,3 +1407,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   link opens the lobby with "Ask to Join", the warm call goes once, no pass is pre-fetched (right:
   a pass request on an approval link is a knock), peek every 5 s, no crash. A non-approval link's
   pre-fetch still needs the live server to test.
+- 2026-11-08 ~9:11 PM: same link with approval off: lobby says Join, warm + pre-fetch + a renewal
+  every ~10 s while peek runs every 5 s; Join with no pass in hand falls back to its own request;
+  the refusal (stub has no groupCallToken) returns to the lobby. No crash.
