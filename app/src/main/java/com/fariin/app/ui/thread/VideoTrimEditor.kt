@@ -197,6 +197,14 @@ internal fun TrimVideo(s: TrimState, active: Boolean, modifier: Modifier = Modif
                     delay(50)
                 }
             }
+            // While a finger drags: the nearest key frame, which shows at once, so the picture follows
+            // the finger (exact seeks were each cancelled by the next and nothing moved; owner's Pixel
+            // 2026-11-09). On release: the exact frame where it stopped.
+            val scrubbing = s.scrub != null
+            LaunchedEffect(player, scrubbing) {
+                if (scrubbing) player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+                else { player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.EXACT); player.seekTo(s.playhead) }
+            }
             LaunchedEffect(player, s.scrub) { s.scrub?.let { player.seekTo(it) } }
             val play = s.playing && s.scrub == null
             LaunchedEffect(player, play) {
@@ -259,13 +267,15 @@ internal fun VideoTrimStrip(s: TrimState, modifier: Modifier = Modifier, stripHe
                     val headX = (s.playhead.coerceIn(s.start, s.end.coerceAtLeast(s.start)) / d * wPx)
                         .coerceIn(li, maxOf(li, rc - hw / 2 - gapPx))
                     val x0 = down.position.x
-                    // The handles sit over the play head (iOS order), so they win a shared touch.
-                    val target = when {
-                        abs(x0 - lc) <= handleZone && abs(x0 - lc) <= abs(x0 - rc) -> 0
-                        abs(x0 - rc) <= handleZone -> 1
-                        abs(x0 - headX) <= headZone -> 2
-                        else -> return@awaitEachGesture
-                    }
+                    // The nearest of the three under the finger wins. The handles used to win any shared
+                    // touch, so once the play head sat against a handle it could never be picked again
+                    // (owner's Pixel 2026-11-09: "the small line glues to the big one").
+                    val dl = abs(x0 - lc).takeIf { it <= handleZone }
+                    val dr = abs(x0 - rc).takeIf { it <= handleZone }
+                    val dh = abs(x0 - headX).takeIf { it <= headZone }
+                    val best = listOfNotNull(dl?.let { 0 to it }, dr?.let { 1 to it }, dh?.let { 2 to it }).minByOrNull { it.second }
+                        ?: return@awaitEachGesture
+                    val target = best.first
                     fun move(x: Float) {
                         s.playing = false
                         val t = at(x)
