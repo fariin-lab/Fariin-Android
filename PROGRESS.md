@@ -1400,3 +1400,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   pick in the library grid (and asked for library access first). Sent and received on emulators.
 - 2026-11-08 ~9:02 PM: the composer camera no longer asks for photo-library access first (the sheet
   under it auto-asked). Tested with media access revoked: shutter -> editor, X -> back to the chat.
+- 2026-11-08 ~9:05 PM: emulators + functions_stub: new channel flow (intro, name, Channel Type
+  page, Done), channel welcome card, Broadcast post with views/time/share. No gaps found. Chat-list
+  search checked: names only, same as iOS (message text is ciphertext there).
