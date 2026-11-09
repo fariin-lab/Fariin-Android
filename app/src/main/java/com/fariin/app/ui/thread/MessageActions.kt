@@ -503,6 +503,30 @@ internal fun ComposerBar(title: String, text: String, thumb: (@Composable () -> 
     }
 }
 
+/**
+ * The reply / edit / quote banner inside the message box (iOS composer banner): the accent bar, the
+ * picture if any, "Reply to X" over the words, and a grey round X. No card of its own; the box is the card.
+ */
+@Composable
+internal fun ComposerBanner(title: String, text: String, thumb: (@Composable () -> Unit)? = null, onClose: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(3.dp).height(36.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(c.label))
+        if (thumb != null) {
+            Spacer(Modifier.width(10.dp))
+            thumb()
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text, fontSize = 15.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(Modifier.size(30.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.75f)).clickable(onClickLabel = "Cancel", onClick = onClose),
+            contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.bg, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
 /** The jump-to-bottom arrow with the count of new messages below the reader (iOS jump button). */
 @Composable
 internal fun JumpArrow(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {

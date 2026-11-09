@@ -1218,12 +1218,15 @@ private fun ThreadContent(
             } else if (ui.isGroup && rememberMutedInGroup(ui.groupDoc, ui.me)) {
                 MutedInGroupBar()
             } else {
+                // The reply / edit / quote banner sits INSIDE the message box, over the field, as one
+                // card (owner 2026-11-08, iOS): not a second card floating above it.
+                var banner: (@Composable () -> Unit)? = null
                 replyTo?.let { r ->
-                    ComposerBar(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
+                    banner = { ComposerBanner(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
                         com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText,
-                        thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp) }) else null) { replyTo = null }
+                        thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp) }) else null) { replyTo = null } }
                 }
-                editing?.let { e -> ComposerBar("Edit message", e.text) { editing = null } }
+                editing?.let { e -> banner = { ComposerBanner("Edit message", e.text) { editing = null } } }
                 // A channel post quoted into this chat (iOS .quote banner): waits above the composer
                 // for my words; closing it cancels the quote.
                 var quoting by remember(ui.cid) { mutableStateOf<com.fariin.app.data.QuoteStore.Draft?>(null) }
@@ -1249,9 +1252,9 @@ private fun ThreadContent(
                 }
                 if (editing == null) quoting?.let { q ->
                     val pk = com.fariin.app.data.QuoteRules.pictureKey(q)
-                    ComposerBar("Quote from ${com.fariin.app.data.QuoteRules.heading(q.card)}",
+                    banner = { ComposerBanner("Quote from ${com.fariin.app.data.QuoteRules.heading(q.card)}",
                         com.fariin.app.data.QuoteRules.body(q.card),
-                        thumb = if (com.fariin.app.data.QuoteStore.picture(pk) != null || com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card, pk) }) else null) { quoting = null }
+                        thumb = if (com.fariin.app.data.QuoteStore.picture(pk) != null || com.fariin.app.data.QuoteRules.image(q.card) != null || q.card.photoUrl.isNotEmpty()) ({ QuoteThumb(q.card, pk) }) else null) { quoting = null } }
                 }
                 // The box's words, for the link card above it (LinkDraftBar).
                 var linkText by remember { mutableStateOf(actions.draft) }
@@ -1354,7 +1357,7 @@ private fun ThreadContent(
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
                             onSendVoice(r)
                         }
-                    }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(),
+                    }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(), banner = banner,
                     // Bold in the selection menu: a channel post only (iOS Format > Bold).
                     boldable = ch != null,
                     onTyping = steady1(actions.onTyping),
@@ -2235,6 +2238,8 @@ private fun Composer(
     prefill: Pair<String, String>? = null,
     /** The edited post's bold runs, put in the field with its words. */
     prefillBold: List<com.fariin.app.data.TextFormat.Span> = emptyList(),
+    /** Reply / edit / quote: drawn at the top of the message box, a hairline under it (iOS). */
+    banner: (@Composable () -> Unit)? = null,
     /** A channel post: "Bold" in the selection menu, and the runs go with the send. */
     boldable: Boolean = false,
     onTyping: (Boolean) -> Unit = {},
@@ -2442,8 +2447,13 @@ private fun Composer(
                 }
                 Spacer(Modifier.width(8.dp))
                 // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
+                Column(Modifier.weight(1f).floating(RoundedCornerShape(if (banner != null) 24.dp else 20.dp))) {
+                if (banner != null) {
+                    banner()
+                    HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(horizontal = 12.dp))
+                }
                 Row(
-                    Modifier.weight(1f).heightIn(min = COMPOSER_BUTTON).floating(RoundedCornerShape(20.dp)),
+                    Modifier.fillMaxWidth().heightIn(min = COMPOSER_BUTTON),
                     verticalAlignment = Alignment.Bottom,
                 ) {
                 Box(
@@ -2509,6 +2519,7 @@ private fun Composer(
                     if (emojiOpen) keyboard?.hide() else keyboard?.show()
                 }
                 Spacer(Modifier.width(8.dp))
+                }
                 }
             }
             Spacer(Modifier.width(8.dp))

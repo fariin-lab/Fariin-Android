@@ -33,6 +33,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import dev.chrisbanes.haze.hazeSource
+import com.fariin.app.ui.components.frostedTopBar
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyRow
@@ -242,8 +245,41 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         if (blocked) com.fariin.app.ui.components.PermissionDenied.openAppSettings(context) else ask.launch(RecentMedia.permissions())
     }
 
+    // The header floats frosted over the grid and slides away with the photos as they scroll down,
+    // back as they scroll up (owner 2026-11-08, his iOS picker video).
+    val haze = remember { dev.chrisbanes.haze.HazeState() }
+    val glass = com.fariin.app.perf.rememberPowerState().glass()
+    val headerPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
+    var headerY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    LaunchedEffect(tab, album) { headerY = 0f }
+    val quickReturn = remember(headerPx) {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            // Only what the grid really scrolled moves the header: a short grid that cannot scroll keeps it.
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset,
+                                      source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                headerY = (headerY + consumed.y).coerceIn(-headerPx, 0f)
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
     Column(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.weight(1f).fillMaxWidth().then(Modifier.nestedScroll(quickReturn))) {
+        Box(Modifier.fillMaxSize().hazeSource(haze)) {
+            when {
+                none -> Box(Modifier.padding(top = 56.dp)) { AccessOff(blocked, askAgain, fileMode) }
+                album != null -> LibraryGrid(inAlbum, null, motion, if (multi != null) picked else null, tap, hold)
+                tab == 0 -> LibraryGrid(photos, if (access == RecentMedia.Access.PARTIAL) askAgain else null, motion,
+                    if (multi != null) picked else null, tap, hold)
+                else -> {
+                    val list = albums
+                    if (list == null) FariinSpinner(Modifier.align(Alignment.Center), size = 28.dp, color = Color.White)
+                    else Box(Modifier.padding(top = 56.dp)) { Collections(list, motion) { album = it } }
+                }
+            }
+        }
         // The bar: X (or back inside a folder) left, the switch in the middle. It drags the sheet.
+        Box(Modifier.fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, headerY.toInt()) }
+            .frostedTopBar(haze, Color.Black, glass)) {
         Box(Modifier.fillMaxWidth().height(56.dp).sheetDrag(motion).padding(horizontal = 8.dp)) {
             val a = album
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape)
@@ -256,18 +292,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Center).padding(horizontal = 60.dp))
             else LibrarySwitch(tab, { tab = it }, Modifier.align(Alignment.Center))
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                none -> AccessOff(blocked, askAgain, fileMode)
-                album != null -> LibraryGrid(inAlbum, null, motion, if (multi != null) picked else null, tap, hold)
-                tab == 0 -> LibraryGrid(photos, if (access == RecentMedia.Access.PARTIAL) askAgain else null, motion,
-                    if (multi != null) picked else null, tap, hold)
-                else -> {
-                    val list = albums
-                    if (list == null) FariinSpinner(Modifier.align(Alignment.Center), size = 28.dp, color = Color.White)
-                    else Collections(list, motion) { album = it }
-                }
-            }
+        }
             // Taps are held at once, but the dim and the spinner wait 300 ms: a pick that is ready
             // sooner flies straight out of its tile with no flash (owner's video 2026-11-08).
             if (busy || resolving) {
@@ -392,7 +417,7 @@ private fun LibraryGrid(items: List<RecentMedia.Item>, onMore: (() -> Unit)?, mo
             // At the top, a pull down moves the sheet (iOS); otherwise the grid scrolls.
             .sheetDrag(motion, atTop = { grid.firstVisibleItemIndex == 0 && grid.firstVisibleItemScrollOffset == 0 }),
         state = grid,
-        contentPadding = PaddingValues(start = 2.dp, end = 2.dp, bottom = 2.dp),
+        contentPadding = PaddingValues(start = 2.dp, end = 2.dp, top = 56.dp, bottom = 2.dp),   // under the floating header
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
