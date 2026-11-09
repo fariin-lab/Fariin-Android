@@ -1410,3 +1410,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~9:11 PM: same link with approval off: lobby says Join, warm + pre-fetch + a renewal
   every ~10 s while peek runs every 5 s; Join with no pass in hand falls back to its own request;
   the refusal (stub has no groupCallToken) returns to the lobby. No crash.
+- 2026-11-08 ~9:14 PM: in-chat search on the emulators (highlight, 1 of 1, arrows, Show as List)
+  and the Calls list row words ("Outgoing (37 sec)") match iOS.
