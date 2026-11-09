@@ -311,8 +311,10 @@ class SheetMotion internal constructor(
         if (kotlin.math.abs(newMid - mid) < 1f) return
         val old = mid
         mid = newMid
-        if (closing || old <= 0f) return
-        if (job?.isActive == true || kotlin.math.abs(y - old) < 1f) open()
+        if (closing || expanded) return
+        // A sheet resting at full height only because the last page filled it (old stop 0) follows
+        // too: Report step 1 (13 rows) to a 5-row step left a big empty band (owner 2026-11-09).
+        if (job?.isActive == true || kotlin.math.abs(y - old) < 1f || (old <= 0f && y < 1f)) open()
     }
 
     /** To full height on the same curve (a list opened, the keyboard coming up). */
