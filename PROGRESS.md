@@ -1459,3 +1459,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   admins edit a post at any age (owner 2026-11-05, the rules drop the window for channels).
   MessageRules.canEdit(channel = true) for the channel post menu, with a test. Checked: hour-old
   post offers Edit, saves "First post edited".
+- 2026-11-08 ~10:13 PM: message menus compared with iOS's CMAction list: group member menu (Reply,
+  Forward, Copy, Select, Report) and sticker "Save to Favorites" match. Fixed the photo row's word:
+  "Save" -> "Save Image" (iOS), "Save Video" for a video (the viewer's word), album stays "Save".

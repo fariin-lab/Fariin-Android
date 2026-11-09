@@ -173,7 +173,9 @@ internal fun MessageMenu(
             // Not when the channel turned Quotes off, for anyone (the server refuses everyone then).
             if (!restricted && MessageRules.canQuote(m) && ui.channel?.info?.quotesOff == false) add(MenuItem("Quote", null, iconRes = com.fariin.app.R.drawable.ic_quote, badge = NewBadgeSpots.CHAT_MENU_QUOTE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onQuote(m) })
-            if (!restricted && canSaveToGallery(m)) add(MenuItem("Save", null, iconRes = com.fariin.app.R.drawable.ic_save_down, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
+            // iOS words "Save Image" (and the viewer's "Save Video"); an album keeps "Save".
+            if (!restricted && canSaveToGallery(m)) add(MenuItem(when (m.mediaKind) {
+                Message.MediaKind.PHOTO -> "Save Image"; Message.MediaKind.VIDEO -> "Save Video"; else -> "Save" }, null, iconRes = com.fariin.app.R.drawable.ic_save_down, badge = NewBadgeSpots.CHAT_MENU_SAVE_IMAGE) {
                 if (!com.fariin.app.data.ChatRestrictions.isOn(ui.cid)) actions.onSave(m) })
             // A contact or location card is no text to copy or edit (iOS keeps markers off text surfaces).
             val card = com.fariin.app.data.CardRules.isCard(m.text)
