@@ -1,11 +1,20 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -49,24 +58,72 @@ fun GlassDropdown(
     val dark = base.luminance() < 0.4f
     val rim = if (dark) Color.White.copy(alpha = 0.18f) else Color.White
     val sheen = if (dark) Color.White.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.85f)
-    DropdownMenu(
-        expanded = expanded, onDismissRequest = onDismissRequest,
-        // The light along the top of the glass and its bright inner rim, under the rows.
-        modifier = Modifier.drawBehind {
-            drawRect(Brush.verticalGradient(0f to sheen, 0.4f to sheen.copy(alpha = 0f), startY = 0f, endY = size.height))
-            val w = 1.dp.toPx(); val r = 24.dp.toPx() - w
-            drawRoundRect(rim, topLeft = androidx.compose.ui.geometry.Offset(w, w),
-                size = androidx.compose.ui.geometry.Size(size.width - 2 * w, size.height - 2 * w),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(w))
-        }.then(modifier),
-        offset = offset, scrollState = scrollState, properties = properties,
-        shape = RoundedCornerShape(24.dp),
-        containerColor = base,
-        tonalElevation = 0.dp,
-        shadowElevation = shadowElevation.coerceAtLeast(16.dp),
-        // The fine dark edge outside the white rim: the clear glass edge on a white page.
-        border = BorderStroke(0.5.dp, if (dark) Color.Black.copy(alpha = 0.55f) else Color.Black.copy(alpha = 0.10f)),
-        content = content,
-    )
+    // OUR OWN popup and motion (owner 2026-11-09: "it opens from small but closes flat"): material's
+    // menu grows in but only fades out. This one grows out of the button it belongs to and shrinks
+    // back into it, the same curve both ways.
+    val state = androidx.compose.runtime.remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    state.targetState = expanded
+    if (!state.currentState && !state.targetState) return
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val origin = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) }
+    val provider = androidx.compose.runtime.remember(offset, density) { DropdownPlace(offset, density) { origin.value = it } }
+    androidx.compose.ui.window.Popup(popupPositionProvider = provider, onDismissRequest = onDismissRequest, properties = properties) {
+        val t = androidx.compose.animation.core.rememberTransition(state, "glassDropdown")
+        val k by t.animateFloat({
+            if (targetState) androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 420f)
+            else androidx.compose.animation.core.tween(170, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+        }, label = "k") { if (it) 1f else 0f }
+        val shape = RoundedCornerShape(24.dp)
+        androidx.compose.foundation.layout.Column(
+            modifier.graphicsLayer {
+                val s = 0.15f + 0.85f * k
+                scaleX = s; scaleY = s
+                alpha = (k * 2.2f).coerceIn(0f, 1f)
+                transformOrigin = origin.value
+            }
+                .padding(4.dp)   // room for the shadow
+                .shadow(shadowElevation.coerceAtLeast(16.dp), shape)
+                .background(base, shape)
+                .border(BorderStroke(0.5.dp, if (dark) Color.Black.copy(alpha = 0.55f) else Color.Black.copy(alpha = 0.10f)), shape)
+                .drawBehind {
+                    drawRect(Brush.verticalGradient(0f to sheen, 0.4f to sheen.copy(alpha = 0f), startY = 0f, endY = size.height))
+                    val w = 1.dp.toPx(); val r = 24.dp.toPx() - w
+                    drawRoundRect(rim, topLeft = androidx.compose.ui.geometry.Offset(w, w),
+                        size = androidx.compose.ui.geometry.Size(size.width - 2 * w, size.height - 2 * w),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+                }
+                .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+                .widthIn(min = 112.dp, max = 280.dp)
+                .verticalScroll(scrollState)
+                .padding(vertical = 8.dp),
+            content = content,
+        )
+    }
+}
+
+/**
+ * Under the button, its end edge on the button's end (or above it when there is no room below),
+ * kept on screen; reports where the button sits inside the menu, so the menu grows out of it.
+ */
+private class DropdownPlace(val offset: DpOffset, val density: androidx.compose.ui.unit.Density,
+                            val onOrigin: (androidx.compose.ui.graphics.TransformOrigin) -> Unit) : androidx.compose.ui.window.PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                                   layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize): androidx.compose.ui.unit.IntOffset {
+        val dx = with(density) { offset.x.roundToPx() }; val dy = with(density) { offset.y.roundToPx() }
+        val margin = with(density) { 8.dp.roundToPx() }
+        val w = popupContentSize.width; val h = popupContentSize.height
+        val startAligned = anchorBounds.left + dx
+        val endAligned = anchorBounds.right - w - dx
+        var x = if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Ltr) {
+            if (anchorBounds.center.x > windowSize.width / 2) endAligned else startAligned
+        } else { if (anchorBounds.center.x < windowSize.width / 2) startAligned else endAligned }
+        x = x.coerceIn(margin, (windowSize.width - w - margin).coerceAtLeast(margin))
+        val below = anchorBounds.bottom + dy
+        var y = if (below + h <= windowSize.height - margin) below else anchorBounds.top - h - dy
+        y = y.coerceIn(margin, (windowSize.height - h - margin).coerceAtLeast(margin))
+        if (w > 0 && h > 0) onOrigin(androidx.compose.ui.graphics.TransformOrigin(
+            ((anchorBounds.center.x - x).toFloat() / w).coerceIn(0f, 1f), ((anchorBounds.center.y - y).toFloat() / h).coerceIn(0f, 1f)))
+        return androidx.compose.ui.unit.IntOffset(x, y)
+    }
 }
