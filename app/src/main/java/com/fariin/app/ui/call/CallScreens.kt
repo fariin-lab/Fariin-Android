@@ -1497,7 +1497,7 @@ private fun MemberTile(
             .shadow(14.dp, shape, clip = false, ambientColor = Green.copy(alpha = 0.35f), spotColor = Green.copy(alpha = 0.75f)))
         if (tileMenu != null) DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }, containerColor = Color(0xFF2C2C2E)) {
             Text(m.name, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-            HostMenuItems(tileMenu.g, m, canBlock = false, onConfirm = tileMenu.onConfirm, close = { menuOpen = false },
+            HostMenuItems(tileMenu.g, m, canBlock = GroupCallAdmin.ownsLink(tileMenu.g.linkRoom != null, tileMenu.g.myRole, tileMenu.g.linkCreator), onConfirm = tileMenu.onConfirm, close = { menuOpen = false },
                 pinned = if (tileMenu.canPin) tileMenu.pinnedId == m.id else null, onPin = { tileMenu.onPin(m.id) })
         }
         BoxWithConstraints(Modifier.matchParentSize().clip(shape)
