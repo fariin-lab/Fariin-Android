@@ -83,7 +83,8 @@ fun Modifier.glassMenuAnchor(a: GlassMenuAnchor): Modifier = onGloballyPositione
  * same motion over a frosted solid card.
  */
 @Composable
-fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>, backdrop: Backdrop?, onDismiss: () -> Unit) {
+fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>, backdrop: Backdrop?,
+              /** A grey line over the rows ("Mute this chat for..."), not a row. */ caption: String? = null, onDismiss: () -> Unit) {
     val c = Fariin.colors
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -111,6 +112,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     var rowH by remember { mutableIntStateOf(0) }
+    var captionH by remember { mutableIntStateOf(0) }
     var pressed by remember { mutableIntStateOf(-1) }
     val pill = remember { Animatable(0f) }
     val lean = remember { Animatable(0f) }
@@ -167,7 +169,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                         val down = awaitFirstDown()
                         // Ours: the page's tap-outside layer must not close the menu (a submenu stays open).
                         down.consume()
-                        fun rowAt(y: Float) = if (rowH <= 0) -1 else (y / rowH).toInt().coerceIn(0, rows.lastIndex)
+                        fun rowAt(y: Float) = if (rowH <= 0 || y < captionH) -1 else ((y - captionH) / rowH).toInt().coerceIn(0, rows.lastIndex)
                         pressed = rowAt(down.position.y)
                         scope.launch { pill.snapTo(pressed.toFloat()) }
                         scope.launch { lean.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 600f)) }
@@ -201,10 +203,13 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
             Box(Modifier.graphicsLayer { alpha = ((grow.value - 0.55f) / 0.35f).coerceIn(0f, 1f)
                 translationY = (1f - ((grow.value - 0.55f) / 0.45f).coerceIn(0f, 1f)) * -6.dp.toPx() }) {
                 // The light pill under the finger.
-                if (pressed >= 0 && rowH > 0) Box(Modifier.offset { IntOffset(0, (pill.value * rowH).roundToInt()) }
+                if (pressed >= 0 && rowH > 0) Box(Modifier.offset { IntOffset(0, (captionH + pill.value * rowH).roundToInt()) }
                     .padding(horizontal = 6.dp).fillMaxWidth().height(with(density) { rowH.toDp() })
                     .background(c.label.copy(alpha = if (c.dark) 0.14f else 0.08f), RoundedCornerShape(18.dp)))
                 Column {
+                    if (caption != null) Text(caption, fontSize = 15.sp, color = c.secondary, maxLines = 1,
+                        modifier = Modifier.fillMaxWidth().onGloballyPositioned { captionH = it.size.height }
+                            .padding(start = 54.dp, end = 18.dp, top = 8.dp, bottom = 2.dp))
                     rows.forEachIndexed { i, it ->
                         if (it.divider && i > 0) Box(Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(0.5.dp).background(c.separator))
                         Row(Modifier.fillMaxWidth().height(52.dp).onGloballyPositioned { if (i == 0) rowH = it.size.height }

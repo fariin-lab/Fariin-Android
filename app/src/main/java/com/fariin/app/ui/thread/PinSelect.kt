@@ -148,14 +148,15 @@ internal fun PinnedBar(
     // A floating capsule over the chat (iOS pinned banner): a picture of the pinned photo at the start,
     // the pin in its own grey circle at the end. No bar behind it; the messages pass underneath.
     Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 6.dp)) {
-        Row(Modifier.fillMaxWidth().height(60.dp).floating(CircleShape).padding(start = 8.dp, end = 8.dp),
+        // iOS size (owner 2026-11-08: Android's was clearly bigger): 48 tall, 15/13 text, a bare pin.
+        Row(Modifier.fillMaxWidth().height(48.dp).floating(CircleShape).padding(start = 6.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             val thumb = msg?.let { rememberPlaceholder(it.thumb, it.blurhash) }
             if (thumb != null) {
                 androidx.compose.foundation.Image(thumb, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)))
+                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)))
                 Spacer(Modifier.width(10.dp))
-            } else Spacer(Modifier.width(12.dp))
+            } else Spacer(Modifier.width(14.dp))
             if (ids.size > 1) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     ids.indices.forEach { i ->
@@ -167,18 +168,18 @@ internal fun PinnedBar(
             }
             Column(Modifier.weight(1f).fillMaxHeight().clickable { onJump(pid) }, verticalArrangement = Arrangement.Center) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(author, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
+                    Text(author, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (ids.size > 1) {
                         Spacer(Modifier.width(5.dp))
                         Text("${idx + 1}/${ids.size}", fontSize = 11.sp, color = c.secondary)
                     }
                 }
-                Text(PinRules.snippet(msg), fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(PinRules.snippet(msg), fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(44.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.12f))) {
-                    Icon(painterResource(R.drawable.ic_pin_bar), "Pinned message", tint = c.label, modifier = Modifier.size(22.dp))
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(painterResource(R.drawable.ic_pin_bar), "Pinned message", tint = c.label, modifier = Modifier.size(21.dp))
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border, containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                     if (ui.canPin) DropdownMenuItem(

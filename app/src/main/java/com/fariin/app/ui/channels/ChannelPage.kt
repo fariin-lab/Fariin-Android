@@ -138,6 +138,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     var moreOpen by remember { mutableStateOf(false) }
     // The More circle's glass menu grows out of the circle (GlassMenu), over the page's own layer.
     val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    val muteAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    var muteMenu by remember { mutableStateOf(false) }
     val menuBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
     val menuGlass = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= 33
     var showQr by remember { mutableStateOf(false) }
@@ -277,7 +279,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             Action.LEAVE -> if (role == Role.VISITOR) leave(fromUndo = true) else confirmLeave = true
             Action.SHARE -> share()
             Action.SEARCH -> onSearch?.invoke()
-            Action.MUTE -> scope.launch { ChannelService.setMuted(info.cid, true, 0.0) }
+            // iOS: the times menu ("Mute this chat for..."), not an instant mute (owner 2026-11-08).
+            Action.MUTE -> muteMenu = true
             Action.UNMUTE -> scope.launch { ChannelService.setMuted(info.cid, false) }
             Action.MORE -> moreOpen = true
         }
@@ -350,7 +353,10 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     for (circle in ChannelRules.circles(shownRole, info.username.isNotEmpty(), muted)) {
                         // A follower's Search is dimmed when the page was not opened from the channel (iOS).
                         val dim = circle.dimmed || (circle.action == Action.SEARCH && onSearch == null)
-                        if (circle.action == Action.MORE) Box(Modifier.weight(1f).glassMenuAnchor(moreAnchor)) {
+                        if (circle.action == Action.MUTE) Box(Modifier.weight(1f).glassMenuAnchor(muteAnchor)) {
+                            ActionCircle(circle.action, circle.label, dim, Modifier.fillMaxWidth()) { tap(circle.action, circle.dimmed) }
+                        }
+                        else if (circle.action == Action.MORE) Box(Modifier.weight(1f).glassMenuAnchor(moreAnchor)) {
                             ActionCircle(circle.action, circle.label, dim, Modifier.fillMaxWidth()) { tap(circle.action, circle.dimmed) }
                         }
                         else ActionCircle(circle.action, circle.label, dim, Modifier.weight(1f)) { tap(circle.action, circle.dimmed) }
@@ -446,6 +452,12 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         submenu = listOf(true, false).map { on -> com.fariin.app.ui.components.GlassMenuItem(if (on) "On" else "Off", null, checked = saveOn == on) {
                             saveOn = on; com.fariin.app.media.AutoSaveMedia.setChat(ctx2, info.cid, on) } }))
             }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
+            com.fariin.app.ui.components.GlassMenu(muteMenu, muteAnchor,
+                com.fariin.app.data.GroupInfoCircles.MUTE_CHOICES.map { (label, hours) ->
+                    com.fariin.app.ui.components.GlassMenuItem(label, null) {
+                        scope.launch { ChannelService.setMuted(info.cid, true, com.fariin.app.data.GroupInfoCircles.muteUntil(hours)) }
+                    }
+                }, backdrop = if (menuGlass) menuBackdrop else null, caption = "Mute this chat for…", onDismiss = { muteMenu = false })
         }
         AnimatedVisibility(undo, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(24.dp)) {
             Row(Modifier.floating(CircleShape).clickable { leave(fromUndo = true) }.padding(horizontal = 18.dp, vertical = 12.dp)) {
