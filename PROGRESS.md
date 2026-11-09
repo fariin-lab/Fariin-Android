@@ -1465,3 +1465,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~10:16 PM: link preview between the emulators: card while typing (X to drop), card in the
   sent bubble and on the other side. The picture is missing only locally (the rules take https image
   addresses; the local storage server is http), as the code notes.
+- 2026-11-08 ~10:17 PM: location: Attach > Location asks permission, finds the place (plus code, city),
+  Exact / Approximate, Send Location -> card in the chat. Map tiles blank on the debug build only
+  (Maps "Authorization failure": the key is limited to the release signing).
