@@ -1251,7 +1251,12 @@ private fun GroupStage(members: List<GroupMember>, meId: String?, speaker: Strin
                         val y by animateDpAsState(f.y.dp, stageSpring(), label = "y")
                         val tw by animateDpAsState(f.w.dp, stageSpring(), label = "w")
                         val th by animateDpAsState(f.h.dp, stageSpring(), label = "h")
-                        MemberTile(m, m.id == meId, m.id == speaker && m.id != meId, Modifier.offset(x, y).size(tw, th), iAmSharing = iAmSharing) { onTile(m.id) }
+                        // A newcomer's tile fades in from 0.96 (iOS: new tiles enter with opacity + scale).
+                        val enter = remember { androidx.compose.animation.core.Animatable(0f) }
+                        LaunchedEffect(Unit) { enter.animateTo(1f, tween(250)) }
+                        MemberTile(m, m.id == meId, m.id == speaker && m.id != meId, Modifier.offset(x, y).size(tw, th)
+                            .graphicsLayer { alpha = enter.value; val k = 0.96f + 0.04f * enter.value; scaleX = k; scaleY = k },
+                            iAmSharing = iAmSharing) { onTile(m.id) }
                     }
                 }
                 if (layout.overflow.isNotEmpty()) {
