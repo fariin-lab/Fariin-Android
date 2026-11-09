@@ -166,6 +166,11 @@ fun ChatListScreen(
     // redraws only that row.
     val draftsAll = com.fariin.app.local.Drafts.map.collectAsState()
     val keysAll = CryptoHub.keysEpoch.collectAsState()
+    // Collected once here, not once per row (lag audit 2026-11-09: rows did their own).
+    val liveCallAll = LiveCallRow.live.collectAsState()
+    val listCtx = LocalContext.current
+    LaunchedEffect(Unit) { com.fariin.app.data.PlayedVoice.init(listCtx.applicationContext) }
+    val playedAll = com.fariin.app.data.PlayedVoice.upTo.collectAsState()
     val cheapDrawing = com.fariin.app.perf.rememberPowerState().cheapDrawing
     var filter by rememberSaveable { mutableIntStateOf(FILTER_ALL) }
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -616,7 +621,7 @@ fun ChatListScreen(
                                 }
                             }) {
                         ChatRow(conv, me, decryptor,
-                            draftsState = draftsAll, keysState = keysAll, cheap = cheapDrawing,
+                            draftsState = draftsAll, keysState = keysAll, liveCallState = liveCallAll, playedState = playedAll, cheap = cheapDrawing,
                             selected = conv.id in selected,
                             ring = ring?.let { com.fariin.app.data.StoryRings.seenFlags(it) }.orEmpty(),
                             onStoryTap = if (ring == null || selecting) null else ({ storyOpen = ring }),
@@ -1060,7 +1065,7 @@ private fun SectionHeader(text: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChatRow(
+internal fun ChatRow(
     conv: Conversation, me: String, decryptor: MessageDecryptor,
     selected: Boolean = false,
     onOpen: () -> Unit,
@@ -1072,6 +1077,9 @@ fun ChatRow(
     /** The drafts and key-epoch states, collected once by the list (null: this row collects its own). */
     draftsState: androidx.compose.runtime.State<Map<String, String>>? = null,
     keysState: androidx.compose.runtime.State<Int>? = null,
+    /** The live call and the played-voice marks, collected once by the list (null: the row collects). */
+    liveCallState: androidx.compose.runtime.State<LiveCallRow.Live?>? = null,
+    playedState: androidx.compose.runtime.State<Map<String, Double>>? = null,
     /** A LOW phone (perf/PowerState.cheapDrawing): the story ring is kept as a picture. */
     cheap: Boolean = false,
 ) {
@@ -1117,12 +1125,12 @@ fun ChatRow(
     val recording = if (activityExpired) null else ChatList.recordingLabel(conv, me)
     val typing = if (activityExpired) null else ChatList.typingLabel(conv, me)
     // A call with this chat going on now: the green line above everything.
-    val liveCall by LiveCallRow.live.collectAsState()
+    val liveCall = (liveCallState ?: LiveCallRow.live.collectAsState()).value
     val onCall = liveCall?.takeIf { LiveCallRow.cid(me, it) == conv.id }
     // An unheard newest voice note: its mic in the accent colour.
     val ctx0 = LocalContext.current
-    LaunchedEffect(Unit) { com.fariin.app.data.PlayedVoice.init(ctx0.applicationContext) }
-    val played by com.fariin.app.data.PlayedVoice.upTo.collectAsState()
+    if (playedState == null) LaunchedEffect(Unit) { com.fariin.app.data.PlayedVoice.init(ctx0.applicationContext) }
+    val played = (playedState ?: com.fariin.app.data.PlayedVoice.upTo.collectAsState()).value
     val voiceUnplayed = remember(conv, me, played) { com.fariin.app.data.PlayedVoice.lastVoiceUnplayed(conv, me, played) }
     // iOS: a chat with unsent words in its box says "Draft:" (red) and the words, not the last line.
     // Only this chat's draft: reading the whole map redrew every row whenever any chat's draft

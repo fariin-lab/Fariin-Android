@@ -98,7 +98,8 @@ object ChatHistoryPreloader {
     private fun warmSaved(conversations: List<Conversation>, me: String) {
         val ids = conversations.sortedByDescending { it.displayUpdatedAt(me) }.take(TOP_CHATS).map { it.id }.filter { savedWarm.add("$me/$it") }
         if (ids.isEmpty()) return
-        scope.launch { for (id in ids) runCatching { com.fariin.app.local.LocalCache.loadThread(me, id) } }
+        // Oldest first, so the newest (the likeliest taps) are the freshest in the memory cache.
+        scope.launch { for (id in ids.asReversed()) runCatching { com.fariin.app.local.LocalCache.loadThread(me, id) } }
     }
 
     /** A finger is on a chat row: read its saved copy now, before the tap lands. */
