@@ -1099,11 +1099,17 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
         when {
             s.flashId == r.id -> c.accent.copy(alpha = 0.14f)
             // The reply being answered stays lit while the field is open (iOS secondarySystemFill).
-            s.answering?.id == r.id -> c.label.copy(alpha = 0.06f)
+            s.answering?.id == r.id -> c.label.copy(alpha = 0.045f)
             else -> Color.Transparent
         },
         androidx.compose.animation.core.tween(300), label = "replyFlash")
-    Column(Modifier.fillMaxWidth().then(lineModifier).background(lit).padding(horizontal = 16.dp, vertical = 8.dp)) {
+    // The shade hugs the row: from just above the name to just below the Reply line, not the row's
+    // full padding (owner's Pixel 2026-11-09: "our grey looks bigger").
+    Column(Modifier.fillMaxWidth().then(lineModifier).drawBehind {
+        val inset = 5.dp.toPx()
+        drawRect(lit, topLeft = androidx.compose.ui.geometry.Offset(0f, inset),
+            size = androidx.compose.ui.geometry.Size(size.width, (size.height - 2 * inset).coerceAtLeast(0f)))
+    }.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(Modifier.padding(start = side + 24.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(r.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)

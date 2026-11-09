@@ -714,6 +714,9 @@ private fun ThreadContent(
     // A group's or channel's card that has to wait for the server's word on the history fades in
     // instead of popping in one frame; a card known from the first frame is simply there (HistoryStart).
     val cardFade = remember(anim) { if (anim) androidx.compose.animation.core.tween<Float>(260) else null }
+    // True once the page has been open a second: cards that come later fade in, first-frame ones do not.
+    val pageAge = remember(ui.cid) { androidx.compose.runtime.mutableStateOf(false) }
+    LaunchedEffect(ui.cid) { kotlinx.coroutines.delay(1_000); pageAge.value = true }
     // My own send rises out of the composer (iOS send flight, SendMotion.kt); off with Power
     // Saving > Animations or the system's Remove animations. (sendMotion is declared above, with
     // arrivalMotion: the stick-to-newest effect asks both.)
@@ -1127,9 +1130,13 @@ private fun ThreadContent(
                 }
                 // iOS groupHistoryCard for a channel: its card above the first post once the whole
                 // history is here (or the channel is too small to have more), never between pages.
-                if (ch != null && ui.loaded && ui.messages.isNotEmpty() && (!ui.canLoadOlder || (ui.messages.size < 20 && ch.info.postCount < 20)))
+                // Also when every post is already here by its count (no wait for the server's page), and
+                // with no fade in the page's first second: the card is there from the first frame, as
+                // iOS (owner's Pixel 2026-11-09: it popped in after the posts).
+                if (ch != null && ui.loaded && ui.messages.isNotEmpty() && (!ui.canLoadOlder ||
+                        (ui.messages.size < 20 && ch.info.postCount < 20) || (ch.info.postCount in 1..ui.messages.size)))
                     item(key = "channelIntro") {
-                        Box(Modifier.animateItem(fadeInSpec = cardFade, placementSpec = null, fadeOutSpec = null)
+                        Box(Modifier.animateItem(fadeInSpec = if (pageAge.value) cardFade else null, placementSpec = null, fadeOutSpec = null)
                             .fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                             com.fariin.app.ui.channels.ChannelIntroCard(ch)
                         }
