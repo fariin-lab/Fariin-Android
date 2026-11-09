@@ -648,18 +648,32 @@ private fun ScanCheckup(profile: MyProfile?, demo: Boolean, open: (String) -> Un
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp).alpha(note))
             }
             // ROWS: one card while scanning; settled, the missing ones in their own card above "Set up".
-            // Each row keeps its identity and slides (animateBounds) to its new place. The room for
-            // the final layout is there from the start, so the sheet does not grow under the eye.
+            // ⛔ THE SETTLE IS A CROSSFADE (owner 2026-11-09, Pixel video): rows sliding between cards
+            // showed an empty card for a few frames and rows clipped inside a card already at its
+            // final size. Now the scan card fades out (to 0.98) while the final groups fade in rising
+            // 8 dp, 320 ms ease-out, as iOS. The room for the final layout is there from the start,
+            // so the sheet does not grow under the eye.
             val finalRoom = (entries.size * 68 + 120).dp
-            androidx.compose.animation.SharedTransitionLayout(Modifier.fillMaxWidth().heightIn(min = finalRoom)) {
-                val scope = this
-                val missing = if (settled) shownEntries.filter { it.status == SecurityCheckupRules.Status.Missing } else emptyList()
-                val failed = if (settled) shownEntries.filter { it.status == SecurityCheckupRules.Status.Failed } else emptyList()
+            val rise = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }   // the 8 dp rise
+            androidx.compose.animation.AnimatedContent(
+                targetState = settled,
+                modifier = Modifier.fillMaxWidth().heightIn(min = finalRoom),
+                contentAlignment = Alignment.TopCenter,
+                transitionSpec = {
+                    (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.LinearOutSlowInEasing)) +
+                        androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.LinearOutSlowInEasing)) { rise })
+                        .togetherWith(androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
+                            androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(200), targetScale = 0.98f))
+                        .using(androidx.compose.animation.SizeTransform(clip = false) { _, _ -> androidx.compose.animation.core.snap() })
+                },
+                label = "settle",
+            ) { done ->
+                val missing = if (done) shownEntries.filter { it.status == SecurityCheckupRules.Status.Missing } else emptyList()
+                val failed = if (done) shownEntries.filter { it.status == SecurityCheckupRules.Status.Failed } else emptyList()
                 val rest = shownEntries.filter { it !in missing && it !in failed }
-                val slide = Modifier.animateBounds(scope, boundsTransform = { _, _ -> androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 380f) })
                 Column(Modifier.fillMaxWidth()) {
                     if (missing.isNotEmpty()) {
-                        ScanCard { for ((i, e) in missing.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == missing.lastIndex, moving, slide, open, onRetry) } }
+                        ScanCard { for ((i, e) in missing.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == missing.lastIndex, moving, Modifier, open, onRetry) } }
                         Text("Set these up to keep your account safe if your phone is lost or someone learns your password.",
                             fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp).padding(top = 6.dp, bottom = 8.dp))
                     }
@@ -667,12 +681,12 @@ private fun ScanCheckup(profile: MyProfile?, demo: Boolean, open: (String) -> Un
                     if (failed.isNotEmpty()) {
                         Text("Couldn't check", style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.secondary,
                             modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 16.dp, bottom = 6.dp))
-                        ScanCard { for ((i, e) in failed.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == failed.lastIndex, moving, slide, open, onRetry) } }
+                        ScanCard { for ((i, e) in failed.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == failed.lastIndex, moving, Modifier, open, onRetry) } }
                     }
-                    if (settled && rest.isNotEmpty()) Text(if (missing.isEmpty() && failed.isEmpty()) "Everything is set up" else "Set up",
+                    if (done && rest.isNotEmpty()) Text(if (missing.isEmpty() && failed.isEmpty()) "Everything is set up" else "Set up",
                         style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = c.secondary,
                         modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 16.dp, bottom = 6.dp))
-                    if (rest.isNotEmpty()) ScanCard { for ((i, e) in rest.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == rest.lastIndex, moving, slide, open, onRetry) } }
+                    if (rest.isNotEmpty()) ScanCard { for ((i, e) in rest.withIndex()) androidx.compose.runtime.key(e.id) { ScanRow(e, i == rest.lastIndex, moving, Modifier, open, onRetry) } }
                 }
             }
             val tail by androidx.compose.animation.core.animateFloatAsState(if (settled) 1f else 0f, androidx.compose.animation.core.tween(200), label = "tail")
