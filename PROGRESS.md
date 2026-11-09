@@ -64,6 +64,7 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 - 2026-11-09 00:17 long-press message menu: press and slide without lifting, a grey pill follows the finger row to row with a tick (SEGMENT_FREQUENT_TICK / CLOCK_TICK), lift picks, lift outside picks nothing; a card that scrolls keeps plain taps. Tested on emulator-5556 (slide to Select, lift outside, plain tap Reply once).
 - 2026-11-09 00:22 photo library: header (X, Photos/Collections) floats frosted over the grid and slides away with the photos as they scroll, back on scroll up (moves only with real scroll). Composer: reply / edit / quote banner now inside the message box with a hairline (iOS), grey round X. Both tested on emulator-5556.
 - 2026-11-09 00:30 story editor from the library: closing (X) flies the picture back into its tile while the black fades to the grid (iOS, owner video). Checked at 10x animator scale on emulator-5556. Note: the emulators are PerfClass LOW, so animations and glass default OFF there; turned on via the app prefs (power.animations / power.blur) on emulator-5556 only.
+- 2026-11-09 00:34 sent photos / albums / GIFs / stickers now fly up from the composer like texts (SendMotion.Kind.MEDIA, start scale 0.85); checked at 10x on emulator-5556.
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes

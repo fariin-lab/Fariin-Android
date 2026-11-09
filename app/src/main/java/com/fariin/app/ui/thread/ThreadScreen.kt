@@ -1316,7 +1316,7 @@ private fun ThreadContent(
                         val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
                             else com.fariin.app.data.GroupAdmins.SendKind.PHOTOS }.distinct()
                         val stop = slow() ?: kinds.firstNotNullOfOrNull { held(it) }
-                        if (stop != null) actions.onNotice(stop) else onSendPick(uris, cap, once)
+                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); onSendPick(uris, cap, once) }
                     },
                     onSendFile = { u -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFile(u) },
                     onSendFiles = { l -> val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.FILES); if (stop != null) actions.onNotice(stop) else onSendFiles(l) },
@@ -1329,7 +1329,7 @@ private fun ThreadContent(
                     // Contact and location cards (CardSheets): sealed text markers, sent like a text.
                     onGif = { gif ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
-                        if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
+                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
                     },
                     onLocation = {
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.LOCATION)
@@ -1388,11 +1388,11 @@ private fun ThreadContent(
                     me = ui.me,
                     onSticker = steady1 { s: com.fariin.app.data.StickerRef ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.STICKERS)
-                        if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendSticker(s, r) }
+                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendSticker(s, r) }
                     },
                     onGif = steady1 { gif: com.fariin.app.data.StickerGifRules.Gif ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.GIFS)
-                        if (stop != null) actions.onNotice(stop) else { val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
+                        if (stop != null) actions.onNotice(stop) else { sendMotion.arm(SendMotion.Kind.MEDIA, ui.messages, sendAnim); val r = replyTo; replyTo = null; actions.onSendGif(gif, r) }
                     },
                     // iOS mentionPicker: groups only (MentionPicker.kt).
                     mentions = if (ui.isGroup) MentionSource(ui.members, ui.me, ui.names, ui.photos) else null)

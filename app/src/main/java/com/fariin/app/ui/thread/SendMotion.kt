@@ -43,7 +43,8 @@ import kotlinx.coroutines.launch
  */
 @Stable
 class SendMotion {
-    enum class Kind { TEXT, VOICE }
+    /** MEDIA: a photo, video, album, GIF or sticker (owner 2026-11-08: a sent photo "came from nowhere"). */
+    enum class Kind { TEXT, VOICE, MEDIA }
 
     private class Arm(val kind: Kind, val origin: Rect, val before: Set<String>, val atMs: Long)
 
@@ -95,7 +96,7 @@ class SendMotion {
     @Stable
     class Flight internal constructor(val kind: Kind, private val origin: Rect) {
         internal val progress = Animatable(0f)
-        internal val scale = Animatable(START_SCALE)
+        internal val scale = Animatable(if (kind == Kind.MEDIA) MEDIA_START_SCALE else START_SCALE)
         private var bounds by mutableStateOf<Rect?>(null)
         /** The composer-to-row distance when the flight starts; fixed from then on (see [run]). */
         private var startDrop: Float? = null
@@ -152,6 +153,8 @@ class SendMotion {
         val GlideCurve = ArrivalMotion.Curve
         /** iOS lands at 0.94; the bubble starts a touch smaller here, as it has no pill shape to shrink from. */
         const val START_SCALE = 0.9f
+        /** A picture grows a little more on its way up, so it reads as arriving, not appearing. */
+        const val MEDIA_START_SCALE = 0.85f
         /** iOS settle spring: stiffness 420, damping 22, mass 1. */
         const val STIFFNESS = 420f
         const val DAMPING_RATIO = 0.54f
