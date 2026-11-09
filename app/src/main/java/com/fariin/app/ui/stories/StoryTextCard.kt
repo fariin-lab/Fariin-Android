@@ -450,7 +450,9 @@ internal fun StoryTextCard(
         // The words' box is what the keyboard leaves (plus 68 dp for the button row above it).
         Box(
             Modifier.fillMaxSize().statusBarsPadding()
-                .padding(top = 6.dp, bottom = if (keyboardUp) ime + 68.dp else bottomReserve),
+                // One continuous value as the keyboard slides (owner 2026-11-09: closing it, the words jumped
+                // when the keyboard reached zero and the gap switched to the resting one in one frame).
+                .padding(top = 6.dp, bottom = maxOf(ime + 68.dp, bottomReserve)),
             contentAlignment = Alignment.Center,
         ) {
             androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -493,7 +495,7 @@ internal fun StoryTextCard(
 
         Row(
             Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 14.dp)
-                .padding(bottom = 14.dp + if (keyboardUp) ime else bottomReserve),
+                .padding(bottom = 14.dp + maxOf(ime, bottomReserve)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
