@@ -341,7 +341,7 @@ private fun AccountPage(
             IconButton(onClick = { more = true }, modifier = com.fariin.app.ui.components.barGlass()) {
                 Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", tint = c.label)
             }
-            androidx.compose.material3.DropdownMenu(expanded = more, onDismissRequest = { more = false },
+            com.fariin.app.ui.components.GlassDropdown(expanded = more, onDismissRequest = { more = false },
                 shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
                 containerColor = com.fariin.app.ui.components.FariinMenu.container) {
                 androidx.compose.material3.DropdownMenuItem(text = { Text("Delete Account", color = c.red) },
