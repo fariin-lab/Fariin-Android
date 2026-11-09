@@ -28,7 +28,8 @@ object ChannelPosting {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         silent[cid] = on
         FirebaseFirestore.getInstance().collection("users").document(uid).collection("channelPrefs").document(cid)
-            .set(mapOf("silent" to on))
+            // Merge (server contract 2026-11-09): an overwrite wiped the reply-alert switch, and the new rules refuse it.
+            .set(mapOf("silent" to on), com.google.firebase.firestore.SetOptions.merge())
             .addOnFailureListener { silent[cid] = !on; onFail() }
     }
 }
