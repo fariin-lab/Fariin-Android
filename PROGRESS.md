@@ -1353,3 +1353,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   for the join pass before the camera prompt and renews it every 10 s of its 20 s life; Join takes
   that pass (or waits for the one in flight) instead of a fresh server trip. Not on approval links.
   Item 14 (expired links) needed nothing: lobby says "no longer valid", delete drops a gone link.
+- 2026-11-08 ~8:10 PM: rest of the iOS list checked. Item 1 receiver side: no change, a push only
+  wakes the ring listener and rings are keyed by call id (current/finished/accepted ignored).
+  Item 2 (pitch after a group call): not on Android; the 1:1 audio module takes the phone's fixed
+  output rate and the LiveKit room is disconnected and released on leave. List done except 22.
