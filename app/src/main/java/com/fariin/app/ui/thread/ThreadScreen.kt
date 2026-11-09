@@ -291,7 +291,7 @@ fun ThreadScreen(
                 onDispose { if (flip) ctl?.isAppearanceLightStatusBars = !appDark }
             }
         }
-        if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid, shared = groupShared) { wallpaperOpen = false }
+        if (wallpaperOpen) com.fariin.app.ui.settings.ChatWallpaperPicker(ui.cid, shared = groupShared, channel = ui.channel != null) { wallpaperOpen = false }
     }
 }
 

@@ -219,14 +219,14 @@ object ChatWallpaperLink {
  * Wallpaper set the group's wallpaper for every member (GroupWallpaper). The chat colour stays mine.
  */
 @Composable
-fun ChatWallpaperPicker(cid: String, shared: Boolean = false, onClose: () -> Unit) {
+fun ChatWallpaperPicker(cid: String, shared: Boolean = false, channel: Boolean = false, onClose: () -> Unit) {
     var colors by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler { if (colors) colors = false else onClose() }
     // Drawn over the chat: it takes every touch so none reaches the list under it.
     Box(Modifier.fillMaxSize().background(Fariin.colors.bgSecondary)
         .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }) {
         if (colors) WallpaperColorPage({ colors = false }, cid, done = onClose, shared = shared)
-        else ChatWallpaperPage({ colors = true }, onClose, cid, shared)
+        else ChatWallpaperPage({ colors = true }, onClose, cid, shared, channel)
     }
 }
 
@@ -282,7 +282,7 @@ private fun WallTile(w: ChatWallpaper, current: ChatWallpaper, modifier: Modifie
 }
 
 @Composable
-private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: String? = null, shared: Boolean = false) {
+private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: String? = null, shared: Boolean = false, channel: Boolean = false) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
@@ -340,9 +340,11 @@ private fun ChatWallpaperPage(push: (String) -> Unit, pop: () -> Unit, cid: Stri
             }
             GridCard(3, 10, 14, tiles)
             if (cid != null) {
-                // A group's or channel's shared sheet (owner 2026-11-07): no Bubble Styles, and Bubble Color
-                // shown but greyed and out of use; a 1:1 chat keeps both.
-                if (shared) Box(Modifier.disabledLook("Bubble color, not used here")) { ChatBubbleColorRow(cid) }
+                // A shared sheet has no Bubble Styles (owner 2026-11-07). Bubble Color (owner 2026-11-09,
+                // as iOS): in a group it works, each person's own colour kept on this phone and never
+                // sent to the group; a channel has no row at all. A 1:1 chat keeps both.
+                if (channel) Unit
+                else if (shared) ChatBubbleColorRow(cid)
                 else {
                     ChatBubbleColorRow(cid)
                     if (com.fariin.app.data.BubbleStyles.SHOWN) BubbleStylesStrip(cid)
