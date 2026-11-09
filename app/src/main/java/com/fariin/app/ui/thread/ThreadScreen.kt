@@ -329,6 +329,15 @@ private fun ThreadContent(
     var reactorsFor by remember { mutableStateOf<String?>(null) }   // "who reacted": the row's id
     var replyTo by remember { mutableStateOf<Message?>(null) }
     var editing by remember { mutableStateOf<Message?>(null) }
+    // iOS dropDeletedReplyTarget: the message being replied to was deleted for everyone while the
+    // reply bar was up; sending would copy its words into the quote, so the quote goes and says so.
+    LaunchedEffect(replyTo?.id, ui.messages) {
+        val r = replyTo ?: return@LaunchedEffect
+        if (ui.messages.firstOrNull { it.id == r.id }?.deleted == true) {
+            replyTo = null
+            actions.onNotice("That message is no longer available")
+        }
+    }
     var historyFor by remember { mutableStateOf<Message?>(null) }
     // Select mode (iOS uiMode .selection): the ticked rows by rowId; empty = not selecting.
     val selected = remember { androidx.compose.runtime.mutableStateListOf<String>() }

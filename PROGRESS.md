@@ -1370,3 +1370,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   placeholders both sides) tested on the emulators. Fixed as iOS: the send button is a tick while
   editing; a reply's quote reads "This message was deleted" once its original is deleted (and
   "Photo" for a view-once original) instead of the stale copied words.
+- 2026-11-08 ~8:11 PM: reply bar drops itself when its message is deleted for everyone meanwhile,
+  with "That message is no longer available" (iOS dropDeletedReplyTarget). Tested on the emulators.
