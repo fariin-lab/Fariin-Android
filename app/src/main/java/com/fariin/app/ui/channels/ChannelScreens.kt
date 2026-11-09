@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -230,26 +231,12 @@ private fun Intro(onBack: () -> Unit, onNext: () -> Unit) {
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
-            // A made-up channel post, as the iOS intro shows one (ChannelIntroPreview).
-            Column(Modifier.width(260.dp).clip(RoundedCornerShape(20.dp)).background(c.bgSecondary).padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(c.accent.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_channel_megaphone), null, tint = c.accent, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("Your channel", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-                        Text("12.4K followers", fontSize = 11.sp, color = c.secondary)
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                Text("Golden hour on the coast tonight", fontSize = 15.sp, color = c.label)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_views), null, tint = c.secondary, modifier = Modifier.size(10.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text("9.1K", fontSize = 11.sp, color = c.secondary)
-                }
-            }
+            // The channel drawing (owner 2026-11-09: a phone planted in a pot, posts growing out of it,
+            // being watered). Straight on the page in both modes: its own white sticker edge outlines it
+            // on dark; no card, tint or shadow. Fitted, never cropped, about 300 dp tall.
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.channel_intro), contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).weight(1f, fill = false))
             Spacer(Modifier.height(22.dp))
             Text("Start a channel", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = c.label)
             Spacer(Modifier.height(10.dp))
