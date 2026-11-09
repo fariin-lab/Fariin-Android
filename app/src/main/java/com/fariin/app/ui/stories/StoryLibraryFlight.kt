@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -71,7 +72,9 @@ object StoryLibraryTiles {
 }
 
 /** A picked library item on its way into the editor. */
-class LibraryFlight(val uri: Uri, val media: StoryMedia.Prepared)
+class LibraryFlight(val uri: Uri, val media: StoryMedia.Prepared,
+                    /** Closing the editor: from the card back into its tile (iOS, owner's video 2026-11-09). */
+                    val back: Boolean = false)
 
 /**
  * THE PICKED PHOTO FLIES OUT OF ITS TILE INTO THE EDITOR (iOS AddStorySheet.openLibraryImage /
@@ -115,6 +118,23 @@ internal fun StoryLibraryFlightLayer(flight: LibraryFlight, onLanded: () -> Unit
         }
         if (photo == null) { landed(); done(); return@LaunchedEffect }
         snapshotFlow { box }.first { it.width > 0 }
+        if (flight.back) {
+            // BACK INTO THE TILE: the copy covers the editor's card where it was, the editor goes
+            // under it ([onLanded]), then the copy shrinks into its tile as the black fades to the grid.
+            val loc = IntArray(2)
+            view.getLocationOnScreen(loc)
+            from = (StoryLibraryTiles.rects[key] ?: start).translate(-loc[0].toFloat(), -loc[1].toFloat())
+            t.snapTo(1f); black.snapTo(1f)
+            StoryLibraryTiles.hiddenKey = key
+            withFrameNanos { }
+            landed()
+            withFrameNanos { }
+            launch { black.animateTo(0f, tween(260, easing = LinearEasing)) }
+            t.animateTo(0f, tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            if (StoryLibraryTiles.hiddenKey == key) StoryLibraryTiles.hiddenKey = null
+            done()
+            return@LaunchedEffect
+        }
         // Read now, not at the tap: the grid may have moved while the picture was made ready.
         val now = StoryLibraryTiles.rects[key] ?: start
         val loc = IntArray(2)

@@ -63,6 +63,7 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
 - 2026-11-09 00:12 59f9be6a: story camera slides up/down as one sheet (no window fade, no black strip), shutter 74/62. Lesson: the glass agent and I both drove emulator-5554; give agents their own emulator.
 - 2026-11-09 00:17 long-press message menu: press and slide without lifting, a grey pill follows the finger row to row with a tick (SEGMENT_FREQUENT_TICK / CLOCK_TICK), lift picks, lift outside picks nothing; a card that scrolls keeps plain taps. Tested on emulator-5556 (slide to Select, lift outside, plain tap Reply once).
 - 2026-11-09 00:22 photo library: header (X, Photos/Collections) floats frosted over the grid and slides away with the photos as they scroll, back on scroll up (moves only with real scroll). Composer: reply / edit / quote banner now inside the message box with a hairline (iOS), grey round X. Both tested on emulator-5556.
+- 2026-11-09 00:30 story editor from the library: closing (X) flies the picture back into its tile while the black fades to the grid (iOS, owner video). Checked at 10x animator scale on emulator-5556. Note: the emulators are PerfClass LOW, so animations and glass default OFF there; turned on via the app prefs (power.animations / power.blur) on emulator-5556 only.
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes

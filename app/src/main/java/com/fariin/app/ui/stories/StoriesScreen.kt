@@ -597,14 +597,24 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     )
     if (library) StoryLibrarySheet(busy = libraryBusy, onPick = pickFromLibrary, onClose = { library = false })
     libraryFlight?.let { f ->
-        StoryLibraryFlightLayer(f, onLanded = { arriving = false }, onDone = { libraryFlight = null; arriving = false })
+        StoryLibraryFlightLayer(f,
+            // Going back, the editor goes once the copy covers it.
+            onLanded = { if (f.back) { post.clear(); composingText = false } else arriving = false },
+            onDone = { libraryFlight = null; arriving = false })
     }
     if (post.isNotEmpty()) {
         // One editor for the whole post; a new post is a fresh one.
         androidx.compose.runtime.key(postId) {
             StoryComposerDialog(me, post, conversations,
                 // Closing the editor drops the whole post (iOS: one editor, one post).
-                onClose = { post.clear(); composingText = false },
+                // From the library with its tile on screen: the picture shrinks back into the tile (iOS).
+                onClose = {
+                    val first = post.firstOrNull()
+                    val u = first?.uri
+                    if (library && libraryFlight == null && u != null && first != null && StoryLibraryTiles.has(u) &&
+                        com.fariin.app.ui.components.Motion.on) libraryFlight = LibraryFlight(u, first.media, back = true)
+                    else { post.clear(); composingText = false }
+                },
                 onPosted = { post.clear(); composingText = false; camera = false; library = false },
                 textStory = composingText,
                 // Every item posts at once, so the one on the card flies home.
