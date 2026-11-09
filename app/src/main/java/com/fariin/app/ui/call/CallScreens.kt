@@ -1146,15 +1146,21 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
         if (!pip && g.hands.isNotEmpty()) RaisedHandsPill(g, meId, onTap = { people = true }, onLower = { onHand(false) },
             modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp))
         // iOS GroupCallSocialViews: reactions rise at the lower left with the sender's name, 4 s each.
-        Column(Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 16.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            g.reactions.forEach { r ->
+        // iOS GroupCallReactionsOverlay: the newest five rows, 12 apart; each the emoji at 28 and the
+        // name ("You" for mine) in a dark capsule, sliding up and fading in as it arrives.
+        Column(Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 16.dp, bottom = 120.dp).widthIn(max = 217.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            g.reactions.takeLast(5).forEach { r ->
                 androidx.compose.runtime.key(r.id) {
-                    Row(Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 10.dp, vertical = 6.dp),
+                    val enter = remember { androidx.compose.animation.core.Animatable(0f) }
+                    LaunchedEffect(Unit) { enter.animateTo(1f, tween(200)) }
+                    Row(Modifier.graphicsLayer { alpha = enter.value; translationY = (1f - enter.value) * 36.dp.toPx() },
                         verticalAlignment = Alignment.CenterVertically) {
-                        Text(r.emoji, fontSize = 22.sp)
-                        Spacer(Modifier.width(6.dp))
-                        Text(r.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(r.emoji, fontSize = 28.sp, maxLines = 1)
+                        Spacer(Modifier.width(18.dp))
+                        Text(if (r.uid.isNotEmpty() && r.uid == meId) "You" else r.name, color = Color.White, fontSize = 15.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clip(CircleShape).background(Color(0xFF1C1C1E).copy(alpha = 0.75f)).padding(horizontal = 16.dp, vertical = 8.dp))
                     }
                 }
             }
