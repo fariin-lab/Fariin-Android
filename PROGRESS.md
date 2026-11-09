@@ -1439,3 +1439,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Forward / Copy bar) and bulk "Delete 2 messages?" for everyone: placeholders on both sides.
 - 2026-11-08 ~9:50 PM: group Message Info ("Read by 1", Bobby; same rows as iOS MessageInfoView) and
   Bubble Style from the message menu (preview, colour, Save, this chat only) checked.
+- 2026-11-08 ~9:53 PM: mute from group info (1 hour ... Always), grey badge + bell-slash in the list.
+  Fixed: the voice-note bar over the chat list stayed forever after a note finished (the player kept
+  it "open"); now a finished note closes, as iOS barVisible ("started, not yet finished or closed").
+  Tested: bar while playing away from the chat, gone when it ends.

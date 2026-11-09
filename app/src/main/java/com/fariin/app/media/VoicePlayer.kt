@@ -107,10 +107,14 @@ object VoicePlayer {
             override fun onIsPlayingChanged(isPlaying: Boolean) { tick() }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
-                    // Finished: back to the start, as iOS draws a played note.
-                    _state.value = _state.value.copy(playing = false, positionMs = 0,
+                    // Finished: the note is closed, as iOS (VoicePlayer.barVisible is "started, not
+                    // yet finished or closed"), so the bar away from the chat goes; the bubble reads
+                    // its length again. Before, the finished note stayed open and its bar never left.
+                    _state.value = _state.value.copy(id = null, cid = null, playing = false, positionMs = 0,
                         paused = _state.value.paused - id)
-                    p.pause(); p.seekTo(0)
+                    ticker?.cancel()
+                    // Released just after this callback returns, not from inside it.
+                    if (player === p) { player = null; main.launch { p.release() } }
                 } else tick()
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
