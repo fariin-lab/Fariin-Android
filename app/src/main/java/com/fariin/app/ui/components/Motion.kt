@@ -51,7 +51,8 @@ object Motion {
     /** How far the page underneath drifts, as a share of the width (iOS: about 0.3). */
     const val UNDER_SHIFT = 0.3f
     /** An iOS-like ease out: quick start, long soft landing (cubic-bezier 0.2, 0.9, 0.3, 1). */
-    val PageEase = CubicBezierEasing(0.2f, 0.9f, 0.3f, 1f)
+    // Starts at twice the average speed, not four and a half (0.2, 0.9 made the first frame jump 20 %).
+    val PageEase = CubicBezierEasing(0.3f, 0.6f, 0.2f, 1f)
     /** The back curve: starts at the finger's pace, lands softly. */
     val BackEase = CubicBezierEasing(0.25f, 0.6f, 0.3f, 1f)
 
@@ -64,10 +65,13 @@ object Motion {
     fun pageBackUnder(): EnterTransition = slideInHorizontally(tween(PAGE_BACK_MS, easing = BackEase)) { -(it * UNDER_SHIFT).toInt() }
 
     /** The nav host's part: nothing visible (PageMotion moves the pages), only long enough that
-     *  both pages stay composed while they move. A real change (0.99) so it is never skipped. */
+     *  both pages stay composed while they move. A real change (1 px) so it is never skipped. */
     const val HOLD_MS = 1_200
-    fun holdIn(): EnterTransition = fadeIn(tween(HOLD_MS), initialAlpha = 0.99f)
-    fun holdOut(): ExitTransition = fadeOut(tween(HOLD_MS), targetAlpha = 0.99f)
+    // A one-pixel slide, never a fade: the 0.99 alpha drew every page see-through for the whole
+    // hold, the chat list showing faintly through a channel with its edge as a line down the middle
+    // (owner's Pixel 2026-11-09, dark mode).
+    fun holdIn(): EnterTransition = slideInHorizontally(tween(HOLD_MS)) { 1 }
+    fun holdOut(): ExitTransition = slideOutHorizontally(tween(HOLD_MS)) { 1 }
 
     // The nav host only holds both pages; PageMotion moves them (see there).
     fun enter(): AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
@@ -154,7 +158,10 @@ object PageMotion {
             var v = 0f
             while (v < ms && mine == run) {
                 val t = androidx.compose.runtime.withFrameNanos { it }
-                v += ((t - last) / 1_000_000f).coerceAtMost(MAX_STEP_MS)
+                // A slow frame (the new page building) moves it only a little, so the page never
+                // peeks in and then lurches half way in one step (owner's Pixel 2026-11-09, groups).
+                val gap = (t - last) / 1_000_000f
+                v += if (gap > SLOW_FRAME_MS) STALL_STEP_MS else gap.coerceAtMost(MAX_STEP_MS)
                 last = t
                 e = ease.transform((v / ms).coerceAtMost(1f))
             }
@@ -188,6 +195,9 @@ object PageMotion {
 
 /** The most [PageMotion]'s own time moves in one frame: a 60 Hz frame. */
 private const val MAX_STEP_MS = 17f
+/** A frame slower than this is a stall: it moves the slide by [STALL_STEP_MS] only. */
+private const val SLOW_FRAME_MS = 25f
+private const val STALL_STEP_MS = 6f
 
 /** A nav host page placed by [PageMotion]. */
 @Composable
