@@ -1462,3 +1462,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~10:13 PM: message menus compared with iOS's CMAction list: group member menu (Reply,
   Forward, Copy, Select, Report) and sticker "Save to Favorites" match. Fixed the photo row's word:
   "Save" -> "Save Image" (iOS), "Save Video" for a video (the viewer's word), album stays "Save".
+- 2026-11-08 ~10:16 PM: link preview between the emulators: card while typing (X to drop), card in the
+  sent bubble and on the other side. The picture is missing only locally (the rules take https image
+  addresses; the local storage server is http), as the code notes.
