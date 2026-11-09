@@ -1333,3 +1333,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~6 PM: group call gaps closed: newest presenter wins (bb4ec244), tile connecting /
   "Can't show video" (e301fc1e), two-person header name/Muted/clock (eb81b47d), tile fade-in
   (676e8ac0), reactions overlay (this). All built; need a real call to see.
+- 2026-11-08 ~7 PM: LIVE link-call test on the Pixel (own empty link, nobody rung): lobby, bar
+  order, iOS More menu (80aaf291), raise/lower hand + pill + Raised hands, reactions, Approve New
+  People, share card + Stop Sharing when alone, flip, speaker, camera off, mute, minimize bar, End.
+  Also: approval switch (22064e9c), ringing faces (30bc3f07), Remove and Block (36797830).
+  Needs a second phone: remote tiles, duo view, watching a share, rings, Not here yet, duo header.
