@@ -1372,3 +1372,9 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   "Photo" for a view-once original) instead of the stale copied words.
 - 2026-11-08 ~8:11 PM: reply bar drops itself when its message is deleted for everyone meanwhile,
   with "That message is no longer available" (iOS dropDeletedReplyTarget). Tested on the emulators.
+- 2026-11-08 ~8:28 PM: emulators: group create, group messages (name/avatar runs, unread line),
+  @mention pick + bold, pin (bar, "You pinned", list "Pinned a message"), disappearing timer
+  (Turn On confirm, "You set..." line, timer mark; hiding checked by stamping expiresAt locally
+  since onNewMessage is not emulated). Fixed: single-choice rows were Material radio buttons; now
+  the iOS tick (end of row; a start gutter + Custom Time value and arrow on Disappearing Messages).
+  Affects privacy pickers, app lock delay, text size, keep-media, disappearing.

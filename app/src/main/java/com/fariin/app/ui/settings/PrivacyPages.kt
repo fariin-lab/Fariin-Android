@@ -2,6 +2,8 @@ package com.fariin.app.ui.settings
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import com.fariin.app.R
 import com.fariin.app.data.NewBadgeSpots
 import com.fariin.app.ui.components.listPress
@@ -92,19 +94,29 @@ internal fun SwitchRow(title: String, checked: Boolean, enabled: Boolean = true,
     if (!last && SHOW_ROW_LINES) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator)
 }
 
-/** A single-choice row, Android style: a radio button at the start (iOS drew a check at the end). */
+/**
+ * A single-choice row as iOS draws it: the chosen one carries a tick, no radio circles. The tick sits
+ * at the row's end (the iOS picker list), or in a fixed gutter at the start when [leadingCheck]
+ * (iOS DisappearingMessagesView's checkSlot, so every label keeps the same indent). [detail] is a
+ * grey value at the end and [chevron] the arrow of a row that opens more (iOS "Custom Time").
+ */
 @Suppress("UNUSED_PARAMETER")
 @Composable
-internal fun CheckRow(title: String, selected: Boolean, last: Boolean = false, onClick: () -> Unit) {
+internal fun CheckRow(title: String, selected: Boolean, last: Boolean = false, leadingCheck: Boolean = false,
+                      detail: String? = null, chevron: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     Row(
-        Modifier.fillMaxWidth().listPress(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().listPress(onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp)
+            .semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        androidx.compose.material3.RadioButton(selected = selected, onClick = onClick,
-            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.accent))
-        Spacer(Modifier.width(16.dp))
+        @Composable fun tick() = Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark), null,
+            tint = c.accent, modifier = Modifier.size(20.dp))
+        if (leadingCheck) Box(Modifier.width(34.dp)) { if (selected) tick() }
         Text(title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge, color = c.label, modifier = Modifier.weight(1f))
+        detail?.let { Text(it, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge, color = c.secondary, modifier = Modifier.padding(end = 6.dp)) }
+        if (chevron) Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_chevron_right), null, tint = c.tertiary, modifier = Modifier.size(14.dp))
+        else if (!leadingCheck && selected) tick()
     }
 }
 
