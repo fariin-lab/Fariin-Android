@@ -1519,3 +1519,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   duplicated here). Checked on the emulator.
 - 2026-11-08 ~11:18 PM: Settings > Stories: Android does list custom stories (the owner's iPhone list
   "f" is on @kream, the Pixel is @roodo); the audience rows now carry the › as iOS. Checked.
+- 2026-11-08 ~11:22 PM: OWNER (Pixel): Android sent his fariin.com/u/roodo link with no card. Two causes:
+  (1) his Pixel's Settings > Chats > Link Previews is OFF (iOS obeys the same switch); (2) Android
+  never made cards for our own profile links at all (own links returned null unless a group invite).
+  Now as iOS profileDraft: fariin.com/u/<handle> gets a card from the account (name, @handle, photo;
+  "Unavailable" for a released name), never by scraping the site. Checked: composer card and sent card.

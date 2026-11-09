@@ -309,7 +309,7 @@ object LinkPreviews {
     /** The card for [url], shared with any fetch already running. A miss is kept one minute. */
     suspend fun draft(url: String): Draft? {
         if (isCallLink(url)) return null
-        if (isOwnLink(url) && GroupLinkCards.target(url) == null) return null
+        if (isOwnLink(url) && GroupLinkCards.target(url) == null && profileHandle(url) == null) return null
         cache[url]?.let { return it }
         missAt[url]?.let { if (System.currentTimeMillis() - it < 60_000) return null }
         // Lazy, so it is in the map before it can finish and take itself out.
@@ -328,8 +328,39 @@ object LinkPreviews {
     /** [draft], given up on after [millis] (Send tapped while the card was still loading). */
     suspend fun draftWithin(url: String, millis: Long): Draft? = withTimeoutOrNull(millis) { draft(url) }
 
+    /**
+     * iOS LinkPreviewService.profileHandle: the handle in one of OUR profile links,
+     * `https://fariin.com/u/<handle>`, or null for any other address.
+     */
+    fun profileHandle(url: String): String? {
+        val host = hostOf(url)?.removePrefix("www.") ?: return null
+        if (host != "fariin.com") return null
+        val parts = runCatching { URI(url).path }.getOrNull()?.split('/')?.filter { it.isNotEmpty() } ?: return null
+        if (parts.size != 2 || parts[0] != "u") return null
+        return parts[1].trim().ifEmpty { null }
+    }
+
+    /**
+     * iOS profileDraft (owner's Pixel, 2026-11-08: "my link has no preview" from Android): the card for
+     * a profile link is built from the account (name, @handle, photo), never by scraping the site,
+     * which knows nothing about the person. A name gone or released reads "Unavailable".
+     */
+    private suspend fun profileDraft(url: String, handle: String): Draft? {
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val key = Usernames.lookupKey(handle) ?: return Draft(url, "Unavailable", "", null)
+        val nd = runCatching { db.collection("usernames").document(key).get().await().data }.getOrNull() ?: return Draft(url, "Unavailable", "", null)
+        val owner = nd["uid"] as? String
+        if (owner.isNullOrEmpty() || nd["releasedAt"] != null) return Draft(url, "Unavailable", "", null)
+        val d = runCatching { db.collection("users").document(owner).get().await().data }.getOrNull() ?: return null
+        val name = (d["name"] as? String)?.trim().orEmpty()
+        val h = (d["handle"] as? String)?.ifEmpty { null } ?: key
+        val photo = (d["photoUrl"] as? String)?.ifEmpty { null }
+        return Draft(url, name.ifEmpty { h }, "@$h", photo?.let { withContext(Dispatchers.IO) { fetchImage(it, url) } })
+    }
+
     private suspend fun build(url: String): Draft? {
         GroupLinkCards.target(url)?.let { return groupDraft(url, it) }
+        profileHandle(url)?.let { return profileDraft(url, it) }
         youtubeId(url)?.let { id -> youtube(url, id)?.let { return it } }
         // TikTok: its page often answers without tags; its public oEmbed then has the title and cover.
         if (isTikTok(url)) {
