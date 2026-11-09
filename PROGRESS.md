@@ -1349,3 +1349,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   mute (other side shows "Muted"), speaker toggle, minimize (bar + floating window with both faces),
   End from the bar, "Voice call 3:31" bubble both sides. No gaps. Speaker shows lit at start only
   because the emulator has no earpiece (code starts voice calls on the earpiece).
+- 2026-11-08 ~8 PM: iOS list item 16 (link Join speed): the lobby now wakes the pass function, asks
+  for the join pass before the camera prompt and renews it every 10 s of its 20 s life; Join takes
+  that pass (or waits for the one in flight) instead of a fresh server trip. Not on approval links.
+  Item 14 (expired links) needed nothing: lobby says "no longer valid", delete drops a gone link.

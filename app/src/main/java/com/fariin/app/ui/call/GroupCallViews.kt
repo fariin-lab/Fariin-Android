@@ -203,6 +203,8 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
     var note by remember { mutableStateOf<String?>(null) }
     var noteAt by remember { mutableLongStateOf(0L) }
     var myPhoto by remember { mutableStateOf<String?>(null) }
+    var passAt by remember { mutableLongStateOf(0L) }   // when the join pass was last asked for ahead of the tap
+    LaunchedEffect(Unit) { GroupCall.warmJoin() }
     val locked = starting || g.connecting || g.waiting || g.joined
     val showsCamera = cameraOn && !voiceOnly && !cameraDenied
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) cameraReady = true else cameraDenied = true }
@@ -220,6 +222,13 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
         val creator = d?.get("creatorUid") == me
         val expired = (d?.get("expiresAt") as? com.google.firebase.Timestamp)?.toDate()?.before(java.util.Date()) == true
         if (!creator && (d?.get("revoked") == true || expired)) { gone = true; return@LaunchedEffect }
+        // iOS: the join pass ahead of the tap, asked for BEFORE the camera prompt (which can sit on
+        // screen); only where the join needs no approval, and not when the server already said no.
+        if (d != null) {
+            val approval = d["restrictions"] == "adminApproval"
+            val serverSaysNo = peek?.let { it.gone || (it.approval && !it.iAmCreator) } ?: false
+            if ((creator || !approval) && !serverSaysNo) { GroupCall.prefetchLinkPass(k.roomId); passAt = System.currentTimeMillis() }
+        }
         val enc = d?.get("encName") as? String
         if (!enc.isNullOrEmpty()) k.decryptName(enc)?.takeIf { it.isNotEmpty() }?.let { title = it }
         if (d?.get("video") == false) voiceOnly = true
@@ -231,6 +240,12 @@ fun CallLobbyScreen(keyText: String, videoFromPath: Boolean, g: GroupCallUi, onL
             CallLinks.peek(k)?.let { p ->
                 if (!starting) {
                     peek = p
+                    // iOS apply/renewPass: a gone or now-approval link drops the pass; a healthy one
+                    // renews it past 10 s, the old one staying usable until the new one lands.
+                    if (p.gone || (p.approval && !p.iAmCreator)) { GroupCall.dropLinkPass(); passAt = 0L }
+                    else if (!p.full && !locked && System.currentTimeMillis() - passAt >= 10_000) {
+                        GroupCall.prefetchLinkPass(k.roomId, renew = passAt != 0L); passAt = System.currentTimeMillis()
+                    }
                     if (p.gone) gone = true
                     if (p.title.isNotEmpty() && p.title != CallLinkDefaults.NAME) title = p.title
                     if (!p.video) voiceOnly = true

@@ -32,6 +32,7 @@ import io.livekit.android.room.track.screencapture.ScreenCaptureParams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -445,8 +446,54 @@ object GroupCall {
         scope.launch { askLinkPass(app, tag, roomId, video) }
     }
 
+    /** A link pass fetched while the lobby is up (iOS prefetchedLinkToken): one account, 20 s, taken once. */
+    private class HeldPass(val roomId: String, val uid: String, val data: Any?, val at: Long)
+    private class PassAsk(val roomId: String, val uid: String, val job: kotlinx.coroutines.Deferred<Any?>)
+    private var heldPass: HeldPass? = null
+    private var passAsk: PassAsk? = null
+    private const val PASS_LIFE_MS = 20_000L
+
+    /**
+     * iOS prefetchLinkToken: the lobby asks for the join pass before Join is tapped, so the tap goes
+     * straight to the room. Only where the join needs no approval (the server reads a pass request on
+     * an approval link as a knock). `renew`: the pass in hand stays usable until the new one lands.
+     */
+    fun prefetchLinkPass(roomId: String, renew: Boolean = false) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        heldPass?.let { if (!renew && it.roomId == roomId && it.uid == uid && System.currentTimeMillis() - it.at < PASS_LIFE_MS) return }
+        passAsk?.let { if (it.roomId == roomId && it.uid == uid) return }
+        val job = scope.async {
+            val d = try { functions.getHttpsCallable("groupCallToken").call(CallLinkWire.tokenRequest(roomId)).await().data } catch (_: Exception) { null }
+            (d as? Map<*, *>)?.takeIf { it["token"] is String && it["pending"] != true }
+        }
+        val ask = PassAsk(roomId, uid, job)
+        passAsk = ask
+        scope.launch {
+            val d = job.await()
+            // Only while still registered: taken by a join, dropped by the lobby or replaced, it is thrown away.
+            if (passAsk !== ask) return@launch
+            passAsk = null
+            if (d != null) heldPass = HeldPass(roomId, uid, d, System.currentTimeMillis())
+        }
+    }
+
+    /** iOS dropPrefetchedLinkToken: the lobby saw the link go or start asking for approval. */
+    fun dropLinkPass() { heldPass = null; passAsk = null }
+
+    /** iOS warmJoin: wakes the pass function while the lobby is up, so Join skips its cold start. */
+    fun warmJoin() { functions.getHttpsCallable("groupCallToken").call(mapOf("warm" to true)) }
+
+    /** The pass the lobby already holds or is fetching for this link, taken once; null = ask the server. */
+    private suspend fun takeLinkPass(roomId: String): Any? {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return null
+        val held = heldPass?.takeIf { it.roomId == roomId && it.uid == uid && System.currentTimeMillis() - it.at < PASS_LIFE_MS }
+        val ask = passAsk?.takeIf { it.roomId == roomId && it.uid == uid }
+        heldPass = null; passAsk = null   // never kept past a join, used or not
+        return held?.data ?: ask?.job?.await()
+    }
+
     private suspend fun askLinkPass(app: Context, tag: String, roomId: String, video: Boolean) {
-        val reply = try {
+        val reply = takeLinkPass(roomId) ?: try {
             functions.getHttpsCallable("groupCallToken").call(CallLinkWire.tokenRequest(roomId)).await().data
         } catch (e: Exception) {
             if (_ui.value.cid == tag) fail(linkNotice(e))
