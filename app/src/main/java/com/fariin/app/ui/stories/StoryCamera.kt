@@ -174,22 +174,37 @@ fun StoryCameraDialog(
         }
     }
     LaunchedEffect(Unit) { y.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f)) }
-    Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()   // no grey band over the status bar
-        val view = androidx.compose.ui.platform.LocalView.current
-        // Only our slide moves it: the window's own fade made the buttons linger over the list.
-        androidx.compose.runtime.SideEffect {
-            (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { w ->
-                w.setWindowAnimations(0)
-                // Clear window: during the slide the list shows above the camera, not a black strip.
-                w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+    // DRAWN IN THE APP'S OWN WINDOW, on top of everything (TopOverlay in MainShell). A Dialog played
+    // the system's dim and rise before code could stop them (it rose twice); a popup could not
+    // reach below the tab bar. Owner's Pixel recordings 2026-11-09. Back closes it.
+    val activityView = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val win = (activityView.context as? android.app.Activity)?.window
+        val ctl = win?.let { androidx.core.view.WindowCompat.getInsetsController(it, activityView) }
+        val wasLight = ctl?.isAppearanceLightStatusBars
+        ctl?.isAppearanceLightStatusBars = false
+        onDispose { if (wasLight != null) ctl.isAppearanceLightStatusBars = wasLight }
+    }
+    val latestCaptured by androidx.compose.runtime.rememberUpdatedState(onCaptured)
+    val latestLibrary by androidx.compose.runtime.rememberUpdatedState(onLibrary)
+    val latestText by androidx.compose.runtime.rememberUpdatedState(onTextStory)
+    val latestActive by androidx.compose.runtime.rememberUpdatedState(active)
+    val latestError by androidx.compose.runtime.rememberUpdatedState(error)
+    val page: @Composable () -> Unit = remember {
+        {
+            androidx.activity.compose.BackHandler { close() }
+            Box(Modifier.fillMaxSize().graphicsLayer { translationY = y.value }.background(Color.Black)
+                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {   // nothing reaches the page below
+                StoryCamera(latestActive, latestError, { latestCaptured(it) }, { latestLibrary() }, { close() }, { latestText(it) })
             }
         }
-        Box(Modifier.fillMaxSize().graphicsLayer { translationY = y.value }) {
-            StoryCamera(active, error, onCaptured, onLibrary, { close() }, onTextStory)
-        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.fariin.app.ui.components.TopOverlay.content = page
+        onDispose { if (com.fariin.app.ui.components.TopOverlay.content === page) com.fariin.app.ui.components.TopOverlay.content = null }
     }
 }
+
 
 private fun granted(context: Context, perm: String) =
     ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED

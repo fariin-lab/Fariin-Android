@@ -295,6 +295,10 @@ fun MainShell(
                 modifier = Modifier.navigationBarsPadding().padding(horizontal = BarSide, vertical = BarMargin),
             )
         }
+        // Full-screen pages drawn over everything, the tab bar included, in the activity's own window
+        // (no Dialog: its system dim and rise played before any code could stop them; owner's Pixel
+        // recording 2026-11-09). The story camera uses it.
+        com.fariin.app.ui.components.TopOverlay.content?.invoke()
     }
 }
 

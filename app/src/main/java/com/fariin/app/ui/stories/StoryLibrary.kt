@@ -264,7 +264,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
     }
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         Box(Modifier.weight(1f).fillMaxWidth().then(Modifier.nestedScroll(quickReturn))) {
-        Box(Modifier.fillMaxSize().hazeSource(haze)) {
+        Box(Modifier.fillMaxSize()) {
             when {
                 none -> Box(Modifier.padding(top = 56.dp)) { AccessOff(blocked, askAgain, fileMode) }
                 album != null -> LibraryGrid(inAlbum, null, motion, if (multi != null) picked else null, tap, hold)
@@ -279,7 +279,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
         }
         // The bar: X (or back inside a folder) left, the switch in the middle. It drags the sheet.
         Box(Modifier.fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, headerY.toInt()) }
-            .frostedTopBar(haze, Color.Black, glass)) {
+            .background(Color.Black)) {   // plain black that slides away with the photos, no blur (owner 2026-11-09)
         Box(Modifier.fillMaxWidth().height(56.dp).sheetDrag(motion).padding(horizontal = 8.dp)) {
             val a = album
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape)
