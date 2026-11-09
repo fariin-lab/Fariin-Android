@@ -484,7 +484,7 @@ private fun AdminRightsPage(cid: String, me: String, uid: String, onBack: () -> 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, Any?>, onClose: () -> Unit,
-                        onProfile: (String) -> Unit, open: (GroupPage) -> Unit) {
+                        onProfile: (String) -> Unit, open: (GroupPage) -> Unit, onMessage: ((String) -> Unit)? = null) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val team = Team.from(conv)
@@ -536,6 +536,21 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                 }
             }
             Spacer(Modifier.height(12.dp))
+            // iOS member card tiles: Message, Voice, Video under the name, for anyone but me.
+            if (uid != me) {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    val share = Modifier.weight(1f)
+                    if (onMessage != null) ActionTile("Message", ImageVector.vectorResource(R.drawable.ic_chat), share) { onClose(); onMessage(uid) }
+                    ActionTile("Voice", ImageVector.vectorResource(R.drawable.ic_call_voice), share) {
+                        onClose(); com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, face, video = false)
+                    }
+                    ActionTile("Video", ImageVector.vectorResource(R.drawable.ic_call_video), share) {
+                        onClose(); com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, face, video = true)
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
             val manage = team.canManage(me, uid)
             SettingsSection {
                 val rows = buildList<Triple<String, Painter, () -> Unit>> {
@@ -546,8 +561,9 @@ internal fun MemberCard(cid: String, me: String, uid: String, conv: Map<String, 
                         add(Triple(com.fariin.app.data.OwnerTransfer.ROW, painterResource(R.drawable.ic_crown)) { transferring = true })
                     // iOS member sheet's Tag (roles): the owner, or an admin who may change info.
                     if (com.fariin.app.data.GroupRole.canSet(me, uid, conv))
-                        add(Triple(if (com.fariin.app.data.GroupRole.all(conv)[uid] == null) "Set Tag" else "Edit Tag",
-                            rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker))) { tagging = true })
+                        // iOS words: Add / Edit Tag, or Add / Edit My Tag on my own card.
+                        add(Triple((if (com.fariin.app.data.GroupRole.all(conv)[uid] == null) "Add" else "Edit") + (if (uid == me) " My Tag" else " Tag"),
+                            rememberVectorPainter(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_tag))) { tagging = true })
                     if (uid != me) add(Triple("Open Profile", rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_person_fill))) { onClose(); onProfile(uid) })
                     // iOS member card: only the lift for a restricted member (owner 2026-10-30); the owner's
                     // 2026-10-19 "no Mute row" still holds, so a restriction starts from the admin delete sheet.

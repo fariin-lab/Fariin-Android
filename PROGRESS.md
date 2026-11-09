@@ -1378,3 +1378,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   since onNewMessage is not emulated). Fixed: single-choice rows were Material radio buttons; now
   the iOS tick (end of row; a start gutter + Custom Time value and arrow on Disappearing Messages).
   Affects privacy pickers, app lock delay, text size, keep-media, disappearing.
+- 2026-11-08 ~8:36 PM: group member card matched to iOS: Message / Voice / Video circles under the
+  name (anyone but me), tag row says Add / Edit Tag (Add / Edit My Tag on my own card) with a tag
+  icon (new ic_sf_tag, our own drawing) instead of the sticker one. Message opens the 1:1 (tested).

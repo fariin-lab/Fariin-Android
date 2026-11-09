@@ -626,7 +626,8 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
  */
 @Composable
 fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats: List<Conversation>, onBack: () -> Unit,
-                    onLeft: () -> Unit, onOpenPerson: (String) -> Unit, start: String? = null) {
+                    onLeft: () -> Unit, onOpenPerson: (String) -> Unit, start: String? = null,
+                    onOpenChat: (String) -> Unit = {}) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     val me = api.me
@@ -847,7 +848,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val shared = rememberSharedMedia(cid, me)
     var allMedia by remember { mutableStateOf(false) }
     if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
-    card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) }) }
+    card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) },
+        onMessage = { other -> onOpenChat(chats.firstOrNull { !it.isGroup && it.users.contains(other) }?.id
+            ?: com.fariin.app.crypto.Wire.directCid(me, other)) }) }
     if (editing && canEdit) {
         // iOS: Edit Group is a sheet over the group page (.sheet), pulled down to close.
         val editMotion = com.fariin.app.ui.components.rememberSheetMotion { editing = false; editAtDescription = false }

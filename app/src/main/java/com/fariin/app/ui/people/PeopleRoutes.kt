@@ -37,7 +37,7 @@ fun NavGraphBuilder.peopleRoutes(
         val cid = e.arguments?.getString("cid") ?: return@composable
         GroupInfoScreen(api, groupDoc(cid), cid, chats(), onBack = { nav.popBackStack() },
             onLeft = { nav.popBackStack("main", false) }, onOpenPerson = { nav.navigate("contact/$it") },
-            start = e.arguments?.getString("open"))
+            start = e.arguments?.getString("open"), onOpenChat = openChat)
     }
     composable("newgroup") { NewGroupScreen(api, chats(), onBack = { nav.popBackStack() }, onCreated = openChat) }
     composable("editprofile") { EditProfileScreen(api, onBack = { nav.popBackStack() }) }
