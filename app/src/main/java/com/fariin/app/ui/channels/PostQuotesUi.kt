@@ -1,6 +1,7 @@
 package com.fariin.app.ui.channels
 
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.WindowInsets
 import com.fariin.app.R
@@ -304,9 +305,8 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
         },
         thumb = thumb,
     )
-    // ⛔ 70% AND ONLY 70% (iOS, owner 2026-11-07, twice: a scroll made it full, then tapping the reply
-    // field made it full). One height, no taller stop: the keyboard does not grow it, the field rides
-    // above the keyboard inside it.
+    // 70% at rest (iOS, owner 2026-11-07: a scroll must not make it full). The keyboard is the one
+    // thing that takes it to the top, and only while it is up (owner 2026-11-09, iOS recording).
     val density = androidx.compose.ui.platform.LocalDensity.current
     // Measured once, at open: a later resize (the keyboard) must not change it.
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
@@ -324,9 +324,22 @@ fun PostQuotesHost(openCid: String, title: String, photoUrl: String?, verified: 
           com.fariin.app.ui.components.SheetKeyboard.covering = true
           onDispose { com.fariin.app.ui.components.SheetKeyboard.covering = false }
       }
+      // owner 2026-11-09 (iOS recording): the keyboard GROWS the sheet to just under the status bar,
+      // and closing the keyboard brings it back to 70%. The bottom sheet already lifts itself by the
+      // keyboard (`lift`); the height follows the keyboard frame by frame, so the top edge glides
+      // from 70% to the top as the keyboard rises, and back as it falls.
       val imeDp = with(density) { WindowInsets.ime.getBottom(this).toDp() }
       val navDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
-      val tall = (sheetH - (imeDp - navDp).coerceAtLeast(0.dp)).coerceAtLeast(200.dp)
+      val statusDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
+      val winDp = with(density) { windowH.toDp() }
+      val lift = (imeDp - navDp).coerceAtLeast(0.dp)
+      var liftMax by remember { mutableStateOf(280.dp) }
+      if (lift > liftMax) liftMax = lift
+      val frac = (lift / liftMax).coerceIn(0f, 1f)
+      val midTop = winDp - sheetH
+      val fullTop = statusDp + 8.dp
+      val top = midTop + (fullTop - midTop) * frac
+      val tall = (winDp - lift - top).coerceAtLeast(200.dp)
       Column(Modifier.fillMaxWidth().height(tall).then(if (imeDp > navDp) Modifier else Modifier.navigationBarsPadding())) {
         RepliesSheetTop(tab, repliesShown, replies, showQuotes = !quotesOff, onPick = {
             tab = it
