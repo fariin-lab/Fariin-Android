@@ -1489,3 +1489,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   from the previous value. Suspects: a second ThreadRoute for the same cid kept in the back stack,
   or typingSince/LaunchedEffect keyed on the map object. Repro on the emulators: write
   typing.<alice> = "text-<now>" via the emulator REST and watch Bobby's header.
+- 2026-11-08 ~10:58 PM: CORRECTION to the 10:52 "open bug": there is no typing/recording expiry bug.
+  Real screenshots at 3 / 9 / 13 s show "typing…" held the full time on the unchanged build; the
+  uiautomator dumps I read had gone stale (they kept returning an old screen). A trial fix was
+  dropped. Lesson for testing here: confirm timing-sensitive UI with screencap, not the dump.
