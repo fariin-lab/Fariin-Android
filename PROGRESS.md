@@ -1425,3 +1425,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   route icon first, as iOS's own route list, with the tick at the end. Checked on the Calls row menu.
 - 2026-11-08 ~9:37 PM: dark mode walk on the emulator (chat list, 1:1 chat, contact page, Settings,
   Calls, Stories, group chat, attach sheet): no contrast or colour gaps found.
+- 2026-11-08 ~9:42 PM: polls on the emulators: create (question, two options), Bobby sees it and
+  votes, results bar + 100% on his side, "1 vote · View results" on Alice's. Fixed: New Poll's title
+  is centred in the bar (iOS inline navigationTitle), it sat on the left by the X. Sticker send and
+  receive also checked (time on its own line under the sticker, as iOS).

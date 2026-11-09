@@ -366,10 +366,13 @@ internal fun PollComposer(onDismiss: () -> Unit, onSend: (String) -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         com.fariin.app.ui.components.AppPageDialogWindow()
         Column(Modifier.fillMaxSize().background(c.bgSecondary).statusBarsPadding().navigationBarsPadding().imePadding()) {
-            Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onDismiss) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.label) }
-                Text("New Poll", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.weight(1f))
-                TextButton(onClick = ::send, enabled = canSend) {
+            // iOS inline bar: X at the start, "New Poll" centred, Send at the end.
+            Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp)) {
+                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterStart)) {
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = c.label)
+                }
+                Text("New Poll", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
+                TextButton(onClick = ::send, enabled = canSend, modifier = Modifier.align(Alignment.CenterEnd)) {
                     Text("Send", fontWeight = FontWeight.SemiBold, color = if (canSend) c.blue else c.secondary)
                 }
             }
