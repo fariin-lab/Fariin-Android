@@ -349,7 +349,7 @@ class MainActivity : ComponentActivity() {
                         clip = true
                     } else Modifier)) {
             Box(Modifier.fillMaxSize().graphicsLayer {
-                alpha = if (shell.shown) shell.alpha else 0f
+                alpha = if (shell.shown || com.fariin.app.ui.components.Motion.cover >= 0f) shell.alpha else 0f
                 translationX = shell.shift * size.width
             }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
                 CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides if (onTop) this@MainActivity else inertBack) {
@@ -367,10 +367,23 @@ class MainActivity : ComponentActivity() {
                 channelRoutes(nav, me, chats = { chats.chats })
                 // A real (see-through) box, never an empty page: with nothing to measure, the page
                 // change back to it could freeze half way (owner 2026-11-03, the stuck back arrow).
-                composable("main") { Box(Modifier.fillMaxSize()); shell.Follow(transition) }
-                composable("thread/{cid}") { entry ->
+                composable("main", exitTransition = {
+                    // A chat slides itself in once drawn (EnterSlide): the list stays composed under it till then.
+                    val m = com.fariin.app.ui.components.Motion
+                    if (!m.on) androidx.compose.animation.ExitTransition.None
+                    else if (targetState.destination.route == "thread/{cid}") m.holdOut() else m.pageUnder()
+                }) { Box(Modifier.fillMaxSize()); shell.Follow(transition) }
+                composable("thread/{cid}", enterTransition = {
+                    val m = com.fariin.app.ui.components.Motion
+                    if (!m.on) androidx.compose.animation.EnterTransition.None
+                    else if (initialState.destination.route == "main") m.holdIn() else m.pageIn()
+                }) { entry ->
                     val cid = entry.arguments?.getString("cid") ?: return@composable
-                    ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
+                    // From the list the chat builds off screen and then slides (EnterSlide); from any
+                    // other page (a profile's "Message") the nav host's slide as every page.
+                    val fromList = androidx.compose.runtime.remember { nav.previousBackStackEntry?.destination?.route == "main" }
+                    if (fromList) com.fariin.app.ui.components.EnterSlide { ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() }) }
+                    else ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
                 }
             }
             }
@@ -520,6 +533,9 @@ private class ShellMotion {
     /** The list drifts left under a page sliding in, and back as it leaves (Motion, the iOS push):
      *  the "main" page's own transition, read here, with the same curves as the page on top. */
     val shift: Float get() {
+        // A chat sliding itself in (EnterSlide) drives the list directly.
+        val c = com.fariin.app.ui.components.Motion.cover
+        if (c >= 0f) return -com.fariin.app.ui.components.Motion.UNDER_SHIFT * c
         val (entering, p) = progress() ?: return 0f
         if (!com.fariin.app.ui.components.Motion.on) return 0f
         val m = com.fariin.app.ui.components.Motion
