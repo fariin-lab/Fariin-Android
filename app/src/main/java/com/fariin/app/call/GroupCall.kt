@@ -243,6 +243,8 @@ data class GroupCallUi(
     val myRole: CallRole = CallRole.PARTICIPANT,
     /** An admin muted me: my mic stays off until an admin allows me to speak. */
     val micLocked: Boolean = false,
+    /** When I got into the room (wall clock): the two-person header's clock (iOS joinedAt). */
+    val joinedAt: Long = 0L,
     /** A voice-only call (the pass's `voiceOnly`): the camera cannot come on (iOS cameraLocked). */
     val cameraLocked: Boolean = false,
     /** A call link's address, for Copy Link / Share Link (null on a group chat's call). */
@@ -518,6 +520,7 @@ object GroupCall {
                     micLocked = pass.micBlocked, cameraLocked = pass.voiceOnly, linkUrl = linkKey?.url(video = !pass.voiceOnly))
                 passRole = CallRole.of(pass.role)
                 joinedAtMs = System.currentTimeMillis()
+                _ui.value = _ui.value.copy(joinedAt = joinedAtMs)
                 startSpeakerTicks(r)
                 // A multi-person call I started: the calling sound goes on until someone comes.
                 if (GroupCallWire.isAdhoc(cid)) { adhocInRoom(cid, r); refresh(); return@run }

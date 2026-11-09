@@ -1050,8 +1050,16 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
         Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = com.fariin.app.call.GroupCallWords.subtitle(g.waiting, g.connecting, g.reconnecting, g.joined, g.calling, g.members.size)
             // In the small window (picture in picture) only the people show, as iOS's floating card.
+            // iOS duoPair header: two people (with or without a share) read like a 1:1 call, their name,
+            // "Muted" while they are, and the clock since I came in instead of "2 in call".
+            val pairOther = if (g.joined && remotes.size == 1) remotes[0] else null
+            var clockNow by remember { mutableStateOf(System.currentTimeMillis()) }
+            if (pairOther != null && g.joinedAt > 0) LaunchedEffect(Unit) { while (true) { clockNow = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+            val pairStatus = if (pairOther != null && g.joinedAt > 0 && !g.reconnecting)
+                com.fariin.app.call.CallMachine.clock(((clockNow - g.joinedAt) / 1000).toInt()) else status
             if (!pip) CallHeader(
-                name = g.title, status = status, muted = false, mutedLabel = "",
+                name = pairOther?.name?.takeIf { it.isNotEmpty() } ?: g.title, status = pairStatus,
+                muted = pairOther != null && !pairOther.micOn, mutedLabel = "Muted",
                 left = onMinimize?.let { m -> { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_collapse), "Minimize call", 44.dp) { chrome.touch(); m() } } },
                 side = 44.dp,
                 right = { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_person2), "Participants", 44.dp) { chrome.touch(); people = true } },
