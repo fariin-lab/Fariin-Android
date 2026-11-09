@@ -357,7 +357,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     if (info.verified) {
                         Spacer(Modifier.width(6.dp))
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
+                        com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(22.dp), "Verified")
                     }
                 }
                 Spacer(Modifier.height(4.dp))

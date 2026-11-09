@@ -563,7 +563,7 @@ private fun NameAndSeal(name: String, verified: Boolean, size: TextUnit, seal: D
             overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (verified) {
             Spacer(Modifier.width(4.dp))
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(seal))
+            com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(seal), "Verified")
         }
     }
 }

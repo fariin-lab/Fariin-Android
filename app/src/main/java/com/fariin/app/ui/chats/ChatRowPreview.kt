@@ -116,9 +116,7 @@ internal fun ChatRowVerifiedMark(conv: Conversation, me: String) {
 
 @Composable
 private fun Seal(tint: Color, label: String) {
-    Box(Modifier.padding(start = 4.dp).size(16.dp).background(Color.White, CircleShape).padding(1.dp)) {
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = label, tint = tint, modifier = Modifier.fillMaxSize())
-    }
+    com.fariin.app.ui.components.VerifiedSeal(tint, Modifier.padding(start = 4.dp).size(16.dp), label)
 }
 
 @Composable

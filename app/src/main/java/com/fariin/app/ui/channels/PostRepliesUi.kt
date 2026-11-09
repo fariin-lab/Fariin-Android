@@ -1116,7 +1116,7 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
                     .clickable(enabled = !r.mine, interactionSource = null, indication = null, onClick = onAuthor))
             if (r.verified) {
                 Spacer(Modifier.width(4.dp))
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(12.dp))
+                com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(12.dp), "Verified")
             }
             // The channel's owner, writing as the channel (owner 2026-11-07).
             if (r.creator) {

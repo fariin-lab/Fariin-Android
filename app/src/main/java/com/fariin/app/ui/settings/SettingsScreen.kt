@@ -321,8 +321,7 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (profile?.verified == true) {
                     Spacer(Modifier.width(6.dp))
-                    androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), "Verified",
-                        tint = c.blue, modifier = Modifier.size(22.dp))
+                    com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(22.dp), "Verified")
                 }
             }
             val h = profile?.handle.orEmpty()

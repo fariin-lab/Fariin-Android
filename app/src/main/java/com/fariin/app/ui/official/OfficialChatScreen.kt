@@ -419,7 +419,7 @@ fun OfficialRow(view: OfficialChannel.View, onOpen: () -> Unit) {
                     Text(OfficialChannel.NAME, style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Medium, color = c.label, maxLines = 1)
                     Spacer(Modifier.width(4.dp))
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Official", tint = c.blue, modifier = Modifier.size(17.dp))
+                    com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(17.dp), "Official")
                     if (muted) {
                         Spacer(Modifier.width(6.dp))
                         Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), contentDescription = "Muted", tint = c.tertiary, modifier = Modifier.size(15.dp))

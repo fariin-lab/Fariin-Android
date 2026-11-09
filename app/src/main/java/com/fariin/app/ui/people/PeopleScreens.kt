@@ -174,7 +174,7 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         if (p?.verified == true) {
                             Spacer(Modifier.width(4.dp))
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                            com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), "Verified")
                         }
                     }
                     // The line's room is kept while the handle loads, so its arrival moves nothing.
@@ -657,9 +657,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
                 if (vKind != null || person?.verified == true) {
                     Spacer(Modifier.width(6.dp))
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), "Verified",
-                        tint = if (vKind != null && com.fariin.app.data.VerifiedPeople.isGold(vKind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue,
-                        modifier = Modifier.size(20.dp))
+                    com.fariin.app.ui.components.VerifiedSeal(if (vKind != null && com.fariin.app.data.VerifiedPeople.isGold(vKind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue, Modifier.size(20.dp), "Verified")
                 }
             }
             person?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 16.sp, color = c.secondary) }

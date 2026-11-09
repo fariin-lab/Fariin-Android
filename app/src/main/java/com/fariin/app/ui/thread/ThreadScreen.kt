@@ -1507,7 +1507,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                         // A verified channel: the blue tick beside its name (iOS ChatHeaderView).
                         if (ui.channel?.info?.verified == true) {
                             Spacer(Modifier.width(5.dp))
-                            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(16.dp))
+                            com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(16.dp), "Verified")
                         }
                         // The timer is on: a small mark beside the name (iOS ChatHeaderView secondary icon).
                         if (ui.disappearSeconds > 0) {

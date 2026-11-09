@@ -562,7 +562,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, verified: Boolean, live
                 )
                 if (verified) {
                     Spacer(Modifier.width(5.dp))
-                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                    com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), "Verified")
                 }
             }
             Spacer(Modifier.height(2.dp))

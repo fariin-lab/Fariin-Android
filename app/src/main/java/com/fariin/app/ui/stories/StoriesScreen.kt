@@ -672,9 +672,8 @@ private fun RowVerifiedMark(uid: String) {
     val kinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
     val kind = if (official) "" else com.fariin.app.data.VerifiedPeople.badge(kinds, uid) ?: return
     val tint = if (com.fariin.app.data.VerifiedPeople.isGold(kind)) Color(0xFFE8B21E) else Color(0xFF2392FE)
-    Box(Modifier.padding(start = 4.dp).size(15.dp).background(Color.White, CircleShape).padding(1.dp)) {
-        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = tint, modifier = Modifier.fillMaxSize())
-    }
+    // No white disc behind it: a glaring ring on a dark page (owner 2026-11-09).
+    com.fariin.app.ui.components.VerifiedSeal(tint, Modifier.padding(start = 4.dp).size(15.dp))
 }
 
 @Composable

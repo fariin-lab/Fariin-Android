@@ -145,7 +145,7 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (r.verified) {
                         Spacer(Modifier.width(4.dp))
-                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(15.dp))
+                        com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), "Verified")
                     }
                     if (r.official) {
                         Spacer(Modifier.width(4.dp))

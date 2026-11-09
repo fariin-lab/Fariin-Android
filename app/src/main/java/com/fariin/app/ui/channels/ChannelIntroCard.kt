@@ -75,7 +75,7 @@ private fun FollowerPart(ch: ChannelThreadUi) {
                 overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
             if (info.verified) {
                 Spacer(Modifier.width(5.dp))
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_seal_fill), contentDescription = "Verified", tint = c.blue, modifier = Modifier.size(22.dp))
+                com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(22.dp), "Verified")
             }
         }
         if (info.isPublic && info.username.isNotEmpty()) Text("@" + info.username, fontSize = 17.sp, color = c.secondary, maxLines = 1)
