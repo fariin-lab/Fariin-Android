@@ -90,7 +90,7 @@ private fun StateCard(icon: ImageVector, title: String, body: String, button: St
         Icon(icon, null, tint = c.secondary, modifier = Modifier.size(48.dp))
         Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.padding(top = 14.dp))
         Text(body, fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
-        Box(Modifier.width(200.dp)) { PrimaryPill(button, onClick) }
+        Box(Modifier.width(200.dp)) { PrimaryPill(button, onClick = onClick) }
     }
 }
 
@@ -293,11 +293,15 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
         launch { Passkeys.prefetchRegistration() }
         load()
     }
+    var adding by remember { mutableStateOf(false) }
     fun add() {
         val act = ctx.findActivity() ?: return
+        if (adding) return
         error = null
+        adding = true
         scope.launch {
             try { Passkeys.register(act, auth); load() } catch (e: Exception) { if (e !is SheetCancelled) error = AuthRepository.codeMessageFor(e) }
+            finally { adding = false }
         }
     }
     val f = DateFormat.getDateInstance(DateFormat.MEDIUM)
@@ -311,7 +315,7 @@ fun PasskeysPage(auth: AuthRepository, onBack: () -> Unit, demoRows: List<Passke
             Point(ImageVector.vectorResource(R.drawable.ic_sf_key), "Your passkey is stored safely in your password manager, such as Google Password Manager.")
             Spacer(Modifier.weight(1f))
             ErrorLine(error)
-            PrimaryPill("Create Passkey") { add() }
+            PrimaryPill("Create Passkey", busy = adding) { add() }
         } else Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Passkeys", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.label)
             Text("Sign in with your screen lock. No password needed.", fontSize = 15.sp, color = c.secondary)

@@ -1501,3 +1501,14 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   centred title ("We're sorry to see you go" lost "go"). The content now starts under the X row (66 dp).
   Also the reasons step still had a Cancel under Continue (82d97d47 removed it only on the confirm
   step); gone, as iOS: the X closes on both steps. Checked on the emulator. Log Out uses the same frame.
+- 2026-11-08 ~11:13 PM: OWNER REPORTS (Pixel):
+  * Delete Account dead-ended on "For your security, sign in again to continue." (nothing was
+    deleted). Now as iOS DeleteAccountView.verify: Delete first proves it is you with the account's
+    door (Apple page, else the Google sheet, else a Password field on the sheet; Delete stays faded
+    until typed; a closed sheet is no error; a wrong password says so), then schedules. AuthRepository
+    gained reauthGoogle / reauthApple / reauthProviders. Password field checked on the emulator.
+  * Delete Account moved off the page (a red row next to Log out) into the ••• menu at the top, as iOS.
+  * Log Out / Delete sheets could be pulled up to full screen; now one fitted height (iOS
+    .height(contentHeight)): SheetMotion.midIsTop, a pull up only stretches and springs back.
+  * Create Passkey felt late: a tap while the page's challenge prefetch was out asked the server a
+    second time (now waits for it), and the button now shows a spinner from the tap.

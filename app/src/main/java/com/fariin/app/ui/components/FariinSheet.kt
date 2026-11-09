@@ -253,6 +253,14 @@ class SheetMotion internal constructor(
      * speed points at (full, middle, or closed).
      */
     var mid = 0f
+    /**
+     * The middle stop is the top (iOS one fitted detent, `.height(contentHeight)`): a pull up only
+     * stretches and springs back, it never carries the sheet to full height. [expand] still can (the
+     * keyboard for a text field), and from there the full height is the top again.
+     */
+    var midIsTop = false
+    private var expanded = false
+    private val top: Float get() = if (midIsTop && !expanded && mid > 0f) mid else 0f
     /** Resting fully open (no drag or animation holding it lower). */
     val atFull: Boolean get() = y <= 0.5f
 
@@ -310,6 +318,7 @@ class SheetMotion internal constructor(
     /** To full height on the same curve (a list opened, the keyboard coming up). */
     fun expand() {
         if (closing || (atFull && job?.isActive != true)) return
+        expanded = true
         run(0f, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
     }
 
@@ -339,10 +348,11 @@ class SheetMotion internal constructor(
 
     fun drag(dy: Float) {
         if (closing) return
-        if (job?.isActive == true) { job?.cancel(); raw = if (y >= 0f) y else 0f }
+        val t = top
+        if (job?.isActive == true) { job?.cancel(); raw = if (y >= t) y else t }
         raw += dy
         // Above the top it pulls back harder the further it goes (the rubber band iOS uses).
-        y = if (raw >= 0f) raw else -(1f - 1f / (-raw * 0.55f / band + 1f)) * band
+        y = if (raw >= t) raw else t - (1f - 1f / ((t - raw) * 0.55f / band + 1f)) * band
     }
 
     fun release(velocity: Float) {
@@ -352,7 +362,8 @@ class SheetMotion internal constructor(
             when {
                 // From the middle stop or below, a flick down or a pull well past it closes.
                 (velocity > flingClose && y >= mid - 1f) || projected > mid + (full - mid) * 0.3f -> close(velocity)
-                projected < mid / 2f -> run(0f, velocity, spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f))
+                // Only a sheet that may grow goes to full height on a pull up (not a fitted one, [midIsTop]).
+                top == 0f && projected < mid / 2f -> run(0f, velocity, spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f))
                 else -> run(mid, velocity, spring(dampingRatio = 0.86f, stiffness = 520f, visibilityThreshold = 0.5f))
             }
             return

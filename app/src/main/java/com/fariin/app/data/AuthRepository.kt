@@ -224,6 +224,26 @@ class AuthRepository(
         TwoStepGate.renewAfterReauth(before)
     }
 
+    /** The account's own sign-in doors, by Firebase provider id ("password", "google.com", "apple.com"). */
+    val reauthProviders: Set<String> get() = auth.currentUser?.providerData?.map { it.providerId }?.toSet().orEmpty()
+
+    /** iOS reauthGoogle: the Google sheet again, then a fresh sign-in time for this account. */
+    suspend fun reauthGoogle(activity: Activity) {
+        val user = auth.currentUser ?: throw AuthFlowError(AuthFlowError.Kind.NotSignedIn)
+        val token = com.fariin.app.auth.GoogleSignIn.idToken(activity)
+        val before = TwoStepGate.tokenBefore()
+        user.reauthenticate(GoogleAuthProvider.getCredential(token, null)).await()
+        TwoStepGate.renewAfterReauth(before)
+    }
+
+    /** iOS reauthApple: Apple's page again (Firebase's web flow), then a fresh sign-in time. */
+    suspend fun reauthApple(activity: Activity) {
+        val user = auth.currentUser ?: throw AuthFlowError(AuthFlowError.Kind.NotSignedIn)
+        val before = TwoStepGate.tokenBefore()
+        user.startActivityForReauthenticateWithProvider(activity, OAuthProvider.newBuilder("apple.com").build()).await()
+        TwoStepGate.renewAfterReauth(before)
+    }
+
     /** startPasswordReset (signed in): mails a code, answers the masked address. */
     suspend fun startPasswordReset(): String? = call("startPasswordReset")?.get("maskedEmail") as? String
     suspend fun checkPasswordResetCode(code: String) { call("checkPasswordResetCode", mapOf("code" to code)) }

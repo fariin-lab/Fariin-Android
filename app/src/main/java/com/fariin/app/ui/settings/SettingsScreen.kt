@@ -335,7 +335,23 @@ private fun AccountPage(
         !com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.isNullOrEmpty()
     }.getOrDefault(false)
     val barScroll = rememberScrollState()
-    BarPage("Account", onBack = pop, under = underBar(barScroll)) { top ->
+    // Delete Account lives in the ••• menu at the top (iOS SettingsView toolbar Menu), not as a red row
+    // beside Log out, where one could be taken for the other (owner 2026-11-08).
+    var more by remember { mutableStateOf(false) }
+    BarPage("Account", onBack = pop, under = underBar(barScroll), action = if (demo) null else ({
+        Box {
+            IconButton(onClick = { more = true }, modifier = com.fariin.app.ui.components.barGlass()) {
+                Icon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", tint = c.label)
+            }
+            androidx.compose.material3.DropdownMenu(expanded = more, onDismissRequest = { more = false },
+                shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
+                containerColor = com.fariin.app.ui.components.FariinMenu.container) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Delete Account", color = c.red) },
+                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_sf_trash), null, tint = c.red) },
+                    onClick = { more = false; deleting = true })
+            }
+        }
+    })) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(bottom = com.fariin.app.ui.shell.bottomBarInset()).padding(top = top + 8.dp)) {
             SettingsSection(header = "Sign-in") {
                 SettingsRow("Email address", last = !hasEmail, badge = NewBadgeSpots.ACCOUNT_EMAIL) { push(PAGE_EMAIL) }
@@ -367,10 +383,6 @@ private fun AccountPage(
                         try { AccountReport.share(ctx) } catch (e: Exception) { toast(ctx, e.message ?: "Could not load everything. Check your connection and try again.") }
                     }
                 }
-            }
-            // Owner 2026-11-07: a plain red row opening two sheets (DeleteAccountSheets.kt), as on iOS.
-            if (!demo) SettingsSection {
-                SettingsRow("Delete Account", trailing = Trailing.NONE, titleColor = c.red, last = true) { deleting = true }
             }
             // Alone at the bottom, no note under it; the note above belongs to Your Account Data only.
             SettingsSection {

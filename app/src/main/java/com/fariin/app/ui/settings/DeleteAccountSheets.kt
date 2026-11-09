@@ -99,11 +99,32 @@ internal fun DeleteAccountFlow(profile: MyProfile?, onDone: () -> Unit, onSignOu
 
     fun closed() { stage = 0; if (!busy) onDone() }
 
+    // iOS DeleteAccountView.verify: prove it is you with the account's own door before the server is
+    // asked (it refuses an old sign-in: "For your security, sign in again", owner's Pixel 2026-11-08).
+    // Apple and Google show their own sheet; a password-only account types it on this sheet.
+    val authRepo = remember { AuthRepository() }
+    val providers = remember { authRepo.reauthProviders }
+    val needsPassword = "apple.com" !in providers && "google.com" !in providers && "password" in providers
+    var password by remember { mutableStateOf("") }
+
     fun delete() {
         if (busy) return
         busy = true; error = null
         scope.launch {
             try {
+                val act = generateSequence(ctx) { (it as? android.content.ContextWrapper)?.baseContext }
+                    .firstOrNull { it is android.app.Activity } as? android.app.Activity
+                try {
+                    when {
+                        "apple.com" in providers && act != null -> authRepo.reauthApple(act)
+                        "google.com" in providers && act != null -> authRepo.reauthGoogle(act)
+                        needsPassword -> authRepo.reauthEmail(password)
+                    }
+                } catch (e: com.fariin.app.auth.SheetCancelled) {
+                    busy = false; return@launch   // a closed sign-in sheet is a decision, not a failure
+                } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
+                    busy = false; error = "That password is not right."; return@launch
+                }
                 val due = AccountDeletion.schedule(code, text)
                 Toast.makeText(app, "Deletion scheduled for ${fmt.format(Date(due))}", Toast.LENGTH_LONG).show()
                 onSignOut()
@@ -120,6 +141,7 @@ internal fun DeleteAccountFlow(profile: MyProfile?, onDone: () -> Unit, onSignOu
         1 -> ReasonSheet(code, text, onPick = { code = it }, onText = { text = it.take(AccountDeletion.REASON_TEXT_MAX) },
             onContinue = { stage = 2 }, onClosed = { if (stage == 1) closed() })
         2 -> ConfirmSheet(handle, fmt.format(Date(AccountDeletion.defaultDue())), busy, error,
+            password = if (needsPassword) password else null, onPassword = { password = it },
             onDownload = {
                 scope.launch {
                     try { AccountReport.share(ctx) }
@@ -198,10 +220,12 @@ private fun Radio(on: Boolean) {
 
 @Composable
 private fun ConfirmSheet(handle: String, dueText: String, busy: Boolean, error: String?,
+                         /** Non-null: a password-only account types its password here (iOS SecureField). */
+                         password: String? = null, onPassword: (String) -> Unit = {},
                          onDownload: () -> Unit, onDelete: () -> Unit, onClosed: () -> Unit) {
     val c = Fariin.colors
     val motion = rememberSheetMotion(onClosed)
-    sheetRestAt(motion, if (error != null) 520.dp else 480.dp)
+    sheetRestAt(motion, (if (error != null) 520 else 480).dp + (if (password != null) 64 else 0).dp)
     FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
         AccountSheetFrame(motion, closeEnabled = !busy) {
             Title(if (handle.isEmpty()) "Delete your account?" else "Delete @$handle?")
@@ -212,9 +236,15 @@ private fun ConfirmSheet(handle: String, dueText: String, busy: Boolean, error: 
             }
             Text("Download my data first", fontSize = 15.sp, color = c.blue,
                 modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = !busy) { onDownload() }.padding(vertical = 6.dp))
+            if (password != null) androidx.compose.material3.OutlinedTextField(password, onPassword,
+                placeholder = { Text("Password", color = c.secondary) }, singleLine = true, enabled = !busy,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+                shape = CircleShape, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
             if (error != null) Text(error, fontSize = 15.sp, color = c.red, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
-            SheetPill("Delete Account", c.red, busy = busy, modifier = Modifier.padding(top = 20.dp)) { onDelete() }
+            SheetPill("Delete Account", c.red, busy = busy, enabled = password == null || password.isNotEmpty(),
+                modifier = Modifier.padding(top = 20.dp)) { onDelete() }
         }
     }
 }
@@ -252,6 +282,9 @@ internal fun AccountSheetFrame(motion: SheetMotion, closeEnabled: Boolean, onClo
     val scroll = rememberScrollState()
     // imePadding: with the keyboard up the scroll ends at its top, so a field and the button under it
     // can be scrolled (and brought) into view instead of sitting behind it (same as ReportSheet).
+    // One fitted height, as iOS (.height(contentHeight)): a pull up no longer carries Log Out or Delete
+    // Account to full screen with an empty page under the button (owner's Pixel 2026-11-08).
+    androidx.compose.runtime.SideEffect { motion.midIsTop = true }
     Box(Modifier.fillMaxSize().imePadding()) {
         // A pull down anywhere while the page is at its top moves the sheet with the finger (iOS);
         // taps, and every other drag, stay the page's own (sheetDrag atTop, as ReportSheet).

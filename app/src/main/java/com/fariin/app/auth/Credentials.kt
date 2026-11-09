@@ -83,14 +83,25 @@ object Passkeys {
      */
     private var ready: Pair<Map<*, *>, Long>? = null
 
+    /** The prefetch still out, so a tap that comes before it lands waits for it, not a second round trip. */
+    private var inflight: kotlinx.coroutines.CompletableDeferred<Map<*, *>?>? = null
+
     suspend fun prefetchRegistration() {
-        if (ready?.let { System.currentTimeMillis() - it.second < 4 * 60_000 } == true) return
-        ready = runCatching { call("passkeyRegistrationOptions") to System.currentTimeMillis() }.getOrNull()
+        if (ready?.let { System.currentTimeMillis() - it.second < 4 * 60_000 } == true || inflight != null) return
+        val d = kotlinx.coroutines.CompletableDeferred<Map<*, *>?>()
+        inflight = d
+        val r = runCatching { call("passkeyRegistrationOptions") }.getOrNull()
+        if (r != null) ready = r to System.currentTimeMillis()
+        inflight = null
+        d.complete(r)
     }
 
     /** One passkey for the signed-in account, saved in the phone's password manager. */
     suspend fun register(activity: Activity, auth: AuthRepository, label: String = "Passkey") {
+        // Owner 2026-11-08 ("bit late to show"): a tap while the page's prefetch was still out asked
+        // the server a second time; it now takes that answer.
         val cached = ready?.takeIf { System.currentTimeMillis() - it.second < 4 * 60_000 }?.first
+            ?: inflight?.await()
         ready = null
         val start = cached ?: call("passkeyRegistrationOptions")
         val options = start["options"] as? Map<*, *>

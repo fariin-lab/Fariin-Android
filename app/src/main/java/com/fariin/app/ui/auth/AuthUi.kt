@@ -97,11 +97,14 @@ internal fun Busy(color: Color, side: Int = 22) {
 
 /** authPrimaryPill: the Fariin-blue pill, white words, 50 high. */
 @Composable
-internal fun PrimaryPill(text: String, onClick: () -> Unit) {
+internal fun PrimaryPill(text: String, busy: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
-    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(c.accent).clickable(onClick = onClick),
+    // [busy]: a spinner in place of the words from the tap on, and no second tap (a system sheet that
+    // takes a moment to rise left the button looking dead, owner 2026-11-08).
+    Box(Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(c.accent).clickable(enabled = !busy, onClick = onClick),
         contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
+        if (busy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = c.onAccent)
+        else Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
     }
 }
 
