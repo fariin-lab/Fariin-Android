@@ -163,6 +163,20 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     when (sub) {
         "storage" -> { com.fariin.app.ui.people.ChatStoragePage(info.cid, me, info.title, pop = { sub = null }); return }
         "stats" -> { com.fariin.app.ui.people.GroupStatsPage(info.cid, info.title, onBack = { sub = null }); return }
+        // iOS SoundsNotificationsView for a channel: Mute with its times, not a one-tap toggle (owner 2026-11-08).
+        "sounds" -> {
+            val follows by com.fariin.app.channel.ChannelFollows.entries.collectAsState()
+            val e = follows[info.cid]
+            val until = when {
+                e == null || !e.isMuted() -> 0.0
+                e.mutedUntil <= 0 -> com.fariin.app.data.GroupInfoCircles.muteUntil(null)   // Always
+                else -> e.mutedUntil
+            }
+            com.fariin.app.ui.people.ContactSoundsPage(until, header = if (role == Role.ADMIN) "Posts by other admins" else "Posts",
+                onMute = { u -> scope.launch { if (u <= 0) ChannelService.setMuted(info.cid, false) else ChannelService.setMuted(info.cid, true, u) } },
+                onBack = { sub = null })
+            return
+        }
     }
     // Clear Messages (iOS, owner only): every post goes for everyone; the followers stay.
     var askClear by remember { mutableStateOf(false) }
@@ -374,7 +388,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         icon = androidx.compose.ui.res.painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off_outline else com.fariin.app.R.drawable.ic_notifications),
                         value = if (muted && shownRole != Role.VISITOR) "Off" else "On", badge = NewBadgeSpots.GROUP_INFO_SOUNDS) {
                         if (shownRole == Role.VISITOR) notice = "Follow this channel to change its notifications."
-                        else tap(if (muted) Action.UNMUTE else Action.MUTE, false)
+                        else sub = "sounds"
                     }
                     com.fariin.app.ui.settings.SettingsRow("Storage Used", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_set_storage),
                         value = channelStorage?.let { if (it > 0) android.text.format.Formatter.formatShortFileSize(ctx, it) else "None" },

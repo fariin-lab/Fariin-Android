@@ -37,7 +37,7 @@ internal suspend fun writeContactMute(cid: String, me: String, untilMs: Double):
  * "Muted until …" while a mute runs. [untilMs] is the live end; [onMute] writes a new one.
  */
 @Composable
-internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, onBack: () -> Unit) {
+internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, header: String = "Messages", onBack: () -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
     BackHandler(onBack = onBack)
@@ -49,7 +49,7 @@ internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, onBack
     val value = endLabel?.removePrefix("Muted ")?.replaceFirstChar { it.uppercase() } ?: "Off"
     var menu by remember { mutableStateOf(false) }
     ScrollPage("Sounds & Notifications", onBack) {
-        SettingsSection(header = "Messages", footer = endLabel) {
+        SettingsSection(header = header, footer = endLabel) {
             Box {
                 SettingsRow("Mute", icon = painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell),
                     value = value, last = true) { menu = true }
