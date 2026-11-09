@@ -1363,3 +1363,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   shell need JAVA_HOME=Android Studio/jbr; e652e0db was only compile-checked at this step (it built).
 - 2026-11-08 ~7:57 PM: emulators: decline = caller "No answer" + Call again, decliner "Missed voice
   call" (iOS owner rule: declines never shown). Voice call -> camera on mid-call: both sides right.
+- 2026-11-08 ~8:03 PM: two-person messaging on the emulators: typing..., send, read ticks, heart
+  reaction both sides, reply with quote both sides. Fixed: Reply and Edit now open the keyboard
+  (iOS beginReply / Edit set inputFocused); before, the reply bar came up with no keyboard.

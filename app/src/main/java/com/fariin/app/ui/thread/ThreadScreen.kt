@@ -1370,7 +1370,9 @@ private fun ThreadContent(
                     },
                     // A quote may go with no words (owner 2026-11-06, iOS sendsWithoutText).
                     sendsWithoutText = quoting != null && editing == null,
-                    focusKey = quoting?.let { com.fariin.app.data.QuoteRules.draftKey(it) },
+                    // iOS beginReply / Edit: "you're about to type", so the keyboard opens for those too.
+                    focusKey = quoting?.let { com.fariin.app.data.QuoteRules.draftKey(it) }
+                        ?: replyTo?.let { "reply:" + it.rowId } ?: editing?.let { "edit:" + it.rowId },
                     // The sticker panel's picks (iOS StickerSend.send / sendGif), held back like the rest.
                     me = ui.me,
                     onSticker = steady1 { s: com.fariin.app.data.StickerRef ->
@@ -2353,7 +2355,9 @@ private fun Composer(
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(focusKey) {
         if (focusKey == null) return@LaunchedEffect
-        kotlinx.coroutines.delay(550)
+        // A quote waits for the screen's slide; a reply or edit only for the menu to close.
+        val pushed = focusKey !is String || !(focusKey.startsWith("reply:") || focusKey.startsWith("edit:"))
+        kotlinx.coroutines.delay(if (pushed) 550 else 200)
         runCatching { fieldFocus.requestFocus(); keyboard?.show() }
     }
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
