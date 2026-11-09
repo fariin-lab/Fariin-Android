@@ -1474,3 +1474,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   could not be captured (no screenshots there). Turned off again.
 - 2026-11-08 ~10:23 PM: Verify Encryption page as iOS (QR, 12 groups, Scan their code); Alice's and
   Bobby's safety numbers are the same 60 digits on both phones.
+- 2026-11-08 ~10:29 PM: notices I wrote now read "You ..." on my phone, as iOS ownNoticeAsYou
+  ("You created the group", "You removed Bobby Test", "You turned on Restricted chat."): only when
+  the text starts with my name or "Someone", never others' notices, not in channels (their own
+  wording). Before, only the timer and pin lines did. (Earlier tonight I wrongly logged "created the
+  group" as matching; I had read the channel rewrite.) Checked on the emulator.

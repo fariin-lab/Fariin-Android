@@ -977,7 +977,7 @@ private fun ThreadContent(
                                     val secs = m.disappearSeconds
                                     if (secs != null) NoticePill(com.fariin.app.data.Disappearing.noticeLine(
                                         if (m.authorId == ui.me) "You" else ui.names[m.authorId] ?: ui.title, secs), icon = true)
-                                    else NoticePill(noticeText(m))
+                                    else NoticePill(youNotice(m, ui))
                                 }
                                 if (selecting) Row(Modifier.fillMaxWidth().background(selLit).clickable { toggle(m) },
                                     verticalAlignment = Alignment.CenterVertically) {
@@ -1032,8 +1032,8 @@ private fun ThreadContent(
                                 val by = conv?.let { com.fariin.app.data.ChatRestrictions.pendingRequestBy(it) }
                                 if (by != null && by != ui.me && com.fariin.app.data.ChatRestrictions.restrictedByMe(conv, ui.me)) restrictAnswer = true
                                 else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()
-                            }) { NoticePill(noticeText(m)) }
-                            m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else noticeText(m))
+                            }) { NoticePill(youNotice(m, ui)) }
+                            m.isSystem || m.isCall -> NoticePill(if (ch != null) com.fariin.app.channel.ChannelRules.words(noticeText(m)) else youNotice(m, ui))
                             // Ticking posts uses the select rows below, as in any chat (iOS: Select in a channel too).
                             ch != null && !selecting -> androidx.compose.runtime.CompositionLocalProvider(
                                 com.fariin.app.ui.channels.LocalPostViews provides
@@ -1421,6 +1421,20 @@ private fun SelectTick(on: Boolean) {
 private fun noticeText(m: Message): String = when {
     m.isCall -> m.text.ifEmpty { "Call" }
     else -> m.text
+}
+
+/**
+ * iOS ownNoticeAsYou: a notice I wrote ("Alice removed Bobby", "Alice turned on Restricted chat.")
+ * reads "You removed Bobby" on my phone. Swapped only while the text still starts with my name (or
+ * "Someone", the writer's fallback); after a rename it stays as written. Others' notices untouched.
+ */
+private fun youNotice(m: Message, ui: ThreadUi): String {
+    val t = noticeText(m)
+    if (!m.isSystem || m.authorId.isEmpty() || m.authorId != ui.me) return t
+    for (name in listOf(ui.names[ui.me].orEmpty(), "Someone")) {
+        if (name.isNotEmpty() && t.startsWith("$name ")) return "You" + t.substring(name.length)
+    }
+    return t
 }
 
 /** The header's words grow with the phone's text size only up to 115% (as iOS caps its bars): the
