@@ -1345,3 +1345,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   Fixed: my card stays with my photo when my camera is off (3ef757ad). Calls killed mid-way stay
   "Ongoing" locally only (the live server's sweepCalls finalises them). Group/link calls need
   Cloud Functions: not testable locally (tested alone on the Pixel instead).
+- 2026-11-08 ~7:41 PM: 1:1 VOICE CALL tested between the emulators: ring, heads-up Answer, clock,
+  mute (other side shows "Muted"), speaker toggle, minimize (bar + floating window with both faces),
+  End from the bar, "Voice call 3:31" bubble both sides. No gaps. Speaker shows lit at start only
+  because the emulator has no earpiece (code starts voice calls on the earpiece).
