@@ -1,5 +1,7 @@
 package com.fariin.app.ui.channels
 
+import com.fariin.app.ui.components.linkShake
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -301,10 +303,10 @@ private fun ChannelIntroArt(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BigButton(text: String, enabled: Boolean, busy: Boolean = false, onClick: () -> Unit) {
+private fun BigButton(text: String, enabled: Boolean, busy: Boolean = false, tappableWhenOff: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).height(52.dp).clip(CircleShape)
-        .background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f)).clickable(enabled = enabled && !busy, onClick = onClick),
+        .background(if (enabled) c.accent else c.accent.copy(alpha = 0.4f)).clickable(enabled = (enabled || tappableWhenOff) && !busy, onClick = onClick),
         contentAlignment = Alignment.Center) {
         if (busy) com.fariin.app.ui.components.ButtonSpinner(c.onAccent)
         else Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.onAccent)
@@ -396,6 +398,12 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
     var protect by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    // Owner 2026-11-09 (iOS GroupTypeView): Public pre-fills a link and brings the keyboard up; a
+    // Done tapped too early shakes the field, buzzes and says, in red, that a link is needed.
+    val linkFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    var askedForLink by remember { mutableStateOf(false) }
+    var nudges by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(cid) { primary = try { ChannelService.primaryLink(cid) } catch (_: Exception) { null }; approve = primary?.requestApproval ?: false }
     LaunchedEffect(link, public) {
         linkOk = false
@@ -412,23 +420,38 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             SectionTitle("CHANNEL TYPE")
             Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
-                TypeRow("Public Channel", public) { public = true }
+                TypeRow("Public Channel", public) {
+                    public = true
+                    if (link.isEmpty()) {
+                        link = ChannelRules.suggestLink(title, "channel")
+                        scope.launch { delay(350); runCatching { linkFocus.requestFocus() } }
+                    }
+                }
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
                 TypeRow("Private Channel", !public) { public = false }
             }
             Foot(ChannelRules.typeFooter(public))
             if (public) {
                 SectionTitle("PUBLIC LINK")
-                Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card).padding(16.dp)) {
-                    Text("fariin.com/", fontSize = 17.sp, color = c.secondary)
-                    BasicTextField(link, { link = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                        cursorBrush = SolidColor(c.accent), modifier = Modifier.weight(1f))
+                Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().linkShake(nudges).clip(RoundedCornerShape(20.dp)).background(c.card).padding(16.dp)) {
+                    // The label colour: grey read as a placeholder, not the start of the link.
+                    Text("fariin.com/", fontSize = 17.sp, color = c.label)
+                    Box(Modifier.weight(1f)) {
+                        if (link.isEmpty()) Text("link", fontSize = 17.sp, color = c.secondary)
+                        BasicTextField(link, { link = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
+                            cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth().focusRequester(linkFocus))
+                    }
                 }
-                // Asking the server: the ring and the words on one line under the field (iOS).
-                if (linkNote == "Checking…") com.fariin.app.ui.components.LoadingLine("Checking link…",
-                    Modifier.padding(horizontal = 32.dp, vertical = 6.dp))
+                // The check as one ring on a line under the field (iOS HandleCheckRing).
+                val ln = linkNote
+                if (ln != null && link.isNotEmpty()) com.fariin.app.ui.components.CheckLine(
+                    when { ln == "Checking…" -> com.fariin.app.ui.components.CheckPhase.Checking
+                        linkOk -> com.fariin.app.ui.components.CheckPhase.Free else -> com.fariin.app.ui.components.CheckPhase.Taken },
+                    if (ln == "Checking…") "Checking link…" else ln, Modifier.padding(horizontal = 32.dp, vertical = 6.dp))
+                else if (link.isEmpty()) Foot("A public channel needs a link. Pick one of ${ChannelRules.LINK_MIN} to ${ChannelRules.LINK_MAX} characters: letters, numbers and _.",
+                    if (askedForLink) c.red else null)
                 else Foot(linkNote ?: "Pick a link of ${ChannelRules.LINK_MIN} to ${ChannelRules.LINK_MAX} characters: letters, numbers and _.",
-                    if (linkOk) Color(0xFF34C759) else null)
+                    if (linkOk) Color(0xFF34C759) else if (askedForLink && linkNote != null) c.red else null)
             } else {
                 SectionTitle("INVITE LINK")
                 Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.card).padding(16.dp)) {
@@ -455,8 +478,15 @@ private fun TypePage(cid: String, title: String, onDone: () -> Unit) {
             Foot(ChannelRules.protectFooter(protect))
             problem?.let { Foot(it, c.red) }
         }
-        BigButton("Done", enabled = !public || link.isEmpty() || linkOk, busy = saving) {
-            if (!public || link.isEmpty()) { onDone(); return@BigButton }
+        // Public needs a good link (iOS): before that, Done explains instead of quietly finishing private.
+        BigButton("Done", enabled = !public || linkOk, busy = saving, tappableWhenOff = public) {
+            if (!public) { onDone(); return@BigButton }
+            if (!linkOk) {
+                askedForLink = true; nudges++
+                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                runCatching { linkFocus.requestFocus() }
+                return@BigButton
+            }
             saving = true
             scope.launch {
                 try { ChannelService.setLink(cid, link); onDone() }

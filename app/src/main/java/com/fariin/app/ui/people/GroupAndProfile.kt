@@ -333,10 +333,11 @@ fun UsernameScreen(api: PeopleApi, current: String, onBack: () -> Unit) {
         Column(Modifier.padding(horizontal = 32.dp)) {
             when (val s = status) {
                 NameStatus.Quiet -> {}
-                NameStatus.Checking -> com.fariin.app.ui.components.LoadingLine("Checking username…")
-                is NameStatus.Available -> Text("${s.name} is available.", fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF34C759))
+                // The animated ring (iOS, owner 2026-11-09): spins while asking, closes into a tick or a cross.
+                NameStatus.Checking -> com.fariin.app.ui.components.CheckLine(com.fariin.app.ui.components.CheckPhase.Checking, "Checking username…")
+                is NameStatus.Available -> com.fariin.app.ui.components.CheckLine(com.fariin.app.ui.components.CheckPhase.Free, "${s.name} is available.")
                 NameStatus.Taken -> {
-                    Text("This username is taken.", fontSize = 13.sp, color = c.red)
+                    com.fariin.app.ui.components.CheckLine(com.fariin.app.ui.components.CheckPhase.Taken, "This username is taken.")
                     if (suggestions.isNotEmpty()) Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Free:", fontSize = 13.sp, color = c.secondary)

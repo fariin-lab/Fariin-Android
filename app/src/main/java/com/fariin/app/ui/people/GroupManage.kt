@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.linkShake
+import androidx.compose.ui.focus.focusRequester
 import com.fariin.app.ui.components.GlassAlert
 import com.fariin.app.ui.settings.BarPage
 import com.fariin.app.ui.components.underBar
@@ -948,6 +950,12 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
     var saving by remember { mutableStateOf(false) }
     var confirmPrivate by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    // Owner 2026-11-09: Public only greyed Save. Now it pre-fills a link and brings the keyboard
+    // up, and a Save tapped too early shakes the field, buzzes and turns the line red.
+    val linkFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    var askedForLink by remember { mutableStateOf(false) }
+    var nudges by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     if (doc.isEmpty()) { Loading(); return }
     val current = if (doc["isPublic"] == true) doc["username"] as? String ?: "" else ""
     val isPublicNow = current.isNotEmpty()
@@ -967,6 +975,11 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
         val r = com.fariin.app.channel.ChannelService.checkLink(cid, typed)
         note = r ?: "fariin.com/$typed is available."
         ok = r == null
+    }
+    fun explainSave() {
+        askedForLink = true; nudges++
+        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+        runCatching { linkFocus.requestFocus() }
     }
     fun save(value: String) {
         saving = true
@@ -995,13 +1008,21 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
     BarPage("$Noun Type", onBack, action = {
             if (saving) BusyMark() else Text("Save", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 color = if (showPublic && changed && ok) c.accent else c.secondary,
-                modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape).clickable(enabled = showPublic && changed && ok) { save(typed) }
+                // Tappable while Public waits for a good link, so the tap can say what is missing.
+                modifier = Modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape)
+                    .clickable(enabled = showPublic && (changed || typed.isEmpty())) { if (changed && ok) save(typed) else explainSave() }
                     .padding(horizontal = 18.dp, vertical = 11.dp))
         }, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary).imePadding()) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).navigationBarsPadding()) {
             SettingsSection(header = "$Noun Type", footer = if (showPublic) (if (ch) "Anyone can find this channel in search and follow it." else "Anyone can find this group in search and join it without an invite.")
                 else if (ch) "People can follow only with an invite link." else "People can join only with an invite link, or when an admin adds them.") {
-                TypeLine("Public $Noun", showPublic) { wantsPublic = true }
+                TypeLine("Public $Noun", showPublic) {
+                    wantsPublic = true
+                    if (typed.isEmpty()) {
+                        name = com.fariin.app.channel.ChannelRules.suggestLink(doc["title"] as? String ?: "", noun)
+                        scope.launch { delay(350); runCatching { linkFocus.requestFocus() } }
+                    }
+                }
                 TypeLine("Private $Noun", !showPublic, last = true) { if (isPublicNow) confirmPrivate = true else wantsPublic = false }
             }
             // A channel's Protect Content lives here, under its type (iOS channel type page).
@@ -1024,22 +1045,31 @@ private fun GroupTypePage(cid: String, me: String, onBack: () -> Unit) {
             if (showPublic) {
                 SettingsSection(header = "Public Link", footer = when {
                     !changed && typed.isNotEmpty() -> "People can open this $noun with fariin.com/$typed."
-                    note == "Checking…" -> null
-                    note != null -> note
+                    note != null -> null   // the ring line below says it
+                    typed.isEmpty() && !askedForLink -> "A public $noun needs a link. Pick one of ${com.fariin.app.channel.ChannelRules.LINK_MIN} to ${com.fariin.app.channel.ChannelRules.LINK_MAX} characters: letters, numbers and _."
+                    typed.isEmpty() -> null
                     else -> "Pick a link of ${com.fariin.app.channel.ChannelRules.LINK_MIN} to ${com.fariin.app.channel.ChannelRules.LINK_MAX} characters: letters, numbers and _."
                 }) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("fariin.com/", fontSize = 17.sp, color = c.secondary)
+                    Row(Modifier.fillMaxWidth().linkShake(nudges).padding(16.dp)) {
+                        // The label colour: grey read as a placeholder, not the start of the link.
+                        Text("fariin.com/", fontSize = 17.sp, color = c.label)
                         Box(Modifier.weight(1f)) {
                             if (typed.isEmpty()) Text("link", fontSize = 17.sp, color = c.secondary)
                             BasicTextField(typed, { name = it.trim() }, singleLine = true, textStyle = TextStyle(fontSize = 17.sp, color = c.label),
-                                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth().focusRequester(linkFocus))
                         }
                     }
                 }
-                // Asking the server: the ring and the words on one line under the field (iOS).
-                if (note == "Checking…") com.fariin.app.ui.components.LoadingLine("Checking link…",
-                    Modifier.padding(start = 32.dp, end = 32.dp, bottom = 6.dp))
+                // Save tapped with no link: the same words, in red.
+                if (typed.isEmpty() && askedForLink) Text("A public $noun needs a link. Pick one of ${com.fariin.app.channel.ChannelRules.LINK_MIN} to ${com.fariin.app.channel.ChannelRules.LINK_MAX} characters: letters, numbers and _.",
+                    fontSize = 13.sp, color = c.red, modifier = Modifier.padding(start = 32.dp, end = 32.dp, bottom = 6.dp))
+                // The check as one ring on a line under the field (iOS HandleCheckRing).
+                note?.let { n ->
+                    val phase = when { n == "Checking…" -> com.fariin.app.ui.components.CheckPhase.Checking
+                        ok -> com.fariin.app.ui.components.CheckPhase.Free else -> com.fariin.app.ui.components.CheckPhase.Taken }
+                    com.fariin.app.ui.components.CheckLine(phase, if (n == "Checking…") "Checking link…" else n,
+                        Modifier.padding(start = 32.dp, end = 32.dp, bottom = 6.dp))
+                }
             }
         }
     }
