@@ -196,7 +196,13 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
     // from placement, and a layer-only move left it a frame behind, so it drew the messages sharp
     // for single frames while the page slid (owner's Pixel 2026-11-09).
     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
-        // While the page moves, its touches go nowhere (PageMotion.moving).
+        .layout { m, c ->
+            val p = m.measure(c)
+            layout(p.width, p.height) { p.place((PageMotion.offset(id) * p.width).toInt(), 0) }
+        }
+        // While the page moves, its touches go nowhere (PageMotion.moving). After the move, so it
+        // covers the page where it is: on the frame, a page that had slid away still caught every
+        // tap on the list for the nav host's whole hold (owner's Pixel 2026-11-09).
         .pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
@@ -204,10 +210,6 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
                     if (PageMotion.moving) ev.changes.forEach { it.consume() }
                 }
             }
-        }
-        .layout { m, c ->
-            val p = m.measure(c)
-            layout(p.width, p.height) { p.place((PageMotion.offset(id) * p.width).toInt(), 0) }
         }) { content() }
 }
 
