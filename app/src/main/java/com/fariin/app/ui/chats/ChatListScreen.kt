@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import com.fariin.app.ui.components.listPress
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import com.fariin.app.data.SearchRecents
@@ -1156,16 +1157,31 @@ internal fun ChatRow(
             if (storyKey != null) androidx.compose.runtime.DisposableEffect(storyKey) {
                 onDispose { com.fariin.app.ui.stories.StoryOrigins.rects.remove(storyKey); com.fariin.app.ui.stories.StoryOrigins.radii.remove(storyKey) }
             }
-            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClickLabel = "View story", onClick = onStoryTap).semantics { contentDescription = "Story" } else Modifier)
-                .then(if (storyKey == null) Modifier else Modifier.onGloballyPositioned { lc ->
-                    val loc = IntArray(2); view.getLocationOnScreen(loc)
-                    val p = lc.positionInWindow()
-                    // The 48 photo inside the 54 slot, in screen pixels (the viewer is its own window).
-                    val inset = (lc.size.width - lc.size.width * 48f / 54f) / 2
-                    com.fariin.app.ui.stories.StoryOrigins.rects[storyKey] = androidx.compose.ui.geometry.Rect(
-                        p.x + loc[0] + inset, p.y + loc[1] + inset, p.x + loc[0] + lc.size.width - inset, p.y + loc[1] + lc.size.height - inset)
-                    com.fariin.app.ui.stories.StoryOrigins.radii[storyKey] = half
-                }.graphicsLayer { alpha = if (com.fariin.app.ui.stories.StoryOrigins.hiddenKey == storyKey) 0f else 1f }),
+            // The photo's place for the story viewer to grow out of, worked out ON THE TAP only. It was
+            // written on every scroll frame of every story row (a window transform plus a shared-state
+            // write each frame); the Pixel trace 2026-11-09 showed that among the scroll's main costs.
+            val placed = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+            fun recordOrigin() {
+                val lc = placed[0]?.takeIf { it.isAttached } ?: return
+                val key = storyKey ?: return
+                val loc = IntArray(2); view.getLocationOnScreen(loc)
+                val p = lc.positionInWindow()
+                // The 48 photo inside the 54 slot, in screen pixels (the viewer is its own window).
+                val inset = (lc.size.width - lc.size.width * 48f / 54f) / 2
+                com.fariin.app.ui.stories.StoryOrigins.rects[key] = androidx.compose.ui.geometry.Rect(
+                    p.x + loc[0] + inset, p.y + loc[1] + inset, p.x + loc[0] + lc.size.width - inset, p.y + loc[1] + lc.size.height - inset)
+                com.fariin.app.ui.stories.StoryOrigins.radii[key] = half
+            }
+            // Every story row on screen registers here, so a tap records them all once: the viewer
+            // pages to other people's stories and closes back into their rows.
+            if (storyKey != null) androidx.compose.runtime.DisposableEffect(storyKey) {
+                val rec: () -> Unit = { recordOrigin() }
+                StoryOriginRecorders[storyKey] = rec
+                onDispose { if (StoryOriginRecorders[storyKey] === rec) StoryOriginRecorders.remove(storyKey) }
+            }
+            Box(Modifier.size(54.dp).then(if (onStoryTap != null) Modifier.clickable(onClickLabel = "View story") { StoryOriginRecorders.values.toList().forEach { it() }; onStoryTap() }.semantics { contentDescription = "Story" } else Modifier)
+                .then(if (storyKey == null) Modifier else Modifier.onPlaced { placed[0] = it }
+                    .graphicsLayer { alpha = if (com.fariin.app.ui.stories.StoryOrigins.hiddenKey == storyKey) 0f else 1f }),
                 contentAlignment = Alignment.Center) {
                 Avatar(conv.displayPhoto(me), if (ring.isEmpty()) 54.dp else 48.dp, squircle = conv.isChannel,
                     kind = com.fariin.app.ui.components.AvatarKind.of(conv.isGroup, conv.isChannel))
@@ -1387,3 +1403,6 @@ private fun TopPeersRow(peers: List<Conversation>, me: String, onOpen: (Conversa
         }
     }
 }
+
+/** The story rows on screen, each able to record its photo's place for the viewer (see ChatRow). */
+private val StoryOriginRecorders = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
