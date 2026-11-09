@@ -577,14 +577,30 @@ private fun StoryCamera(
     }
 
     val navBottom = androidx.compose.foundation.layout.WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val streamFade = remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.DisposableEffect(previewView) {
+        val obs = androidx.lifecycle.Observer<PreviewView.StreamState> { st ->
+            scope.launch {
+                if (st == PreviewView.StreamState.STREAMING) streamFade.animateTo(1f, androidx.compose.animation.core.tween(220))
+            }
+        }
+        previewView.previewStreamState.observe(owner, obs)
+        onDispose { previewView.previewStreamState.removeObserver(obs) }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (hasCamera) {
+            Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = BAR_HEIGHT + navBottom)
+                .clip(RoundedCornerShape(28.dp)).background(Color(0xFF1C1C1E)))
             AndroidView(
                 factory = { previewView },
                 // A rounded frame under the status bar that stops above the bar, as iOS's camera
                 // (owner screenshots 2026-11-04): black around it, the bar's controls on black.
+                // The frame is drawn from the first frame (dark grey card), and the live picture fades
+                // in over it once the lens streams, instead of black then a sudden picture with the
+                // card and the controls' circles appearing with it (owner's Pixel recording 2026-11-09).
                 modifier = Modifier.fillMaxSize().statusBarsPadding().padding(bottom = BAR_HEIGHT + navBottom)
                     .clip(RoundedCornerShape(28.dp))
+                    .graphicsLayer { alpha = streamFade.value }
                     .pointerInput(camera) {
                         detectTransformGestures { _, _, zoom, _ ->
                             val c = camera ?: return@detectTransformGestures
