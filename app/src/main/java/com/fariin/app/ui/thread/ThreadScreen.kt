@@ -219,10 +219,9 @@ fun ThreadScreen(
     onSendFiles: (List<Uri>) -> Unit = { it.forEach(onSendFile) },
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val text = remember {
-        bubbleText(ctx.getSharedPreferences(com.fariin.app.ui.settings.CHAT_PREFS, android.content.Context.MODE_PRIVATE)
-            .getString("chat.textSize", "medium") ?: "medium")
-    }
+    // One bubble size, as iOS (Message Text Size is gone from Settings, 2026-11-08; a saved Small or
+    // Large no longer applies). The phone's own text size still scales it.
+    val text = remember { bubbleText("medium") }
     // iOS openChatWallpaper: "Change Wallpaper" on the info page comes back here and opens this chat's picker.
     var wallpaperOpen by remember { mutableStateOf(false) }
     LaunchedEffect(ui.cid) {

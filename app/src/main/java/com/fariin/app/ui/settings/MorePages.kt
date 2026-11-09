@@ -405,23 +405,18 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     var links by remember { mutableStateOf(p.getBoolean("linkPreviewsEnabled", true)) }
     var savePhotos by remember { mutableStateOf(p.getBoolean(com.fariin.app.media.AutoSaveMedia.KEY, false)) }
     var archive by remember { mutableStateOf(p.getBoolean("unknownChats.autoArchive", false)) }
-    var size by remember { mutableStateOf(p.getString("chat.textSize", "medium") ?: "medium") }
-    val quick = p.getString(SettingsRules.QUICK_KEY, "❤️") ?: "❤️"
     var confirmClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val clearScope = rememberCoroutineScope()
+    // iOS ChatsSettingsView: the key itself when this phone knows it, else On / Off.
+    var keySet by remember { mutableStateOf(ChatKey.cachedSet()) }
+    LaunchedEffect(Unit) { ChatKey.status()?.let { keySet = it } }
+    val keyValue = ChatKey.mine() ?: if (keySet == true) "On" else if (keySet == false) "Off" else null
+    // Same rows as iOS (owner 2026-11-08): Message Text Size, Quick Reaction and Night Mode are gone from
+    // here; the last two are in Appearance, as on iOS, and iOS has no text size of its own (the phone's).
     ScrollPage("Chats", pop) {
         SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
-            SettingsRow("Chat Key", last = true, badge = NewBadgeSpots.CHATS_CHAT_KEY) { push(PAGE_CHAT_KEY) }
-        }
-        SettingsSection(header = "Message Text Size") {
-            val sizes = listOf("small" to "Small", "medium" to "Medium", "large" to "Large")
-            for ((raw, label) in sizes) CheckRow(label, raw == size, last = raw == "large") { size = raw; p.edit().putString("chat.textSize", raw).apply() }
-        }
-        SettingsSection {
-            SettingsRow("Quick Reaction", value = quick, badge = NewBadgeSpots.APPEARANCE_QUICK_REACTION) { push(PAGE_QUICK) }
-            SettingsRow("Night Mode", value = com.fariin.app.data.AppearancePrefs.current(ctx).label, last = true,
-                badge = NewBadgeSpots.APPEARANCE_NIGHT_MODE) { push("night") }
+            SettingsRow("Chat Key", value = keyValue, last = true, badge = NewBadgeSpots.CHATS_CHAT_KEY) { push(PAGE_CHAT_KEY) }
         }
         SettingsSection(footer = "Automatically save received photos to your gallery.") {
             SwitchRow("Save to Photos", savePhotos, last = true, badge = NewBadgeSpots.CHATS_SAVE_TO_PHOTOS) { savePhotos = it; p.edit().putBoolean(com.fariin.app.media.AutoSaveMedia.KEY, it).apply() }

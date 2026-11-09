@@ -1512,3 +1512,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
     .height(contentHeight)): SheetMotion.midIsTop, a pull up only stretches and springs back.
   * Create Passkey felt late: a tap while the page's challenge prefetch was out asked the server a
     second time (now waits for it), and the button now shows a spinner from the tap.
+- 2026-11-08 ~11:16 PM: OWNER ("?", Chats page vs iOS): Settings > Chats now has iOS's rows only:
+  Chat Key (value = the key if known, else On / Off, as iOS), Save to Photos, Link Previews, New Chats
+  from Your Chat Key, Clear Chat History. Message Text Size removed (iOS has none; bubbles use one
+  size, the phone's text size still scales it), Quick Reaction and Night Mode only in Appearance (were
+  duplicated here). Checked on the emulator.
