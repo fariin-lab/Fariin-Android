@@ -109,6 +109,8 @@ import kotlin.math.abs
 internal class ViewersSheetState(private val scope: CoroutineScope) {
     val p = Animatable(0f)
     val row = Animatable(0f)
+    /** 0 = the resting height, 1 = pulled up near full screen (iOS large detent, owner 2026-11-09). */
+    val up = Animatable(0f)
     var id by mutableStateOf<String?>(null)
     private var job: Job? = null
     private val springSpec = spring<Float>(dampingRatio = 1f, stiffness = StoryMotion.SHEET_STIFFNESS)
@@ -125,9 +127,17 @@ internal class ViewersSheetState(private val scope: CoroutineScope) {
         job = scope.launch { p.animateTo(1f, springSpec, initialVelocity = velocity) }
     }
 
+    fun upTo(v: Float) { scope.launch { up.snapTo(v.coerceIn(0f, 1f)) } }
+    /** Let go between the two heights: a flick decides, else the nearer one. [velocity] in heights/s, + = up. */
+    fun settleUp(velocity: Float) {
+        val target = when { velocity > 1.2f -> 1f; velocity < -1.2f -> 0f; up.value > 0.5f -> 1f; else -> 0f }
+        scope.launch { up.animateTo(target, springSpec, initialVelocity = velocity) }
+    }
+
     fun close(velocity: Float = 0f) {
         if (id == null) return
         job?.cancel()
+        scope.launch { up.snapTo(0f) }
         job = scope.launch { p.animateTo(0f, springSpec, initialVelocity = velocity); id = null }
     }
 
@@ -142,7 +152,7 @@ internal class ViewersSheetState(private val scope: CoroutineScope) {
     }
 
     /** A finger is on the sheet or the row: it owns them, any spring stops. */
-    fun hold() { job?.cancel(); scope.launch { p.stop(); row.stop() } }
+    fun hold() { job?.cancel(); scope.launch { p.stop(); row.stop(); up.stop() } }
     fun dragTo(v: Float) { scope.launch { p.snapTo(v.coerceIn(0f, 1f)) } }
     fun rowTo(v: Float) { scope.launch { row.snapTo(v) } }
 
@@ -168,6 +178,9 @@ internal class ViewersSheetState(private val scope: CoroutineScope) {
     /** Open fraction, kept inside 0..1 for drawing (a release velocity can carry a spring past). */
     val fraction: Float get() = p.value.coerceIn(0f, 1f)
 }
+
+/** The tall height, a little room left at the top (iOS large detent). */
+private const val TALL_FRACTION = 0.92f
 
 // iOS StoryViewersPanelView, always dark (overrideUserInterfaceStyle = .dark).
 private val SheetFill = Color(0xFF1A1A1A)        // white 0.10
@@ -452,11 +465,18 @@ internal fun ViewersSheet(
     val showingReplies = repliesTab && tab == 1
 
     // The list hands a pull to the sheet once it is at its top, and takes back an upward one first.
-    val listPull = remember(sheet) {
+    // How far the sheet grows from its resting height to its tall one, in px.
+    val growPx = maxOf(1f, screenH * (TALL_FRACTION - StorySheetGeometry.HEIGHT_FRACTION))
+    val listPull = remember(sheet, growPx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (available.y < 0f && sheet.fraction < 1f) {
                     sheet.dragTo(sheet.fraction - available.y / sheetH)
+                    return Offset(0f, available.y)
+                }
+                // Pushing up: the sheet grows to its tall height before the list scrolls.
+                if (available.y < 0f && source == NestedScrollSource.UserInput && sheet.up.value < 1f) {
+                    sheet.upTo(sheet.up.value - available.y / growPx)
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
@@ -464,12 +484,15 @@ internal fun ViewersSheet(
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (available.y > 0f && source == NestedScrollSource.UserInput) {
                     sheet.hold()
-                    sheet.dragTo(sheet.fraction - available.y / sheetH)
+                    // Pulling down at the list's top: back to the resting height first, then down.
+                    if (sheet.up.value > 0f) sheet.upTo(sheet.up.value - available.y / growPx)
+                    else sheet.dragTo(sheet.fraction - available.y / sheetH)
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
             }
             override suspend fun onPreFling(available: Velocity): Velocity {
+                if (sheet.up.value > 0f && sheet.up.value < 1f) { sheet.settleUp(-available.y / growPx); return available }
                 if (sheet.fraction >= 1f) return Velocity.Zero
                 val dropped = (1f - sheet.fraction) * sheetH
                 if (StorySheetGeometry.shouldClose(dropped, available.y, screenH, d)) sheet.close(-available.y / sheetH)
@@ -483,7 +506,8 @@ internal fun ViewersSheet(
     CompositionLocalProvider(LocalFariinColors provides Fariin.colors.copy(dark = true, label = Color.White, bg = SheetFill)) {
         Box(Modifier.fillMaxSize().onSizeChanged { screenH = maxOf(1f, it.height.toFloat()) }) {
             Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(StorySheetGeometry.HEIGHT_FRACTION)
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .fillMaxHeight(StorySheetGeometry.HEIGHT_FRACTION + (TALL_FRACTION - StorySheetGeometry.HEIGHT_FRACTION) * sheet.up.value.coerceIn(0f, 1f))
                     .onSizeChanged { sheetH = maxOf(1f, it.height.toFloat()) }
                     .graphicsLayer { translationY = (1f - sheet.fraction) * sheetH }
                     .rowSwipe(rowSwipe)
@@ -500,10 +524,13 @@ internal fun ViewersSheet(
                             onDragStart = { sheet.hold(); start = sheet.fraction; tracker.resetTracking() },
                             onVerticalDrag = { ch, dy ->
                                 tracker.addPosition(ch.uptimeMillis, ch.position)
-                                sheet.dragTo(sheet.fraction - dy / sheetH)
+                                // Up past fully open, or down while tall: the height moves, not the sheet.
+                                if (sheet.fraction >= 1f && (dy < 0f || sheet.up.value > 0f)) sheet.upTo(sheet.up.value - dy / growPx)
+                                else sheet.dragTo(sheet.fraction - dy / sheetH)
                             },
                             onDragEnd = {
                                 val vDown = tracker.calculateVelocity().y
+                                if (sheet.fraction >= 1f && (sheet.up.value > 0f || vDown < 0f)) { sheet.settleUp(-vDown / growPx); return@detectVerticalDragGestures }
                                 val dropped = (start - sheet.fraction) * sheetH
                                 if (StorySheetGeometry.shouldClose(dropped, vDown, screenH, d)) sheet.close(-vDown / sheetH)
                                 else sheet.settleOpen(-vDown / sheetH)
