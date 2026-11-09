@@ -59,11 +59,11 @@ fun Modifier.listPress(enabled: Boolean = true, onLongClick: (() -> Unit)? = nul
             scope.launch {
                 val p = PressInteraction.Press(touch.down)
                 press.emit(p)
-                // Held as long as the big Android messenger holds it (owner's video, 2026-11-04: the
-                // whole row grey for about 0.2 s before the chat came in), so the ripple fills the row.
-                delay(PRESS_HOLD_MS)
+                // Opens at once and the row stays grey while the page slides over it (iOS; owner's Pixel
+                // 2026-11-09: the 0.2 s hold before the chat came in felt slow once the page slid from
+                // the tap, and quick taps piled up behind it).
                 onClick()
-                delay(200)
+                delay(PRESS_HOLD_MS + 200)
                 press.emit(PressInteraction.Release(p))
             }
         })

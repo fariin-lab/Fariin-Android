@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.composable
@@ -176,6 +177,11 @@ object PageMotion {
         }
     }
 
+    /** A page change is playing: nothing takes a touch or a back press until it lands (iOS does the
+     *  same). Owner's Pixel 2026-11-09: taps while a chat was still sliding away landed on that chat,
+     *  the next back press found no chat to close and left the app ("lost the track"). */
+    val moving: Boolean get() = e < 1f
+
     /** Whether a page is on screen at all: the top one, or the one it is replacing while that moves. */
     fun shows(id: String?): Boolean = id != null && (id == top || (id == other && e < 1f))
 }
@@ -190,6 +196,15 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
     // from placement, and a layer-only move left it a frame behind, so it drew the messages sharp
     // for single frames while the page slid (owner's Pixel 2026-11-09).
     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
+        // While the page moves, its touches go nowhere (PageMotion.moving).
+        .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    if (PageMotion.moving) ev.changes.forEach { it.consume() }
+                }
+            }
+        }
         .layout { m, c ->
             val p = m.measure(c)
             layout(p.width, p.height) { p.place((PageMotion.offset(id) * p.width).toInt(), 0) }
@@ -203,3 +218,18 @@ fun androidx.navigation.NavGraphBuilder.page(
     deepLinks: List<androidx.navigation.NavDeepLink> = emptyList(),
     content: @Composable androidx.compose.animation.AnimatedContentScope.(NavBackStackEntry) -> Unit,
 ) = composable(route, arguments, deepLinks) { entry: NavBackStackEntry -> PageFrame(entry.id) { content(entry) } }
+
+
+/** A back press while a page change plays is kept and done the moment it lands (PageMotion.moving):
+ *  dropped, a chat stayed open after the press; let through, a second quick back found no chat to
+ *  close and left the app. One press is kept at most. Placed after the nav host, so it is asked first. */
+@Composable
+fun PageMotionBackGuard() {
+    val moving by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { PageMotion.moving } }
+    var pending by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val owner = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
+    androidx.activity.compose.BackHandler(enabled = moving) { pending = true }
+    androidx.compose.runtime.LaunchedEffect(moving, pending) {
+        if (!moving && pending) { pending = false; owner?.onBackPressedDispatcher?.onBackPressed() }
+    }
+}

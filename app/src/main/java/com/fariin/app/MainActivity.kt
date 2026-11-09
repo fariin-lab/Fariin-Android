@@ -355,7 +355,18 @@ class MainActivity : ComponentActivity() {
                         shape = com.fariin.app.ui.call.CallCardShape(26.dp.toPx() * cardT)
                         clip = true
                     } else Modifier)) {
-            Box(Modifier.fillMaxSize().graphicsLayer {
+            Box(Modifier.fillMaxSize()
+                // Nor while a page change plays (PageMotion.moving): a tap on the list then opened a
+                // second chat under the first one still sliding. Read at the touch, not in composition.
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            if (com.fariin.app.ui.components.PageMotion.moving) ev.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+                .graphicsLayer {
                 alpha = if (pm.top == null || pm.shows(pm.mainId)) 1f else 0f
                 translationX = shell.shift * size.width
             }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
@@ -383,6 +394,7 @@ class MainActivity : ComponentActivity() {
                     ThreadRoute(cid, me, crypto, onBack = { nav.popBackStack() })
                 }
             }
+            com.fariin.app.ui.components.PageMotionBackGuard()
             }
             }
         }
