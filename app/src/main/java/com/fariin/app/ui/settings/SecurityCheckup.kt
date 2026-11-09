@@ -666,7 +666,7 @@ private fun ScanCheckup(profile: MyProfile?, demo: Boolean, open: (String) -> Un
         }
         val cont by androidx.compose.animation.core.animateFloatAsState(if (settled) 1f else 0.4f, androidx.compose.animation.core.tween(200), label = "cont")
         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).alpha(cont)) {
-            WideButton("Continue") { if (settled) onContinue() }
+            WideButton("Done") { if (settled) onContinue() }   // owner 2026-11-09: it closes back to Devices
         }
     }
 }
