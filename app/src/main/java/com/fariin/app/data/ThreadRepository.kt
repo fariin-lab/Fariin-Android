@@ -1549,6 +1549,8 @@ class ThreadRepository(
     }
 
     private suspend fun rewriteSummaryAfterDelete() {
+        // A channel's preview is the server's (CHANNEL-SYNC-SPEC 3-4, iOS serverOwnsPreview; audit A7).
+        if (isChannelChat() || isChannel()) return
         try {
             val group = Wire.isGroupCid(cid)
             val newest = convRef.collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)

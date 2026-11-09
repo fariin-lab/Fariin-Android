@@ -140,6 +140,9 @@ internal fun rememberReplyQuickReaction(): String {
  * before it. A send carries the phone's id, which becomes the reply's id: a retry cannot post twice.
  */
 @Stable
+/** Offline is not "deleted" (iOS, audit X8). */
+private const val OFFLINE_WORDS = "Couldn't load replies. Check your connection."
+
 class PostRepliesState(val cid: String, private val mid: String, private val scope: CoroutineScope) {
     private val cacheKey = (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "") + "/$cid/$mid"
 
@@ -488,7 +491,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         if (threads.none { it.id == f.rid }) {
             // Not on the pages read so far: a few more pages are looked through, then it is let go.
             if (olderCursor.isNotEmpty() && laterIds.size < 4 * 30) loadOlder()
-            else if (loaded) { focusWanted = null; if (olderCursor.isEmpty()) toast = "This reply was deleted" }
+            else if (loaded) { focusWanted = null; if (failed) toast = OFFLINE_WORDS else if (olderCursor.isEmpty()) toast = "This reply was deleted" }
             return
         }
         focusWanted = null
@@ -505,7 +508,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
             while (answers[thread].orEmpty().none { it.id == answer } && answerNext[thread].orEmpty().isNotEmpty() && tries++ < 5)
                 loadAnswers(thread, more = true)
             if (answers[thread].orEmpty().any { it.id == answer }) { scrollTarget = answer; flash(answer) }
-            else { scrollTarget = thread; flash(thread); if (answerNext[thread].orEmpty().isEmpty()) toast = "This reply was deleted" }
+            else { scrollTarget = thread; flash(thread); if (answersFailed) toast = OFFLINE_WORDS else if (answerNext[thread].orEmpty().isEmpty()) toast = "This reply was deleted" }
         }
     }
 
@@ -517,12 +520,17 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
             scope.launch { loadAnswers(rid, more = true) }
     }
 
+    /** The last answers page could not be read (offline): not a deleted reply (audit X8). */
+    private var answersFailed = false
+
     suspend fun loadAnswers(rid: String, more: Boolean) {
         // One first-page fetch per thread at a time (the background fetch and a tap meet here).
         if (!more && rid in answersLoading) return
         if (!more) answersLoading = answersLoading + rid
         val cursor = if (more) answerNext[rid].orEmpty() else ""
-        val p = try { PostReplies.answers(cid, mid, rid, cursor) } finally { if (!more) answersLoading = answersLoading - rid } ?: return
+        val p = try { PostReplies.answers(cid, mid, rid, cursor) } finally { if (!more) answersLoading = answersLoading - rid }
+        answersFailed = p == null
+        if (p == null) return
         answers = answers + (rid to PostReplyRules.mergeAnswers(answers[rid].orEmpty(), rows(p.items), more))
         answerNext = answerNext + (rid to p.next)
         answersLoaded += rid

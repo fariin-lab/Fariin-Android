@@ -108,7 +108,10 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
                 }
             }
             val list = items
+            // Not from people I blocked since (iOS ActivityFeedView; audit A9).
+            val blocked by com.fariin.app.data.BlockList.state.collectAsState()
             val shown = list?.let { l -> if (unreadOnly) l.filter { it.id in unreadAtOpen.orEmpty() } else l }
+                ?.filter { it.fromUid.isEmpty() || !blocked.contains(it.fromUid) }
             when {
                 shown == null -> com.fariin.app.ui.components.LoadingLine("Loading…", Modifier.padding(16.dp), fontSize = 17.sp)
                 shown.isEmpty() -> Text(if (unreadOnly) "Nothing unread." else "When people reply to or react to your comments, you'll see it here.",
@@ -294,13 +297,25 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
     suspend fun load(more: Boolean) {
         if (loading) return
         loading = true
-        val page = com.fariin.app.data.ReplyReactors.page(i.cid, i.mid, i.mineRid, i.mineAid, emoji, if (more) next else "")
+        val asked = emoji
+        var cursor = if (more) next else ""
+        var got = emptyList<com.fariin.app.data.Reactor>()
+        var page: com.fariin.app.data.ReactorsPage? = null
+        // The server filters an emoji after taking 60 likes, so a page can be empty with more behind
+        // it (audit A12): keep asking, at most five pages, until someone shows.
+        for (k in 0 until 5) {
+            val p = com.fariin.app.data.ReplyReactors.page(i.cid, i.mid, i.mineRid, i.mineAid, asked, cursor) ?: run { page = null; break }
+            page = p; got = got + p.people; cursor = p.next
+            if (got.isNotEmpty() || p.next.isEmpty()) break
+        }
         loading = false
-        if (page == null) { if (!more) failed = true; return }
+        if (asked != emoji) return   // the chip changed meanwhile (audit A15)
+        val pg = page
+        if (pg == null) { if (!more) failed = true; return }
         failed = false
-        if (page.rx.isNotEmpty()) rx = page.rx
-        list = if (more) list.orEmpty() + page.people else page.people
-        next = page.next
+        if (pg.rx.isNotEmpty()) rx = pg.rx
+        list = if (more) list.orEmpty() + got else got
+        next = cursor
     }
     LaunchedEffect(emoji) { list = null; next = ""; load(false) }
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = c.bgSecondary) {
@@ -341,7 +356,7 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
                     items(rows.size, key = { rows[it].uid + rows[it].emoji }) { k ->
                         val r = rows[k]
                         if (k >= rows.size - 10 && next.isNotEmpty()) LaunchedEffect(next) { load(true) }
-                        Row(Modifier.fillMaxWidth().clickable { onDismiss(); people.contact(r.uid) }
+                        Row(Modifier.fillMaxWidth().clickable(enabled = r.uid.isNotEmpty()) { onDismiss(); people.contact(r.uid) }
                             .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(48.dp)) {
                                 Avatar(r.photo.ifEmpty { null }, 48.dp)

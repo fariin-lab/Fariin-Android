@@ -83,7 +83,7 @@ class FariinMessagingService : FirebaseMessagingService() {
         com.fariin.app.data.PostReplyRules.alertTarget(message.data["kind"], message.data["cid"], message.data["mid"])?.let { (cid, mid) ->
             if (Push.pushOn(applicationContext) && PushRouter.activeChatId != cid) NotificationPoster.postReplyAlert(applicationContext,
                 message.notification?.title ?: "Fariin", message.notification?.body ?: "New reply", cid, mid,
-                message.data["rid"].orEmpty(), message.data["aid"].orEmpty())
+                message.data["rid"].orEmpty(), message.data["aid"].orEmpty(), message.data["kind"].orEmpty())
             return
         }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)

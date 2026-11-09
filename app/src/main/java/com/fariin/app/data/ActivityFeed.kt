@@ -119,11 +119,12 @@ object ActivityRules {
     fun preview(s: ActivitySummary): String {
         val n = s.name.ifEmpty { "Someone" }
         return when (s.kind) {
-            "react" -> "$n reacted ${s.emoji} to your comment".replace("  ", " ")
+            // Word for word as iOS ActivitySummary.preview, empty forms too (audit A2).
+            "react" -> if (s.emoji.isEmpty()) "$n reacted to your comment" else "$n reacted ${s.emoji} to your comment"
             "quote" -> "$n quoted your post" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
-            "comment" -> "$n commented: ${s.text}"
+            "comment" -> if (s.text.isEmpty()) "$n commented on your post" else "$n commented: ${s.text}"
             "mention" -> "$n mentioned you" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
-            else -> "$n replied to your comment: ${s.text}"
+            else -> "$n replied to your comment" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
         }
     }
 
@@ -246,5 +247,6 @@ object ReplyReactors {
                 .filter { it.second > 0 }.toMap(),
             total = (r["total"] as? Number)?.toInt() ?: 0,
             next = r["next"] as? String ?: "")
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e   // a cancelled load stops (audit A15)
     } catch (_: Exception) { null }
 }
