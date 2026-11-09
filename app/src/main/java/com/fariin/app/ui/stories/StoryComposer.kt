@@ -965,8 +965,14 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
             askPlace = false
             com.fariin.app.data.StoryChips.place(raw)?.let { (label, url) -> addChip("📍 $label", url) }
         }, onCancel = { askPlace = false })
-        if (baking) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)).clickable {}, contentAlignment = Alignment.Center) {
-            com.fariin.app.ui.components.FariinSpinner(size = 44.dp, stroke = 5.dp, color = Color.White)
+        // Taps held at once; the dim and the spinner only after 300 ms, so a quick Next goes straight
+        // to the sheet with no flash (owner's video 2026-11-09: a spinner blinked for two frames).
+        if (baking) {
+            var slow by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { kotlinx.coroutines.delay(300); slow = true }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (slow) 0.3f else 0f)).clickable {}, contentAlignment = Alignment.Center) {
+                if (slow) com.fariin.app.ui.components.FariinSpinner(size = 44.dp, stroke = 5.dp, color = Color.White)
+            }
         }
         if (audience) Box(Modifier.fillMaxSize().graphicsLayer { translationY = leaveSheet.value * box.height }) {
             ShareStoryAudiencePage(me, conversations, onBack = { if (textStory) onClose() else audience = false }) { choice, picked, lists, capture ->
