@@ -1361,3 +1361,5 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   to the iOS card: my tile bottom-right (a third of the width, 9:16, hairline edge), the stage words
   centred under the picture only until connected (no clock on a running call). Note: builds in this
   shell need JAVA_HOME=Android Studio/jbr; e652e0db was only compile-checked at this step (it built).
+- 2026-11-08 ~7:57 PM: emulators: decline = caller "No answer" + Call again, decliner "Missed voice
+  call" (iOS owner rule: declines never shown). Voice call -> camera on mid-call: both sides right.
