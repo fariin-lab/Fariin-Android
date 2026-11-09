@@ -117,7 +117,11 @@ private fun ReportSheet(t: ReportTarget, me: String, onDismiss: () -> Unit) {
     // Each page's own height, so the sheet settles to the page now showing (not mid-slide sizes).
     val heights = remember { mutableStateMapOf<Int, Float>() }
     val guess = reportRestStop(560f)
-    if (motion.mid <= 0f) motion.mid = guess
+    // The first guess ONCE: a page taller than the screen fits to 0, and re-seeding the guess on
+    // every pass then made the sheet think it rested lower than it did, so the next, short step
+    // never shrank (owner's Pixel 2026-11-09; its shorter screen is where step 1 overflows).
+    val seeded = remember { booleanArrayOf(false) }
+    if (!seeded[0]) { seeded[0] = true; if (motion.mid <= 0f) motion.mid = guess }
     // A fitted sheet: a pull up only stretches and springs back, never parks it at full height, so
     // the next step can shrink to its own size (owner's Pixel 2026-11-09: a short step sat full
     // height after the list had been pushed up). The note field still raises it for the keyboard.
