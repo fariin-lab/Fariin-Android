@@ -211,7 +211,10 @@ fun CallScreen(
     val shown by animateFloatAsState(if (chrome.visible) 1f else 0f,
         tween(if (chrome.visible) 200 else 280, easing = EaseInOut), label = "chrome")
     val local = ui.localVideo
-    val cardUp = ui.cameraOn && !localFull && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED
+    // iOS showsTile: in a connected video call the card stays put, with my photo in it while my camera
+    // is off (it used to vanish, found testing alice <-> bobby on two emulators).
+    val connectedVideo = (s.video || ui.remoteCameraOn) && (s.phase == CallPhase.ACTIVE || s.phase == CallPhase.RECONNECTING)
+    val cardUp = (ui.cameraOn || connectedVideo) && !localFull && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED
     // A tap on my card swaps the two pictures: mine big, theirs in the card (iOS isLocalExpanded).
     var swapped by remember { mutableStateOf(false) }
     LaunchedEffect(cardUp) { if (!cardUp) swapped = false }
@@ -296,15 +299,22 @@ fun CallScreen(
         if (cardUp && !shareLayout) {
             SelfCard(grown = chrome.visible, chrome = chrome,
                 label = if (swapped) ui.peerName else "Your video",
-                onFlip = if (!swapped && local != null) { { chrome.touch(); onFlip() } } else null,
+                onFlip = if (!swapped && local != null && ui.cameraOn) { { chrome.touch(); onFlip() } } else null,
                 // TWO STAGES (iOS tapTile): the small card only brings the controls back; a tap on the
                 // grown card swaps the pictures, and the next one swaps them back.
                 onTap = { if (chrome.visible) swapped = !swapped; chrome.touch() },
             ) {
                 val m = Modifier.fillMaxSize()
-                val cardTrack = if (swapped) remoteVideo else local
+                // My track stays published while the camera is off: only a camera that is on is drawn.
+                val cardTrack = if (swapped) remoteVideo else local?.takeIf { ui.cameraOn }
                 when {
                     cardTrack != null -> CardVideoView(cardTrack, mirror = !swapped && ui.frontCamera, modifier = m)
+                    // My camera is off: my photo holds the card (iOS tileContent).
+                    !swapped && !ui.cameraOn -> Box(m.background(TileFill), contentAlignment = Alignment.Center) {
+                        Avatar(rememberMyPhoto(), 64.dp)
+                        Icon(ImageVector.vectorResource(R.drawable.ic_call_video_off), "Camera off", tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).size(18.dp))
+                    }
                     !swapped -> DemoVideo(m, MeA, MeB)
                     demoVideo -> DemoVideo(m, ThemA, ThemB)
                     // Their camera is off: their photo holds the card (iOS tileContent).
