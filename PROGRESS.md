@@ -1357,3 +1357,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   wakes the ring listener and rings are keyed by call id (current/finished/accepted ignored).
   Item 2 (pitch after a group call): not on Android; the 1:1 audio module takes the phone's fixed
   output rate and the LiveKit room is disconnected and released on leave. List done except 22.
+- 2026-11-08 ~7:55 PM: 1:1 video minimized to the floating window, tested on the emulators. Matched
+  to the iOS card: my tile bottom-right (a third of the width, 9:16, hairline edge), the stage words
+  centred under the picture only until connected (no clock on a running call). Note: builds in this
+  shell need JAVA_HOME=Android Studio/jbr; e652e0db was only compile-checked at this step (it built).

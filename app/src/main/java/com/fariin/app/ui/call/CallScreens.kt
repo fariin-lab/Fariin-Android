@@ -843,15 +843,20 @@ fun PipScreen(ui: CallUi) {
         }
         val video = remote != null || demoThem || local != null
         if (video) {
-            // The stage words or clock along the bottom over the video.
-            Text(status, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
-                    .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-            // My tile in the corner while their video is big.
-            if (!bigIsMine && local != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(36.dp, 64.dp).clip(RoundedCornerShape(8.dp))) {
-                VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize(), overlay = true)
+            // iOS card: my tile in the BOTTOM corner (owner's rule, its home is the bottom), a third of
+            // the width at 9:16 with a hairline edge.
+            if (!bigIsMine && local != null) {
+                val tw = maxWidth * 0.34f
+                Box(Modifier.align(Alignment.BottomEnd).padding(5.dp).size(tw, tw * 16f / 9f).clip(RoundedCornerShape(7.dp))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(7.dp))) {
+                    VideoView(local, mirror = ui.frontCamera, modifier = Modifier.fillMaxSize(), overlay = true)
+                }
             }
-            if (ui.muted) PipMicOff("You are muted", Modifier.align(Alignment.BottomEnd).padding(8.dp))
+            // iOS stageLabel: the stage words under the picture until connected; a counting call says nothing.
+            if (s.phase != CallPhase.ACTIVE || ui.held) Text(status, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
+                    .background(Color.Black.copy(alpha = 0.55f), CircleShape).padding(horizontal = 8.dp, vertical = 4.dp))
+            if (ui.muted) PipMicOff("You are muted", Modifier.align(Alignment.TopEnd).padding(8.dp))
         }
         if (theirMute && video) PipMicOff("${ui.peerName.substringBefore(' ')} is muted", Modifier.align(Alignment.TopStart).padding(8.dp))
     }
