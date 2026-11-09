@@ -197,7 +197,12 @@ internal fun AttachSheet(
     var shotUri by remember { mutableStateOf<Uri?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val u = shotUri
-        if (ok && u != null && picked.size < MediaRules.MEDIA_PER_PICK) picked += u
+        if (ok && u != null && picked.size < MediaRules.MEDIA_PER_PICK) {
+            picked += u
+            // iOS ThreadView: the composer camera's photo opens straight in the photo editor (crop,
+            // draw, caption, Send), not in the library grid.
+            if (cameraFirst && picked.size == 1) drawOn = u
+        }
         else if (cameraFirst && picked.isEmpty()) onDismiss()
     }
     val launchCamera = {
@@ -380,7 +385,9 @@ internal fun AttachSheet(
         }
     }
     drawOn?.let { u ->
-        if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false, onClose = { drawOn = null },
+        // From the composer camera, closing the editor goes back to the chat, as iOS (no grid behind it).
+        if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false,
+            onClose = { drawOn = null; if (cameraFirst && picked.size == 1) onDismiss() },
             allowViewOnce = allowViewOnce,
             onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); motion.close() })
         // One video chosen: the video editor (iOS VideoApprovalView), the trimmer and Send.

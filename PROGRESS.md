@@ -1395,3 +1395,6 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~8:57 PM: voice notes between the emulators (hold to record, slide-to-cancel bar,
   lock, send, play). Fixed as iOS VoiceMessageView: the speed pill shows always (was only while
   this note was the player), and a note that played to the end reads its length again, not 0:00.
+- 2026-11-08 ~9:00 PM: composer camera photo now opens straight in the photo editor (iOS
+  ThreadView CameraPicker -> editImage), closing it returns to the chat; before it landed as one
+  pick in the library grid (and asked for library access first). Sent and received on emulators.
