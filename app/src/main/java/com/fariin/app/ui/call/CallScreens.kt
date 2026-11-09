@@ -1045,7 +1045,9 @@ private fun GroupCallStage(g: GroupCallUi, onMic: () -> Unit, onCamera: () -> Un
     var swapped by remember { mutableStateOf(false) }
     LaunchedEffect(duo) { if (!duo) swapped = false }
     Box(Modifier.fillMaxSize().background(if (pip) PipFill else Backdrop)) {
-        if (waitingScreen) GroupWaiting(g.groupPhoto, pulse = g.calling)
+        // A multi-person call I started, nobody here yet: who is being rung (iOS GroupCallRingingView).
+        if (waitingScreen && g.calling && g.ringing.isNotEmpty()) RingingPeople(g.ringing)
+        else if (waitingScreen) GroupWaiting(g.groupPhoto, pulse = g.calling)
         if (duo) DuoFeed(if (swapped && duoTile(me!!, remotes[0])) me else remotes[0], meId)
         Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             val status = com.fariin.app.call.GroupCallWords.subtitle(g.waiting, g.connecting, g.reconnecting, g.joined, g.calling, g.members.size)
@@ -1194,6 +1196,46 @@ fun GroupWaiting(photo: String?, pulse: Boolean, size: Dp = 160.dp) {
             }
         }
     }
+}
+
+/** iOS GroupCallRingingView: the first person's photo pulsing, "+N" for the rest, the names, "Ringing…". */
+@Composable
+private fun RingingPeople(people: List<com.fariin.app.call.CallPerson>) {
+    val size = 160.dp
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "ringPulse")
+    val phase by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+        tween(2400, easing = androidx.compose.animation.core.LinearEasing)), label = "ringPhase")
+    Column(Modifier.fillMaxSize().padding(bottom = 60.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center) {
+        Box(Modifier.size(size * 1.5f), contentAlignment = Alignment.Center) {
+            for (i in 0..1) {
+                val p = (phase + i * 0.5f) % 1f
+                val e = 1 - (1 - p) * (1 - p)
+                Box(Modifier.size(size).graphicsLayer { scaleX = 1 + 0.5f * e; scaleY = 1 + 0.5f * e; alpha = 0.9f * (1 - e) }
+                    .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape))
+            }
+            Box(Modifier.shadow(26.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))) {
+                Avatar(people.first().photo, size, Modifier.border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape))
+            }
+            if (people.size > 1) Box(Modifier.offset(x = size * 0.36f, y = size * 0.36f).size(40.dp).clip(CircleShape)
+                .background(Color(0xFF333333)).border(3.dp, Color.Black.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
+                Text("+${people.size - 1}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Spacer(Modifier.height(22.dp))
+        Text(ringingNames(people.map { it.name }), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 2, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
+        Spacer(Modifier.height(6.dp))
+        Text("Ringing…", color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp)
+    }
+}
+
+/** iOS GroupCallRingingView.names: "Ana", "Ana and Bo", "Ana, Bo and 2 others". */
+internal fun ringingNames(names: List<String>): String = when (names.size) {
+    0 -> ""
+    1 -> names[0]
+    2 -> "${names[0]} and ${names[1]}"
+    else -> (names.size - 2).let { rest -> "${names[0]}, ${names[1]} and $rest ${if (rest == 1) "other" else "others"}" }
 }
 
 /** iOS GroupCallMotion.layout: spring(response 0.38, damping 1). */

@@ -219,6 +219,8 @@ data class GroupCallUi(
     /** I started this call and nobody has come yet (iOS callingNow: "Ringing everyone…" and the pulse). */
     val calling: Boolean = false,
     val reconnecting: Boolean = false,
+    /** The people a call I started is ringing (iOS ringingNames), for the waiting screen. */
+    val ringing: List<CallPerson> = emptyList(),
     /** The group's own photo, for the waiting screen (iOS groupPhotoUrl). */
     val groupPhoto: String? = null,
     /** The settled speaker (iOS GroupCallSpeakerTracker), a member id. */
@@ -358,7 +360,7 @@ object GroupCall {
         groupReg?.remove(); groupReg = null
         faces = others.associate { it.uid to (it.name to it.photo) }; asked.clear(); team = null
         _ui.value = GroupCallUi(cid = roomId, title = title, connecting = true, cameraOn = video, micOn = mic, calling = true,
-            groupPhoto = others.first().photo)
+            groupPhoto = others.first().photo, ringing = others)
         CallTonePlayer.startRingback()
         val app = context.applicationContext
         appContext = app
