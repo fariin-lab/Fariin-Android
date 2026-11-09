@@ -285,7 +285,10 @@ private fun StoryCamera(
     val previewView = remember {
         PreviewView(context).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
-            implementationMode = PreviewView.ImplementationMode.PERFORMANCE
+            // COMPATIBLE (drawn inside the app) so the picture fades and slides with the page: in
+            // PERFORMANCE it is its own surface, which ignored the close fade and stayed bright while
+            // the rest faded (owner's Pixel 2026-11-09).
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         }
     }
     val captured by rememberUpdatedState(onCaptured)
