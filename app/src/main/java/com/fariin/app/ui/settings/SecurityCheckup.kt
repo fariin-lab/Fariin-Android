@@ -289,7 +289,8 @@ internal fun securityCheckupRoute(page: String, profile: MyProfile?, demo: Boole
     return true
 }
 
-/** The Devices page header (iOS DevicesHeader): the shield, the line and the Security Checkup button. */
+/** The Devices page header (iOS DevicesHeader): the padlock art, the line, then Security Checkup as a
+ *  grouped row (owner 2026-11-09: no big black button). */
 @Composable
 internal fun DevicesCheckupHeader(onCheckup: () -> Unit) {
     val c = Fariin.colors
@@ -298,16 +299,15 @@ internal fun DevicesCheckupHeader(onCheckup: () -> Unit) {
     // The answers are fetched while he looks at Devices, so the checkup opens already answered.
     LaunchedEffect(Unit) { if (demo) SecurityCheckup.demo() else SecurityCheckup.run(ctx) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        SecurityShieldIcon(Modifier.size(112.dp))
+        SecurityArt()
         Spacer(Modifier.size(18.dp))
         Text(buildAnnotatedString {
             append("Review your ")
             withStyle(SpanStyle(color = c.accent)) { append("account security") }
             append(" and check active devices")
         }, fontSize = 17.sp, color = c.label, textAlign = TextAlign.Center, modifier = Modifier.clickable(onClick = onCheckup))
-        Spacer(Modifier.size(18.dp))
-        WideButton("Security Checkup", onCheckup)
     }
+    SettingsSection { SettingsRow("Security Checkup", subtitle = "Review your account", last = true, onClick = onCheckup) }
 }
 
 @Composable

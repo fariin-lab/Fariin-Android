@@ -138,6 +138,8 @@ internal fun SettingsRow(
     newBadge: Boolean = false,
     /** The row's NewBadgeSpots id: its pill shows while the panel has it on. */
     badge: String? = null,
+    /** A line always under the title, however short (the Devices page's Security Checkup row). */
+    subtitle: String? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val c = Fariin.colors
@@ -169,6 +171,7 @@ internal fun SettingsRow(
             if (value != null && !side) {
                 Text(value, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2)
             }
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 2)
         }
         if (side) Text(value!!, style = MaterialTheme.typography.bodyLarge, color = c.secondary, maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,

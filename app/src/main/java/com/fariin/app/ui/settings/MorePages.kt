@@ -230,10 +230,8 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
         }
         SettingsSection(header = "Other devices", footer = if (hoursLeft > 0 && others.isNotEmpty()) "You can sign out other devices in about $hoursLeft h."
             else "Sign out any device you don't recognise.") {
+            // Text only (owner 2026-11-09: the blue shield went).
             if (rows != null && others.isEmpty()) Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_shield), null,
-                    tint = Fariin.colors.blue, modifier = Modifier.size(30.dp))
-                Spacer(Modifier.width(14.dp))
                 Column {
                     Text("No other devices", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label)
                     Text("Only this device is signed in to your account.", fontSize = 15.sp, color = Fariin.colors.secondary)
