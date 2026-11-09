@@ -152,24 +152,12 @@ class ThreadRepository(
             val now = System.currentTimeMillis().toDouble()
             val saved = LocalCache.loadThread(me, cid).filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
             if (saved.isNotEmpty()) {
-                // Safety net (shared rules 2026-11-07): when the list knows a newer message than the
-                // saved rows, they are not drawn, so the chat does not open on old rows and then
-                // jump. The listener (warm from ChatHistoryPreloader) answers first; past 350 ms the saved
-                // rows show and the new ones glide in at the bottom.
-                val listTime = CryptoHub.listedConversation(cid)?.displayUpdatedAt(me) ?: 0.0
-                // Never for a channel (iOS 2026-11-08): settings and edits move its updatedAt with no
-                // new row, so the hold fired on every open and it showed empty for up to a second.
-                val stale = !isChannelChat() && ChatHistoryPreloader.behind(listTime, saved.maxOf { it.createdAtMillis })
-                if (!stale) {
-                    seeded = true
-                    _state.update { it.copy(messages = order.sort(saved), loaded = true) }
-                } else scope.launch {
-                    kotlinx.coroutines.delay(ChatHistoryPreloader.OPEN_WAIT_MS)
-                    if (!live && liveDocs.isEmpty() && _state.value.messages.isEmpty()) {
-                        seeded = true
-                        _state.update { it.copy(messages = order.sort(saved), loaded = true) }
-                    }
-                }
+                // Owner's Pixel 2026-11-09: a first open after launch slid in empty and the rows came
+                // a beat later, a second open was full at once. The saved rows now draw on the first
+                // frame always (as iOS ThreadMessageCache paints before the push); rows the list knows
+                // are newer arrive from the listener at the bottom, as a message arriving would.
+                seeded = true
+                _state.update { it.copy(messages = order.sort(saved), loaded = true) }
             }
         }
         open[cid] = this

@@ -168,7 +168,10 @@ object PageMotion {
         return when (id) {
             top -> if (forward) 1f - p else -Motion.UNDER_SHIFT * (1f - p)
             other -> if (forward) -Motion.UNDER_SHIFT * p else p
-            else -> 0f
+            // Any other page still composed (one closing a moment ago, held by the nav host while
+            // a new change starts): never drawn in place. Owner's Pixel 2026-11-09: a chat closed
+            // and another opened within a second flashed the closed chat full screen for 4 frames.
+            else -> if (top == null) 0f else 1f
         }
     }
 
