@@ -237,13 +237,10 @@ private fun HandleMark(state: HandleState) {
     when (state) {
         HandleState.Empty -> {}
         HandleState.Invalid -> Box(Modifier.size(17.dp).border(BorderStroke(1.5.dp, c.secondary.copy(alpha = 0.6f)), CircleShape))
-        HandleState.Checking -> Busy(c.label, 18)
-        HandleState.Free -> Box(Modifier.size(20.dp).clip(CircleShape).background(GreenOk), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), "Available", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(13.dp))
-        }
-        HandleState.Taken -> Box(Modifier.size(20.dp).clip(CircleShape).background(c.red), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Taken", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(13.dp))
-        }
+        // One ring that spins while asking and closes into the answer (iOS HandleCheckRing, owner 2026-11-09).
+        HandleState.Checking -> com.fariin.app.ui.components.HandleCheckRing(com.fariin.app.ui.components.CheckPhase.Checking)
+        HandleState.Free -> com.fariin.app.ui.components.HandleCheckRing(com.fariin.app.ui.components.CheckPhase.Free)
+        HandleState.Taken -> com.fariin.app.ui.components.HandleCheckRing(com.fariin.app.ui.components.CheckPhase.Taken)
         HandleState.Unknown -> Icon(ImageVector.vectorResource(R.drawable.ic_sf_wifi_slash), "Couldn't check", tint = c.secondary, modifier = Modifier.size(16.dp))
     }
 }

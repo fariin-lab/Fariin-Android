@@ -252,6 +252,22 @@ object ChannelRules {
     const val NAME_MAX = 100
     const val ABOUT_MAX = 255
     const val LINK_MIN = 5
+
+    /**
+     * A first public link from the name (owner 2026-11-09, iOS GroupTypeView.suggestedLink): lower
+     * case, spaces and dashes to _, only a-z 0-9 _, LINK_MIN..LINK_MAX long. Only a suggestion; the
+     * live check still says whether it is free.
+     */
+    fun suggestLink(title: String, noun: String): String {
+        val sb = StringBuilder()
+        for (ch in title.lowercase()) {
+            if (ch == ' ' || ch == '-') { if (!sb.endsWith("_")) sb.append('_') }
+            else if (ch in 'a'..'z' || ch in '0'..'9' || ch == '_') sb.append(ch)
+        }
+        var out = sb.toString().trim('_')
+        if (out.length < LINK_MIN) out = if (out.isEmpty()) noun else "${out}_$noun"
+        return out.take(LINK_MAX)
+    }
     const val LINK_MAX = 30
 
     /** GroupDirectory.localProblem: the shape rules the phone can judge; null = fine (or empty). */
