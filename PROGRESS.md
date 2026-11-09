@@ -1338,3 +1338,10 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   People, share card + Stop Sharing when alone, flip, speaker, camera off, mute, minimize bar, End.
   Also: approval switch (22064e9c), ringing faces (30bc3f07), Remove and Block (36797830).
   Needs a second phone: remote tiles, duo view, watching a share, rings, Not here yet, duo header.
+- 2026-11-08 ~7:35 PM: REAL 1:1 VIDEO CALL tested between two emulators (alice <-> bobby, local
+  backend, seed + scratchpad dm_seed.py for the 1:1 chat): ring + heads-up Answer, No answer page,
+  connect, clock, card grows/shrinks, Muted + photo on the other side when camera off, screen share
+  both sides (sharer card + Stop, viewer card + two tiles + full screen), stop, end, call bubble.
+  Fixed: my card stays with my photo when my camera is off (3ef757ad). Calls killed mid-way stay
+  "Ongoing" locally only (the live server's sweepCalls finalises them). Group/link calls need
+  Cloud Functions: not testable locally (tested alone on the Pixel instead).
