@@ -62,6 +62,7 @@ class FariinApp : Application() {
         // thread, and the reaction art a few seconds later so it does not compete with the first frames.
         Thread({ runCatching { com.fariin.app.media.ChatSounds.init(this) } }, "sounds-init").apply { isDaemon = true }.start()
         com.fariin.app.ui.thread.ReactionArt.init(this)
+        com.fariin.app.ui.thread.DecodedPictures.init(this)
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open

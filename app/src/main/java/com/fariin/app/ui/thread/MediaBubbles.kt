@@ -155,7 +155,36 @@ internal object DecodedPictures {
         }.also { cache = it }
     }
 
-    fun clear() { cache?.evictAll() }
+    fun clear() { cache?.evictAll(); byFile.evictAll() }
+
+    /** The last copy decoded of each file, at whatever size: drawn on a bubble's first frame while
+     *  its exact size is made, so a picture never pops in late (owner's Pixel 2026-11-09, "blink"). */
+    val byFile = android.util.LruCache<String, ImageBitmap>(80)
+
+    @Volatile private var app: android.content.Context? = null
+    fun init(ctx: android.content.Context) { app = ctx.applicationContext }
+
+    /** The newest pictures of a saved chat, decoded ahead (called off the main thread). */
+    fun warm(messages: List<Message>) {
+        val ctx = app ?: return
+        val dir = File(ctx.cacheDir, "chat-media")
+        val lowRam = LowEnd.isLowRam(ctx)
+        var n = 0
+        for (m in messages.asReversed()) {
+            if (n >= 8) break
+            val url = when (m.mediaKind) {
+                Message.MediaKind.PHOTO -> m.imageUrl
+                Message.MediaKind.VIDEO -> m.thumbUrl
+                else -> null
+            } ?: continue
+            n++
+            if (ChatMedia.isLocal(url)) continue
+            val f = File(dir, ChatMedia.sha(url)).takeIf { it.exists() && it.length() > 0 } ?: continue
+            if (byFile.get(f.absolutePath) != null) continue
+            decodeSampled(f, WARM_PX, 0, lowRam)?.let { byFile.put(f.absolutePath, it) }
+        }
+    }
+    private const val WARM_PX = 540
 }
 
 /** A picture decoded to about [targetPx] on its short side, and never over [maxLongPx] on its long side. */
@@ -164,12 +193,15 @@ internal fun rememberBitmap(file: File?, targetPx: Int, maxLongPx: Int = 0): Ima
     val ctx = LocalContext.current
     val lowRam = remember { LowEnd.isLowRam(ctx) }
     val key = file?.let { "${it.absolutePath}|${it.length()}|$targetPx|$maxLongPx" }
-    val v by produceState(initialValue = key?.let { DecodedPictures.of(lowRam).get(it) }, file, targetPx) {
-        if (value != null || file == null || key == null) return@produceState
+    val exact = key?.let { DecodedPictures.of(lowRam).get(it) }
+    val v by produceState(initialValue = exact ?: file?.let { if (maxLongPx == 0) DecodedPictures.byFile.get(it.absolutePath) else null }, file, targetPx) {
+        if (exact != null || file == null || key == null) return@produceState
         value = withContext(Dispatchers.IO) {
             // Bubble-sized pictures only: the full-screen viewer (a view-once photo among them) is never kept.
-            decodeSampled(file, targetPx, maxLongPx, lowRam)?.also { if (maxLongPx == 0) DecodedPictures.of(lowRam).put(key, it) }
-        }
+            decodeSampled(file, targetPx, maxLongPx, lowRam)?.also {
+                if (maxLongPx == 0) { DecodedPictures.of(lowRam).put(key, it); DecodedPictures.byFile.put(file.absolutePath, it) }
+            }
+        } ?: value
     }
     return v
 }
