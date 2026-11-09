@@ -85,6 +85,13 @@ C:\Users\abdik\Documents\Kulan). Work all night, test everything, no prompts to 
   - 51fefa26 merged abdik-f8's noanswer-sheet (No answer call sheet) so installs keep it.
   - 3a5e8446 story rows record their photo place on the tap, not every scroll frame: 2nd scroll 30% -> 14% janky, p90 97 -> 46 ms.
   NEXT: ThreadRepository listener on a background executor + parse memo; previews stored opened in chats.bin; first-scroll row cost; open wait 1.5 s -> ~200 ms; real baseline profile.
+- 2026-11-09 05:15 ROOT CAUSE OF THE LAG: the Pixel ran the DEBUGGABLE build. New build type pixelfast (7f900616: release code, debug key, installs over debug with the same data; App Check debug provider; App Check API is not enabled on the project so nothing enforced). Pixel: cold start 4.0 s -> 0.8 s; chat-list scroll 30% janky -> 1.5%. ALWAYS install app-pixelfast.apk on the Pixel (memory feedback_pixel_fast_build).
+  - 1315e30d parse memo in ThreadRepository (unchanged messages not decrypted again; emulator send -> double tick OK).
+  - d3451c7c story camera drawn in the activity via TopOverlay (MainShell) instead of a Dialog/Popup: Dialog played the system dim+rise first (rose twice), Popup stopped above the tab bar. Pixel recording: one clean rise, full screen. Library header plain black, blur removed (owner).
+  - 46abc02c GlassDropdown is our own popup + motion: grows out of the button and shrinks back into it (material's exit was a flat fade). Pixel recording confirms both ways.
+  - merged abdik-f8 link-guidance (d5c13ece: public link prefill/shake, HandleCheckRing) - compiled clean, on the Pixel.
+  - Peers: abdik-bb builds the profile photo viewer (branch profile-photo-viewer) and the Save to Photos pick fix (save-photos-menu); I merge when green.
+  RULE LEARNED: the owner uses the Pixel while I test - screenshot right before EVERY tap; a stale screen sent swipes into another app and a tap into a group chat (no harm done).
 
 ## Server changes needed (not made; functions in C:\Users\abdik\Documents\Kulan\functions)
 Today the server DOES reach an Android token: every message, reaction, story and missed-call push goes
