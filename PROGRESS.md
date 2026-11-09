@@ -1387,3 +1387,8 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
 - 2026-11-08 ~8:48 PM: emulators: text story (tap-to-type as iOS, share sheet, Post), shows on the
   other side under Recent Stories, first-view tips, viewer count 1, story reply lands in the 1:1 as
   "replied to your story" + thumbnail. No gaps found.
+- 2026-11-08 ~8:52 PM: OWNER REPORT: blocking the person you are on a 1:1 call with left the call
+  running. Decided (as mature messengers): the block hangs up that call from the blocker's side, a
+  plain hang-up, so the blocked person sees "call ended" and no block tell. Group calls untouched.
+  In setBlocked, so every block door does it. Tested on the emulators (both sides ended). Spec sent
+  to the iOS session (iOS has the same gap: block only gates new calls).

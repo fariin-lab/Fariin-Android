@@ -224,6 +224,13 @@ class FirestorePeople(
         val ref = blockedRef(uid)
         if (on) {
             ref.set(mapOf("at" to FieldValue.serverTimestamp())).await()
+            // Blocking the person I am on a 1:1 call with ends that call (owner 2026-11-08: it ran on
+            // until hung up). An ordinary hang-up from my side, so they see the call end and nothing
+            // that says they were blocked. Group calls are left alone.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                val call = com.fariin.app.call.CallManager.ui.value
+                if (call.status.live && call.peerUid == uid) com.fariin.app.call.CallManager.hangUp()
+            }
             // As iOS BlockList.setBlocked: no shared-chat copy of the block (the blocked person could
             // read it; an old one goes), and my live stories lose them. Best effort, after the list doc.
             runCatching {
