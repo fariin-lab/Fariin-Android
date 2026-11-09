@@ -924,20 +924,29 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
                                 Modifier.fillMaxWidth().padding(vertical = 4.dp), center = true) { s.loadOlder() }
                         }
                         is ReplyItem.MoreCount -> SmallLink(PostReplyRules.moreAnswers(row.n),
-                            Modifier.fillMaxWidth().threadLineThrough().padding(start = 108.dp, bottom = 8.dp)) { s.showMoreAnswers(row.rid) }
+                            Modifier.fillMaxWidth().padding(start = 108.dp, bottom = 8.dp)) { s.showMoreAnswers(row.rid) }
                         ReplyItem.PinLabel -> Row(Modifier.padding(start = 16.dp + 40.dp + 24.dp, top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Icon(ImageVector.vectorResource(R.drawable.ic_pin_menu), null, tint = c.secondary, modifier = Modifier.size(12.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Pinned", fontSize = 12.sp, color = c.secondary)
                         }
-                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick,
-                            line = if (maxOf(row.r.answers, s.answers[row.r.id].orEmpty().size) > 0) LINE_DOWN else LINE_NONE) { author(row.r) }
-                        is ReplyItem.Answer -> Box(Modifier.padding(start = AnswerIndent)) { ReplyRow(s, row.r, small = true, now, quick, line = LINE_BRANCH) { author(row.r) } }
+                        is ReplyItem.Thread -> ReplyRow(s, row.r, small = false, now, quick) { author(row.r) }
+                        is ReplyItem.Answer -> {
+                            // OWNER 2026-11-09 (iOS b0e01ef22): no long line down a thread. A short line joins
+                            // two NEIGHBOURING answers only when the lower answers the upper one.
+                            val above = (items.getOrNull(i - 1) as? ReplyItem.Answer)?.r
+                            val below = (items.getOrNull(i + 1) as? ReplyItem.Answer)?.r
+                            val up = above != null && row.r.to?.id == above.id
+                            val down = below != null && below.to?.id == row.r.id
+                            Box(Modifier.padding(start = AnswerIndent)) {
+                                ReplyRow(s, row.r, small = true, now, quick, line = (if (up) LINE_UP else 0) or (if (down) LINE_DOWN else 0)) { author(row.r) }
+                            }
+                        }
                         is ReplyItem.Toggle -> ThreadToggle(
                             if (row.open && row.rid in s.answersLoading && s.answers[row.rid].isNullOrEmpty()) "Loading…" else PostReplyRules.threadToggle(row.n, row.open),
                         ) { s.toggleThread(row.rid) }
-                        is ReplyItem.More -> SmallLink("Show more replies", Modifier.fillMaxWidth().threadLineThrough().padding(start = 108.dp, bottom = 8.dp)) {
+                        is ReplyItem.More -> SmallLink("Show more replies", Modifier.fillMaxWidth().padding(start = 108.dp, bottom = 8.dp)) {
                             scope.launch { s.loadAnswers(row.rid, more = true) }
                         }
                     }
@@ -995,16 +1004,14 @@ private fun BanSheet(onDismiss: () -> Unit, onBan: (Boolean) -> Unit) {
 }
 
 /**
- * THREAD LINES (iOS, owner 2026-11-07): from the reply's photo a solid light-grey line runs down and
- * bends into the "View N replies" line (and into each open answer's photo) with iOS's continuous
- * corner of [ThreadLineRadius], never a sharp elbow. Each row draws its own piece behind itself, at the list's
- * x of the reply photo's centre ([ThreadLineX]), so no extra layouts.
+ * THREAD LINES (owner 2026-11-09, iOS b0e01ef22): no long line down a thread and no bends into
+ * "View N replies". A short vertical joins two neighbouring answers only when the lower one answers
+ * the upper one, photo to photo at the photo's centre; each row draws its own half.
  */
 private const val LINE_NONE = 0
 private const val LINE_DOWN = 1
-private const val LINE_BRANCH = 2
-private val ThreadLineX = 16.dp + 20.dp
-private val ThreadLineRadius = 12.dp   // iOS 2026-11-07: 12, was 16
+/** From the row's top into my photo (I answer the answer above). Combined with [LINE_DOWN] as bits. */
+private const val LINE_UP = 2
 private val ThreadLineWidth = 1.5.dp
 /** Where an answer row starts in the list (its Box padding); the line sits left of it. */
 private val AnswerIndent = 46.dp
@@ -1012,44 +1019,12 @@ private val AnswerIndent = 46.dp
 @Composable
 private fun threadLineColor(): Color = if (Fariin.colors.dark) Color(0xFF48484A) else Color(0xFFC7C7CC)
 
-/** A vertical from the top at [x] that turns, with the quarter circle, into a horizontal at [y] up to [toX]. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.elbow(color: Color, x: Float, y: Float, toX: Float) {
-    val r = ThreadLineRadius.toPx()
-    val w = ThreadLineWidth.toPx()
-    // iOS's continuous corner (iOS 2026-11-08), not a quarter circle: it starts 1.53 radii before
-    // the corner and eases in over three cubics (the rounded-rect curve's own control points).
-    val a = 1.52866483f * r
-    if (y - a > 0f) drawLine(color, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, y - a), w)
-    val p = androidx.compose.ui.graphics.Path().apply {
-        moveTo(x, y - a)
-        cubicTo(x, y - 1.08849299f * r, x + 0.02225930f * r, y - 0.86840701f * r, x + 0.07491100f * r, y - 0.63149399f * r)
-        cubicTo(x + 0.16905201f * r, y - 0.37282401f * r, x + 0.37282401f * r, y - 0.16905201f * r, x + 0.63149399f * r, y - 0.07491100f * r)
-        cubicTo(x + 0.86840701f * r, y - 0.02225930f * r, x + 1.08849299f * r, y, x + a, y)
-        lineTo(toX, y)
-    }
-    drawPath(p, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
-}
-
-/** The straight piece through a whole row ("Show more replies" between the answers and the toggle). */
-@Composable
-private fun Modifier.threadLineThrough(): Modifier {
-    val color = threadLineColor()
-    return drawBehind {
-        drawLine(color, androidx.compose.ui.geometry.Offset(ThreadLineX.toPx(), 0f),
-            androidx.compose.ui.geometry.Offset(ThreadLineX.toPx(), size.height), ThreadLineWidth.toPx())
-    }
-}
-
-/** "View 3 replies" / "Hide replies": the thread line bends into it, then the words. */
+/** "View 3 replies" / "Hide replies" (no thread line into it since 2026-11-09). */
 @Composable
 private fun ThreadToggle(label: String, onTap: () -> Unit) {
     val c = Fariin.colors
-    val color = threadLineColor()
     val bottom = 10.dp
-    // The bend may start in the row above (its top is above this row), so the curve is never cut.
-    Box(Modifier.fillMaxWidth().drawBehind {
-        elbow(color, ThreadLineX.toPx(), (size.height - bottom.toPx()) / 2f, (62.dp + 2.dp + 20.dp).toPx())
-    }) {
+    Box(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 62.dp, bottom = bottom).clip(RoundedCornerShape(6.dp)).clickable(onClick = onTap)
             .padding(vertical = 4.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.width(28.dp))
@@ -1067,7 +1042,7 @@ private fun ThreadToggle(label: String, onTap: () -> Unit) {
  */
 @Composable
 private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Long, quick: String,
-                     /** The thread line: [LINE_DOWN] from my photo to the row's end, [LINE_BRANCH] (an answer) through the row and into my photo. */
+                     /** The thread line: [LINE_DOWN] from my photo to the row's end, [LINE_UP] from the row's top into my photo (bits). */
                      line: Int = LINE_NONE, onAuthor: () -> Unit) {
     val c = Fariin.colors
     val clipboard = LocalClipboardManager.current
@@ -1084,16 +1059,13 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
             val photo = places[1]?.takeIf { it.isAttached && row.isAttached } ?: return@drawBehind
             val at = row.localPositionOf(photo, androidx.compose.ui.geometry.Offset.Zero)
             val w = ThreadLineWidth.toPx()
-            if (line == LINE_DOWN) {
-                val x = at.x + photo.size.width / 2f
-                // Starts 2 under the photo's edge (iOS), so no gap shows between the photo and the line.
-                drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, at.y + photo.size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Offset(x, size.height), w)
-            } else {
-                // An answer: the parent's line goes on through the row; a bend leaves it into my photo.
-                val x = (ThreadLineX - AnswerIndent).toPx()
-                drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, size.height), w)
-                elbow(lineColor, x, at.y + photo.size.height / 2f, at.x)
-            }
+            // At my photo's centre: from its bottom to the row's end (the next answer answers me), and
+            // from the row's top into its top (I answer the one above). Neighbours meet at the seam.
+            val x = at.x + photo.size.width / 2f
+            if (line and LINE_DOWN != 0) drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, at.y + photo.size.height - 2.dp.toPx()),
+                androidx.compose.ui.geometry.Offset(x, size.height), w)
+            if (line and LINE_UP != 0) drawLine(lineColor, androidx.compose.ui.geometry.Offset(x, 0f),
+                androidx.compose.ui.geometry.Offset(x, at.y + 2.dp.toPx()), w)
         }
     // A jump to it or a push's comment lights the row for a moment.
     val lit by androidx.compose.animation.animateColorAsState(
