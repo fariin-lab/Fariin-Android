@@ -1412,3 +1412,7 @@ iOS slow calls from Android: agent ruled out stale key; real gap is createdAt->r
   the refusal (stub has no groupCallToken) returns to the lobby. No crash.
 - 2026-11-08 ~9:14 PM: in-chat search on the emulators (highlight, 1 of 1, arrows, Show as List)
   and the Calls list row words ("Outgoing (37 sec)") match iOS.
+- 2026-11-08 ~9:28 PM: the last Material radio buttons are gone: call link Call Type, the careful
+  confirm sheet's options and Story Privacy's mode rows now mark the choice with the iOS tick at the
+  row's end. Call Type checked on the emulator. (Chat-row swipe stays Archive-only: owner's
+  2026-11-06 Android choice.)

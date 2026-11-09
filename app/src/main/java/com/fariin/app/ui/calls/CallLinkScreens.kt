@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.unit.sp
 import com.fariin.app.call.CallLinkDefaults
 import com.fariin.app.call.CallLinkDraft
@@ -234,9 +235,11 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
                     scope.launch {
                         try { CallLinks.setVideo(s.roomId, video) } catch (_: Exception) { s.video = before; error = "Couldn't change setting" }
                     }
-                }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = s.video == video, onClick = null, modifier = Modifier.padding(8.dp))
-                    Text(label, fontSize = 17.sp, color = c.label)
+                }.heightIn(min = 48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // iOS marks the chosen type with a tick, never a radio circle.
+                    Text(label, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f))
+                    if (s.video == video) Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark), null,
+                        tint = c.accent, modifier = Modifier.size(20.dp))
                 }
             }
         }
