@@ -1357,7 +1357,7 @@ private fun ThreadContent(
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
                             onSendVoice(r)
                         }
-                    }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(), banner = banner,
+                    }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(), banner = banner, voiceKey = ui.cid,
                     // Bold in the selection menu: a channel post only (iOS Format > Bold).
                     boldable = ch != null,
                     onTyping = steady1(actions.onTyping),
@@ -2240,6 +2240,8 @@ private fun Composer(
     prefillBold: List<com.fariin.app.data.TextFormat.Span> = emptyList(),
     /** Reply / edit / quote: drawn at the top of the message box, a hairline under it (iOS). */
     banner: (@Composable () -> Unit)? = null,
+    /** The chat's id: a locked or paused voice note left unsent is kept for it (VoiceDrafts). */
+    voiceKey: String = "",
     /** A channel post: "Bold" in the selection menu, and the runs go with the send. */
     boldable: Boolean = false,
     onTyping: (Boolean) -> Unit = {},
@@ -2302,15 +2304,34 @@ private fun Composer(
     val recorder = remember { VoiceRecorder(context.applicationContext) }
     // The locked recording's listen-back (a private player, not the shared VoicePlayer).
     val preview = remember { com.fariin.app.media.VoicePreview() }
-    DisposableEffect(Unit) { onDispose { preview.release(); recorder.cancel() } }
+    // Leaving with a locked or paused note: it is kept as this chat's draft (iOS), not thrown away.
+    val lockedNow = remember { booleanArrayOf(false) }
+    DisposableEffect(Unit) { onDispose {
+        preview.release()
+        if (voiceKey.isNotEmpty() && lockedNow[0] && recorder.isRecording) {
+            val lv = recorder.levelsSnapshot()
+            val app = context.applicationContext
+            recorder.finish { r -> if (r != null) com.fariin.app.media.VoiceDrafts.save(app, voiceKey, r.file, r.duration, lv) }
+        } else recorder.cancel()
+    } }
     // recording: the mic is live (held or locked). locked: it goes on with the finger off (iOS
     // recordLocked). reviewing: a locked recording paused to listen back (iOS reviewingNote).
     var recording by remember { mutableStateOf(false) }
     LaunchedEffect(recording) { onRecording(recording) }
     DisposableEffect(Unit) { onDispose { onRecording(false) } }
     var locked by remember { mutableStateOf(false) }
+    androidx.compose.runtime.SideEffect { lockedNow[0] = locked }
     var reviewing by remember { mutableStateOf(false) }
     var review by remember { mutableStateOf<VoiceRecorder.Review?>(null) }
+    // A note kept from the last visit comes back paused, ready to listen to, send, bin or carry on.
+    LaunchedEffect(voiceKey) {
+        val d = com.fariin.app.media.VoiceDrafts.load(context.applicationContext, voiceKey) ?: return@LaunchedEffect
+        com.fariin.app.media.VoiceDrafts.forget(context.applicationContext, voiceKey)
+        recorder.restore(d.file, d.duration, d.levels)
+        recording = true; locked = true
+        review = VoiceRecorder.Review(d.file, d.duration, com.fariin.app.media.MediaRules.bars(d.levels)); reviewing = true
+        preview.load(d.file)
+    }
     // iOS broadcastRecording: on while capturing, re-sent every 10 s; off when it stops or pauses.
     val capturing = recording && !reviewing
     var capturedOnce by remember { mutableStateOf(false) }

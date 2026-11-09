@@ -171,6 +171,23 @@ class VoiceRecorder(private val context: Context) {
         }
     }
 
+    /** The meter levels so far (the waveform's source), for a kept draft. */
+    fun levelsSnapshot(): List<Float> = levels.toList()
+
+    /**
+     * A kept draft (VoiceDrafts) back as a paused recording: [file] is its one stretch, so Send
+     * sends it, the mic carries on after it, and the bin deletes it.
+     */
+    fun restore(file: java.io.File, duration: Double, lv: List<Float>) {
+        if (wanted) return
+        wanted = true; paused = true
+        scope.launch(audio) {
+            parts.clear(); parts.add(file); banked = duration; joined = file
+        }
+        levels.clear(); levels.addAll(lv)
+        _elapsed.value = duration
+    }
+
     /** Carry on after a pause: a new stretch, joined to the others when the note is sent. */
     fun resume() {
         if (!wanted || !paused) return
