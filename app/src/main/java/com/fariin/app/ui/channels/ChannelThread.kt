@@ -390,7 +390,9 @@ internal fun ChannelPostMenu(
                         com.fariin.app.ui.thread.MenuRow(item.title, androidx.compose.ui.graphics.vector.rememberVectorPainter(item.icon),
                             item.destructive, null, { item.run() }, isNew = com.fariin.app.ui.components.isNew(item.badge))
                     }
-                    Box(Modifier.width(250.dp)) { com.fariin.app.ui.thread.ActionsCard(rows) { r -> onDismiss(); r.run() } }
+                    // The card fills what it is given (the chat menu sizes it): here, its rows' own height
+                    // (45 each, 10 above and below), or it ran to the screen's bottom (owner 2026-11-10).
+                    Box(Modifier.width(250.dp).height((rows.size * 45 + 20).dp)) { com.fariin.app.ui.thread.ActionsCard(rows) { r -> onDismiss(); r.run() } }
                 }
             }
         }
