@@ -789,7 +789,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("admins").document(me).get().await().exists()
         }.getOrDefault(false)
     }
-    val showStats = iAmMember && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
+    val showStats = iAmMember && com.fariin.app.data.AppFeatures.groupStats && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
     // iOS: the Search circle goes back to the group's chat and opens its search; only from that chat.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     notice?.let { n -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notice = null }, text = { Text(n) },

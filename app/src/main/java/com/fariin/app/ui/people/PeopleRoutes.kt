@@ -24,7 +24,8 @@ fun NavGraphBuilder.peopleRoutes(
 ) {
     val openChat: (String) -> Unit = { cid -> nav.navigate("thread/$cid") { popUpTo("main"); launchSingleTop = true } }
     page("newchat") {
-        NewChatScreen(api, chats(), onBack = { nav.popBackStack() }, onOpenChat = openChat, onNewGroup = { nav.navigate("newgroup") })
+        NewChatScreen(api, chats(), onBack = { nav.popBackStack() }, onOpenChat = openChat, onNewGroup = { if (com.fariin.app.data.AppFeatures.groupCreate) nav.navigate("newgroup")
+            else com.fariin.app.ui.components.Snack.show(com.fariin.app.data.AppFeatures.CREATE_OFF) })
     }
     // Activity (owner 2026-11-09): a row opens that channel, that post's Replies, on the comment.
     page("activity") {
@@ -88,7 +89,9 @@ fun peopleNav(nav: NavHostController, api: PeopleApi? = null) = PeopleNav(
     contact = { nav.navigate("contact/$it") { launchSingleTop = true } },
     group = { nav.navigate("group/$it") { launchSingleTop = true } },
     groupStep = { cid, step -> nav.navigate("group/$cid?open=$step") { launchSingleTop = true } },
-    newGroup = { nav.navigate("newgroup") { launchSingleTop = true } },
+    // The admin panel's "Create new groups" switch (iOS Flags.groupCreateEnabled): every door goes here.
+    newGroup = { if (com.fariin.app.data.AppFeatures.groupCreate) nav.navigate("newgroup") { launchSingleTop = true }
+        else com.fariin.app.ui.components.Snack.show(com.fariin.app.data.AppFeatures.CREATE_OFF) },
     // A sheet over the page it was opened from (iOS presents Edit Profile as a sheet), not a page.
     editProfile = { EditProfileSheet.open.value = true },
     myProfile = { nav.navigate("myprofile") { launchSingleTop = true } },

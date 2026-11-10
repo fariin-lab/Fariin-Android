@@ -323,7 +323,8 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                 }
                 else -> {
                     // owner 2026-10-23 (iOS): Create a Call Link always first, then the live group calls.
-                    if (!selecting) item(key = "create-link", contentType = "create") { CreateLinkRow { nav.newCallLink() } }
+                    // The admin panel's Call Links switch (iOS CallFeatures.callLinks).
+                    if (!selecting && com.fariin.app.data.AppFeatures.callLinks) item(key = "create-link", contentType = "create") { CreateLinkRow { nav.newCallLink() } }
                     if (!selecting) items(live, key = { "live:" + it.cid }) { l -> com.fariin.app.ui.call.LiveGroupCallRow(l, groups.firstOrNull { it.id == l.cid }) }
                     items(rows, key = { r -> if (r is com.fariin.app.call.SavedCallLink) "link:" + r.roomId else (r as CallRun).id }) { r ->
                         if (r is com.fariin.app.call.SavedCallLink) {
