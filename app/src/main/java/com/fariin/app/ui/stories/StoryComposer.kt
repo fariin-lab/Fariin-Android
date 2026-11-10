@@ -313,9 +313,25 @@ internal fun StoryComposerDialog(
     onAddMore: (() -> Unit)? = null,
     hidden: Boolean = false,
 ) {
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    // ⛔ NO PLATFORM WINDOW ANIMATION (owner 2026-11-10, video): closing played the phone maker's
+    // dialog zoom-out, which shrank the whole editor toward the lower grid. The window has none
+    // now; the editor fades itself out (180 ms) and then closes, back onto the photo grid.
+    val leaving = remember { androidx.compose.animation.core.Animatable(1f) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+    val fadeClose: () -> Unit = {
+        if (!closing) {
+            closing = true
+            scope.launch { leaving.animateTo(0f, androidx.compose.animation.core.tween(180)); onClose() }
+        }
+    }
+    Dialog(onDismissRequest = fadeClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        val view = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.SideEffect { (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setWindowAnimations(0) }
         com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
-        StoryComposer(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = leaving.value }) {
+            StoryComposer(me, items, conversations, fadeClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
+        }
     }
 }
 
