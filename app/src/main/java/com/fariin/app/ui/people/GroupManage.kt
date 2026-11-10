@@ -132,6 +132,8 @@ sealed interface GroupPage {
     data class Storage(val title: String) : GroupPage
     /** iOS GroupSettingsView: the group's management on its own page, behind one row of the info page. */
     data object Settings : GroupPage
+    /** iOS ChatHistoryForNewMembersPage: Visible or Hidden. */
+    data object History : GroupPage
 
     /**
      * The stack as words, so it outlives a trip to another screen (a member's profile and back):
@@ -145,7 +147,7 @@ sealed interface GroupPage {
             for (p in stack) out += when (p) {
                 Admins -> "admins"; Choose -> "choose"; is AddAdmin -> "addAdmin:" + p.uid; is Rights -> "rights:" + p.uid
                 Permissions -> "permissions"; Type -> "type"; Links -> "links"; Members -> "members"; Banned -> "banned"
-                JoinRequests -> "joinRequests"; RecentActions -> "recentActions"; Settings -> "settings"
+                JoinRequests -> "joinRequests"; RecentActions -> "recentActions"; Settings -> "settings"; History -> "history"
                 is Stats -> "stats:" + p.title; is Storage -> "storage:" + p.title
                 is LinkEdit, ChooseOwner -> return out
             }
@@ -157,7 +159,7 @@ sealed interface GroupPage {
             when (kind) {
                 "admins" -> Admins; "choose" -> Choose; "addAdmin" -> AddAdmin(arg); "rights" -> Rights(arg)
                 "permissions" -> Permissions; "type" -> Type; "links" -> Links; "members" -> Members; "banned" -> Banned
-                "joinRequests" -> JoinRequests; "recentActions" -> RecentActions; "settings" -> Settings
+                "joinRequests" -> JoinRequests; "recentActions" -> RecentActions; "settings" -> Settings; "history" -> History
                 "stats" -> Stats(arg); "storage" -> Storage(arg)
                 else -> null
             }
@@ -232,6 +234,11 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
             SettingsSection {
                 DisappearingRow((doc["disappearSeconds"] as? Number)?.toInt() ?: 0, short = false,
                     badge = NewBadgeSpots.GROUP_SETTINGS_DISAPPEARING, onClick = onTimer)
+                // Chat History for new members (iOS, owner 2026-10-20): change-info admins, never a channel.
+                val team = com.fariin.app.data.GroupAdmins.Team.from(doc)
+                if (doc["channel"] != true && team.may(me, Right.CHANGE_INFO))
+                    SettingsRow("Chat History", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_clock)),
+                        value = if (com.fariin.app.data.Conversation.millis(doc["hideHistoryAt"]) > 0) "Hidden" else "Visible") { open(GroupPage.History) }
                 SettingsRow("Recent Actions", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_clock_arrow)), last = true,
                     badge = NewBadgeSpots.GROUP_SETTINGS_RECENT_ACTIONS) { open(GroupPage.RecentActions) }
             }
@@ -263,6 +270,7 @@ internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, 
         GroupPage.JoinRequests -> JoinRequestsPage(cid, pop)
         GroupPage.RecentActions -> RecentActionsPage(cid, me, pop)
         GroupPage.Settings -> GroupSettingsPage(cid, me, pop, push, onTimer)
+        GroupPage.History -> ChatHistoryPage(cid, pop)
         is GroupPage.Stats -> GroupStatsPage(cid, top.title, pop)
         is GroupPage.Storage -> ChatStoragePage(cid, me, top.title, pop)
         GroupPage.ChooseOwner -> {
@@ -1534,4 +1542,41 @@ private fun RoleEmojiSheet(hasEmoji: Boolean, onPick: (String) -> Unit, onRemove
             SettingsRow("Remove Emoji", titleColor = c.red, trailing = Trailing.NONE, last = true) { onRemove() }
         } else Spacer(Modifier.height(24.dp))
     }
+}
+
+/**
+ * Chat History for new members (iOS ChatHistoryForNewMembersPage): Visible or Hidden, ticked. Hidden:
+ * people who join from now on see the chat from the moment they come in; nobody already in the group
+ * loses anything. The tick goes back if the server does not take it.
+ */
+@Composable
+private fun ChatHistoryPage(cid: String, onBack: () -> Unit) {
+    val c = Fariin.colors
+    val doc = liveGroupDoc(cid)
+    val live = com.fariin.app.data.Conversation.millis(doc["hideHistoryAt"]) > 0
+    var pending by remember { mutableStateOf<Boolean?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val hidden = pending ?: live
+    val scope = rememberCoroutineScope()
+    fun set(v: Boolean) {
+        if (v == hidden || pending != null) return
+        pending = v
+        scope.launch {
+            runCatching { com.fariin.app.data.GroupManage.setHideHistory(cid, v) }
+                .onFailure { error = "Couldn't change it. Check your connection and try again." }
+            pending = null
+        }
+    }
+    BarPage("Chat History", onBack, modifier = Modifier.background(c.bgSecondary)) { top ->
+        Column(Modifier.fillMaxSize().padding(top = top + 8.dp)) {
+            com.fariin.app.ui.settings.SettingsSection(footer = if (hidden)
+                "People who join from now on see only messages sent after they join. Members already in the group still see everything."
+                else "People who join can see the messages sent before they joined.") {
+                com.fariin.app.ui.settings.CheckRow("Visible", !hidden) { set(false) }
+                com.fariin.app.ui.settings.CheckRow("Hidden", hidden, last = true) { set(true) }
+            }
+        }
+    }
+    error?.let { e -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { error = null }, text = { Text(e) },
+        confirmButton = { androidx.compose.material3.TextButton({ error = null }) { Text("OK", color = c.accent) } }, containerColor = c.card) }
 }

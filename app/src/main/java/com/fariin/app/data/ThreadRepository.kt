@@ -238,7 +238,10 @@ class ThreadRepository(
             }
             if (me in ((data["users"] as? List<*>) ?: emptyList<Any>())) wasMember = true
             if (wasMember && !snap.metadata.isFromCache && FormerGroups.isFormer(cid, data, me)) { becomeFormer(data); return@addSnapshotListener }
+            val startBefore = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
             _state.update { it.copy(receipts = Receipts.from(data, me, cid), conv = data) }
+            // Chat History for new members changed (or my join time arrived): the list is cut again.
+            if (Wire.isGroupCid(cid) && msgReg != null && GroupManage.historyStart(data, me) != startBefore) rebuild()
             if (data["e2ee"] == false) CryptoHub.notePlainGroup(cid)
             syncPins(PinRules.pinnedIds(data))
         }
@@ -381,8 +384,12 @@ class ThreadRepository(
         val now = System.currentTimeMillis().toDouble()
         val stamped = ArrayList<Message>()
         val due = ArrayList<Message>()
+        // Chat History for new members hidden before I joined (iOS historyStart): the chat starts
+        // when I came in, as a new group would. My own messages are always there.
+        val historyStart = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
         for (d in olderDocs.values + liveDocs.values) {
             var m = parse(d)
+            if (historyStart != null && m.hasServerTime && m.createdAtMillis < historyStart && m.authorId != me) continue
             // The disappearing timer: the server's stamp only (iOS). Due = off the screen now, from
             // the saved copy too; the server deletes it for both people.
             if (m.expiresAtMillis != null) {

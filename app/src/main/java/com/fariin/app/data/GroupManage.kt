@@ -47,6 +47,28 @@ object GroupManage {
         return runCatching { db.collection("users").document(me).get().await().getString("name") }.getOrNull()?.ifBlank { null } ?: "Someone"
     }
 
+    /**
+     * Chat History for new members (iOS ChatService.setHideHistory, owner 2026-10-20): Hidden stamps
+     * the moment (server time); Visible removes it. The group is told in one line.
+     */
+    suspend fun setHideHistory(cid: String, hidden: Boolean) {
+        conv(cid).update(mapOf("hideHistoryAt" to (if (hidden) FieldValue.serverTimestamp() else FieldValue.delete()),
+            "updatedAt" to FieldValue.serverTimestamp())).await()
+        val who = myName(cid)
+        runCatching { systemLine(cid, if (hidden) "$who hid chat history from new members" else "$who made chat history visible to new members") }
+    }
+
+    /**
+     * Where my chat in a group starts (iOS Conversation.historyStart): my join time when I came in
+     * after history was hidden; null (everything) otherwise, including for anyone already in it then.
+     */
+    fun historyStart(doc: Map<String, Any?>, me: String): Double? {
+        val hide = com.fariin.app.data.Conversation.millis(doc["hideHistoryAt"])
+        if (hide <= 0) return null
+        val since = com.fariin.app.data.Conversation.millis((doc["memberSince"] as? Map<*, *>)?.get(me))
+        return if (since > 0 && since >= hide) since else null
+    }
+
     /** writeSystemMessage: the line, and the chat list summary pointing at it. */
     internal suspend fun systemLine(cid: String, text: String) {
         val b = db.batch()
