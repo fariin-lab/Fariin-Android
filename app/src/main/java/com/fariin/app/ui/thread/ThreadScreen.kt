@@ -227,6 +227,9 @@ fun ThreadScreen(
     val text = remember { bubbleText("medium") }
     // iOS openChatWallpaper: "Change Wallpaper" on the info page comes back here and opens this chat's picker.
     var wallpaperOpen by remember { mutableStateOf(false) }
+    // The GIF panel's first frames, made ahead a moment after the chat lands (GifLoader.still).
+    val gifCtx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(ui.cid) { kotlinx.coroutines.delay(1_200); com.fariin.app.media.GifLoader.warmStills(gifCtx) }
     LaunchedEffect(ui.cid) {
         com.fariin.app.ui.settings.ChatWallpaperLink.requests.collect { want ->
             if (want == ui.cid) { com.fariin.app.ui.settings.ChatWallpaperLink.requests.value = null; wallpaperOpen = true }

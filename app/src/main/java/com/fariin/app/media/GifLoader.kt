@@ -23,4 +23,20 @@ object GifLoader {
             }
             .build().also { loader = it }
     }
+
+    /** A GIF's first frame as a still picture, a third of the screen wide: memory-cached, unlike
+     *  the animated decode, so a grid shown again draws at once. */
+    fun still(c: Context, url: String): coil3.request.ImageRequest =
+        coil3.request.ImageRequest.Builder(c.applicationContext).data(url)
+            .size(STILL_PX).memoryCacheKey("still:$url").build()
+
+    /** The first frames of the GIF panel's last trending list, made ahead (a chat opened). */
+    fun warmStills(c: Context) {
+        val list = com.fariin.app.data.Giphy.cached(c, "") ?: return
+        val l = get(c)
+        for (g in list.take(WARM_COUNT)) l.enqueue(still(c, g.url))
+    }
+
+    private const val STILL_PX = 360
+    private const val WARM_COUNT = 15
 }

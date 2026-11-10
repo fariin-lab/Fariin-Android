@@ -462,9 +462,14 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
             val ratio = 1f
             var menu by remember { mutableStateOf(false) }
             Box {
+                // Its first frame under it, kept in memory (an animated GIF never is): the panel
+                // opened again showed grey tiles for ~0.5 s while every GIF was decoded from disk
+                // again (owner's Pixel 2026-11-10). The moving one draws over it once it is ready.
+                AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, g.url), contentDescription = null,
+                    imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize().background(c.secondary.copy(alpha = 0.15f)))
                 AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()
-                        .background(c.secondary.copy(alpha = 0.15f))
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
                 com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                     val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
