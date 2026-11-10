@@ -133,7 +133,9 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                         /** Bumped by a tap: the sticker plays its few times again. */
                         replay: Int = 0,
                         /** Mine still on its way: the shipped still, the animation starts once it lands. */
-                        holdStill: Boolean = false) {
+                        holdStill: Boolean = false,
+                        /** How many times it plays before resting, and its frames a second (the panel: fewer). */
+                        plays: Int = STICKER_PLAYS, fps: Int = 30) {
     val ctx = LocalContext.current
     val play = autoplay() && !still
     val asset = remember(packId, stickerId) { if (packId == "mine") null else StickerCatalog.assetPath(ctx, packId, stickerId) }
@@ -171,12 +173,12 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                         // Painted into a picture off the main thread, at most 30 times a second, and only
                         // shown here (owner 2026-11-10: smooth like the reference app). Until the first
                         // picture is ready the still stays, so it never blinks.
-                        androidx.compose.runtime.key(replay) { StickerFrames(c, onWaiting = drawStill) }
+                        androidx.compose.runtime.key(replay) { StickerFrames(c, plays, fps, onWaiting = drawStill) }
                     }
                 }
             }
         }
-        else -> androidx.compose.runtime.key(replay) { AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play, plays = STICKER_PLAYS), contentDescription = null,
+        else -> androidx.compose.runtime.key(replay) { AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play, plays = plays), contentDescription = null,
             contentScale = ContentScale.Fit, modifier = modifier) }
     }
 }
@@ -364,9 +366,9 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
                         onSticker(s)
                         recents = StickerCatalog.recents(ctx, me)
                     }.semanticsLabel(StickerGifRules.stickerLabel(s.emoji)), contentAlignment = Alignment.Center) {
-                        // Every tile still (animated WebP packs too): a grid of moving stickers kept the
-                        // CPU busy and the scroll heavy (owner 2026-11-10). They move once sent.
-                        StickerArt(s.packId, s.stickerId, null, null, Modifier.size(64.dp), still = true)
+                        // The tiles on screen move (owner 2026-11-10, as iOS), lightly for cheap phones: painted
+                        // off the main thread at 20 a second, twice, then at rest; again when scrolled back.
+                        StickerArt(s.packId, s.stickerId, null, null, Modifier.size(64.dp), plays = 2, fps = 20)
                     }
                 }
                 // The second row's last place: "+N", the pack's stickers not shown; a tap opens the pack.
@@ -706,7 +708,7 @@ internal fun StickerPackSheet(pack: StickerPackInfo, me: String, onSend: (Sticke
  * when it comes back.
  */
 @Composable
-private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, onWaiting: @Composable () -> Unit) {
+private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, plays: Int, fps: Int, onWaiting: @Composable () -> Unit) {
     var shown by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = constraints.maxWidth.coerceIn(1, 1024)
@@ -720,11 +722,11 @@ private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, onWaiting: @Co
             val scale = minOf(w / b.width().toFloat(), h / b.height().toFloat())
             val dx = (w - b.width() * scale) / 2f; val dy = (h - b.height() * scale) / 2f
             val frames = c.durationFrames.coerceAtLeast(1f)
-            val per = (c.frameRate / 30f).coerceAtLeast(1f)
+            val per = (c.frameRate / fps).coerceAtLeast(1f)
             val stepMs = (1000f * per / c.frameRate).toLong().coerceAtLeast(16L)
             var n = 0
             try {
-                for (play in 0 until STICKER_PLAYS) {
+                for (play in 0 until plays) {
                     var f = 0f
                     while (f <= frames) {
                         val started = android.os.SystemClock.uptimeMillis()
