@@ -202,8 +202,12 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                     contentAlignment = Alignment.Center) { Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), null, tint = c.label) }
                 Text("New chat", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
             }
-            LazyColumn(Modifier.fillMaxSize(), state = listState,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 120.dp)) {
+            // ⛔ SEARCH AT THE TOP ON ANDROID (owner 2026-11-10): where Android people look for it,
+            // and the keyboard never covers it. iOS keeps its toolbar search at the bottom.
+            com.fariin.app.ui.components.FloatingSearchField(q, { q = it }, "Search by username",
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+            LazyColumn(Modifier.fillMaxSize().imePadding(), state = listState,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 24.dp)) {
                 if (needle.isEmpty()) {
                     item {
                         val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
@@ -260,11 +264,6 @@ fun NewChatScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit,
                         scope.launch { listState.animateScrollToItem(idx) }
                     }.padding(vertical = 1.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
-        }
-        // The search field at the bottom, over the list (iOS toolbar search).
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding().padding(bottom = 8.dp)) {
-            com.fariin.app.ui.components.FloatingSearchField(q, { q = it }, "Search by username",
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp))
         }
     }
 }

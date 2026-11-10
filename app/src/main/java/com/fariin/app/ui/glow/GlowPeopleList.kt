@@ -86,7 +86,10 @@ fun GlowPeopleListPage(title: String, startOnGlowing: Boolean = false, onOpenPer
         // Full width, 20 in (the back button's own edge), 46 tall: the search field's size.
         HalvesSwitch(listOf("Glowers", "Glowing"), tab, { tab = it },
             Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 10.dp))
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        // Search at the top on Android (owner 2026-11-10), under the switch; iOS keeps it at the bottom.
+        FloatingSearchField(search, { search = it }, "Search",
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 8.dp))
+        Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
             when (val l = load) {
                 GlowLoad.Loading -> com.fariin.app.ui.components.FariinSpinner(Modifier.align(Alignment.Center), size = 30.dp, stroke = 3.dp)
                 GlowLoad.Failed -> GlowCouldNotLoad { reload++ }
@@ -113,8 +116,6 @@ fun GlowPeopleListPage(title: String, startOnGlowing: Boolean = false, onOpenPer
                 }
             }
         }
-        FloatingSearchField(search, { search = it }, "Search",
-            Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 8.dp))
     }
     GlowWriteFailed(failed) { failed = false }
 }
