@@ -70,6 +70,7 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
                 links = { nav.navigate("channellinks/$it") { launchSingleTop = true } },
                 banned = { nav.navigate("channelbanned/$it") { launchSingleTop = true } },
                 reactions = { nav.navigate("channelreactions/$it") { launchSingleTop = true } },
+                apiKey = { nav.navigate("channelapikey/$it") { launchSingleTop = true } },
                 requests = { nav.navigate("channelrequests/$it") { launchSingleTop = true } },
                 settings = { nav.navigate("channelsettings/$it") { launchSingleTop = true } },
             ))
@@ -83,6 +84,7 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
             links = { nav.navigate("channellinks/$it") { launchSingleTop = true } },
             banned = { nav.navigate("channelbanned/$it") { launchSingleTop = true } },
             reactions = { nav.navigate("channelreactions/$it") { launchSingleTop = true } },
+            apiKey = { nav.navigate("channelapikey/$it") { launchSingleTop = true } },
             requests = { nav.navigate("channelrequests/$it") { launchSingleTop = true } },
             type = { nav.navigate("channeltype/$it") { launchSingleTop = true } },
             recent = { nav.navigate("channelrecent/$it") { launchSingleTop = true } },
@@ -121,6 +123,10 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
     page("channelrequests/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@page
         com.fariin.app.ui.people.GroupPagesHost(cid, me, com.fariin.app.ui.people.GroupPage.JoinRequests, onExit = { nav.popBackStack() })
+    }
+    page("channelapikey/{cid}") { e ->
+        val cid = e.arguments?.getString("cid") ?: return@page
+        ChannelApiKeyScreen(cid, onBack = { nav.popBackStack() })
     }
     page("channelreactions/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@page
