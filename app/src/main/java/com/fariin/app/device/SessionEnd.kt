@@ -66,7 +66,16 @@ object SessionEnd {
     @Volatile var droppedByRevoke = 0
 
     /** Pure, tested: the line the Log Out dialog and the remote sign-out notice add, or null. */
-    fun unsentLine(n: Int, afterRevoke: Boolean): String? = when {
+    fun unsentLine(n: Int, afterRevoke: Boolean, drafts: Int = 0): String? = when {
+        // Drafts are wiped at Log Out too, so they are named (iOS SessionWipe.unsentSummary).
+        !afterRevoke && drafts > 0 -> {
+            val parts = listOfNotNull(
+                if (n > 0) (if (n == 1) "1 unsent message" else "$n unsent messages") else null,
+                if (drafts == 1) "1 draft" else "$drafts drafts")
+            val pron = if (n + drafts == 1) "it" else "they"
+            "You have ${parts.joinToString(" and ")}. If you log out now, $pron will be lost." +
+                (if (n > 0) " Wait until you are online so messages can be sent, or log out anyway." else "")
+        }
         n <= 0 -> null
         afterRevoke -> if (n == 1) "1 message that was not sent yet could not be delivered."
             else "$n messages that were not sent yet could not be delivered."

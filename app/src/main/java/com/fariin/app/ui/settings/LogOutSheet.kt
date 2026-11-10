@@ -32,7 +32,8 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
     val c = Fariin.colors
     var busy by remember { mutableStateOf(false) }
     val unsent = remember { com.fariin.app.device.SessionEnd.unsentCount() }
-    val warning = com.fariin.app.device.SessionEnd.unsentLine(unsent, afterRevoke = false)
+    val drafts = remember { com.fariin.app.local.Drafts.count() }
+    val warning = com.fariin.app.device.SessionEnd.unsentLine(unsent, afterRevoke = false, drafts = drafts)
     val wait = remember { booleanArrayOf(false) }
     val motion = rememberSheetMotion {
         if (wait[0]) com.fariin.app.AppLifecycle.reconnect()
