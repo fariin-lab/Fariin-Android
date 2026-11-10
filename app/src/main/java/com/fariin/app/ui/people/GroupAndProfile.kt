@@ -1139,7 +1139,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 com.fariin.app.ui.settings.ChatWallpaperLink.request(cid); onBack() })
             if (inviteLink != null) {
                 add(com.fariin.app.ui.components.GlassMenuItem("Share Group",
-                    androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { sharingLink = true })
+                    androidx.compose.ui.res.painterResource(R.drawable.ic_share_box)) { sharingLink = true })
                 add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
                     androidx.compose.ui.res.painterResource(R.drawable.ic_qr)) { showQr = true })
             }

@@ -1004,7 +1004,7 @@ private fun OverflowMenu(
     // the "Show" filters, then the rest.
     val rows = listOf(
         item("Select Chats", R.drawable.ic_sf_checkmark_circle, onClick = onSelect),
-        item("Mark All Read", R.drawable.ic_menu_read, onClick = onMarkAllRead),
+        item("Mark All Read", R.drawable.ic_mark_all_read, onClick = onMarkAllRead),
         item("All Chats", R.drawable.ic_menu_read, filter == FILTER_ALL, divider = true) { onFilter(FILTER_ALL) },
         item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) },
         item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) },

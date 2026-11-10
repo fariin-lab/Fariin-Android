@@ -112,7 +112,7 @@ private fun AdminPart(ch: ChannelThreadUi) {
         Text("Share your channel so people can follow it.", fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center)
     }
     Row {
-        CardCircle(ImageVector.vectorResource(R.drawable.ic_link_share), "Share") {
+        CardCircle(ImageVector.vectorResource(R.drawable.ic_share_box), "Share") {
             scope.launch {
                 val link = ch.shareLink()
                 if (link == null) {

@@ -95,7 +95,10 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
             com.fariin.app.ui.components.GlassDropdown(expanded = open, onDismissRequest = { open = false },
                 shape = com.fariin.app.ui.components.FariinMenu.shape, border = com.fariin.app.ui.components.FariinMenu.border,
                 containerColor = com.fariin.app.ui.components.FariinMenu.container) {
-                DropdownMenuItem(text = { Text("Mark All as Read") }, onClick = { open = false; scope.launch { ActivityFeed.markRead() } })
+                // The owner's icon: a chat bubble with a check (2026-11-10), as in the Chats menu.
+                DropdownMenuItem(text = { Text("Mark All as Read") },
+                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_mark_all_read), contentDescription = null, tint = c.label) },
+                    onClick = { open = false; scope.launch { ActivityFeed.markRead() } })
             }
         }
     }) { top ->

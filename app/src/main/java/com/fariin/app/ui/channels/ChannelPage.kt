@@ -463,7 +463,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_wallpaper)) {
                     com.fariin.app.ui.settings.ChatWallpaperLink.request(info.cid); onBack() })
                 add(com.fariin.app.ui.components.GlassMenuItem("Share Channel",
-                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_link_share)) { share() })
+                    androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_share_box)) { share() })
                 if (info.username.isNotEmpty()) add(com.fariin.app.ui.components.GlassMenuItem("QR Code",
                     androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_qr)) { showQr = true })
                 add(com.fariin.app.ui.components.GlassMenuItem("Save to Photos: " + (if (saveOn) "On" else "Off"),
@@ -503,7 +503,7 @@ private fun ActionCircle(a: Action, label: String, dimmed: Boolean, modifier: Mo
         Action.MUTE -> com.fariin.app.R.drawable.ic_bell_off
         Action.UNMUTE -> com.fariin.app.R.drawable.ic_bell
         Action.FOLLOW -> com.fariin.app.R.drawable.ic_plus_ios
-        Action.SHARE -> com.fariin.app.R.drawable.ic_link_share
+        Action.SHARE -> com.fariin.app.R.drawable.ic_share_box   // owner 2026-11-10
         Action.MORE -> com.fariin.app.R.drawable.ic_more_ios
         Action.SEARCH -> com.fariin.app.R.drawable.ic_search_ios
     }
