@@ -241,8 +241,12 @@ internal object PhotoHideFrom {
         FirebaseFirestore.getInstance().collection("users").document(it).collection("photoHiddenFrom")
     }
     suspend fun load(): List<String> = try { col()?.get()?.await()?.documents?.map { it.id } ?: emptyList() } catch (_: Exception) { emptyList() }
+    // Each change re-publishes my photo under a new name (iOS republishPhoto), so a person just
+    // hidden stops getting it from their cache.
     suspend fun add(uid: String) = runCatching { col()!!.document(uid).set(mapOf("at" to FieldValue.serverTimestamp())).await() }.isSuccess
+        .also { if (it) com.fariin.app.data.PhotoRepublish.launch() }
     suspend fun remove(uid: String) = runCatching { col()!!.document(uid).delete().await() }.isSuccess
+        .also { if (it) com.fariin.app.data.PhotoRepublish.launch() }
 }
 
 /** The people I share a 1:1 with, from the chat list (uid, name, photo). */

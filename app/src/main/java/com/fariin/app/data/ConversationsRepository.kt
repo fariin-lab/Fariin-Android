@@ -59,8 +59,10 @@ class ConversationsRepository(
                 }
                 if (snap == null) return@addSnapshotListener
                 if (LocalCache.currentGeneration != gen) return@addSnapshotListener
-                // An empty answer from Firestore's own offline store never blanks the saved list.
-                if (snap.metadata.isFromCache && snap.isEmpty && saved.isNotEmpty()) return@addSnapshotListener
+                // An empty answer from Firestore's own offline store is no answer: it never blanks the
+                // saved list, and with nothing saved it must not read as "No chats yet" before the
+                // server has spoken (iOS keeps loading; 2026-11-10 parity). Loading stays up instead.
+                if (snap.metadata.isFromCache && snap.isEmpty) return@addSnapshotListener
                 // Each document's data read once, for the row and for the saved copy.
                 val datas = snap.documents.map { it.id to (it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()) }
                 val convs = snap.documents.mapIndexed { i, d -> parse(d, datas[i].second) }

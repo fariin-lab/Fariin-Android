@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -498,6 +499,54 @@ class FirestorePeople(
 /** ProfilePhotoURLProtocol.reference: `fariin-photo://<path>?v=<ms>`. */
 object PhotoRef {
     fun reference(path: String, version: Long) = "fariin-photo://$path?v=$version"
+}
+
+/**
+ * ⛔ RUN AFTER ANY CHANGE TO WHO MAY SEE MY PHOTO (iOS ProfileStore.republishPhoto, 2026-09-25 photo
+ * privacy). The photo audience or the Hide From list changed, so my photo (and poster, if any) get a
+ * NEW name (same files, new `v`), on my profile and in every chat's copy. Every viewer's cached copy
+ * is keyed by the old name, so their next draw misses the cache and storage.rules is asked again;
+ * someone who may no longer see it gets the initial instead. Three tries, 2 s and 6 s apart; no
+ * photo is an answer, not a failure. Android's files are always tagged "checked" and it publishes no
+ * blurred cover, so nothing else needs re-labelling here.
+ */
+object PhotoRepublish {
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
+    fun launch() {
+        scope.launch {
+            for (wait in longArrayOf(0, 2_000, 6_000)) {
+                if (wait > 0) kotlinx.coroutines.delay(wait)
+                if (once()) return@launch
+            }
+        }
+    }
+
+    private suspend fun once(): Boolean {
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return true
+        val db = FirebaseFirestore.getInstance()
+        val d = try { db.collection("users").document(me).get().await() } catch (_: Exception) { return false }
+        val photo = d.getString("photoUrl").orEmpty()
+        if (photo.isEmpty()) return true
+        val v = System.currentTimeMillis()
+        val circle = PhotoRef.reference("profiles/$me.jpg", v)
+        val poster = if (d.getString("posterUrl").isNullOrEmpty()) null else PhotoRef.reference("profiles/$me-poster.jpg", v)
+        val userFields = HashMap<String, Any>().apply { put("photoUrl", circle); poster?.let { put("posterUrl", it) } }
+        try { db.collection("users").document(me).set(userFields, SetOptions.merge()).await() } catch (_: Exception) { return false }
+        val fields = HashMap<String, Any>().apply { put("photos.$me", circle); poster?.let { put("posters.$me", it) } }
+        try {
+            val docs = db.collection("conversations").whereArrayContains("users", me).get().await().documents
+            // Same split as a photo change: one refused group write must not sink a whole batch.
+            val (groups, ones) = docs.partition { it.getString("type") == "group" }
+            for (chunk in ones.chunked(450)) {
+                val b = db.batch()
+                for (c in chunk) b.update(c.reference, fields)
+                try { b.commit().await() } catch (_: Exception) {}
+            }
+            for (g in groups) try { g.reference.update(fields).await() } catch (_: Exception) {}
+        } catch (_: Exception) {}
+        return true
+    }
 }
 
 /** ChatPin: 4 to 6 digits, the verify failure sentences. */

@@ -144,6 +144,8 @@ object PrivacySettings {
             FirebaseFirestore.getInstance().collection("users").document(me)
                 .set(mapOf("privacy" to mapOf(key to value)), SetOptions.merge()).await()
             if (key == "lastSeen") Presence.set(true, app)
+            // Who may see my photo changed: it gets a new name so cached copies are checked again.
+            if (key == "photo") PhotoRepublish.launch()
             null
         } catch (e: Exception) {
             if (_map.value[key] == value) {
