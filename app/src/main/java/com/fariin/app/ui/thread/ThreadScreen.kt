@@ -921,11 +921,15 @@ private fun ThreadContent(
                 if (!search.active && !selecting) VoiceNoteBar(ui.cid, ui.me) { cid -> com.fariin.app.data.ChatsNow.find(cid)?.let(openChat) }
                 // Search owns the top: the pinned bar hides while searching (iOS).
                 // A group's live call takes the pinned bar's place while it runs (iOS CallBarOrPin).
-                if (!search.active) com.fariin.app.ui.call.ThreadLiveCallBar(ui.cid, ui.isGroup && ui.channel == null && !ui.notAMember, ui.title) {
+                // Frosted glass, as the header's buttons (owner 2026-11-10: the rows under the pinned
+                // bar read through it, over the pinned message's own words).
+                if (!search.active) androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassBlur provides true) {
+                  com.fariin.app.ui.call.ThreadLiveCallBar(ui.cid, ui.isGroup && ui.channel == null && !ui.notAMember, ui.title) {
                     PinnedBar(pins, pinIndex, ui, msgFor = { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] },
                         onJump = { jumpTo(it, advance = true) },
                         onUnpin = { id -> actions.onUnpin(id); if (pinIndex > 0) pinIndex-- },
                         onSeeAll = { showPins.value = true })
+                  }
                 }
             }
             if (!ui.loaded) {

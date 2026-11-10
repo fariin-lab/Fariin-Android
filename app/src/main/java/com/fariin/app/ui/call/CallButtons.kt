@@ -63,9 +63,22 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         return
     }
     if (!mayStart) return
-    CallCapsule {
-        CallSlot(com.fariin.app.R.drawable.ic_call_video, "Group video call") { CallActivity.startGroup(ctx, cid, title, video = true, start = true) }
-        CallSlot(com.fariin.app.R.drawable.ic_call_voice, "Group voice call") { CallActivity.startGroup(ctx, cid, title, video = false, start = true) }
+    // One video button; a tap drops down Voice Call and Video Call (iOS ChatNavigationItem, groups).
+    var menu by remember(cid) { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Box {
+        CallCapsule {
+            CallSlot(com.fariin.app.R.drawable.ic_call_video, "Call", width = 44.dp) { menu = true }
+        }
+        com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { androidx.compose.material3.Text("Voice Call") },
+                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_voice), null, tint = Fariin.colors.label, modifier = Modifier.size(22.dp)) },
+                onClick = { menu = false; CallActivity.startGroup(ctx, cid, title, video = false, start = true) })
+            androidx.compose.material3.DropdownMenuItem(
+                text = { androidx.compose.material3.Text("Video Call") },
+                leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_call_video), null, tint = Fariin.colors.label, modifier = Modifier.size(22.dp)) },
+                onClick = { menu = false; CallActivity.startGroup(ctx, cid, title, video = true, start = true) })
+        }
     }
 }
 
