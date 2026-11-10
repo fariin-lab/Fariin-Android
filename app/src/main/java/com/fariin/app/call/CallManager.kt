@@ -1062,6 +1062,7 @@ object CallManager {
         }
     }
 
+    // Read by name in FariinApp.onCreate too (it checks before loading this class): keep them in step.
     private const val LIVE_PREFS = "fariin_call_live"
     private const val LIVE_KEY = "callId"
 

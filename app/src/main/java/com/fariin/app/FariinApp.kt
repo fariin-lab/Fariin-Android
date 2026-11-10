@@ -110,7 +110,10 @@ class FariinApp : Application() {
             Log.i("FariinApp", "Using the LOCAL test backend at $HOST")
         }
         // A call this phone was in when the app last died is ended for the other phone (CallManager).
-        if (FirebaseAuth.getInstance().currentUser != null) com.fariin.app.call.CallManager.endAfterCrash(this)
+        // Only when a call was really left open: touching CallManager loads the whole call stack,
+        // ~46 ms of every cold start on the Pixel, almost always to find nothing.
+        if (FirebaseAuth.getInstance().currentUser != null &&
+            getSharedPreferences("fariin_call_live", MODE_PRIVATE).contains("callId")) com.fariin.app.call.CallManager.endAfterCrash(this)
         // Slow networks: a photo download gives up after 2 minutes (default 10) so the bubble shows
         // its "Try again" disc instead of a ring that never ends; uploads keep the 10 minute window.
         runCatching { FirebaseStorage.getInstance().maxDownloadRetryTimeMillis = 120_000 }
