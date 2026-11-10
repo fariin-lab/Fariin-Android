@@ -478,6 +478,11 @@ class MainActivity : ComponentActivity() {
         if (intent?.action != Intent.ACTION_VIEW) return
         if (com.fariin.app.call.CallLinkRouter.take(intent.dataString)) intent.data = null
         else if (com.fariin.app.ui.thread.ExternalLinks.take(intent.dataString)) intent.data = null
+        // A page of the website that has a name's shape (fariin.com/help): the browser shows it.
+        else if (com.fariin.app.ui.thread.ExternalLinks.isSitePage(intent.dataString) &&
+            !intent.dataString.orEmpty().contains("call", ignoreCase = true)) {
+            com.fariin.app.ui.settings.openWeb(this, intent.dataString!!); intent.data = null
+        }
         else if (intent.data != null) android.widget.Toast.makeText(this, "This call link is no longer valid", android.widget.Toast.LENGTH_LONG).show()
     }
 

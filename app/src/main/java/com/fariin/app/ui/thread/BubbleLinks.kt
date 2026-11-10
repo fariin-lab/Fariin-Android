@@ -223,14 +223,43 @@ internal object StoryLinks {
 /** Profile, invite and story links handed to the app from outside (the manifest's App Links). */
 object ExternalLinks {
     val pending = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
-    private val re = Regex("^https?://(www\\.)?fariin\\.com/(u/|g/|s/|[A-Za-z0-9_.]{1,40}/s/)", RegexOption.IGNORE_CASE)
+    private val re = Regex("^https?://(www\\.)?fariin\\.com/(u/|g/|a/|s/|[A-Za-z0-9_.]{1,40}/s/)", RegexOption.IGNORE_CASE)
+    /** A public name, fariin.com/<name> (iOS: 1 to 30 of these characters). */
+    private val name = Regex("^https?://(www\\.)?fariin\\.com/([A-Za-z0-9_]{1,30})/?$", RegexOption.IGNORE_CASE)
+    private val site = Regex("^https?://(www\\.)?fariin\\.com(/|$)", RegexOption.IGNORE_CASE)
+
+    /** iOS DeepLink.sitePages: the website's own pages, never read as a name. */
+    private val sitePages = setOf("download", "privacy", "terms", "support", "help", "about", "faq", "news", "safety",
+        "security", "reset", "admin", "console", "index", "g", "u", "s", "hc", "call", "voice", "video", "link")
+
+    /** iOS safeSegment: no slash, no dot names, no __x__, at most 128. */
+    private fun safe(v: String) = v.isNotEmpty() && '/' !in v && v != "." && v != ".." &&
+        !(v.startsWith("__") && v.endsWith("__")) && v.length <= 128
 
     fun take(url: String?): Boolean {
-        val u = url?.trim() ?: return false
-        if (!re.containsMatchIn(u)) return false
-        pending.value = u
-        return true
+        var u = url?.trim() ?: return false
+        // kulan://<kind>/<value> (iOS custom scheme): the same as the website's link of that kind.
+        if (u.startsWith("kulan://", ignoreCase = true)) {
+            val rest = u.substring(8).trimEnd('/')
+            val kind = rest.substringBefore('/').lowercase()
+            val value = rest.substringAfter('/', "").substringAfterLast('/')
+            if (!safe(value)) return false
+            when (kind) {
+                "u", "g", "a", "s" -> u = "https://fariin.com/$kind/$value"
+                // A chat named by the widget (iOS widgetChat): opens it as a notification would.
+                "wchat" -> { com.fariin.app.push.PushRouter.pendingOpen.value = value; return true }
+                else -> return false
+            }
+        }
+        if (re.containsMatchIn(u)) { pending.value = u; return true }
+        name.find(u)?.let { m ->
+            if (m.groupValues[2].lowercase() !in sitePages) { pending.value = u; return true }
+        }
+        return false
     }
+
+    /** One of the website's own pages reached the app (it claims fariin.com/<name>): the browser shows it. */
+    fun isSitePage(url: String?): Boolean = url != null && site.containsMatchIn(url.trim())
 }
 
 /** Opens a pending outside link exactly as the same link tapped in a chat would open. */

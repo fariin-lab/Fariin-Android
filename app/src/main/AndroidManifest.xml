@@ -100,7 +100,11 @@
                 <data android:pathPrefix="/u/" />
                 <data android:pathPrefix="/g/" />
                 <data android:pathPrefix="/s/" />
+                <data android:pathPrefix="/a/" />
                 <data android:pathPattern="/.*/s/.*" />
+                <!-- A public name, fariin.com/<name> (iOS DeepLink .name); a site page that has the
+                     same shape is handed on to the browser (ExternalLinks.sitePages). Android 12+. -->
+                <data android:pathAdvancedPattern="/[A-Za-z0-9_]+" />
             </intent-filter>
             <!-- The web landing page's "Open" button: kulan://video/<id>, kulan://voice/<id>, kulan://call/<key>. -->
             <intent-filter>
@@ -111,6 +115,18 @@
                 <data android:host="video" />
                 <data android:host="voice" />
                 <data android:host="call" />
+            </intent-filter>
+            <!-- kulan://u/<handle>, g/<code>, a/<code>, s/<id>, wchat/<cid> (iOS DeepLink, custom scheme). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kulan" />
+                <data android:host="u" />
+                <data android:host="g" />
+                <data android:host="a" />
+                <data android:host="s" />
+                <data android:host="wchat" />
             </intent-filter>
         </activity>
         <!-- Settings > Appearance > App Icon (ui/settings/AppIconPage.kt): one launcher entry per
