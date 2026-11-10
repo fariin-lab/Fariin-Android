@@ -511,7 +511,7 @@ private fun ThreadContent(
     }
     val ch = ui.channel
     postMenuFor?.let { m ->
-        if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null; menuLifted = null },
+        if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
             onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
@@ -520,8 +520,7 @@ private fun ThreadContent(
                 ({ editing = it; replyTo = null }) else null,
             onEditHistory = { historyFor = it },
             pinned = if (ui.canPin && com.fariin.app.data.PinRules.offers(m)) (m.id in ui.pinnedIds) else null,
-            onPin = { if (it.id in ui.pinnedIds) actions.onUnpin(it.id) else actions.onPin(it) },
-            source = menuSource, preview = menuPreview, onLifted = { menuLifted = m.rowId }, onLanded = { menuLifted = null })
+            onPin = { if (it.id in ui.pinnedIds) actions.onUnpin(it.id) else actions.onPin(it) })
     }
     deleteFor?.let { m -> DeleteDialog(m, ui, actions) { deleteFor = null } }
     infoFor?.let { m -> MessageInfoSheet(m, ui, is24h) { infoFor = null } }
@@ -1145,18 +1144,8 @@ private fun ThreadContent(
                                 com.fariin.app.ui.channels.LocalPostViews provides
                                     if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
                             ) {
-                                // The chat's own menu over the post (owner 2026-11-10: one menu everywhere): the
-                                // post's bubble is lifted and the menu's card and reactions sit by it.
-                                val postCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
-                                Column(Modifier.fillMaxWidth().combinedClickableLong {
-                                    val lc = postCoords[0]?.takeIf { it.isAttached }
-                                    menuSource = lc?.let { menuSourceOf(it, false) }   // every post sits on the left
-                                    menuPreview = { MessageRow(ui, m, g, is24h, {}) {} }
-                                    postMenuFor = m
-                                }) {
-                                    Box(Modifier.onPlaced { postCoords[0] = it }.graphicsLayer { alpha = if (menuLifted == m.rowId) 0f else 1f }) {
+                                Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
                                     MessageRow(ui, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
-                                    }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
                                     // A picture, video or album post's pills sit inside its bubble (MediaRow).

@@ -150,8 +150,6 @@ internal fun MessageMenuOverlay(
     onLifted: () -> Unit = {},
     /** The copy has landed: the real message may show again (called before [onDismiss]). */
     onLanded: () -> Unit = {},
-    /** A channel's own reactions (its bar list, then everything its "+" offers); null = the chat's. */
-    channelEmojis: Pair<List<String>, List<String>>? = null,
 ) {
     val c = Fariin.colors
     val density = LocalDensity.current
@@ -314,7 +312,7 @@ internal fun MessageMenuOverlay(
                 val b = f.bar!!
                 Box(Modifier.offset { IntOffset(b.left.roundToInt(), (b.top + (homeDy() - travel) * (1 - p)).roundToInt()) }
                     .graphicsLayer { alpha = barAlpha.value }) {
-                    ReactionBar(side, barH, mine, delayMs = if (abs(travel) > 0.5f) 100 else 0, custom = channelEmojis?.first,
+                    ReactionBar(side, barH, mine, delayMs = if (abs(travel) > 0.5f) 100 else 0,
                         onPick = { e -> close { onReact(e) } },
                         onMore = { picker = true })
                 }
@@ -333,7 +331,7 @@ internal fun MessageMenuOverlay(
             ) { ActionsCard(rows, onPick = { r -> close(keysBack = false) { r.run() } }) }
         }
     }
-    if (picker) ReactionPickerSheet(mine, channelEmojis?.second, onDismiss = { picker = false }) { e -> picker = false; close { onReact(e) } }
+    if (picker) ReactionPickerSheet(mine, onDismiss = { picker = false }) { e -> picker = false; close { onReact(e) } }
 }
 
 /**
@@ -409,7 +407,7 @@ internal object Frames {
  * to scroll keeps plain taps, so it can still scroll.
  */
 @Composable
-private fun ActionsCard(rows: List<MenuRow>, onPick: (MenuRow) -> Unit) {
+internal fun ActionsCard(rows: List<MenuRow>, onPick: (MenuRow) -> Unit) {
     val c = Fariin.colors
     val shape = RoundedCornerShape(33.dp)
     val scroll = rememberScrollState()
@@ -496,13 +494,12 @@ private fun ActionsCard(rows: List<MenuRow>, onPick: (MenuRow) -> Unit) {
  * away, then the "+" for any emoji. Mine sits on a soft disc the size of its slot.
  */
 @Composable
-private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: Int, custom: List<String>? = null, onPick: (String) -> Unit, onMore: () -> Unit) {
+private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: Int, onPick: (String) -> Unit, onMore: () -> Unit) {
     val c = Fariin.colors
     val density = LocalDensity.current
     val side = with(density) { sidePx.toDp() }
     val retired = rememberRetired()
-    val strip = remember(mine, retired, custom) {
-        if (custom != null) return@remember custom
+    val strip = remember(mine, retired) {
         val quick = MessageRules.QUICK_REACTIONS
         val list = (quick + ExtraEmojis.filter { it !in quick }).take(STRIP_COUNT).toMutableList()
         if (mine != null && mine !in list && !retired(mine)) list.add(mine)
@@ -545,9 +542,9 @@ private fun ReactionBar(sidePx: Float, heightPx: Float, mine: String?, delayMs: 
 /** The "+": every emoji the bar knows, in one sheet (iOS morePickerTarget). */
 @Composable
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-private fun ReactionPickerSheet(mine: String?, custom: List<String>?, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+private fun ReactionPickerSheet(mine: String?, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val c = Fariin.colors
-    val all = remember(custom) { custom ?: (MessageRules.QUICK_REACTIONS + ExtraEmojis).distinct() }
+    val all = remember { (MessageRules.QUICK_REACTIONS + ExtraEmojis).distinct() }
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = com.fariin.app.ui.components.sheetFill,
@@ -557,9 +554,7 @@ private fun ReactionPickerSheet(mine: String?, custom: List<String>?, onDismiss:
             items(all) { e ->
                 Box(Modifier.size(52.dp).clip(CircleShape)
                     .background(if (e == mine) c.label.copy(alpha = 0.08f) else Color.Transparent)
-                    .clickable { onPick(e) }, contentAlignment = Alignment.Center) {
-                    if (custom != null) ReactionGlyph(e, 30.sp, 36.dp) else Emoji3D(e, 30.sp, 36.dp)
-                }
+                    .clickable { onPick(e) }, contentAlignment = Alignment.Center) { Emoji3D(e, 30.sp, 36.dp) }
             }
         }
     }
