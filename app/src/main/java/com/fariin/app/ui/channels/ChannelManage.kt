@@ -527,7 +527,9 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
     }
     val q = query.trim()
     val list = rows.filter { it.uid !in exclude }
-    val shown = if (q.isEmpty()) list else list.filter { it.name.contains(q, ignoreCase = true) }
+    // Name or @username (iOS, 2026-11-10); a leading @ is ignored.
+    val qn = q.removePrefix("@")
+    val shown = if (q.isEmpty()) list else list.filter { it.name.contains(q, ignoreCase = true) || (qn.isNotEmpty() && it.username.contains(qn, ignoreCase = true)) }
     BarPage("Choose Follower", onClose, action = {
             if (busy) com.fariin.app.ui.components.BarBusyPill("Adding…")
         }, modifier = Modifier.background(c.bgSecondary)) { top ->
@@ -536,7 +538,8 @@ private fun ChannelAdminPicker(cid: String, exclude: Set<String>, onClose: () ->
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             SettingsSection {
                 shown.forEach { f ->
-                    PersonLine(f.photoUrl, f.name, onClick = { if (!busy) asking = f })
+                    // @username in grey under the name, like the Followers page (iOS 2026-11-10).
+                    PersonLine(f.photoUrl, f.name, onClick = { if (!busy) asking = f }, username = f.username)
                     if (f.uid == rows.lastOrNull()?.uid && more) LaunchedEffect(f.uid) { load() }
                 }
                 when {
