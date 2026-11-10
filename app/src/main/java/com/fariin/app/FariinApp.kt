@@ -71,6 +71,7 @@ class FariinApp : Application() {
             // Messages I deleted for me: read once here, not by the first chat that opens.
             runCatching { com.fariin.app.data.HiddenMessages.load(this) } }, "prefs-prefetch").apply { isDaemon = true }.start() }, PREFS_PREFETCH_DELAY_MS)
         com.fariin.app.ui.thread.DecodedPictures.init(this)
+        com.fariin.app.ui.thread.StickerLottie.init(this)
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open

@@ -102,13 +102,13 @@ object ChatHistoryPreloader {
         val ids = conversations.sortedByDescending { it.displayUpdatedAt(me) }.take(TOP_CHATS).map { it.id }.filter { savedWarm.add("$me/$it") }
         if (ids.isEmpty()) return
         // Oldest first, so the newest (the likeliest taps) are the freshest in the memory cache.
-        scope.launch { for (id in ids.asReversed()) runCatching { val t = com.fariin.app.local.LocalCache.loadThread(me, id); com.fariin.app.ui.thread.ReactionArt.warm(t); com.fariin.app.ui.thread.DecodedPictures.warm(t) } }
+        scope.launch { for (id in ids.asReversed()) runCatching { val t = com.fariin.app.local.LocalCache.loadThread(me, id); com.fariin.app.ui.thread.ReactionArt.warm(t); com.fariin.app.ui.thread.DecodedPictures.warm(t); com.fariin.app.ui.thread.StickerLottie.warmMessages(t) } }
     }
 
     /** A finger is on a chat row: read its saved copy now, before the tap lands. */
     fun touch(me: String, cid: String) {
         if (me.isEmpty() || !savedWarm.add("$me/$cid")) return
-        scope.launch { runCatching { val t = com.fariin.app.local.LocalCache.loadThread(me, cid); com.fariin.app.ui.thread.ReactionArt.warm(t); com.fariin.app.ui.thread.DecodedPictures.warm(t) } }
+        scope.launch { runCatching { val t = com.fariin.app.local.LocalCache.loadThread(me, cid); com.fariin.app.ui.thread.ReactionArt.warm(t); com.fariin.app.ui.thread.DecodedPictures.warm(t); com.fariin.app.ui.thread.StickerLottie.warmMessages(t) } }
     }
 
     @Synchronized

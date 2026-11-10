@@ -128,7 +128,9 @@ private const val STICKER_PLAYS = 3
 internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: com.fariin.app.crypto.EncMeta?,
                         modifier: Modifier, still: Boolean = false,
                         /** Bumped by a tap: the sticker plays its few times again. */
-                        replay: Int = 0) {
+                        replay: Int = 0,
+                        /** Mine still on its way: the shipped still, the animation starts once it lands. */
+                        holdStill: Boolean = false) {
     val ctx = LocalContext.current
     val play = autoplay() && !still
     val asset = remember(packId, stickerId) { if (packId == "mine") null else StickerCatalog.assetPath(ctx, packId, stickerId) }
@@ -143,25 +145,33 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
             Box(modifier) { if (bmp != null) Image(bmp, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
         }
         asset != null && asset.endsWith(".tgs") -> {
-            // The panel's tiles draw the shipped still (iOS TGSSticker `_still.png`).
-            val stillPath = if (still || !play) remember(asset) { StickerCatalog.stillPath(ctx, packId, stickerId) } else null
-            if (stillPath != null) {
-                AsyncImage("file:///android_asset/$stillPath", null, contentScale = ContentScale.Fit, modifier = modifier)
+            // The shipped still (iOS TGSSticker `_still.png`): the panel's tiles, a sticker of mine
+            // while it is sent (owner 2026-11-10: sending lagged), and every sticker until its
+            // animation is parsed, so it never shows an empty box first.
+            val stillPath = remember(asset) { StickerCatalog.stillPath(ctx, packId, stickerId) }
+            val drawStill: @Composable () -> Unit = {
+                if (stillPath != null) AsyncImage("file:///android_asset/$stillPath", null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            }
+            if (still || !play || holdStill) {
+                Box(modifier) { drawStill() }
             } else {
-                val json by produceState<String?>(null, asset) {
-                    value = withContext(Dispatchers.IO) {
-                        runCatching { GZIPInputStream(ctx.assets.open(asset)).bufferedReader().use { it.readText() } }.getOrNull()
-                    }
+                // Parsed once per sticker, off the main thread, and kept (StickerLottie).
+                val comp by produceState(StickerLottie.cached(asset), asset) {
+                    if (value == null) value = StickerLottie.load(ctx, asset)
                 }
                 Box(modifier) {
-                    json?.let { j ->
-                        val comp by rememberLottieComposition(LottieCompositionSpec.JsonString(j), cacheKey = asset)
+                    val c = comp
+                    if (c == null) drawStill()
+                    else {
                         // A few plays, then it rests on its last frame (owner 2026-11-10: animated, but not
-                        // eating battery): looping forever kept the CPU drawing as long as the chat
-                        // stayed open. It plays again when it comes back on screen.
-                        val progress by androidx.compose.runtime.key(replay) { com.airbnb.lottie.compose.animateLottieCompositionAsState(comp,
+                        // eating battery). It plays again when it comes back on screen.
+                        val progress = androidx.compose.runtime.key(replay) { com.airbnb.lottie.compose.animateLottieCompositionAsState(c,
                             iterations = STICKER_PLAYS, isPlaying = play) }
-                        LottieAnimation(comp, { if (play) progress else 0f }, modifier = Modifier.fillMaxSize())
+                        // Drawn at most 30 times a second (a sticker is made at 30 or 60): the progress
+                        // moves every vsync (90 Hz on the Pixel), so the frame it shows is rounded to a
+                        // 30 fps step and the sticker redraws only when that step changes.
+                        val shown = remember(c) { androidx.compose.runtime.derivedStateOf { StickerLottie.step(c, progress.value) } }
+                        LottieAnimation(c, { shown.value }, modifier = Modifier.fillMaxSize())
                     }
                 }
             }
@@ -188,7 +198,8 @@ internal fun StickerRow(m: Message, isMe: Boolean, shape: Shape, fill: Color, he
     if (info) StickerInfoSheet(m) { info = false }
     val art: @Composable () -> Unit = {
         StickerArt(m.stickerPack ?: "", m.stickerId ?: "", m.localPath ?: m.imageUrl, m.enc,
-            Modifier.size(w.dp, h.dp).clickable(enabled = m.sendState == null) { replay++; info = true }, replay = replay)
+            Modifier.size(w.dp, h.dp).clickable(enabled = m.sendState == null) { replay++; info = true }, replay = replay,
+            holdStill = m.sendState != null)
     }
     if (m.replyTo != null) {
         Column(Modifier.clip(shape).background(fill).padding(horizontal = 10.dp, vertical = 6.dp),
@@ -298,6 +309,14 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
     val shelves: List<StickerPackInfo> = remember(recents, favorites, packs) {
         (if (recents.isEmpty()) emptyList() else listOf(StickerPackInfo("recent", "Recently Used", recents))) +
             listOf(StickerPackInfo("favorites", "Favorites", favorites)) + packs
+    }
+    // The recent and favourite stickers parsed ahead, so sending one does not parse it on the spot.
+    val warmCtx = LocalContext.current
+    LaunchedEffect(recents, favorites) {
+        withContext(Dispatchers.IO) {
+            StickerLottie.warm(warmCtx, (recents + favorites).take(24).mapNotNull { r ->
+                runCatching { StickerCatalog.assetPath(warmCtx, r.packId, r.stickerId) }.getOrNull() })
+        }
     }
     // Where each shelf's header sits in the grid, for the strip's jumps (Favorites has the Create tile too).
     val starts = remember(shelves) { var i = 0; shelves.map { s -> val at = i; i += 1 + s.stickers.size + (if (s.id == "favorites") 1 else 0); at } }
@@ -557,4 +576,51 @@ internal fun Modifier.scrollHide(onScrolledIn: (Boolean) -> Unit): Modifier {
         }
     }
     return this.nestedScroll(conn)
+}
+
+/**
+ * The animated stickers' parsed animations, kept for the run (owner 2026-11-10: sending a sticker
+ * lagged; each one was unzipped and parsed again on every draw of its row).
+ */
+internal object StickerLottie {
+    private val comps = object : android.util.LruCache<String, com.airbnb.lottie.LottieComposition>(40) {}
+
+    fun cached(asset: String): com.airbnb.lottie.LottieComposition? = comps.get(asset)
+
+    suspend fun load(ctx: android.content.Context, asset: String): com.airbnb.lottie.LottieComposition? =
+        comps.get(asset) ?: withContext(Dispatchers.IO) {
+            runCatching {
+                val json = GZIPInputStream(ctx.assets.open(asset)).bufferedReader().use { it.readText() }
+                com.airbnb.lottie.LottieCompositionFactory.fromJsonStringSync(json, asset).value
+            }.getOrNull()?.also { comps.put(asset, it) }
+        }
+
+    @Volatile private var app: android.content.Context? = null
+    fun init(c: android.content.Context) { app = c.applicationContext }
+
+    /** The animated stickers of a chat's saved messages, parsed before it opens (ChatHistoryPreloader). */
+    fun warmMessages(messages: List<com.fariin.app.data.Message>) {
+        val c = app ?: return
+        if (!com.fariin.app.ui.components.Motion.on) return
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            val assets = messages.asReversed().asSequence().filter { !it.deleted && it.stickerPack != null && it.stickerId != null && it.stickerPack != "mine" }
+                .take(30).mapNotNull { m -> runCatching { StickerCatalog.assetPath(c, m.stickerPack!!, m.stickerId!!) }.getOrNull() }.toSet()
+            warm(c, assets)
+        }
+    }
+
+    /** Parsed ahead, off the main thread, so a send or a scroll does not parse on the spot. */
+    fun warm(ctx: android.content.Context, assets: Collection<String>) {
+        val todo = assets.filter { it.endsWith(".tgs") && comps.get(it) == null }.take(20)
+        if (todo.isEmpty()) return
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch { for (a in todo) load(ctx, a) }
+    }
+
+    /** [progress] rounded down to a 30 fps step of [c]. */
+    fun step(c: com.airbnb.lottie.LottieComposition, progress: Float): Float {
+        val frames = c.durationFrames
+        if (frames <= 0f) return progress
+        val per = (c.frameRate / 30f).coerceAtLeast(1f)
+        return (kotlin.math.floor(progress * frames / per) * per / frames).coerceIn(0f, 1f)
+    }
 }
