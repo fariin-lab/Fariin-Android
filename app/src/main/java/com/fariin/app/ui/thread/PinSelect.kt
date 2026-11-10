@@ -296,15 +296,22 @@ internal fun PinnedMessagesSheet(
 internal fun SelectTopBar(count: Int, onClose: () -> Unit) {
     val c = Fariin.colors
     // The chat header's build (owner 2026-11-07: select mode looked like a different app): the close
-    // in a floating circle at the start, the count centred and semibold, on the page colour.
-    Box(
-        Modifier.fillMaxWidth().background(c.bg)
-            .windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 12.dp),
-    ) {
-        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", onClick = onClose, circle = true,
-            modifier = Modifier.align(Alignment.CenterStart))
-        Text(if (count == 1) "1 Selected" else "$count Selected", fontSize = 17.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
+    // in a floating circle at the start, the count in a glass capsule in the middle. No band behind
+    // them (owner 2026-11-10: the grey band over the wallpaper looked soft and cheap); crisp glass
+    // that blurs what passes under, as the pinned bar.
+    androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassBlur provides true) {
+        Box(
+            Modifier.fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars).height(64.dp).padding(horizontal = 12.dp),
+        ) {
+            com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", onClick = onClose, circle = true,
+                modifier = Modifier.align(Alignment.CenterStart))
+            Box(Modifier.align(Alignment.Center).height(44.dp).floating(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 20.dp),
+                contentAlignment = Alignment.Center) {
+                Text(if (count == 1) "1 Selected" else "$count Selected", fontSize = 17.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = c.label)
+            }
+        }
     }
 }
 
@@ -319,16 +326,20 @@ internal fun SelectionBar(
     onDelete: () -> Unit, onForward: () -> Unit, onCopy: () -> Unit,
 ) {
     val c = Fariin.colors
+    // A capsule of the buttons' clear glass, blurred under (owner 2026-11-10: the thick frost of a
+    // text field made it look soft and grey).
+    androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalGlassBlur provides true) {
     Row(
         Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 12.dp, vertical = 8.dp).height(60.dp)
-            .floating(androidx.compose.foundation.shape.RoundedCornerShape(30.dp)),
+            .floating(androidx.compose.foundation.shape.CircleShape),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SelectAction("Delete", painterResource(R.drawable.ic_sf_trash),
             deleteEnabled && !busy, c.red, onDelete)
         SelectAction("Forward", painterResource(R.drawable.ic_menu_forward), forwardEnabled && !busy, c.label, onForward)
         SelectAction("Copy", painterResource(R.drawable.ic_sf_doc_on_doc), copyEnabled && !busy, c.label, onCopy)
+    }
     }
 }
 
@@ -361,24 +372,19 @@ internal fun BulkDeleteDialog(picked: List<Message>, ui: ThreadUi, onDismiss: ()
         onPlan(SelectRules.plan(picked, everyone, ui.me, ui.isGroup, ui.adminMayDelete))
     }
     val n = picked.size
+    // One stacked glass pill per choice (owner 2026-11-10: all three were packed into one pill, so
+    // Delete for Me and Cancel were cut off).
     GlassAlert(
         onDismissRequest = onDismiss,
-        title = { Text("Delete $n message${if (n == 1) "" else "s"}?") },
-        text = if (hasMine && split.onlyMe > 0) {
-            {
-                Text(
-                    if (ui.isGroup) "Delete for Everyone removes ${split.everyone} of these for everyone. You can't delete the other ${split.onlyMe}."
-                    else "Delete for Everyone removes ${split.everyone} of these for everyone. The other ${split.onlyMe} will only be removed from your side.",
-                )
-            }
+        title = "Delete $n message${if (n == 1) "" else "s"}?",
+        message = if (hasMine && split.onlyMe > 0) {
+            if (ui.isGroup) "Delete for Everyone removes ${split.everyone} of these for everyone. You can't delete the other ${split.onlyMe}."
+            else "Delete for Everyone removes ${split.everyone} of these for everyone. The other ${split.onlyMe} will only be removed from your side."
         } else null,
-        confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                if (hasMine) TextButton(onClick = { go(true) }) { Text("Delete for Everyone", color = c.red) }
-                if (!ui.isGroup) TextButton(onClick = { go(false) }) { Text("Delete for Me", color = c.red) }
-                TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent) }
-            }
+        actions = buildList {
+            if (hasMine) add(com.fariin.app.ui.components.GlassAlertAction("Delete for Everyone", com.fariin.app.ui.components.GlassAlertStyle.Red) { go(true) })
+            if (!ui.isGroup) add(com.fariin.app.ui.components.GlassAlertAction("Delete for Me", com.fariin.app.ui.components.GlassAlertStyle.Red) { go(false) })
+            add(com.fariin.app.ui.components.GlassAlertAction("Cancel", com.fariin.app.ui.components.GlassAlertStyle.Bold) {})
         },
-        containerColor = c.card,
     )
 }
