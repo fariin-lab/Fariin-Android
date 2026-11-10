@@ -324,10 +324,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
             LaunchedEffect(top?.id) { pm.play() }
-            val inertBack = remember { object : OnBackPressedDispatcherOwner {
-                override val onBackPressedDispatcher = OnBackPressedDispatcher()
-                override val lifecycle get() = this@MainActivity.lifecycle
-            } }
+            // The shell's back handlers live on their own dispatcher, joined to the activity's only
+            // while the list is on top. It used to be handed the activity or an inert owner as a page
+            // opened and closed: a new CompositionLocal value each time, which rebuilt the whole chat
+            // list on the tap frame (~50 ms of an 81 ms frame, trace of a group open 2026-11-09).
+            val shellBack = remember { ShellBack(this@MainActivity) }
+            DisposableEffect(Unit) {
+                onBackPressedDispatcher.addCallback(this@MainActivity, shellBack.forward)
+                onDispose { shellBack.forward.remove() }
+            }
+            androidx.compose.runtime.SideEffect { shellBack.setOnTop(onTop) }
             // During a call: the bar on top (it holds the status bar's strip) and the app under it as a
             // full-width card, its top corners rounded over the bar's dark colour (owner 2026-11-08: no side margins). The bar
             // slides in and out and the card's corners follow it over 300 ms, so the app
@@ -373,7 +379,7 @@ class MainActivity : ComponentActivity() {
                 alpha = if (pm.top == null || pm.shows(pm.mainId)) 1f else 0f
                 translationX = shell.shift * size.width
             }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
-                CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides if (onTop) this@MainActivity else inertBack) {
+                CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides shellBack) {
                     HeldChats(chatsState) { listChats -> MainShell(me, listChats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }, onRetryChats = vm::retry) }
                 }
                 if (!onTop) Box(Modifier.fillMaxSize().pointerInput(Unit) {
@@ -567,4 +573,19 @@ private fun HeldChats(state: State<ChatsUiState>, content: @Composable (ChatsUiS
     val held = remember { androidx.compose.runtime.mutableStateOf(state.value) }
     if (!moving) held.value = state.value
     content(held.value)
+}
+
+/** The chat list shell's back presses: its own dispatcher, forwarded from the activity's only
+ *  while the shell is on top and one of its handlers wants the press (see SignedIn). */
+private class ShellBack(private val activity: androidx.activity.ComponentActivity) : OnBackPressedDispatcherOwner {
+    private var onTop = true
+    private var wanted = false
+    val forward = object : androidx.activity.OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() { onBackPressedDispatcher.onBackPressed() }
+    }
+    override val onBackPressedDispatcher: OnBackPressedDispatcher =
+        OnBackPressedDispatcher(null) { has -> wanted = has; update() }
+    override val lifecycle get() = activity.lifecycle
+    fun setOnTop(top: Boolean) { onTop = top; update() }
+    private fun update() { forward.isEnabled = onTop && wanted }
 }

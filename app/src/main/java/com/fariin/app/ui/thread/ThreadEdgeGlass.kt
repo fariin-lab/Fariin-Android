@@ -104,9 +104,10 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
             tints = emptyList()
-            // Full size (was a third): the scaled copy dropped out for single frames, drawing the
-            // messages sharp under the header (owner's Pixel 2026-11-09, "the header blur makes movement").
-            inputScale = HazeInputScale.None
+            // A third-size copy: full size doubled the GPU time of every frame of a page slide on the
+            // Pixel 5 (18-24 ms against an 11 ms budget). The single sharp frames seen with it went with
+            // the pages' move to placement (PageFrame) and the edge's 250 ms off-delay.
+            inputScale = HazeInputScale.Fixed(1f / 3)
             progressive = com.fariin.app.ui.components.edgeStages(solid)
             this.alpha = alpha
         })
