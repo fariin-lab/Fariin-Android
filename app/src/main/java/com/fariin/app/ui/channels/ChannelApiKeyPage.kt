@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -97,6 +99,9 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var confirmNew by remember { mutableStateOf(false) }
     var confirmRevoke by remember { mutableStateOf(false) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    /** Which action is running, so only that row shows the spinner. */
+    var running by remember { mutableStateOf<String?>(null) }
 
     fun errText(e: Exception) = (e.message ?: "").ifBlank { "Something went wrong. Try again." }
 
@@ -115,6 +120,7 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
 
     fun run(action: String) {
         busy = true
+        running = action
         scope.launch {
             try {
                 val d = ChannelApiKey.call(cid, action)
@@ -125,15 +131,17 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
                 } else {
                     freshKey = null; hasKey = false; hint = null; createdAt = null
                 }
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 error = errText(e)
-            } finally { busy = false }
+            } finally { busy = false; running = null }
         }
     }
 
     fun copy(label: String, text: String) {
         (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(label, text))
+        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
     }
     val scroll = rememberScrollState()
     BarPage("API Key", onBack, under = underBar(scroll), modifier = Modifier.background(c.bgSecondary)) { top ->
@@ -156,11 +164,21 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
                 else -> "Only you can see this page. The key works for this channel only."
             }) {
                 val k = freshKey
-                when {
-                    loading -> Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                val state = when { loading -> 0; k != null -> 1; hasKey -> 2; else -> 3 }
+                androidx.compose.animation.AnimatedContent(state, label = "apiKeyState",
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(240, delayMillis = 80))
+                            + androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(240, delayMillis = 80), initialScale = 0.96f))
+                            .togetherWith(androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(100)))
+                            .using(androidx.compose.animation.SizeTransform(clip = false) { _, _ ->
+                                androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 400f) })
+                    }) { st ->
+                Column {
+                when (st) {
+                    0 -> Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                     }
-                    k != null -> {
+                    1 -> if (k != null) {
                         SelectionContainer {
                             Text(k, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = c.label,
                                 modifier = Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(12.dp))
@@ -170,21 +188,31 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
                             icon = painterResource(if (copied) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_doc_on_doc),
                             titleColor = c.blue, trailing = Trailing.NONE) { copy("API key", k); copied = true }
                     }
-                    hasKey -> SettingsRow("Active", icon = painterResource(R.drawable.ic_sf_key), value = "••••${hint ?: ""}",
+                    2 -> SettingsRow("Active", icon = painterResource(R.drawable.ic_sf_key), value = "••••${hint ?: ""}",
                         subtitle = createdAt?.let { "Created " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)) },
                         trailing = Trailing.NONE,
-                        accessory = { Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF34C759))) })
+                        accessory = { LiveDot() })
                     else -> SettingsRow("No key yet", icon = painterResource(R.drawable.ic_sf_key), titleColor = c.secondary, trailing = Trailing.NONE)
+                }
+                }
                 }
                 if (!loading) {
                     SettingsRow(if (hasKey) "New Key" else "Create Key",
                         icon = painterResource(if (hasKey) R.drawable.ic_sf_arrow_clockwise else R.drawable.ic_plus_ios),
-                        titleColor = if (busy) c.secondary else c.blue, trailing = Trailing.NONE, last = !hasKey) {
+                        titleColor = if (busy) c.secondary else c.blue, trailing = Trailing.NONE, last = !hasKey,
+                        accessory = { if (running == "create") CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.secondary) }) {
                         if (busy) return@SettingsRow
                         if (hasKey) confirmNew = true else run("create")
                     }
-                    if (hasKey) SettingsRow("Revoke Key", icon = painterResource(R.drawable.ic_sf_trash),
-                        titleColor = if (busy) c.secondary else c.red, trailing = Trailing.NONE, last = true) { if (!busy) confirmRevoke = true }
+                    androidx.compose.animation.AnimatedVisibility(hasKey,
+                        enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                        exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) {
+                        SettingsRow("Revoke Key", icon = painterResource(R.drawable.ic_sf_trash),
+                            titleColor = if (busy) c.secondary else c.red, trailing = Trailing.NONE, last = true,
+                            accessory = { if (running == "revoke") CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.secondary) }) {
+                            if (!busy) confirmRevoke = true
+                        }
+                    }
                 }
             }
 
@@ -249,3 +277,11 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
 @Composable
 private fun ApiAction(icon: Int, title: String, action: String, last: Boolean = false) =
     SettingsRow(title, icon = painterResource(icon), subtitle = action, trailing = Trailing.NONE, last = last)
+
+/** The green "live" dot: grows in with a spring when a key turns active. */
+@Composable
+private fun LiveDot() {
+    val grow = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { grow.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 300f)) }
+    Box(Modifier.size(8.dp).graphicsLayer { scaleX = grow.value; scaleY = grow.value }.clip(CircleShape).background(Color(0xFF34C759)))
+}
