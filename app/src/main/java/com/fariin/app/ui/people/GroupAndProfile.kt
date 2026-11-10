@@ -723,7 +723,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         ContactSoundsPage(muteUntil, onMute = { until ->
             muteOverride = until
             scope.launch { if (!writeContactMute(cid, me, until)) muteOverride = null }
-        }, cid = cid, onBack = { soundsOpen = false })
+        }, cid = cid, footer = "While this group is muted, you're still told when someone mentions you.", onBack = { soundsOpen = false })
         return
     }
     val storageCtx = LocalContext.current.applicationContext

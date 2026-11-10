@@ -314,9 +314,25 @@ internal fun StoryComposerDialog(
     onAddMore: (() -> Unit)? = null,
     hidden: Boolean = false,
 ) {
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    // ⛔ NO PLATFORM WINDOW ANIMATION (owner 2026-11-10, video): closing played the phone maker's
+    // dialog zoom-out, which shrank the whole editor toward the lower grid. The window has none
+    // now; the editor fades itself out (180 ms) and then closes, back onto the photo grid.
+    val leaving = remember { androidx.compose.animation.core.Animatable(1f) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+    val fadeClose: () -> Unit = {
+        if (!closing) {
+            closing = true
+            scope.launch { leaving.animateTo(0f, androidx.compose.animation.core.tween(180)); onClose() }
+        }
+    }
+    Dialog(onDismissRequest = fadeClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        val view = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.SideEffect { (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setWindowAnimations(0) }
         com.fariin.app.ui.components.EdgeToEdgeDarkDialogWindow()
-        StoryComposer(me, items, conversations, onClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = leaving.value }) {
+            StoryComposer(me, items, conversations, fadeClose, onPosted, textStory, flyHome, onFlightStart, onAddMore, hidden)
+        }
     }
 }
 
@@ -485,8 +501,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     }
     var hoursMenu by remember { mutableStateOf(false) }
     var stickerTray by remember { mutableStateOf(false) }
-    var askLink by remember { mutableStateOf(false) }
-    var askPlace by remember { mutableStateOf(false) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var audience by remember { mutableStateOf(textStory) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -578,7 +593,12 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     val space = frame.space
     val shown = frame.shown
     val strokeMatrix = frame.strokeMatrix
-    val bin = with(density) { Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx()) }
+    // The bin sits ON the picture, 60 dp above its bottom edge (iOS trashCenter: canvas height - 60),
+    // not under it in the black bar (owner 2026-11-10). Before the card is measured, the old spot.
+    val bin = with(density) {
+        if (card.width > 1f) Offset(card.center.x, card.bottom - 60.dp.toPx())
+        else Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx())
+    }
     val binSlop = with(density) { 12.dp.toPx() }
     val binSize = with(density) { 52.dp.toPx() }
 
@@ -600,12 +620,28 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     }
     // iOS chipSticker (Location, Link, Time): a white pill that moves like text; Link and Location
     // become a tap area on the posted story.
-    fun addChip(label: String, link: String?) {
+    // Baked as a picture like iOS (ImageRenderer), white first; a tap bakes it again in the next colour.
+    fun addChip(symbol: StoryChipSymbol, label: String, link: String?) {
         val k = StoryEditRules.SPACE / space.width.coerceAtLeast(1f)
         val t = StoryTextItem(edits.newId(), StoryEditRules.SPACE / 2, space.height * k / 2)
-        t.text = label; t.bg = StoryEditRules.Bg.SOLID; t.isChip = true; t.link = link
+        val pic = StoryChipArt.render(ctx, symbol, label, StoryChipStyle.WHITE)
+        t.text = label; t.isChip = true; t.link = link; t.chipSymbol = symbol
+        t.imageW = pic.width / StoryChipArt.PX_PER_UNIT
+        t.imageH = pic.height / StoryChipArt.PX_PER_UNIT
+        t.image = pic
         edits.drawingOnTop = false
         edits.texts.add(t)
+    }
+    // iOS cycleChipColour: white, black, blue; the width is read again from the new bake.
+    fun cycleChip(t: StoryTextItem) {
+        val symbol = t.chipSymbol ?: return
+        val next = t.chipStyle.next
+        val pic = StoryChipArt.render(ctx, symbol, t.text, next)
+        t.chipStyle = next
+        t.imageW = pic.width / StoryChipArt.PX_PER_UNIT
+        t.imageH = pic.height / StoryChipArt.PX_PER_UNIT
+        t.image = pic
+        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
     }
     // iOS addSticker: the tray's sticker in the middle of the card, 150 pt across, moving like text.
     fun addSticker(pic: android.graphics.Bitmap) {
@@ -779,7 +815,7 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
         if (canEdit && flight == null) androidx.compose.runtime.key(cur) { StoryEditCanvas(
             edits, space, editingId, drawing, StoryEditRules.penColor(penHue), penWidth, highlighter,
             onStroke = { stroking = it },
-            onTapText = { if (!it.isChip && it.image == null) editingId = it.id },
+            onTapText = { if (it.isChip) cycleChip(it) else if (it.image == null) editingId = it.id },
             onDrag = { _, p ->
                 dragging = true
                 val hot = StoryEditRules.isOverTrash(p.x, p.y, bin.x, bin.y, binSize, binSlop)
@@ -823,7 +859,10 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                 onCancel = { cancelPen() }, onDone = { closePen(false) }, modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
-        if (dragging) StoryTrash(trashHot, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 36.dp))
+        if (dragging) StoryTrash(trashHot, Modifier.align(Alignment.TopStart).offset {
+            val half = 26.dp.roundToPx()
+            androidx.compose.ui.unit.IntOffset(bin.x.toInt() - half, bin.y.toInt() - half)
+        })
         // Gone while the audience page shows: a caption field left behind kept the keyboard up
         // over Post Story.
         if (chrome && !audience) {
@@ -961,17 +1000,9 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                 stickerTray = false
                 scope.launch { StoryStickers.bitmap(ctx, g)?.let { addSticker(it) } }
             },
-            onTime = { stickerTray = false; addChip("🕒 " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date()), null) },
-            onLink = { stickerTray = false; askLink = true },
-            onPlace = { stickerTray = false; askPlace = true })
-        if (askLink) ChipPrompt("Link", "https://", onDone = { raw ->
-            askLink = false
-            com.fariin.app.data.StoryChips.link(raw)?.let { (label, url) -> addChip("🔗 $label", url) }
-        }, onCancel = { askLink = false })
-        if (askPlace) ChipPrompt("Location", "Place name", onDone = { raw ->
-            askPlace = false
-            com.fariin.app.data.StoryChips.place(raw)?.let { (label, url) -> addChip("📍 $label", url) }
-        }, onCancel = { askPlace = false })
+            onTime = { stickerTray = false; addChip(StoryChipSymbol.TIME, android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date()), null) },
+            onLink = { url, label -> stickerTray = false; addChip(StoryChipSymbol.LINK, label, url) },
+            onPlace = { name, lat, lon -> stickerTray = false; addChip(StoryChipSymbol.PLACE, name.uppercase(), com.fariin.app.data.StoryChips.placeUrl(name, lat, lon)) })
         // Taps held at once; the dim and the spinner only after 300 ms, so a quick Next goes straight
         // to the sheet with no flash (owner's video 2026-11-09: a spinner blinked for two frames).
         if (baking) {
@@ -1038,19 +1069,6 @@ suspend fun prepareStoryMedia(context: android.content.Context, uri: Uri): Resul
         }
     }
 
-
-/** One line for a Link or Location chip; Done adds it. */
-@Composable
-private fun ChipPrompt(title: String, hint: String, onDone: (String) -> Unit, onCancel: () -> Unit) {
-    var text by remember { mutableStateOf("") }
-    com.fariin.app.ui.components.GlassAlert(onDismissRequest = onCancel,
-        title = { Text(title) },
-        text = {
-            androidx.compose.material3.OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text(hint) })
-        },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = { onDone(text) }, enabled = text.isNotBlank()) { Text("Done") } },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = onCancel) { Text("Cancel") } })
-}
 
 /** The tools bar under the story editor's frame (Aa, stickers, pen | NEXT), as iOS. */
 internal val EDIT_BAR = 80.dp

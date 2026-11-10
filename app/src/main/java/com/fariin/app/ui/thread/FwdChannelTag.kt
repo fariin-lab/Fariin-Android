@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,9 +68,11 @@ private fun ForwardedFrom(src: Message.ForwardSource, isMe: Boolean, openCid: St
     if (joinSheet) com.fariin.app.ui.people.PublicGroupSheet(src.cid,
         onClose = { joinSheet = false; com.fariin.app.data.QuoteStore.pendingJump.value = null },
         onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) })
-    Text("Forwarded from ${src.title}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-        color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.clickable {
+    // Two lines at the head of the bubble (owner 2026-11-10: the one grey line did not look like
+    // something to tap): "Forwarded from" small, then the source's photo and name in the accent
+    // colour with a chevron, so it reads as a link. The whole block is the button.
+    val accent = if (isMe) Color.White else c.accent
+    Column(Modifier.clip(RoundedCornerShape(8.dp)).clickable {
             val jump = com.fariin.app.data.QuoteStore.Jump(src.cid, src.mid)
             if (src.cid == openCid) { com.fariin.app.data.QuoteStore.pendingJump.value = jump; return@clickable }
             val mine = com.fariin.app.data.ChatsNow.find(src.cid) != null || ChannelFollows.entries.value.containsKey(src.cid)
@@ -86,7 +89,18 @@ private fun ForwardedFrom(src: Message.ForwardSource, isMe: Boolean, openCid: St
                 else -> joinSheet = true
             }
         }.padding(vertical = 2.dp)
-            .semantics { contentDescription = "Forwarded from ${src.title}" })
+        .semantics(mergeDescendants = true) { contentDescription = "Forwarded from ${src.title}" }) {
+        Text("Forwarded from", fontSize = 12.sp, color = if (isMe) Color.White.copy(alpha = 0.75f) else c.secondary, maxLines = 1)
+        Spacer(Modifier.height(3.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(src.photo?.ifEmpty { null }, 20.dp, squircle = src.isChannel,
+                kind = if (src.isChannel) com.fariin.app.ui.components.AvatarKind.CHANNEL else com.fariin.app.ui.components.AvatarKind.GROUP)
+            Spacer(Modifier.width(6.dp))
+            Text(src.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = accent, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_right), null, tint = accent.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+        }
+    }
 }
 
 /** [openCid]: the chat this bubble is drawn in, so a "Forwarded from" this very chat scrolls instead. */

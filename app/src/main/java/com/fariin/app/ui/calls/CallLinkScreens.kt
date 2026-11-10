@@ -75,12 +75,16 @@ import com.fariin.app.R
 
 private const val NET_ERROR = "Check your connection and try again."
 
-/** The round link mark that stands for a call link wherever a person's photo would be. */
+/** iOS CallLinkAvatar: eight calm colours, mid-tone so white reads on all of them. */
+private val linkPalette = listOf(0xFF4F7DF3, 0xFF2FA37C, 0xFFE0794F, 0xFF8C6BDB, 0xFFD3577A, 0xFF2C9BB8, 0xFFC69A2E, 0xFF5E8C4A)
+
+/** A call link where a person's photo would be (iOS CallLinkAvatar): a coloured circle picked by
+ *  the room id with a white camera, never the copy mark (owner, 2026-11-10). */
 @Composable
-fun CallLinkAvatar(size: Dp) {
-    val c = Fariin.colors
-    Box(Modifier.size(size).clip(CircleShape).background(c.blue.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.accent, modifier = Modifier.size(size * 0.48f))
+fun CallLinkAvatar(size: Dp, roomId: String = "") {
+    val first = roomId.take(2).toIntOrNull(16) ?: 0
+    Box(Modifier.size(size).clip(CircleShape).background(Color(linkPalette[first % linkPalette.size])), contentAlignment = Alignment.Center) {
+        Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_video_fill), null, tint = Color.White, modifier = Modifier.size(size * 0.42f))
     }
 }
 
@@ -192,7 +196,7 @@ private fun LinkBody(s: LinkState, onUsed: () -> Unit, onDeleted: (() -> Unit)?,
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 24.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            CallLinkAvatar(80.dp)
+            CallLinkAvatar(80.dp, s.roomId)
             Spacer(Modifier.height(12.dp))
             Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
@@ -345,13 +349,13 @@ fun CallLinkRow(link: SavedCallLink, timeLabel: String, onOpen: () -> Unit, onIn
     Column {
         Row(Modifier.fillMaxWidth().listPress(onLongClick = onLongClick, onClick = onOpen).padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            CallLinkAvatar(46.dp)
+            CallLinkAvatar(46.dp, link.roomId)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(link.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.secondary, modifier = Modifier.size(13.dp))
+                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link), null, tint = c.secondary, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Call Link", fontSize = 14.sp, color = c.secondary, maxLines = 1)
                 }

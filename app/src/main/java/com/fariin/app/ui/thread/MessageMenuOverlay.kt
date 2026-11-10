@@ -135,10 +135,7 @@ private const val STRIP_COUNT = 15
  * focus, so the composer keeps it and the keys can come back; back closes the menu through the
  * activity's back dispatcher instead.
  *
- * The blur is the chat's own
- * screen blurred in place (a RenderEffect on the activity's content, Android 12 and up; older
- * phones get the tint alone), always taken off when the menu goes. Not the window blur-behind:
- * on a real Pixel and the emulator that left the display showing stale frames after the menu.
+ * Behind it the chat is dimmed, not blurred (owner 2026-11-10: spare the GPU).
  */
 @Composable
 internal fun MessageMenuOverlay(
@@ -204,24 +201,9 @@ internal fun MessageMenuOverlay(
         }
     }
 
-    // The blur, on the background's own clock as iOS's blur view alpha is.
-    val content = (LocalView.current.rootView as? android.view.ViewGroup)?.getChildAt(0)
-    val blurPx = with(density) { 20.dp.toPx() }
-    // The app's one blur rule (Settings > Power Saving): Android 12+, not a LOW-class phone, Blur
-    // effects on and Battery Saver not taking it away. Otherwise the tint alone.
-    val glass = com.fariin.app.perf.rememberPowerState().glass()
-    if (glass && content != null) {
-        LaunchedEffect(content) {
-            // Four steps, not a new blur every frame: measured on the Pixel 5 over six menus, the
-            // per-frame blur took the 90th-percentile frame from 15 to 32 ms (GPU 5 -> 14); four
-            // steps keep it at 21 ms (GPU 7) and still read as a fade under the tint.
-            androidx.compose.runtime.snapshotFlow { kotlin.math.ceil(scrim.value * 4f) / 4f }.collect { v ->
-                content.setRenderEffect(if (v < 0.01f) null
-                    else android.graphics.RenderEffect.createBlurEffect(blurPx * v, blurPx * v, android.graphics.Shader.TileMode.CLAMP))
-            }
-        }
-        androidx.compose.runtime.DisposableEffect(content) { onDispose { content.setRenderEffect(null) } }
-    }
+    // No blur behind the menu (owner 2026-11-10, to spare the GPU): a full-screen blur cost the
+    // Pixel 5 about 7 ms of GPU a frame while the menu opened. A dim alone, a little deeper than the
+    // tint that sat over the blur.
 
     androidx.activity.compose.BackHandler(enabled = !closing) { close() }
 
@@ -259,7 +241,7 @@ internal fun MessageMenuOverlay(
         val popupRoot = LocalView.current.rootView
         LaunchedEffect(popupRoot) { stretchOverDisplay(popupRoot) }
         var origin by remember { mutableStateOf<Offset?>(null) }
-        val tint = if (c.dark) Color.Black.copy(alpha = 0.6f) else Color(0f, 0.039f, 0.149f, 0.2f)
+        val tint = if (c.dark) Color.Black.copy(alpha = 0.6f) else Color(0f, 0.039f, 0.149f, 0.34f)
         BoxWithConstraints(
             Modifier.fillMaxSize()
                 .onGloballyPositioned { origin = it.positionOnScreen() }
@@ -425,7 +407,7 @@ internal object Frames {
  * to scroll keeps plain taps, so it can still scroll.
  */
 @Composable
-private fun ActionsCard(rows: List<MenuRow>, onPick: (MenuRow) -> Unit) {
+internal fun ActionsCard(rows: List<MenuRow>, onPick: (MenuRow) -> Unit) {
     val c = Fariin.colors
     val shape = RoundedCornerShape(33.dp)
     val scroll = rememberScrollState()

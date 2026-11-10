@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -110,8 +111,12 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         // goes back must be seen), not a quick fade.
         // A LIVING MORPH, not a flat zoom (owner's video 2026-11-08): a slower spring with a real
         // overshoot on the way out, a firm one back.
-        if (open) { closing = false; shown = true; grow.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 150f)) }
-        else if (shown) { closing = true; grow.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 260f, visibilityThreshold = 0.01f)); shown = false }
+        // Timed against the reference app's profile menu on the Pixel (60 fps, owner 2026-11-10): open
+        // ~280 ms with a small overshoot, back into the button ~200 ms. Ours was a slow spring that
+        // showed an empty box for 100 ms and drifted for 400 ms after.
+        if (open) { closing = false; shown = true; grow.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 420f)) }
+        else if (shown) { closing = true; grow.animateTo(0f, androidx.compose.animation.core.tween(240,
+            easing = androidx.compose.animation.core.CubicBezierEasing(0.4f, 0f, 0.2f, 1f))); shown = false }
     }
     if (!shown) return
     BackHandler { onDismiss() }
@@ -126,16 +131,24 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
     val menuW = with(density) { 260.dp.toPx() }
     val margin = with(density) { 16.dp.toPx() }
     Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow() }
+        // The page dims a little under the menu, as the reference (about 10 %).
+        .drawBehind { drawRect(Color.Black.copy(alpha = (if (c.dark) 0.2f else 0.1f) * grow.value.coerceIn(0f, 1f))) }
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() }) {
-        // Open: under the button, its right edge on the button's right (kept on screen).
+        // Open OVER the button, its top right on the button's top right, as the reference: the
+        // button's circle becomes the menu. Kept on screen.
         val left = (src.right - origin.x - menuW).coerceAtLeast(margin)
-        val top = src.bottom - origin.y + with(density) { 8.dp.toPx() }
+        val screenH = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
+        val top = (src.top - origin.y).coerceAtMost(screenH - size.height - margin * 2).coerceAtLeast(margin)
         val g = grow.value.coerceIn(0f, 1.05f)
         val h = size.height.toFloat()
         // The box flies from the button's circle to the menu's place, its corners from round to 28.
         val sx = if (size.width > 0) (src.width / size.width).coerceAtMost(1f) else 1f
         val sy = if (h > 0) (src.height / h).coerceAtMost(1f) else 1f
-        val shape = RoundedCornerShape(28.dp)
+        // Closing, the corners round up as it shrinks, so the glass ends as the button's circle (the
+        // reference folds into a tall pill, then the round button; ours ended as a square ghost).
+        val fold = if (closing) (1f - g).coerceIn(0f, 1f) else 0f
+        val r0 = with(density) { 28.dp.toPx() }
+        val shape = RoundedCornerShape(r0 + (minOf(size.width, size.height) / 2f - r0).coerceAtLeast(0f) * fold)
         val glassMod = if (backdrop != null) Modifier.drawBackdrop(
             backdrop = backdrop, shape = { shape },
             effects = { vibrancy(); blur(24.dp.toPx()); lens(14.dp.toPx(), 28.dp.toPx()) },
@@ -151,26 +164,28 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                 .onGloballyPositioned { size = it.size }
                 .graphicsLayer {
                     val k = g
-                    // From the button's centre to the menu's own place.
-                    val cx0 = src.center.x - origin.x - (left + this.size.width / 2f)
-                    val cy0 = src.center.y - origin.y - (top + this.size.height / 2f)
-                    translationX = cx0 * (1f - k)
-                    translationY = cy0 * (1f - k)
+                    // Grows out of the button where it sits under the menu (no flight across the page).
+                    val w0 = this.size.width.coerceAtLeast(1f); val h0 = this.size.height.coerceAtLeast(1f)
+                    val px = ((src.center.x - origin.x - left) / w0).coerceIn(0f, 1f)
+                    val py = ((src.center.y - origin.y - top) / h0).coerceIn(0f, 1f)
                     // Jelly: the glass widens first and drops after (x leads, y lags), so it stretches out
                     // of the button instead of zooming; the overshoot of [grow] gives the bounce.
                     // Both sides grow together, out of the round button and back into it (owner 2026-11-08:
                     // the width-first jelly read as "coming out flat").
-                    val kx = k.coerceAtLeast(0f)
+                    // Closing, the width goes first (the reference's tall pill), the height after.
+                    val kx = if (closing) Math.pow(k.coerceAtLeast(0f).toDouble(), 1.5).toFloat() else k.coerceAtLeast(0f)
                     val ky = k.coerceAtLeast(0f)
                     scaleX = (sx + (1f - sx) * kx) * (1f + 0.025f * lean.value)
                     scaleY = (sy + (1f - sy) * ky) * (1f - 0.015f * lean.value)
-                    alpha = (k * 6f).coerceIn(0f, 1f)   // only the last bit of the fold fades
-                    transformOrigin = TransformOrigin.Center
+                    // Only the last bit of the fold fades; closing, the last quarter, so it goes INTO the
+                    // button instead of sitting on it as a faint box (Pixel video 2026-11-10: 6 frames).
+                    alpha = (k * if (closing) 4f else 6f).coerceIn(0f, 1f)
+                    transformOrigin = TransformOrigin(px, py)
                     shadowElevation = 18.dp.toPx() * k
                     this.shape = shape; clip = true
                 }
                 .then(glassMod)
-                .glassRim(c)
+                .glassRim(c, shape)
                 // Finger tracking: the pill follows the row under the finger; lifting on a row picks it.
                 .pointerInput(open) {   // open: [sub] is a new state per opening
                     awaitEachGesture {
@@ -212,8 +227,9 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                 .padding(vertical = 6.dp),
         ) {
             // The rows come in after the glass has opened, and leave first.
-            Box(Modifier.graphicsLayer { alpha = ((grow.value - 0.55f) / 0.35f).coerceIn(0f, 1f)
-                translationY = (1f - ((grow.value - 0.55f) / 0.45f).coerceIn(0f, 1f)) * -6.dp.toPx() }) {
+            // Reference: the rows are there (scaled with the glass) from the second frame on, and on
+            // the way back they fade in the first half while the empty glass folds into the button.
+            Box(Modifier.graphicsLayer { alpha = (if (closing) (grow.value - 0.4f) / 0.45f else (grow.value - 0.08f) / 0.3f).coerceIn(0f, 1f) }) {
                 // The light pill under the finger.
                 if (pressed >= 0 && rowH > 0) Box(Modifier.offset { IntOffset(0, (captionH + pill.value * rowH).roundToInt()) }
                     .padding(horizontal = 6.dp).fillMaxWidth().height(with(density) { rowH.toDp() })
@@ -249,6 +265,6 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
 }
 
 /** A bright glass rim, as the glass buttons. */
-private fun Modifier.glassRim(c: com.fariin.app.ui.theme.FariinColors): Modifier =
+private fun Modifier.glassRim(c: com.fariin.app.ui.theme.FariinColors, shape: androidx.compose.ui.graphics.Shape): Modifier =
     this.then(Modifier.border(if (c.dark) 0.5.dp else 1.dp,
-        if (c.dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.9f), RoundedCornerShape(28.dp)))
+        if (c.dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.9f), shape))

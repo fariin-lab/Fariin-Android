@@ -30,9 +30,19 @@ object PhotonPlaces {
     data class Place(val name: String, val address: String, val lat: Double, val lon: Double, val area: String?)
 
     /** Text search, nudged toward where the map is looking (three decimals, about 100 m, is plenty). */
-    fun searchUrl(q: String, biasLat: Double?, biasLon: Double?, limit: Int = 12): String {
+    fun searchUrl(q: String, biasLat: Double?, biasLon: Double?, limit: Int = 12, localKm: Double? = null): String {
         val sb = StringBuilder("$BASE/api?q=").append(URLEncoder.encode(q.trim(), "UTF-8")).append("&limit=").append(limit)
-        if (biasLat != null && biasLon != null) sb.append("&lat=").append(f(biasLat, 3)).append("&lon=").append(f(biasLon, 3))
+        if (biasLat != null && biasLon != null) {
+            sb.append("&lat=").append(f(biasLat, 3)).append("&lon=").append(f(biasLon, 3))
+            // Only inside a box around the map's centre: "coffee" means the coffee shops here, not
+            // the towns called Coffee three states away (owner, 2026-11-10).
+            if (localKm != null) {
+                val dLat = localKm / 111.0
+                val dLon = localKm / (111.0 * Math.cos(Math.toRadians(biasLat)).coerceAtLeast(0.1))
+                sb.append("&bbox=").append(f(biasLon - dLon, 4)).append(',').append(f(biasLat - dLat, 4))
+                    .append(',').append(f(biasLon + dLon, 4)).append(',').append(f(biasLat + dLat, 4))
+            }
+        }
         return sb.toString()
     }
 

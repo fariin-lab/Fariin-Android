@@ -94,7 +94,23 @@ internal object AttachSource { @Volatile var rect: androidx.compose.ui.geometry.
  * something is chosen the bar is a caption field, a "View once" switch (one photo only, as iOS)
  * and Send.
  */
-@Composable
+/**
+ * ⛔ THE SHEET TAKES THE KEYBOARD'S PLACE (owner 2026-11-10, recorded beside the reference app on the
+ * Pixel): + tapped with the keyboard up used to drop the keyboard in one frame, the chat jumped down
+ * and the sheet popped out of the + in the middle. Now the chat holds the keyboard's height
+ * ([heldPx], read by ThreadScreen) while the sheet rises from the bottom into that place, and
+ * glides back down when the sheet closes.
+ */
+object AttachKeyboard {
+    /** The keyboard's height (px) on the last frame the chat drew; ThreadScreen keeps it current. */
+    @Volatile var lastImePx = 0
+    /** The height the chat holds while the sheet is up; 0 = not holding. */
+    var heldPx by androidx.compose.runtime.mutableIntStateOf(0)
+    fun holdIfTyping() { heldPx = lastImePx }
+    fun release() { heldPx = 0 }
+}
+
+@androidx.compose.runtime.Composable
 internal fun AttachSheet(
     allowViewOnce: Boolean,
     onDismiss: () -> Unit,
@@ -122,13 +138,15 @@ internal fun AttachSheet(
     // drag grows it to full, pulling the grid down from its top returns it to half, then closes it.
     val motion = com.fariin.app.ui.components.rememberSheetMotion(onDismiss)
     // Grows out of the composer's "+" and shrinks back into it (iOS); not when the camera opens first.
-    motion.source = if (cameraFirst) null else ({ AttachSource.rect })
+    // From the keyboard it rises into the keyboard's place, not out of the + (AttachKeyboard).
+    motion.source = if (cameraFirst || AttachKeyboard.heldPx > 0) null else ({ AttachSource.rect })
     val density = androidx.compose.ui.platform.LocalDensity.current
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
-    // The sheet's top at full height sits 10 dp under the status bar (FariinSheet's frame); the
-    // half stop puts it at the middle of the screen.
+    // The sheet's top at full height sits 10 dp under the status bar (FariinSheet's frame). At rest
+    // it shows 62% of the screen, iOS AttachSheetController's compact detent (the camera row plus
+    // about three rows of photos); owner 2026-11-10: half looked short next to the iPhone.
     val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
-    motion.mid = (windowH / 2f - statusTop - with(density) { 10.dp.toPx() }).coerceAtLeast(1f)
+    motion.mid = (windowH * 0.38f - statusTop - with(density) { 10.dp.toPx() }).coerceAtLeast(1f)
     val sheetScroll = com.fariin.app.ui.components.rememberSheetScroll(motion)
     val picked = remember { mutableStateListOf<Uri>() }
     val videos = remember { mutableStateListOf<Uri>() }
@@ -172,9 +190,11 @@ internal fun AttachSheet(
     // iOS sheet pages: the photos, the folder list (album button), and GIFs (GIF tile).
     var page by remember { mutableStateOf(SheetPage.PHOTOS) }
     var folder by remember { mutableStateOf<RecentMedia.Album?>(null) }
-    val recents by produceState(emptyList<RecentMedia.Item>(), access, folder) {
+    // The list kept from the last open (or warmed when the chat opened) shows on the first frame;
+    // the fresh read replaces it a moment later.
+    val recents by produceState(if (folder == null && access != RecentMedia.Access.NONE) AttachWarm.recents else emptyList(), access, folder) {
         value = if (access == RecentMedia.Access.NONE) emptyList()
-            else withContext(Dispatchers.IO) { RecentMedia.load(context, bucket = folder?.id) }
+            else withContext(Dispatchers.IO) { RecentMedia.load(context, bucket = folder?.id) }.also { if (folder == null) AttachWarm.recents = it }
     }
     val albums by produceState(emptyList<RecentMedia.Album>(), access, page == SheetPage.ALBUMS) {
         if (page == SheetPage.ALBUMS && access != RecentMedia.Access.NONE) value = withContext(Dispatchers.IO) { RecentMedia.albums(context) }
@@ -481,6 +501,31 @@ private fun AlbumRow(a: RecentMedia.Album, onClick: () -> Unit) {
 
 private enum class SheetPage { PHOTOS, ALBUMS, GIFS, FILES }
 
+/**
+ * The + sheet's grid made ready before it is asked for (measured 2026-11-10: the first frames of
+ * an open were slow while every tile read its thumbnail from scratch). When a chat opens, the newest
+ * photos' list and their first thumbnails are read off the main thread and kept, so the sheet's
+ * first frame already has pictures; reopening reuses them.
+ */
+internal object AttachWarm {
+    @Volatile var recents: List<RecentMedia.Item> = emptyList()
+    /** Grid thumbnails by address, about 24 MB of them. */
+    val thumbs = object : android.util.LruCache<Uri, androidx.compose.ui.graphics.ImageBitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: Uri, value: androidx.compose.ui.graphics.ImageBitmap) = value.width * value.height * 4
+    }
+    private const val FIRST = 18
+
+    suspend fun warm(context: android.content.Context) = withContext(Dispatchers.IO) {
+        if (RecentMedia.access(context) == RecentMedia.Access.NONE) return@withContext
+        val list = runCatching { RecentMedia.load(context) }.getOrNull() ?: return@withContext
+        recents = list
+        for (item in list.take(FIRST)) {
+            if (thumbs.get(item.uri) != null) continue
+            attachThumb(context, item.uri, item.isVideo, 256)?.let { thumbs.put(item.uri, it) }
+        }
+    }
+}
+
 /** A small picture of a phone photo or video, for the grid and the folder covers. */
 internal fun attachThumb(context: android.content.Context, uri: Uri, isVideo: Boolean, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
     runCatching {
@@ -497,8 +542,8 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
     val c = Fariin.colors
     val context = LocalContext.current
     val uri = item.uri
-    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
-        value = withContext(Dispatchers.IO) { attachThumb(context, uri, item.isVideo, 256) }
+    val bmp by produceState(AttachWarm.thumbs.get(uri), uri) {
+        if (value == null) value = withContext(Dispatchers.IO) { attachThumb(context, uri, item.isVideo, 256)?.also { AttachWarm.thumbs.put(uri, it) } }
     }
     val chosen = number > 0
     Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f)).clickable(onClickLabel = "Edit", onClick = onOpen)

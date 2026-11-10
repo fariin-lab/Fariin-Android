@@ -296,11 +296,18 @@ private fun PickerPage(onDismiss: () -> Unit, onSend: (lat: Double, lon: Double,
         val a = ask ?: run { loading = false; return@LaunchedEffect }
         loading = true; note = null; canRetry = false
         try {
-            val url = when (a) {
-                is Ask.Search -> PhotonPlaces.searchUrl(a.q, a.lat, a.lon)
-                is Ask.Nearby -> PhotonPlaces.nearbyUrl(a.lat, a.lon)
+            val list = when (a) {
+                // Nearby first (30 km around the map), then the wider world after it, so a typed
+                // town or street far away is still found.
+                is Ask.Search -> {
+                    val near = if (a.lat != null && a.lon != null)
+                        PhotonPlaces.parse(PhotonPlaces.fetch(PhotonPlaces.searchUrl(a.q, a.lat, a.lon, localKm = 30.0))) else emptyList()
+                    if (near.size >= 8) near
+                    else (near + PhotonPlaces.parse(PhotonPlaces.fetch(PhotonPlaces.searchUrl(a.q, a.lat, a.lon))))
+                        .distinctBy { it.name + "|" + "%.4f".format(java.util.Locale.US, it.lat) + "|" + "%.4f".format(java.util.Locale.US, it.lon) }
+                }
+                is Ask.Nearby -> PhotonPlaces.parse(PhotonPlaces.fetch(PhotonPlaces.nearbyUrl(a.lat, a.lon)), namedOnly = true)
             }
-            val list = PhotonPlaces.parse(PhotonPlaces.fetch(url), namedOnly = a is Ask.Nearby)
             results = list
             if (list.isEmpty()) note = if (a is Ask.Search) "No results" else "No places found here"
         } catch (e: CancellationException) {

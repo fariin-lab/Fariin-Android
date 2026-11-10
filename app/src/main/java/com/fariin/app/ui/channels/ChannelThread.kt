@@ -276,7 +276,7 @@ private data class PostItem(val title: String, val icon: ImageVector, val destru
  * a "more" button that opens the whole set), then Copy, Share, Report, and Delete for an admin.
  */
 @Composable
-fun ChannelPostMenu(
+internal fun ChannelPostMenu(
     ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit,
     onCopy: (String) -> Unit, onDelete: (Message) -> Unit,
     onQuote: ((Message) -> Unit)? = null,
@@ -384,19 +384,13 @@ fun ChannelPostMenu(
                         .background(if (c.dark) Color(0xFF26262B) else Color(0xFFF2F2F2)).padding(horizontal = 14.dp, vertical = 8.dp),
                 )
                 Spacer(Modifier.height(10.dp))
-                if (items.isNotEmpty()) Column(Modifier.width(250.dp).shadow(8.dp, RoundedCornerShape(14.dp))
-                    .clip(RoundedCornerShape(14.dp)).background(c.card)) {
-                    items.forEachIndexed { i, it ->
-                        if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator)
-                        Row(Modifier.fillMaxWidth().clickable { onDismiss(); it.run() }.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            if (com.fariin.app.ui.components.isNew(it.badge)) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                Text(it.title, fontSize = 17.sp, color = if (it.destructive) c.red else c.label, modifier = Modifier.weight(1f, fill = false))
-                                com.fariin.app.ui.components.NewPill(Modifier.padding(start = 8.dp, end = 8.dp))
-                            } else Text(it.title, fontSize = 17.sp, color = if (it.destructive) c.red else c.label, modifier = Modifier.weight(1f))
-                            Icon(it.icon, null, tint = if (it.destructive) c.red else c.label, modifier = Modifier.size(20.dp))
-                        }
+                // The chat menu's own card (owner 2026-11-10: same liquid menu as chats, icons first, no lines).
+                if (items.isNotEmpty()) {
+                    val rows = items.map { item ->
+                        com.fariin.app.ui.thread.MenuRow(item.title, androidx.compose.ui.graphics.vector.rememberVectorPainter(item.icon),
+                            item.destructive, null, { item.run() }, isNew = com.fariin.app.ui.components.isNew(item.badge))
                     }
+                    Box(Modifier.width(250.dp)) { com.fariin.app.ui.thread.ActionsCard(rows) { r -> onDismiss(); r.run() } }
                 }
             }
         }
