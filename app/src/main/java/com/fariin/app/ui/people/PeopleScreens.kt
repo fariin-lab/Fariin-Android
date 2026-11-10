@@ -360,6 +360,11 @@ fun MessageRequestsScreen(api: PeopleApi, requests: List<Conversation>, onBack: 
     var pendingDelete by remember { mutableStateOf<Conversation?>(null) }
     var failed by remember { mutableStateOf(false) }
     var gone by remember { mutableStateOf(setOf<String>()) }
+    // The first-time card (iOS introSheet): once per install, a moment after the page lands.
+    val introCtx = androidx.compose.ui.platform.LocalContext.current
+    var showIntro by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (!RequestsIntro.seen(introCtx)) { kotlinx.coroutines.delay(350); showIntro = true } }
+    if (showIntro) RequestsIntroSheet(onDismiss = { showIntro = false })
     pendingDelete?.let { conv ->
         com.fariin.app.ui.components.GlassAlert(onDismissRequest = { pendingDelete = null }, title = { Text("Delete this request?") },
             text = { Text("The conversation is deleted and they can’t send you another request for ${Requests.DECLINE_COOLDOWN_DAYS} days. This does not block them.") },
