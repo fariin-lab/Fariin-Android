@@ -282,6 +282,7 @@ fun ChatListScreen(
     val activityPin by com.fariin.app.data.ActivityFeed.pinned.collectAsState()
     val activityShown = !showArchive && filter == FILTER_ALL && activity?.let { it.at > 0 } == true
     val activityPinned = activityShown && activityPin
+    val activityMuted by com.fariin.app.data.ActivityFeed.muted.collectAsState()
     // "Activity" is found by the chat search like a chat title.
     val activitySearchHit = query.isNotBlank() && activity?.let { it.at > 0 } == true && "Activity".contains(query.trim(), ignoreCase = true)
     val activityIndex = if (activityShown && !activityPinned) rest.indexOfFirst { it.displayUpdatedAt(me) < activity!!.at }.let { if (it < 0) rest.size else it } else rest.size
@@ -669,9 +670,16 @@ fun ChatListScreen(
                                 SwipeToActRow("activity", enabled = !selecting && !searching, label = if (activityPinned) "Unpin" else "Pin",
                                     icon = if (activityPinned) R.drawable.ic_sf_pin else R.drawable.ic_sf_pin_fill, fill = c.blue, leading = true,
                                     onAction = { com.fariin.app.data.ActivityFeed.setPinned(appCtx, !activityPinned) }) {
-                                    ActivityChatRow(activity!!, onOpen = {
+                                  // Swipe LEFT: Mute / Unmute (owner 2026-11-10), one indigo button, as a chat's.
+                                  SwipeToActRow("activity-mute", enabled = !selecting && !searching, label = if (activityMuted) "Unmute" else "Mute",
+                                      icon = if (activityMuted) R.drawable.ic_bell else R.drawable.ic_bell_off, fill = Color(0xFF5856D6),
+                                      onAction = { scope.launch {
+                                          if (!com.fariin.app.data.ActivityFeed.setMuted(!activityMuted)) Snack.show("Couldn't change Activity notifications")
+                                      } }) {
+                                    ActivityChatRow(activity!!, muted = activityMuted, onOpen = {
                                         if (!selecting) { if (searching) { searching = false; query = "" }; people.activity() }
                                     })
+                                  }
                                 }
                             }
                         }
@@ -1456,7 +1464,7 @@ private val StoryOriginRecorders = java.util.concurrent.ConcurrentHashMap<String
 
 /** The chat list's Activity row (shared contract): grey face with a white bell, the latest event, the unread count. */
 @Composable
-private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, onOpen: () -> Unit) {
+private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, muted: Boolean = false, onOpen: () -> Unit) {
     val c = Fariin.colors
     val context = androidx.compose.ui.platform.LocalContext.current
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1467,7 +1475,14 @@ private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, onOpen: () -
         Column(Modifier.weight(1f).padding(top = 7.dp, bottom = 9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Activity", style = MaterialTheme.typography.titleMedium, fontWeight = if (s.unread > 0) FontWeight.Bold else FontWeight.Medium, color = c.label,
-                    maxLines = 1, modifier = Modifier.weight(1f))
+                    maxLines = 1)
+                // Muted: the struck bell after the name, as a muted chat (owner 2026-11-10).
+                if (muted) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_bell_off), contentDescription = "Muted",
+                        tint = c.tertiary, modifier = Modifier.size(15.dp))
+                }
+                Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 Text(timeLabel(s.at, android.text.format.DateFormat.is24HourFormat(context)), style = MaterialTheme.typography.labelMedium,
                     color = if (s.unread > 0) c.blue else c.secondary, maxLines = 1)
@@ -1476,7 +1491,7 @@ private fun ActivityChatRow(s: com.fariin.app.data.ActivitySummary, onOpen: () -
                 Text(com.fariin.app.data.ActivityRules.preview(s), style = MaterialTheme.typography.bodyMedium, color = c.secondary,
                     maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                if (s.unread > 0) Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape).background(c.blue)
+                if (s.unread > 0) Box(Modifier.padding(top = 1.dp).heightIn(min = 20.dp).clip(CircleShape).background(if (muted) c.secondary.copy(alpha = 0.6f) else c.blue)
                     .padding(horizontal = 6.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
                     Text(if (s.unread > 99) "99+" else "${s.unread}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                 }

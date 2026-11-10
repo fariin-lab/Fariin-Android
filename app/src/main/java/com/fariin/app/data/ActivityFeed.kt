@@ -152,6 +152,10 @@ object ActivityFeed {
     /** The rows came from the server, not the phone's cache (what was unread is only known then). */
     val itemsFresh: StateFlow<Boolean> = _itemsFresh
     private var summaryReg: ListenerRegistration? = null
+    private var prefsReg: ListenerRegistration? = null
+    private val _muted = MutableStateFlow(false)
+    /** Activity pushes off (owner 2026-11-10): users/{me}/activityMeta/prefs `muted`, set by the server. */
+    val muted: StateFlow<Boolean> = _muted
     private var itemsReg: ListenerRegistration? = null
     private var owner = ""
 
@@ -173,10 +177,27 @@ object ActivityFeed {
                 text = last?.get("text") as? String ?: "", emoji = last?.get("emoji") as? String ?: "",
                 at = Conversation.millis(last?.get("at")))
         }
+        prefsReg = user(me).collection("activityMeta").document("prefs").addSnapshotListener { snap, _ ->
+            if (snap != null) _muted.value = snap.getBoolean("muted") == true
+        }
+    }
+
+    /** Swipe left on the Activity row: the server keeps it and its push job skips me (setActivityMute). */
+    suspend fun setMuted(muted: Boolean): Boolean {
+        val was = _muted.value
+        _muted.value = muted
+        val ok = runCatching {
+            FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("setActivityMute")
+                .call(mapOf("muted" to muted)).await()
+        }.isSuccess
+        if (!ok) _muted.value = was
+        return ok
     }
 
     fun stop() {
         summaryReg?.remove(); summaryReg = null
+        prefsReg?.remove(); prefsReg = null
+        _muted.value = false
         stopItems()
         owner = ""
         _summary.value = null
