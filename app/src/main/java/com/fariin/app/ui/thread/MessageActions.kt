@@ -191,7 +191,7 @@ internal fun MessageMenu(
             // Not in a channel, nor in a group whose owner or admin turned styles off.
             if (com.fariin.app.data.BubbleStyles.SHOWN && m.authorId == ui.me && !card && m.text.isNotEmpty() &&
                 m.mediaKind == null && m.poll == null && !m.isCall && !m.isSystem &&
-                !bubbleStylesOff(ui.channel != null, ui.groupDoc))
+                !bubbleStylesOff(ui.channel != null, ui.groupDoc, ui.isGroup))
                 add(MenuItem("Bubble Style", null, iconRes = com.fariin.app.R.drawable.ic_set_appearance, badge = NewBadgeSpots.CHAT_MENU_BUBBLE_STYLE) { com.fariin.app.ui.settings.BubbleStyleSheet.open.value = true })
             if (MessageRules.canEdit(m, ui.me, now) && !card) add(MenuItem("Edit", null, iconRes = com.fariin.app.R.drawable.ic_sf_pencil, badge = NewBadgeSpots.CHAT_MENU_EDIT) { onStartEdit(m) })
             // In a channel only its owner and admins see a post's earlier versions (iOS 0ed7fa04);

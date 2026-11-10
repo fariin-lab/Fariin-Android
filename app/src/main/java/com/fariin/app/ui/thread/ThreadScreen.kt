@@ -1850,7 +1850,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             return@Column
         }
         // The sender's bubble style (BubbleStyles.kt): its fill and text colour, on both sides.
-        val styled = styledBubble(m, bubbleStylesOff(ui.channel != null, ui.groupDoc))
+        val styled = styledBubble(m, bubbleStylesOff(ui.channel != null, ui.groupDoc, ui.isGroup))
         val art = styled?.art
         val chromeMe = isMe && styled == null
         androidx.compose.runtime.CompositionLocalProvider(LocalStyledInk provides styled?.ink) {

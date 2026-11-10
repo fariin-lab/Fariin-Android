@@ -1453,7 +1453,7 @@ class ThreadRepository(
         if (quote != null) msg["quote"] = mapOf("qid" to quote)   // a quoted channel post (iOS sendGroupText)
         // Bold runs (TextFormat), sealed like the text: plain in a plain channel.
         if (fmt != null && t.isNotEmpty()) msg["fmt"] = crypto.sealForGroup(fmt, members, cid)
-        if (countsAsUnread && CryptoHub.listedConversation(cid)?.isChannel != true) putBubbleStyle(msg, clientId)
+        // No bubble style in a group or channel (iOS spec 2026-11-10: styles are 1:1 only).
         // A poll says in the clear only pollMulti / pollEndsAt (iOS ChatService); the rest stays sealed.
         msg.putAll(PollRules.clearFields(t))
         batch.set(convRef.collection("messages").document(clientId), msg)

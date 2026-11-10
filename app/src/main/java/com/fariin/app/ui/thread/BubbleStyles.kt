@@ -65,8 +65,10 @@ internal fun styledBubble(m: Message, stylesOff: Boolean): StyledBubble? {
 }
 
 /** The styles' on/off for a chat: never in a channel, and off in a group whose `bubbleStylesOff` is set (SPEC 5). */
-internal fun bubbleStylesOff(channel: Boolean, groupDoc: Map<String, Any?>): Boolean =
-    channel || groupDoc["bubbleStylesOff"] == true
+internal fun bubbleStylesOff(channel: Boolean, groupDoc: Map<String, Any?>, isGroup: Boolean = false): Boolean =
+    // Bubble styles are 1:1 only (iOS spec 2026-11-10): never drawn nor offered in a group or
+    // channel; a group keeps its Bubble Color. The group switch is kept for older reasons.
+    channel || isGroup || groupDoc["bubbleStylesOff"] == true
 
 /** The styled fill, with a hairline edge for Soft Glass, and a light rim on a dark picture style's plain bubble in dark mode. */
 internal fun Modifier.styledFill(s: StyledBubble, shape: Shape, dark: Boolean): Modifier =
