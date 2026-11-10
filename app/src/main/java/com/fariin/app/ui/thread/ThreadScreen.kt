@@ -1495,6 +1495,9 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
     val d = androidx.compose.ui.platform.LocalDensity.current
     androidx.compose.runtime.CompositionLocalProvider(
         androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, minOf(d.fontScale, 1.15f)),
+        // The header's glass buttons (back, call) frost what passes under them, as the bar around
+        // them does (owner 2026-11-10: a photo read clearly through the call buttons).
+        com.fariin.app.ui.components.LocalGlassBlur provides true,
     ) { HeaderBody(ui, onBack, onTitleClick, onToggleMute) }
 }
 
