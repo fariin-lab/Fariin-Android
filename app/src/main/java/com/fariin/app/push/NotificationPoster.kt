@@ -1,5 +1,7 @@
 package com.fariin.app.push
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -55,6 +57,8 @@ object NotificationPoster {
     private const val AVATAR_PX = 192
     /** The newest line's server stamp (ms) on a disappearing message's notification and line. */
     private const val EXTRA_EXPIRES = "fariin.expiresAt"
+    /** The message a line (or a plain notification) shows, so a delete-for-everyone can take it down. */
+    private const val EXTRA_MID = "fariin.mid"
 
     fun ensureChannels(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java) ?: return
@@ -109,6 +113,7 @@ object NotificationPoster {
             .setCategory(if (spec.channel == NotifChannel.CALLS) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
         // A disappearing message: the notification goes when its newest line's timer runs out
         // (iOS NotificationCleaner.pruneExpired); the stamp rides along for the prune below.
+        if (!spec.mid.isNullOrEmpty()) b.addExtras(android.os.Bundle().apply { putString(EXTRA_MID, spec.mid) })
         spec.expiresAtMs?.let { at ->
             val left = at - System.currentTimeMillis()
             if (left > 0) b.setTimeoutAfter(left)
@@ -158,6 +163,7 @@ object NotificationPoster {
         }
         val line = NotificationCompat.MessagingStyle.Message(if (spec.isGroup) spec.body else spec.line, nowMs, sender)
         spec.expiresAtMs?.let { line.extras.putLong(EXTRA_EXPIRES, it) }
+        if (!spec.mid.isNullOrEmpty()) line.extras.putString(EXTRA_MID, spec.mid)
         style.addMessage(line)
         b.setStyle(style)
 
@@ -324,6 +330,48 @@ object NotificationPoster {
             val exp = sbn.notification.extras.getLong(EXTRA_EXPIRES, 0L)
             val chatDue = due[tag]?.let { (updated, stamp) -> NotifExpiry.chatGone(sbn.postTime, updated, stamp) } == true
             if (NotifExpiry.lineGone(exp, now) || chatDue) nm.cancel(tag, ID)
+        }
+    }
+
+    @Volatile private var lastDeletedCheck = 0L
+
+    /**
+     * iOS NotificationCleaner.pruneDeleted (bug search 2026-11-01): a notification still showing a
+     * message that was deleted for everyone goes, since it carries the decrypted words. Each line
+     * remembers its message; up to 20 are checked against the server, at most once a minute. A
+     * chat's lines share one notification here, so a deleted line takes that chat's notification
+     * down (opening the chat shows the rest). An answer from the local copy proves nothing.
+     */
+    fun pruneDeleted(c: Context) {
+        val now = System.currentTimeMillis()
+        if (now - lastDeletedCheck < 60_000) return
+        lastDeletedCheck = now
+        val app = c.applicationContext
+        val nm = app.getSystemService(NotificationManager::class.java) ?: return
+        val active = try { nm.activeNotifications } catch (_: Exception) { return }
+        val items = ArrayList<Pair<String, String>>()   // cid (the tag) to mid
+        for (sbn in active) {
+            if (sbn.id != ID) continue
+            val cid = sbn.tag ?: continue
+            sbn.notification.extras.getString(EXTRA_MID)?.let { items += cid to it }
+            NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(sbn.notification)?.messages?.forEach { m ->
+                m.extras.getString(EXTRA_MID)?.let { items += cid to it }
+            }
+        }
+        val check = items.distinct().take(20)
+        if (check.isEmpty()) return
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val gone = HashSet<String>()
+            for ((cid, mid) in check) {
+                if (cid in gone) continue
+                val d = try {
+                    db.collection("conversations").document(cid).collection("messages").document(mid)
+                        .get(com.google.firebase.firestore.Source.SERVER).await()
+                } catch (_: Exception) { continue }
+                if (!d.exists() || d.getBoolean("deleted") == true) gone += cid
+            }
+            for (cid in gone) try { nm.cancel(cid, ID) } catch (_: Exception) {}
         }
     }
 

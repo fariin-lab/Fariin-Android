@@ -48,6 +48,7 @@ object AppLifecycle : DefaultLifecycleObserver {
         if (FirebaseAuth.getInstance().currentUser == null) return
         // Notifications of disappearing messages that ran out while the app was away.
         runCatching { com.fariin.app.push.NotificationPoster.pruneExpired(app) }
+        runCatching { com.fariin.app.push.NotificationPoster.pruneDeleted(app) }   // deleted-for-everyone lines
         scope.launch { Presence.set(online = true, context = app) }
         try { FirebaseFirestore.getInstance().enableNetwork() } catch (_: Exception) {}
         reconnect()

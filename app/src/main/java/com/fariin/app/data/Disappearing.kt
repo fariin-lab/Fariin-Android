@@ -212,6 +212,7 @@ object Disappearing {
     fun pruneNotifications(due: Map<String, Pair<Double, Double>>) {
         val c = appContext ?: return
         try { com.fariin.app.push.NotificationPoster.pruneExpired(c, due) } catch (_: Exception) {}
+        try { com.fariin.app.push.NotificationPoster.pruneDeleted(c) } catch (_: Exception) {}   // at most once a minute
     }
 
     private val burnAsked = ConcurrentHashMap<String, Long>()
