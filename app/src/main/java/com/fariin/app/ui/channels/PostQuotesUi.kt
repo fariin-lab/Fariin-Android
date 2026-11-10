@@ -150,7 +150,9 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
     if (local != null) androidx.compose.runtime.SideEffect { PostRepliesSwitch.settled(m.id, m.repliesOff) }
     val repliesOn = !PostReplyRules.postOff(m.repliesOff, channelRepliesOff, local)
     val label = PostReplyRules.barLabel(m.replyCount, m.quoteCount, repliesOn = repliesOn,
-        sent = m.sendState == null, deleted = m.deleted, quotesOn = !channelQuotesOff) ?: return
+        // Drawn from the first frame of a send (iOS spec 2026-11-10 item 8), so the bubble does not
+        // grow when the server answers; only a failed send has none.
+        sent = m.sendState != Message.SendState.FAILED, deleted = m.deleted, quotesOn = !channelQuotesOff) ?: return
     val start = PostReplyRules.barStart(repliesOn, m.replyCount, m.replyFaces, m.quoteCount, m.quoteFaces)
     val c = Fariin.colors
     var parentW by remember { mutableIntStateOf(0) }
@@ -184,7 +186,8 @@ fun PostQuotesBar(m: Message, inBubble: Boolean = true, channelRepliesOff: Boole
                 // Across the whole bubble, into its side padding (the bubble's clip trims it).
                 if (inBubble) drawLine(line, Offset(-20.dp.toPx(), 0f), Offset(size.width + 20.dp.toPx(), 0f), strokeWidth = 1f)
             }
-            .clickable {
+            // Nothing to open until the post is on the server.
+            .clickable(enabled = m.sendState == null) {
                 PostQuotesSheet.startTab = PostReplyRules.startTab(repliesOn)
                 PostQuotesSheet.startOff = !repliesOn
                 PostQuotesSheet.open.value = m
