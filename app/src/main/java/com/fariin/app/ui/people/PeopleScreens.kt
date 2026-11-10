@@ -623,8 +623,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 if (exportChat != null) ExportChatItem { close(); exportChat() }
                 if (clearMine != null) ClearMineItem { close(); clearMine() }
             }
-            else if (fromChat || addToGroup != null) com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios),
-                contentDescription = "More", onClick = { moreOpen = true }, modifier = Modifier.padding(end = 4.dp).glassMenuAnchor(moreAnchor))
+            // More is the last circle in the actions row now (iOS, owner 2026-11-10), not up here.
         }
         }
     }) { top ->
@@ -680,7 +679,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // iOS actionsRow: equal shares, inside the page's 16 dp margins.
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 val share = Modifier.weight(1f)
-                ActionTile("Message", ImageVector.vectorResource(R.drawable.ic_chat), share) { onOpenChat(cid) }
+                // Message only when this page was not opened from the chat itself (iOS: source != .chat).
+                if (!fromChat && uid != me && !blocked) ActionTile("Message", ImageVector.vectorResource(R.drawable.ic_chat), share) { onOpenChat(cid) }
                 if (glowOn) com.fariin.app.ui.glow.GlowActionTile(glowDoor, share)
                 // iOS ContactInfoView: Voice and Video circles, never on my own page or a blocked person's.
                 if (uid != me && !blocked) {
@@ -704,6 +704,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 }
                 if (fromChat && uid != me) ActionTile("Search", ImageVector.vectorResource(R.drawable.ic_search_ios), share) {
                     com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack)
+                }
+                // The "…" menu as the row's last circle, as iOS (owner 2026-11-10).
+                if (uid != me && !glowOn && (fromChat || addToGroup != null)) Box(share.glassMenuAnchor(moreAnchor)) {
+                    ActionTile("More", ImageVector.vectorResource(R.drawable.ic_more_ios), Modifier.fillMaxWidth()) { moreOpen = true }
                 }
             }
             Spacer(Modifier.height(20.dp))
