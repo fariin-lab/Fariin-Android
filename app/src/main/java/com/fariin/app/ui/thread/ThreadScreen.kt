@@ -3083,7 +3083,10 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
         // Read here, in layout: the keyboard's every step moves only this, nothing recomposes.
         val under = maxOf(ime.getBottom(this), restPx)
         val h = (reserve.value.toInt() - under).coerceAtLeast(0)
-        layout(p.width, h) { p.place(0, 0) }
+        // The composer's 8 above the keys stays above the panel too: the column's 8 sits under this
+        // slot, so the panel starts 8 lower and ends at the screen's edge, exactly where the keys sit
+        // (owner 2026-11-10: with the panel open the field lost its space and sat on the panel).
+        layout(p.width, h) { p.place(0, 8.dp.roundToPx()) }
     }) { content(panelH) }
 }
 
