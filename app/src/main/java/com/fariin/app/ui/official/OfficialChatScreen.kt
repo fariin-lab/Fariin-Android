@@ -1,5 +1,6 @@
 package com.fariin.app.ui.official
 
+import kotlinx.coroutines.tasks.await
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.res.vectorResource
 import android.text.format.DateFormat
@@ -119,9 +120,24 @@ fun OfficialChatScreen(onBack: () -> Unit) {
     LaunchedEffect(view.visible) { OfficialChannel.markRead() }
     LaunchedEffect(view.visible.size) { if (view.visible.isNotEmpty() && !searching) listState.scrollToItem(view.visible.size - 1) }
 
+    // My @username for the Invite Friends link (fariin.com/<me>), read once.
+    val inviteHandle by androidx.compose.runtime.produceState<String?>(null) {
+        value = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid)
+                .get(com.google.firebase.firestore.Source.CACHE).await().getString("handle") }.getOrNull()
+        }
+    }
     fun tap(b: AnnouncementButton) {
         when (b.action) {
             AnnouncementButton.LINK -> try { uri.openUri(b.value) } catch (_: Exception) {}
+            // iOS OfficialChatView .screen: the named Settings page (Invite Friends = the share sheet).
+            AnnouncementButton.SCREEN -> if (b.value == "invite") {
+                com.fariin.app.ui.settings.shareInvite(context, inviteHandle)
+            } else AnnouncementButton.screenPage(b.value)?.let { page ->
+                com.fariin.app.ui.settings.SettingsLink.request(page)
+                com.fariin.app.system.SystemRouter.settingsTabRequests.value++
+                onBack()
+            }
             AnnouncementButton.REJECT_OWNERSHIP -> if (!rejecting) pendingReject = b.value
         }
     }

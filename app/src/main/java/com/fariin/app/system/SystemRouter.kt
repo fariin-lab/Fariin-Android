@@ -22,6 +22,8 @@ object SystemRouter {
 
     /** Bumped for each story notification tap; the shell switches to the Stories tab. */
     val storiesTabRequests = MutableStateFlow(0)
+    /** The Settings tab, asked from a page above the shell (an official announcement's button). */
+    val settingsTabRequests = MutableStateFlow(0)
 
     fun take(intent: Intent?) {
         // A story push tapped while the app was closed: the system's notification hands its data

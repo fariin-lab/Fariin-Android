@@ -235,6 +235,9 @@ fun MainShell(
     val storiesAsk by com.fariin.app.system.SystemRouter.storiesTabRequests.collectAsState()
     var storiesSeen by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(storiesAsk) { if (storiesAsk > storiesSeen) { storiesSeen = storiesAsk; tab = TAB_STORIES } }
+    val settingsAsk by com.fariin.app.system.SystemRouter.settingsTabRequests.collectAsState()
+    var settingsSeen by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(settingsAsk) { if (settingsAsk > settingsSeen) { settingsSeen = settingsAsk; tab = TAB_SETTINGS } }
     // One count per tab: the tabs stay alive behind each other, and a second tap on Settings must
     // not scroll the hidden chat list to the top (one shared count did).
     var reselect by rememberSaveable { mutableStateOf(listOf(0, 0, 0, 0)) }

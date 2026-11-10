@@ -37,7 +37,7 @@ data class AnnouncementButton(val label: String, val action: String, val value: 
     /** Nothing draws a button we cannot honour. appStore is iOS only, so it never shows here. */
     fun isUsable(now: Double): Boolean = when (action) {
         LINK -> value.startsWith("http://") || value.startsWith("https://")
-        SCREEN -> false   // no Android pages wired to the iOS screen names yet
+        SCREEN -> screenPage(value) != null || value == "invite"
         REJECT_OWNERSHIP -> value.isNotEmpty() && (until ?: 0.0) > now
         else -> false
     }
@@ -46,6 +46,18 @@ data class AnnouncementButton(val label: String, val action: String, val value: 
         const val LINK = "link"
         const val APP_STORE = "appStore"
         const val SCREEN = "screen"
+
+        /** iOS AnnouncementButton.Screen's names, as this app's Settings pages (null = unknown). */
+        fun screenPage(name: String): String? = when (name) {
+            "appearance" -> com.fariin.app.ui.settings.PAGE_APPEARANCE
+            "chats" -> com.fariin.app.ui.settings.PAGE_CHATS
+            "stories" -> com.fariin.app.ui.settings.PAGE_STORIES
+            "privacy" -> com.fariin.app.ui.settings.PAGE_PRIVACY
+            "storage" -> com.fariin.app.ui.settings.PAGE_STORAGE
+            "notifications" -> com.fariin.app.ui.settings.PAGE_NOTIFS
+            "devices" -> com.fariin.app.ui.settings.PAGE_DEVICES
+            else -> null
+        }
         const val REJECT_OWNERSHIP = "rejectOwnership"
         private val known = setOf(LINK, APP_STORE, SCREEN, REJECT_OWNERSHIP)
 
