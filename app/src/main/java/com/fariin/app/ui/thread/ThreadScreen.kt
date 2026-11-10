@@ -3053,10 +3053,13 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
                 else reserve.snapTo(0f)
         }
     }
-    val panelH = with(density) { (full - restPx).coerceAtLeast(0).toDp() }
+    // The panel runs on under the composer's resting gap to the screen's bottom edge (owner
+    // 2026-11-10, the reference app: no empty strip of wallpaper under it); its controls keep clear
+    // of the gesture bar themselves.
+    val panelH = with(density) { full.coerceAtLeast(0).toDp() }
     val shown = open || toKeys || reserve.value > 0f
     if (!shown) return
-    Box(Modifier.fillMaxWidth().clipToBounds().layout { m, c ->
+    Box(Modifier.fillMaxWidth().layout { m, c ->
         val p = m.measure(c.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
         // Read here, in layout: the keyboard's every step moves only this, nothing recomposes.
         val under = maxOf(ime.getBottom(this), restPx)

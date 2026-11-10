@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -90,6 +91,8 @@ import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -274,7 +277,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
         .border(1.dp, Color.White.copy(alpha = if (c.dark) 0.12f else 0.7f), panelShape)) {
         if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it })
         else StickerTab(me, onSticker, hide = hide, onScrolledIn = { barsHidden = it })
-        Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+        Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
             .graphicsLayer { translationY = hide * 60.dp.toPx(); alpha = 1f - hide }) {
             Row(Modifier.align(Alignment.Center).width(200.dp).height(38.dp).floating(RoundedCornerShape(19.dp)).padding(3.dp)) {
                 for ((label, isGif) in listOf("GIFs" to true, "Stickers" to false)) {
@@ -338,8 +341,8 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
     // The grid's columns, as GridCells.Adaptive(70) lays them out (10 each side, 12 apart).
     val cols = maxOf(1, ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 20 + 12) / (70 + 12)))
     Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
-        LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 60.dp),
+        LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize().gridTopClip { hide },
+            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 84.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             for (shelf in shelves) {
                 item(key = "h:${shelf.id}", span = { GridItemSpan(maxLineSpan) }) {
@@ -456,13 +459,18 @@ internal fun GifTab(
     val grid = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
     LaunchedEffect(category) { grid.scrollToItem(0); onScrolledIn(false) }
     Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
-        val pad = PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 60.dp)
+        val pad = PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 84.dp)
+        // The GIFs stop under the mood row (and a little under the panel's top edge once the row has
+        // slid away): scrolled up, they ran under the half-hidden row and up into the rounded rim,
+        // cut off against the message bar (owner 2026-11-10, "bug space").
+        Box(Modifier.fillMaxSize().gridTopClip { hide }) {
         when (category) {
             GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send, state = grid,
                 emptyTitle = "No favourites yet", emptyText = "Hold a GIF and choose Add to Favourites.")
             GifCategory.RECENT -> GifGrid(local, pad, me = me, onRecentTab = true, onGif = send, state = grid,
                 emptyTitle = "No recent GIFs", emptyText = "GIFs you send will appear here.")
             else -> GifGrid(fetched, pad, me = me, onGif = send, state = grid)
+        }
         }
         // The mood row on top, centred, on the panel itself (iOS PanelGifGrid): 28 cells 8 apart, the
         // chosen one on a soft rounded square.
@@ -754,3 +762,9 @@ private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, plays: Int, fp
         else Image(img, contentDescription = null, modifier = Modifier.fillMaxSize())
     }
 }
+
+/** Clips a panel grid below its top row of controls ([hide] 0 = row shown, 1 = slid away) and 6 dp under the edge. */
+private fun Modifier.gridTopClip(hide: () -> Float): Modifier = this.then(Modifier.drawWithContent {
+    val top = ((TOP_BAND - 2) * (1f - hide()) + 6f).dp.toPx()
+    clipRect(top = top) { this@drawWithContent.drawContent() }
+})
