@@ -542,6 +542,27 @@ private fun ThreadContent(
     LaunchedEffect(atBottom) { actions.onAtBottom(atBottom) }
     var seenCount by remember { mutableStateOf(ui.messages.size) }
     LaunchedEffect(atBottom, ui.messages.size) { if (atBottom) seenCount = ui.messages.size }
+    // iOS noteReactionChanges: my messages' reactions as last seen; the first pass only seeds, so
+    // reactions already there when the chat opened never fire. Only someone else's NEW or CHANGED
+    // reaction counts, never a removal. Reaching the bottom clears it.
+    var reactionJump by remember(ui.cid) { mutableStateOf<Pair<String, String>?>(null) }
+    val seenReactions = remember(ui.cid) { HashMap<String, Map<String, String>>() }
+    val reactionsSeeded = remember(ui.cid) { booleanArrayOf(false) }
+    LaunchedEffect(ui.messages) {
+        var arrived: Pair<String, String>? = null
+        for (m in ui.messages) {
+            if (m.authorId != ui.me || m.id.isEmpty()) continue
+            val old = seenReactions[m.id]
+            if (old != null && old != m.reactions) {
+                m.reactions.entries.firstOrNull { (who, e) -> who != ui.me && old[who] != e }?.let { arrived = m.id to it.value }
+            }
+            seenReactions[m.id] = m.reactions
+        }
+        val seeding = !reactionsSeeded[0]
+        reactionsSeeded[0] = true
+        if (!seeding && arrived != null && listState.firstVisibleItemIndex > 1) reactionJump = arrived
+    }
+    LaunchedEffect(atBottom) { if (atBottom) reactionJump = null }
 
     // Near the top of the history: fetch the page before it (iOS loadOlder).
     val nearTop by remember {
@@ -1210,6 +1231,18 @@ private fun ThreadContent(
             // The day of the topmost message while scrolling (iOS floating date pill), under the header.
             if (!search.active) FloatingDayPill(listState, ui.messages, now,
                 Modifier.align(Alignment.TopCenter).zIndex(1f).padding(top = with(density) { topBarPx.toDp() } + 8.dp))
+            // A reaction that just ARRIVED on one of my messages while I am scrolled up (iOS
+            // reactionJumpButton): its emoji in a glass circle above the arrow; a tap goes to it.
+            reactionJump?.takeIf { !atBottom && !search.active && !voiceRecording }?.let { (rid, emoji) ->
+                Box(Modifier.align(Alignment.BottomEnd).zIndex(1f)
+                    .padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 60.dp)
+                    .size(40.dp).floating().clickable {
+                        reactionJump = null
+                        jumpTo(rid, advance = false)
+                    }, contentAlignment = Alignment.Center) {
+                    Text(emoji, fontSize = 19.sp)
+                }
+            }
             // iOS: hidden while a voice note is being recorded.
             if (!atBottom && !search.active && !voiceRecording) {
                 JumpArrow((ui.messages.size - seenCount).coerceAtLeast(0), onClick = {

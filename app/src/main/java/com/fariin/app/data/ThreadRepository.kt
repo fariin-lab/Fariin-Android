@@ -1556,6 +1556,7 @@ class ThreadRepository(
             if (d == null) {
                 update["lastMessage"] = ""; update["lastSender"] = ""
                 update["lastImageUrl"] = FieldValue.delete(); update["lastImageEnc"] = FieldValue.delete()
+                update["lastImages"] = FieldValue.delete()
             } else {
                 val gone = d["deleted"] == true
                 val line = if (gone) "This message was deleted" else summaryText(d)
@@ -1565,10 +1566,19 @@ class ThreadRepository(
                 if (group && !gone && kind != "system" && kind != "call" && line.isNotEmpty() && !line.startsWith("enc")) {
                     update["lastPlainTag"] = Conversation.plainTag(line)
                 }
-                val u = d["imageUrl"] as? String
-                val e = d["enc"]
+                // An album has no picture of its own: its first tiles are the line's thumbnails, as
+                // its send wrote them (lastImageUrl/Enc from the first, lastImages up to three).
+                val tiles = (if (gone) null else d["album"] as? List<*>)?.mapNotNull { t ->
+                    val m = t as? Map<*, *> ?: return@mapNotNull null
+                    val tu = m["imageUrl"] as? String ?: return@mapNotNull null
+                    val te = m["enc"] as? Map<*, *> ?: return@mapNotNull null
+                    mapOf("imageUrl" to tu, "enc" to te)
+                }.orEmpty()
+                val u = if (gone) null else (d["imageUrl"] as? String ?: tiles.firstOrNull()?.get("imageUrl") as? String)
+                val e = if (d["imageUrl"] is String) d["enc"] else tiles.firstOrNull()?.get("enc")
                 if (u != null && e is Map<*, *> && d["viewOnce"] != true) { update["lastImageUrl"] = u; update["lastImageEnc"] = e }
                 else { update["lastImageUrl"] = FieldValue.delete(); update["lastImageEnc"] = FieldValue.delete() }
+                if (tiles.isNotEmpty()) update["lastImages"] = tiles.take(3) else update["lastImages"] = FieldValue.delete()
             }
             convRef.update(update).await()
         } catch (_: Exception) {}
