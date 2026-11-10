@@ -166,6 +166,8 @@ fun OnboardingPage(
                     catch (_: Exception) { com.fariin.app.ui.components.Snack.show("Photo couldn't be uploaded. Add it later in Edit Profile.", long = true) }
                 }
                 onSaved()
+            } catch (e: IllegalArgumentException) {
+                error = e.message ?: "That name can’t be used."   // checkDisplayName's refusal, as said
             } catch (e: Exception) {
                 val msg = e.message ?: "Try again."
                 error = if (msg.contains("username", ignoreCase = true)) msg else "Could not save: $msg"

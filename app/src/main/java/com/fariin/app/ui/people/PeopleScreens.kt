@@ -436,6 +436,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     var ask by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(uid) { api.profile(uid)?.let { person = it; ProfileMemo.put(uid, it) }; blocked = api.isBlocked(uid) }
+    // Counts toward their profile views in Insights (iOS ProfileViews.record on ContactInfoView).
+    LaunchedEffect(uid) { com.fariin.app.data.ProfileViews.record(uid, me) }
     // A name I saved for them wins (iOS ContactNames); Edit opens Set nickname.
     val name = com.fariin.app.data.ContactNames.name(uid) ?: person?.shownName ?: conv?.names?.get(uid) ?: ""
     val cid = conv?.id ?: Wire.directCid(me, uid)

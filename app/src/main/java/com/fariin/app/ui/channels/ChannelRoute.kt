@@ -39,7 +39,9 @@ val LocalChannelNav = staticCompositionLocalOf { ChannelNav() }
 
 fun channelNav(nav: NavHostController) = ChannelNav(
     find = { nav.navigate("findchannels") { launchSingleTop = true } },
-    create = { nav.navigate("newchannel") { launchSingleTop = true } },
+    // Same switch as New Group (iOS NewChannelView guards Flags.groupCreateEnabled).
+    create = { if (com.fariin.app.data.AppFeatures.groupCreate) nav.navigate("newchannel") { launchSingleTop = true }
+        else com.fariin.app.ui.components.Snack.show(com.fariin.app.data.AppFeatures.CREATE_OFF) },
     page = { nav.navigate("channelpage/$it") { launchSingleTop = true } },
     // Not singleTop: a channel opened from a chat is another "thread/{cid}" page, and singleTop
     // replaced the chat with it, so Back went to the chat list instead of the chat (owner 2026-11-06).

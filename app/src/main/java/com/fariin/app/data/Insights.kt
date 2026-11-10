@@ -7,6 +7,7 @@ import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -61,6 +62,28 @@ data class InsightsDayRow(val date: LocalDate, val day: InsightsDay)
 
 /** A live story's numbers on the Stories tab while the history has nothing (iOS StoryInsight). */
 data class StoryInsight(val story: PostedStory, val views: Int?, val reactions: Int?)
+
+/**
+ * Profile views (iOS ProfileViews): opening somebody else's profile tells the server once
+ * (`insightsProfileViewed`), which adds one to that person's day, a count and never a name. The
+ * server counts one per person per day; this only stops one run of the app asking again.
+ */
+object ProfileViews {
+    private val told = HashSet<String>()
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
+    fun record(uid: String, me: String) {
+        if (uid.isEmpty() || me.isEmpty() || uid == me) return
+        val key = uid + "|" + InsightsCalendar.key(InsightsCalendar.today())
+        synchronized(told) { if (!told.add(key)) return }
+        scope.launch {
+            try {
+                FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION)
+                    .getHttpsCallable("insightsProfileViewed").call(mapOf("uid" to uid)).await()
+            } catch (_: Exception) {}
+        }
+    }
+}
 
 object InsightsCalendar {
     fun today(nowMs: Long = System.currentTimeMillis()): LocalDate =

@@ -25,6 +25,14 @@ object AutoSaveMedia {
 
     fun isOn(c: Context): Boolean = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
 
+    /** Sign-out (iOS SessionWipe): the Save to Photos choices, global and per chat, are this account's. */
+    fun wipe(c: Context) {
+        val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val e = p.edit()
+        p.all.keys.filter { it == KEY || it == DONE || it.startsWith("$KEY.chat.") }.forEach { e.remove(it) }
+        e.apply()
+    }
+
     // Per chat (iOS ChatChoice, Group Info's menu): "always" or "never" overrides the Settings
     // switch for that chat; nothing stored = follow Settings.
     private fun chatKey(cid: String) = "$KEY.chat.$cid"

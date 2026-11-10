@@ -30,7 +30,23 @@ object AppFeatures {
     /** The My Profile card under the header in Settings (owner 2026-10-11: hidden). */
     val myProfileCard: Boolean get() = value("myProfileCard", false)
 
+    // ⛔ THE ADMIN PANEL'S DOORS (iOS Flags / CallFeatures, 2026-11-10 parity): these close a door the
+    // panel switched off. `offOnly`: the server can only turn a shipped-on feature OFF.
+    /** Groups at all (iOS Flags.groupsEnabled). */
+    val groups: Boolean get() = offOnly("groups", true)
+    /** Making new groups and channels (iOS Flags.groupCreateEnabled; the rules refuse one when off). */
+    val groupCreate: Boolean get() = groups && value("groupCreate", true)
+    /** The group Statistics row (iOS Flags.groupStatsEnabled). */
+    val groupStats: Boolean get() = value("groupStats", true)
+    /** Group calls (iOS CallFeatures.groupCalls). */
+    val groupCalls: Boolean get() = offOnly("groupCalls", true)
+    /** Call links: the Create a Call Link row (iOS CallFeatures.callLinks). */
+    val callLinks: Boolean get() = offOnly("callLinks", true)
+
     fun value(key: String, default: Boolean): Boolean = snapshot[key] ?: default
+    /** A switch the server may only turn off (iOS RemoteFeatures.offOnly). */
+    fun offOnly(key: String, default: Boolean): Boolean = default && snapshot[key] != false
+    const val CREATE_OFF = "Creating new groups and channels isn't available right now."
 
     /** Once per launch, before anything reads a switch. */
     fun init(c: Context) {

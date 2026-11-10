@@ -212,6 +212,9 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
         }
         batch.delete(user.collection("devices").document(d.id))
         batch.commit().await()
+        // Its saved-account one-tap key too (iOS DeviceRegistry.signOut), so that phone asks for the
+        // password next time.
+        com.fariin.app.data.DeviceSessionKeys.revoke(listOf(d.id))
     }
     fun run(work: suspend () -> Unit) {
         error = null
@@ -278,7 +281,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
             onYes = { pending = null; run { signOut(d) } }, onNo = { pending = null })
     }
     if (all) YesNo("Sign out all other devices?", "This device stays signed in.", "Sign out all",
-        onYes = { all = false; run { others.forEach { signOut(it) } } }, onNo = { all = false })
+        onYes = { all = false; run { others.forEach { signOut(it) }; com.fariin.app.data.DeviceSessionKeys.revokeAllOthers(ctx) } }, onNo = { all = false })
 }
 
 @Composable

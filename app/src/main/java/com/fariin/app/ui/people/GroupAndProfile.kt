@@ -199,7 +199,8 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                         // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
                         if (me != null && about.trim() != me?.about?.trim()) com.fariin.app.data.ProfileWrites.saveAbout(api.me, about)
                         onBack()
-                    } catch (_: Exception) { error = "Couldn't save. Try again." }
+                    } catch (e: IllegalArgumentException) { error = e.message ?: "That name can’t be used." }
+                    catch (_: Exception) { error = "Couldn't save. Try again." }
                     busy = false; saving = false
                 }
             }
@@ -788,7 +789,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("admins").document(me).get().await().exists()
         }.getOrDefault(false)
     }
-    val showStats = iAmMember && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
+    val showStats = iAmMember && com.fariin.app.data.AppFeatures.groupStats && com.fariin.app.data.GroupStats.showRow(conv, me, appAdmin)
     // iOS: the Search circle goes back to the group's chat and opens its search; only from that chat.
     val fromChat = androidx.compose.runtime.saveable.rememberSaveable { com.fariin.app.ui.thread.InChatSearchLink.takeOpenedFrom(cid) }
     notice?.let { n -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { notice = null }, text = { Text(n) },

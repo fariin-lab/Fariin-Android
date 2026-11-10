@@ -137,6 +137,12 @@ object SessionEnd {
         com.fariin.app.data.ProfilePhotoHistory.wipe(c)  // my past profile photos
         com.fariin.app.data.Glow.Cache.clear(c)       // the Glowing grid's last answer, every account's
         com.fariin.app.data.ChatLookStore.wipe(c)      // wallpapers, chat colours, wallpaper photos
+        // Per-account choices iOS SessionWipe.wipeAccountPrefs clears (2026-11-10 parity): whose
+        // stories I hid, the new-chat timer default, the missed-calls mark, Save to Photos.
+        com.fariin.app.data.StoryMutes.wipe(c)
+        com.fariin.app.data.Disappearing.defaultSeconds = 0
+        com.fariin.app.data.CallsSeen.wipe(c)
+        com.fariin.app.media.AutoSaveMedia.wipe(c)
         com.fariin.app.local.AtRest.forgetKey()
     }
 
