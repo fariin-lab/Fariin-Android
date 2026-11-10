@@ -170,6 +170,8 @@ data class ThreadUi(
     val unreadAtOpen: Int = 0,
     /** The divider's count, kept for the whole visit (back from a profile it is no longer re-read as 0). */
     val dividerAt: Int = 0,
+    /** A 1:1 message request's bar in place of the composer (RequestBars), or null. */
+    val requestBar: RequestBar? = null,
     /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
     val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
     /** A chat that may be a channel I visit, its answer not back yet: drawn as a loading ring. */
@@ -1272,6 +1274,12 @@ private fun ThreadContent(
             } else if (ui.otherDeleted && !ui.isGroup) {
                 // Nobody left to receive, so no composer (iOS decision D15).
                 DeletedAccountBar()
+            } else if (ui.requestBar != null) {
+                // A message request: Accept / Delete, "request sent", or their Chat Key keeping me out (iOS).
+                // A notice has nothing to type into, so the keyboard goes with the composer.
+                val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+                LaunchedEffect(ui.requestBar.kind) { kb?.hide() }
+                RequestBarView(ui.requestBar, ui.me, ui.title, onBack, actions.onKeyAccepted)
             } else if (ui.notAMember) {
                 // iOS removedBar: one centred line where the composer was.
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)

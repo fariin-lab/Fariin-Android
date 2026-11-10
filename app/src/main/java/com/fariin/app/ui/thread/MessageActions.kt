@@ -66,6 +66,8 @@ import com.fariin.app.R
 
 /** What the long-press menu, swipe, typing and read-at-bottom call back into (live or demo). */
 data class ThreadActions(
+    /** The Chat Key opened this request chat: the composer comes back at once (iOS keyAccepted). */
+    val onKeyAccepted: () -> Unit = {},
     val onReact: (Message, String?) -> Unit = { _, _ -> },
     val onSendReply: (String, Message) -> Unit = { _, _ -> },
     /** A text with group @mentions (uids), optionally a reply; null falls back to the plain sends. */

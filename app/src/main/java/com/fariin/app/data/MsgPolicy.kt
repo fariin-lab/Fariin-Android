@@ -51,6 +51,7 @@ object MsgPolicy {
         configReg = db.collection("config").document("msgPolicy").addSnapshotListener { snap, _ ->
             if (snap == null) return@addSnapshotListener
             setGlobal(snap.getBoolean(KEY) ?: true)
+            setKeySwitches(snap.getBoolean("chatKeyRequired") ?: true, snap.getBoolean("chatKeyVisible") ?: true)
         }
         if (me.isEmpty()) return
         meReg = db.collection("users").document(me).addSnapshotListener { snap, _ ->
@@ -63,19 +64,39 @@ object MsgPolicy {
         configReg?.remove(); configReg = null
         meReg?.remove(); meReg = null
         overrides.clear()
+        keyOverrides.clear()
     }
 
     /** Somebody's user document arrived. */
     fun record(uid: String, data: Map<String, Any?>?) {
         if (uid.isEmpty()) return
         val o = ((data?.get("msgPolicy") as? Map<*, *>)?.get(KEY)) as? Boolean
+        val k = ((data?.get("msgPolicy") as? Map<*, *>)?.get("chatKeyRequired")) as? Boolean
         val before = overrides[uid]
+        val beforeKey = keyOverrides[uid]
         if (o == null) overrides.remove(uid) else overrides[uid] = o
-        if (before != o) bump()
+        if (k == null) keyOverrides.remove(uid) else keyOverrides[uid] = k
+        if (before != o || beforeKey != k) bump()
     }
 
     /** Does a stranger's first message to [uid] arrive as a request? */
     fun requestsOn(uid: String): Boolean = overrides[uid] ?: global
+
+    // iOS MsgPolicy chatKeyRequired / chatKeyVisible (config/msgPolicy, users/{uid}.msgPolicy):
+    // shipped default on. A hidden Chat Key turns its requirement off too.
+    @Volatile private var keyRequired = true
+    @Volatile var chatKeyVisible = true
+        private set
+    private val keyOverrides = ConcurrentHashMap<String, Boolean>()
+
+    /** Is [uid]'s "People Who Know My Chat Key" choice enforced? Off whenever the Chat Key is hidden. */
+    fun chatKeyRequired(uid: String): Boolean = chatKeyVisible && (keyOverrides[uid] ?: keyRequired)
+
+    private fun setKeySwitches(required: Boolean, visible: Boolean) {
+        if (required == keyRequired && visible == chatKeyVisible) return
+        keyRequired = required; chatKeyVisible = visible
+        bump()
+    }
 
     /** iOS `confirm(for:)`: before a first message, ask the server once (2 s at most) for the
      *  switch and the recipient's own override, since the rules read the live values. */

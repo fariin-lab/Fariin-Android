@@ -80,6 +80,19 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     // from a profile or a photo builds the chat again, and by then the count is 0 because it was read;
     // saved with the page, the line stays where it was. The scroll still restores the reader's place.
     val dividerAt = androidx.compose.runtime.saveable.rememberSaveable(cid) { mutableStateOf(unreadAtOpen) }
+    // Message requests in a 1:1 (iOS requestStance / cannotMessageThem / otherHasKey / keyAccepted).
+    val otherUid = if (conv?.isGroup == true) "" else com.fariin.app.crypto.Wire.otherUid(cid, me)
+    val keyAccepted = androidx.compose.runtime.saveable.rememberSaveable(cid) { mutableStateOf(false) }
+    // Asked once per chat whether they have a Chat Key (who has one is private; iOS ChatPin.keyExists).
+    var otherHasKey by remember(cid) { mutableStateOf(false) }
+    var keyResolved by remember(cid) { mutableStateOf(otherUid.isEmpty()) }
+    LaunchedEffect(cid, otherUid) {
+        if (otherUid.isEmpty()) return@LaunchedEffect
+        otherHasKey = com.fariin.app.data.FirestorePeople(me, crypto).chatKeyExists(otherUid) ?: false
+        keyResolved = true
+    }
+    val requestBar = requestBarFor(conv, me, otherUid, s.otherPrivacy, s.messages, receipts.iBlocked || s.former,
+        keyAccepted.value, otherHasKey, keyResolved, com.fariin.app.data.MsgPolicy.revision)
     // Online / last seen for a 1:1 (iOS ThreadView subtitle), redrawn each minute so "5 min. ago" moves.
     var minute by remember { mutableStateOf(0) }
     LaunchedEffect(cid) { while (true) { delay(60_000); minute++ } }
@@ -145,6 +158,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         myPhoto = conv?.photos?.get(me),
         unreadAtOpen = unreadAtOpen,
         dividerAt = dividerAt.value,
+        requestBar = requestBar,
         channel = channel,
         channelWaiting = channel == null && com.fariin.app.ui.channels.ChannelGuestPreviews.waiting(cid, me, channelDoc),
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),
@@ -159,6 +173,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
         onReload = vm.repo::reload,
+        onKeyAccepted = { keyAccepted.value = true },
         onUnblock = {
             vm.viewModelScope.launch {
                 val ok = com.fariin.app.data.FirestorePeople(me, CryptoHub.get(ctx))
