@@ -1,9 +1,11 @@
 package com.fariin.app.ui.people
 
-import com.fariin.app.ui.components.GlassDropdown
+import com.fariin.app.ui.components.glassMenuAnchor
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import com.kyant.backdrop.backdrops.layerBackdrop
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,23 +58,30 @@ internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, header
     if (toneSheet) MessageSoundSheet(tone.id, onClose = { toneSheet = false }) { id ->
         com.fariin.app.push.MessageTones.set(ctx, cid, id); tone = com.fariin.app.push.MessageTones.of(ctx, cid)
     }
-    ScrollPage("Sounds & Notifications", onBack) {
-        SettingsSection(header = header, footer = endLabel) {
-            Box {
-                SettingsRow("Mute", icon = painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_bell),
-                    value = value, last = cid.isEmpty()) { menu = true }
-                GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
-                    border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
-                    if (muted) DropdownMenuItem(text = { Text("Unmute", color = c.label) }, onClick = { menu = false; onMute(0.0) })
-                    GroupInfoCircles.MUTE_CHOICES.forEach { (label, hours) ->
-                        DropdownMenuItem(text = { Text(label, color = c.label) },
-                            onClick = { menu = false; onMute(GroupInfoCircles.muteUntil(hours)) })
+    // The Mute choices are the glass menu growing out of the row, as on the profile's Mute button
+    // (it was the old dropdown, pinned left with a grey box behind it, owner 2026-11-10).
+    val anchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    val backdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val glass = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= 33
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(if (glass) Modifier.layerBackdrop(backdrop) else Modifier)) {
+            ScrollPage("Sounds & Notifications", onBack) {
+                SettingsSection(header = header, footer = endLabel) {
+                    Box(Modifier.glassMenuAnchor(anchor)) {
+                        SettingsRow("Mute", icon = painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_notifications),
+                            value = value, last = cid.isEmpty()) { menu = true }
                     }
+                    if (cid.isNotEmpty()) SettingsRow("Message Sound", icon = painterResource(com.fariin.app.R.drawable.ic_speaker_on),
+                        value = tone.name.removeSuffix(" (Default)"), last = true) { toneSheet = true }
                 }
             }
-            if (cid.isNotEmpty()) SettingsRow("Message Sound", icon = painterResource(com.fariin.app.R.drawable.ic_speaker_on),
-                value = tone.name.removeSuffix(" (Default)"), last = true) { toneSheet = true }
         }
+        com.fariin.app.ui.components.GlassMenu(menu, anchor, buildList {
+            if (muted) add(com.fariin.app.ui.components.GlassMenuItem("Unmute", null) { onMute(0.0) })
+            GroupInfoCircles.MUTE_CHOICES.forEach { (label, hours) ->
+                add(com.fariin.app.ui.components.GlassMenuItem(label, null) { onMute(GroupInfoCircles.muteUntil(hours)) })
+            }
+        }, backdrop = if (glass) backdrop else null, caption = "Mute this chat for…", onDismiss = { menu = false })
     }
 }
 
