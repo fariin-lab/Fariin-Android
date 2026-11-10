@@ -1758,7 +1758,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             val header: @Composable () -> Unit = {
                 Column {
                     if (showSender && g.first) SenderLine(ui, m.authorId)
-                    if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null)
+                    if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null, ui.cid)
                     m.replyTo?.let { ReplyQuote(it, ui, isMe) }
                 }
             }
@@ -1787,7 +1787,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             m.replyTo?.isStatus == false) 0 else MessageRules.jumbomojiCount(m.bodyText)
         if (jumbo > 0) {
             if (showSender && g.first) SenderLine(ui, m.authorId)
-            if (m.forwarded) ForwardedTag(m, false, false)
+            if (m.forwarded) ForwardedTag(m, false, false, ui.cid)
             Text(m.bodyText.trim(), fontSize = (17f * MessageRules.jumbomojiScale(jumbo)).sp,
                 lineHeight = (17f * MessageRules.jumbomojiScale(jumbo) * 1.15f).sp, color = c.label)
             Spacer(Modifier.height(2.dp))
@@ -1822,7 +1822,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
                 Spacer(Modifier.height(1.dp))
             }
             if (m.forwarded && !m.deleted) {
-                ForwardedTag(m, chromeMe, ui.channel != null)
+                ForwardedTag(m, chromeMe, ui.channel != null, ui.cid)
             }
             m.replyTo?.takeIf { !m.deleted && !it.isStatus }?.let { ReplyQuote(it, ui, chromeMe) }
             if (kind == Message.MediaKind.VOICE) {
@@ -1985,7 +1985,7 @@ private fun MediaRow(
                 if (showSender && g.first) {
                     SenderLine(ui, m.authorId)
                 }
-                if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null)
+                if (m.forwarded) ForwardedTag(m, isMe, ui.channel != null, ui.cid)
                 m.replyTo?.let { ReplyQuote(it, ui, isMe) }
             }
         }

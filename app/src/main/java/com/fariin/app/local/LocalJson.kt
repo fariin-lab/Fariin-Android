@@ -130,6 +130,7 @@ object LocalJson {
         m.callJoinedUids?.let { put("callJ", JSONArray(it)) }
         m.callRungUids?.let { put("callR", JSONArray(it)) }
         m.fwdChannel?.let { put("fc", JSONObject().put("c", it.cid).put("t", it.title).put("p", it.photoUrl).put("u", it.username)) }
+        m.forwardSource?.let { put("fs", it.json()) }
         com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length)?.let { put("fmt", it) }
         m.storyMention?.let { put("sm", JSONObject().put("id", it.id).put("t", it.thumbUrl)) }
         m.linkPreview?.let { lp ->
@@ -193,6 +194,7 @@ object LocalJson {
             callDuration = if (o.has("callD")) o.getInt("callD") else null,
             callJoinedUids = strings(o.optJSONArray("callJ")), callRungUids = strings(o.optJSONArray("callR")),
             fwdChannel = o.optJSONObject("fc")?.let { Message.FwdChannel(it.optString("c"), it.optString("t"), it.optString("p"), it.optString("u")) },
+            forwardSource = s("fs")?.let { Message.ForwardSource.fromJson(it) },
             bold = com.fariin.app.data.TextFormat.parse(s("fmt"), o.optString("t").length),
             storyMention = o.optJSONObject("sm")?.let { Message.StoryMentionRef(it.optString("id"), it.optString("t")) },
             linkPreview = o.optJSONObject("lp")?.let { lp ->

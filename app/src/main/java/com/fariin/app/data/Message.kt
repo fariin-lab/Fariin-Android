@@ -121,6 +121,8 @@ data class Message(
     val bold: List<TextFormat.Span> = emptyList(),
     /** iOS Message.fwdChannel: the channel a forwarded post came from (sealed JSON on the wire). */
     val fwdChannel: FwdChannel? = null,
+    /** iOS Message.forwardSource (`fwd`, owner 2026-11-10): the group or channel it was forwarded from. */
+    val forwardSource: ForwardSource? = null,
     /** iOS isRestrictRequest: the "asked to turn off Restricted chat" line, answerable from the chat. */
     val isRestrictRequest: Boolean = false,
     /** Local only: the plain bytes of a photo or note I am sending, drawn before the upload ends. */
@@ -137,6 +139,38 @@ data class Message(
     data class StoryMentionRef(val id: String, val thumbUrl: String)
 
     data class FwdChannel(val cid: String, val title: String, val photoUrl: String, val username: String)
+
+    /**
+     * Where a forwarded message first came from, when that was a group or a channel (iOS
+     * ForwardSource). Travels as `fwd` {cid, mid, t, p, pub, ch}: the JSON sealed like the text in
+     * a 1:1 and an end-to-end group, the map itself in a plain group or channel. None from a person.
+     */
+    data class ForwardSource(val cid: String, val mid: String, val title: String, val photo: String?,
+                             val isPublic: Boolean, val isChannel: Boolean) {
+        fun map(): Map<String, Any> = buildMap {
+            put("cid", cid); put("mid", mid); put("t", title); put("pub", isPublic); put("ch", isChannel)
+            photo?.let { put("p", it) }
+        }
+        fun json(): String = org.json.JSONObject(map()).toString()
+
+        companion object {
+            private fun bad(s: String) = s.isEmpty() || s.contains('/') || s.length > 128
+
+            fun make(cid: String, mid: String, title: String, photo: String?, isPublic: Boolean, isChannel: Boolean): ForwardSource? {
+                val t = title.trim()
+                if (bad(cid) || bad(mid) || t.isEmpty()) return null
+                return ForwardSource(cid, mid, t.take(128), photo?.ifEmpty { null }, isPublic, isChannel)
+            }
+
+            fun fromMap(d: Map<*, *>): ForwardSource? = make(d["cid"] as? String ?: "", d["mid"] as? String ?: "",
+                d["t"] as? String ?: "", d["p"] as? String, d["pub"] == true, d["ch"] == true)
+
+            fun fromJson(s: String): ForwardSource? = runCatching { org.json.JSONObject(s) }.getOrNull()?.let { o ->
+                make(o.optString("cid"), o.optString("mid"), o.optString("t"), o.optString("p").ifEmpty { null },
+                    o.optBoolean("pub"), o.optBoolean("ch"))
+            }
+        }
+    }
 
     /** iOS LinkPreviewData: fetched and sealed by the sender; the picture is a sealed file like a photo's. */
     data class LinkPreview(val url: String, val title: String, val desc: String,
@@ -298,6 +332,13 @@ data class Message(
                     runCatching { org.json.JSONObject(clear) }.getOrNull()?.let { o ->
                         o.optString("c").takeIf { it.isNotEmpty() }?.let { FwdChannel(it, o.optString("t"), o.optString("p"), o.optString("u")) }
                     }
+                },
+                // Where it was forwarded from (iOS 2026-11-10): sealed in a 1:1 and an end-to-end
+                // group, a plain map in a plain group or channel. Unreadable = no source shown.
+                forwardSource = if (data["forwarded"] != true || data["deleted"] == true) null else when (val f = data["fwd"]) {
+                    is String -> openOptional("fwd")?.let { ForwardSource.fromJson(it) }
+                    is Map<*, *> -> ForwardSource.fromMap(f)
+                    else -> null
                 },
                 quoteId = ((data["quote"] as? Map<*, *>)?.get("qid") as? String)?.takeIf { QuoteRules.isQid(it) },
                 bubbleStyle = BubbleStyles.parseId(data["bs"]),

@@ -51,11 +51,52 @@ private val ChannelBlue = Color(0xFF2392FE)
  * once I follow it. A tap opens the channel; Follow follows it from the chat. Inside a channel a
  * post is that channel's own, so there it stays the plain word.
  */
+/**
+ * "Forwarded from <group or channel>" (iOS 2026-11-10), cut short at the line's end. A tap opens the
+ * source at the post: this chat scrolls to it; a chat I am in or a channel I follow opens at it; a
+ * public one I am not in opens its channel posts or the group's join sheet; a private one only says so.
+ */
 @Composable
-internal fun ForwardedTag(m: Message, isMe: Boolean, inChannel: Boolean) {
+private fun ForwardedFrom(src: Message.ForwardSource, isMe: Boolean, openCid: String) {
+    val c = Fariin.colors
+    val nav = com.fariin.app.ui.people.LocalPeopleNav.current
+    val channelNav = LocalChannelNav.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    var joinSheet by remember { mutableStateOf(false) }
+    if (joinSheet) com.fariin.app.ui.people.PublicGroupSheet(src.cid,
+        onClose = { joinSheet = false; com.fariin.app.data.QuoteStore.pendingJump.value = null },
+        onOpenChat = { nav.chat(it) }, onOpenChannel = { channelNav.open(it) })
+    Text("Forwarded from ${src.title}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+        color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.clickable {
+            val jump = com.fariin.app.data.QuoteStore.Jump(src.cid, src.mid)
+            if (src.cid == openCid) { com.fariin.app.data.QuoteStore.pendingJump.value = jump; return@clickable }
+            val mine = com.fariin.app.data.ChatsNow.find(src.cid) != null || ChannelFollows.entries.value.containsKey(src.cid)
+            if (!mine && !src.isPublic) {
+                com.fariin.app.ui.components.Snack.show(if (src.isChannel) "This channel is private" else "This group is private")
+                return@clickable
+            }
+            // The keyboard goes down first, so it is not still up on coming back here.
+            keyboard?.hide(); focus.clearFocus()
+            com.fariin.app.data.QuoteStore.pendingJump.value = jump
+            when {
+                src.isChannel -> channelNav.open(src.cid)
+                mine -> nav.chat(src.cid)
+                else -> joinSheet = true
+            }
+        }.padding(vertical = 2.dp)
+            .semantics { contentDescription = "Forwarded from ${src.title}" })
+}
+
+/** [openCid]: the chat this bubble is drawn in, so a "Forwarded from" this very chat scrolls instead. */
+@Composable
+internal fun ForwardedTag(m: Message, isMe: Boolean, inChannel: Boolean, openCid: String = "") {
     val c = Fariin.colors
     val fc = m.fwdChannel?.takeIf { !inChannel && !m.deleted }
     if (fc == null) {
+        val src = m.forwardSource?.takeIf { !m.deleted }
+        if (src != null) { ForwardedFrom(src, isMe, openCid); return }
         Text("Forwarded", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
             color = if (isMe) Color.White.copy(alpha = 0.7f) else c.secondary)
         return

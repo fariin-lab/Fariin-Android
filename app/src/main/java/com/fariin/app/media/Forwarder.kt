@@ -34,10 +34,13 @@ object Forwarder {
         // A post forwarded out of a channel says which channel (iOS forwardMessage + sealedFwdChannel);
         // one already forwarded from a channel keeps its channel. Never written into a channel.
         val fromChannel = channelJson(sourceCid) ?: m.fwdChannel?.let { json(it.cid, it.title, it.photoUrl, it.username) }
+        // "Forwarded from <group or channel>" (iOS ForwardSource.of): a forward keeps the source it came
+        // with; a group or channel names itself; a person names nothing.
+        val source = if (m.forwarded) m.forwardSource else runCatching { sourceOf(sourceCid, m.id, me) }.getOrNull()
         for (t in targets.distinct().take(MediaRules.FORWARD_CHATS_AT_ONCE)) {
             val fwd = MediaMessages.isForward(m.forwarded, sourceCid, t)
             val fc = fromChannel?.takeIf { !isChannel(t) }
-            val ok = runCatching { sendTo(context, me, crypto, t, m, payload, fwd, fc) }.isSuccess
+            val ok = runCatching { sendTo(context, me, crypto, t, m, payload, fwd, fc, source.takeIf { fwd }) }.isSuccess
             if (!ok) failed += t
         }
         failed
@@ -61,6 +64,21 @@ object Forwarder {
         val info = com.fariin.app.channel.ChannelInfo.from(sourceCid, d)
         if (!info.isChannel) return null
         return json(sourceCid, info.title, info.avatarUrl.orEmpty(), info.username)
+    }
+
+    /** The group or channel [sourceCid] as a forward source, or null for a 1:1. Its doc as held, else read once. */
+    private suspend fun sourceOf(sourceCid: String, mid: String, me: String): Message.ForwardSource? {
+        if (sourceCid.contains('_')) return null
+        val listed = com.fariin.app.data.ChatsNow.find(sourceCid)
+        if (listed != null && !listed.isGroup) return null
+        val d = com.fariin.app.channel.ChannelFollows.docs.value[sourceCid]
+            ?: runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
+                .document(sourceCid).get().await().data as Map<String, Any?>? }.getOrNull()
+        if (listed == null && d?.get("type") != "group") return null
+        val title = listed?.displayName(me) ?: (d?.get("title") as? String).orEmpty()
+        val photo = listed?.displayPhoto(me) ?: (d?.get("avatarUrl") as? String)
+        return Message.ForwardSource.make(sourceCid, mid, title, photo, d?.get("isPublic") == true,
+            listed?.isChannel ?: (d?.get("channel") == true))
     }
 
     private sealed class Payload {
@@ -105,11 +123,12 @@ object Forwarder {
 
     private suspend fun sendTo(
         context: Context, me: String, crypto: FariinCrypto, target: String, m: Message, payload: Payload?, fwd: Boolean,
-        fwdChannelJson: String?,
+        fwdChannelJson: String?, source: Message.ForwardSource?,
     ) {
         val ts = System.currentTimeMillis().toDouble()
         val clientId = UUID.randomUUID().toString().uppercase()
-        val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto)).also { it.fwdChannelJson = fwdChannelJson }
+        val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto))
+            .also { it.fwdChannelJson = fwdChannelJson; it.fwdSource = source }
         when (payload ?: throw SourceUnavailable()) {
             is Payload.Photo -> sender.image((payload as Payload.Photo).prep, m.text, false, fwd, clientId, ts)
             is Payload.Video -> sender.video((payload as Payload.Video).prep, m.text, fwd, clientId, ts)
@@ -117,7 +136,7 @@ object Forwarder {
             is Payload.Voice -> sender.audio((payload as Payload.Voice).bytes, m.duration ?: 0.0, m.waveform, fwd, clientId, ts)
             is Payload.Doc -> sender.file((payload as Payload.Doc).prep, fwd, clientId, ts)
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
-                .sendForwardedText(m.text, fwd, fwdChannelJson)
+                .sendForwardedText(m.text, fwd, fwdChannelJson, source)
         }
     }
 }

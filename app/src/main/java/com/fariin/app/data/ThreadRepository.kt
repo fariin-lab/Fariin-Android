@@ -972,14 +972,15 @@ class ThreadRepository(
         (context.contentResolver.getType(uri) ?: "").startsWith("video/")
 
     /** A text forwarded into this chat (iOS sendText with `forwarded`), straight to the server. */
-    suspend fun sendForwardedText(text: String, forwarded: Boolean, fwdChannelJson: String? = null) {
+    suspend fun sendForwardedText(text: String, forwarded: Boolean, fwdChannelJson: String? = null,
+                                  fwdSource: Message.ForwardSource? = null) {
         val t = text.trim()
         if (t.isEmpty()) return
         val clientId = UUID.randomUUID().toString().uppercase()
         val ts = System.currentTimeMillis().toDouble()
         turn.withLock {
-            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson)
-            else sendDirect(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson)
+            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource)
+            else sendDirect(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource)
         }
     }
 
@@ -1309,7 +1310,7 @@ class ThreadRepository(
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                    forwarded: Boolean = false, countsAsUnread: Boolean = true,
                                    storyMention: Message.StoryMentionRef? = null, fwdChannelJson: String? = null,
-                                   quote: String? = null) {
+                                   quote: String? = null, fwdSource: Message.ForwardSource? = null) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         // A quote sent with no words of mine: the list says "Quoted post" (sealed like any preview), not a blank line.
@@ -1353,6 +1354,8 @@ class ThreadRepository(
         // A story mention card (iOS ChatService: the plain story id and thumbnail).
         // The channel a forwarded post came from, sealed like the text (iOS sealedFwdChannel).
         fwdChannelJson?.let { j -> runCatching { crypto.encryptForConversation(cid, j) }.getOrNull()?.let { msg["fwdChannel"] = it } }
+        // The group or channel it came from (iOS sealedForwardSource); a failed seal drops only this.
+        if (forwarded) fwdSource?.let { s -> runCatching { crypto.encryptForConversation(cid, s.json()) }.getOrNull()?.let { msg["fwd"] = it } }
         if (storyMention != null) msg["storyMention"] = mapOf("id" to storyMention.id, "thumb" to storyMention.thumbUrl)
         // A quoted channel post: only the server snapshot's id, in the clear (iOS ChatService).
         if (quote != null) msg["quote"] = mapOf("qid" to quote)
@@ -1419,7 +1422,7 @@ class ThreadRepository(
     private suspend fun sendGroup(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                   forwarded: Boolean = false, countsAsUnread: Boolean = true,
                                   mentions: List<String> = emptyList(), fwdChannelJson: String? = null,
-                                  quote: String? = null, fmt: String? = null) {
+                                  quote: String? = null, fmt: String? = null, fwdSource: Message.ForwardSource? = null) {
         // iOS freshGroupMembers: a member removed elsewhere is not wrapped for.
         val members = freshMembers()
         val cipher = crypto.sealForGroup(t, members, cid)
@@ -1438,6 +1441,11 @@ class ThreadRepository(
         if (mentions.isNotEmpty()) msg["mentions"] = mentions
         if (forwarded) msg["forwarded"] = true
         fwdChannelJson?.let { j -> runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwdChannel"] = it } }
+        // Where it came from (iOS sealedForwardSource): a plain group's seal hands the JSON back, so the map goes.
+        if (forwarded) fwdSource?.let { s ->
+            val j = s.json()
+            runCatching { crypto.sealForGroup(j, members, cid) }.getOrNull()?.let { msg["fwd"] = if (it == j) s.map() else it }
+        }
         if (quote != null) msg["quote"] = mapOf("qid" to quote)   // a quoted channel post (iOS sendGroupText)
         // Bold runs (TextFormat), sealed like the text: plain in a plain channel.
         if (fmt != null && t.isNotEmpty()) msg["fmt"] = crypto.sealForGroup(fmt, members, cid)
@@ -1848,7 +1856,7 @@ class ThreadRepository(
         val TOMBSTONE_STRIP = listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl", "album",
             "fileName", "fileSize", "waveform", "duration", "blurhash", "linkPreview", "poll", "locationCard",
             "contactCard", "replyTo", "reactions", "videoEnc", "thumbEnc", "viewOnce", "mentions", "forwarded",
-            "fwdChannel", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
+            "fwdChannel", "fwd", "thumb", "edits", "editedAt", "quote", "bs", "bsd", "fmt")   // bs/bsd: the rules refuse a tombstone keeping a bubble style (iOS b189891b)
     }
 }
 

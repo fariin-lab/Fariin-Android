@@ -74,8 +74,19 @@ class MediaSender(
     private suspend fun setMsg(batch: com.google.firebase.firestore.WriteBatch, ref: com.google.firebase.firestore.DocumentReference,
                                members: List<String>?, msg: Map<String, Any>) {
         val fc = sealOrNull(fwdChannelJson, members)
-        batch.set(ref, if (fc != null) msg + ("fwdChannel" to fc) else msg)
+        var out = if (fc != null) msg + ("fwdChannel" to fc) else msg
+        // The group or channel it came from (iOS sealedForwardSource), only beside `forwarded`. A
+        // plain group's seal hands the JSON back, so there the map itself goes. A failed seal drops only this.
+        val src = fwdSource?.takeIf { msg["forwarded"] == true }
+        if (src != null) {
+            val j = src.json()
+            sealOrNull(j, members)?.let { out = out + ("fwd" to (if (it == j) src.map() else it)) }
+        }
+        batch.set(ref, out)
     }
+
+    /** The group or channel a forward comes from (Message.ForwardSource), written as `fwd`. */
+    var fwdSource: com.fariin.app.data.Message.ForwardSource? = null
 
     /** End-to-end encrypted bytes go up as application/octet-stream (storage.rules `chat/`). */
     private suspend fun upload(cipher: ByteArray, path: String, onProgress: ((Float) -> Unit)? = null): String {
