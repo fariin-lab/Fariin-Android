@@ -55,6 +55,9 @@ class CallActivity : ComponentActivity() {
         const val EXTRA_DEMO = "callScreen"
 
         fun startDial(c: Context, uid: String, name: String, photo: String?, video: Boolean) {
+            // Their call privacy, decided here before anything rings (iOS startCall + CallPrivacyIndex).
+            com.fariin.app.call.CallPrivacyIndex.refresh(uid)
+            if (com.fariin.app.call.CallPrivacyIndex.refuses(uid)) { com.fariin.app.call.CallPrivacyIndex.refused.value = true; return }
             c.startActivity(Intent(c, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(EXTRA_UID, uid).putExtra(EXTRA_NAME, name).putExtra(EXTRA_PHOTO, photo).putExtra(EXTRA_VIDEO, video))
         }

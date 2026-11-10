@@ -26,6 +26,8 @@ data class CallEntry(
     val durationSec: Int,
     val dateMs: Long,
     val groupCid: String? = null,
+    /** Set only on a multi-person (ad-hoc) call: `id` and `cid` are then the room id (iOS CallEntry.adhoc). */
+    val adhoc: AdhocCall? = null,
 ) {
     fun mine(me: String): Boolean = callerUid == me
 
@@ -80,7 +82,8 @@ object CallHistory {
             val last = out.lastOrNull()?.first()
             if (last != null && last.otherUid == e.otherUid && last.mine(me) == e.mine(me) &&
                 last.missed(nowMs) == e.missed(nowMs) && last.video == e.video &&
-                last.groupCid == e.groupCid && sameDay(last.dateMs, e.dateMs)
+                last.groupCid == e.groupCid && last.adhoc?.members?.toSet() == e.adhoc?.members?.toSet() &&
+                sameDay(last.dateMs, e.dateMs)
             ) {
                 out.last().add(e)
             } else {
@@ -114,12 +117,59 @@ object CallHistory {
     }
 }
 
+/** The people on a multi-person call, from groupCalls/{roomId} with kind "adhoc" (iOS AdhocCallInfo). */
+data class AdhocCall(
+    val roomId: String,
+    val members: List<String>,
+    val names: Map<String, String>,
+    val photos: Map<String, String>,
+    val joined: List<String>,
+    val startedBy: String,
+    val video: Boolean,
+    val active: Boolean,
+    val startedAtMs: Long,
+    val endedAtMs: Long?,
+) {
+    fun name(uid: String) = names[uid] ?: "Unknown"
+    fun photo(uid: String) = photos[uid]?.ifEmpty { null }
+    fun others(me: String) = members.filter { it != me }
+    fun joinedOthers(me: String) = joined.filter { it != me && members.contains(it) }
+    /** Who the row is named after: the people who joined, or everyone invited when nobody did. */
+    fun titleUids(me: String) = joinedOthers(me).ifEmpty { others(me) }
+
+    /** As I saw it: mine and nobody came = my unanswered call; I joined = answered; else missed. A live room reads "ringing". */
+    fun entry(me: String): CallEntry {
+        val live = active && endedAtMs == null
+        val outcome = when {
+            startedBy == me -> if (joinedOthers(me).isNotEmpty()) "answered" else if (live) "ringing" else "missed"
+            joined.contains(me) -> "answered"
+            else -> if (live) "ringing" else "missed"
+        }
+        val duration = if (outcome == "answered" && endedAtMs != null) ((endedAtMs - startedAtMs) / 1000).toInt().coerceAtLeast(0) else 0
+        val first = titleUids(me).firstOrNull() ?: ""
+        return CallEntry(roomId, roomId, com.fariin.app.call.GroupCallWire.adhocTitle(titleUids(me).map { name(it) }),
+            photo(first), first, startedBy, outcome, video, duration, startedAtMs, adhoc = this)
+    }
+
+    companion object {
+        fun from(d: DocumentSnapshot): AdhocCall? {
+            if (d.getString("kind") != "adhoc") return null
+            fun strings(k: String) = (d.get(k) as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            fun map(k: String) = (d.get(k) as? Map<*, *>)?.mapNotNull { (a, b) -> (a as? String)?.let { it to (b as? String ?: "") } }?.toMap() ?: emptyMap()
+            val est = DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+            return AdhocCall(d.id, strings("members"), map("names"), map("photos"), strings("joined"),
+                d.getString("startedBy") ?: "", d.getBoolean("video") ?: false, d.getBoolean("active") ?: false,
+                d.getTimestamp("startedAt", est)?.toDate()?.time ?: 0L, d.getTimestamp("endedAt", est)?.toDate()?.time)
+        }
+    }
+}
+
 /**
  * Reads call history the way iOS CallsRepository.load does: one query per chat for its call
- * rows, re-read only when the chat's updatedAt moved. Read only.
+ * rows, re-read only when the chat's updatedAt moved, plus the multi-person calls I was on
+ * (`groupCalls`, members array-contains me; kind filtered here, so no composite index). Read only.
  *
- * TODO (iOS has these): ad-hoc group calls from `groupCalls` (members array-contains me), the
- * per-member outcome of a group chat's call (GroupCallOutcome: joinedUids / rungUids), locally
+ * TODO (iOS has these): the per-member outcome of a group chat's call (GroupCallOutcome: joinedUids / rungUids), locally
  * hidden calls, the live row of a call in progress, saved call links.
  */
 class CallsRepository(
@@ -140,9 +190,16 @@ class CallsRepository(
     @Volatile var failed: String? = null
         private set
 
+    /** The last multi-person calls read; kept when a read fails, so a weak network never empties them. */
+    @Volatile private var adhocHeld: List<CallEntry> = emptyList()
+
     suspend fun load(me: String, convs: List<Conversation>): List<CallEntry> = coroutineScope {
         val miss = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
-        convs.filter { it.id.isNotEmpty() && !it.id.contains('/') && !it.isChannel }.map { c ->
+        val adhoc = async {
+            runCatching { db.collection("groupCalls").whereArrayContains("members", me).get().await() }.getOrNull()
+                ?.documents?.mapNotNull { AdhocCall.from(it)?.entry(me) }?.also { adhocHeld = it } ?: adhocHeld
+        }
+        val chats = convs.filter { it.id.isNotEmpty() && !it.id.contains('/') && !it.isChannel }.map { c ->
             async {
                 cache[c.id]?.takeIf { it.first == c.updatedAtMillis && !dirty.remove(c.id) }?.second ?: run {
                     val read = runCatching {
@@ -162,7 +219,8 @@ class CallsRepository(
                     list
                 }
             }
-        }.awaitAll().flatten().sortedByDescending { it.dateMs }
+        }.awaitAll().flatten()
+        (chats + adhoc.await()).sortedByDescending { it.dateMs }
             .also { failed = miss.get()?.let { e -> LoadFailure.of(e) } }
     }
 

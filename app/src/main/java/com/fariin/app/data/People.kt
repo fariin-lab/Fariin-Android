@@ -37,7 +37,10 @@ data class Person(
     val shownName: String get() = name.ifEmpty { handle.ifEmpty { "Fariin user" } }
 
     companion object {
-        fun from(uid: String, d: Map<String, Any?>): Person = Person(
+        fun from(uid: String, d: Map<String, Any?>): Person = fromDoc(uid, d)
+            .also { com.fariin.app.call.CallPrivacyIndex.record(uid, it.privacy) }
+
+        private fun fromDoc(uid: String, d: Map<String, Any?>): Person = Person(
             uid = uid,
             name = d["name"] as? String ?: "",
             handle = d["handle"] as? String ?: "",

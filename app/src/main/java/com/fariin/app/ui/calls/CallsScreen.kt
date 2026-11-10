@@ -263,6 +263,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
         // group's chat; the Calls page has no separate call info page.
         val g = run.latest.groupCid
         if (g != null) nav.chat(g)
+        else if (run.latest.adhoc != null) info = run   // a multi-person call has no one chat or profile
         else if (run.latest.otherUid.isNotEmpty()) {
             // The profile shows this call's card (iOS source .calls).
             com.fariin.app.data.CallInfoLink.set(run.latest.otherUid, run.latest)
@@ -354,7 +355,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                             val isLive = CallsLive.showsReturn(run)
                             var menu by remember { mutableStateOf(false) }
                             val verified = remember(run.latest.otherUid, warmed) {
-                                run.latest.groupCid == null && com.fariin.app.ui.people.ProfileMemo.get(run.latest.otherUid)?.verified == true
+                                run.latest.groupCid == null && run.latest.adhoc == null && com.fariin.app.ui.people.ProfileMemo.get(run.latest.otherUid)?.verified == true
                             }
                             fun deleteRun() { com.fariin.app.data.HiddenCalls.hide(ctx, run.entries.map { it.id }) }
                             Box {
@@ -374,7 +375,7 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                                 }
                                 val call = run.latest
                                 RowMenu(menu, { menu = false }, callUp,
-                                    chats = { nav.chat(call.groupCid ?: call.cid) },
+                                    chats = { if (call.adhoc != null) openInfo(run) else nav.chat(call.groupCid ?: call.cid) },
                                     onVideo = { pendingCall = call to true }, onVoice = { pendingCall = call to false },
                                     onSelect = { selecting = true; picked = setOf(run.id) },
                                     onDelete = { deleteRun() })
@@ -551,7 +552,7 @@ private fun CallRow(run: CallRun, me: String, now: Long, verified: Boolean, live
             .padding(start = 16.dp, end = if (live) 16.dp else 4.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(call.photoUrl, 46.dp, squircle = false, kind = com.fariin.app.ui.components.AvatarKind.of(call.groupCid != null, false))
+        Avatar(call.photoUrl, 46.dp, squircle = false, kind = com.fariin.app.ui.components.AvatarKind.of(call.groupCid != null || call.adhoc != null, false))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -608,6 +609,14 @@ private fun callBack(ctx: android.content.Context, call: CallEntry, video: Boole
     if (com.fariin.app.call.CallManager.ui.value.status.live) { CallActivity.startRing(ctx); return }
     val g = call.groupCid
     if (g != null) { CallActivity.startGroup(ctx, g, call.name, video, start = true); return }
+    // A multi-person call: the same people again, in a new room.
+    call.adhoc?.let { a ->
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val people = a.others(me).map { com.fariin.app.call.CallPerson(it, a.name(it), a.photo(it)) }
+        if (people.size >= 2) CallActivity.startAdhoc(ctx, people, video)
+        else people.firstOrNull()?.let { CallActivity.startDial(ctx, it.uid, it.name, it.photo, video) }
+        return
+    }
     if (call.otherUid.isEmpty()) return
     CallActivity.startDial(ctx, call.otherUid, call.name, call.photoUrl, video)
 }

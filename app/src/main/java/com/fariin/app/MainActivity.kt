@@ -155,6 +155,17 @@ class MainActivity : ComponentActivity() {
                     notice?.let { SignedOutNotice(it) { notice = null } }
                     // A message for another chat while the app is open (push/InAppNotify).
                     if (me != null) com.fariin.app.ui.components.InAppBannerHost() else LaunchedEffect(Unit) { com.fariin.app.push.InAppNotify.reset() }
+                    // A call refused by their call privacy, said over whatever screen tried it (iOS restrictedCallee).
+                    if (me == null) LaunchedEffect(Unit) { com.fariin.app.call.CallPrivacyIndex.clear() }
+                    else {
+                        val cantCall by com.fariin.app.call.CallPrivacyIndex.refused.collectAsState()
+                        if (cantCall) com.fariin.app.ui.components.GlassAlert(
+                            onDismissRequest = { com.fariin.app.call.CallPrivacyIndex.refused.value = false },
+                            title = { androidx.compose.material3.Text(com.fariin.app.call.CallPrivacyIndex.TITLE) },
+                            text = { androidx.compose.material3.Text(com.fariin.app.call.CallPrivacyIndex.TEXT) },
+                            confirmButton = { androidx.compose.material3.TextButton(onClick = { com.fariin.app.call.CallPrivacyIndex.refused.value = false }) {
+                                androidx.compose.material3.Text("OK") } })
+                    }
                     // A required or suggested update from the server covers everything (iOS AppUpdateGate).
                     com.fariin.app.system.AppUpdateLayer()
                     // Log Out under way (iOS BusyOverlay "Signing Out…"): the app says so and takes no taps.

@@ -274,7 +274,7 @@ class ThreadRepository(
             }
             val d = snap?.data ?: return@addSnapshotListener
             MsgPolicy.record(other, d)   // their own Message Requests override (admin panel)
-            _state.update { it.copy(otherPrivacy = Presence.privacyOf(d)) }
+            _state.update { it.copy(otherPrivacy = Presence.privacyOf(d).also { p -> com.fariin.app.call.CallPrivacyIndex.record(other, p) }) }
             notePresence()
         }
         myReg = users.document(me).addSnapshotListener { snap, _ ->
