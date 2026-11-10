@@ -49,7 +49,9 @@ import kotlinx.coroutines.launch
  * their request to me is open I can answer it here.
  */
 @Composable
-fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> String, onBack: () -> Unit) {
+fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> String, onBack: () -> Unit,
+                       /** Non-null: drawn as a sheet rising from the bottom, as Disappearing Messages (owner 2026-11-10). */
+                       sheet: com.fariin.app.ui.components.SheetMotion? = null) {
     val c = Fariin.colors
     val conv = ChatsNow.list.firstOrNull { it.id == cid }
     var pending by remember { mutableStateOf<Boolean?>(null) }
@@ -74,9 +76,7 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
         theirs -> "$them turned this on. You can ask $them to turn it off."
         else -> "When either of you turns this on, it applies to both of you. Only the person who turned it on can turn it off."
     }
-    val barScroll = rememberScrollState()
-    BarPage("Restricted Chat", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
-        Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(top = 8.dp)) {
+    val body: @Composable () -> Unit = {
             SettingsSection(footer = footer) {
                 SwitchRow("Restricted Chat", isOn, last = false) { flip(it) }
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -106,6 +106,12 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
             } else if (myRequestOpen) SettingsSection {
                 Text("Waiting for $them to answer your request.", fontSize = 15.sp, color = c.secondary, modifier = Modifier.padding(16.dp))
             }
+    }
+    if (sheet != null) com.fariin.app.ui.components.SheetPage(sheet, "Restricted Chat") { body() }
+    else {
+        val barScroll = rememberScrollState()
+        BarPage("Restricted Chat", onBack = onBack, under = underBar(barScroll), modifier = Modifier.background(c.bgSecondary)) { top ->
+            Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(top = 8.dp)) { body() }
         }
     }
     if (askRequest) GlassAlert(onDismissRequest = { askRequest = false }, title = { Text("Ask $them to turn it off?") },

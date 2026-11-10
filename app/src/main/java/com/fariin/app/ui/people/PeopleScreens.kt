@@ -494,9 +494,13 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     if (allGroups) { GroupsInCommonPage(commonGroups, me, onBack = { allGroups = false }, onOpenChat = onOpenChat); return }
     var restrictOpen by remember { mutableStateOf(false) }
     if (restrictOpen) {
+        // A sheet over the profile, rising from the bottom like Disappearing Messages (owner 2026-11-10).
         val myName = remember { mutableStateOf("") }
         LaunchedEffect(Unit) { myName.value = api.profile(me)?.shownName.orEmpty() }
-        RestrictedChatPage(cid, me, name.ifEmpty { "They" }, { myName.value }, onBack = { restrictOpen = false }); return
+        val motion = com.fariin.app.ui.components.rememberSheetMotion { restrictOpen = false }
+        com.fariin.app.ui.components.FariinSheetDialog(motion, fill = Fariin.colors.bgSecondary) {
+            RestrictedChatPage(cid, me, name.ifEmpty { "They" }, { myName.value }, onBack = { motion.close() }, sheet = motion)
+        }
     }
     // Chat Bubble (SPEC 4): my one bubble style for every chat, the Settings picker itself.
     var bubbleOpen by remember { mutableStateOf(false) }
