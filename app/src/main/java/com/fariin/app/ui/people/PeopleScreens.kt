@@ -1,5 +1,6 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.profileMeltSource
 import com.fariin.app.ui.components.glassMenuAnchor
 import com.fariin.app.ui.photo.profilePhotoSource
 import androidx.compose.foundation.combinedClickable
@@ -583,6 +584,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
 
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
+    // The photo melts into the camera hole as the page scrolls (ProfileMelt.kt, owner 2026-11-10).
+    val melt = com.fariin.app.ui.components.rememberProfileMelt(pageScroll)
     val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
     // iOS ••• "Change Wallpaper", only from the chat (it goes back there and opens its picker);
     // under Glow Story and a divider when Glow is on, as iOS orders the menu.
@@ -611,7 +614,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(Modifier.fillMaxSize()) {
     com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary)
-        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true, bar = {
+        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true,
+        // No bar behind back and Edit (owner 2026-11-10): the page runs to the top and the photo
+        // melts into the camera hole (ProfileMelt).
+        clear = true, bar = {
         Box(Modifier.graphicsLayer { alpha = chromeAlpha }) {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
@@ -653,7 +659,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             // A tap opens the photo; a hold does too, with a tick (iOS: tap = story when there is one,
             // else the photo; this page has no story ring on Android, so a tap is the photo).
             Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp, onResolved = photo::resolved,
-                modifier = Modifier.profilePhotoSource(photo)
+                modifier = Modifier.profilePhotoSource(photo).then(Modifier.profileMeltSource(melt))
                     .then(if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
                         onLongClickLabel = "View photo", onLongClick = {
                             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
@@ -759,6 +765,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             Spacer(Modifier.height(30.dp))
         }
     }
+    // Over the page, under the menus and the photo viewer: the photo's melting copy.
+    com.fariin.app.ui.components.ProfileMeltOverlay(melt, 100.dp) { Avatar(person?.photoUrl ?: conv?.photos?.get(uid), 100.dp) }
     com.fariin.app.ui.components.GlassMenu(moreOpen, moreAnchor, buildList {
         if (shareProfile != null) add(com.fariin.app.ui.components.GlassMenuItem("Share Profile",
             androidx.compose.ui.res.painterResource(R.drawable.ic_link_share)) { shareProfile() })
