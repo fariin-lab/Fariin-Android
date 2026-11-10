@@ -109,6 +109,7 @@ class RtcEngine(
     var frontCamera = true; private set
     private var acceptChannel: DataChannel? = null
     private var screenCapturer: ScreenCapturerAndroid? = null
+    private var videoSender: livekit.org.webrtc.RtpSender? = null
     private var screenHelper: SurfaceTextureHelper? = null
 
     fun open(servers: List<IceServerSpec>, relayOnly: Boolean, isCaller: Boolean, micOn: Boolean, cameraOn: Boolean): Boolean {
@@ -123,7 +124,7 @@ class RtcEngine(
         videoSource = vs
         localVideo = f.createVideoTrack("video0", vs).also {
             it.setEnabled(cameraOn)
-            conn.addTrack(it, listOf(CallWire.STREAM_ID))
+            videoSender = conn.addTrack(it, listOf(CallWire.STREAM_ID))
         }
         if (cameraOn) startCamera()
         if (isCaller) {
@@ -252,7 +253,15 @@ class RtcEngine(
         return try {
             cap.initialize(helper, context.applicationContext, src.capturerObserver)
             val (w, h) = screenSize()
-            cap.startCapture(w, h, 30)
+            // The screen capture hands over a frame every time the display redraws (90-120 a second
+            // on many phones; its frame-rate argument is ignored), and each one was encoded: the
+            // biggest lag on a mid-range phone (owner 2026-11-10). Big messengers send a screen at
+            // about 15 a second and keep it sharp: drop frames at the source, and under a weak
+            // network give up frames, never sharpness, so text stays readable.
+            val fps = screenFps()
+            src.adaptOutputFormat(w, h, fps)
+            tuneSender(fps, keepSharp = true)
+            cap.startCapture(w, h, fps)
             screenCapturer = cap; screenHelper = helper
             localVideo?.setEnabled(true)   // a voice call's track is disabled until now
             true
@@ -275,16 +284,36 @@ class RtcEngine(
             try { cap.dispose() } catch (_: Exception) {}
             screenHelper?.dispose()
             screenCapturer = null; screenHelper = null
+            // Back to the camera's own size and rate.
+            videoSource?.adaptOutputFormat(1280, 720, 30)
+            tuneSender(null, keepSharp = false)
             localVideo?.setEnabled(camera)
             if (camera) startCamera()
         }
     }
 
-    /** The display at most 1280 on its long side, even numbers (iOS shares at 720p-class too). */
+    /** Screen frames a second: 15, or 10 on a low-end phone. */
+    private fun screenFps(): Int =
+        if (com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.LOW) 10 else 15
+
+    /** The video sender's frame cap and what it gives up first when the network is weak. */
+    private fun tuneSender(fps: Int?, keepSharp: Boolean) {
+        val s = videoSender ?: return
+        try {
+            val p = s.parameters
+            p.degradationPreference = if (keepSharp) livekit.org.webrtc.RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
+                else livekit.org.webrtc.RtpParameters.DegradationPreference.BALANCED
+            p.encodings.forEach { it.maxFramerate = fps }
+            s.parameters = p
+        } catch (e: Exception) { Log.w(TAG, "sender tune failed", e) }
+    }
+
+    /** The display at most 1280 on its long side (960 below a high-end phone), even numbers. */
     private fun screenSize(): Pair<Int, Int> {
         val m = context.resources.displayMetrics
         val long = maxOf(m.widthPixels, m.heightPixels).coerceAtLeast(1)
-        val k = minOf(1f, 1280f / long)
+        val cap = if (com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.HIGH) 1280f else 960f
+        val k = minOf(1f, cap / long)
         fun even(v: Float) = (v.toInt() / 2 * 2).coerceAtLeast(2)
         return even(m.widthPixels * k) to even(m.heightPixels * k)
     }
