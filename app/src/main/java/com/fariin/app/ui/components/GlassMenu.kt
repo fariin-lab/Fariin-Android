@@ -115,7 +115,8 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         // ~280 ms with a small overshoot, back into the button ~200 ms. Ours was a slow spring that
         // showed an empty box for 100 ms and drifted for 400 ms after.
         if (open) { closing = false; shown = true; grow.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 420f)) }
-        else if (shown) { closing = true; grow.animateTo(0f, spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.01f)); shown = false }
+        else if (shown) { closing = true; grow.animateTo(0f, androidx.compose.animation.core.tween(220,
+            easing = androidx.compose.animation.core.CubicBezierEasing(0.4f, 0f, 0.2f, 1f))); shown = false }
     }
     if (!shown) return
     BackHandler { onDismiss() }
@@ -176,7 +177,9 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     val ky = k.coerceAtLeast(0f)
                     scaleX = (sx + (1f - sx) * kx) * (1f + 0.025f * lean.value)
                     scaleY = (sy + (1f - sy) * ky) * (1f - 0.015f * lean.value)
-                    alpha = (k * 6f).coerceIn(0f, 1f)   // only the last bit of the fold fades
+                    // Only the last bit of the fold fades; closing, the last quarter, so it goes INTO the
+                    // button instead of sitting on it as a faint box (Pixel video 2026-11-10: 6 frames).
+                    alpha = (k * if (closing) 4f else 6f).coerceIn(0f, 1f)
                     transformOrigin = TransformOrigin(px, py)
                     shadowElevation = 18.dp.toPx() * k
                     this.shape = shape; clip = true
