@@ -126,8 +126,10 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
             // A soft page-colour veil over the blur (owner 2026-11-10: a photo blurred under the header
-            // still looked busy), so the header reads calm over any picture.
-            tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.55f)))
+            // still looked busy), so the header reads calm over any picture. Not over a wallpaper: the
+            // page colour laid on a dark wallpaper made a pale band (owner's photo, kream's chat); there
+            // the blurred wallpaper itself is the header's ground, as before.
+            tints = if (walled) emptyList() else listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.55f)))
             // A third-size copy: full size doubled the GPU time of every frame of a page slide on the
             // Pixel 5 (18-24 ms against an 11 ms budget). The single sharp frames seen with it went with
             // the pages' move to placement (PageFrame) and the edge's 250 ms off-delay.
