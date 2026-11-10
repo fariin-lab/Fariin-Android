@@ -93,6 +93,10 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     val bias by ChannelFollows.biasFlow.collectAsState()
     // Design A (owner 2026-11-10, iOS find-channels-a): search under the title, always shown.
     var query by remember { mutableStateOf("") }
+    // A keyboard left up by the page this came from (the chat search, owner 2026-11-10) goes down.
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(Unit) { focus.clearFocus(force = true); keyboard?.hide() }
     LaunchedEffect(Unit) {
         try { rows = ChannelService.discover().also { FindChannelsCache.rows = it }; failed = false } catch (_: Exception) { failed = true }
         loading = false
