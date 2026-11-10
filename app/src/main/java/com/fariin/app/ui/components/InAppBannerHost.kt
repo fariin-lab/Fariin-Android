@@ -8,6 +8,7 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -71,11 +72,12 @@ fun InAppBannerHost() {
         AnimatedContent(
             targetState = banner,
             transitionSpec = {
-                (slideInVertically(tween(300)) { -it * 2 } + fadeIn(tween(200)))
+                // The drop itself is Arrive's (its own clock); here only a short fade in.
+                fadeIn(tween(120))
                     .togetherWith(slideOutVertically(tween(300)) { -it * 2 } + fadeOut(tween(250)))
             },
             label = "inAppBanner",
-        ) { b -> if (b != null) Card(b) }
+        ) { b -> if (b != null) Arrive(b) { Card(b) } }
     }
 }
 
@@ -142,3 +144,27 @@ private fun Card(b: InAppBanner) {
         }
     }
 }
+
+/**
+ * The banner's drop from above on its own clock (owner 2026-11-10: "comes raw", iOS slides in
+ * clean): at most one 60 Hz frame of progress per frame drawn, so a heavy first frame (the face
+ * loading, the app busy with the message) delays the drop instead of skipping it.
+ */
+@Composable
+private fun Arrive(key: Any, content: @Composable () -> Unit) {
+    val y = remember(key) { androidx.compose.runtime.mutableFloatStateOf(if (com.fariin.app.ui.components.Motion.on) 1f else 0f) }
+    LaunchedEffect(key) {
+        if (y.floatValue == 0f) return@LaunchedEffect
+        var last = androidx.compose.runtime.withFrameNanos { it }; var v = 0f
+        while (v < ARRIVE_MS) {
+            val t = androidx.compose.runtime.withFrameNanos { it }
+            val gap = (t - last) / 1_000_000f; last = t
+            v += if (gap > 25f) 6f else gap.coerceAtMost(17f)
+            y.floatValue = 1f - com.fariin.app.ui.components.Motion.PageEase.transform((v / ARRIVE_MS).coerceAtMost(1f))
+        }
+        y.floatValue = 0f
+    }
+    Box(Modifier.graphicsLayer { translationY = -y.floatValue * (size.height + 40.dp.toPx()) }) { content() }
+}
+
+private const val ARRIVE_MS = 320f

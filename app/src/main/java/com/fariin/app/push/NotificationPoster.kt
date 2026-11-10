@@ -121,8 +121,22 @@ object NotificationPoster {
             return
         }
 
+        // A channel post (owner 2026-11-10: "it looks like somebody sent me a 1:1 message"): not a
+        // conversation (Android crops a conversation's face to a circle and offers Reply, which a
+        // follower cannot), but the channel's own notification: its name, the post, its rounded-
+        // square photo, and only Mark as Read.
+        if (spec.isChannel) {
+            b.setContentTitle(spec.title)
+                .setContentText(spec.line)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(spec.line))
+                .setLargeIcon(circle(senderPhoto, group = false, squircle = true))
+            if (spec.opensChat && me.isNotEmpty()) b.addAction(NotifActions.readAction(c, spec.key, me))
+            nmc.notify(spec.key, ID, b.build())
+            return
+        }
+
         // A channel's face is its rounded square (owner 2026-11-10), as on its row and its page.
-        val channelChat = com.fariin.app.data.CryptoHub.listedConversation(spec.key)?.isChannel == true ||
+        val channelChat = spec.isChannel || com.fariin.app.data.CryptoHub.listedConversation(spec.key)?.isChannel == true ||
             com.fariin.app.channel.ChannelFollows.docs.value[spec.key]?.get("channel") == true
         val senderIcon = IconCompat.createWithBitmap(circle(senderPhoto, group = false, squircle = channelChat && !spec.isGroup))
         val sender = Person.Builder().setName(spec.senderName).setKey(spec.senderUid).setIcon(senderIcon).build()

@@ -29,6 +29,8 @@ data class PushData(
     val type: String?,
     val title: String,
     val body: String,
+    /** A channel post (server channelFanout: data `channel: "1"`, `aid` = the channel itself). */
+    val isChannel: Boolean = false,
 ) {
     companion object {
         fun parse(data: Map<String, String>, notifTitle: String? = null, notifBody: String? = null): PushData {
@@ -49,6 +51,7 @@ data class PushData(
                 type = s("type"),
                 title = notifTitle?.takeIf { it.isNotEmpty() } ?: s("t") ?: "Fariin",
                 body = notifBody?.takeIf { it.isNotEmpty() } ?: s("b") ?: "New message",
+                isChannel = data["channel"] == "1",
             )
         }
     }
@@ -93,6 +96,8 @@ data class NotifSpec(
     val groupPhoto: String?,
     val mid: String?,
     val expiresAtMs: Long?,
+    /** A channel post: drawn as the channel's, not as a person's conversation (NotificationPoster). */
+    val isChannel: Boolean = false,
 )
 
 sealed class NotifDecision {
@@ -203,7 +208,7 @@ object NotifBuilder {
             senderUid = sender, senderName = shownSender, isGroup = p.isGroup,
             groupName = if (p.isGroup) groupName else null,
             senderPhoto = senderPhoto, groupPhoto = if (p.isGroup) chat?.photo else null,
-            mid = p.mid, expiresAtMs = p.expiresAtMs,
+            mid = p.mid, expiresAtMs = p.expiresAtMs, isChannel = p.isChannel,
         ))
     }
 }
