@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The back button's chevron (owner 2026-11-10: small and thin next to iOS). Our own drawing in the
+     iOS back style: taller (17 of 24) and heavier than ic_sf_chevron_left, which other rows keep.
+     Its centre sits a little left of the middle, so it reads centred in the round button. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M15.25,3.5L7,12L15.25,20.5"
+        android:strokeColor="#FF000000" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

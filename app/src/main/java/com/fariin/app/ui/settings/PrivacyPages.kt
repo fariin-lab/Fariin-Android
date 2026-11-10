@@ -330,6 +330,20 @@ internal fun PersonRow(name: String, photo: String?, sub: String? = null, last: 
     }
 }
 
+/**
+ * iOS ChatPinPage.syncMessagesMode (owner 2026-11-05): a key that exists means the Messages mode is
+ * the key mode ("People who know my key"); no key means it is not. Run after a key is made or removed.
+ */
+internal suspend fun syncMessagesMode(keyExists: Boolean) {
+    val mode = PrivacyRules.audience(PrivacySettings.map.value, "messages")
+    if (keyExists) {
+        if (!com.fariin.app.data.MsgPolicy.chatKeyVisible || mode == Audience.CONTACTS) return
+        PrivacySettings.setAudience("messages", Audience.CONTACTS)
+    } else if (mode == Audience.CONTACTS) {
+        PrivacySettings.setAudience("messages", Audience.EVERYONE)
+    }
+}
+
 /** iOS MessagesPrivacyPage: who can contact me by username, the Chat Key row, the two switches. */
 @Composable
 private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
@@ -338,6 +352,8 @@ private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var explain by remember { mutableStateOf(false) }
     var keySet by remember { mutableStateOf(ChatKey.cachedSet()) }
+    // Leaving the key mode removes the key (iOS, owner 2026-11-02): asked first, nothing changes on Cancel.
+    var confirmRemoveKey by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val s = ChatKey.status()
         if (s != null) keySet = s
@@ -352,6 +368,9 @@ private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
         SettingsSection(header = "Who can contact me by username", footer = "Who new people can message. Your chats are never affected.") {
             for (a in PrivacyRules.options("messages")) CheckRow(a.label("messages"), a == sel, last = a == Audience.CONTACTS) {
                 if (a == Audience.CONTACTS && keySet != true) { explain = true; return@CheckRow }
+                if (a == Audience.EVERYONE && sel == Audience.CONTACTS && keySet == true && com.fariin.app.data.MsgPolicy.chatKeyVisible) {
+                    confirmRemoveKey = true; return@CheckRow
+                }
                 scope.launch { error = PrivacySettings.setAudience("messages", a) }
             }
         }
@@ -370,6 +389,17 @@ private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
         ChatKey.makeThenKeyOnly = true
         push(PAGE_CHAT_KEY)
     }
+    // Everyone while the key mode is on: the key goes first, on the server, then the setting.
+    if (confirmRemoveKey) com.fariin.app.ui.people.PersonConfirmSheet(null, "", "Are you sure you want to remove your Chat Key?",
+        "Anyone will be able to message you, and your Chat Key will stop working.",
+        listOf(com.fariin.app.ui.people.PersonAction("Remove") {
+            try {
+                ChatKey.remove(); keySet = false
+                error = PrivacySettings.setAudience("messages", Audience.EVERYONE)
+            } catch (e: Exception) { error = "Couldn't remove your Chat Key. ${e.message ?: ""}".trim() }
+            true
+        }),
+        onDismiss = { confirmRemoveKey = false }, face = false)
 }
 
 /**
@@ -489,7 +519,7 @@ internal fun ChatKeyPage(pop: () -> Unit) {
             }
         }
     }
-    if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { pin = ChatKey.generate(); set = true } }
+    if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { pin = ChatKey.generate(); set = true; syncMessagesMode(true) } }
     // The contact page's bottom sheet (no photo: it is my own key). Same work as run(), awaited so the
     // button spins; a failure still shows on the page.
     suspend fun runNow(done: String, work: suspend () -> Unit): Boolean {
@@ -500,10 +530,10 @@ internal fun ChatKeyPage(pop: () -> Unit) {
         return ok
     }
     if (confirmReset) com.fariin.app.ui.people.PersonConfirmSheet(null, "", "Reset your Chat Key?", "You'll get a new key and the old one will stop working.",
-        listOf(com.fariin.app.ui.people.PersonAction("Reset") { runNow("Your new Chat Key is ready") { pin = ChatKey.generate(); set = true } }),
+        listOf(com.fariin.app.ui.people.PersonAction("Reset") { runNow("Your new Chat Key is ready") { pin = ChatKey.generate(); set = true; syncMessagesMode(true) } }),
         onDismiss = { confirmReset = false }, face = false)
     if (confirmRemove) com.fariin.app.ui.people.PersonConfirmSheet(null, "", "Remove your Chat Key?", "Nobody will be able to use it to message you. People who already did stay in your chats.",
-        listOf(com.fariin.app.ui.people.PersonAction("Remove") { runNow("Chat Key removed") { ChatKey.remove(); set = false; pin = null } }),
+        listOf(com.fariin.app.ui.people.PersonAction("Remove") { runNow("Chat Key removed") { ChatKey.remove(); set = false; pin = null; syncMessagesMode(false) } }),
         onDismiss = { confirmRemove = false }, face = false)
 }
 

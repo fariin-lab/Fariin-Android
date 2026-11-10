@@ -89,6 +89,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     val justFollowed = remember { mutableStateListOf<String>() }
     val entries by ChannelFollows.entries.collectAsState()
     val bias by ChannelFollows.biasFlow.collectAsState()
+    // Design A (owner 2026-11-10, iOS find-channels-a): search under the title, always shown.
+    var query by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         try { rows = ChannelService.discover(); failed = false } catch (_: Exception) { failed = true }
         loading = false
@@ -97,15 +99,35 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
         com.fariin.app.ui.components.FloatingBarPage("Find Channels", onBack, page = c.bgSecondary) { top ->
             androidx.compose.foundation.layout.Spacer(Modifier.height(top))
+            com.fariin.app.ui.people.SearchField(query, "Search") { query = it }
+            // Name or @handle of the loaded channels.
+            val q = query.trim().removePrefix("@")
+            val shown = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
             when {
-                loading && rows.isEmpty() -> com.fariin.app.ui.components.LoadingRow(Modifier.padding(vertical = 14.dp))
+                loading && rows.isEmpty() -> Column(Modifier.padding(top = 4.dp)) {
+                    // Skeleton rows in the real rows' shape: a round 52 photo, a name, a count.
+                    repeat(6) { i ->
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            com.fariin.app.ui.components.SkeletonCircle(52.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                com.fariin.app.ui.components.SkeletonBlock(listOf(130, 100, 160, 115)[i % 4].dp, 14.dp)
+                                Spacer(Modifier.height(8.dp))
+                                com.fariin.app.ui.components.SkeletonBlock(80.dp, 11.dp)
+                            }
+                        }
+                    }
+                }
                 failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
                 rows.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
+                shown.isEmpty() -> Note("No channels match “${query.trim()}”.")
                 else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                     item {
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {
-                            rows.forEachIndexed { i, r ->
-                                if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 76.dp))
+                        // A plain list: no card, no footer (design A).
+                        Column {
+                            shown.forEachIndexed { i, r ->
+                                // The line starts under the name, not under the photo.
+                                if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 80.dp))
                                 @Suppress("UNUSED_VARIABLE") val b = bias.size
                                 val mine = entries.containsKey(r.cid) || justFollowed.contains(r.cid)
                                 DiscoverRow(r, mine, onOpen = { onOpen(r.cid) }) {
@@ -118,8 +140,6 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                                 }
                             }
                         }
-                        Text("Public channels anyone can follow. Only their admins post. Active channels from your country come first.",
-                            fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp))
                     }
                 }
             }
@@ -137,7 +157,7 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(r.photoUrl, 48.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
+            Avatar(r.photoUrl, 52.dp, squircle = false, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -153,15 +173,13 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
                     }
                 }
                 Text(ChannelRules.followersLine(ChannelFollows.adjusted(r.cid, r.followerCount)), fontSize = 15.sp, color = c.secondary)
-                if (r.description.isNotEmpty()) {
-                    Text(r.description, fontSize = 15.sp, color = c.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
             }
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.height(32.dp).clip(CircleShape).background(if (mine) c.bgSecondary else c.accent)
-                .clickable(enabled = !mine, onClick = onFollow).padding(horizontal = 14.dp),
+            // Solid action capsule (black light / white dark); once following, a grey capsule, not tappable.
+            Modifier.height(34.dp).clip(CircleShape).background(if (mine) c.fieldFill else c.accent)
+                .clickable(enabled = !mine, onClick = onFollow).padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center,
         ) { Text(if (mine) "Following" else "Follow", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (mine) c.secondary else c.onAccent) }
     }

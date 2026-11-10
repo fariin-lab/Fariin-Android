@@ -60,6 +60,7 @@ object AppFeatures {
     /** Saves the server's switches for the next open. A missing document or an error leaves the
      *  saved values alone: a dropped listener is no reason to undo the owner's last choice. */
     fun start() {
+        MyLanguage.sync()
         reg?.remove()
         reg = FirebaseFirestore.getInstance().collection("config").document("features")
             .addSnapshotListener { snap, _ ->
@@ -89,6 +90,28 @@ object AppFeatures {
  * leave the pickers at once; a chat or user already using one keeps it and keeps drawing it. Ids the
  * build does not know are ignored by [visible], which only ever removes.
  */
+/**
+ * The phone's language on my profile (iOS ProfileStore.syncMyLanguage, owner 2026-10-26: for Group
+ * Statistics). `users/{me}.lang`, a 2-letter code, written once per launch and only when it differs
+ * from what the server holds, read fresh first so a cached copy never causes a write.
+ */
+object MyLanguage {
+    @Volatile private var doneFor: String? = null
+    fun sync() {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (doneFor == uid) return
+        doneFor = uid
+        val code = java.util.Locale.getDefault().language.lowercase()
+        if (code.length != 2) return
+        val ref = FirebaseFirestore.getInstance().collection("users").document(uid)
+        ref.get(com.google.firebase.firestore.Source.SERVER).addOnSuccessListener { snap ->
+            if (snap.getString("lang") == code) return@addOnSuccessListener
+            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != uid) return@addOnSuccessListener
+            ref.set(mapOf("lang" to code), com.google.firebase.firestore.SetOptions.merge())
+        }
+    }
+}
+
 object HiddenLooks {
     private const val FILE = "hidden_looks"
     private const val WALLS = "walls.v1"

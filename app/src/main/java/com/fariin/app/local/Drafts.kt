@@ -45,6 +45,8 @@ object Drafts {
     }
 
     fun text(cid: String): String = _map.value[cid] ?: ""
+    /** Chats holding a draft, for the Log Out warning (iOS unsentSummary). */
+    fun count(): Int = _map.value.values.count { it.isNotBlank() }
 
     fun set(cid: String, text: String) {
         val t = text.trim()

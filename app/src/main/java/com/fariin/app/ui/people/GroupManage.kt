@@ -1433,13 +1433,16 @@ private fun TagEditorSheet(cid: String, me: String, uid: String, name: String, c
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf(current?.text ?: "") }
     var color by remember { mutableStateOf(current?.color) }
+    // The emoji in front of the tag (iOS RoleEditorView "Role Emoji"): pick, change or remove.
+    var emoji by remember { mutableStateOf(current?.emoji) }
+    var pickingEmoji by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     val clean = com.fariin.app.data.GroupRole.clean(text)
-    val changed = clean != (current?.text ?: "") || (clean.isNotEmpty() && color != current?.color)
+    val changed = clean != (current?.text ?: "") || (clean.isNotEmpty() && (color != current?.color || emoji != current?.emoji))
     fun write(words: String) {
         busy = true
         scope.launch {
-            val ok = runCatching { com.fariin.app.data.GroupRole.set(cid, me, uid, words, current?.emoji, color) }.isSuccess
+            val ok = runCatching { com.fariin.app.data.GroupRole.set(cid, me, uid, words, if (words.isEmpty()) null else emoji, color) }.isSuccess
             busy = false
             if (ok) onDone() else com.fariin.app.ui.components.Snack.show("Could not save the tag. Try again.")
         }
@@ -1454,9 +1457,14 @@ private fun TagEditorSheet(cid: String, me: String, uid: String, name: String, c
             }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).padding(horizontal = 14.dp)) {
                 Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker), null, tint = c.secondary, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    current?.emoji?.let { Text(it, fontSize = 17.sp); Spacer(Modifier.width(6.dp)) }
+                    // A smiley to add one, the emoji itself once picked; a tap opens the picker.
+                    Box(Modifier.size(32.dp).clip(CircleShape).clickable(enabled = !busy, onClickLabel = "Role Emoji") { pickingEmoji = true },
+                        contentAlignment = Alignment.Center) {
+                        val e = emoji
+                        if (e != null) Text(e, fontSize = 22.sp)
+                        else Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sticker), null, tint = c.secondary, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
                     androidx.compose.foundation.text.BasicTextField(text,
                         { v -> text = com.fariin.app.data.GroupRole.fit(v, com.fariin.app.data.GroupRole.MAX_TEXT) },
                         singleLine = true, enabled = !busy,
@@ -1477,11 +1485,52 @@ private fun TagEditorSheet(cid: String, me: String, uid: String, name: String, c
                     }
                 }
             }
+            // Live preview: the tag as it will sit next to the name.
+            if (clean.isNotEmpty()) {
+                val tint = Color(0xFF000000 or (com.fariin.app.data.GroupRole.colors.firstOrNull { it.first == (color ?: "grey") }?.second ?: 0x8E8E93L))
+                Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                    Spacer(Modifier.width(8.dp))
+                    Text((emoji?.let { "$it " } ?: "") + clean, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = tint,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(tint.copy(alpha = 0.14f)).padding(horizontal = 8.dp, vertical = 3.dp))
+                }
+            }
             Text("A short word next to the name in this group, like Host or Teacher. Everyone in the group sees it.",
                 fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 4.dp))
             if (current != null) SettingsSection {
                 SettingsRow("Remove Tag", titleColor = c.red, trailing = Trailing.NONE, last = true) { if (!busy) write("") }
             }
         }
+    }
+    if (pickingEmoji) RoleEmojiSheet(hasEmoji = emoji != null, onPick = { emoji = it; pickingEmoji = false },
+        onRemove = { emoji = null; pickingEmoji = false }, onDismiss = { pickingEmoji = false })
+}
+
+/** Emoji that read well beside a name (iOS RoleEditorView uses the full picker; a short set here). */
+private val RoleEmojis = listOf(
+    "👑", "⭐", "🌟", "🔥", "💎", "🏆", "🎖️", "🛡️", "⚡", "🎓", "📚", "✏️",
+    "🎤", "🎧", "🎨", "📷", "🎬", "🎮", "⚽", "🏀", "💻", "🧠", "💡", "🔧",
+    "🩺", "⚖️", "📢", "📰", "🤝", "❤️", "💙", "💚", "😎", "🤖", "👋", "🙏",
+    "🕌", "📿", "🌙", "☀️", "🌍", "🇸🇴", "🚀", "💼", "💰", "📈", "🍀", "✅",
+)
+
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun RoleEmojiSheet(hasEmoji: Boolean, onPick: (String) -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
+    val c = Fariin.colors
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss,
+        containerColor = com.fariin.app.ui.components.sheetFill, shape = com.fariin.app.ui.components.SheetShape) {
+        Text("Role Emoji", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(androidx.compose.foundation.lazy.grid.GridCells.Adaptive(52.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            items(RoleEmojis.size) { i ->
+                val e = RoleEmojis[i]
+                Box(Modifier.size(52.dp).clip(CircleShape).clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 28.sp) }
+            }
+        }
+        if (hasEmoji) SettingsSection {
+            SettingsRow("Remove Emoji", titleColor = c.red, trailing = Trailing.NONE, last = true) { onRemove() }
+        } else Spacer(Modifier.height(24.dp))
     }
 }

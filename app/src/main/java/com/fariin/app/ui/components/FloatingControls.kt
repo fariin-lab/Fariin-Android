@@ -86,8 +86,9 @@ fun FloatingBack(onBack: () -> Unit, modifier: Modifier = Modifier, contentDescr
     val close = LocalBackIsClose.current
     IconButton(onClick = onBack, modifier = modifier.size(44.dp).then(if (circle || glassBar()) Modifier.floating() else Modifier)) {
         if (close) Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(18.dp))
-        else Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = contentDescription, tint = c.label,
-            modifier = Modifier.padding(start = 6.dp).size(20.dp))
+        // Centred and the iOS size (owner 2026-11-10: it was 20 dp pushed 6 dp right, small and thin).
+        else Icon(ImageVector.vectorResource(R.drawable.ic_back_chevron), contentDescription = contentDescription, tint = c.label,
+            modifier = Modifier.size(24.dp))
     }
 }
 
