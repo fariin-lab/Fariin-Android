@@ -134,11 +134,15 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         // The page dims a little under the menu, as the reference (about 10 %).
         .drawBehind { drawRect(Color.Black.copy(alpha = (if (c.dark) 0.2f else 0.1f) * grow.value.coerceIn(0f, 1f))) }
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() }) {
-        // Open OVER the button, its top right on the button's top right, as the reference: the
-        // button's circle becomes the menu. Kept on screen.
+        // Open UNDER the button, growing out of it, so the button and its neighbours stay seen (owner
+        // 2026-11-10: over the button it hid the profile's Video, Mute and Search). No room under:
+        // above it instead.
         val left = (src.right - origin.x - menuW).coerceAtLeast(margin)
         val screenH = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
-        val top = (src.top - origin.y).coerceAtMost(screenH - size.height - margin * 2).coerceAtLeast(margin)
+        val gap = with(density) { 8.dp.toPx() }
+        val below = src.bottom - origin.y + gap
+        val top = (if (size.height > 0 && below + size.height > screenH - margin) src.top - origin.y - gap - size.height else below)
+            .coerceAtLeast(margin)
         val g = grow.value.coerceIn(0f, 1.05f)
         val h = size.height.toFloat()
         // The box flies from the button's circle to the menu's place, its corners from round to 28.
