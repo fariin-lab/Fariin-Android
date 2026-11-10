@@ -76,6 +76,10 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val typingLine = if (receipts.iBlocked) null else MessageRules.liveLine(typingMap, me, conv?.isGroup == true,
         com.fariin.app.data.PrivacySettings.typingIndicators(), typingNow) { conv?.names?.get(it) }
     val unreadAtOpen = remember(cid) { CryptoHub.listedConversation(cid)?.unread(me) ?: 0 }
+    // The divider's count for this whole visit (owner 2026-11-10: "shows, then goes away"). Coming back
+    // from a profile or a photo builds the chat again, and by then the count is 0 because it was read;
+    // saved with the page, the line stays where it was. The scroll still restores the reader's place.
+    val dividerAt = androidx.compose.runtime.saveable.rememberSaveable(cid) { mutableStateOf(unreadAtOpen) }
     // Online / last seen for a 1:1 (iOS ThreadView subtitle), redrawn each minute so "5 min. ago" moves.
     var minute by remember { mutableStateOf(0) }
     LaunchedEffect(cid) { while (true) { delay(60_000); minute++ } }
@@ -140,6 +144,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         }?.toMap() ?: emptyMap(),
         myPhoto = conv?.photos?.get(me),
         unreadAtOpen = unreadAtOpen,
+        dividerAt = dividerAt.value,
         channel = channel,
         channelWaiting = channel == null && com.fariin.app.ui.channels.ChannelGuestPreviews.waiting(cid, me, channelDoc),
         pinnedIds = com.fariin.app.data.PinRules.pinnedIds(s.conv),

@@ -168,6 +168,8 @@ data class ThreadUi(
     val myPhoto: String? = null,
     /** My unread count when the chat opened, which places the "Unread Messages" divider. */
     val unreadAtOpen: Int = 0,
+    /** The divider's count, kept for the whole visit (back from a profile it is no longer re-read as 0). */
+    val dividerAt: Int = 0,
     /** A channel: posts drawn as the channel speaking, views, counts-only reactions, follower bar. */
     val channel: com.fariin.app.ui.channels.ChannelThreadUi? = null,
     /** A chat that may be a channel I visit, its answer not back yet: drawn as a loading ring. */
@@ -531,7 +533,7 @@ private fun ThreadContent(
     // Counted only on the server's first answer: the phone's saved copy can lack the very messages
     // that are unread, and counting back through it put the divider on old, read rows.
     val dividerId = remember(ui.loaded && ui.synced) {
-        if (ui.loaded && ui.synced) MessageRules.unreadDividerId(ui.messages, ui.me, ui.unreadAtOpen) else null
+        if (ui.loaded && ui.synced) MessageRules.unreadDividerId(ui.messages, ui.me, ui.dividerAt) else null
     }
     // At the bottom = the newest row in view (the list is reversed). Read receipts follow it.
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
