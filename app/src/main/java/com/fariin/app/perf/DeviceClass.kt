@@ -65,6 +65,13 @@ object DeviceClass {
     /** The saved class, measuring once when there is none. Cheap after the first call. */
     fun get(context: Context): PerfClass {
         cached?.let { return it }
+        // The Pixel test build only: a file the developer writes over adb makes this phone act as a
+        // weaker class, to measure what a cheap phone gets (owner 2026-11-10, a friend's Nubia lagged).
+        if (context.resources.getBoolean(com.fariin.app.R.bool.fariin_debug_appcheck)) {
+            val f = java.io.File(context.getExternalFilesDir(null), "perf_class")
+            val forced = runCatching { if (f.exists()) PerfClass.valueOf(f.readText().trim()) else null }.getOrNull()
+            if (forced != null) { cached = forced; return forced }
+        }
         val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val saved = p.getString(KEY, null)?.let { runCatching { PerfClass.valueOf(it) }.getOrNull() }
         if (saved != null && p.getInt(KEY_VERSION, 0) == RULES_VERSION) {

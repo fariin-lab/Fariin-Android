@@ -33,7 +33,9 @@ data class PowerState(
 ) {
     private val saving get() = choices.followBatterySaver && batterySaverOn
     val blur get() = choices.blur && !saving
-    val animations get() = choices.animations && !saving
+    /** Always on (owner 2026-11-10: "remove this, make it something users can't control"): with it off
+     *  the app had no motion at all and looked broken, and cheap phones started that way. */
+    val animations get() = true
     val autoplayVideos get() = choices.autoplayVideos && !saving
     val autoplayGifs get() = choices.autoplayGifs && !saving
     /** Real glass (background blur) only on Android 12+, a phone that is not LOW, and blur allowed. */
