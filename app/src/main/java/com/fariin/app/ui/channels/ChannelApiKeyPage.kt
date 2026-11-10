@@ -71,8 +71,6 @@ object ChannelApiKey {
     val MAKERS = setOf(
         "SVf0zxDVZzO8oLbGvM150QWgIWd2",   // @v
         "a74hUgOoNYOmxMDoNCWI4nO81xH3",   // @kream
-        // TEMPORARY (owner 2026-11-10): @roodo, the test Pixel's account. REMOVE after the test.
-        "xOAiiGNxpff1r2Clfrru2gdrUW13",   // @roodo
     )
     const val ENDPOINT = "https://me-central1-kulan-2ef85.cloudfunctions.net/channelApi"
 
