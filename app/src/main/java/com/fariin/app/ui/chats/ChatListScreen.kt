@@ -524,8 +524,15 @@ fun ChatListScreen(
                                 // Explore (owner 2026-11-09): a round glass button with our compass, the one
                                 // way in from the chat list; it opens the same Find Channels page.
                                 // Filled (owner 2026-11-10): black with a white compass, white with a black one in dark.
-                                if (!showArchive) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_compass), contentDescription = "Explore",
-                                    onClick = channels.find, modifier = Modifier.padding(end = 8.dp), tint = c.onAccent, fill = c.accent)
+                                // The same visual size as the search and "..." icons beside it (owner 2026-11-10:
+                                // the 44 dp filled circle looked bigger): a 34 dp disc in a 44 dp tap area.
+                                if (!showArchive) Box(Modifier.padding(end = 8.dp).size(44.dp).clip(CircleShape)
+                                    .clickable(onClickLabel = "Explore", onClick = channels.find), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.size(34.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_sf_compass), contentDescription = "Explore",
+                                            tint = c.onAccent, modifier = Modifier.size(20.dp))
+                                    }
+                                }
                                 if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
