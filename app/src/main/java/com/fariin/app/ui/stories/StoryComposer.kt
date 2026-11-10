@@ -588,7 +588,12 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     val space = frame.space
     val shown = frame.shown
     val strokeMatrix = frame.strokeMatrix
-    val bin = with(density) { Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx()) }
+    // The bin sits ON the picture, 60 dp above its bottom edge (iOS trashCenter: canvas height - 60),
+    // not under it in the black bar (owner 2026-11-10). Before the card is measured, the old spot.
+    val bin = with(density) {
+        if (card.width > 1f) Offset(card.center.x, card.bottom - 60.dp.toPx())
+        else Offset(box.width / 2f, box.height - navBottom - 36.dp.toPx() - 26.dp.toPx())
+    }
     val binSlop = with(density) { 12.dp.toPx() }
     val binSize = with(density) { 52.dp.toPx() }
 
@@ -833,7 +838,10 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                 onCancel = { cancelPen() }, onDone = { closePen(false) }, modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
-        if (dragging) StoryTrash(trashHot, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 36.dp))
+        if (dragging) StoryTrash(trashHot, Modifier.align(Alignment.TopStart).offset {
+            val half = 26.dp.roundToPx()
+            androidx.compose.ui.unit.IntOffset(bin.x.toInt() - half, bin.y.toInt() - half)
+        })
         // Gone while the audience page shows: a caption field left behind kept the keyboard up
         // over Post Story.
         if (chrome && !audience) {

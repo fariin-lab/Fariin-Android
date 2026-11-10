@@ -2,6 +2,8 @@ package com.fariin.app.ui.stories
 
 import androidx.compose.ui.res.vectorResource
 import com.fariin.app.R
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -220,9 +222,9 @@ fun StoryStickerTray(
                     FlowRow(Modifier.fillMaxWidth().padding(bottom = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StickerPill("📍", "Location", Color(0xFFFF453A), NewBadgeSpots.STORY_STICKERS_LOCATION, onPlace)
-                        StickerPill("🔗", "Link", Color(0xFF0A84FF), NewBadgeSpots.STORY_STICKERS_LINK, onLink)
-                        StickerPill("🕒", "Time", Color(0xFFFF9F0A), NewBadgeSpots.STORY_STICKERS_TIME, onTime)
+                        StickerPill(R.drawable.ic_sf_location_fill, "Location", Color(0xFFFF453A), NewBadgeSpots.STORY_STICKERS_LOCATION, onPlace)
+                        StickerPill(R.drawable.ic_sf_link, "Link", Color(0xFF0A84FF), NewBadgeSpots.STORY_STICKERS_LINK, onLink)
+                        StickerPill(R.drawable.ic_sf_clock, "Time", Color(0xFFFF9F0A), NewBadgeSpots.STORY_STICKERS_TIME, onTime)
                     }
                 }
                 if (list.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
@@ -267,12 +269,14 @@ fun StoryStickerTray(
 
 /** iOS actionPill: the symbol in its colour, the word in white, on a capsule. */
 @Composable
-private fun StickerPill(glyph: String, title: String, tint: Color, badge: String, onClick: () -> Unit) {
+private fun StickerPill(icon: Int, title: String, tint: Color, badge: String, onClick: () -> Unit) {
     Box {
-        Row(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(glyph, fontSize = 16.sp, color = tint)
-            Spacer(Modifier.width(6.dp))
+        // iOS actionPill: a glass capsule, the coloured icon (our drawing, not an emoji), white words.
+        Row(Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.14f))
+            .border(0.5.dp, Color.White.copy(alpha = 0.22f), CircleShape).clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(icon), contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
             Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         }
         NewCornerPill(isNew(badge))
