@@ -152,6 +152,21 @@ fun ChatListScreen(
     onRetry: () -> Unit = {},
 ) {
     val c = Fariin.colors
+    // ⛔ LEAVING THIS SCREEN TAKES THE KEYBOARD DOWN (owner 2026-11-10): a chat, channel or Find
+    // Channels opened from the search kept the search's keyboard up over it. When another page
+    // covers this one (its lifecycle pauses), focus is cleared and the keyboard hidden.
+    run {
+        val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+        val fm = androidx.compose.ui.platform.LocalFocusManager.current
+        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        androidx.compose.runtime.DisposableEffect(owner) {
+            val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                if (e == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) { fm.clearFocus(force = true); kb?.hide() }
+            }
+            owner.lifecycle.addObserver(obs)
+            onDispose { owner.lifecycle.removeObserver(obs) }
+        }
+    }
     // Rings on the photos (iOS storyRing): a tap on a ringed photo opens that story, not the chat.
     val storyHidden by com.fariin.app.data.StoryMutes.set.collectAsState()
     var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
