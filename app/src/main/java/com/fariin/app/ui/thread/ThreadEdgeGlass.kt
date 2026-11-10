@@ -99,7 +99,10 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         // there is no band to see. Full strength behind the top of the header, gone 32 dp under it.
         // The wallpaper is inside the list's blur source (ThreadScreen), so it blurs along.
         val heightDp = barDp + 32.dp
-        val solid = (barDp * 0.55f / heightDp).coerceIn(0f, 0.8f)
+        // Full blur under the whole bar, the call buttons' part too, fading only in the 32 dp below
+        // it (owner 2026-11-10: a photo showed clear under the call buttons; the full blur stopped
+        // at 55 % of the bar and faded through its lower half).
+        val solid = (barDp / heightDp).coerceIn(0f, 0.9f)
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.thread
 
+import coil3.gif.repeatCount
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -105,14 +106,19 @@ private fun autoplay(): Boolean = PowerSaving.state.collectAsState().value.autop
 
 /** A Coil request that animates GIF and WebP (Android 9+ decodes both; older phones GIF only). */
 @Composable
-private fun animatedRequest(model: Any?, play: Boolean): ImageRequest {
+private fun animatedRequest(model: Any?, play: Boolean, plays: Int = 0): ImageRequest {
     val ctx = LocalContext.current
-    return remember(model, play) {
+    return remember(model, play, plays) {
         ImageRequest.Builder(ctx).data(model).apply {
             if (play) decoderFactory(if (Build.VERSION.SDK_INT >= 28) coil3.gif.AnimatedImageDecoder.Factory() else coil3.gif.GifDecoder.Factory())
+            // [plays] > 0: that many plays, then the last frame (stickers); 0 = loops (GIFs).
+            if (play && plays > 0) repeatCount(plays - 1)
         }.build()
     }
 }
+
+/** How many times an animated sticker plays each time it appears, then rests (battery). */
+private const val STICKER_PLAYS = 3
 
 /**
  * One sticker's art: this phone's copy of the pack (WebP, or .tgs played by Lottie), else the
@@ -148,13 +154,17 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                 Box(modifier) {
                     json?.let { j ->
                         val comp by rememberLottieComposition(LottieCompositionSpec.JsonString(j), cacheKey = asset)
-                        LottieAnimation(comp, iterations = LottieConstants.IterateForever, isPlaying = play,
-                            modifier = Modifier.fillMaxSize())
+                        // A few plays, then it rests on its last frame (owner 2026-11-10: animated, but not
+                        // eating battery): looping forever kept the CPU drawing as long as the chat
+                        // stayed open. It plays again when it comes back on screen.
+                        val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(comp,
+                            iterations = STICKER_PLAYS, isPlaying = play)
+                        LottieAnimation(comp, { if (play) progress else 0f }, modifier = Modifier.fillMaxSize())
                     }
                 }
             }
         }
-        else -> AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play), contentDescription = null,
+        else -> AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play, plays = STICKER_PLAYS), contentDescription = null,
             contentScale = ContentScale.Fit, modifier = modifier)
     }
 }
