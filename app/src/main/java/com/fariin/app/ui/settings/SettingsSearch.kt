@@ -59,6 +59,9 @@ internal const val PAGE_MY_PROFILE = "settings:myprofile"
  * page that holds it). A row a page hides is not indexed: the same gates as the pages.
  */
 internal object SettingsIndex {
+    /** The account has two-step on (set by the Settings page): only then is it findable, as its row. */
+    @Volatile var hasTwoStep = false
+
     data class Entry(val title: String, val icon: String?, val keywords: String, val page: String,
                      val path: List<String> = emptyList(), val isPage: Boolean = false) {
         val id: String get() = (path + title).joinToString("›")
@@ -97,7 +100,7 @@ internal object SettingsIndex {
         row("Password", acc, "password change set sign in", PAGE_ACCOUNT)
         page("Username", acc, "username handle @ who can find me contact me", PAGE_USERNAME)
         page("Passkeys", acc, "passkeys passkey fingerprint face sign in key", PAGE_PASSKEYS)
-        page("Two-step verification", acc, "two step twostep verification 2fa additional password code security", PAGE_TWOSTEP)
+        if (hasTwoStep) page("Two-step verification", acc, "two step twostep verification 2fa additional password code security", PAGE_TWOSTEP)
         page("Security notifications", acc, "security notifications alerts new login sign in email", PAGE_SEC_NOTIFS)
         row("Sign-in alerts", acc + "Security notifications", "sign in alerts new login email security", PAGE_SEC_NOTIFS)
         row("Your Account Data", acc, "export download account data copy text file", PAGE_ACCOUNT)

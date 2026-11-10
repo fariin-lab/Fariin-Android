@@ -1,5 +1,6 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.Easing
 import dev.chrisbanes.haze.HazeProgressive
@@ -69,7 +70,7 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
         // Mostly blur, a light tint: a colour band is what shows where a bar ends (reference: ~0.4).
         backgroundColor = page; blurRadius = 14.dp; noiseFactor = 0f   // softer: the reference keeps what is under readable (dark-mode compare)
         tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.42f)))
-        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
+        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
         // Solid down the bar, then a long, soft ease to nothing over the tail.
         // A CROSS-FADE, NOT A FADING RADIUS (owner's video 2026-11-08, frame by frame: a letter under
         // the edge came out half blurred, half sharp, cut by a line where the radius changed). The blur
@@ -80,9 +81,22 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
             0.60f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.90f), 0.70f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.66f),
             0.80f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.36f), 0.90f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.12f),
             0.96f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.03f), 1f to androidx.compose.ui.graphics.Color.Transparent)
-    } else androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(
-        0f to page, 0.40f to page, 0.55f to page.copy(alpha = 0.78f), 0.7f to page.copy(alpha = 0.45f),
-        0.84f to page.copy(alpha = 0.18f), 0.94f to page.copy(alpha = 0.05f), 1f to page.copy(alpha = 0f))))
+    } else androidx.compose.ui.Modifier.drawBehind {
+        // No glass (a cheap phone, Battery Saver, blur off). Owner 2026-11-10, cheap-phone check: the
+        // fade began 40 % down the bar, so a chat's photo showed through under the title. Now solid
+        // through the whole bar and eased away only over the tail below it.
+        val t = tail.toPx().coerceAtMost(size.height)
+        val start = ((size.height - t) / size.height).coerceIn(0f, 1f)
+        val n = 8
+        val stops = Array(n + 2) { i ->
+            if (i == 0) 0f to page
+            else {
+                val x = (i - 1).toFloat() / n
+                (start + (1f - start) * x) to page.copy(alpha = page.alpha * (1f - x * x * (3f - 2f * x)))
+            }
+        }
+        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(*stops, startY = 0f, endY = size.height))
+    })
     // The blur fades at its own top edge, so the screen's first pixels let the page show through sharp
     // (owner's photo of the physical screen 2026-11-08; a screenshot does not catch it). A band of the
     // page colour, solid at the very top and gone 10 dp down, covers that edge.

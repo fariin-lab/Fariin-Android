@@ -33,7 +33,9 @@ data class PowerState(
 ) {
     private val saving get() = choices.followBatterySaver && batterySaverOn
     val blur get() = choices.blur && !saving
-    val animations get() = choices.animations && !saving
+    /** Always on (owner 2026-11-10: "remove this, make it something users can't control"): with it off
+     *  the app had no motion at all and looked broken, and cheap phones started that way. */
+    val animations get() = true
     val autoplayVideos get() = choices.autoplayVideos && !saving
     val autoplayGifs get() = choices.autoplayGifs && !saving
     /** Real glass (background blur) only on Android 12+, a phone that is not LOW, and blur allowed. */
@@ -50,7 +52,10 @@ data class PowerState(
 object PowerRules {
     fun defaults(cls: PerfClass): PowerChoices {
         val on = cls != PerfClass.LOW
-        return PowerChoices(blur = on, animations = on, autoplayVideos = on, autoplayGifs = on, followBatterySaver = true)
+        // Blur starts on only on a high-end phone (owner 2026-11-10: blur goes off by itself on a weak
+        // phone). On the Pixel as a mid-range phone the frosted bars doubled the cost of every frame
+        // of a tab change (24.6 -> 11.8 ms); the switch in Power Saving still turns it on.
+        return PowerChoices(blur = cls == PerfClass.HIGH, animations = on, autoplayVideos = on, autoplayGifs = on, followBatterySaver = true)
     }
     fun glass(sdk: Int, cls: PerfClass, blurAllowed: Boolean) = sdk >= 31 && cls != PerfClass.LOW && blurAllowed
 }

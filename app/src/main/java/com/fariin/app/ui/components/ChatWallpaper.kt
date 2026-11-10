@@ -1,5 +1,7 @@
 package com.fariin.app.ui.components
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -236,7 +238,12 @@ fun DrawScope.drawAnimated(a: AnimatedWallpaper, dark: Boolean, phase: Float, la
     // Read in the draw phase, so a new intensity redraws at once.
     val intensity = AnimatedWallpapers.intensity.intValue
     val full = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt())
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+    // Below a fast phone the look never moves (see rememberWallpaperMotion), so its first frame is all
+    // that is ever shown: the CPU-made still, not the shader. Building the shader on the chat's first
+    // frame took 56-78 ms of drawing on the Pixel as a mid-range phone (2026-11-10, kream's chat),
+    // some 250 ms on one.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        com.fariin.app.perf.PowerSaving.state.value.deviceClass != com.fariin.app.perf.PerfClass.HIGH) {
         drawImage(AnimatedStill.bitmap(a, size.width / size.height, dark, intensity), dstSize = full, filterQuality = FilterQuality.Low)
         return
     }
@@ -337,7 +344,12 @@ fun rememberWallpaperMotion(
     // (owner 2026-11-07: animations must not drain the battery or lag cheap phones). The still
     // picture is the same wallpaper, so nothing looks missing.
     val power = com.fariin.app.perf.rememberPowerState()
-    val moving = animates && power.animations && AnimatedWallpapers.moves(com.fariin.app.ui.thread.systemAnimationsOn()) &&
+    // Held still on a LOW phone, and paused while the chat is scrolled or a panel is open (owner
+    // 2026-11-10, a cheap phone lagged): each wallpaper frame also redraws the glass over it.
+    // Moves only on a fast phone: measured 2026-11-10, each wallpaper frame cost 31 ms of drawing on
+    // the Pixel (the glass over it redrawn too), about 110 ms on a mid-range phone, 15 times a second.
+    val moving = animates && power.deviceClass == com.fariin.app.perf.PerfClass.HIGH && !WallpaperHold.held &&
+        AnimatedWallpapers.moves(com.fariin.app.ui.thread.systemAnimationsOn()) &&
         AnimatedWallpapers.hasMotion(a.look, shaders = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
     val fps = a.fps(preview)
     @Suppress("DEPRECATION") val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -465,4 +477,11 @@ private fun rememberWallpaperPhoto(ctx: android.content.Context, id: String?): a
     return androidx.compose.runtime.produceState(ChatLookStore.cachedImage(id)?.asImageBitmap(), id, ChatLookStore.version.intValue) {
         if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ChatLookStore.libraryImage(app, id) }?.asImageBitmap()
     }.value
+}
+
+/** Pauses a chat's moving wallpaper while its list scrolls or a panel is open (set by ThreadScreen). */
+object WallpaperHold {
+    var scrolling by androidx.compose.runtime.mutableStateOf(false)
+    var panel by androidx.compose.runtime.mutableStateOf(false)
+    val held: Boolean get() = scrolling || panel
 }

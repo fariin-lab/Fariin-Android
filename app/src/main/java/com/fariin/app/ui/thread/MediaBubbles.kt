@@ -311,7 +311,9 @@ internal fun PictureBox(
     Box(
         Modifier.size(wDp.dp, hDp.dp)
             .heroSource(originKey, originRadius, MediaOrigins.rects, MediaOrigins.radii) { MediaOrigins.hiddenKey == originKey }
-            .clip(shape).background(Fariin.colors.secondary.copy(alpha = 0.18f))
+            // The grey card only while nothing is drawn: under a full photo it was one more screen-sized
+            // fill per bubble on scroll (overdraw view, 2026-11-10).
+            .clip(shape).then(if (bmp == null && picked == null) Modifier.background(Fariin.colors.secondary.copy(alpha = 0.18f)) else Modifier)
             .clickable(enabled = bmp != null || pending,
                 onClickLabel = when (fetch?.state) { Fetch.LOADING -> "Cancel download"; Fetch.WAITING -> "Download"; Fetch.FAILED -> "Try again"; else -> "Open" },
                 // A tap that belongs to the download starts, retries or cancels it; it opens only what is here.

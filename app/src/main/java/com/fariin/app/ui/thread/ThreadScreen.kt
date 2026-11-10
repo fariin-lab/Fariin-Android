@@ -291,7 +291,7 @@ fun ThreadScreen(
         run {
             val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
             val appDark = Fariin.colors.dark
-            val flip = headerDark != null && headerDark != appDark && !wallpaperOpen
+            val flip = !CHAT_TOP_SOLID && headerDark != null && headerDark != appDark && !wallpaperOpen
             val barView = androidx.compose.ui.platform.LocalView.current
             androidx.compose.runtime.DisposableEffect(flip, appDark) {
                 val ctl = (barView.context as? android.app.Activity)?.window?.let { androidx.core.view.WindowCompat.getInsetsController(it, barView) }
@@ -748,7 +748,10 @@ private fun ThreadContent(
         ChatReadingPositions.save(ui.cid, key, m.id, listState.firstVisibleItemScrollOffset)
     }
     LaunchedEffect(ui.cid) {
-        snapshotFlow { listState.isScrollInProgress }.collect { if (!it) savePlace() }
+        snapshotFlow { listState.isScrollInProgress }.collect {
+            if (!it) savePlace()
+            com.fariin.app.ui.components.WallpaperHold.scrolling = it
+        }
     }
     DisposableEffect(ui.cid) {
         onDispose { savePlace() }
@@ -938,27 +941,30 @@ private fun ThreadContent(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // The top edge (ThreadEdgeGlass.kt): the page colour, or the wallpaper, laid over the
             // messages through the header and fading out over its last 48 dp.
-            run {
+            if (!CHAT_TOP_SOLID) run {
                 ThreadEdgeGlass(edgeHaze, top = true, barPx = topBarPx, under = olderUnder && !searchList, walled = walled,
                     modifier = Modifier.align(Alignment.TopCenter).zIndex(0.5f))
                 // No bottom strip: iOS took its bottom blur off on the owner's order (2026-08-25, "remove
                 // chat bottom blur, don't touch top header"); messages pass behind the floating composer.
             }
-            if (walled && edgeHaze == null) {
+            if (!CHAT_TOP_SOLID && walled && edgeHaze == null) {
                 // A wallpaper chat on a phone without blur: the wallpaper itself laid over the top at the same stops as the
                 // page colour (ThreadEdgeGlass.kt), so the messages show faintly through it and are
                 // sharp right under the header.
                 Box(Modifier.align(Alignment.TopCenter).zIndex(0.5f).fillMaxWidth()
-                    .height(with(density) { topBarPx.toDp() } + EDGE_FADE)
+                    .height(with(density) { topBarPx.toDp() } + CHEAP_EDGE_FADE)
                     .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
-                        drawRect(edgeAlphaBrush(Color.Black, size.height, EDGE_FADE.toPx()),
+                        drawRect(cheapEdgeBrush(Color.Black, size.height, CHEAP_EDGE_FADE.toPx()),
                             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
                     }
                     .then(com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid)))
             }
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
+                // CHAT_TOP_SOLID: a plain bar in the page colour behind the header (owner 2026-11-10,
+                // pointing at the reference app's solid white header: the blur kept competing).
+                .then(if (CHAT_TOP_SOLID) Modifier.background(Fariin.colors.bg) else Modifier)
                 // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
                 .onSizeChanged { topBarPx = it.height }) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
@@ -971,7 +977,7 @@ private fun ThreadContent(
                     // dark top): the buttons keep the app's own light or dark glass, as the composer does
                     // (owner 2026-11-10: in light mode the back and call buttons turned dark mode's black).
                     val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
-                    val flipped = headerDark != null && headerDark != Fariin.colors.dark
+                    val flipped = !CHAT_TOP_SOLID && headerDark != null && headerDark != Fariin.colors.dark
                     androidx.compose.runtime.CompositionLocalProvider(LocalHeaderWordsDark provides if (flipped) headerDark else null) {
                         Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
                     }
@@ -2545,6 +2551,8 @@ private fun Composer(
     // camera and the sticker button inside, and a 40 glass circle that is the mic until there are
     // words, then Send. No bar behind them: the chat's bottom edge strip (ThreadEdgeGlass) is that.
     var emojiOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(emojiOpen) { com.fariin.app.ui.components.WallpaperHold.panel = emojiOpen }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { com.fariin.app.ui.components.WallpaperHold.panel = false; com.fariin.app.ui.components.WallpaperHold.scrolling = false } }
     // The panel is closing because the keyboard is coming (its own motion, the panel goes at once).
     var panelToKeys by remember { mutableStateOf(false) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -3064,10 +3072,13 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
                 else reserve.snapTo(0f)
         }
     }
-    val panelH = with(density) { (full - restPx).coerceAtLeast(0).toDp() }
+    // The panel runs on under the composer's resting gap to the screen's bottom edge (owner
+    // 2026-11-10, the reference app: no empty strip of wallpaper under it); its controls keep clear
+    // of the gesture bar themselves.
+    val panelH = with(density) { full.coerceAtLeast(0).toDp() }
     val shown = open || toKeys || reserve.value > 0f
     if (!shown) return
-    Box(Modifier.fillMaxWidth().clipToBounds().layout { m, c ->
+    Box(Modifier.fillMaxWidth().layout { m, c ->
         val p = m.measure(c.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
         // Read here, in layout: the keyboard's every step moves only this, nothing recomposes.
         val under = maxOf(ime.getBottom(this), restPx)

@@ -108,7 +108,7 @@ fun Modifier.floating(shape: Shape = CircleShape, fill: Color? = null): Modifier
                 tints = listOf(dev.chrisbanes.haze.HazeTint(c.card.copy(alpha = 0.76f)))
                 // A quarter-size copy: under a hard blur and 76 % colour it reads the same, at a fraction of
                 // the GPU work per frame while the list scrolls behind (measured 2026-11-06).
-                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(0.25f)
+                inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(com.fariin.app.ui.components.GlassQuality.scale(0.25f))
             }
             .border(0.5.dp, c.label.copy(alpha = if (c.dark) 0.10f else 0.08f), shape)
     }

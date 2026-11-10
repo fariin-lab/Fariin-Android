@@ -5,6 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -71,6 +73,12 @@ private fun edgeBrush(color: Color, solidFrac: Float): Brush {
  * over the header's last 48 dp it steps down 81 % -> 62 % -> 34 % -> 0, so the bubbles right under
  * the controls are sharp. Plain colour: free for the GPU and the battery, the same on every phone.
  */
+/**
+ * The chat's top as a solid bar in the page colour (true), or the blur and fade below (false, kept).
+ * Owner 2026-11-10, Android only: "solid white bar", like the reference app's chat header.
+ */
+internal const val CHAT_TOP_SOLID = true
+
 internal val EDGE_FADE = 48.dp
 internal val EDGE_STOPS = floatArrayOf(0.814f, 0.618f, 0.337f, 0f)
 
@@ -87,6 +95,25 @@ internal fun edgeAlphaBrush(color: Color, heightPx: Float, fadePx: Float): Brush
         startY = 0f, endY = heightPx)
 }
 
+/** No-blur edge: [color] at 97 % down through the bar, then a smoothstep ease to clear over [fadePx]. */
+internal val CHEAP_EDGE_FADE = 56.dp
+
+internal fun cheapEdgeBrush(color: Color, heightPx: Float, fadePx: Float): Brush {
+    val f = fadePx.coerceAtMost(heightPx)
+    val start = ((heightPx - f) / heightPx).coerceIn(0f, 1f)
+    val top = 0.97f
+    val n = 10
+    val stops = Array(n + 2) { i ->
+        if (i == 0) 0f to color.copy(alpha = color.alpha * top)
+        else {
+            val t = (i - 1).toFloat() / n
+            val eased = 1f - t * t * (3f - 2f * t)
+            (start + (1f - start) * t) to color.copy(alpha = color.alpha * top * eased)
+        }
+    }
+    return Brush.verticalGradient(*stops, startY = 0f, endY = heightPx)
+}
+
 @Composable
 internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: Boolean, walled: Boolean = false, modifier: Modifier = Modifier) {
     if (!top) return   // no bottom edge (iOS)
@@ -98,29 +125,44 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         // never"): a real blur whose radius eases down to nothing, with no colour laid over it, so
         // there is no band to see. Full strength behind the top of the header, gone 32 dp under it.
         // The wallpaper is inside the list's blur source (ThreadScreen), so it blurs along.
-        val heightDp = barDp + 32.dp
-        // Full blur under the whole bar, the call buttons' part too, fading only in the 32 dp below
-        // it (owner 2026-11-10: a photo showed clear under the call buttons; the full blur stopped
-        // at 55 % of the bar and faded through its lower half).
-        val solid = (barDp / heightDp).coerceIn(0f, 0.9f)
+        // A long progressive blur (owner 2026-11-10, beside the reference app: "still not progressive,
+        // make it look native"): full strength only behind the status bar, then the strength eases
+        // away on a quintic curve over the whole header and 64 dp below it, so there is no band and no
+        // line where it ends. The header's buttons carry their own frosted glass over it.
+        val statusDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
+        val heightDp = barDp + 64.dp
+        val solid = (statusDp / heightDp).coerceIn(0f, 0.5f)
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
-            tints = emptyList()
+            // A soft page-colour veil over the blur (owner 2026-11-10: a photo blurred under the header
+            // still looked busy), so the header reads calm over any picture. Not over a wallpaper: the
+            // page colour laid on a dark wallpaper made a pale band (owner's photo, kream's chat); there
+            // the blurred wallpaper itself is the header's ground, as before.
+            tints = if (walled) emptyList() else listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.55f)))
             // A third-size copy: full size doubled the GPU time of every frame of a page slide on the
             // Pixel 5 (18-24 ms against an 11 ms budget). The single sharp frames seen with it went with
             // the pages' move to placement (PageFrame) and the edge's 250 ms off-delay.
-            inputScale = HazeInputScale.Fixed(1f / 3)
-            progressive = com.fariin.app.ui.components.edgeStages(solid)
+            // Half size on a fast phone: from a third-size copy the blur shimmered as messages scrolled
+            // under it (owner: "shakes"). Mid-range phones keep the smaller copy (GlassQuality).
+            inputScale = HazeInputScale.Fixed(
+                if (com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.HIGH) 0.5f
+                else com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
+            progressive = com.fariin.app.ui.components.edgeStages(solid, gentle = true)
             this.alpha = alpha
         })
     } else if (!walled) {
         // No blur on this phone (Android < 12, a LOW phone, Battery Saver): the page colour over the
         // messages in four soft steps, the reference app's cheap edge.
-        val heightDp = barDp + EDGE_FADE
+        // Owner 2026-11-10 (his Pixel photo of a channel post under the header): the 81 % wash let a
+        // photo show through as a muddy white smear. Now the header sits on the page colour almost
+        // solid, and only below it does the colour ease away over 56 dp in many small steps, so the
+        // edge is soft and nothing busy shows behind the name.
+        val fade = CHEAP_EDGE_FADE
+        val heightDp = barDp + fade
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
         Box(modifier.fillMaxWidth().height(heightDp).drawBehind {
-            if (alpha > 0f) drawRect(edgeAlphaBrush(c.bg, size.height, EDGE_FADE.toPx()), alpha = alpha)
+            if (alpha > 0f) drawRect(cheapEdgeBrush(c.bg, size.height, fade.toPx()), alpha = alpha)
         })
     }
 }

@@ -353,6 +353,7 @@ private fun AccountPage(
     var confirm by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     val hasTwoStep = !demo && rememberHasTwoStep()
+    androidx.compose.runtime.SideEffect { SettingsIndex.hasTwoStep = hasTwoStep }
     // iOS shows Password only when the account has an address a person can type.
     val hasEmail = demo || runCatching {
         !com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.isNullOrEmpty()

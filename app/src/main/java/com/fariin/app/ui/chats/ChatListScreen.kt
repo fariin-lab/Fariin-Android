@@ -421,7 +421,9 @@ fun ChatListScreen(
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.nestedScroll((if (selecting || searching) pinBar else scroll).nestedScrollConnection).nestedScroll(fabScroll),
-        containerColor = c.bg,
+        // The shell already paints this colour under the whole screen: painting it again cost a full
+        // screen of fill every frame (overdraw view, 2026-11-10).
+        containerColor = Color.Transparent,
         // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
         contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
         // In the Archive and in search the back (and the Archive's search button) are glass circles over
@@ -536,6 +538,9 @@ fun ChatListScreen(
                                 if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
+                                    // Off from the admin panel = no entry (iOS: owner 2026-10-18). Live:
+                                    // reading `revision` redraws this when the panel switch flips.
+                                    showRequests = run { com.fariin.app.data.MsgPolicy.revision; com.fariin.app.data.MsgPolicy.requestsOn(me) } || state.requests.isNotEmpty(),
                                     onRequests = people.requests,
                                     // The Chat Key page lives in Settings; the same link the Get Started card uses.
                                     onChatKey = {
@@ -1059,7 +1064,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
 @Composable
 private fun OverflowMenu(
     anchor: com.fariin.app.ui.components.GlassMenuAnchor, onOpen: (List<com.fariin.app.ui.components.GlassMenuItem>) -> Unit,
-    filter: Int, onFilter: (Int) -> Unit, requests: Int, onRequests: () -> Unit, onChatKey: () -> Unit, onArchive: () -> Unit,
+    filter: Int, onFilter: (Int) -> Unit, requests: Int, showRequests: Boolean, onRequests: () -> Unit, onChatKey: () -> Unit, onArchive: () -> Unit,
     onMarkAllRead: () -> Unit, onSelect: () -> Unit, onNewGroup: () -> Unit, onNewChannel: () -> Unit, onFindChannels: () -> Unit, onSettings: () -> Unit,
 ) {
     // iOS's own set, in its order: the filters (the chosen one ticked), then Message Requests, Chat Key,
@@ -1068,15 +1073,17 @@ private fun OverflowMenu(
         { p: androidx.compose.ui.graphics.painter.Painter -> com.fariin.app.ui.components.GlassMenuItem(text, p, divider = divider, checked = checked, onClick = onClick) }
     // Owner 2026-11-09 (iOS Chats bar, the Android way): Select chats and Mark All Read first, then
     // the "Show" filters, then the rest.
-    val rows = listOf(
+    val rows = listOfNotNull(
         item("Select Chats", R.drawable.ic_sf_checkmark_circle, onClick = onSelect),
         item("Mark All Read", R.drawable.ic_mark_all_read, onClick = onMarkAllRead),
         item("All Chats", R.drawable.ic_menu_read, filter == FILTER_ALL, divider = true) { onFilter(FILTER_ALL) },
         item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) },
-        item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) },
+        if (com.fariin.app.data.AppFeatures.groups) item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) } else null,
         item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) },
-        item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", R.drawable.ic_message_request, divider = true, onClick = onRequests),
-        item("Chat Key", R.drawable.ic_chat_key, onClick = onChatKey),
+        // Message Requests switched off in the admin panel: no entry (unless something still waits).
+        if (showRequests) item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", R.drawable.ic_message_request, divider = true, onClick = onRequests) else null,
+        // Hidden with the Chat Key itself (admin panel chatKeyVisible, iOS MainShell).
+        if (com.fariin.app.data.MsgPolicy.chatKeyVisible) item("Chat Key", R.drawable.ic_chat_key, divider = !showRequests, onClick = onChatKey) else null,
         item("Archive", R.drawable.ic_archive, onClick = onArchive),
     )
     val painters = rows.map { androidx.compose.ui.res.painterResource(it.first) }

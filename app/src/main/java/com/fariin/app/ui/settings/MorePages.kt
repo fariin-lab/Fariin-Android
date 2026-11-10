@@ -475,7 +475,8 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     // Same rows as iOS (owner 2026-11-08): Message Text Size, Quick Reaction and Night Mode are gone from
     // here; the last two are in Appearance, as on iOS, and iOS has no text size of its own (the phone's).
     ScrollPage("Chats", pop) {
-        SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
+        // Hidden with the Chat Key itself (admin panel chatKeyVisible, iOS ChatsSettingsView).
+        if (com.fariin.app.data.MsgPolicy.chatKeyVisible) SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
             SettingsRow("Chat Key", value = keyValue, last = true, badge = NewBadgeSpots.CHATS_CHAT_KEY) { push(PAGE_CHAT_KEY) }
         }
         SettingsSection(footer = "Automatically save received photos to your gallery.") {

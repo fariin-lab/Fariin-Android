@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -90,6 +91,8 @@ import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -133,7 +136,9 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                         /** Bumped by a tap: the sticker plays its few times again. */
                         replay: Int = 0,
                         /** Mine still on its way: the shipped still, the animation starts once it lands. */
-                        holdStill: Boolean = false) {
+                        holdStill: Boolean = false,
+                        /** How many times it plays before resting, and its frames a second (the panel: fewer). */
+                        plays: Int = STICKER_PLAYS, fps: Int = 30) {
     val ctx = LocalContext.current
     val play = autoplay() && !still
     val asset = remember(packId, stickerId) { if (packId == "mine") null else StickerCatalog.assetPath(ctx, packId, stickerId) }
@@ -171,12 +176,12 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                         // Painted into a picture off the main thread, at most 30 times a second, and only
                         // shown here (owner 2026-11-10: smooth like the reference app). Until the first
                         // picture is ready the still stays, so it never blinks.
-                        androidx.compose.runtime.key(replay) { StickerFrames(c, onWaiting = drawStill) }
+                        androidx.compose.runtime.key(replay) { StickerFrames(c, plays, fps, onWaiting = drawStill) }
                     }
                 }
             }
         }
-        else -> androidx.compose.runtime.key(replay) { AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play, plays = STICKER_PLAYS), contentDescription = null,
+        else -> androidx.compose.runtime.key(replay) { AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play, plays = plays), contentDescription = null,
             contentScale = ContentScale.Fit, modifier = modifier) }
     }
 }
@@ -232,8 +237,15 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
     Column(Modifier.width(w.dp).clip(shape).background(fill)) {
         if (hasHeader) Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) { header() }
         Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))) {
-            AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
-                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            // Played as its small MP4 on the video chip (GifVideo), its still under it; a GIF with no
+            // MP4 (not from Giphy) plays as the picture, as before.
+            val hasMp4 = remember(m.imageUrl) { GifVideo.mp4Of(m.imageUrl) != null }
+            GifMp4(m.imageUrl, autoplay(), Modifier.fillMaxSize()) {
+                if (hasMp4) AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, m.imageUrl ?: ""), contentDescription = "GIF",
+                    imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
             Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) { MetaCapsule { meta() } }
         }
     }
@@ -272,7 +284,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
         .border(1.dp, Color.White.copy(alpha = if (c.dark) 0.12f else 0.7f), panelShape)) {
         if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it })
         else StickerTab(me, onSticker, hide = hide, onScrolledIn = { barsHidden = it })
-        Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+        Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
             .graphicsLayer { translationY = hide * 60.dp.toPx(); alpha = 1f - hide }) {
             Row(Modifier.align(Alignment.Center).width(200.dp).height(38.dp).floating(RoundedCornerShape(19.dp)).padding(3.dp)) {
                 for ((label, isGif) in listOf("GIFs" to true, "Stickers" to false)) {
@@ -336,8 +348,8 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
     // The grid's columns, as GridCells.Adaptive(70) lays them out (10 each side, 12 apart).
     val cols = maxOf(1, ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 20 + 12) / (70 + 12)))
     Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
-        LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 60.dp),
+        LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize().gridTopClip { hide },
+            contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 84.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             for (shelf in shelves) {
                 item(key = "h:${shelf.id}", span = { GridItemSpan(maxLineSpan) }) {
@@ -364,9 +376,9 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
                         onSticker(s)
                         recents = StickerCatalog.recents(ctx, me)
                     }.semanticsLabel(StickerGifRules.stickerLabel(s.emoji)), contentAlignment = Alignment.Center) {
-                        // Every tile still (animated WebP packs too): a grid of moving stickers kept the
-                        // CPU busy and the scroll heavy (owner 2026-11-10). They move once sent.
-                        StickerArt(s.packId, s.stickerId, null, null, Modifier.size(64.dp), still = true)
+                        // The tiles on screen move (owner 2026-11-10, as iOS), lightly for cheap phones: painted
+                        // off the main thread at 20 a second, twice, then at rest; again when scrolled back.
+                        StickerArt(s.packId, s.stickerId, null, null, Modifier.size(64.dp), plays = 2, fps = 20)
                     }
                 }
                 // The second row's last place: "+N", the pack's stickers not shown; a tap opens the pack.
@@ -454,13 +466,18 @@ internal fun GifTab(
     val grid = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
     LaunchedEffect(category) { grid.scrollToItem(0); onScrolledIn(false) }
     Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
-        val pad = PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 60.dp)
+        val pad = PaddingValues(start = 6.dp, end = 6.dp, top = TOP_BAND.dp, bottom = 84.dp)
+        // The GIFs stop under the mood row (and a little under the panel's top edge once the row has
+        // slid away): scrolled up, they ran under the half-hidden row and up into the rounded rim,
+        // cut off against the message bar (owner 2026-11-10, "bug space").
+        Box(Modifier.fillMaxSize().gridTopClip { hide }) {
         when (category) {
             GifCategory.FAVORITES -> GifGrid(local, pad, me = me, onRecentTab = false, onGif = send, state = grid,
                 emptyTitle = "No favourites yet", emptyText = "Hold a GIF and choose Add to Favourites.")
             GifCategory.RECENT -> GifGrid(local, pad, me = me, onRecentTab = true, onGif = send, state = grid,
                 emptyTitle = "No recent GIFs", emptyText = "GIFs you send will appear here.")
             else -> GifGrid(fetched, pad, me = me, onGif = send, state = grid)
+        }
         }
         // The mood row on top, centred, on the panel itself (iOS PanelGifGrid): 28 cells 8 apart, the
         // chosen one on a soft rounded square.
@@ -523,9 +540,16 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
                 AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, g.url), contentDescription = null,
                     imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize().background(c.secondary.copy(alpha = 0.15f)))
-                AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()
+                // The moving one: its MP4 on the video chip (a few shared players, only tiles on
+                // screen), else the picture as before. The tap area lies over it.
+                val hasMp4 = remember(g.url) { GifVideo.mp4Of(g.url) != null }
+                Box(Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()) {
+                    if (hasMp4) GifMp4(g.url, play, Modifier.matchParentSize()) {}
+                    else AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                        contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                    Box(Modifier.matchParentSize().semantics { contentDescription = "GIF" }
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
+                }
                 com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                     val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
                     androidx.compose.material3.DropdownMenuItem(
@@ -706,7 +730,7 @@ internal fun StickerPackSheet(pack: StickerPackInfo, me: String, onSend: (Sticke
  * when it comes back.
  */
 @Composable
-private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, onWaiting: @Composable () -> Unit) {
+private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, plays: Int, fps: Int, onWaiting: @Composable () -> Unit) {
     var shown by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = constraints.maxWidth.coerceIn(1, 1024)
@@ -720,13 +744,16 @@ private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, onWaiting: @Co
             val scale = minOf(w / b.width().toFloat(), h / b.height().toFloat())
             val dx = (w - b.width() * scale) / 2f; val dy = (h - b.height() * scale) / 2f
             val frames = c.durationFrames.coerceAtLeast(1f)
-            val per = (c.frameRate / 30f).coerceAtLeast(1f)
+            val per = (c.frameRate / fps).coerceAtLeast(1f)
             val stepMs = (1000f * per / c.frameRate).toLong().coerceAtLeast(16L)
             var n = 0
             try {
-                for (play in 0 until STICKER_PLAYS) {
+                for (play in 0 until plays) {
                     var f = 0f
-                    while (f <= frames) {
+                    // Up to the last frame, not its end: the end is the first pose again, so painting
+                    // it showed the same pose twice at every loop seam (a hitch).
+                    val last = if (play == plays - 1) frames else frames - per
+                    while (f <= last) {
                         val started = android.os.SystemClock.uptimeMillis()
                         val target = bufs[n % 3]
                         val p = (f / frames).coerceIn(0f, 1f)
@@ -752,3 +779,9 @@ private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, onWaiting: @Co
         else Image(img, contentDescription = null, modifier = Modifier.fillMaxSize())
     }
 }
+
+/** Clips a panel grid below its top row of controls ([hide] 0 = row shown, 1 = slid away) and 6 dp under the edge. */
+private fun Modifier.gridTopClip(hide: () -> Float): Modifier = this.then(Modifier.drawWithContent {
+    val top = ((TOP_BAND - 2) * (1f - hide()) + 6f).dp.toPx()
+    clipRect(top = top) { this@drawWithContent.drawContent() }
+})

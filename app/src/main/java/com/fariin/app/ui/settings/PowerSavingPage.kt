@@ -39,8 +39,8 @@ internal fun PowerSavingPage(pop: () -> Unit) {
                 else -> "Turning these off saves battery and makes the app smoother on older phones."
             },
         ) {
-            SwitchRow("Blur effects", ch.blur, enabled = !forced) { set(PowerSaving.K_BLUR, it) }
-            SwitchRow("Animations", ch.animations, enabled = !forced, last = true) { set(PowerSaving.K_ANIM, it) }
+            // No Animations switch (owner 2026-11-10): motion is part of the app, always on.
+            SwitchRow("Blur effects", ch.blur, enabled = !forced, last = true) { set(PowerSaving.K_BLUR, it) }
         }
         SettingsSection(header = "Media") {
             SwitchRow("Autoplay videos", ch.autoplayVideos, enabled = !forced) { set(PowerSaving.K_VIDEO, it) }

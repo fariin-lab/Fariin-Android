@@ -254,7 +254,7 @@ fun MainShell(
     val haze = remember { HazeState() }
     // Android 13+ with glass allowed: real liquid glass (lens refraction at the rim, colour vibrancy,
     // a specular edge) from the backdrop library; Android 12 keeps the frosted blur; below, solid.
-    val liquid = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    val liquid = com.fariin.app.ui.components.GlassQuality.liquid(glass)
     val backdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
 
     // storyAppShrink: the app grows back from a card after a story is posted (StoryPostFlight.kt).
@@ -275,17 +275,19 @@ fun MainShell(
                         active = shown)
                 }
                 KeptTab(TAB_STORIES, tab, reselect[TAB_STORIES]) { shown ->
-                    StoriesTab(me, chats.chats, if (demo) DemoSettings.stories() else null, storyRequest, shared = if (demo) null else stories,
+                    StoriesTab(me, heldWhileHidden(shown, chats.chats), if (demo) DemoSettings.stories() else null, storyRequest,
+                        shared = if (demo) null else heldWhileHidden(shown, stories),
                         active = shown)
                 }
                 // The calls list scrolls under the bar and lifts its New Call button by the inset.
                 KeptTab(TAB_CALLS, tab, reselect[TAB_CALLS]) { shown ->
-                    CallsTab(me, chats.chats, if (demo) DemoSettings.calls() else null, shared = calls,
+                    CallsTab(me, heldWhileHidden(shown, chats.chats), if (demo) DemoSettings.calls() else null,
+                        shared = heldWhileHidden(shown, calls),
                         error = callsError, onRetry = { callsRetry++ }, active = shown)
                 }
                 // My Profile (Settings) reads the same feed for its Posted stories card.
                 KeptTab(TAB_SETTINGS, tab, reselect[TAB_SETTINGS]) { shown ->
-                    com.fariin.app.ui.glow.ProvideMyStories(stories, chats.chats) {
+                    com.fariin.app.ui.glow.ProvideMyStories(heldWhileHidden(shown, stories), heldWhileHidden(shown, chats.chats)) {
                         SettingsTab(me, if (demo) DemoSettings.profile else null, onSignOut, active = shown)
                     }
                 }
@@ -310,6 +312,20 @@ fun MainShell(
         // recording 2026-11-09). The story camera uses it.
         com.fariin.app.ui.components.TopOverlay.content?.invoke()
     }
+}
+
+/**
+ * What a hidden tab is handed: the value it last saw while open. The tabs behind the open one took
+ * the live chat list, so every change (a chat opened and marked read, a new message) rebuilt
+ * Stories, Calls and Settings unseen, on the same frames that opened a chat (sampled on the Pixel
+ * as a mid-range phone, 2026-11-10). The same object back means nothing under it rebuilds; it
+ * catches up on the frame the tab opens.
+ */
+@Composable
+private fun <T> heldWhileHidden(shown: Boolean, value: T): T {
+    val box = remember { arrayOfNulls<Any?>(1).also { it[0] = value } }
+    if (shown) box[0] = value
+    @Suppress("UNCHECKED_CAST") return box[0] as T
 }
 
 /**
@@ -399,7 +415,7 @@ private fun FloatingTabBar(
             blurRadius = 24.dp
             noiseFactor = 0f
             // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
-            inputScale = HazeInputScale.Fixed(1f / 3)
+            inputScale = HazeInputScale.Fixed(com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
             // Frosted white by day, the dark surface at night, both thin enough to show what passes under.
             tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = TAB_FROST_DARK) else Color.White.copy(alpha = TAB_FROST_LIGHT)))
         }

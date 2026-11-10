@@ -55,13 +55,16 @@ class DeviceClassTest {
         assertFalse(d.blur || d.animations || d.autoplayVideos || d.autoplayGifs)
         assertTrue(d.followBatterySaver)
         val a = PowerRules.defaults(PerfClass.AVERAGE)
-        assertTrue(a.blur && a.animations && a.autoplayVideos && a.autoplayGifs)
+        assertTrue(a.animations && a.autoplayVideos && a.autoplayGifs)
+        assertFalse(a.blur)   // blur starts on only on a high-end phone
+        assertTrue(PowerRules.defaults(PerfClass.HIGH).blur)
     }
 
     @Test fun batterySaverTurnsEffectsOffOnlyWhenFollowed() {
         val on = PowerRules.defaults(PerfClass.HIGH)
         val saver = PowerState(on, batterySaverOn = true, deviceClass = PerfClass.HIGH)
-        assertFalse(saver.blur || saver.animations || saver.autoplayVideos || saver.autoplayGifs)
+        assertFalse(saver.blur || saver.autoplayVideos || saver.autoplayGifs)
+        assertTrue(saver.animations)   // animations are always on (owner 2026-11-10, the switch is gone)
         val ignored = saver.copy(choices = on.copy(followBatterySaver = false))
         assertTrue(ignored.blur && ignored.animations && ignored.autoplayVideos && ignored.autoplayGifs)
     }

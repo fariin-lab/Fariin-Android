@@ -539,6 +539,20 @@ object GroupCall {
         run {
             try {
                 val r = LiveKit.create(app)
+                // A shared screen at 15 frames a second (10 on a low-end phone), 960 on its long side
+                // below a high-end phone: the screen was the heaviest thing a call did (owner 2026-11-10).
+                run {
+                    val cls = com.fariin.app.perf.PowerSaving.state.value.deviceClass
+                    val fps = if (cls == com.fariin.app.perf.PerfClass.LOW) 10 else 15
+                    val m = app.resources.displayMetrics
+                    val long = maxOf(m.widthPixels, m.heightPixels).coerceAtLeast(1)
+                    val k = minOf(1f, (if (cls == com.fariin.app.perf.PerfClass.HIGH) 1280f else 960f) / long)
+                    fun even(v: Float) = (v.toInt() / 2 * 2).coerceAtLeast(2)
+                    r.screenShareTrackCaptureDefaults = r.screenShareTrackCaptureDefaults.copy(
+                        captureParams = io.livekit.android.room.track.VideoCaptureParameter(even(m.widthPixels * k), even(m.heightPixels * k), fps))
+                    r.screenShareTrackPublishDefaults = r.screenShareTrackPublishDefaults.copy(
+                        videoEncoding = io.livekit.android.room.track.VideoEncoding(1_500_000, fps))
+                }
                 room = r
                 watchRoutes(r)
                 events = scope.launch {
