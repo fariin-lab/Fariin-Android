@@ -334,6 +334,16 @@ class MainActivity : ComponentActivity() {
                     pm.begin(id, old, isForward = old == null || nav.currentBackStack.value.any { it.id == old })
                 }
             }
+            // A page pushed over a screen typing (a search field) takes the keyboard down with it, on
+            // every page at once (owner 2026-11-10: it stayed up over Find Channels opened from search).
+            val pushFocus = androidx.compose.ui.platform.LocalFocusManager.current
+            LaunchedEffect(top?.id) {
+                if (pm.forward && pm.other != null) {
+                    pushFocus.clearFocus(force = true)
+                    androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                        .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+                }
+            }
             LaunchedEffect(top?.id) { pm.play() }
             // The shell's back handlers live on their own dispatcher, joined to the activity's only
             // while the list is on top. It used to be handed the activity or an inert owner as a page
