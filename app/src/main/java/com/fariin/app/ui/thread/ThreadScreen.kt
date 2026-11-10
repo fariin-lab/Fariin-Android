@@ -281,10 +281,7 @@ fun ThreadScreen(
                     }
                 }
                 // Not known yet whether this chat is a channel I visit: a loading ring, not a group chat.
-                if (ui.channelWaiting)
-                    Box(Modifier.fillMaxSize().background(Fariin.colors.bg), contentAlignment = Alignment.Center) {
-                        com.fariin.app.ui.components.FariinSpinner()
-                    }
+                if (ui.channelWaiting) com.fariin.app.ui.components.ChannelSkeleton()
                 else ThreadContent(shownUi, onBack, onSend, onLoadOlder, onRetry, onSendPhoto, onSendVoice, actions, onSendPick, onSendFile, onSendFiles)
             }
         }

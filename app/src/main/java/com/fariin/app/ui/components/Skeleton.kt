@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -145,6 +146,32 @@ fun ThreadSkeleton(modifier: Modifier = Modifier) {
                     SkeletonBlock(w.dp, 34.dp, radius = 18.dp, phase = phase)
                 }
             }
+        }
+    }
+}
+
+/**
+ * A channel or group opened from outside before its first page (iOS spec 2026-11-10 item 6): never
+ * an empty white page. Post bubbles down the left, one with a 150 picture block, and a 50 capsule
+ * where Follow sits.
+ */
+@Composable
+fun ChannelSkeleton(modifier: Modifier = Modifier) {
+    val phase = shimmerPhase()
+    Column(modifier.fillMaxSize().background(com.fariin.app.ui.theme.Fariin.colors.bg)
+        .clearAndSetSemantics { contentDescription = "Loading posts" }
+        .navigationBarsPadding().padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom)) {
+        SkeletonBlock(230.dp, 64.dp, radius = 18.dp, phase = phase)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SkeletonBlock(260.dp, 150.dp, radius = 18.dp, phase = phase)
+            SkeletonBlock(200.dp, 34.dp, radius = 18.dp, phase = phase)
+        }
+        SkeletonBlock(180.dp, 48.dp, radius = 18.dp, phase = phase)
+        SkeletonBlock(240.dp, 80.dp, radius = 18.dp, phase = phase)
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            SkeletonBlock(10000.dp, 50.dp, radius = 25.dp, phase = phase, modifier = Modifier.fillMaxWidth())
         }
     }
 }
