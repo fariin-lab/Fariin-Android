@@ -3,6 +3,23 @@ package com.fariin.app.ui.people
 import com.fariin.app.ui.components.glassMenuAnchor
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.fariin.app.ui.components.listPress
 import com.kyant.backdrop.backdrops.layerBackdrop
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
@@ -17,8 +34,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.fariin.app.data.GroupInfoCircles
 import com.fariin.app.ui.settings.ScrollPage
-import com.fariin.app.ui.settings.SettingsRow
-import com.fariin.app.ui.settings.SettingsSection
 import com.fariin.app.ui.theme.Fariin
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -42,6 +57,7 @@ internal suspend fun writeContactMute(cid: String, me: String, untilMs: Double):
 @Composable
 internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, header: String = "Messages",
                                /** The chat's id: its own Message Sound row (iOS); empty hides the row. */ cid: String = "",
+                               /** iOS's grey line under the card (a group: mentions still come through). */ footer: String? = null,
                                onBack: () -> Unit) {
     val c = Fariin.colors
     val ctx = LocalContext.current
@@ -66,13 +82,20 @@ internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, header
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().then(if (glass) Modifier.layerBackdrop(backdrop) else Modifier)) {
             ScrollPage("Sounds & Notifications", onBack) {
-                SettingsSection(header = header, footer = endLabel) {
-                    Box(Modifier.glassMenuAnchor(anchor)) {
-                        SettingsRow("Mute", icon = painterResource(if (muted) com.fariin.app.R.drawable.ic_bell_off else com.fariin.app.R.drawable.ic_notifications),
-                            value = value, last = cid.isEmpty()) { menu = true }
+                // iOS SoundsNotificationsView, point for point (owner 2026-11-10: "too big, match it
+                // pixel by pixel"): 16 around, the heading 15 semibold 16 in, 8 down to a card of
+                // radius 24; rows 14 above and below the 17 text, a 21 icon in a 26 slot, 14 to the title.
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(header, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
+                        modifier = Modifier.padding(horizontal = 16.dp))
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.card)) {
+                        Box(Modifier.glassMenuAnchor(anchor)) {
+                            SoundsRow("Mute", com.fariin.app.R.drawable.ic_sound_mute, value) { menu = true }
+                        }
+                        if (cid.isNotEmpty()) SoundsRow("Message Sound", com.fariin.app.R.drawable.ic_sound_message,
+                            tone.name.removeSuffix(" (Default)")) { toneSheet = true }
                     }
-                    if (cid.isNotEmpty()) SettingsRow("Message Sound", icon = painterResource(com.fariin.app.R.drawable.ic_speaker_on),
-                        value = tone.name.removeSuffix(" (Default)"), last = true) { toneSheet = true }
+                    if (footer != null) Text(footer, fontSize = 13.sp, color = c.secondary, modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
@@ -82,6 +105,24 @@ internal fun ContactSoundsPage(untilMs: Double, onMute: (Double) -> Unit, header
                 add(com.fariin.app.ui.components.GlassMenuItem(label, null) { onMute(GroupInfoCircles.muteUntil(hours)) })
             }
         }, backdrop = if (glass) backdrop else null, caption = "Mute this chat for…", onDismiss = { menu = false })
+    }
+}
+
+/** iOS rowLabel: icon, title, the value in grey and a small bold chevron. */
+@Composable
+private fun SoundsRow(title: String, icon: Int, value: String, onClick: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().listPress(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) {
+            Icon(painterResource(icon), null, tint = c.label, modifier = Modifier.size(21.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(title, fontSize = 17.sp, color = c.label, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(value, fontSize = 17.sp, color = c.secondary, maxLines = 1, modifier = Modifier.padding(start = 14.dp))
+        Spacer(Modifier.width(14.dp))
+        Icon(painterResource(com.fariin.app.R.drawable.ic_sf_chevron_right), null,
+            tint = c.secondary.copy(alpha = 0.5f), modifier = Modifier.size(13.dp))
     }
 }
 

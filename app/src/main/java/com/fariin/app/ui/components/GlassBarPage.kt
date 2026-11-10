@@ -67,7 +67,8 @@ fun GlassBarPage(
     val glass = com.fariin.app.perf.rememberPowerState().glass()
     val liquid = enabled && glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
     if (!liquid) {
-        Column(modifier.fillMaxSize()) { bar(); content(0.dp) }
+        // The page colour here too: without it the plain path showed whatever lay under it (Pixel 2026-11-10).
+        Column(modifier.fillMaxSize().background(page)) { bar(); content(0.dp) }
         return
     }
     val c = Fariin.colors
