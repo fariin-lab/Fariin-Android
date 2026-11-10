@@ -82,8 +82,10 @@ import kotlinx.coroutines.tasks.await
 fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
-    var rows by remember { mutableStateOf<List<DiscoveredChannel>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    // The last list draws at once (owner 2026-11-10: the skeleton sat ~4 s on every open), then the
+    // server's answer replaces it.
+    var rows by remember { mutableStateOf(FindChannelsCache.rows) }
+    var loading by remember { mutableStateOf(FindChannelsCache.rows.isEmpty()) }
     var failed by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
     val justFollowed = remember { mutableStateListOf<String>() }
@@ -91,8 +93,12 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     val bias by ChannelFollows.biasFlow.collectAsState()
     // Design A (owner 2026-11-10, iOS find-channels-a): search under the title, always shown.
     var query by remember { mutableStateOf("") }
+    // A keyboard left up by the page this came from (the chat search, owner 2026-11-10) goes down.
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(Unit) { focus.clearFocus(force = true); keyboard?.hide() }
     LaunchedEffect(Unit) {
-        try { rows = ChannelService.discover(); failed = false } catch (_: Exception) { failed = true }
+        try { rows = ChannelService.discover().also { FindChannelsCache.rows = it }; failed = false } catch (_: Exception) { failed = true }
         loading = false
     }
     toast?.let { t -> LaunchedEffect(t) { delay(2500); toast = null } }
@@ -108,7 +114,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     // Skeleton rows in the real rows' shape: a round 52 photo, a name, a count.
                     repeat(6) { i ->
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            com.fariin.app.ui.components.SkeletonCircle(52.dp)
+                            com.fariin.app.ui.components.SkeletonBlock(52.dp, 52.dp, radius = 16.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 com.fariin.app.ui.components.SkeletonBlock(listOf(130, 100, 160, 115)[i % 4].dp, 14.dp)
@@ -152,12 +158,18 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     }
 }
 
+/** Find Channels' last answer, for this run of the app. */
+internal object FindChannelsCache {
+    @Volatile var rows: List<DiscoveredChannel> = emptyList()
+}
+
 @Composable
 private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit, onFollow: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(r.photoUrl, 52.dp, squircle = false, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
+            // A channel's face is its rounded square everywhere (owner 2026-11-10).
+            Avatar(r.photoUrl, 52.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

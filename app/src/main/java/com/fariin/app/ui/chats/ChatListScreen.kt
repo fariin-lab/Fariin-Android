@@ -152,6 +152,21 @@ fun ChatListScreen(
     onRetry: () -> Unit = {},
 ) {
     val c = Fariin.colors
+    // ⛔ LEAVING THIS SCREEN TAKES THE KEYBOARD DOWN (owner 2026-11-10): a chat, channel or Find
+    // Channels opened from the search kept the search's keyboard up over it. When another page
+    // covers this one (its lifecycle pauses), focus is cleared and the keyboard hidden.
+    run {
+        val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+        val fm = androidx.compose.ui.platform.LocalFocusManager.current
+        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        androidx.compose.runtime.DisposableEffect(owner) {
+            val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                if (e == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) { fm.clearFocus(force = true); kb?.hide() }
+            }
+            owner.lifecycle.addObserver(obs)
+            onDispose { owner.lifecycle.removeObserver(obs) }
+        }
+    }
     // Rings on the photos (iOS storyRing): a tap on a ringed photo opens that story, not the chat.
     val storyHidden by com.fariin.app.data.StoryMutes.set.collectAsState()
     var storyOpen by remember { mutableStateOf<com.fariin.app.data.StoryGroup?>(null) }
@@ -240,15 +255,22 @@ fun ChatListScreen(
     val peopleCache = remember { HashMap<String, List<com.fariin.app.data.Person>>() }
     var peopleAll by remember { mutableStateOf(false) }
     val q = query.trim()
+    // ⛔ STILL LOOKING IS NOT "NO RESULTS" (owner 2026-11-10): while the server is being asked,
+    // the page shows skeleton rows; "No Results" only once every answer is in and empty (iOS).
+    var peoplePending by remember { mutableStateOf(false) }
+    var groupsPending by remember { mutableStateOf(false) }
     LaunchedEffect(q, searching) {
         peopleAll = false
-        if (!searching || q.trim('@').isEmpty()) { peopleHits = emptyList(); return@LaunchedEffect }
+        if (!searching || q.trim('@').isEmpty()) { peopleHits = emptyList(); peoplePending = false; return@LaunchedEffect }
         val key = q.lowercase()
-        peopleCache[key]?.let { peopleHits = it; return@LaunchedEffect }
-        kotlinx.coroutines.delay(400)
-        val found = people.searchPeople(q)
-        peopleCache[key] = found
-        peopleHits = found
+        peopleCache[key]?.let { peopleHits = it; peoplePending = false; return@LaunchedEffect }
+        peoplePending = true
+        try {
+            kotlinx.coroutines.delay(400)
+            val found = people.searchPeople(q)
+            peopleCache[key] = found
+            peopleHits = found
+        } finally { if (peopleCache.containsKey(key) || !searching) peoplePending = false }
     }
     // Public groups and channels by @name (iOS GroupDirectory.search, groupsOnly), the same pause.
     var groupHits by remember { mutableStateOf<List<com.fariin.app.data.PublicGroupHit>>(emptyList()) }
@@ -256,9 +278,14 @@ fun ChatListScreen(
     publicGroupOpen?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { publicGroupOpen = null },
         onOpenChat = { cid -> searching = false; query = ""; people.chat(cid) }, onOpenChannel = { channels.open(it) }) }
     LaunchedEffect(q, searching) {
-        if (!searching || q.trim('@').length < 3) { groupHits = emptyList(); return@LaunchedEffect }
-        kotlinx.coroutines.delay(400)
-        groupHits = com.fariin.app.data.PublicGroups.search(q)
+        if (!searching || q.trim('@').length < 3) { groupHits = emptyList(); groupsPending = false; return@LaunchedEffect }
+        groupsPending = true
+        var done = false
+        try {
+            kotlinx.coroutines.delay(400)
+            groupHits = com.fariin.app.data.PublicGroups.search(q)
+            done = true
+        } finally { if (done) groupsPending = false }
     }
     val newPeople = run {
         val known = shown.filter { !it.isGroup }.map { it.otherUid(me) }.toSet()
@@ -361,11 +388,18 @@ fun ChatListScreen(
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset,
                                      source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                if (available.y < -6f) fabShown = false else if (available.y > 6f) fabShown = true
+                // ⛔ ONLY WHEN THE LIST REALLY MOVES (owner 2026-11-10): on a short or near-empty list a
+                // small drag hid them and there was no scroll left to bring them back, so a new person
+                // lost the way to start a chat. Down hides only while there is more list below.
+                if (available.y < -6f && listState.canScrollForward) fabShown = false
+                else if (available.y > 6f) fabShown = true
                 return androidx.compose.ui.geometry.Offset.Zero
             }
         }
     }
+    // A list that cannot scroll, or one back at the top, always shows them.
+    val listScrolls by remember { androidx.compose.runtime.derivedStateOf { listState.canScrollForward || listState.canScrollBackward } }
+    LaunchedEffect(atTop, listScrolls) { if (atTop || !listScrolls) fabShown = true }
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
     // The new-account card's height (owner 2026-11-04: the camera and pencil sat on top of it). The
@@ -489,8 +523,9 @@ fun ChatListScreen(
                                     modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
                                 // Explore (owner 2026-11-09): a round glass button with our compass, the one
                                 // way in from the chat list; it opens the same Find Channels page.
+                                // Filled (owner 2026-11-10): black with a white compass, white with a black one in dark.
                                 if (!showArchive) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_compass), contentDescription = "Explore",
-                                    onClick = channels.find, modifier = Modifier.padding(end = 8.dp))
+                                    onClick = channels.find, modifier = Modifier.padding(end = 8.dp), tint = c.onAccent, fill = c.accent)
                                 if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
@@ -556,6 +591,22 @@ fun ChatListScreen(
                     Box(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentAlignment = Alignment.Center) {
                         com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Archive,
                             "Nothing archived", "Chats you archive and stories you hide will show here.", Modifier.padding(bottom = 60.dp))
+                    }
+                // Nothing local, and the server still being asked: skeleton rows, not "No Results".
+                shown.isEmpty() && !officialShown && !activitySearchHit && newPeople.isEmpty() && groupHits.isEmpty() && query.isNotBlank()
+                    && (peoplePending || groupsPending) ->
+                    Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding() + 8.dp)) {
+                        repeat(4) { i ->
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                com.fariin.app.ui.components.SkeletonCircle(52.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    com.fariin.app.ui.components.SkeletonBlock(listOf(140, 110, 160, 120)[i].dp, 14.dp)
+                                    Spacer(Modifier.height(8.dp))
+                                    com.fariin.app.ui.components.SkeletonBlock(listOf(90, 120, 80, 100)[i].dp, 11.dp)
+                                }
+                            }
+                        }
                     }
                 // A search with nothing found: in the middle of what the keyboard leaves, worded as the
                 // Settings search (and iOS) say it.
@@ -705,7 +756,7 @@ fun ChatListScreen(
                                     else if (e.kind == "person") {
                                         val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
                                         PersonRow(p) {
-                                            scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } }
+                                            scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
                                         }
                                     }
                                 }
@@ -766,7 +817,7 @@ fun ChatListScreen(
                         item(key = "h-global") { SectionHeader("Global Search") }
                         items(if (peopleAll) newPeople else newPeople.take(3), key = { "p-" + it.uid }) { p ->
                             PersonRow(p) {
-                                scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } }
+                                scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
                             }
                         }
                         if (!peopleAll && newPeople.size > 3) item(key = "p-more") {

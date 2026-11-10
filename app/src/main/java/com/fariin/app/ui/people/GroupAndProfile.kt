@@ -921,10 +921,12 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     if (sharingLink && inviteLink != null) com.fariin.app.ui.thread.LinkShareSheet(me, inviteLink, onDismiss = { sharingLink = false })
     var showQr by remember { mutableStateOf(false) }
     var publicQr by remember { mutableStateOf<String?>(null) }
+    var publicShare by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
     // iOS GroupInfoView exportChat: this group's messages as a text file (ChatExportRun). Not for a channel.
     var exportJob by remember { mutableStateOf<ChatExportRun.Job?>(null) }
     exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }
+    publicShare?.let { link -> com.fariin.app.ui.thread.LinkShareSheet(me, link, onDismiss = { publicShare = null }) }
     publicQr?.let { link -> com.fariin.app.ui.settings.GroupQrSheet(conv["title"] as? String ?: "Group", link,
         (conv["avatarUrl"] as? String)?.ifEmpty { null }, users.size, onClose = { publicQr = null }) }
     if (showQr && inviteLink != null) com.fariin.app.ui.settings.GroupQrSheet(conv["title"] as? String ?: "Group", inviteLink,
@@ -1011,7 +1013,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 if (desc.isNotEmpty()) DescriptionCard(desc)
                 if (publicName != null) {
                     if (desc.isNotEmpty()) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
-                    Row(Modifier.fillMaxWidth().clickable { publicQr = "https://fariin.com/$publicName" }.padding(16.dp),
+                    // The link opens Share with; the QR mark opens the code (iOS, owner 2026-11-10).
+                    Row(Modifier.fillMaxWidth().clickable { publicShare = "https://fariin.com/$publicName" }.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_sf_link), null, tint = c.label, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(14.dp))
@@ -1019,7 +1022,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                             Text("fariin.com/$publicName", fontSize = 17.sp, color = c.label)
                             Text("Link", fontSize = 14.sp, color = c.secondary)
                         }
-                        Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "QR code") { publicQr = "https://fariin.com/$publicName" },
+                            contentAlignment = Alignment.Center) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                        }
                     }
                 }
             }

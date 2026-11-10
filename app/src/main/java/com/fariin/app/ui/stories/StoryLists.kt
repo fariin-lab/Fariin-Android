@@ -305,6 +305,17 @@ fun SelectViewersPage(
     Page {
         BarPage(title, onBack = onCancel, action = { BarButton(actionTitle, !requiresSelection || selected.isNotEmpty(), onAction) }) { top ->
             androidx.compose.foundation.layout.Spacer(Modifier.height(top))
+            // ⛔ SEARCH AT THE TOP ON ANDROID (owner 2026-11-10): Android people look for it there, and
+            // at the bottom the keyboard covered it. iOS keeps its own at the bottom.
+            Box(
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(22.dp)).background(c.fieldFill).padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (search.isEmpty()) Text("Name or username", color = c.secondary, fontSize = 16.sp)
+                BasicTextField(search, { search = it.take(60) }, singleLine = true,
+                    textStyle = TextStyle(color = c.label, fontSize = 16.sp), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+            }
             val chosen = people.filter { it.uid in selected }
             if (chosen.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -333,16 +344,6 @@ fun SelectViewersPage(
                         color = c.secondary, fontSize = 16.sp, modifier = Modifier.padding(16.dp))
                 }
                 Spacer(Modifier.height(12.dp))
-            }
-            // iOS keeps the search field at the bottom.
-            Box(
-                Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(22.dp)).background(c.fieldFill).padding(horizontal = 16.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                if (search.isEmpty()) Text("Name or username", color = c.secondary, fontSize = 16.sp)
-                BasicTextField(search, { search = it.take(60) }, singleLine = true,
-                    textStyle = TextStyle(color = c.label, fontSize = 16.sp), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
             }
         }
     }

@@ -277,8 +277,18 @@ private fun PosterAction(painter: Painter, label: String, modifier: Modifier, en
 /** A short notice in a capsule, gone after 1.6 s (iOS flash). */
 @Composable
 private fun Flash(text: String?, modifier: Modifier) {
-    if (text != null) Text(text, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Fariin.colors.label,
-        modifier = modifier.floating(CircleShape).padding(horizontal = 16.dp, vertical = 10.dp))
+    // Owner 2026-11-10: it sat on the QR code's logo and just blinked on. Now it drops in at the top,
+    // clear of the code and of Android's own copy preview (bottom left), and floats away again.
+    var shown by remember { mutableStateOf("") }
+    if (text != null) shown = text
+    androidx.compose.animation.AnimatedVisibility(visible = text != null, modifier = modifier,
+        enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 500f)) { -it } +
+            androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)),
+        exit = androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(220)) { -it / 2 } +
+            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200))) {
+        Text(shown, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Fariin.colors.label,
+            modifier = Modifier.floating(CircleShape).padding(horizontal = 16.dp, vertical = 10.dp))
+    }
 }
 
 /** iOS MyQRView: my name, @username and profile link on the poster; Scan opens the scanner. */
@@ -415,7 +425,7 @@ private fun QrPosterSheet(title: String, subtitle: String, link: String, photoUr
                     }
                 }
             }
-            Flash(toast, Modifier.align(Alignment.Center))
+            Flash(toast, Modifier.align(Alignment.TopCenter).padding(top = 20.dp))
         }
     }
 }
