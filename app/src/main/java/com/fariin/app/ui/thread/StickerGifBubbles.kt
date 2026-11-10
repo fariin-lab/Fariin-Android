@@ -237,8 +237,15 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
     Column(Modifier.width(w.dp).clip(shape).background(fill)) {
         if (hasHeader) Box(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp)) { header() }
         Box(Modifier.size(w.dp, h.dp).background(Fariin.colors.secondary.copy(alpha = 0.18f))) {
-            AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
-                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            // Played as its small MP4 on the video chip (GifVideo), its still under it; a GIF with no
+            // MP4 (not from Giphy) plays as the picture, as before.
+            val hasMp4 = remember(m.imageUrl) { GifVideo.mp4Of(m.imageUrl) != null }
+            GifMp4(m.imageUrl, autoplay(), Modifier.fillMaxSize()) {
+                if (hasMp4) AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, m.imageUrl ?: ""), contentDescription = "GIF",
+                    imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
             Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) { MetaCapsule { meta() } }
         }
     }
@@ -533,9 +540,16 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
                 AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, g.url), contentDescription = null,
                     imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize().background(c.secondary.copy(alpha = 0.15f)))
-                AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()
+                // The moving one: its MP4 on the video chip (a few shared players, only tiles on
+                // screen), else the picture as before. The tap area lies over it.
+                val hasMp4 = remember(g.url) { GifVideo.mp4Of(g.url) != null }
+                Box(Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()) {
+                    if (hasMp4) GifMp4(g.url, play, Modifier.matchParentSize()) {}
+                    else AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                        contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                    Box(Modifier.matchParentSize().semantics { contentDescription = "GIF" }
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
+                }
                 com.fariin.app.ui.components.GlassDropdown(expanded = menu, onDismissRequest = { menu = false }) {
                     val favourite = remember(changes, g.url) { GifFavorites.contains(ctx, me, g.url) }
                     androidx.compose.material3.DropdownMenuItem(
