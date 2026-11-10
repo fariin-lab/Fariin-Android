@@ -205,7 +205,7 @@ fun NewCallScreen(me: String, chats: List<Conversation>, onBack: () -> Unit, onC
                         .clickable(onClick = onCreateLink).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(46.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_link_copy), null, tint = c.accent)
+                            Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_link), null, tint = c.accent, modifier = Modifier.size(24.dp))
                         }
                         Spacer(Modifier.width(14.dp))
                         Column {
