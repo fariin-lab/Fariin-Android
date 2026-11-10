@@ -399,7 +399,7 @@ private fun FloatingTabBar(
             blurRadius = 24.dp
             noiseFactor = 0f
             // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
-            inputScale = HazeInputScale.Fixed(1f / 3)
+            inputScale = HazeInputScale.Fixed(com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
             // Frosted white by day, the dark surface at night, both thin enough to show what passes under.
             tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = TAB_FROST_DARK) else Color.White.copy(alpha = TAB_FROST_LIGHT)))
         }

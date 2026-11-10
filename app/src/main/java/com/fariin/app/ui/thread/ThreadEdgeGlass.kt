@@ -110,7 +110,7 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
             // A third-size copy: full size doubled the GPU time of every frame of a page slide on the
             // Pixel 5 (18-24 ms against an 11 ms budget). The single sharp frames seen with it went with
             // the pages' move to placement (PageFrame) and the edge's 250 ms off-delay.
-            inputScale = HazeInputScale.Fixed(1f / 3)
+            inputScale = HazeInputScale.Fixed(com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
             progressive = com.fariin.app.ui.components.edgeStages(solid)
             this.alpha = alpha
         })

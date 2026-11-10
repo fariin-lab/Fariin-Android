@@ -748,7 +748,10 @@ private fun ThreadContent(
         ChatReadingPositions.save(ui.cid, key, m.id, listState.firstVisibleItemScrollOffset)
     }
     LaunchedEffect(ui.cid) {
-        snapshotFlow { listState.isScrollInProgress }.collect { if (!it) savePlace() }
+        snapshotFlow { listState.isScrollInProgress }.collect {
+            if (!it) savePlace()
+            com.fariin.app.ui.components.WallpaperHold.scrolling = it
+        }
     }
     DisposableEffect(ui.cid) {
         onDispose { savePlace() }
@@ -2534,6 +2537,8 @@ private fun Composer(
     // camera and the sticker button inside, and a 40 glass circle that is the mic until there are
     // words, then Send. No bar behind them: the chat's bottom edge strip (ThreadEdgeGlass) is that.
     var emojiOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(emojiOpen) { com.fariin.app.ui.components.WallpaperHold.panel = emojiOpen }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { com.fariin.app.ui.components.WallpaperHold.panel = false; com.fariin.app.ui.components.WallpaperHold.scrolling = false } }
     // The panel is closing because the keyboard is coming (its own motion, the panel goes at once).
     var panelToKeys by remember { mutableStateOf(false) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current

@@ -69,7 +69,7 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
         // Mostly blur, a light tint: a colour band is what shows where a bar ends (reference: ~0.4).
         backgroundColor = page; blurRadius = 14.dp; noiseFactor = 0f   // softer: the reference keeps what is under readable (dark-mode compare)
         tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.42f)))
-        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(1f / 3)
+        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
         // Solid down the bar, then a long, soft ease to nothing over the tail.
         // A CROSS-FADE, NOT A FADING RADIUS (owner's video 2026-11-08, frame by frame: a letter under
         // the edge came out half blurred, half sharp, cut by a line where the radius changed). The blur
