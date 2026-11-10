@@ -178,6 +178,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
     var hoursLeft by remember { mutableStateOf(0) }
     var auto by remember { mutableStateOf<Int?>(null) }
     var pending by remember { mutableStateOf<DeviceRow?>(null) }
+    var info by remember { mutableStateOf<Pair<DeviceRow, Boolean>?>(null) }
     var all by remember { mutableStateOf(false) }
     val db = FirebaseFirestore.getInstance()
     if (me != null) DisposableEffect(me) {
@@ -234,7 +235,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
             if (mine == null && rows == null) com.fariin.app.ui.components.LoadingLine("Loading…", Modifier.padding(16.dp), fontSize = 17.sp)
             else if (mine == null) Text("This device is not registered yet. Check your connection.",
                 color = Fariin.colors.secondary, modifier = Modifier.padding(16.dp))
-            else DeviceLine(mine, true, now, true)
+            else Box(Modifier.clickable { info = mine to true }) { DeviceLine(mine, true, now, true) }
         }
         SettingsSection(header = "Other devices", footer = if (hoursLeft > 0 && others.isNotEmpty()) "You can sign out other devices in about $hoursLeft h."
             else "Sign out any device you don't recognise.") {
@@ -245,7 +246,7 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
                     Text("Only this device is signed in to your account.", fontSize = 15.sp, color = Fariin.colors.secondary)
                 }
             }
-            for ((i, d) in others.withIndex()) Box(Modifier.clickable { pending = d }) { DeviceLine(d, false, now, i == others.lastIndex) }
+            for ((i, d) in others.withIndex()) Box(Modifier.clickable { info = d to false }) { DeviceLine(d, false, now, i == others.lastIndex) }
         }
         if (others.size > 1) SettingsSection { SettingsRow("Sign out all other devices", trailing = Trailing.NONE, titleColor = Fariin.colors.red, last = true) { all = true } }
         SettingsSection(header = "Automatic sign-out", footer = "A device not opened for this long signs itself out. The one you are using stays signed in.") {
@@ -276,12 +277,65 @@ private fun DevicesPage(pop: () -> Unit, onCheckup: () -> Unit) {
             }
         }
     }
+    // A device tapped (iOS DeviceDetailSheet): its details; another device's sheet signs it out.
+    info?.let { (d, thisOne) ->
+        DeviceInfoSheet(d, thisOne, now, onDismiss = { info = null }, onSignOut = if (thisOne) null else ({ pending = d }))
+    }
     pending?.let { d ->
         YesNo("Sign out this device?", "It will stop receiving messages and calls, and will be signed out the next time it is opened.", "Sign out",
             onYes = { pending = null; run { signOut(d) } }, onNo = { pending = null })
     }
     if (all) YesNo("Sign out all other devices?", "This device stays signed in.", "Sign out all",
         onYes = { all = false; run { others.forEach { signOut(it) }; com.fariin.app.data.DeviceSessionKeys.revokeAllOthers(ctx) } }, onNo = { all = false })
+}
+
+/**
+ * One device's details (iOS DeviceDetailSheet, owner 2026-11-10: tapping my own device did nothing):
+ * the phone in its blue circle, the model, its status, then Model, System, Fariin, Location and
+ * Signed in. Another device's sheet ends with Sign Out, which closes the sheet and asks first.
+ */
+@Composable
+private fun DeviceInfoSheet(d: DeviceRow, thisDevice: Boolean, now: Long, onDismiss: () -> Unit, onSignOut: (() -> Unit)?) {
+    val c = Fariin.colors
+    val then = remember { booleanArrayOf(false) }
+    val motion = com.fariin.app.ui.components.rememberSheetMotion {
+        onDismiss()
+        if (then[0]) onSignOut?.invoke()
+    }
+    sheetRestAt(motion, 560.dp)
+    com.fariin.app.ui.components.FariinSheetDialog(motion, fill = c.bgSecondary) { _ ->
+        AccountSheetFrame(motion, closeEnabled = true, onClose = { motion.close() }) {
+            Box(Modifier.size(72.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.Icon(ImageVector.vectorResource(R.drawable.ic_sf_iphone), null,
+                    tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(38.dp))
+            }
+            Text(d.model, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = c.label,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+            Text(SettingsRules.deviceLine(thisDevice, d.lastSeen, now, ""), fontSize = 17.sp, color = c.secondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            val rows = listOfNotNull(
+                "Model" to d.model,
+                d.os.takeIf { it.isNotEmpty() }?.let { "System" to it },
+                d.app.takeIf { it.isNotEmpty() }?.let { "Fariin" to it },
+                d.location.takeIf { it.isNotEmpty() }?.let { "Location" to it },
+                d.created?.takeIf { it > 0 }?.let { "Signed in" to java.text.SimpleDateFormat("MMM d, yyyy 'at' h:mm a", java.util.Locale.US).format(java.util.Date(it)) },
+            )
+            Column(Modifier.fillMaxWidth().padding(top = 24.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp)).background(c.card)) {
+                rows.forEachIndexed { i, (k, v) ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(k, fontSize = 17.sp, color = c.label)
+                        Spacer(Modifier.width(16.dp))
+                        Text(v, fontSize = 17.sp, color = c.secondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f))
+                    }
+                    if (i < rows.lastIndex) androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+            if (onSignOut != null) SheetPill("Sign Out This Device", c.red, modifier = Modifier.padding(top = 20.dp)) {
+                then[0] = true; motion.close()
+            }
+        }
+    }
 }
 
 @Composable
