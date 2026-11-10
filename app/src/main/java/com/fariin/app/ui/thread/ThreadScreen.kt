@@ -914,6 +914,8 @@ private fun ThreadContent(
     // glides back down when the sheet closes.
     val imeNowPx = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
     androidx.compose.runtime.SideEffect { AttachKeyboard.lastImePx = imeNowPx }
+    // The + sheet's photos, read once the chat has settled, so its first frame already has pictures.
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(700); AttachWarm.warm(context) }
     val heldAnim by androidx.compose.animation.core.animateIntAsState(AttachKeyboard.heldPx,
         androidx.compose.animation.core.tween(if (AttachKeyboard.heldPx > 0) 0 else 260), label = "attachHold")
     val holdDp = with(androidx.compose.ui.platform.LocalDensity.current) { (heldAnim - imeNowPx).coerceAtLeast(0).toDp() }

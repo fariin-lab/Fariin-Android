@@ -190,9 +190,11 @@ internal fun AttachSheet(
     // iOS sheet pages: the photos, the folder list (album button), and GIFs (GIF tile).
     var page by remember { mutableStateOf(SheetPage.PHOTOS) }
     var folder by remember { mutableStateOf<RecentMedia.Album?>(null) }
-    val recents by produceState(emptyList<RecentMedia.Item>(), access, folder) {
+    // The list kept from the last open (or warmed when the chat opened) shows on the first frame;
+    // the fresh read replaces it a moment later.
+    val recents by produceState(if (folder == null && access != RecentMedia.Access.NONE) AttachWarm.recents else emptyList(), access, folder) {
         value = if (access == RecentMedia.Access.NONE) emptyList()
-            else withContext(Dispatchers.IO) { RecentMedia.load(context, bucket = folder?.id) }
+            else withContext(Dispatchers.IO) { RecentMedia.load(context, bucket = folder?.id) }.also { if (folder == null) AttachWarm.recents = it }
     }
     val albums by produceState(emptyList<RecentMedia.Album>(), access, page == SheetPage.ALBUMS) {
         if (page == SheetPage.ALBUMS && access != RecentMedia.Access.NONE) value = withContext(Dispatchers.IO) { RecentMedia.albums(context) }
@@ -499,6 +501,31 @@ private fun AlbumRow(a: RecentMedia.Album, onClick: () -> Unit) {
 
 private enum class SheetPage { PHOTOS, ALBUMS, GIFS, FILES }
 
+/**
+ * The + sheet's grid made ready before it is asked for (measured 2026-11-10: the first frames of
+ * an open were slow while every tile read its thumbnail from scratch). When a chat opens, the newest
+ * photos' list and their first thumbnails are read off the main thread and kept, so the sheet's
+ * first frame already has pictures; reopening reuses them.
+ */
+internal object AttachWarm {
+    @Volatile var recents: List<RecentMedia.Item> = emptyList()
+    /** Grid thumbnails by address, about 24 MB of them. */
+    val thumbs = object : android.util.LruCache<Uri, androidx.compose.ui.graphics.ImageBitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: Uri, value: androidx.compose.ui.graphics.ImageBitmap) = value.width * value.height * 4
+    }
+    private const val FIRST = 18
+
+    suspend fun warm(context: android.content.Context) = withContext(Dispatchers.IO) {
+        if (RecentMedia.access(context) == RecentMedia.Access.NONE) return@withContext
+        val list = runCatching { RecentMedia.load(context) }.getOrNull() ?: return@withContext
+        recents = list
+        for (item in list.take(FIRST)) {
+            if (thumbs.get(item.uri) != null) continue
+            attachThumb(context, item.uri, item.isVideo, 256)?.let { thumbs.put(item.uri, it) }
+        }
+    }
+}
+
 /** A small picture of a phone photo or video, for the grid and the folder covers. */
 internal fun attachThumb(context: android.content.Context, uri: Uri, isVideo: Boolean, px: Int): androidx.compose.ui.graphics.ImageBitmap? =
     runCatching {
@@ -515,8 +542,8 @@ private fun RecentTile(item: RecentMedia.Item, number: Int, onToggle: () -> Unit
     val c = Fariin.colors
     val context = LocalContext.current
     val uri = item.uri
-    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
-        value = withContext(Dispatchers.IO) { attachThumb(context, uri, item.isVideo, 256) }
+    val bmp by produceState(AttachWarm.thumbs.get(uri), uri) {
+        if (value == null) value = withContext(Dispatchers.IO) { attachThumb(context, uri, item.isVideo, 256)?.also { AttachWarm.thumbs.put(uri, it) } }
     }
     val chosen = number > 0
     Box(Modifier.aspectRatio(1f).background(c.secondary.copy(alpha = 0.12f)).clickable(onClickLabel = "Edit", onClick = onOpen)
