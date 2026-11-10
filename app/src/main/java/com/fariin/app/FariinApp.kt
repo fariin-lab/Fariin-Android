@@ -64,10 +64,12 @@ class FariinApp : Application() {
         com.fariin.app.ui.thread.ReactionArt.init(this)
         // The settings files a chat reads as it opens, loaded off the main thread now: the first read
         // of each parsed its file on the main thread inside the chat's first frame (~7 ms each).
+        // A moment after launch (started with it, it slowed the first frame by ~40 ms on the Pixel).
+        android.os.Handler(mainLooper).postDelayed({
         Thread({ for (f in listOf(com.fariin.app.ui.settings.CHAT_PREFS, "fariin_privacy", "fariin_history_start")) runCatching {
             getSharedPreferences(f, MODE_PRIVATE).all }
             // Messages I deleted for me: read once here, not by the first chat that opens.
-            runCatching { com.fariin.app.data.HiddenMessages.load(this) } }, "prefs-prefetch").apply { isDaemon = true }.start()
+            runCatching { com.fariin.app.data.HiddenMessages.load(this) } }, "prefs-prefetch").apply { isDaemon = true }.start() }, PREFS_PREFETCH_DELAY_MS)
         com.fariin.app.ui.thread.DecodedPictures.init(this)
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
         com.fariin.app.data.ContactNames.init(this)
@@ -163,3 +165,6 @@ class FariinApp : Application() {
             private set
     }
 }
+
+/** When the chat prefs are read ahead after launch: after the first frames, before a first tap. */
+private const val PREFS_PREFETCH_DELAY_MS = 700L
