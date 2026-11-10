@@ -87,6 +87,23 @@ internal fun edgeAlphaBrush(color: Color, heightPx: Float, fadePx: Float): Brush
         startY = 0f, endY = heightPx)
 }
 
+/** No-blur edge: [color] at 97 % down through the bar, then a smoothstep ease to clear over [fadePx]. */
+private fun cheapEdgeBrush(color: Color, heightPx: Float, fadePx: Float): Brush {
+    val f = fadePx.coerceAtMost(heightPx)
+    val start = ((heightPx - f) / heightPx).coerceIn(0f, 1f)
+    val top = 0.97f
+    val n = 10
+    val stops = Array(n + 2) { i ->
+        if (i == 0) 0f to color.copy(alpha = color.alpha * top)
+        else {
+            val t = (i - 1).toFloat() / n
+            val eased = 1f - t * t * (3f - 2f * t)
+            (start + (1f - start) * t) to color.copy(alpha = color.alpha * top * eased)
+        }
+    }
+    return Brush.verticalGradient(*stops, startY = 0f, endY = heightPx)
+}
+
 @Composable
 internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: Boolean, walled: Boolean = false, modifier: Modifier = Modifier) {
     if (!top) return   // no bottom edge (iOS)
@@ -106,7 +123,9 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
-            tints = emptyList()
+            // A soft page-colour veil over the blur (owner 2026-11-10: a photo blurred under the header
+            // still looked busy), so the header reads calm over any picture.
+            tints = listOf(dev.chrisbanes.haze.HazeTint(c.bg.copy(alpha = 0.55f)))
             // A third-size copy: full size doubled the GPU time of every frame of a page slide on the
             // Pixel 5 (18-24 ms against an 11 ms budget). The single sharp frames seen with it went with
             // the pages' move to placement (PageFrame) and the edge's 250 ms off-delay.
@@ -117,10 +136,15 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
     } else if (!walled) {
         // No blur on this phone (Android < 12, a LOW phone, Battery Saver): the page colour over the
         // messages in four soft steps, the reference app's cheap edge.
-        val heightDp = barDp + EDGE_FADE
+        // Owner 2026-11-10 (his Pixel photo of a channel post under the header): the 81 % wash let a
+        // photo show through as a muddy white smear. Now the header sits on the page colour almost
+        // solid, and only below it does the colour ease away over 56 dp in many small steps, so the
+        // edge is soft and nothing busy shows behind the name.
+        val fade = 56.dp
+        val heightDp = barDp + fade
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
         Box(modifier.fillMaxWidth().height(heightDp).drawBehind {
-            if (alpha > 0f) drawRect(edgeAlphaBrush(c.bg, size.height, EDGE_FADE.toPx()), alpha = alpha)
+            if (alpha > 0f) drawRect(cheapEdgeBrush(c.bg, size.height, fade.toPx()), alpha = alpha)
         })
     }
 }
