@@ -126,7 +126,9 @@ private const val STICKER_PLAYS = 3
  */
 @Composable
 internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: com.fariin.app.crypto.EncMeta?,
-                        modifier: Modifier, still: Boolean = false) {
+                        modifier: Modifier, still: Boolean = false,
+                        /** Bumped by a tap: the sticker plays its few times again. */
+                        replay: Int = 0) {
     val ctx = LocalContext.current
     val play = autoplay() && !still
     val asset = remember(packId, stickerId) { if (packId == "mine") null else StickerCatalog.assetPath(ctx, packId, stickerId) }
@@ -157,15 +159,15 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                         // A few plays, then it rests on its last frame (owner 2026-11-10: animated, but not
                         // eating battery): looping forever kept the CPU drawing as long as the chat
                         // stayed open. It plays again when it comes back on screen.
-                        val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(comp,
-                            iterations = STICKER_PLAYS, isPlaying = play)
+                        val progress by androidx.compose.runtime.key(replay) { com.airbnb.lottie.compose.animateLottieCompositionAsState(comp,
+                            iterations = STICKER_PLAYS, isPlaying = play) }
                         LottieAnimation(comp, { if (play) progress else 0f }, modifier = Modifier.fillMaxSize())
                     }
                 }
             }
         }
-        else -> AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play, plays = STICKER_PLAYS), contentDescription = null,
-            contentScale = ContentScale.Fit, modifier = modifier)
+        else -> androidx.compose.runtime.key(replay) { AsyncImage(animatedRequest(asset?.let { "file:///android_asset/$it" } ?: url ?: StickerGifRules.stickerPublicUrl(packId, stickerId), play, plays = STICKER_PLAYS), contentDescription = null,
+            contentScale = ContentScale.Fit, modifier = modifier) }
     }
 }
 
@@ -181,10 +183,12 @@ internal fun StickerRow(m: Message, isMe: Boolean, shape: Shape, fill: Color, he
     val desc = StickerGifRules.stickerLabel(m.stickerEmoji)
     // A tap opens the sticker's sheet (iOS StickerInfoSheet); long press still opens the message menu.
     var info by remember { mutableStateOf(false) }
+    // A tap plays it again (it rests after a few plays) and opens its sheet.
+    var replay by remember { mutableStateOf(0) }
     if (info) StickerInfoSheet(m) { info = false }
     val art: @Composable () -> Unit = {
         StickerArt(m.stickerPack ?: "", m.stickerId ?: "", m.localPath ?: m.imageUrl, m.enc,
-            Modifier.size(w.dp, h.dp).clickable(enabled = m.sendState == null) { info = true })
+            Modifier.size(w.dp, h.dp).clickable(enabled = m.sendState == null) { replay++; info = true }, replay = replay)
     }
     if (m.replyTo != null) {
         Column(Modifier.clip(shape).background(fill).padding(horizontal = 10.dp, vertical = 6.dp),

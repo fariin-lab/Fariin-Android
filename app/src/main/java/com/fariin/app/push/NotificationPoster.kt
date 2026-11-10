@@ -121,7 +121,10 @@ object NotificationPoster {
             return
         }
 
-        val senderIcon = IconCompat.createWithBitmap(circle(senderPhoto, group = false))
+        // A channel's face is its rounded square (owner 2026-11-10), as on its row and its page.
+        val channelChat = com.fariin.app.data.CryptoHub.listedConversation(spec.key)?.isChannel == true ||
+            com.fariin.app.channel.ChannelFollows.docs.value[spec.key]?.get("channel") == true
+        val senderIcon = IconCompat.createWithBitmap(circle(senderPhoto, group = false, squircle = channelChat && !spec.isGroup))
         val sender = Person.Builder().setName(spec.senderName).setKey(spec.senderUid).setIcon(senderIcon).build()
         val mePerson = Person.Builder().setName("You").setKey(me.ifEmpty { "me" }).build()
 
@@ -149,7 +152,7 @@ object NotificationPoster {
             if (spec.isGroup) groupPhoto else senderPhoto, person = if (spec.isGroup) null else sender)
         try { ShortcutManagerCompat.pushDynamicShortcut(c, shortcut) } catch (_: Exception) {}
         b.setShortcutId(spec.key)
-        if (spec.isGroup) b.setLargeIcon(circle(groupPhoto, group = true))
+        if (spec.isGroup) b.setLargeIcon(circle(groupPhoto, group = true, squircle = channelChat))
         if (spec.opensChat) {
             val locked = AppLock.enabled(c)
             NotifActions.addTo(b, c, spec.key, me, locked)
@@ -317,14 +320,16 @@ object NotificationPoster {
 
     /** The photo cut to a circle, or the soft grey face with the person (or people) glyph, the
      *  way the app's own avatar draws someone with no photo (iOS Avatars.placeholder). */
-    fun circle(bytes: ByteArray?, group: Boolean): Bitmap {
+    fun circle(bytes: ByteArray?, group: Boolean, squircle: Boolean = false): Bitmap {
         val n = AVATAR_PX
         val out = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
         val cv = Canvas(out)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         val src = bytes?.let { decode(it) }
+        val r = n * SQUIRCLE_RADIUS
         if (src != null) {
-            cv.drawOval(RectF(0f, 0f, n.toFloat(), n.toFloat()), p)
+            if (squircle) cv.drawRoundRect(RectF(0f, 0f, n.toFloat(), n.toFloat()), r, r, p)
+            else cv.drawOval(RectF(0f, 0f, n.toFloat(), n.toFloat()), p)
             p.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
             val side = minOf(src.width, src.height)
             val sx = (src.width - side) / 2
@@ -333,7 +338,8 @@ object NotificationPoster {
             return out
         }
         p.color = Color.rgb(0xDB, 0xDB, 0xE0)
-        cv.drawOval(RectF(0f, 0f, n.toFloat(), n.toFloat()), p)
+        if (squircle) cv.drawRoundRect(RectF(0f, 0f, n.toFloat(), n.toFloat()), r, r, p)
+        else cv.drawOval(RectF(0f, 0f, n.toFloat(), n.toFloat()), p)
         p.color = Color.rgb(0x9E, 0x9E, 0xA6)
         if (group) {
             person(cv, p, n * 0.36f, n * 0.54f, n * 0.30f)
@@ -343,6 +349,9 @@ object NotificationPoster {
         }
         return out
     }
+
+    /** A channel face's corner radius, as a share of its side (the app's channel squircle). */
+    private const val SQUIRCLE_RADIUS = 0.28f
 
     /** A filled head and shoulders, centred on (cx, cy), `size` tall. */
     private fun person(cv: Canvas, p: Paint, cx: Float, cy: Float, size: Float) {

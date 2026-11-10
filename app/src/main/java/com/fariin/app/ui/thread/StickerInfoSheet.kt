@@ -116,7 +116,8 @@ internal fun StickerInfoSheet(m: Message, onDismiss: () -> Unit) {
                     items(pack.stickers, key = { it.key }) { p ->
                         Box(Modifier.size(80.dp).clip(RoundedCornerShape(10.dp)).clickable { StickerSendHook.send?.invoke(p); onDismiss() },
                             contentAlignment = Alignment.Center) {
-                            StickerArt(p.packId, p.stickerId, null, null, Modifier.size(72.dp))
+                            // Stills (owner 2026-11-10: the pack page lagged as 40 stickers played at once).
+                            StickerArt(p.packId, p.stickerId, null, null, Modifier.size(72.dp), still = true)
                         }
                     }
                 }

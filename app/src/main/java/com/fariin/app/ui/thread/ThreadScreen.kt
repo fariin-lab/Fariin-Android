@@ -2593,7 +2593,7 @@ private fun Composer(
                 // The sticker mark opens the sticker panel, the keyboard mark brings the keys back.
                 FieldIcon(if (emojiOpen) com.fariin.app.R.drawable.ic_keyboard else com.fariin.app.R.drawable.ic_gif,
                     if (emojiOpen) "Keyboard" else "GIF") {
-                    lightTap()   // iOS: a light tap as the sticker panel opens or closes
+                    // No buzz on the swap (owner 2026-11-10).
                     panelToKeys = emojiOpen
                     emojiOpen = !emojiOpen
                     // Back to the keys: the field takes focus first. The panel opened with no keyboard
@@ -2718,7 +2718,9 @@ internal val COMPOSER_SIDE = 20.dp
 /** One icon inside the message pill: a 32 x 40 slot (the iOS pitch), a 24 icon at 55 % ink. */
 @Composable
 private fun FieldIcon(icon: Int, label: String, onClick: () -> Unit) {
-    Box(Modifier.size(width = 32.dp, height = COMPOSER_BUTTON).clip(CircleShape).clickable(onClick = onClick),
+    // No grey press circle (owner 2026-11-10): the icon itself is the button.
+    Box(Modifier.size(width = 32.dp, height = COMPOSER_BUTTON).clickable(
+        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center) {
         Icon(androidx.compose.ui.res.painterResource(icon), contentDescription = label,
             tint = Fariin.colors.label.copy(alpha = 0.55f), modifier = Modifier.size(24.dp))
