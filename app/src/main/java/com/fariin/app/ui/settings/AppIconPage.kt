@@ -104,6 +104,8 @@ internal fun AppIconPage(pop: () -> Unit) {
     val c = Fariin.colors
     var current by remember { mutableStateOf(AppIcons.shown(ctx)) }
     var error by remember { mutableStateOf<String?>(null) }
+    // iOS says so after a change: "You have changed the icon for "Fariin"." with the new icon.
+    var changed by remember { mutableStateOf<AppIcons.Choice?>(null) }
     val barScroll = rememberScrollState()
     BarPage("App Icon", onBack = pop, under = underBar(barScroll)) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(barScroll).padding(top = top).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -113,16 +115,18 @@ internal fun AppIconPage(pop: () -> Unit) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                         row.forEach { ch ->
                             val sel = ch.alias == current
-                            Column(Modifier.weight(1f).clickable {
+                            // No grey press shade (owner 2026-11-10): the ring and the alert say it.
+                            Column(Modifier.weight(1f).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
                                 if (ch.alias == current) return@clickable
-                                try { AppIcons.choose(ctx, ch.alias); current = ch.alias }
+                                try { AppIcons.choose(ctx, ch.alias); current = ch.alias; changed = ch }
                                 catch (e: Exception) { error = e.message ?: "Something went wrong." }
                             }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 val shape = RoundedCornerShape(15.dp)
                                 Image(painterResource(ch.art), contentDescription = ch.label, contentScale = ContentScale.Crop,
                                     modifier = Modifier.size(64.dp).clip(shape)
-                                        .border(if (sel) 2.5.dp else 1.dp, if (sel) c.accent else c.label.copy(alpha = 0.1f), shape))
-                                Text(ch.label, fontSize = 12.sp, color = if (sel) c.accent else c.secondary)
+                                        // iOS: the chosen icon ringed in the text colour, its name in the text colour.
+                                        .border(if (sel) 3.dp else 1.dp, if (sel) c.label else c.label.copy(alpha = 0.1f), shape))
+                                Text(ch.label, fontSize = 13.sp, color = if (sel) c.label else c.secondary)
                             }
                         }
                         repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -135,6 +139,19 @@ internal fun AppIconPage(pop: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 4.dp))
             Spacer(Modifier.size(com.fariin.app.ui.shell.bottomBarInset()))
         }
+    }
+    changed?.let { ch ->
+        GlassAlert(onDismissRequest = { changed = null },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(ch.art), contentDescription = null, contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(13.dp)))
+                    Spacer(Modifier.size(14.dp))
+                    Text("You have changed the icon for “Fariin”.", fontSize = 17.sp, color = c.label)
+                }
+            },
+            confirmButton = { TextButton(onClick = { changed = null }) { Text("OK", color = c.label) } },
+            containerColor = c.card, titleContentColor = c.label, textContentColor = c.label)
     }
     error?.let { msg ->
         GlassAlert(onDismissRequest = { error = null }, title = { Text("Couldn't change the icon") }, text = { Text(msg) },
