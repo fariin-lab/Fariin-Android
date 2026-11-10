@@ -65,7 +65,7 @@ fun GlassBarPage(
     content: @Composable (top: Dp) -> Unit,
 ) {
     val glass = com.fariin.app.perf.rememberPowerState().glass()
-    val liquid = enabled && glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    val liquid = enabled && GlassQuality.liquid(glass)
     if (!liquid) {
         Column(modifier.fillMaxSize()) { bar(); content(0.dp) }
         return

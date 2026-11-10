@@ -254,7 +254,7 @@ fun MainShell(
     val haze = remember { HazeState() }
     // Android 13+ with glass allowed: real liquid glass (lens refraction at the rim, colour vibrancy,
     // a specular edge) from the backdrop library; Android 12 keeps the frosted blur; below, solid.
-    val liquid = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    val liquid = com.fariin.app.ui.components.GlassQuality.liquid(glass)
     val backdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
 
     // storyAppShrink: the app grows back from a card after a story is posted (StoryPostFlight.kt).

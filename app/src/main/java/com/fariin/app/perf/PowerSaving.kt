@@ -52,7 +52,10 @@ data class PowerState(
 object PowerRules {
     fun defaults(cls: PerfClass): PowerChoices {
         val on = cls != PerfClass.LOW
-        return PowerChoices(blur = on, animations = on, autoplayVideos = on, autoplayGifs = on, followBatterySaver = true)
+        // Blur starts on only on a high-end phone (owner 2026-11-10: blur goes off by itself on a weak
+        // phone). On the Pixel as a mid-range phone the frosted bars doubled the cost of every frame
+        // of a tab change (24.6 -> 11.8 ms); the switch in Power Saving still turns it on.
+        return PowerChoices(blur = cls == PerfClass.HIGH, animations = on, autoplayVideos = on, autoplayGifs = on, followBatterySaver = true)
     }
     fun glass(sdk: Int, cls: PerfClass, blurAllowed: Boolean) = sdk >= 31 && cls != PerfClass.LOW && blurAllowed
 }

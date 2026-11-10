@@ -12,4 +12,12 @@ import com.fariin.app.perf.PowerSaving
 object GlassQuality {
     fun scale(base: Float): Float =
         if (PowerSaving.state.value.deviceClass == PerfClass.HIGH) base else base * 0.6f
+
+    /**
+     * The liquid glass (lens refraction, from the backdrop library) only on a high-end phone with
+     * Android 13+. Its shader cost 17 ms of drawing per frame on the Pixel as a mid-range phone while
+     * the tab bar moved (2026-11-10), some 60 ms on one; mid-range phones get the frosted glass.
+     */
+    fun liquid(glass: Boolean): Boolean = glass && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+        PowerSaving.state.value.deviceClass == PerfClass.HIGH
 }
