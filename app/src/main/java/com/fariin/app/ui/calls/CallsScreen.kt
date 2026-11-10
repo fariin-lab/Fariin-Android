@@ -162,7 +162,13 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // A second tap on Calls: to the top.
     com.fariin.app.ui.shell.OnTabReselect { listState.animateScrollToItem(0) }
-    val now = System.currentTimeMillis()
+    // One clock a minute while the tab is open (as Stories). Read fresh on every pass, it gave every
+    // row a new time, so any small change rebuilt the whole list, even hidden behind a chat
+    // (sampled on the Pixel as a mid-range phone, 2026-11-10).
+    var now by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(active, calls) {
+        if (active) { now = System.currentTimeMillis(); while (true) { kotlinx.coroutines.delay(60_000); now = System.currentTimeMillis() } }
+    }
     val ctx = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val q = search.trim().lowercase()
