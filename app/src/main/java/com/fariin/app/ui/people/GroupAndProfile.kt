@@ -216,7 +216,9 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                 contentAlignment = Alignment.Center) {
                 if (heldBmp != null) androidx.compose.foundation.Image(heldBmp, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else Avatar(if (stagedRemove) null else me?.photoUrl, 120.dp)
-                if (saving) Box(Modifier.size(120.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                // Only a photo being saved spins here; a name or bio save spins on Save alone (owner
+                // 2026-11-10: a second spinner blinked on the photo after saving a bio).
+                if (saving && (stagedJpeg != null || stagedRemove)) Box(Modifier.size(120.dp).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
                     com.fariin.app.ui.components.FariinSpinner(size = 30.dp, stroke = 3.dp, color = androidx.compose.ui.graphics.Color.White)
                 }
             }
