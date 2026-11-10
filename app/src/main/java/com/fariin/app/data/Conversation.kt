@@ -35,6 +35,8 @@ data class Conversation(
     val pinOrder: Map<String, Double> = emptyMap(),
     val markedUnread: Map<String, Boolean> = emptyMap(),
     val delivered: Map<String, Double> = emptyMap(),
+    /** iOS lastPlayedVoice: per person, the send time of the newest voice note they played. */
+    val lastPlayedVoice: Map<String, Double> = emptyMap(),
     val lastHeld: Boolean = false,
     /** Group admins and "Start group call: Admins only" (for the New Call page's group rows). */
     val admins: List<String> = emptyList(),
@@ -270,6 +272,7 @@ data class Conversation(
                 pinOrder = doubleMap(data["pinOrder"]),
                 markedUnread = boolMap(data["markedUnread"]),
                 delivered = doubleMap(data["delivered"]),
+                lastPlayedVoice = doubleMap(data["lastPlayedVoice"]),
                 lastHeld = data["lastHeld"] as? Boolean ?: false,
                 admins = stringList(data["admins"]),
                 createdBy = data["createdBy"] as? String ?: "",

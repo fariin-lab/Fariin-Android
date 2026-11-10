@@ -70,8 +70,12 @@ import com.fariin.app.R
 internal fun OneTimeVoicePill(m: Message, cid: String, isMe: Boolean, meta: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val epoch by ViewedOnce.epoch.collectAsState()
-    val opened = remember(m.id, epoch, m.consumed, isMe) {
-        OnceRules.opened(isMe, m.consumed, ViewedOnce.contains(ctx, m.id))
+    // My own note also reads Opened once their played mark passes it (iOS openedByOther), which
+    // lands before the server's burn does; read off the chat as the list already holds it.
+    val heardThere = isMe && com.fariin.app.data.PlayedVoice.playedByOther(com.fariin.app.data.ChatsNow.find(cid),
+        m.authorId, m.createdAtMillis)
+    val opened = remember(m.id, epoch, m.consumed, isMe, heardThere) {
+        OnceRules.opened(isMe, m.consumed || heardThere, ViewedOnce.contains(ctx, m.id))
     }
     val canOpen = OnceRules.canOpen(isMe, opened, m.audioUrl != null, m.sendState != null)
     var open by remember(m.id) { mutableStateOf(false) }
@@ -114,6 +118,8 @@ private fun OneTimeVoicePage(m: Message, cid: String, onClose: () -> Unit) {
             if (f == null || !player.load(f, rewindAtEnd = false)) { failed = true; return@LaunchedEffect }
             file = f
             heard = true
+            // The sender's "Opened" (iOS markVoicePlayedThrottled on open).
+            com.fariin.app.data.PlayedVoice.markPlayed(ctx, cid, m.createdAtMillis)
             // Only the receiver opens this page (the pill is inert for its sender); the function
             // also refuses the author and groups.
             OnceBurn.burnVoice(cid, m.id)
