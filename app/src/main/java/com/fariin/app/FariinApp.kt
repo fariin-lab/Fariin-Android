@@ -62,6 +62,10 @@ class FariinApp : Application() {
         // thread, and the reaction art a few seconds later so it does not compete with the first frames.
         Thread({ runCatching { com.fariin.app.media.ChatSounds.init(this) } }, "sounds-init").apply { isDaemon = true }.start()
         com.fariin.app.ui.thread.ReactionArt.init(this)
+        // The settings files a chat reads as it opens, loaded off the main thread now: the first read
+        // of each parsed its file on the main thread inside the chat's first frame (~7 ms each).
+        Thread({ for (f in listOf(com.fariin.app.ui.settings.CHAT_PREFS, "fariin_privacy", "fariin_history_start")) runCatching {
+            getSharedPreferences(f, MODE_PRIVATE).all } }, "prefs-prefetch").apply { isDaemon = true }.start()
         com.fariin.app.ui.thread.DecodedPictures.init(this)
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
         com.fariin.app.data.ContactNames.init(this)
