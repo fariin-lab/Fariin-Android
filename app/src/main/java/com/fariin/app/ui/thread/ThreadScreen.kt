@@ -2915,6 +2915,8 @@ private fun rowKind(m: Message, channel: Boolean): Int = when {
 
 /** The sticker and GIF panel's slide down as it closes outright (the big messenger's is about 150 ms). */
 private const val PANEL_CLOSE_MS = 180
+/** The panel's rise from rest, about the keyboard's own rise on a Pixel. */
+private const val PANEL_OPEN_MS = 260
 
 /**
  * The room under the composer that the sticker panel shares with the keyboard. The page above is
@@ -2942,7 +2944,16 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
     val reserve = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(open, toKeys, full) {
         when {
-            open -> reserve.snapTo(full.toFloat())
+            open -> {
+                // From the keys: at once (they stand there, the panel takes their place). From rest
+                // (no keys up): it rises as the keys rise (owner 2026-11-10: "it feels like a jump").
+                val keysUp = ime.getBottom(density) > defaultKb / 3
+                if (keysUp || !com.fariin.app.ui.components.Motion.on || reserve.value >= full - 1) reserve.snapTo(full.toFloat())
+                else {
+                    if (reserve.value < restPx) reserve.snapTo(restPx.toFloat())
+                    reserve.animateTo(full.toFloat(), androidx.compose.animation.core.tween(PANEL_OPEN_MS, easing = com.fariin.app.ui.components.Motion.Decelerate))
+                }
+            }
             toKeys -> {
                 // Held while the keys rise under it; let go once they are up (or after a beat if they never came).
                 reserve.snapTo(full.toFloat())

@@ -41,7 +41,7 @@ class FariinMessagingService : FirebaseMessagingService() {
         // ring watcher, which reads the call document and shows the incoming screen.
         // The server's "Incoming call" alert (not data-only) also means a ring: wake the watcher; the
         // alert itself is not shown (NotifPayload skips it).
-        val alertBody = message.notification?.body ?: message.data["body"]
+        val alertBody = message.notification?.body ?: message.data["body"] ?: message.data["b"]
         if (message.data["kind"] != "call" && (alertBody == "Incoming call" || alertBody == "Incoming video call")) {
             FirebaseAuth.getInstance().currentUser?.uid?.let { com.fariin.app.call.IncomingCallWatcher.onCallPush(applicationContext, it) }
         }
@@ -75,14 +75,14 @@ class FariinMessagingService : FirebaseMessagingService() {
         // here and is drawn the same way. A tap opens the Stories tab.
         if (message.data["kind"] == "story") {
             if (Push.pushOn(applicationContext)) NotificationPoster.postStory(applicationContext,
-                message.notification?.title ?: "Fariin", message.notification?.body ?: "New story.", message.data["aid"].orEmpty())
+                message.notification?.title ?: message.data["t"] ?: "Fariin", message.notification?.body ?: message.data["b"] ?: "New story.", message.data["aid"].orEmpty())
             return
         }
         // A reply alert (owner 2026-11-06): its own notification, whose tap opens that post's Replies.
         // Not while that channel is open: its sheet refreshes there on its own.
         com.fariin.app.data.PostReplyRules.alertTarget(message.data["kind"], message.data["cid"], message.data["mid"])?.let { (cid, mid) ->
             if (Push.pushOn(applicationContext) && PushRouter.activeChatId != cid) NotificationPoster.postReplyAlert(applicationContext,
-                message.notification?.title ?: "Fariin", message.notification?.body ?: "New reply", cid, mid,
+                message.notification?.title ?: message.data["t"] ?: "Fariin", message.notification?.body ?: message.data["b"] ?: "New reply", cid, mid,
                 message.data["rid"].orEmpty(), message.data["aid"].orEmpty())
             return
         }
