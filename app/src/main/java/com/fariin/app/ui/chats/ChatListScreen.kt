@@ -496,8 +496,9 @@ fun ChatListScreen(
                                     modifier = Modifier.padding(end = if (showArchive) 12.dp else 8.dp))
                                 // Explore (owner 2026-11-09): a round glass button with our compass, the one
                                 // way in from the chat list; it opens the same Find Channels page.
+                                // Filled (owner 2026-11-10): black with a white compass, white with a black one in dark.
                                 if (!showArchive) FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_compass), contentDescription = "Explore",
-                                    onClick = channels.find, modifier = Modifier.padding(end = 8.dp))
+                                    onClick = channels.find, modifier = Modifier.padding(end = 8.dp), tint = c.onAccent, fill = c.accent)
                                 if (!showArchive) OverflowMenu(moreAnchor, onOpen = { items -> moreItems = items; moreOpen = true },
                                     filter = filter, onFilter = { filter = it },
                                     requests = state.requests.size,
