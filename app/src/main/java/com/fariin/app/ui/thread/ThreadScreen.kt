@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -2181,9 +2182,11 @@ private fun ReplyQuote(r: Message.ReplyRef, ui: ThreadUi, isMe: Boolean) {
     val name = if (r.authorId == ui.me) "You" else ui.names[r.authorId] ?: ui.title
     Row(
         Modifier.padding(top = 3.dp, bottom = 5.dp).clip(RoundedCornerShape(6.dp))
-            .background(if (isMe) Color.White.copy(alpha = 0.18f) else bar.copy(alpha = 0.12f)),
+            .background(if (isMe) Color.White.copy(alpha = 0.18f) else bar.copy(alpha = 0.12f))
+            .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
     ) {
-        Box(Modifier.width(3.dp).height(38.dp).background(bar))
+        // The card's full height, as iOS (a fixed 38 covered only the top of a taller card).
+        Box(Modifier.width(3.dp).fillMaxHeight().background(bar))
         // The quoted photo, video poster, GIF or sticker (iOS QuoteChrome thumb, 34 square), read
         // from the original in this chat; none once it is deleted or view-once.
         val original = if (r.isStatus) null else remember(r.id, ui.messages) { ui.messages.firstOrNull { it.id == r.id } }
