@@ -145,7 +145,11 @@ class FirestorePeople(
     }
 
     override suspend fun profile(uid: String): Person? = try {
-        db.collection("users").document(uid).get().await().data?.let { Person.from(uid, it) }
+        db.collection("users").document(uid).get().await().data?.let { Person.from(uid, it) }?.let { p ->
+            // ⛔ THEIR BIO ONLY WHEN THEIR "Bio" PRIVACY LETS ME SEE IT (iOS ContactInfoView.gatedAbout,
+            // PrivacyPrefs.allows "bio"). Blanked here, where every page that shows a person gets it.
+            if (uid == me || Person.allows(p.privacy, "bio", isContact(uid))) p else p.copy(about = "")
+        }
     } catch (_: Exception) { null }
 
     override suspend fun chatKeyExists(uid: String): Boolean? = try {
