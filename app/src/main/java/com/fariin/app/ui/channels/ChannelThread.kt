@@ -422,7 +422,9 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
             Text(it, fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 8.dp))
         }
         // iOS SimilarChannels: after following in this run, a strip of channels like this one, until its X.
-        if (joined && SimilarChannelsStore.showsAfterFollow(ch.info.cid)) SimilarChannelsStrip(ch.info.cid)
+        // ⛔ HIDDEN (owner 2026-11-10, iOS too: "not finished"): no strip, no getSimilarChannels call.
+        // Back only on his word: flip SimilarChannelsStore.ENABLED.
+        if (SimilarChannelsStore.ENABLED && joined && SimilarChannelsStore.showsAfterFollow(ch.info.cid)) SimilarChannelsStrip(ch.info.cid)
         if (banned) {
             Text("You're banned from this channel.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(c.card).padding(14.dp))
@@ -476,6 +478,8 @@ fun ChannelBottomBar(ch: ChannelThreadUi, notice: String?) {
 
 /** Which channels show "Similar Channels": followed in this run of the app, and not closed with the X. */
 internal object SimilarChannelsStore {
+    /** Owner 2026-11-10: Similar Channels hidden everywhere until it is finished. */
+    const val ENABLED = false
     private val just = androidx.compose.runtime.mutableStateListOf<String>()
     private val cache = HashMap<String, List<com.fariin.app.channel.DiscoveredChannel>>()
     fun followed(cid: String) { if (cid !in just) just.add(cid) }
