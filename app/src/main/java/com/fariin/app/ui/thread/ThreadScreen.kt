@@ -540,6 +540,18 @@ private fun ThreadContent(
     // At the bottom = the newest row in view (the list is reversed). Read receipts follow it.
     val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
     LaunchedEffect(atBottom) { actions.onAtBottom(atBottom) }
+    // A failed message tapped (iOS decision D14): "Message not sent" with Resend and Delete.
+    var failedFor by remember { mutableStateOf<Message?>(null) }
+    failedFor?.let { fm ->
+        val offline = com.fariin.app.data.ConnectionStatus.state.collectAsState().value != com.fariin.app.data.ConnectionStatus.State.ONLINE
+        com.fariin.app.ui.components.GlassAlert(onDismissRequest = { failedFor = null }, title = "Message not sent",
+            message = if (offline) "No internet connection. Check your connection and try again." else null,
+            actions = listOf(
+                com.fariin.app.ui.components.GlassAlertAction("Resend", com.fariin.app.ui.components.GlassAlertStyle.Bold) { onRetry(fm) },
+                com.fariin.app.ui.components.GlassAlertAction("Delete", com.fariin.app.ui.components.GlassAlertStyle.Red) { actions.onDeleteForMe(fm) },
+                com.fariin.app.ui.components.GlassAlertAction("Cancel") {},
+            ))
+    }
     var seenCount by remember { mutableStateOf(ui.messages.size) }
     LaunchedEffect(atBottom, ui.messages.size) { if (atBottom) seenCount = ui.messages.size }
     // iOS noteReactionChanges: my messages' reactions as last seen; the first pass only seeds, so
@@ -1122,7 +1134,7 @@ private fun ThreadContent(
                                     if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
                             ) {
                                 Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
-                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
+                                    MessageRow(ui, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
                                     // A picture, video or album post's pills sit inside its bubble (MediaRow).
@@ -1175,7 +1187,7 @@ private fun ThreadContent(
                                         ReactNow.set(m, next)
                                         actions.onReact(m, next)
                                     }) {
-                                    MessageRow(ui, m, g, is24h, onRetry) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
+                                    MessageRow(ui, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // iOS: a pill opens who reacted (channels keep their own chips).
                                     ReactionChips(ReactNow.shown(m, ui.me), ui, m.authorId == ui.me) { reactorsFor = m.rowId }
                                 }
@@ -1945,7 +1957,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
     }
     // The red "!" alone says little: the words under the bubble, tappable too.
     if (failed) {
-        Text("Not sent. Tap to retry", fontSize = 12.sp, color = c.red,
+        Text("Not sent. Tap for options", fontSize = 12.sp, color = c.red,
             modifier = Modifier.padding(start = 12.dp, end = 16.dp, top = 2.dp, bottom = 2.dp).clickable { onRetry(m) })
     }
     }

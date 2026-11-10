@@ -1723,7 +1723,10 @@ class ThreadRepository(
 
     /** Delete for Me: hidden on this phone only (an unsent one of mine is also dropped). */
     fun hideForMe(context: Context, m: Message) {
-        m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it) }
+        // An unsent one also leaves the send queue and drops what it was waiting to resend (iOS
+        // deleteForMe on a failed message: queue entry, upload and bubble all go).
+        m.clientId?.let { pending.remove(it); retryPhoto.remove(it); retryVoice.remove(it)
+            if (m.sendState != null && !SendQueue.isInFlight(it)) { SendQueue.remove(me, it); retryMedia.remove(it) } }
         HiddenMessages.hide(context, m.id)
         rebuild()
     }
