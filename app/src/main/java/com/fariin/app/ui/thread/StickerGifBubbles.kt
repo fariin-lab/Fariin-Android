@@ -90,6 +90,8 @@ import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.util.zip.GZIPInputStream
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -166,13 +168,10 @@ internal fun StickerArt(packId: String, stickerId: String, url: String?, enc: co
                     else {
                         // A few plays, then it rests on its last frame (owner 2026-11-10: animated, but not
                         // eating battery). It plays again when it comes back on screen.
-                        val progress = androidx.compose.runtime.key(replay) { com.airbnb.lottie.compose.animateLottieCompositionAsState(c,
-                            iterations = STICKER_PLAYS, isPlaying = play) }
-                        // Drawn at most 30 times a second (a sticker is made at 30 or 60): the progress
-                        // moves every vsync (90 Hz on the Pixel), so the frame it shows is rounded to a
-                        // 30 fps step and the sticker redraws only when that step changes.
-                        val shown = remember(c) { androidx.compose.runtime.derivedStateOf { StickerLottie.step(c, progress.value) } }
-                        LottieAnimation(c, { shown.value }, modifier = Modifier.fillMaxSize())
+                        // Painted into a picture off the main thread, at most 30 times a second, and only
+                        // shown here (owner 2026-11-10: smooth like the reference app). Until the first
+                        // picture is ready the still stays, so it never blinks.
+                        androidx.compose.runtime.key(replay) { StickerFrames(c, onWaiting = drawStill) }
                     }
                 }
             }
@@ -606,6 +605,11 @@ internal fun Modifier.scrollHide(onScrolledIn: (Boolean) -> Unit): Modifier {
  * lagged; each one was unzipped and parsed again on every draw of its row).
  */
 internal object StickerLottie {
+    /** The shared painters: four background threads for every animated sticker on screen. */
+    val painters = java.util.concurrent.Executors.newFixedThreadPool(4) { r ->
+        Thread(r, "sticker-paint").apply { priority = Thread.NORM_PRIORITY - 1; isDaemon = true }
+    }.asCoroutineDispatcher()
+
     private val comps = object : android.util.LruCache<String, com.airbnb.lottie.LottieComposition>(40) {}
 
     fun cached(asset: String): com.airbnb.lottie.LottieComposition? = comps.get(asset)
@@ -691,5 +695,60 @@ internal fun StickerPackSheet(pack: StickerPackInfo, me: String, onSend: (Sticke
                     color = if (isAdded) c.red else c.onAccent)
             }
         }
+    }
+}
+
+/**
+ * One animated sticker played the way big messengers do it: each frame is painted into a bitmap on a
+ * shared pool of background threads (four), at most 30 frames a second, and the screen only draws the
+ * finished bitmap. Three bitmaps per sticker, in turn. It plays [STICKER_PLAYS] times and rests on its
+ * last frame; it stops the moment it leaves the screen (its effect is cancelled) and starts again
+ * when it comes back.
+ */
+@Composable
+private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, onWaiting: @Composable () -> Unit) {
+    var shown by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = constraints.maxWidth.coerceIn(1, 1024)
+        val h = constraints.maxHeight.coerceIn(1, 1024)
+        LaunchedEffect(c, w, h) {
+            // Three in turn: the one shown, the one the screen may still be drawing, and the one painted.
+            val bufs = Array(3) { android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888) }
+            val d = com.airbnb.lottie.LottieDrawable().apply { composition = c }
+            // Fit inside the box, centred, as the vector drawing did.
+            val b = c.bounds
+            val scale = minOf(w / b.width().toFloat(), h / b.height().toFloat())
+            val dx = (w - b.width() * scale) / 2f; val dy = (h - b.height() * scale) / 2f
+            val frames = c.durationFrames.coerceAtLeast(1f)
+            val per = (c.frameRate / 30f).coerceAtLeast(1f)
+            val stepMs = (1000f * per / c.frameRate).toLong().coerceAtLeast(16L)
+            var n = 0
+            try {
+                for (play in 0 until STICKER_PLAYS) {
+                    var f = 0f
+                    while (f <= frames) {
+                        val started = android.os.SystemClock.uptimeMillis()
+                        val target = bufs[n % 3]
+                        val p = (f / frames).coerceIn(0f, 1f)
+                        withContext(StickerLottie.painters) {
+                            target.eraseColor(android.graphics.Color.TRANSPARENT)
+                            val cv = android.graphics.Canvas(target)
+                            cv.translate(dx, dy); cv.scale(scale, scale)
+                            d.progress = p
+                            d.draw(cv)
+                        }
+                        shown = target.asImageBitmap()
+                        n++
+                        f += per
+                        kotlinx.coroutines.delay((stepMs - (android.os.SystemClock.uptimeMillis() - started)).coerceAtLeast(0L))
+                    }
+                }
+            } finally {
+                // The bitmaps go with the effect; the last one shown stays until the composable leaves.
+            }
+        }
+        val img = shown
+        if (img == null) onWaiting()
+        else Image(img, contentDescription = null, modifier = Modifier.fillMaxSize())
     }
 }
