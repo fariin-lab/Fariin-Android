@@ -32,6 +32,9 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
+/** Pushed pages' top bar: solid in the page colour (true) or frosted glass (false, kept). Android, owner 2026-11-10. */
+internal const val PAGE_BAR_SOLID = true
+
 /**
  * A pushed page whose content runs under its bar, so the bar's floating buttons (the back circle,
  * Edit, Done) are real liquid glass as in the chat (owner 2026-11-06: "the back button in the chat
@@ -64,6 +67,9 @@ fun GlassBarPage(
     bar: @Composable () -> Unit,
     content: @Composable (top: Dp) -> Unit,
 ) {
+    // PAGE_BAR_SOLID: the frosted bar's blur ran on past it over the page (owner 2026-11-10, a
+    // profile: "why is this bar bigger"), so pages get the chat's solid bar. Frosted stays, switched off.
+    @Suppress("NAME_SHADOWING") val frosted = frosted && !PAGE_BAR_SOLID
     val glass = com.fariin.app.perf.rememberPowerState().glass()
     val liquid = enabled && GlassQuality.liquid(glass)
     if (!liquid) {
