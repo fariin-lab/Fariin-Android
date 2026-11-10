@@ -2577,7 +2577,7 @@ private fun Composer(
             } else {
                 Box(Modifier.size(COMPOSER_BUTTON).onGloballyPositioned { AttachSource.rect = it.boundsInWindow() }
                     .floating().clickable { lightTap(); onAttach() }, contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "Attach", tint = c.label, modifier = Modifier.size(28.dp))
+                    Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), contentDescription = "Attach", tint = c.label, modifier = Modifier.size(26.dp))
                 }
                 Spacer(Modifier.width(8.dp))
                 // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
@@ -2748,8 +2748,9 @@ private fun Composer(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
+                    // iOS: the mic drawn in a 24 box, at its own shape (owner 2026-11-10: "stretched").
                     Icon(ImageVector.vectorResource(R.drawable.ic_mic), contentDescription = "Record a voice message. Tap for hands-free, hold to record",
-                        tint = if (recording) Color.White else c.label, modifier = Modifier.size(28.dp))
+                        tint = if (recording) Color.White else c.label, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -2784,8 +2785,8 @@ private fun FieldIcon(icon: Int, label: String, onClick: () -> Unit) {
 
 /**
  * Where the composer rests (iOS positionBottomBar), as window insets so it is worked out at layout
- * time: 8 is always added below the row; on top of that, a gesture strip's height less 13 (the row
- * sinks 5 into the strip) or a 3-button bar's full height. The keyboard, consumed above by
+ * time: 8 is always added below the row; on top of that, a gesture strip's height less 5 (the row
+ * sinks 5 into the strip, iOS composerRestDip) or a 3-button bar's full height. The keyboard, consumed above by
  * imePadding, takes this to zero, which leaves the 8 above the keys.
  */
 @Composable
@@ -2807,7 +2808,9 @@ private class ComposerRestInsets(
         if (strip <= 0) return 0
         // A 3-button bar is tappable: never sink into it.
         if (tappable.getBottom(density) > 0) return strip
-        return (strip - with(density) { 13.dp.roundToPx() }).coerceAtLeast(0)
+        // iOS composerRestDip: the row sinks only 5 into the strip (owner 2026-11-10: it sat too
+        // close to the bottom when it sank 13).
+        return (strip - with(density) { 5.dp.roundToPx() }).coerceAtLeast(0)
     }
 }
 
