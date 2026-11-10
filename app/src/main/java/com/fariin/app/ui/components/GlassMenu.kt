@@ -115,7 +115,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         // ~280 ms with a small overshoot, back into the button ~200 ms. Ours was a slow spring that
         // showed an empty box for 100 ms and drifted for 400 ms after.
         if (open) { closing = false; shown = true; grow.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 420f)) }
-        else if (shown) { closing = true; grow.animateTo(0f, androidx.compose.animation.core.tween(220,
+        else if (shown) { closing = true; grow.animateTo(0f, androidx.compose.animation.core.tween(240,
             easing = androidx.compose.animation.core.CubicBezierEasing(0.4f, 0f, 0.2f, 1f))); shown = false }
     }
     if (!shown) return
@@ -173,7 +173,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     // Both sides grow together, out of the round button and back into it (owner 2026-11-08:
                     // the width-first jelly read as "coming out flat").
                     // Closing, the width goes first (the reference's tall pill), the height after.
-                    val kx = if (closing) (k * k).coerceAtLeast(0f) else k.coerceAtLeast(0f)
+                    val kx = if (closing) Math.pow(k.coerceAtLeast(0f).toDouble(), 1.5).toFloat() else k.coerceAtLeast(0f)
                     val ky = k.coerceAtLeast(0f)
                     scaleX = (sx + (1f - sx) * kx) * (1f + 0.025f * lean.value)
                     scaleY = (sy + (1f - sy) * ky) * (1f - 0.015f * lean.value)
