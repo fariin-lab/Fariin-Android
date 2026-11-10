@@ -56,6 +56,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import androidx.compose.foundation.layout.ime
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -182,9 +183,32 @@ fun FariinSheetDialog(onDismiss: () -> Unit, handle: Boolean = false, content: @
 @Composable
 fun FariinSheetDialog(motion: SheetMotion, handle: Boolean = false, fill: Color? = null, typing: Boolean = false,
     content: @Composable (SheetMotion) -> Unit) {
+    // A sheet opening over a screen that is typing takes that keyboard down (iOS lowers it too).
+    val outerFocus = androidx.compose.ui.platform.LocalFocusManager.current
+    val outerView = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(Unit) {
+        outerFocus.clearFocus(force = true)
+        androidx.core.view.ViewCompat.getWindowInsetsController(outerView)?.hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+    }
     Dialog(onDismissRequest = { motion.close() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnClickOutside = false)) {
         SheetDialogWindow(Fariin.colors.dark, typing)
+        // The keyboard, if up, goes down before the sheet closes (SheetMotion.close).
+        val sheetView = androidx.compose.ui.platform.LocalView.current
+        val imeUp = androidx.compose.runtime.rememberUpdatedState(
+            androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0)
+        SideEffect {
+            motion.keyboardFirst = {
+                if (imeUp.value) {
+                    (sheetView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { w ->
+                        WindowCompat.getInsetsController(w, w.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+                    }
+                    // Until it is down, or 450 ms at most.
+                    val until = System.nanoTime() + 450_000_000L
+                    while (imeUp.value && System.nanoTime() < until) androidx.compose.runtime.withFrameNanos { }
+                }
+            }
+        }
         // A page swapped inside a sheet must never slide the page under the sheet (InnerPages).
         FariinSheet(motion, handle, fill) { androidx.compose.runtime.CompositionLocalProvider(LocalInnerPages provides null) { content(motion) } }
     }
@@ -325,8 +349,25 @@ class SheetMotion internal constructor(
         run(0f, 0f, if (still) androidx.compose.animation.core.snap() else tween(500, easing = SheetEase))
     }
 
+    /** Set by the sheet's window: takes the keyboard down and waits for it (see FariinSheetDialog). */
+    internal var keyboardFirst: (suspend () -> Unit)? = null
+    private var keyboardDown = false
+
     fun close(velocity: Float = 0f) {
         if (closing) return
+        // A Save or X while typing (owner 2026-11-10, "it leaves like a rocket"): the keyboard goes
+        // down first, then the sheet closes on its own curve; together they flew off as one jump.
+        val first = keyboardFirst
+        if (velocity <= 0f && first != null && !keyboardDown) {
+            closing = true
+            scope.launch {
+                first()
+                keyboardDown = true
+                closing = false
+                close(velocity)
+            }
+            return
+        }
         closing = true
         // A button, Back or a tap on the dim: back into the button it came from.
         if (velocity <= 0f && sourceRect() != null) {

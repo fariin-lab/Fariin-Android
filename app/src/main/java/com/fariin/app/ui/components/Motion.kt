@@ -258,6 +258,15 @@ val LocalInnerPages = androidx.compose.runtime.staticCompositionLocalOf<InnerPag
 fun InnerPageDepth(depth: Int) {
     val h = LocalInnerPages.current ?: return
     h.used = true
+    // A page pushed in place takes the keyboard down, as a nav push does (owner 2026-11-10).
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.LaunchedEffect(depth) {
+        if (depth > 0) {
+            fm.clearFocus(force = true)
+            androidx.core.view.ViewCompat.getWindowInsetsController(view)?.hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+        }
+    }
     // Written in composition and read only in this frame's draw, so the first frame of a new page
     // is already placed off to the right, never drawn in place first.
     if (h.depth != depth) h.depth = depth
