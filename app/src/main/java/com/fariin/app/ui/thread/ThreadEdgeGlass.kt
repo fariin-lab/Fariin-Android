@@ -73,6 +73,12 @@ private fun edgeBrush(color: Color, solidFrac: Float): Brush {
  * over the header's last 48 dp it steps down 81 % -> 62 % -> 34 % -> 0, so the bubbles right under
  * the controls are sharp. Plain colour: free for the GPU and the battery, the same on every phone.
  */
+/**
+ * The chat's top as a solid bar in the page colour (true), or the blur and fade below (false, kept).
+ * Owner 2026-11-10, Android only: "solid white bar", like the reference app's chat header.
+ */
+internal const val CHAT_TOP_SOLID = true
+
 internal val EDGE_FADE = 48.dp
 internal val EDGE_STOPS = floatArrayOf(0.814f, 0.618f, 0.337f, 0f)
 

@@ -291,7 +291,7 @@ fun ThreadScreen(
         run {
             val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
             val appDark = Fariin.colors.dark
-            val flip = headerDark != null && headerDark != appDark && !wallpaperOpen
+            val flip = !CHAT_TOP_SOLID && headerDark != null && headerDark != appDark && !wallpaperOpen
             val barView = androidx.compose.ui.platform.LocalView.current
             androidx.compose.runtime.DisposableEffect(flip, appDark) {
                 val ctl = (barView.context as? android.app.Activity)?.window?.let { androidx.core.view.WindowCompat.getInsetsController(it, barView) }
@@ -930,13 +930,13 @@ private fun ThreadContent(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // The top edge (ThreadEdgeGlass.kt): the page colour, or the wallpaper, laid over the
             // messages through the header and fading out over its last 48 dp.
-            run {
+            if (!CHAT_TOP_SOLID) run {
                 ThreadEdgeGlass(edgeHaze, top = true, barPx = topBarPx, under = olderUnder && !searchList, walled = walled,
                     modifier = Modifier.align(Alignment.TopCenter).zIndex(0.5f))
                 // No bottom strip: iOS took its bottom blur off on the owner's order (2026-08-25, "remove
                 // chat bottom blur, don't touch top header"); messages pass behind the floating composer.
             }
-            if (walled && edgeHaze == null) {
+            if (!CHAT_TOP_SOLID && walled && edgeHaze == null) {
                 // A wallpaper chat on a phone without blur: the wallpaper itself laid over the top at the same stops as the
                 // page colour (ThreadEdgeGlass.kt), so the messages show faintly through it and are
                 // sharp right under the header.
@@ -951,6 +951,9 @@ private fun ThreadContent(
                     .then(com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid)))
             }
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
+                // CHAT_TOP_SOLID: a plain bar in the page colour behind the header (owner 2026-11-10,
+                // pointing at the reference app's solid white header: the blur kept competing).
+                .then(if (CHAT_TOP_SOLID) Modifier.background(Fariin.colors.bg) else Modifier)
                 // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
                 .onSizeChanged { topBarPx = it.height }) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
@@ -963,7 +966,7 @@ private fun ThreadContent(
                     // dark top): the buttons keep the app's own light or dark glass, as the composer does
                     // (owner 2026-11-10: in light mode the back and call buttons turned dark mode's black).
                     val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
-                    val flipped = headerDark != null && headerDark != Fariin.colors.dark
+                    val flipped = !CHAT_TOP_SOLID && headerDark != null && headerDark != Fariin.colors.dark
                     androidx.compose.runtime.CompositionLocalProvider(LocalHeaderWordsDark provides if (flipped) headerDark else null) {
                         Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
                     }
