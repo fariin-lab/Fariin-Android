@@ -59,6 +59,18 @@ class ProfileMeltState internal constructor(val scroll: ScrollState) {
     internal var side by mutableFloatStateOf(0f)
     /** The overlay's own top-left in window pixels (the page may sit inside a sliding frame). */
     internal var origin by mutableStateOf(Offset.Zero)
+    /** Where the photo goes, in window pixels (set by the overlay). */
+    internal var targetY by mutableFloatStateOf(0f)
+
+    /**
+     * 0 with the photo still out, rising to 1 over [fadePx] once the page has scrolled [extraPx] past
+     * the point where the photo is gone: for a compact title and the bar's ground to come in.
+     */
+    fun collapsed(extraPx: Float, fadePx: Float): Float {
+        if (!restCenter.isSpecified) return 0f
+        val gone = restCenter.y - targetY
+        return ((scroll.value - gone - extraPx) / fadePx.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    }
 }
 
 @Composable
@@ -117,8 +129,12 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
     val topInset = remember(view) { (view.rootWindowInsets?.systemWindowInsetTop ?: 0).toFloat() }
     val liquid = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
         PowerSaving.state.value.deviceClass != PerfClass.LOW
-    val target = hole?.first ?: Offset(view.width / 2f, topInset / 2f)
-    val targetSide = hole?.second ?: with(density) { 22.dp.toPx() }
+    // The reference app (owner's screen recording, 2026-11-10): a black drop hangs from the screen's
+    // top edge, centred, and the photo is drawn up into it on a thin neck. The drop's centre sits a
+    // little above the edge, so only its lower part shows.
+    val targetSide = hole?.second ?: with(density) { 40.dp.toPx() }
+    val target = hole?.first ?: Offset(view.width / 2f, -targetSide * 0.2f)
+    m.targetY = target.y
     // How far the page scrolls before the photo is gone: from where it rests up to the hole.
     val travel by remember(target) {
         derivedStateOf { if (m.restCenter.isSpecified) (m.restCenter.y - target.y).coerceAtLeast(1f) else 1f }
@@ -151,7 +167,8 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
                 if (shader != null) {
                     // The join only near the end, so most of the way the photo stays sharp and no
                     // effect runs at all.
-                    val k = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                    // Blurring early, while still big (the reference blurs it from the first third).
+                    val k = ((p - 0.2f) / 0.8f).coerceIn(0f, 1f)
                     // In 2 dp steps: a new blur size each frame made the graphics chip set up new
                     // work every frame; a few fixed sizes are set up once and reused.
                     val step = 2.dp.toPx()
@@ -168,8 +185,8 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
                 // The drop over the camera hole, growing out to meet the photo as it nears.
                 if (shader != null) {
                     val p = (m.scroll.value / travel).coerceIn(0f, 1f)
-                    val k = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
-                    val r = targetSide / 2f * (0.6f + 0.6f * k)
+                    val k = ((p - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                    val r = targetSide / 2f * (0.4f + 0.8f * k)
                     drawCircle(Color.Black, r, target - m.origin - Offset(stripLeft.toInt().toFloat(), 0f))
                 }
             }) {
