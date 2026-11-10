@@ -276,7 +276,7 @@ private data class PostItem(val title: String, val icon: ImageVector, val destru
  * a "more" button that opens the whole set), then Copy, Share, Report, and Delete for an admin.
  */
 @Composable
-fun ChannelPostMenu(
+internal fun ChannelPostMenu(
     ch: ChannelThreadUi, m: Message, onDismiss: () -> Unit,
     onCopy: (String) -> Unit, onDelete: (Message) -> Unit,
     onQuote: ((Message) -> Unit)? = null,
@@ -286,6 +286,11 @@ fun ChannelPostMenu(
     /** null: no Pin row; else whether the post is pinned now. */
     pinned: Boolean? = null,
     onPin: ((Message) -> Unit)? = null,
+    /** The pressed post on screen: then the chat's own menu over it (owner 2026-11-10: one menu everywhere). */
+    source: com.fariin.app.ui.thread.MenuSource? = null,
+    preview: (@Composable () -> Unit)? = null,
+    onLifted: () -> Unit = {},
+    onLanded: () -> Unit = {},
 ) {
     val c = Fariin.colors
     val ctx = LocalContext.current
@@ -329,6 +334,19 @@ fun ChannelPostMenu(
             }
         }
         if (ch.role == Role.ADMIN) add(PostItem("Delete", ImageVector.vectorResource(R.drawable.ic_sf_trash), destructive = true) { onDelete(m) })
+    }
+    if (source != null && preview != null) {
+        // The same menu as a chat (icons first, no lines), with the channel's own reactions.
+        val rows = items.map { it ->
+            com.fariin.app.ui.thread.MenuRow(it.title, androidx.compose.ui.graphics.vector.rememberVectorPainter(it.icon), it.destructive, null,
+                { it.run() }, isNew = com.fariin.app.ui.components.isNew(it.badge))
+        }
+        com.fariin.app.ui.thread.MessageMenuOverlay(source, rows,
+            reactable = ch.canReact && !m.deleted && !m.isSystem && m.sendState == null, mine = mine,
+            onReact = { e -> ch.onReact(m, ChannelRules.nextPick(mine, e)) },
+            onDismiss = onDismiss, preview = preview, onLifted = onLifted, onLanded = onLanded,
+            channelEmojis = ch.offered to ch.pickable)
+        return
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
