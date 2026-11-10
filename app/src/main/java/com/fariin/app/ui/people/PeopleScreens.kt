@@ -471,6 +471,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     androidx.compose.runtime.LaunchedEffect(liveUntil) { muteOverride = null }
     val muteUntil = muteOverride ?: liveUntil
     val muted = muteUntil > System.currentTimeMillis()
+    val personMuteAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
+    var personMuteMenu by remember { mutableStateOf(false) }
     fun setMute(until: Double) {
         muteOverride = until
         if (api !is com.fariin.app.data.FirestorePeople) return
@@ -691,10 +693,14 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                         com.fariin.app.ui.call.CallActivity.startDial(ctx, uid, name, photo, video = true)
                     }
                 }
-                ActionTile(if (muted) "Unmute" else "Mute",
-                    if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
-                    else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), share) {
-                    setMute(if (muted) 0.0 else com.fariin.app.data.GroupInfoCircles.FOREVER)
+                // Mute opens the times menu, as groups and channels do (iOS muteMenuItems, owner
+                // 2026-11-10); Unmute is one tap.
+                Box(share.glassMenuAnchor(personMuteAnchor)) {
+                    ActionTile(if (muted) "Unmute" else "Mute",
+                        if (muted) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell)
+                        else ImageVector.vectorResource(com.fariin.app.R.drawable.ic_bell_off), Modifier.fillMaxWidth()) {
+                        if (muted) setMute(0.0) else personMuteMenu = true
+                    }
                 }
                 if (fromChat && uid != me) ActionTile("Search", ImageVector.vectorResource(R.drawable.ic_search_ios), share) {
                     com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack)
@@ -761,6 +767,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         if (clearMine != null) add(com.fariin.app.ui.components.GlassMenuItem("Clear My Messages",
             androidx.compose.ui.res.painterResource(R.drawable.ic_sf_trash), danger = true, divider = true) { clearMine() })
     }, backdrop = if (menuGlass) menuBackdrop else null, onDismiss = { moreOpen = false })
+    // "Mute this chat for…" (iOS muteMenuItems): 1 hour, 8 hours, 1 day, 1 week, Always.
+    com.fariin.app.ui.components.GlassMenu(personMuteMenu, personMuteAnchor,
+        com.fariin.app.data.GroupInfoCircles.MUTE_CHOICES.map { (label, hours) ->
+            com.fariin.app.ui.components.GlassMenuItem(label, null) { setMute(com.fariin.app.data.GroupInfoCircles.muteUntil(hours)) }
+        }, backdrop = if (menuGlass) menuBackdrop else null, caption = "Mute this chat for…", onDismiss = { personMuteMenu = false })
     // Over everything on the page: the round photo, out of the avatar and back into it.
     com.fariin.app.ui.photo.ProfilePhotoViewer(photo, person?.photoUrl ?: conv?.photos?.get(uid),
         bar = com.fariin.app.ui.photo.ProfilePhotoBar(leavesOnClose = true))
