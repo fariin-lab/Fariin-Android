@@ -95,7 +95,10 @@ class StoryTextItem(val id: Long, cx: Float, cy: Float) {
     /** What a tap on the posted chip opens (Link, Location); null for Time. */
     var link: String? = null
     /** A tray sticker (iOS StickerOverlay): its picture, drawn [imageW] x [imageH] edit units, never typed into. */
-    var image: android.graphics.Bitmap? = null
+    var image by androidx.compose.runtime.mutableStateOf<android.graphics.Bitmap?>(null)
+    /** A Location/Link/Time chip's recipe (iOS ChipRecipe), kept so a tap can bake it again in the next colour. */
+    var chipSymbol: StoryChipSymbol? = null
+    var chipStyle = StoryChipStyle.WHITE
     var imageW = 0f
     var imageH = 0f
     /** Something to draw: a sticker, or words. */
@@ -538,11 +541,10 @@ fun StoryPenBar(
 fun chipTapTargets(e: StoryEdits, mediaW: Int, mediaH: Int): List<com.fariin.app.data.StoryTapTarget> {
     if (mediaW <= 0 || mediaH <= 0) return emptyList()
     val spaceH = StoryEditRules.SPACE * mediaH / mediaW
-    return e.texts.filter { it.isChip && !it.link.isNullOrEmpty() && it.text.isNotBlank() }.map { t ->
-        val l = t.layout()
+    return e.texts.filter { it.isChip && !it.link.isNullOrEmpty() && it.hasContent }.map { t ->
         com.fariin.app.data.StoryTapTarget(
             x = (t.cx / StoryEditRules.SPACE).toDouble(), y = (t.cy / spaceH).toDouble(),
-            w = (boxW(l, t.bg) * t.scale / StoryEditRules.SPACE).toDouble(), h = (boxH(l, t.bg) * t.scale / spaceH).toDouble(),
+            w = (itemW(t) * t.scale / StoryEditRules.SPACE).toDouble(), h = (itemH(t) * t.scale / spaceH).toDouble(),
             rotation = Math.toRadians(t.rotation.toDouble()), url = t.link!!, aspect = mediaW.toDouble() / mediaH)
     }
 }

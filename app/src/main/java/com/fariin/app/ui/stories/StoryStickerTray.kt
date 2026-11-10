@@ -159,13 +159,15 @@ private var trendingCache: List<StickerGifRules.Gif> = emptyList()
 @Composable
 fun StoryStickerTray(
     onClose: () -> Unit, onSticker: (StickerGifRules.Gif) -> Unit,
-    onTime: () -> Unit, onLink: () -> Unit, onPlace: () -> Unit,
+    onTime: () -> Unit, onLink: (url: String, label: String) -> Unit, onPlace: (name: String, lat: Double, lon: Double) -> Unit,
 ) {
     val ctx = LocalContext.current
     var tab by remember { mutableStateOf<StickerTab>(StickerTab.BuiltIn) }
     var query by remember { mutableStateOf("") }
     var list by remember { mutableStateOf<List<StickerGifRules.Gif>>(StoryStickers.builtIn) }
     var loading by remember { mutableStateOf(false) }
+    // iOS pushes Link and Location inside the tray (TrayPushHeader + page); null is the tray itself.
+    var page by remember { mutableStateOf<String?>(null) }
     val searching = query.isNotBlank()
     val play = PowerSaving.state.collectAsState().value.autoplayGifs
     LaunchedEffect(tab, query) {
@@ -198,7 +200,10 @@ fun StoryStickerTray(
     }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color.Black, contentColor = Color.White) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) {
+        when (page) {
+        "link" -> Box(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) { StoryLinkPage({ page = null }, onLink) }
+        "place" -> Box(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) { StoryPlacePage({ page = null }, onPlace) }
+        else -> Column(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) {
             // The search field (iOS: a 40 tall capsule).
             Row(Modifier.padding(horizontal = 16.dp).padding(bottom = 14.dp).fillMaxWidth().height(40.dp)
                 .clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 14.dp),
@@ -222,8 +227,8 @@ fun StoryStickerTray(
                     FlowRow(Modifier.fillMaxWidth().padding(bottom = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StickerPill(R.drawable.ic_sf_location_fill, "Location", Color(0xFFFF453A), NewBadgeSpots.STORY_STICKERS_LOCATION, onPlace)
-                        StickerPill(R.drawable.ic_sf_link, "Link", Color(0xFF0A84FF), NewBadgeSpots.STORY_STICKERS_LINK, onLink)
+                        StickerPill(R.drawable.ic_sf_location_fill, "Location", Color(0xFFFF453A), NewBadgeSpots.STORY_STICKERS_LOCATION) { page = "place" }
+                        StickerPill(R.drawable.ic_sf_link, "Link", Color(0xFF0A84FF), NewBadgeSpots.STORY_STICKERS_LINK) { page = "link" }
                         StickerPill(R.drawable.ic_sf_clock, "Time", Color(0xFFFF9F0A), NewBadgeSpots.STORY_STICKERS_TIME, onTime)
                     }
                 }
@@ -263,6 +268,7 @@ fun StoryStickerTray(
                     }
                 }
             }
+        }
         }
     }
 }

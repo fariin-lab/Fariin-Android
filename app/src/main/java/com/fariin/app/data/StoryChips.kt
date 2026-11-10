@@ -19,4 +19,8 @@ object StoryChips {
         if (name.isEmpty()) return null
         return name.uppercase() to "https://www.google.com/maps/search/?api=1&query=" + URLEncoder.encode(name, "UTF-8")
     }
+
+    /** A picked place opened in the phone's maps at its exact spot, at its coordinates (the name is on the chip). */
+    fun placeUrl(name: String, lat: Double, lon: Double): String =
+        "https://www.google.com/maps/search/?api=1&query=" + URLEncoder.encode(String.format(java.util.Locale.US, "%.6f,%.6f", lat, lon), "UTF-8")
 }
