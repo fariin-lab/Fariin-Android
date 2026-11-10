@@ -153,6 +153,8 @@ class FariinApp : Application() {
         com.fariin.app.data.Disappearing.init(this)
         FirebaseAuth.getInstance().addAuthStateListener { a ->
             val uid = a.currentUser?.uid
+            // A Log Out kept its media and chats for its own return; a different account wipes them first.
+            if (uid != null) com.fariin.app.device.SessionEnd.claimKept(this, uid)
             com.fariin.app.data.PrivacySettings.follow(uid)
             com.fariin.app.data.BlockList.follow(uid)
         }

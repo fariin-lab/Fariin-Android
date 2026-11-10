@@ -47,7 +47,21 @@ object SessionEnd {
         step(uid, "presence") { com.fariin.app.data.Presence.set(online = false, context = c) }
         step(uid, "device record") { DeviceRegistry.removeThisDevice() }
         step(uid, "push token") { Push.unregister(c) }
-        if (endAuth(uid)) wipe(c)
+        if (endAuth(uid)) wipe(c, keepFor = uid)
+    }
+
+    private const val KEPT_PREFS = "fariin_session"
+    private const val KEPT_KEY = "keptMediaFor"
+
+    /** At every sign-in: kept data goes back to its own account; any other account wipes it first. */
+    fun claimKept(c: Context, uid: String) {
+        val prefs = c.getSharedPreferences(KEPT_PREFS, Context.MODE_PRIVATE)
+        val kept = prefs.getString(KEPT_KEY, null) ?: return
+        prefs.edit().remove(KEPT_KEY).apply()
+        if (kept != uid) {
+            com.fariin.app.media.ChatMedia.wipe(c)
+            com.fariin.app.local.LocalCache.wipe()
+        }
     }
 
     private suspend fun endCalls() = withContext(Dispatchers.Main) {
@@ -137,7 +151,14 @@ object SessionEnd {
         wipe(c)
     }
 
-    private fun wipe(c: Context) {
+    /**
+     * A plain Log Out passes [keepFor] (the account leaving): its received photos, videos and voice
+     * notes and its saved chats stay on this phone for when it signs back in (iOS
+     * SessionWipe.claimKeptMedia, owner 2026-09-26: "never lose my messages"; the server deletes a
+     * delivered 1:1 file once this phone has it, so these are the only copy). They are wiped the
+     * moment a DIFFERENT account signs in ([claimKept]), and right away on deletion or revocation.
+     */
+    private fun wipe(c: Context, keepFor: String? = null) {
         com.fariin.app.data.ActivityFeed.clearPin(c)
         NotifStore.clearAccount(c)
         NotificationPoster.clearAll(c)
@@ -147,14 +168,16 @@ object SessionEnd {
         com.fariin.app.push.OfficialPushTopics.sync(c, muted = false, signedIn = false)
         // The phone's copies of this account's chats: opened messages, the list, drafts, unsent
         // texts, opened media and faces. None of it survives into the next account (iOS SessionWipe).
-        com.fariin.app.local.LocalCache.wipe()
+        val prefs = c.getSharedPreferences(KEPT_PREFS, Context.MODE_PRIVATE)
+        if (keepFor.isNullOrEmpty()) { prefs.edit().remove(KEPT_KEY).apply(); com.fariin.app.local.LocalCache.wipe() }
+        else prefs.edit().putString(KEPT_KEY, keepFor).apply()   // per account on disk, so nobody else reads it
         com.fariin.app.local.Drafts.clear()
         com.fariin.app.local.SendQueue.wipe()
         com.fariin.app.call.CallLinks.reset()
         com.fariin.app.data.StickerFavorites.wipe(c)   // the account keeps its backup
         com.fariin.app.ui.auth.GateMemory.clear(c)   // the next account waits for its checks
         com.fariin.app.ui.call.LiveGroupCalls.stopAll()   // the live group-call watchers belong to the account
-        com.fariin.app.media.ChatMedia.wipe(c)
+        if (keepFor.isNullOrEmpty()) com.fariin.app.media.ChatMedia.wipe(c)
         try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
         com.fariin.app.ui.thread.DecodedPictures.clear()   // decoded chat photos held in memory
         com.fariin.app.data.SharedMediaSource.clear()      // All Media's opened messages
