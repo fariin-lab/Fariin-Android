@@ -12,6 +12,18 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import com.fariin.app.R
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -120,56 +132,97 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
         }
     }
 
+    fun copy(label: String, text: String) {
+        (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(label, text))
+    }
     val scroll = rememberScrollState()
     BarPage("API Key", onBack, under = underBar(scroll), modifier = Modifier.background(c.bgSecondary)) { top ->
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(top = top).navigationBarsPadding()) {
-            SettingsSection(footer = if (freshKey != null)
-                "Copy it now. Fariin keeps only the last 4 characters, so it can't be shown again."
-            else "A program with this key can read, post, edit, delete and pin posts in this channel. It can't change the channel's settings, admins or owner.") {
+            // 1. What this is.
+            Column(Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 12.dp, bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(c.blue), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_sf_key), null, tint = Color.White, modifier = Modifier.size(32.dp))
+                }
+                Text("Channel API", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.label, modifier = Modifier.padding(top = 12.dp))
+                Text("Let your own program read and post in this channel, any time.", fontSize = 15.sp, color = c.secondary,
+                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+            }
+
+            // 2. The key.
+            SettingsSection(header = "Key", footer = when {
+                freshKey != null -> "Copy it now. Fariin keeps only the last 4 characters, so it can't be shown again."
+                hasKey -> "New Key stops the old key at once. Revoke stops it with no new one."
+                else -> "Only you can see this page. The key works for this channel only."
+            }) {
                 val k = freshKey
                 when {
                     loading -> Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(Modifier.padding(4.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                     }
                     k != null -> {
                         SelectionContainer {
                             Text(k, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = c.label,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp))
+                                modifier = Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(12.dp))
+                                    .background(c.fieldFill).padding(horizontal = 12.dp, vertical = 10.dp))
                         }
-                        SettingsRow(if (copied) "Copied" else "Copy Key", titleColor = c.accent, trailing = Trailing.NONE, last = true) {
-                            (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                                .setPrimaryClip(ClipData.newPlainText("API key", k))
-                            copied = true
-                        }
+                        SettingsRow(if (copied) "Copied" else "Copy Key",
+                            icon = painterResource(if (copied) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_doc_on_doc),
+                            titleColor = c.blue, trailing = Trailing.NONE) { copy("API key", k); copied = true }
                     }
-                    hasKey -> {
-                        SettingsRow("Active key", value = "••••${hint ?: ""}", trailing = Trailing.NONE, last = createdAt == null)
-                        createdAt?.let {
-                            SettingsRow("Created", value = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)),
-                                trailing = Trailing.NONE, last = true)
-                        }
-                    }
-                    else -> SettingsRow("No key", titleColor = c.secondary, trailing = Trailing.NONE, last = true)
+                    hasKey -> SettingsRow("Active", icon = painterResource(R.drawable.ic_sf_key), value = "••••${hint ?: ""}",
+                        subtitle = createdAt?.let { "Created " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)) },
+                        trailing = Trailing.NONE,
+                        accessory = { Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF34C759))) })
+                    else -> SettingsRow("No key yet", icon = painterResource(R.drawable.ic_sf_key), titleColor = c.secondary, trailing = Trailing.NONE)
                 }
-            }
-            if (!loading) {
-                SettingsSection(footer = "New Key stops the old key at once. Revoke stops it with no new one.") {
-                    SettingsRow(if (hasKey) "New Key" else "Create Key", titleColor = if (busy) c.secondary else c.accent,
-                        trailing = Trailing.NONE, last = !hasKey) {
+                if (!loading) {
+                    SettingsRow(if (hasKey) "New Key" else "Create Key",
+                        icon = painterResource(if (hasKey) R.drawable.ic_sf_arrow_clockwise else R.drawable.ic_plus_ios),
+                        titleColor = if (busy) c.secondary else c.blue, trailing = Trailing.NONE, last = !hasKey) {
                         if (busy) return@SettingsRow
                         if (hasKey) confirmNew = true else run("create")
                     }
-                    if (hasKey) SettingsRow("Revoke Key", titleColor = if (busy) c.secondary else c.red, trailing = Trailing.NONE, last = true) {
-                        if (!busy) confirmRevoke = true
-                    }
+                    if (hasKey) SettingsRow("Revoke Key", icon = painterResource(R.drawable.ic_sf_trash),
+                        titleColor = if (busy) c.secondary else c.red, trailing = Trailing.NONE, last = true) { if (!busy) confirmRevoke = true }
                 }
-                SettingsSection(header = "Address",
-                    footer = "Send the key in the \"X-Api-Key\" header with a JSON body, for example {\"action\":\"post\",\"text\":\"Hello\"}. Actions: read, post, edit, delete, pin, unpin.") {
-                    SelectionContainer {
-                        Text(ChannelApiKey.ENDPOINT, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = c.label,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp))
-                    }
+            }
+
+            if (!loading) {
+                // 3. How to connect.
+                var addressCopied by remember { mutableStateOf(false) }
+                SettingsSection(header = "Connect") {
+                    SettingsRow("Address", icon = painterResource(R.drawable.ic_sf_link), subtitle = ChannelApiKey.ENDPOINT, trailing = Trailing.NONE,
+                        accessory = {
+                            Icon(painterResource(if (addressCopied) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_doc_on_doc), "Copy",
+                                tint = c.blue, modifier = Modifier.size(20.dp))
+                        }) { copy("Address", ChannelApiKey.ENDPOINT); addressCopied = true }
+                    SettingsRow("Key goes in header", icon = painterResource(R.drawable.ic_sf_lock), value = "X-Api-Key",
+                        trailing = Trailing.NONE, last = true)
                 }
+
+                // 4. What the key can do: the plain words, and the action as the program sends it.
+                SettingsSection(header = "What it can do", footer = "It can't change the channel's settings, admins or owner.") {
+                    ApiAction(R.drawable.ic_sf_doc_text, "Read posts", "read")
+                    ApiAction(R.drawable.ic_sf_textformat, "Post text", "post + text")
+                    ApiAction(R.drawable.ic_sf_photo, "Post a photo", "post + image or imageUrl")
+                    ApiAction(R.drawable.ic_sf_pencil, "Edit a post", "edit + id + text")
+                    ApiAction(R.drawable.ic_sf_trash, "Delete a post", "delete + id")
+                    ApiAction(R.drawable.ic_sf_pin, "Pin or unpin", "pin / unpin + id", last = true)
+                }
+
+                // 5. One example to copy.
+                val example = "POST ${ChannelApiKey.ENDPOINT}\nX-Api-Key: <your key>\nContent-Type: application/json\n\n{\"action\":\"post\",\"text\":\"Hello\"}"
+                var exampleCopied by remember { mutableStateOf(false) }
+                SettingsSection(header = "Example", footer = "Up to 20 changes a minute and 500 a day. Photos: JPEG or PNG, up to 10 MB.") {
+                    Text(example, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 17.sp, color = c.label,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(12.dp))
+                            .background(c.fieldFill).padding(horizontal = 12.dp, vertical = 10.dp))
+                    SettingsRow(if (exampleCopied) "Copied" else "Copy Example",
+                        icon = painterResource(if (exampleCopied) R.drawable.ic_sf_checkmark else R.drawable.ic_sf_doc_on_doc),
+                        titleColor = c.blue, trailing = Trailing.NONE, last = true) { copy("Example", example); exampleCopied = true }
+                }
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
@@ -191,3 +244,8 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
             actions = listOf(GlassAlertAction("OK", GlassAlertStyle.Bold) { error = null }))
     }
 }
+
+/** One thing the key can do: the plain words, and the action as the program sends it. */
+@Composable
+private fun ApiAction(icon: Int, title: String, action: String, last: Boolean = false) =
+    SettingsRow(title, icon = painterResource(icon), subtitle = action, trailing = Trailing.NONE, last = last)
