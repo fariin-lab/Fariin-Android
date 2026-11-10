@@ -386,7 +386,9 @@ private fun FloatingTabBar(
             // No blur pass (measured on the Pixel: the blur took the median frame from 13 to 18 ms
             // while scrolling); a slightly thicker frosted surface keeps the labels readable instead.
             // Thicker (owner 2026-11-08: the rows were readable through it): only soft shapes show now.
-            onDrawSurface = { drawRect(if (c.dark) surface.copy(alpha = 0.84f) else Color.White.copy(alpha = 0.86f)) },
+            // Clearer (owner 2026-11-10: "the liquid is too soft", the list passing under could not be
+            // seen): the rows show through softly, the labels still sit on enough white to read.
+            onDrawSurface = { drawRect(if (c.dark) surface.copy(alpha = TAB_FROST_DARK) else Color.White.copy(alpha = TAB_FROST_LIGHT)) },
         )
     } else if (glass) {
         Modifier.hazeEffect(haze) {
@@ -396,7 +398,7 @@ private fun FloatingTabBar(
             // Blurred from a third-size copy: the same look under a 24 dp blur, a fraction of the GPU work.
             inputScale = HazeInputScale.Fixed(1f / 3)
             // Frosted white by day, the dark surface at night, both thin enough to show what passes under.
-            tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = 0.84f) else Color.White.copy(alpha = 0.86f)))
+            tints = listOf(HazeTint(if (c.dark) surface.copy(alpha = TAB_FROST_DARK) else Color.White.copy(alpha = TAB_FROST_LIGHT)))
         }
     } else Modifier.background(surface.copy(alpha = 0.97f))
     Row(
@@ -508,3 +510,7 @@ const val TAB_SETTINGS = 3
 
 /** How long after launch the call history is first read (the Calls badge only). */
 private const val CALLS_FIRST_LOAD_DELAY_MS = 1_500L
+
+/** The tab bar's frosted surface over the list (was 0.86 / 0.84: too thick to see the rows pass). */
+private const val TAB_FROST_LIGHT = 0.62f
+private const val TAB_FROST_DARK = 0.64f
