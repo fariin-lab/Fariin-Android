@@ -9,6 +9,9 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.material3.DropdownMenuItem
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.clipToBounds
+import kotlinx.coroutines.flow.first
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
@@ -2438,6 +2441,8 @@ private fun Composer(
     // camera and the sticker button inside, and a 40 glass circle that is the mic until there are
     // words, then Send. No bar behind them: the chat's bottom edge strip (ThreadEdgeGlass) is that.
     var emojiOpen by rememberSaveable { mutableStateOf(false) }
+    // The panel is closing because the keyboard is coming (its own motion, the panel goes at once).
+    var panelToKeys by remember { mutableStateOf(false) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     // The keyboard after the push lands, not during it (owner 2026-11-06): a quote opens this chat
     // with a slide; focusing at once raised the keyboard inside the sliding screen.
@@ -2546,10 +2551,10 @@ private fun Composer(
                             else androidx.compose.ui.text.input.VisualTransformation.None,
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 6,
-                        modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged { if (it.isFocused) emojiOpen = false }
+                        modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus).onFocusChanged { if (it.isFocused && emojiOpen) { panelToKeys = true; emojiOpen = false } }
                             // A tap on the box while the GIF/sticker panel is up: the box already has focus, so
                             // the keyboard rose over the panel and both stood stacked (owner 2026-11-08). Close it.
-                            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); if (emojiOpen) emojiOpen = false } }
+                            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); if (emojiOpen) { panelToKeys = true; emojiOpen = false } } }
                             .boldMenuItem(boldable, hasSelection = { !boxValue.selection.collapsed }, onBold = boldBar.onBold)
                             // Screen readers: the placeholder is a separate Text, so the field names itself.
                             .semantics { contentDescription = placeholder },
@@ -2570,6 +2575,7 @@ private fun Composer(
                 FieldIcon(if (emojiOpen) com.fariin.app.R.drawable.ic_keyboard else com.fariin.app.R.drawable.ic_gif,
                     if (emojiOpen) "Keyboard" else "GIF") {
                     lightTap()   // iOS: a light tap as the sticker panel opens or closes
+                    panelToKeys = emojiOpen
                     emojiOpen = !emojiOpen
                     if (emojiOpen) keyboard?.hide() else keyboard?.show()
                 }
@@ -2670,9 +2676,13 @@ private fun Composer(
                 }
             }
         }
-        if (emojiOpen && !recording) {
-            BackHandler { emojiOpen = false }
-            StickerPanel(me, onSticker = onSticker, onGif = onGif)
+        if (emojiOpen && !recording) BackHandler { panelToKeys = false; emojiOpen = false }
+        // The panel and the keyboard share one place under the field (owner 2026-11-09, beside the
+        // big messenger): the panel is the keyboard's height, and the room under the field is always
+        // the larger of the two. Switching, one shrinks as the other grows, so the field stays where
+        // it is; only closing the panel outright (Back) slides the field down.
+        PanelSlot(open = emojiOpen && !recording, toKeys = panelToKeys, onKeysUp = { panelToKeys = false }) { h ->
+            StickerPanel(me, onSticker = onSticker, onGif = onGif, height = h)
         }
     }
 }
@@ -2877,4 +2887,59 @@ private fun rowKind(m: Message, channel: Boolean): Int = when {
     m.isCall -> 1
     channel -> 3
     else -> 4
+}
+
+/** The sticker and GIF panel's slide down as it closes outright (the big messenger's is about 150 ms). */
+private const val PANEL_CLOSE_MS = 180
+
+/**
+ * The room under the composer that the sticker panel shares with the keyboard. The page above is
+ * lifted by the keyboard (imePadding) and the composer rests on the bottom inset; this adds
+ * (panel height - the larger of the keyboard and the rest inset), never below zero, so the field
+ * sits as high with the panel as with the keys and does not move when one replaces the other.
+ * The panel takes the last keyboard height seen (320 dp above the rest inset before any).
+ */
+@Composable
+private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, content: @Composable (androidx.compose.ui.unit.Dp) -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val ime = androidx.compose.foundation.layout.WindowInsets.ime
+    val rest = rememberComposerRestInsets()
+    val defaultKb = with(density) { 320.dp.roundToPx() }
+    var kb by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // The keyboard's full height (its bottom inset at rest), learned each time it settles open.
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { ime.getBottom(density) }.collect { v ->
+            if (v > kb && v > defaultKb / 3) kb = v
+        }
+    }
+    val restPx = rest.getBottom(density)
+    val full = if (kb > 0) kb else restPx + defaultKb
+    // The height the slot holds the field at, as a bottom offset like the keyboard's.
+    val reserve = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(open, toKeys, full) {
+        when {
+            open -> reserve.snapTo(full.toFloat())
+            toKeys -> {
+                // Held while the keys rise under it; let go once they are up (or after a beat if they never came).
+                reserve.snapTo(full.toFloat())
+                kotlinx.coroutines.withTimeoutOrNull(700) {
+                    androidx.compose.runtime.snapshotFlow { ime.getBottom(density) }.first { it >= full - 2 }
+                }
+                reserve.snapTo(0f); onKeysUp()
+            }
+            reserve.value > 0f -> if (com.fariin.app.ui.components.Motion.on)
+                reserve.animateTo(0f, androidx.compose.animation.core.tween(PANEL_CLOSE_MS, easing = com.fariin.app.ui.components.Motion.Decelerate))
+                else reserve.snapTo(0f)
+        }
+    }
+    val panelH = with(density) { (full - restPx).coerceAtLeast(0).toDp() }
+    val shown = open || toKeys || reserve.value > 0f
+    if (!shown) return
+    Box(Modifier.fillMaxWidth().clipToBounds().layout { m, c ->
+        val p = m.measure(c.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+        // Read here, in layout: the keyboard's every step moves only this, nothing recomposes.
+        val under = maxOf(ime.getBottom(this), restPx)
+        val h = (reserve.value.toInt() - under).coerceAtLeast(0)
+        layout(p.width, h) { p.place(0, 0) }
+    }) { content(panelH) }
 }

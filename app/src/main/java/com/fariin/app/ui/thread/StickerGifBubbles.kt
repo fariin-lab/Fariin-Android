@@ -223,7 +223,9 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
  * GIFs = trending in two columns, Search opens the tall GIF sheet.
  */
 @Composable
-internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (StickerGifRules.Gif) -> Unit) {
+internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (StickerGifRules.Gif) -> Unit,
+    /** The keyboard's height, so the field does not move when the panel and the keys swap (ThreadScreen PanelSlot). */
+    height: androidx.compose.ui.unit.Dp = 320.dp) {
     val ctx = LocalContext.current
     val c = Fariin.colors
     var gifs by remember { mutableStateOf(StickerCatalog.lastTabGifs(ctx)) }
@@ -240,7 +242,7 @@ internal fun StickerPanel(me: String, onSticker: (StickerRef) -> Unit, onGif: (S
     // Rounded all round like the iPhone keyboard (owner 2026-11-09): the top corners, and the bottom
     // ones following the phone's own screen corners, with a thin light rim.
     val panelShape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp, bottomStart = 40.dp, bottomEnd = 40.dp)
-    Box(Modifier.fillMaxWidth().height(320.dp).clip(panelShape)
+    Box(Modifier.fillMaxWidth().height(height).clip(panelShape)
         .background(MaterialTheme.colorScheme.surfaceContainerLow)
         .border(1.dp, Color.White.copy(alpha = if (c.dark) 0.12f else 0.7f), panelShape)) {
         if (gifs) GifTab(me, onGif, hide = hide, onScrolledIn = { barsHidden = it })
