@@ -240,15 +240,22 @@ fun ChatListScreen(
     val peopleCache = remember { HashMap<String, List<com.fariin.app.data.Person>>() }
     var peopleAll by remember { mutableStateOf(false) }
     val q = query.trim()
+    // ⛔ STILL LOOKING IS NOT "NO RESULTS" (owner 2026-11-10): while the server is being asked,
+    // the page shows skeleton rows; "No Results" only once every answer is in and empty (iOS).
+    var peoplePending by remember { mutableStateOf(false) }
+    var groupsPending by remember { mutableStateOf(false) }
     LaunchedEffect(q, searching) {
         peopleAll = false
-        if (!searching || q.trim('@').isEmpty()) { peopleHits = emptyList(); return@LaunchedEffect }
+        if (!searching || q.trim('@').isEmpty()) { peopleHits = emptyList(); peoplePending = false; return@LaunchedEffect }
         val key = q.lowercase()
-        peopleCache[key]?.let { peopleHits = it; return@LaunchedEffect }
-        kotlinx.coroutines.delay(400)
-        val found = people.searchPeople(q)
-        peopleCache[key] = found
-        peopleHits = found
+        peopleCache[key]?.let { peopleHits = it; peoplePending = false; return@LaunchedEffect }
+        peoplePending = true
+        try {
+            kotlinx.coroutines.delay(400)
+            val found = people.searchPeople(q)
+            peopleCache[key] = found
+            peopleHits = found
+        } finally { if (peopleCache.containsKey(key) || !searching) peoplePending = false }
     }
     // Public groups and channels by @name (iOS GroupDirectory.search, groupsOnly), the same pause.
     var groupHits by remember { mutableStateOf<List<com.fariin.app.data.PublicGroupHit>>(emptyList()) }
@@ -256,9 +263,14 @@ fun ChatListScreen(
     publicGroupOpen?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { publicGroupOpen = null },
         onOpenChat = { cid -> searching = false; query = ""; people.chat(cid) }, onOpenChannel = { channels.open(it) }) }
     LaunchedEffect(q, searching) {
-        if (!searching || q.trim('@').length < 3) { groupHits = emptyList(); return@LaunchedEffect }
-        kotlinx.coroutines.delay(400)
-        groupHits = com.fariin.app.data.PublicGroups.search(q)
+        if (!searching || q.trim('@').length < 3) { groupHits = emptyList(); groupsPending = false; return@LaunchedEffect }
+        groupsPending = true
+        var done = false
+        try {
+            kotlinx.coroutines.delay(400)
+            groupHits = com.fariin.app.data.PublicGroups.search(q)
+            done = true
+        } finally { if (done) groupsPending = false }
     }
     val newPeople = run {
         val known = shown.filter { !it.isGroup }.map { it.otherUid(me) }.toSet()
@@ -564,6 +576,22 @@ fun ChatListScreen(
                     Box(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding()), contentAlignment = Alignment.Center) {
                         com.fariin.app.ui.components.IllustratedEmpty(com.fariin.app.ui.components.LineArt.Archive,
                             "Nothing archived", "Chats you archive and stories you hide will show here.", Modifier.padding(bottom = 60.dp))
+                    }
+                // Nothing local, and the server still being asked: skeleton rows, not "No Results".
+                shown.isEmpty() && !officialShown && !activitySearchHit && newPeople.isEmpty() && groupHits.isEmpty() && query.isNotBlank()
+                    && (peoplePending || groupsPending) ->
+                    Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding() + 8.dp)) {
+                        repeat(4) { i ->
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                com.fariin.app.ui.components.SkeletonCircle(52.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    com.fariin.app.ui.components.SkeletonBlock(listOf(140, 110, 160, 120)[i].dp, 14.dp)
+                                    Spacer(Modifier.height(8.dp))
+                                    com.fariin.app.ui.components.SkeletonBlock(listOf(90, 120, 80, 100)[i].dp, 11.dp)
+                                }
+                            }
+                        }
                     }
                 // A search with nothing found: in the middle of what the keyboard leaves, worded as the
                 // Settings search (and iOS) say it.
