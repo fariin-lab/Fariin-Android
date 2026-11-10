@@ -1,5 +1,11 @@
 package com.fariin.app.device
 
+import kotlinx.coroutines.tasks.await
+
+import kotlinx.coroutines.Dispatchers
+
+import kotlinx.coroutines.withContext
+
 import com.fariin.app.ui.components.GlassAlert
 import android.content.Context
 import androidx.compose.material3.Text
@@ -33,11 +39,32 @@ object SessionEnd {
         // under the old account and never runs as the next one.
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         DeviceRegistry.stopWatching()
+        // iOS endCallsBeforeSignOut (audit M-015): a live call or a ring ends first, as my own end,
+        // while the rules still let this account write it; otherwise the other side keeps a call
+        // nobody is in. Capped like every step.
+        step(uid, "calls") { endCalls() }
         // iOS SessionWipe: "offline" goes out while the account can still write it.
         step(uid, "presence") { com.fariin.app.data.Presence.set(online = false, context = c) }
         step(uid, "device record") { DeviceRegistry.removeThisDevice() }
         step(uid, "push token") { Push.unregister(c) }
         if (endAuth(uid)) wipe(c)
+    }
+
+    private suspend fun endCalls() = withContext(Dispatchers.Main) {
+        val one = com.fariin.app.call.CallManager.ui.value.status.live
+        val g = com.fariin.app.call.GroupCall.ui.value
+        val inGroup = g.joined || g.connecting || g.waiting
+        if (one) com.fariin.app.call.CallManager.hangUp()
+        if (inGroup) com.fariin.app.call.GroupCall.leave()
+        // A group ring still up for this account goes quietly (no decline), as iOS.
+        com.fariin.app.call.GroupRing.stop()
+        if (!one && !inGroup) return@withContext
+        // The end and the leave are written by their own jobs: a moment for them to queue, then the
+        // pending writes, about 3 s at most so a dead network cannot hold the sign-out.
+        kotlinx.coroutines.delay(800)
+        kotlinx.coroutines.withTimeoutOrNull(2200) {
+            runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().waitForPendingWrites().await() }
+        }
     }
 
     private suspend fun step(uid: String?, name: String, work: suspend () -> Unit) {
