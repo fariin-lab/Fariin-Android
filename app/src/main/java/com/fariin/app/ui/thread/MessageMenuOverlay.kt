@@ -58,13 +58,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -153,7 +151,6 @@ internal fun MessageMenuOverlay(
 ) {
     val c = Fariin.colors
     val density = LocalDensity.current
-    val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val open = remember { Animatable(0f) }          // the spring: message, card
     val scrim = remember { Animatable(0f) }         // the background
@@ -217,7 +214,7 @@ internal fun MessageMenuOverlay(
     }
 
     LaunchedEffect(Unit) {
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        // No buzz here: the bubble's hold already played it at the press (combinedClickableLong).
         launch { scrim.animateTo(1f, tween(200, easing = EaseInOut)) }
         open.animateTo(1f, springSpec)
     }

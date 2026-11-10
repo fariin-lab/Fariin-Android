@@ -2930,6 +2930,7 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier {
     // the message. With the first one captured, a post edited since its row was first drawn opened
     // its menu with the old words (and Edit started from them, and Edit History was missing).
     val latest = androidx.compose.runtime.rememberUpdatedState(onLong)
+    val view = androidx.compose.ui.platform.LocalView.current
     return this.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -2943,6 +2944,9 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier {
                 @Suppress("UNREACHABLE_CODE") false
             }
             if (long != null) return@awaitEachGesture
+            // The buzz at the moment the hold is long enough, under the finger, before the menu
+            // opens (it used to play only once the menu had lifted, late enough to miss).
+            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             latest.value()
             while (true) {
                 val e = awaitPointerEvent(PointerEventPass.Initial)
