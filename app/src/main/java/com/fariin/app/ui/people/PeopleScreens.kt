@@ -627,11 +627,11 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         // between back and Edit (the reference app's profile, owner's recording 2026-11-10).
         val barGround = c.bgSecondary
         Box(Modifier.graphicsLayer { alpha = chromeAlpha }.drawBehind {
-            val t = melt.collapsed(30.dp.toPx(), 24.dp.toPx())
+            val t = melt.collapsed(12.dp.toPx(), 16.dp.toPx())
             if (t > 0f) drawRect(barGround.copy(alpha = t))
         }) {
         Box(Modifier.matchParentSize().statusBarsPadding().graphicsLayer {
-            alpha = melt.collapsed(30.dp.toPx(), 24.dp.toPx())
+            alpha = melt.collapsed(12.dp.toPx(), 16.dp.toPx())
         }, contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
