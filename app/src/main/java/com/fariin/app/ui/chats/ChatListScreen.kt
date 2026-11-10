@@ -756,7 +756,7 @@ fun ChatListScreen(
                                     else if (e.kind == "person") {
                                         val p = com.fariin.app.data.Person(e.key, e.title, e.handle, e.photo.ifEmpty { null })
                                         PersonRow(p) {
-                                            scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } }
+                                            scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
                                         }
                                     }
                                 }
@@ -817,7 +817,7 @@ fun ChatListScreen(
                         item(key = "h-global") { SectionHeader("Global Search") }
                         items(if (peopleAll) newPeople else newPeople.take(3), key = { "p-" + it.uid }) { p ->
                             PersonRow(p) {
-                                scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } }
+                                scope.launch { people.startChat(p)?.let { cid -> SearchRecents.recordPerson(appCtx, me, p, cid); searching = false; query = ""; people.chat(cid) } ?: run { searching = false; query = ""; people.contact(p.uid) } }   // the chat can't be made (their Messages setting): their page, never a dead tap (owner 2026-11-10)
                             }
                         }
                         if (!peopleAll && newPeople.size > 3) item(key = "p-more") {
