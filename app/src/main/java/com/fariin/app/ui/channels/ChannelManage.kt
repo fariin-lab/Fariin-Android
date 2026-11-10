@@ -189,6 +189,10 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
                 badge = NewBadgeSpots.CHANNEL_SETTINGS_REACTIONS) { nav.reactions(info.cid) }
         }
     }
+    // owner 2026-11-10 (iOS ChannelApiKeyView): the channel's API key, its owner on the allowed accounts only.
+    if (ChannelApiKey.shows(owner, me)) Card {
+        SettingsRow("API Key", last = true) { nav.apiKey(info.cid) }
+    }
 }
 
 /**
@@ -258,6 +262,7 @@ data class ChannelManageNav(
     val settings: (String) -> Unit = {},
     val type: (String) -> Unit = {},
     val recent: (String) -> Unit = {},
+    val apiKey: (String) -> Unit = {},
 )
 
 /** Edit Channel: the group editor in a channel's words and squircle (iOS EditGroupView). */
