@@ -2951,7 +2951,16 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
                 if (keysUp || !com.fariin.app.ui.components.Motion.on || reserve.value >= full - 1) reserve.snapTo(full.toFloat())
                 else {
                     if (reserve.value < restPx) reserve.snapTo(restPx.toFloat())
-                    reserve.animateTo(full.toFloat(), androidx.compose.animation.core.tween(PANEL_OPEN_MS, easing = com.fariin.app.ui.components.Motion.Decelerate))
+                    // On its own clock, at most one 60 Hz frame of progress per frame drawn: the
+                    // panel's first frames are heavy and a clock-timed rise jumped 60 % in two.
+                    val from = reserve.value; val to = full.toFloat()
+                    var last = androidx.compose.runtime.withFrameNanos { it }; var v = 0f
+                    while (v < PANEL_OPEN_MS) {
+                        val t = androidx.compose.runtime.withFrameNanos { it }
+                        val gap = (t - last) / 1_000_000f; last = t
+                        v += if (gap > 25f) 6f else gap.coerceAtMost(17f)
+                        reserve.snapTo(from + (to - from) * com.fariin.app.ui.components.Motion.PageEase.transform((v / PANEL_OPEN_MS).coerceAtMost(1f)))
+                    }
                 }
             }
             toKeys -> {
