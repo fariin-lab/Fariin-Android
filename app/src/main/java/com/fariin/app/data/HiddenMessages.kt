@@ -16,6 +16,7 @@ object HiddenMessages {
     val ids: StateFlow<Set<String>> = _ids.asStateFlow()
     @Volatile private var loaded = false
 
+    @Synchronized   // read at app start on a background thread; a chat opening meanwhile waits for it
     fun load(context: Context) {
         if (loaded) return
         loaded = true
