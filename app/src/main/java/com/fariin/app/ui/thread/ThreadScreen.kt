@@ -834,6 +834,10 @@ private fun ThreadContent(
         with(androidx.compose.ui.platform.LocalDensity.current) { 52.dp.roundToPx() }
     var topBarPx by remember { androidx.compose.runtime.mutableIntStateOf(topEstimate) }
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // The composer's height, written by its own layout and read by the list's padding in the same
+    // pass: through onSizeChanged it came a frame late, and while the keys fell and the sticker
+    // panel's room grew the messages sagged and came back (owner's video 2026-11-10).
+    val composerPx = remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val walled = com.fariin.app.ui.components.hasChatWallpaper(ui.cid)
     // Glass at the edges only where PowerState allows it (see ThreadEdgeGlass.kt).
@@ -961,7 +965,9 @@ private fun ThreadContent(
                 Modifier.fillMaxSize().then(if (edgeHaze != null) Modifier.hazeSource(edgeHaze)
                     .then(if (liquid) Modifier.layerBackdrop(liquidBackdrop) else Modifier)
                     .then(if (walled) com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid) else Modifier) else Modifier), state = listState, reverseLayout = true,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = with(density) { topBarPx.toDp() } + 8.dp, bottom = with(density) { bottomBarPx.toDp() } + 8.dp),
+                contentPadding = remember(density, composerPx) { ListPadding(density, composerPx) }.also {
+                    it.top = with(density) { topBarPx.toDp() } + 8.dp
+                },
             ) {
                 itemsIndexed(reversed, key = { _, i -> ui.messages[i].rowId },
                     // Notices, call records, posts and bubbles are different trees: a row is reused only by its own kind.
@@ -1206,7 +1212,10 @@ private fun ThreadContent(
         // The bottom bar floats over the end of the chat too (iOS paints no bar behind its controls):
         // it takes no height of its own, draws over the list's last stretch, and the list is padded by it.
         Column(Modifier.fillMaxWidth().zIndex(1f)
-            .layout { m, cs -> val pl = m.measure(cs); layout(pl.width, 0) { pl.place(0, -pl.height) } }
+            // Its height goes to the list in this same pass: the Column measures this bar before the
+            // weighted Box with the list, so the list never pads by last frame's height (the
+            // keyboard's first steps moved the messages up, back 8 and up again; owner 2026-11-10).
+            .layout { m, cs -> val pl = m.measure(cs); composerPx.intValue = pl.height; layout(pl.width, 0) { pl.place(0, -pl.height) } }
             .onSizeChanged { bottomBarPx = it.height }) {
             if (search.active) {
                 SearchNavBar(search, onStep = { d ->
@@ -2945,4 +2954,15 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
         val h = (reserve.value.toInt() - under).coerceAtLeast(0)
         layout(p.width, h) { p.place(0, 0) }
     }) { content(panelH) }
+}
+
+/** The message list's padding: the composer's height as measured earlier in this same layout pass
+ *  (ThreadContent), so the keyboard and the sticker panel move the list in the same frame. */
+@androidx.compose.runtime.Stable
+private class ListPadding(private val density: androidx.compose.ui.unit.Density, private val composerPx: androidx.compose.runtime.MutableIntState) : androidx.compose.foundation.layout.PaddingValues {
+    var top by mutableStateOf(0.dp)
+    override fun calculateTopPadding() = top
+    override fun calculateBottomPadding() = with(density) { composerPx.intValue.coerceAtLeast(0).toDp() } + 8.dp
+    override fun calculateLeftPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
+    override fun calculateRightPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
 }
