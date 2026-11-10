@@ -419,6 +419,14 @@ object StoryMutes {
         _set.value = parse(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "") ?: "")
     }
 
+    /** Sign-out (iOS SessionWipe.wipeAccountPrefs): the next account must not inherit whose stories
+     *  this one hid, nor its story view-receipts choice. */
+    fun wipe(ctx: Context) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).remove("storyViewReceipts").apply()
+        _set.value = emptySet()
+        loaded = false
+    }
+
     fun setHidden(ctx: Context, uid: String, hidden: Boolean) {
         if (uid.isEmpty()) return
         load(ctx)

@@ -15,6 +15,9 @@ object CallsSeen {
 
     data class Mark(val seenAtMs: Long, val ids: List<String>)
 
+    /** Sign-out: the missed-calls badge mark is this account's (iOS callsSeenAt / callsSeenIds). */
+    fun wipe(c: Context) { c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(SEEN_AT).remove(SEEN_IDS).apply() }
+
     fun load(c: Context): Mark {
         val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         var at = p.getLong(SEEN_AT, 0L)
