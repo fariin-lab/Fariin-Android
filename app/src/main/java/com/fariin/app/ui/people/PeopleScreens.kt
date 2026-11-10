@@ -1,5 +1,7 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.ProfileMeltTitle
+import com.fariin.app.ui.components.profileMeltBarGround
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.drawBehind
 import com.fariin.app.ui.components.profileMeltSource
@@ -625,20 +627,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         enabled = false, bar = {
         // Once the photo has gone up, the bar's ground and the name fade in at the top, centred
         // between back and Edit (the reference app's profile, owner's recording 2026-11-10).
-        val barGround = c.bgSecondary
-        Box(Modifier.graphicsLayer { alpha = chromeAlpha }.drawBehind {
-            val t = melt.collapsed(12.dp.toPx(), 16.dp.toPx())
-            if (t > 0f) drawRect(barGround.copy(alpha = t))
-        }) {
-        Box(Modifier.matchParentSize().statusBarsPadding().graphicsLayer {
-            alpha = melt.collapsed(12.dp.toPx(), 16.dp.toPx())
-        }, contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
-                person?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 13.sp, color = c.secondary, maxLines = 1) }
-            }
-        }
+        Box(Modifier.graphicsLayer { alpha = chromeAlpha }.profileMeltBarGround(melt, c.bgSecondary)) {
+        ProfileMeltTitle(melt, name, person?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" })
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->

@@ -1588,7 +1588,10 @@ private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = 
         androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, minOf(d.fontScale, 1.15f)),
         // The header's glass buttons (back, call) frost what passes under them, as the bar around
         // them does (owner 2026-11-10: a photo read clearly through the call buttons).
-        com.fariin.app.ui.components.LocalGlassBlur provides true,
+        com.fariin.app.ui.components.LocalGlassBlur provides !CHAT_TOP_SOLID,
+        // On the solid bar the buttons are plain: glass showed the messages passing behind the bar
+        // through them (owner's Pixel photo 2026-11-10, back and call buttons).
+        *(if (CHAT_TOP_SOLID) arrayOf(com.fariin.app.ui.components.LocalLiquidBackdrop provides null) else emptyArray()),
     ) { HeaderBody(ui, onBack, onTitleClick, onToggleMute) }
 }
 
