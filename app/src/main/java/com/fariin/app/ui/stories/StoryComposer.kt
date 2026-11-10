@@ -1,5 +1,6 @@
 package com.fariin.app.ui.stories
 
+import kotlinx.coroutines.tasks.await
 import com.fariin.app.ui.components.GlassDropdown
 import com.fariin.app.ui.components.GlassAlert
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -477,6 +478,11 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
     val media = cur.media
     var captionFocused by remember { mutableStateOf(false) }
     var hours by remember { mutableIntStateOf(StoryRules.DEFAULT_HOURS) }
+    val storyAdmin by androidx.compose.runtime.produceState<Boolean>(false) {
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        value = me != null && runCatching { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("admins")
+            .document(me).get().await().exists() }.getOrDefault(false)
+    }
     var hoursMenu by remember { mutableStateOf(false) }
     var stickerTray by remember { mutableStateOf(false) }
     var askLink by remember { mutableStateOf(false) }
@@ -866,7 +872,8 @@ private fun StoryComposer(me: String, items: androidx.compose.runtime.snapshots.
                         modifier = Modifier.fillMaxWidth().focusProperties { canFocus = captionArmed }
                             .onFocusChanged { captionFocused = it.isFocused })
                 }
-                Box {
+                // The lifetime ring is for Fariin admins only (iOS AdminStore.isAdmin); everyone else posts 24 h.
+                if (storyAdmin) Box {
                     // Picking a lifetime must not hand the caption the focus (and the keyboard).
                     Box(Modifier.size(44.dp).clip(CircleShape).clickable {
                         captionArmed = false; focus.clearFocus(force = true); keyboard?.hide(); hoursMenu = true

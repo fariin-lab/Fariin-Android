@@ -1076,11 +1076,12 @@ private fun OverflowMenu(
         item("Mark All Read", R.drawable.ic_mark_all_read, onClick = onMarkAllRead),
         item("All Chats", R.drawable.ic_menu_read, filter == FILTER_ALL, divider = true) { onFilter(FILTER_ALL) },
         item("Unread", R.drawable.ic_menu_unread, filter == FILTER_UNREAD) { onFilter(FILTER_UNREAD) },
-        item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) },
+        if (com.fariin.app.data.AppFeatures.groups) item("Groups", R.drawable.ic_gs_group_type, filter == FILTER_GROUPS) { onFilter(FILTER_GROUPS) } else null,
         item("Channels", R.drawable.ic_sf_megaphone, filter == FILTER_CHANNELS) { onFilter(FILTER_CHANNELS) },
         // Message Requests switched off in the admin panel: no entry (unless something still waits).
         if (showRequests) item(if (requests > 0) "Message Requests ($requests)" else "Message Requests", R.drawable.ic_message_request, divider = true, onClick = onRequests) else null,
-        item("Chat Key", R.drawable.ic_chat_key, divider = !showRequests, onClick = onChatKey),
+        // Hidden with the Chat Key itself (admin panel chatKeyVisible, iOS MainShell).
+        if (com.fariin.app.data.MsgPolicy.chatKeyVisible) item("Chat Key", R.drawable.ic_chat_key, divider = !showRequests, onClick = onChatKey) else null,
         item("Archive", R.drawable.ic_archive, onClick = onArchive),
     )
     val painters = rows.map { androidx.compose.ui.res.painterResource(it.first) }

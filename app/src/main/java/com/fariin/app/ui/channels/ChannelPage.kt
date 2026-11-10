@@ -426,7 +426,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                         last = !admin, badge = NewBadgeSpots.GROUP_INFO_STORAGE) { sub = "storage" }
                     if (admin) {
                         ChannelManageRows(info, team!!, me, shownCount, manage, last = false)
-                        com.fariin.app.ui.settings.SettingsRow("Statistics", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_statistics),
+                        // The same groupStats switch as groups (iOS GroupInfoView).
+                        if (com.fariin.app.data.AppFeatures.groupStats) com.fariin.app.ui.settings.SettingsRow("Statistics", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_statistics),
                             last = true, badge = NewBadgeSpots.GROUP_INFO_STATISTICS) { sub = "stats" }
                     }
                     // Channel Type and Protect Content live on Channel Settings (as iOS).
