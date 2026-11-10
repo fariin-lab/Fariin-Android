@@ -1,5 +1,8 @@
 package com.fariin.app.ui.people
 
+import com.fariin.app.ui.components.profileMeltSource
+import com.fariin.app.ui.components.ProfileMeltTitle
+import com.fariin.app.ui.components.profileMeltBarGround
 import androidx.compose.foundation.combinedClickable
 import com.fariin.app.ui.photo.profilePhotoSource
 import com.fariin.app.ui.components.glassMenuAnchor
@@ -933,6 +936,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         (conv["avatarUrl"] as? String)?.ifEmpty { null }, users.size, onClose = { showQr = false })
     // The page runs under its bar, so back, Edit and the menu are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
+    // The photo melts into the top as the page scrolls; the bar and the title come in after (ProfileMelt).
+    val melt = com.fariin.app.ui.components.rememberProfileMelt(pageScroll)
     val underBar by remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
     // The More circle's glass menu grows out of the circle over the page's own layer (as the channel's).
     val moreAnchor = remember { com.fariin.app.ui.components.GlassMenuAnchor() }
@@ -946,8 +951,12 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val groupPhotoUrl = (conv["avatarUrl"] as? String)?.ifEmpty { null }
     Box(Modifier.fillMaxSize()) {
     com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary)
-        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true, bar = {
-        Box(Modifier.graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }) {
+        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true,
+        // No bar until the name reaches the top; plain circles (as the contact profile, owner 2026-11-10).
+        clear = true, enabled = false, bar = {
+        Box(Modifier.graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }
+            .then(Modifier.profileMeltBarGround(melt, c.bgSecondary))) {
+        ProfileMeltTitle(melt, conv["title"] as? String ?: "Group", "${users.size} Member${if (users.size == 1) "" else "s"}")
         // iOS: "Edit" top right for whoever may change the group's info (owner 2026-10-19), and the
         // ••• menu (moreMenuItems) as the Android three-dot overflow: Share Group and QR Code while the
         // group has a link I may share, and Change Wallpaper (the group's, for everyone) for whoever
@@ -971,7 +980,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             val photoHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
             Avatar(groupPhotoUrl, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true),
                 onResolved = photo::resolved,
-                modifier = Modifier.profilePhotoSource(photo).then(
+                modifier = Modifier.profilePhotoSource(photo).profileMeltSource(melt).then(
                 if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
                     onLongClickLabel = "View photo", onLongClick = photoChoice.hold).semantics { contentDescription = "Group photo" }
                 else if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
@@ -1142,6 +1151,10 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             }
             Spacer(Modifier.height(30.dp))
         }
+    }
+    // Over the page, under the menus and the photo viewer: the photo's melting copy.
+    com.fariin.app.ui.components.ProfileMeltOverlay(melt, 100.dp, squircle = conv["channel"] == true) {
+        Avatar(groupPhotoUrl, 100.dp, kind = com.fariin.app.ui.components.AvatarKind.of(true, conv["channel"] == true))
     }
     run {
         val ctx2 = LocalContext.current

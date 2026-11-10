@@ -115,7 +115,7 @@ internal fun LinkShareSheet(me: String, link: String, text: String = link, onDis
                             // iOS: a black tick badge (white in dark mode).
                             if (on) Box(Modifier.align(Alignment.BottomEnd).size(24.dp).clip(CircleShape).background(c.label)
                                 .border(2.dp, com.fariin.app.ui.components.sheetFill, CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark), null, tint = c.bg, modifier = Modifier.size(14.dp))
+                                Icon(ImageVector.vectorResource(R.drawable.ic_sf_checkmark_bold), null, tint = c.bg, modifier = Modifier.size(16.dp))
                             }
                         }
                         Spacer(Modifier.height(6.dp))

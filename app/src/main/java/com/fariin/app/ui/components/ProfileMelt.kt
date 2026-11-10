@@ -35,6 +35,9 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.fariin.app.perf.PerfClass
 import com.fariin.app.perf.PowerSaving
@@ -214,6 +217,30 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
                     val d = ((p - 0.3f) / 0.7f).coerceIn(0f, 1f)
                     if (d > 0f) drawRect(Color.Black.copy(alpha = d * 0.85f))
                 }) { photo() }
+        }
+    }
+}
+
+/** The bar's ground, fading in once the photo has gone and the page's name reaches the bar. */
+fun Modifier.profileMeltBarGround(m: ProfileMeltState, color: Color): Modifier = this.drawBehind {
+    val t = m.collapsed(12.dp.toPx(), 16.dp.toPx())
+    if (t > 0f) drawRect(color.copy(alpha = t))
+}
+
+/**
+ * The compact title (name, and a second line) fading in at the bar's centre with its ground, as the
+ * page's own name arrives there (the reference app's profile). Put it first inside the bar's Box.
+ */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.ProfileMeltTitle(m: ProfileMeltState, title: String, subtitle: String?) {
+    val c = com.fariin.app.ui.theme.Fariin.colors
+    Box(Modifier.matchParentSize().statusBarsPadding().graphicsLayer { alpha = m.collapsed(12.dp.toPx(), 16.dp.toPx()) },
+        contentAlignment = androidx.compose.ui.Alignment.Center) {
+        androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+            androidx.compose.material3.Text(title, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                color = c.label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 220.dp))
+            if (!subtitle.isNullOrEmpty()) androidx.compose.material3.Text(subtitle, fontSize = 13.sp, color = c.secondary, maxLines = 1)
         }
     }
 }
