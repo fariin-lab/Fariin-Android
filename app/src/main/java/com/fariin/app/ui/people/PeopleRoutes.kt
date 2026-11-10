@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import com.fariin.app.ui.components.page
@@ -27,10 +28,24 @@ fun NavGraphBuilder.peopleRoutes(
     }
     // Activity (owner 2026-11-09): a row opens that channel, that post's Replies, on the comment.
     page("activity") {
+        val gateScope = androidx.compose.runtime.rememberCoroutineScope()
+        var opening by remember { mutableStateOf<String?>(null) }
         com.fariin.app.ui.settings.ActivityScreen(onBack = { nav.popBackStack() }, onOpen = { i ->
-            com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.ActivityRules.focus(i)
-            com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = i.cid to i.mid
-            nav.navigate("thread/${i.cid}") { launchSingleTop = true }
+            // Checked first (iOS OpenGate, audit X1): a deleted post or channel says so and stays here.
+            if (opening == null && i.cid.isNotEmpty() && '/' !in i.cid) {
+                opening = i.id
+                gateScope.launch {
+                    val gate = com.fariin.app.data.OpenGate.check(i.cid, i.mid)
+                    opening = null
+                    if (gate == com.fariin.app.data.OpenGate.Result.OPEN) {
+                        com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.ActivityRules.focus(i)
+                        com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = i.cid to i.mid
+                        nav.navigate("thread/${i.cid}") { launchSingleTop = true }
+                    } else com.fariin.app.data.OpenGate.notice(gate).takeIf { it.isNotEmpty() }?.let {
+                        com.fariin.app.ui.components.Snack.show(it)
+                    }
+                }
+            }
         })
     }
     page("requests") { MessageRequestsScreen(api, requests(), onBack = { nav.popBackStack() }, onOpenChat = openChat) }

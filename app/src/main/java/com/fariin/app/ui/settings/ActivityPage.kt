@@ -108,7 +108,10 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
                 }
             }
             val list = items
+            // Not from people I blocked since (iOS ActivityFeedView; audit A9).
+            val blocked by com.fariin.app.data.BlockList.state.collectAsState()
             val shown = list?.let { l -> if (unreadOnly) l.filter { it.id in unreadAtOpen.orEmpty() } else l }
+                ?.filter { it.fromUid.isEmpty() || !blocked.contains(it.fromUid) }
             when {
                 shown == null -> com.fariin.app.ui.components.LoadingLine("Loading…", Modifier.padding(16.dp), fontSize = 17.sp)
                 shown.isEmpty() -> Text(if (unreadOnly) "Nothing unread." else "When people reply to or react to your comments, you'll see it here.",
@@ -153,7 +156,10 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
             Avatar(i.fromPhoto.ifEmpty { if (i.fromUid.isEmpty()) i.chPhoto else "" }.ifEmpty { null }, 56.dp,
                 squircle = i.fromUid.isEmpty(), kind = if (i.fromUid.isEmpty()) AvatarKind.CHANNEL else AvatarKind.PERSON)
             Box(Modifier.align(Alignment.BottomEnd).offset(x = 3.dp, y = 3.dp).size(24.dp).clip(CircleShape).background(c.bgSecondary).padding(2.dp)) {
-                Avatar(i.chPhoto.ifEmpty { null }, 20.dp, squircle = true, kind = AvatarKind.CHANNEL)
+                // A mention: a small blue "@" badge instead of the channel's photo.
+                if (i.isMention) Box(Modifier.size(20.dp).clip(CircleShape).background(c.blue), contentAlignment = Alignment.Center) {
+                    Text("@", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                } else Avatar(i.chPhoto.ifEmpty { null }, 20.dp, squircle = true, kind = AvatarKind.CHANNEL)
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -181,6 +187,21 @@ private fun ActivityRow(i: ActivityItem, onTap: () -> Unit) {
                 }
                 if (i.text.isNotEmpty()) Text(i.text, fontSize = 15.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(ActivityRules.postLine(i), fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else if (i.isMention) {
+                // "Nan mentioned you · 5m" / their words, @handles blue / "In VE3 · On the post: …" (CHANNEL-SYNC-SPEC 10).
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(i.fromName.ifEmpty { "Someone" }) }
+                        append(" mentioned you")
+                    }, fontSize = 15.sp, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(" · " + shortAgo(i.at), fontSize = 13.sp, color = c.secondary, maxLines = 1)
+                }
+                if (i.text.isNotEmpty()) Text(buildAnnotatedString {
+                    append(i.text)
+                    com.fariin.app.data.PostReplyRules.mentions(i.text).forEach { (r, _) -> addStyle(SpanStyle(color = c.blue), r.first, r.last + 1) }
+                }, fontSize = 15.sp, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("In " + i.chTitle.ifEmpty { "a channel" } + if (i.post.isNotEmpty()) " · On the post: ${i.post}" else "",
+                    fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             } else if (i.isReact) {
                 // Design 3 (owner 2026-11-09): "Roodo, kream and 12 others" / "reacted to your comment in VE3".
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -276,13 +297,25 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
     suspend fun load(more: Boolean) {
         if (loading) return
         loading = true
-        val page = com.fariin.app.data.ReplyReactors.page(i.cid, i.mid, i.mineRid, i.mineAid, emoji, if (more) next else "")
+        val asked = emoji
+        var cursor = if (more) next else ""
+        var got = emptyList<com.fariin.app.data.Reactor>()
+        var page: com.fariin.app.data.ReactorsPage? = null
+        // The server filters an emoji after taking 60 likes, so a page can be empty with more behind
+        // it (audit A12): keep asking, at most five pages, until someone shows.
+        for (k in 0 until 5) {
+            val p = com.fariin.app.data.ReplyReactors.page(i.cid, i.mid, i.mineRid, i.mineAid, asked, cursor) ?: run { page = null; break }
+            page = p; got = got + p.people; cursor = p.next
+            if (got.isNotEmpty() || p.next.isEmpty()) break
+        }
         loading = false
-        if (page == null) { if (!more) failed = true; return }
+        if (asked != emoji) return   // the chip changed meanwhile (audit A15)
+        val pg = page
+        if (pg == null) { if (!more) failed = true; return }
         failed = false
-        if (page.rx.isNotEmpty()) rx = page.rx
-        list = if (more) list.orEmpty() + page.people else page.people
-        next = page.next
+        if (pg.rx.isNotEmpty()) rx = pg.rx
+        list = if (more) list.orEmpty() + got else got
+        next = cursor
     }
     LaunchedEffect(emoji) { list = null; next = ""; load(false) }
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = c.bgSecondary) {
@@ -323,7 +356,7 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
                     items(rows.size, key = { rows[it].uid + rows[it].emoji }) { k ->
                         val r = rows[k]
                         if (k >= rows.size - 10 && next.isNotEmpty()) LaunchedEffect(next) { load(true) }
-                        Row(Modifier.fillMaxWidth().clickable { onDismiss(); people.contact(r.uid) }
+                        Row(Modifier.fillMaxWidth().clickable(enabled = r.uid.isNotEmpty()) { onDismiss(); people.contact(r.uid) }
                             .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(48.dp)) {
                                 Avatar(r.photo.ifEmpty { null }, 48.dp)

@@ -138,8 +138,13 @@ object NotificationPoster {
         // A channel's face is its rounded square (owner 2026-11-10), as on its row and its page.
         val channelChat = spec.isChannel || com.fariin.app.data.CryptoHub.listedConversation(spec.key)?.isChannel == true ||
             com.fariin.app.channel.ChannelFollows.docs.value[spec.key]?.get("channel") == true
-        val senderIcon = IconCompat.createWithBitmap(circle(senderPhoto, group = false, squircle = channelChat && !spec.isGroup))
-        val sender = Person.Builder().setName(spec.senderName).setKey(spec.senderUid).setIcon(senderIcon).build()
+        // A GROUP'S FACE AND NAME (iOS, owner 2026-11-09: "show group avatar and group name"): in a
+        // group the group itself is the line's sender, and the line reads "Sender: message".
+        val senderIcon = IconCompat.createWithBitmap(
+            if (spec.isGroup) circle(groupPhoto, group = true, squircle = channelChat) else circle(senderPhoto, group = false, squircle = channelChat))
+        val sender = if (spec.isGroup)
+            Person.Builder().setName(spec.groupName ?: spec.title).setKey("g:" + spec.key).setIcon(senderIcon).build()
+        else Person.Builder().setName(spec.senderName).setKey(spec.senderUid).setIcon(senderIcon).build()
         val mePerson = Person.Builder().setName("You").setKey(me.ifEmpty { "me" }).build()
 
         // The chat's earlier lines stay under the new one, as one conversation.
@@ -151,13 +156,9 @@ object NotificationPoster {
             // A line whose timer has run out is not carried under the new one.
             if (!NotifExpiry.lineGone(it.extras.getLong(EXTRA_EXPIRES, 0L), nowMs)) style.addMessage(it)
         }
-        val line = NotificationCompat.MessagingStyle.Message(spec.line, nowMs, sender)
+        val line = NotificationCompat.MessagingStyle.Message(if (spec.isGroup) spec.body else spec.line, nowMs, sender)
         spec.expiresAtMs?.let { line.extras.putLong(EXTRA_EXPIRES, it) }
         style.addMessage(line)
-        if (spec.isGroup) {
-            style.setConversationTitle(spec.groupName ?: spec.title)
-            style.isGroupConversation = true
-        }
         b.setStyle(style)
 
         // The conversation shortcut (needed for Android's Conversations section, the share sheet
@@ -255,7 +256,8 @@ object NotificationPoster {
      * the tap brings the same `cid`, `mid` and `kind` (MainActivity).
      */
     @SuppressLint("MissingPermission")
-    fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String, rid: String = "", aid: String = "") {
+    fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String, rid: String = "", aid: String = "",
+                       /** The push kind: a reaction gets its own notification, not the reply's (audit A14). */ kind: String = "") {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
@@ -279,7 +281,8 @@ object NotificationPoster {
             .build()
         // One notification per comment (the server sends one push, then "N new replies to your
         // comment" in its place), one per post for an admin's summary.
-        nmc.notify(if (rid.isNotEmpty()) "replies-$cid/$mid/$rid" else "replies-$cid/$mid", ID, n)
+        val pre = if (kind == "replyReact") "react" else "replies"
+        nmc.notify(if (rid.isNotEmpty()) "$pre-$cid/$mid/$rid" else "$pre-$cid/$mid", ID, n)
     }
 
     /** "Posted a new story" with the app open: one per author (tag), a tap opens the Stories tab. */

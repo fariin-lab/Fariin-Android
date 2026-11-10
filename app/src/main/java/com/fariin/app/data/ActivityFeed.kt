@@ -55,11 +55,13 @@ data class ActivityItem(
     val isReact get() = kind == "react"
     val isQuote get() = kind == "quote"
     val isComment get() = kind == "comment"
+    /** My @handle in somebody's comment or answer (server, CHANNEL-SYNC-SPEC 10). */
+    val isMention get() = kind == "mention"
 
     companion object {
         fun parse(id: String, d: Map<String, Any?>): ActivityItem? {
             val kind = d["kind"] as? String ?: return null
-            if (kind != "reply" && kind != "react" && kind != "quote" && kind != "comment") return null
+            if (kind != "reply" && kind != "react" && kind != "quote" && kind != "comment" && kind != "mention") return null
             val cid = d["cid"] as? String ?: return null
             val mid = d["mid"] as? String ?: return null
             fun m(k: String) = d[k] as? Map<*, *> ?: emptyMap<String, Any?>()
@@ -117,10 +119,12 @@ object ActivityRules {
     fun preview(s: ActivitySummary): String {
         val n = s.name.ifEmpty { "Someone" }
         return when (s.kind) {
-            "react" -> "$n reacted ${s.emoji} to your comment".replace("  ", " ")
+            // Word for word as iOS ActivitySummary.preview, empty forms too (audit A2).
+            "react" -> if (s.emoji.isEmpty()) "$n reacted to your comment" else "$n reacted ${s.emoji} to your comment"
             "quote" -> "$n quoted your post" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
-            "comment" -> "$n commented: ${s.text}"
-            else -> "$n replied to your comment: ${s.text}"
+            "comment" -> if (s.text.isEmpty()) "$n commented on your post" else "$n commented: ${s.text}"
+            "mention" -> "$n mentioned you" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
+            else -> "$n replied to your comment" + if (s.text.isNotEmpty()) ": ${s.text}" else ""
         }
     }
 
@@ -243,5 +247,6 @@ object ReplyReactors {
                 .filter { it.second > 0 }.toMap(),
             total = (r["total"] as? Number)?.toInt() ?: 0,
             next = r["next"] as? String ?: "")
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e   // a cancelled load stops (audit A15)
     } catch (_: Exception) { null }
 }

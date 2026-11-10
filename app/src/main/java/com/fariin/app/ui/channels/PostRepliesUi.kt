@@ -90,6 +90,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 /**
@@ -139,6 +140,9 @@ internal fun rememberReplyQuickReaction(): String {
  * before it. A send carries the phone's id, which becomes the reply's id: a retry cannot post twice.
  */
 @Stable
+/** Offline is not "deleted" (iOS, audit X8). */
+private const val OFFLINE_WORDS = "Couldn't load replies. Check your connection."
+
 class PostRepliesState(val cid: String, private val mid: String, private val scope: CoroutineScope) {
     private val cacheKey = (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "") + "/$cid/$mid"
 
@@ -226,6 +230,53 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
     /** A short line over the sheet ("Thanks. We'll take a look."). */
     var toast by mutableStateOf<String?>(null)
     val field = FocusRequester()
+
+    /** People for the "@word" being typed (iOS 75e323de3): up to five, over the field. */
+    var mentionPicks by mutableStateOf<List<com.fariin.app.data.Person>>(emptyList())
+    /** What a tapped "@handle" in a reply does; set by the list (RepliesList). */
+    var mentionTap: (String) -> Unit = {}
+    private var mentionJob: Job? = null
+
+    /** The draft changed: search the "@word" at its end 250 ms after the last key. */
+    fun mentionTyped(draft: String) {
+        mentionJob?.cancel()
+        val word = PostReplyRules.typingMention(draft)?.second
+        if (word.isNullOrEmpty()) { mentionPicks = emptyList(); return }
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        mentionJob = scope.launch {
+            delay(250)
+            val found = runCatching { com.fariin.app.data.FirestorePeople(me, com.fariin.app.data.CryptoHub.crypto).search(word) }
+                .getOrDefault(emptyList())
+            mentionPicks = found.filter { it.handle.isNotEmpty() }.take(5)
+        }
+    }
+
+    fun pickMention(p: com.fariin.app.data.Person) {
+        mentionJob?.cancel()
+        draft = PostReplyRules.pickMention(draft, p.handle).take(PostReplyRules.MAX_LENGTH)
+        mentionPicks = emptyList()
+    }
+
+    /**
+     * An "@handle" tapped in a reply (iOS): its owner's profile, after the sheet goes down. My own
+     * handle and a handle nobody holds only say so.
+     */
+    fun openMention(handle: String, open: (String) -> Unit) {
+        val key = com.fariin.app.data.Usernames.lookupKey(handle)
+        if (key == null) { toast = "No one uses @$handle."; return }
+        scope.launch {
+            val owner = runCatching {
+                val d = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("usernames").document(key).get().await()
+                d.getString("uid")?.takeIf { it.isNotEmpty() && d.get("releasedAt") == null }
+            }.getOrNull()
+            val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            when {
+                owner == null -> toast = "No one uses @$handle."
+                owner == me -> toast = "@$handle is your username."
+                else -> open(owner)
+            }
+        }
+    }
 
     /** Reply id to the emoji wanted ("" = none) while a call is on its way. */
     private val pendingLikes = HashMap<String, String>()
@@ -440,7 +491,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
         if (threads.none { it.id == f.rid }) {
             // Not on the pages read so far: a few more pages are looked through, then it is let go.
             if (olderCursor.isNotEmpty() && laterIds.size < 4 * 30) loadOlder()
-            else if (loaded) { focusWanted = null; if (olderCursor.isEmpty()) toast = "This reply was deleted" }
+            else if (loaded) { focusWanted = null; if (failed) toast = OFFLINE_WORDS else if (olderCursor.isEmpty()) toast = "This reply was deleted" }
             return
         }
         focusWanted = null
@@ -457,7 +508,7 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
             while (answers[thread].orEmpty().none { it.id == answer } && answerNext[thread].orEmpty().isNotEmpty() && tries++ < 5)
                 loadAnswers(thread, more = true)
             if (answers[thread].orEmpty().any { it.id == answer }) { scrollTarget = answer; flash(answer) }
-            else { scrollTarget = thread; flash(thread); if (answerNext[thread].orEmpty().isEmpty()) toast = "This reply was deleted" }
+            else { scrollTarget = thread; flash(thread); if (answersFailed) toast = OFFLINE_WORDS else if (answerNext[thread].orEmpty().isEmpty()) toast = "This reply was deleted" }
         }
     }
 
@@ -469,12 +520,17 @@ class PostRepliesState(val cid: String, private val mid: String, private val sco
             scope.launch { loadAnswers(rid, more = true) }
     }
 
+    /** The last answers page could not be read (offline): not a deleted reply (audit X8). */
+    private var answersFailed = false
+
     suspend fun loadAnswers(rid: String, more: Boolean) {
         // One first-page fetch per thread at a time (the background fetch and a tap meet here).
         if (!more && rid in answersLoading) return
         if (!more) answersLoading = answersLoading + rid
         val cursor = if (more) answerNext[rid].orEmpty() else ""
-        val p = try { PostReplies.answers(cid, mid, rid, cursor) } finally { if (!more) answersLoading = answersLoading - rid } ?: return
+        val p = try { PostReplies.answers(cid, mid, rid, cursor) } finally { if (!more) answersLoading = answersLoading - rid }
+        answersFailed = p == null
+        if (p == null) return
         answers = answers + (rid to PostReplyRules.mergeAnswers(answers[rid].orEmpty(), rows(p.items), more))
         answerNext = answerNext + (rid to p.next)
         answersLoaded += rid
@@ -894,6 +950,14 @@ internal fun RepliesList(s: PostRepliesState, modifier: Modifier) {
             if (uid == null) channelNav.page(s.cid) else peopleNav.contact(uid)
         }
     }
+    // An "@handle" in a reply: the sheet goes down, then that person's profile (iOS 75e323de3).
+    s.mentionTap = { h ->
+        s.openMention(h) { uid ->
+            PostQuotesSheet.open.value = null
+            PostQuotesSheet.startOff = false
+            peopleNav.contact(uid)
+        }
+    }
     Column(modifier) {
     if (s.loaded && s.threads.isNotEmpty() || s.sort != PostReplyRules.Sort.TOP) SortSwitch(s)
     Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -1120,7 +1184,17 @@ private fun ReplyRow(s: PostRepliesState, r: PostReply, small: Boolean, now: Lon
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f, fill = false).padding(end = 24.dp)) {
                 // The words only: whom it answers is in the name line now (iOS 785831e73).
-                val words = remember(r.text) { androidx.compose.ui.text.AnnotatedString(r.text) }
+                // Each "@handle" in the app's blue and tappable (iOS 75e323de3).
+                val blue = c.blue
+                val words = remember(r.text, blue) {
+                    val found = PostReplyRules.mentions(r.text)
+                    if (found.isEmpty()) androidx.compose.ui.text.AnnotatedString(r.text)
+                    else androidx.compose.ui.text.AnnotatedString.Builder(r.text).apply {
+                        for ((range, h) in found) addLink(androidx.compose.ui.text.LinkAnnotation.Clickable("mention",
+                            androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = blue))) { s.mentionTap(h) },
+                            range.first, range.last + 1)
+                    }.toAnnotatedString()
+                }
                 Text(words, fontSize = if (small) 15.sp else 17.sp, color = c.label,
                     modifier = Modifier.alpha(if (dim) 0.55f else 1f).clip(RoundedCornerShape(20.dp)).background(c.fieldFill)
                         .pointerInput(r.id, r.send) {
@@ -1317,6 +1391,25 @@ internal fun RepliesComposer(s: PostRepliesState) {
                         }.padding(vertical = 6.dp))
                 }
             }
+            // "@" + letters at the field's end: up to five people over it (iOS 75e323de3); a tap
+            // puts "@handle " in place of the word.
+            if (s.mentionPicks.isNotEmpty() && PostReplyRules.typingMention(s.draft) != null) {
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp).fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp)).background(c.card)) {
+                    s.mentionPicks.forEach { p ->
+                        Row(Modifier.fillMaxWidth().clickable(onClickLabel = "Mention @${p.handle}") { s.pickMention(p) }
+                            .padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(p.photoUrl, 30.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(p.name.ifEmpty { p.handle }, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("@" + p.handle, fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
             Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.fieldFill)
                 .padding(start = 18.dp, end = 5.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 // Replying to someone else: their name in blue before the cursor (drawn, never sent; iOS).
@@ -1327,7 +1420,7 @@ internal fun RepliesComposer(s: PostRepliesState) {
                     if (s.draft.isEmpty() && token == null) Text("Add a reply…", fontSize = 16.sp, color = c.tertiary)
                     BasicTextField(
                         value = s.draft,
-                        onValueChange = { s.draft = it.take(PostReplyRules.MAX_LENGTH); s.problem = null },
+                        onValueChange = { s.draft = it.take(PostReplyRules.MAX_LENGTH); s.problem = null; s.mentionTyped(s.draft) },
                         textStyle = TextStyle(fontSize = 16.sp, color = c.label),
                         cursorBrush = SolidColor(c.accent),
                         maxLines = 5,
