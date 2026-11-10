@@ -11,6 +11,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -169,14 +170,38 @@ internal fun SharedMediaCard(cid: String, state: SharedMediaState, inset: androi
 
 /** A square thumbnail: the inline placeholder under the picture, a play disc on a video. */
 @Composable
-private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, onOpen: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun MediaTile(item: SharedMedia.Item, modifier: Modifier, cid: String = "", onOpen: () -> Unit) {
     val c = Fariin.colors
     val px = with(LocalDensity.current) { 120.dp.roundToPx() }
     val file = rememberPlainFile(item.pictureUrl, item.pictureEnc)
     val bmp = rememberBitmap(file, px)
     val placeholder = rememberPlaceholder(item.thumb, item.blurhash)
-    Box(modifier.background(c.secondary.copy(alpha = 0.18f)).clickable(onClick = onOpen)
+    // A long press (iOS MediaGalleryView): Go to Message, Share (not in a restricted chat), Delete for Me.
+    var menu by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val nav = LocalPeopleNav.current
+    val media = com.fariin.app.ui.thread.chatMedia()
+    val scope = rememberCoroutineScope()
+    Box(modifier.background(c.secondary.copy(alpha = 0.18f))
+        .combinedClickable(onClick = onOpen, onLongClick = if (cid.isEmpty()) null else ({ menu = true }))
         .semantics { contentDescription = if (item.isVideo) "Video" else "Photo" }) {
+        if (menu) GlassDropdown(true, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
+            border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card) {
+            DropdownMenuItem(text = { Text("Go to Message", color = c.label) }, onClick = {
+                menu = false
+                com.fariin.app.data.QuoteStore.pendingJump.value = com.fariin.app.data.QuoteStore.Jump(cid, item.messageId)
+                nav.chat(cid)
+            })
+            if (!com.fariin.app.data.ChatRestrictions.isOn(cid)) DropdownMenuItem(text = { Text("Share", color = c.label) }, onClick = {
+                menu = false
+                scope.launch { shareItem(ctx, media, item) }
+            })
+            DropdownMenuItem(text = { Text("Delete for Me", color = c.red) }, onClick = {
+                menu = false
+                HiddenMessages.hide(ctx, item.messageId)
+            })
+        }
         (bmp ?: placeholder)?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         if (item.isVideo) {
             Box(Modifier.align(Alignment.Center).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
@@ -256,7 +281,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
         }) { top ->
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                 when (tabs[page]) {
-                    SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded, top) { viewing = viewingOf(it, media) }
+                    SharedMedia.Tab.MEDIA -> MediaGrid(media, state.loaded, top, cid) { viewing = viewingOf(it, media) }
                     SharedMedia.Tab.FILES -> Rows(top, state.loaded, state.lists.files.isEmpty(), SharedMedia.Tab.FILES, ImageVector.vectorResource(R.drawable.ic_file)) {
                         items(state.lists.files, key = { it.id }) { m -> FileRow(m) }
                     }
@@ -275,7 +300,7 @@ internal fun SharedMediaScreen(cid: String, state: SharedMediaState, onBack: () 
 
 /** Three square columns with a hairline gap, under date headings (iOS grid + sections). */
 @Composable
-private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, top: androidx.compose.ui.unit.Dp, onOpen: (SharedMedia.Item) -> Unit) {
+private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, top: androidx.compose.ui.unit.Dp, cid: String = "", onOpen: (SharedMedia.Item) -> Unit) {
     val c = Fariin.colors
     val sections = remember(media) { SharedMedia.sections(media, System.currentTimeMillis().toDouble()) }
     if (loaded && media.isEmpty()) { Box(Modifier.padding(top = top)) { EmptyTab(SharedMedia.Tab.MEDIA, ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album)) }; return }
@@ -288,7 +313,7 @@ private fun MediaGrid(media: List<SharedMedia.Item>, loaded: Boolean, top: andro
                 Text(title, style = MaterialTheme.typography.titleSmall, color = c.secondary,
                     modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 6.dp))
             }
-            items(list, key = { it.id }) { item -> MediaTile(item, Modifier.aspectRatio(1f)) { onOpen(item) } }
+            items(list, key = { it.id }) { item -> MediaTile(item, Modifier.aspectRatio(1f), cid = cid) { onOpen(item) } }
         }
     }
 }
@@ -352,4 +377,22 @@ private fun LinkRow(m: Message, link: SharedMedia.Link) {
         Text(link.url, style = MaterialTheme.typography.bodySmall, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 16.dp))
+}
+
+/** Android's share sheet with the plain copy (cache/open, served by our FileProvider), as the viewer shares. */
+private suspend fun shareItem(ctx: android.content.Context, media: com.fariin.app.media.ChatMedia, item: SharedMedia.Item) {
+    val intent = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val video = item.isVideo && item.videoUrl != null
+            val plain = (if (video) media.file(item.videoUrl!!, item.videoEnc) else media.file(item.pictureUrl, item.pictureEnc)) ?: return@runCatching null
+            val dir = java.io.File(ctx.cacheDir, "open").also { it.mkdirs() }
+            val out = java.io.File(dir, "Fariin_${item.id.filter { it.isLetterOrDigit() }}" + if (video) ".mp4" else ".jpg")
+            plain.copyTo(out, overwrite = true)
+            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", out)
+            Intent(Intent.ACTION_SEND).setType(if (video) "video/mp4" else "image/jpeg")
+                .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .apply { clipData = android.content.ClipData.newRawUri(null, uri) }
+        }.getOrNull()
+    }
+    if (intent == null) com.fariin.app.ui.components.Snack.show("Couldn't share") else ctx.startActivity(Intent.createChooser(intent, null))
 }
