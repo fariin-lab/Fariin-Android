@@ -404,7 +404,11 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                                 Text("fariin.com/${info.username}", fontSize = 17.sp, color = c.label)
                                 Text("Link", fontSize = 14.sp, color = c.secondary)
                             }
-                            Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                            // The link opens Share with; the QR mark opens the code (iOS, owner 2026-11-10).
+                            Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "QR code") { showQr = true },
+                                contentAlignment = Alignment.Center) {
+                                Icon(ImageVector.vectorResource(R.drawable.ic_qr), "QR code", tint = c.secondary, modifier = Modifier.size(24.dp))
+                            }
                         }
                     }
                 }
