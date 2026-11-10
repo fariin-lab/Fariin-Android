@@ -70,13 +70,18 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                           /** Set: the bottom is the composer (preview, "Add a message…", send arrow) and
                            *  Send hands back the picked chats and the typed note (may be empty). */
                           onSendNote: ((List<String>, String) -> Unit)? = null,
+                          /** Quote: Create Channel from the empty state (null = no button). */
+                          onCreateChannel: (() -> Unit)? = null,
                           onSend: (List<String>) -> Unit = {}) {
     val c = Fariin.colors
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     val chosen = remember { mutableStateListOf<String>() }
     val chats = remember {
-        CryptoHub.listedAll().filter { forwardable(it, me) }.sortedByDescending { it.updatedAtMillis }
+        // A quote goes to a group or a channel I post in, never to one person (owner 2026-11-10:
+        // Share/Forward is for people; iOS ForwardPicker people filter).
+        CryptoHub.listedAll().filter { forwardable(it, me) && (!pickOne || it.isGroup || it.isChannel) }
+            .sortedByDescending { it.updatedAtMillis }
     }
     val shown = chats.filter { query.isBlank() || it.displayName(me).contains(query.trim(), ignoreCase = true) }
     // Rounded as iOS ForwardPicker: the grey sheet, the search as a floating pill, the chats in one
@@ -95,7 +100,18 @@ internal fun ForwardSheet(me: String, onDismiss: () -> Unit, title: String = "Fo
                     cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
             }
             // A search that finds nothing says so, rather than leaving an empty sheet.
-            if (shown.isEmpty()) Text(if (query.isBlank()) "No chats yet" else "No chats found", fontSize = 15.sp, color = c.secondary,
+            if (pickOne && chats.isEmpty()) Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("No channels or groups", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                Text("Quotes go to a channel you post in or a group. Create one to quote into it.", fontSize = 15.sp,
+                    color = c.secondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                if (onCreateChannel != null) Box(
+                    Modifier.padding(top = 18.dp).height(44.dp).floating(CircleShape, fill = c.label)
+                        .clickable { onDismiss(); onCreateChannel() }.padding(horizontal = 22.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("Create Channel", color = c.bg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+            }
+            else if (shown.isEmpty()) Text(if (query.isBlank()) "No chats yet" else "No chats found", fontSize = 15.sp, color = c.secondary,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             else LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp)
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp).clip(RoundedCornerShape(20.dp)).background(c.card)) {

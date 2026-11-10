@@ -434,7 +434,19 @@ private fun ThreadContent(
         onSendNote = { targets, note -> actions.onForwardWithNote(listOf(m), targets, note) }) }
     // Quote a channel post (iOS ForwardPicker pick-one mode): the same chats, one tap picks.
     var quoteFor by remember { mutableStateOf<Message?>(null) }
-    quoteFor?.let { m -> ForwardSheet(ui.me, onDismiss = { quoteFor = null }, title = "Quote in", pickOne = true) { t ->
+    // Create Channel from the empty Quote list: the list comes back when this chat is on top again.
+    var quoteAfterCreate by remember { mutableStateOf<Message?>(null) }
+    val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
+    val quoteLife = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(quoteLife) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) quoteAfterCreate?.let { quoteFor = it; quoteAfterCreate = null }
+        }
+        quoteLife.lifecycle.addObserver(obs)
+        onDispose { quoteLife.lifecycle.removeObserver(obs) }
+    }
+    quoteFor?.let { m -> ForwardSheet(ui.me, onDismiss = { quoteFor = null }, title = "Quote in", pickOne = true,
+        onCreateChannel = { quoteAfterCreate = m; channelNav.create() }) { t ->
         t.firstOrNull()?.let { actions.onQuoteTo(m, it) } } }
     bulkForward?.let { msgs ->
         ForwardSheet(ui.me, onDismiss = { bulkForward = null }, preview = msgs,
