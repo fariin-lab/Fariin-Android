@@ -158,7 +158,14 @@ fun MainShell(
     if (me != DemoChats.ME) {
         val callKey = chats.chats.joinToString(",") { it.id + ":" + it.updatedAtMillis }
         LaunchedEffect(me, callKey, callsRetry, com.fariin.app.data.CallsRepository.version.intValue) {
-            if (!chats.loading) { calls = callsRepo.load(me, chats.chats); callsError = callsRepo.failed }
+            if (!chats.loading) {
+                // Off the main thread, and not while the app is still drawing its first frames
+                // (owner's Pixel 2026-11-09, cold start: a read per chat and its parsing ran on the
+                // main thread beside the list's first draw). Only the Calls badge waits for it.
+                if (calls == null) kotlinx.coroutines.delay(CALLS_FIRST_LOAD_DELAY_MS)
+                val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { callsRepo.load(me, chats.chats) }
+                calls = list; callsError = callsRepo.failed
+            }
         }
     }
     var callsMark by remember { mutableStateOf(com.fariin.app.data.CallsSeen.load(context)) }
@@ -498,3 +505,6 @@ const val TAB_CHATS = 0
 const val TAB_STORIES = 1
 const val TAB_CALLS = 2
 const val TAB_SETTINGS = 3
+
+/** How long after launch the call history is first read (the Calls badge only). */
+private const val CALLS_FIRST_LOAD_DELAY_MS = 1_500L

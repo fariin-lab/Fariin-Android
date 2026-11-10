@@ -125,7 +125,8 @@ object CallHistory {
 class CallsRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
 ) {
-    private val cache = mutableMapOf<String, Pair<Double, List<CallEntry>>>()
+    // Read from a background thread now (MainShell), its chats in parallel.
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Double, List<CallEntry>>>()
 
     companion object {
         /** Chats whose calls changed without the chat moving (a group call's start and end write the call
@@ -140,7 +141,7 @@ class CallsRepository(
         private set
 
     suspend fun load(me: String, convs: List<Conversation>): List<CallEntry> = coroutineScope {
-        var miss: Throwable? = null
+        val miss = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
         convs.filter { it.id.isNotEmpty() && !it.id.contains('/') && !it.isChannel }.map { c ->
             async {
                 cache[c.id]?.takeIf { it.first == c.updatedAtMillis && !dirty.remove(c.id) }?.second ?: run {
@@ -149,7 +150,7 @@ class CallsRepository(
                             .whereEqualTo("type", "call").get().await()
                     }
                     val snap = read.getOrNull() ?: run {
-                        if (cache[c.id] == null) miss = read.exceptionOrNull()
+                        if (cache[c.id] == null) miss.set(read.exceptionOrNull())
                         return@async cache[c.id]?.second ?: emptyList()
                     }
                     val group = c.isGroup
@@ -162,7 +163,7 @@ class CallsRepository(
                 }
             }
         }.awaitAll().flatten().sortedByDescending { it.dateMs }
-            .also { failed = miss?.let { e -> LoadFailure.of(e) } }
+            .also { failed = miss.get()?.let { e -> LoadFailure.of(e) } }
     }
 
     private fun entry(d: DocumentSnapshot, cid: String, name: String, photo: String?, other: String, group: Boolean) =
