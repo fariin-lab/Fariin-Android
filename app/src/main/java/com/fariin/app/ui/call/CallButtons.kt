@@ -62,7 +62,8 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
         }
         return
     }
-    if (!mayStart) return
+    // The admin panel can switch group calls off (iOS CallFeatures.groupCalls): no start button then.
+    if (!mayStart || !com.fariin.app.data.AppFeatures.groupCalls) return
     // One video button; a tap drops down Voice Call and Video Call (iOS ChatNavigationItem, groups).
     var menu by remember(cid) { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box {
