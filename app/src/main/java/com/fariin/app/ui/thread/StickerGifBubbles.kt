@@ -750,7 +750,10 @@ private fun StickerFrames(c: com.airbnb.lottie.LottieComposition, plays: Int, fp
             try {
                 for (play in 0 until plays) {
                     var f = 0f
-                    while (f <= frames) {
+                    // Up to the last frame, not its end: the end is the first pose again, so painting
+                    // it showed the same pose twice at every loop seam (a hitch).
+                    val last = if (play == plays - 1) frames else frames - per
+                    while (f <= last) {
                         val started = android.os.SystemClock.uptimeMillis()
                         val target = bufs[n % 3]
                         val p = (f / frames).coerceIn(0f, 1f)
