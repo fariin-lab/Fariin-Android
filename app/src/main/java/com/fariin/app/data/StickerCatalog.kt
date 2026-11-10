@@ -227,3 +227,30 @@ object Giphy {
         } catch (_: Exception) { emptyList() }
     }
 }
+
+/**
+ * Packs added to this account, on this phone (iOS StickerStore.addedPacks, owner 2026-10-21). Every
+ * pack starts NOT added: the panel shows its first two rows and a "+N" tile; "Add to my stickers" on
+ * the pack's sheet shows it in full. Recently Used, Favorites and my own stickers do not depend on it.
+ */
+object StickerPacksAdded {
+    private const val PREFS = "fariin_stickers"
+    private fun key(uid: String) = "stickers.addedPacks.v1.$uid"
+    private val _ids = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+    val ids: kotlinx.coroutines.flow.StateFlow<Set<String>> = _ids
+    private var loadedFor: String? = null
+
+    fun load(context: Context, uid: String) {
+        if (uid == loadedFor) return
+        loadedFor = uid
+        _ids.value = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(key(uid), emptySet())?.toSet() ?: emptySet()
+    }
+
+    fun set(context: Context, uid: String, packId: String, on: Boolean) {
+        load(context, uid)
+        val next = if (on) _ids.value + packId else _ids.value - packId
+        if (next == _ids.value) return
+        _ids.value = next
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(key(uid), next).apply()
+    }
+}

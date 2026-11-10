@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -327,14 +328,24 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
     creating?.let { u -> StickerCreatorPage(u, onClose = { creating = null }) { made -> creating = null; onSticker(made) } }
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
+    // Packs not added show two rows and a "+N" tile that opens the pack (iOS, owner 2026-10-21).
+    remember(me) { com.fariin.app.data.StickerPacksAdded.load(ctx, me) }
+    val added by com.fariin.app.data.StickerPacksAdded.ids.collectAsState()
+    var packOpen by remember { mutableStateOf<StickerPackInfo?>(null) }
+    packOpen?.let { p -> StickerPackSheet(p, me, onSend = { s -> StickerCatalog.noteUsed(ctx, me, s); onSticker(s); recents = StickerCatalog.recents(ctx, me) },
+        onDismiss = { packOpen = null }) }
+    // The grid's columns, as GridCells.Adaptive(70) lays them out (10 each side, 12 apart).
+    val cols = maxOf(1, ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 20 + 12) / (70 + 12)))
     Box(Modifier.fillMaxSize().scrollHide(onScrolledIn)) {
         LazyVerticalGrid(GridCells.Adaptive(70.dp), state = grid, modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = TOP_BAND.dp, bottom = 60.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             for (shelf in shelves) {
                 item(key = "h:${shelf.id}", span = { GridItemSpan(maxLineSpan) }) {
+                    // A pack's name opens its sheet (Add to / Remove from my stickers).
+                    val isPack = shelf.id != "recent" && shelf.id != "favorites"
                     Text(shelf.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.secondary,
-                        modifier = Modifier.height(24.dp).padding(top = 6.dp))
+                        modifier = Modifier.height(24.dp).then(if (isPack) Modifier.clickable { packOpen = shelf } else Modifier).padding(top = 6.dp))
                 }
                 if (shelf.id == "favorites") item(key = "create") {
                     Box(Modifier.size(70.dp).clip(RoundedCornerShape(10.dp)).background(c.label.copy(alpha = 0.06f)).clickable {
@@ -346,7 +357,9 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
                         }
                     }
                 }
-                for (s in shelf.stickers) item(key = "${shelf.id}:${s.key}") {
+                val preview = shelf.id != "recent" && shelf.id != "favorites" && shelf.id !in added && shelf.stickers.size > 2 * cols
+                val shown = if (preview) shelf.stickers.take(2 * cols - 1) else shelf.stickers
+                for (s in shown) item(key = "${shelf.id}:${s.key}") {
                     Box(Modifier.size(70.dp).clip(RoundedCornerShape(10.dp)).clickable {
                         StickerCatalog.noteUsed(ctx, me, s)
                         onSticker(s)
@@ -355,6 +368,16 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
                         // Every tile still (animated WebP packs too): a grid of moving stickers kept the
                         // CPU busy and the scroll heavy (owner 2026-11-10). They move once sent.
                         StickerArt(s.packId, s.stickerId, null, null, Modifier.size(64.dp), still = true)
+                    }
+                }
+                // The second row's last place: "+N", the pack's stickers not shown; a tap opens the pack.
+                if (preview) item(key = "more:${shelf.id}") {
+                    val more = shelf.stickers.size - shown.size
+                    Box(Modifier.size(70.dp).clickable { packOpen = shelf }.semanticsLabel("$more more stickers in ${shelf.title}"),
+                        contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(58.dp).clip(CircleShape).background(c.label.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+                            Text("+$more", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.secondary)
+                        }
                     }
                 }
             }
@@ -622,5 +645,51 @@ internal object StickerLottie {
         if (frames <= 0f) return progress
         val per = (c.frameRate / 30f).coerceAtLeast(1f)
         return (kotlin.math.floor(progress * frames / per) * per / frames).coerceIn(0f, 1f)
+    }
+}
+
+/**
+ * A pack's sheet from the panel's "+N" (iOS StickerPackSheet): its name, Add to / Remove from my
+ * stickers, and every sticker as a still; a tap sends it.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+internal fun StickerPackSheet(pack: StickerPackInfo, me: String, onSend: (StickerRef) -> Unit, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val c = Fariin.colors
+    val added by com.fariin.app.data.StickerPacksAdded.ids.collectAsState()
+    val isAdded = pack.id in added
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = c.bgSecondary, dragHandle = null) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(c.label.copy(alpha = 0.08f)).clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center) {
+                    Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), contentDescription = "Close", tint = c.label, modifier = Modifier.size(20.dp))
+                }
+                Text(pack.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
+                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+            }
+            LazyVerticalGrid(GridCells.Adaptive(80.dp), Modifier.fillMaxWidth().heightIn(max = 460.dp).padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(pack.stickers.size, key = { pack.stickers[it].key }) { i ->
+                    val p = pack.stickers[i]
+                    Box(Modifier.size(80.dp).clip(RoundedCornerShape(10.dp)).clickable { onSend(p); onDismiss() },
+                        contentAlignment = Alignment.Center) {
+                        StickerArt(p.packId, p.stickerId, null, null, Modifier.size(72.dp), still = true)
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            // Add shows the pack in full in the panel; Remove takes it back to its two-row preview.
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(50.dp).clip(CircleShape)
+                .background(if (isAdded) c.label.copy(alpha = 0.08f) else c.accent)
+                .clickable { com.fariin.app.data.StickerPacksAdded.set(ctx, me, pack.id, !isAdded); if (!isAdded) onDismiss() },
+                contentAlignment = Alignment.Center) {
+                Text(if (isAdded) "Remove from my stickers" else "Add to my stickers", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (isAdded) c.red else c.onAccent)
+            }
+        }
     }
 }
