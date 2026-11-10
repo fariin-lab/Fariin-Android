@@ -64,6 +64,18 @@ fun Avatar(photoUrl: String?, size: Dp, modifier: Modifier = Modifier, squircle:
                 modifier = Modifier.size(size * if (kind == AvatarKind.PERSON) 0.78f else 0.6f),
             )
         } else {
+            // A big face (a profile, an info page) first draws the small copy the chat list already
+            // holds in memory, at once; the sharp one lands on it. Asked at its own size alone it
+            // could not use that smaller copy and came a few frames into the page's slide
+            // (owner's Pixel 2026-11-10, call info page).
+            if (size > BIG_FACE) {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val px: Int = with(androidx.compose.ui.platform.LocalDensity.current) { SMALL_FACE.roundToPx() }
+                val small: coil3.request.ImageRequest = remember(photoUrl, px) {
+                    coil3.request.ImageRequest.Builder(ctx).data(photoUrl).size(coil3.size.Size(px, px)).build()
+                }
+                AsyncImage(model = small, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(size))
+            }
             AsyncImage(
                 model = photoUrl,
                 contentDescription = null,
@@ -91,3 +103,8 @@ enum class AvatarKind {
         }
     }
 }
+
+/** Faces bigger than this draw the list's small copy first (see Avatar). */
+private val BIG_FACE = androidx.compose.ui.unit.Dp(64f)
+/** The size asked for that small copy: no bigger than any list row's face, so memory has it. */
+private val SMALL_FACE = androidx.compose.ui.unit.Dp(40f)
