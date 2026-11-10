@@ -238,7 +238,12 @@ fun DrawScope.drawAnimated(a: AnimatedWallpaper, dark: Boolean, phase: Float, la
     // Read in the draw phase, so a new intensity redraws at once.
     val intensity = AnimatedWallpapers.intensity.intValue
     val full = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt())
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+    // Below a fast phone the look never moves (see rememberWallpaperMotion), so its first frame is all
+    // that is ever shown: the CPU-made still, not the shader. Building the shader on the chat's first
+    // frame took 56-78 ms of drawing on the Pixel as a mid-range phone (2026-11-10, kream's chat),
+    // some 250 ms on one.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        com.fariin.app.perf.PowerSaving.state.value.deviceClass != com.fariin.app.perf.PerfClass.HIGH) {
         drawImage(AnimatedStill.bitmap(a, size.width / size.height, dark, intensity), dstSize = full, filterQuality = FilterQuality.Low)
         return
     }
