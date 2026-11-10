@@ -287,6 +287,13 @@ class FirestorePeople(
     /** ProfileStore name save: `users/{me}.name`, then `names.<me>` in every chat I am in. */
     override suspend fun saveName(name: String) {
         val n = name.trim()
+        // A name that poses as a company or a verified person is refused in words (iOS SettingsView,
+        // checkDisplayName, 2026-10-13 audit). The server's guard would put the old name back anyway;
+        // asking first turns that into a sentence. A failed check (offline, old server) does not block.
+        val verdict = try { call("checkDisplayName", mapOf("name" to n)) } catch (_: Exception) { null }
+        if (verdict?.get("ok") == false) {
+            throw IllegalArgumentException((verdict["message"] as? String) ?: "That name can’t be used.")
+        }
         db.collection("users").document(me).set(mapOf("name" to n), SetOptions.merge()).await()
         updateMyConvs(mapOf("names.$me" to n))
     }

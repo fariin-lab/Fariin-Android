@@ -199,7 +199,8 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
                         // Without a loaded profile the bio is only empty, not cleared by anyone (iOS).
                         if (me != null && about.trim() != me?.about?.trim()) com.fariin.app.data.ProfileWrites.saveAbout(api.me, about)
                         onBack()
-                    } catch (_: Exception) { error = "Couldn't save. Try again." }
+                    } catch (e: IllegalArgumentException) { error = e.message ?: "That name can’t be used." }
+                    catch (_: Exception) { error = "Couldn't save. Try again." }
                     busy = false; saving = false
                 }
             }
