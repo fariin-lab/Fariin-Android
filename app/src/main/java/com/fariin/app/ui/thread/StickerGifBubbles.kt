@@ -333,7 +333,9 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
                         onSticker(s)
                         recents = StickerCatalog.recents(ctx, me)
                     }.semanticsLabel(StickerGifRules.stickerLabel(s.emoji)), contentAlignment = Alignment.Center) {
-                        StickerArt(s.packId, s.stickerId, null, null, Modifier.size(64.dp), still = s.stickerId.isNotEmpty() && isTgs(ctx, s))
+                        // Every tile still (animated WebP packs too): a grid of moving stickers kept the
+                        // CPU busy and the scroll heavy (owner 2026-11-10). They move once sent.
+                        StickerArt(s.packId, s.stickerId, null, null, Modifier.size(64.dp), still = true)
                     }
                 }
             }
@@ -356,8 +358,6 @@ private fun StickerTab(me: String, onSticker: (StickerRef) -> Unit, hide: Float 
     }
 }
 
-private fun isTgs(ctx: android.content.Context, s: StickerRef): Boolean =
-    StickerCatalog.assetPath(ctx, s.packId, s.stickerId)?.endsWith(".tgs") == true
 
 /**
  * GifPickerView's mood row: Favorites and Recent answer from the phone (instant, offline), Trending
