@@ -617,7 +617,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true,
         // No bar behind back and Edit (owner 2026-11-10): the page runs to the top and the photo
         // melts into the camera hole (ProfileMelt).
-        clear = true, bar = {
+        clear = true,
+        // Plain white circles for back and Edit, not liquid glass: the glass redrew what was under
+        // it on every frame of the scroll (Pixel, slowest frames 22 -> 15 ms without it).
+        enabled = false, bar = {
         Box(Modifier.graphicsLayer { alpha = chromeAlpha }) {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }

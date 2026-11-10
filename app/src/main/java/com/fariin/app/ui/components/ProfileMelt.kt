@@ -7,6 +7,10 @@ import android.os.Build
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -120,18 +124,39 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
         derivedStateOf { if (m.restCenter.isSpecified) (m.restCenter.y - target.y).coerceAtLeast(1f) else 1f }
     }
     val showing by remember { derivedStateOf { m.restCenter.isSpecified && m.scroll.value > 0 && m.scroll.value < travel } }
+    // Let go part way and it settles, in or out, like the reference app: never left half melted.
+    androidx.compose.runtime.LaunchedEffect(m.scroll, travel) {
+        androidx.compose.runtime.snapshotFlow { m.scroll.isScrollInProgress }.collect { moving ->
+            val v = m.scroll.value
+            if (!moving && m.restCenter.isSpecified && v > 0 && v < travel) {
+                m.scroll.animateScrollTo(if (v < travel * 0.5f) 0 else travel.toInt() + 1,
+                    androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f))
+            }
+        }
+    }
     Box(Modifier.fillMaxSize().onGloballyPositioned { m.origin = it.positionInWindow() }) {
         if (!showing) return@Box
         val shader = remember { if (liquid) RuntimeShader(MELT_SKSL) else null }
         val shape = if (squircle) RoundedCornerShape(photoSize * 0.27f) else CircleShape
-        Box(Modifier.fillMaxSize()
+        // Only the strip from the top down past the photo's resting place: a full-screen layer under
+        // a blur cost a whole screen of work on every frame of the scroll.
+        val stripH = with(density) { ((m.restCenter.y - m.origin.y) + photoSize.toPx()).coerceAtLeast(1f).toDp() }
+        // And only the column the photo travels up (it rises straight to the top centre), not the
+        // screen's width: the blur's cost goes with the area (Pixel: 22 ms frames full width).
+        val stripW = photoSize + 56.dp
+        val stripLeft = (m.restCenter.x - m.origin.x) - with(density) { stripW.toPx() } / 2f
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(stripLeft.toInt(), 0) }.width(stripW).height(stripH)
             .graphicsLayer {
                 val p = (m.scroll.value / travel).coerceIn(0f, 1f)
                 if (shader != null) {
-                    // The join only near the end, so most of the way the photo stays sharp.
+                    // The join only near the end, so most of the way the photo stays sharp and no
+                    // effect runs at all.
                     val k = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
-                    val blur = (k * k * 18.dp.toPx()).coerceAtLeast(0.5f)
-                    renderEffect = RenderEffect.createChainEffect(
+                    // In 2 dp steps: a new blur size each frame made the graphics chip set up new
+                    // work every frame; a few fixed sizes are set up once and reused.
+                    val step = 2.dp.toPx()
+                    val blur = (kotlin.math.round(k * k * 18.dp.toPx() / step) * step).coerceAtLeast(0.5f)
+                    renderEffect = if (k <= 0f) null else RenderEffect.createChainEffect(
                         RenderEffect.createRuntimeShaderEffect(shader, "content"),
                         RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.DECAL),
                     ).asComposeRenderEffect()
@@ -145,7 +170,7 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
                     val p = (m.scroll.value / travel).coerceIn(0f, 1f)
                     val k = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
                     val r = targetSide / 2f * (0.6f + 0.6f * k)
-                    drawCircle(Color.Black, r, target - m.origin)
+                    drawCircle(Color.Black, r, target - m.origin - Offset(stripLeft.toInt().toFloat(), 0f))
                 }
             }) {
             val sidePx = with(density) { photoSize.toPx() }
@@ -160,7 +185,7 @@ fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
                     val cy = (restLocal.y - m.scroll.value) + ((target.y - m.origin.y) - (restLocal.y - m.scroll.value)) * pull
                     val s = 1f + (targetSide / sidePx - 1f) * p
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
-                    translationX = cx - sidePx / 2f
+                    translationX = cx - sidePx / 2f - stripLeft.toInt()
                     translationY = cy - sidePx / 2f
                     scaleX = s; scaleY = s
                 }
