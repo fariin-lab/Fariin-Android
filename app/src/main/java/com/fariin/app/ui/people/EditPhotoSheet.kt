@@ -83,9 +83,18 @@ internal fun EditPhotoSheet(
                     .clickable { askRemove = true }, contentAlignment = Alignment.Center) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_sf_minus), "Remove photo", tint = c.label)
                 }
+            }
+            Spacer(Modifier.height(28.dp))
+            // "Add a Photo" under the circle (iOS, owner 2026-11-10): the visible way in to Camera or
+            // Photo Library, photo or not; the menu opens from it. A tap on the circle opens it too.
+            Box {
+                Box(Modifier.height(48.dp).clip(CircleShape).background(c.fieldFill).clickable { menu = true }
+                    .padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+                    Text("Add a Photo", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label)
+                }
                 GlassDropdown(menu, onDismissRequest = { menu = false }, shape = com.fariin.app.ui.components.FariinMenu.shape,
                     border = com.fariin.app.ui.components.FariinMenu.border, containerColor = c.card,
-                    offset = androidx.compose.ui.unit.DpOffset(40.dp, (-60).dp)) {
+                    offset = androidx.compose.ui.unit.DpOffset(0.dp, (-48).dp)) {
                     DropdownMenuItem(text = { Text("Camera", fontSize = 17.sp) },
                         leadingIcon = { Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_camera), null, tint = c.label) },
                         onClick = { menu = false; onCamera() })
