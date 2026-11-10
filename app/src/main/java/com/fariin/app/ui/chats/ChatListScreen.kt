@@ -361,11 +361,18 @@ fun ChatListScreen(
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset,
                                      source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                if (available.y < -6f) fabShown = false else if (available.y > 6f) fabShown = true
+                // ⛔ ONLY WHEN THE LIST REALLY MOVES (owner 2026-11-10): on a short or near-empty list a
+                // small drag hid them and there was no scroll left to bring them back, so a new person
+                // lost the way to start a chat. Down hides only while there is more list below.
+                if (available.y < -6f && listState.canScrollForward) fabShown = false
+                else if (available.y > 6f) fabShown = true
                 return androidx.compose.ui.geometry.Offset.Zero
             }
         }
     }
+    // A list that cannot scroll, or one back at the top, always shows them.
+    val listScrolls by remember { androidx.compose.runtime.derivedStateOf { listState.canScrollForward || listState.canScrollBackward } }
+    LaunchedEffect(atTop, listScrolls) { if (atTop || !listScrolls) fabShown = true }
     val anim = com.fariin.app.ui.components.animationsOn()
     val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
     // The new-account card's height (owner 2026-11-04: the camera and pencil sat on top of it). The
