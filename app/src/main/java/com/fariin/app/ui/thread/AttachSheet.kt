@@ -125,10 +125,11 @@ internal fun AttachSheet(
     motion.source = if (cameraFirst) null else ({ AttachSource.rect })
     val density = androidx.compose.ui.platform.LocalDensity.current
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
-    // The sheet's top at full height sits 10 dp under the status bar (FariinSheet's frame); the
-    // half stop puts it at the middle of the screen.
+    // The sheet's top at full height sits 10 dp under the status bar (FariinSheet's frame). At rest
+    // it shows 62% of the screen, iOS AttachSheetController's compact detent (the camera row plus
+    // about three rows of photos); owner 2026-11-10: half looked short next to the iPhone.
     val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
-    motion.mid = (windowH / 2f - statusTop - with(density) { 10.dp.toPx() }).coerceAtLeast(1f)
+    motion.mid = (windowH * 0.38f - statusTop - with(density) { 10.dp.toPx() }).coerceAtLeast(1f)
     val sheetScroll = com.fariin.app.ui.components.rememberSheetScroll(motion)
     val picked = remember { mutableStateListOf<Uri>() }
     val videos = remember { mutableStateListOf<Uri>() }
