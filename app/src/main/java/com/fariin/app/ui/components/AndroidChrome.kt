@@ -20,6 +20,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.fariin.app.ui.theme.Fariin
 import kotlinx.coroutines.flow.MutableSharedFlow
 
@@ -52,24 +54,26 @@ fun FariinTopBar(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Fariin.colors
-    TopAppBar(
+    // iOS (owner 2026-11-10): the title centred, 17 semibold, and Back always in its 44 white circle
+    // (on a plain page the circle was not drawn, so the arrow looked small and faint).
+    CenterAlignedTopAppBar(
         title = {
-            Column {
-                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                Text(title, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subtitle != null) {
                     Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = c.secondary, maxLines = 1)
                 }
             }
         },
         navigationIcon = {
-            // Back in the chat screen's floating circle with the iOS chevron, on every page.
-            if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp))
+            if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp), circle = true)
         },
         // Glass circles at the end keep the back circle's distance from the edge (the last one was cut).
         actions = { actions(); if (glassBar()) androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp)) },
         windowInsets = insets,
 
-        colors = TopAppBarDefaults.topAppBarColors(
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = container,
             scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
             titleContentColor = c.label,
