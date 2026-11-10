@@ -170,6 +170,21 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         muted = conv?.takeIf { !s.former }?.isMuted(me, System.currentTimeMillis().toDouble()),
         loadError = s.error,
     )
+    // iOS autoRetryFailedMedia: when the chat is in from the server, and again whenever the
+    // connection comes back, each failed photo, video or voice note is resent once by itself (the
+    // stuck "uploading" sweep is ThreadRepository.clearStuckSends).
+    val link by com.fariin.app.data.ConnectionStatus.state.collectAsState()
+    val autoRetried = remember(cid) { HashSet<String>() }
+    LaunchedEffect(cid, link, s.synced) {
+        if (link != com.fariin.app.data.ConnectionStatus.State.ONLINE || !s.synced) return@LaunchedEffect
+        for (m in vm.repo.state.value.messages) {
+            val key = m.clientId ?: continue
+            if (m.sendState != com.fariin.app.data.Message.SendState.FAILED || m.mediaKind == null || key in autoRetried) continue
+            if (!vm.repo.canResendMedia(key)) continue
+            autoRetried += key
+            vm.repo.retry(m)
+        }
+    }
     val atBottom = remember { MutableStateFlow(true) }
     val actions = ThreadActions(
         onReload = vm.repo::reload,

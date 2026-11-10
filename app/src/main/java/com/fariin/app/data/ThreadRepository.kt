@@ -671,6 +671,10 @@ class ThreadRepository(
         sendText(m.text, null, m.mentions)
     }
 
+    /** A failed media send this process can still re-drive (its prepared bytes are held). */
+    fun canResendMedia(clientId: String) =
+        retryPhoto.containsKey(clientId) || retryVoice.containsKey(clientId) || retryMedia.containsKey(clientId)
+
     // ------------------------------------------------------------------ media picks (attach sheet)
 
     /**
