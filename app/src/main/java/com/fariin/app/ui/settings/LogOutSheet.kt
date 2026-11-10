@@ -21,8 +21,8 @@ import com.fariin.app.ui.theme.Fariin
 
 /**
  * Log out of this account (owner 2026-11-07): a sheet as tall as its content, with the photo and
- * name, "Log out of @username?", one line, a red Log Out that spins and locks while the session
- * ends, and Cancel. Only this account is logged out; the app then shows the front door.
+ * name, "Log out of @username?", one line, and a red Log Out that closes the sheet and then ends
+ * the session (the "Logging out..." screen shows it), and Cancel. Only this account is logged out; the app then shows the front door.
  *
  * Texts still waiting to send are wiped with the session: the line says how many and Cancel
  * becomes Wait (a send is tried now), as the old dialog did.
@@ -35,9 +35,13 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
     val drafts = remember { com.fariin.app.local.Drafts.count() }
     val warning = com.fariin.app.device.SessionEnd.unsentLine(unsent, afterRevoke = false, drafts = drafts)
     val wait = remember { booleanArrayOf(false) }
+    // Log Out closes the sheet first, then the session ends behind the "Logging out..." screen
+    // (owner 2026-11-10, as iOS): the sheet's only job is the tap.
+    val go = remember { booleanArrayOf(false) }
     val motion = rememberSheetMotion {
         if (wait[0]) com.fariin.app.AppLifecycle.reconnect()
         onDismiss()
+        if (go[0]) onSignOut()
     }
     sheetRestAt(motion, if (warning != null) 440.dp else 380.dp)
     val handle = profile?.handle.orEmpty()
@@ -54,7 +58,7 @@ internal fun LogOutSheet(profile: MyProfile?, onDismiss: () -> Unit, onSignOut: 
                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             SheetPill(if (warning != null) "Log Out Anyway" else "Log Out", c.red, busy = busy,
                 modifier = Modifier.padding(top = 24.dp)) {
-                if (!busy) { busy = true; onSignOut() }
+                if (!busy) { busy = true; go[0] = true; motion.close() }
             }
         }
     }
