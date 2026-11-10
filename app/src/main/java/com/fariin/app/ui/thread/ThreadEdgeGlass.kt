@@ -5,6 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -117,11 +119,13 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         // never"): a real blur whose radius eases down to nothing, with no colour laid over it, so
         // there is no band to see. Full strength behind the top of the header, gone 32 dp under it.
         // The wallpaper is inside the list's blur source (ThreadScreen), so it blurs along.
-        val heightDp = barDp + 32.dp
-        // Full blur under the whole bar, the call buttons' part too, fading only in the 32 dp below
-        // it (owner 2026-11-10: a photo showed clear under the call buttons; the full blur stopped
-        // at 55 % of the bar and faded through its lower half).
-        val solid = (barDp / heightDp).coerceIn(0f, 0.9f)
+        // A long progressive blur (owner 2026-11-10, beside the reference app: "still not progressive,
+        // make it look native"): full strength only behind the status bar, then the strength eases
+        // away on a quintic curve over the whole header and 64 dp below it, so there is no band and no
+        // line where it ends. The header's buttons carry their own frosted glass over it.
+        val statusDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
+        val heightDp = barDp + 64.dp
+        val solid = (statusDp / heightDp).coerceIn(0f, 0.5f)
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
         Box(modifier.fillMaxWidth().height(heightDp).hazeEffect(haze) {
             backgroundColor = c.bg; blurRadius = 18.dp; noiseFactor = 0f
@@ -133,8 +137,12 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
             // A third-size copy: full size doubled the GPU time of every frame of a page slide on the
             // Pixel 5 (18-24 ms against an 11 ms budget). The single sharp frames seen with it went with
             // the pages' move to placement (PageFrame) and the edge's 250 ms off-delay.
-            inputScale = HazeInputScale.Fixed(com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
-            progressive = com.fariin.app.ui.components.edgeStages(solid)
+            // Half size on a fast phone: from a third-size copy the blur shimmered as messages scrolled
+            // under it (owner: "shakes"). Mid-range phones keep the smaller copy (GlassQuality).
+            inputScale = HazeInputScale.Fixed(
+                if (com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.HIGH) 0.5f
+                else com.fariin.app.ui.components.GlassQuality.scale(1f / 3))
+            progressive = com.fariin.app.ui.components.edgeStages(solid, gentle = true)
             this.alpha = alpha
         })
     } else if (!walled) {
