@@ -151,6 +151,19 @@ object DeviceSessionKeys {
 
     fun forget(c: Context, uid: String) { prefs(c).edit().remove(uid).apply() }
 
+    /**
+     * Signed in: end other phones' one-tap keys (iOS DeviceSessionKeys.revoke / revokeAllOthers), so a
+     * phone signed out from the Devices page asks for the password next time instead of signing
+     * straight back in. Best effort.
+     */
+    suspend fun revoke(deviceIds: List<String>) {
+        try { fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("deviceIds" to deviceIds)).await() } catch (_: Exception) {}
+    }
+
+    suspend fun revokeAllOthers(c: Context) {
+        try { fn.getHttpsCallable("revokeDeviceSessions").call(mapOf("allExcept" to DeviceRegistry.thisDeviceId(c))).await() } catch (_: Exception) {}
+    }
+
     /** Signed in: make sure this phone holds a key for this account. Cheap when it already does. */
     suspend fun ensureIssued(c: Context) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
