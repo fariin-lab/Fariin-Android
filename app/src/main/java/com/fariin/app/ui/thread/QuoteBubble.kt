@@ -67,8 +67,8 @@ private fun QuoteAlbumTiles(urls: List<String>) {
  * A quoted channel post in a bubble (iOS quote card, owner 2026-11-06, his reference). It sits
  * UNDER my words, with the time on its own line below it ([meta]). The card is outlined, not
  * filled: the channel's 20 dp photo and its name, the post's words (8 lines), then its picture
- * with its own corners (iOS, owner 2026-11-07: words above the picture). Until the first answer lands it shows quietly as
- * "Channel post / Loading…", never the raw id.
+ * with its own corners (iOS, owner 2026-11-07: words above the picture). Until the first answer lands it shows
+ * grey pulsing bars (iOS 2026-11-10), never the raw id.
  * A tap opens the post in its channel; when that channel is the chat already open ([openCid]) it
  * scrolls to the post and lights it instead. A post this reader may not see gets a short notice.
  */
@@ -113,6 +113,20 @@ internal fun QuoteCardBubble(qid: String, isMe: Boolean, openCid: String?, meta:
                 }
                 .padding(10.dp),
         ) {
+            // Until the quote lands (iOS spec 2026-11-10 item 5): no "Channel post / Loading..." words,
+            // grey pulsing bars over the photo, the name and two lines, at the card's own size.
+            if (quiet) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    com.fariin.app.ui.components.SkeletonBlock(24.dp, 24.dp, radius = 7.dp)
+                    Spacer(Modifier.width(6.dp))
+                    com.fariin.app.ui.components.SkeletonBlock(110.dp, 14.dp)
+                }
+                Spacer(Modifier.height(10.dp))
+                com.fariin.app.ui.components.SkeletonBlock(200.dp, 12.dp)
+                Spacer(Modifier.height(7.dp))
+                com.fariin.app.ui.components.SkeletonBlock(140.dp, 12.dp)
+                return@Column
+            }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // iOS 2026-11-08: the header at the card's own size, photo 24, name 16 semibold.
                 Avatar(card?.photoUrl?.ifEmpty { null }, 24.dp, squircle = true, kind = AvatarKind.of(true, true))
