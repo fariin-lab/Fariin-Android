@@ -68,9 +68,12 @@ fun InAppBannerHost() {
         InAppNotify.buzz.collect { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
     }
     val banner by InAppNotify.banner.collectAsState()
+    // No banner while the screen is being recorded (iOS audit M-030): it carries the opened message,
+    // restricted chats included. Android tells an app this from 15 on; the buzz still comes.
+    val recording = rememberScreenRecording()
     Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
         AnimatedContent(
-            targetState = banner,
+            targetState = banner.takeIf { !recording },
             transitionSpec = {
                 // The drop itself is Arrive's (its own clock); here only a short fade in.
                 fadeIn(tween(120))
@@ -168,3 +171,19 @@ private fun Arrive(key: Any, content: @Composable () -> Unit) {
 }
 
 private const val ARRIVE_MS = 320f
+
+/** Whether this app's window is being recorded right now (Android 15+; false before, unknowable there). */
+@Composable
+private fun rememberScreenRecording(): Boolean {
+    if (android.os.Build.VERSION.SDK_INT < 35) return false
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val on = remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.DisposableEffect(ctx) {
+        val wm = ctx.getSystemService(android.view.WindowManager::class.java)
+        val cb = java.util.function.Consumer<Int> { st -> on.value = st == android.view.WindowManager.SCREEN_RECORDING_STATE_VISIBLE }
+        val first = runCatching { wm?.addScreenRecordingCallback(ctx.mainExecutor, cb) }.getOrNull()
+        on.value = first == android.view.WindowManager.SCREEN_RECORDING_STATE_VISIBLE
+        onDispose { runCatching { wm?.removeScreenRecordingCallback(cb) } }
+    }
+    return on.value
+}
