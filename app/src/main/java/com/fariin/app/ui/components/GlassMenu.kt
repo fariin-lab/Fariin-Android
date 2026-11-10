@@ -115,7 +115,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         // ~280 ms with a small overshoot, back into the button ~200 ms. Ours was a slow spring that
         // showed an empty box for 100 ms and drifted for 400 ms after.
         if (open) { closing = false; shown = true; grow.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 420f)) }
-        else if (shown) { closing = true; grow.animateTo(0f, spring(dampingRatio = 1f, stiffness = 700f, visibilityThreshold = 0.01f)); shown = false }
+        else if (shown) { closing = true; grow.animateTo(0f, spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.01f)); shown = false }
     }
     if (!shown) return
     BackHandler { onDismiss() }
@@ -143,7 +143,11 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
         // The box flies from the button's circle to the menu's place, its corners from round to 28.
         val sx = if (size.width > 0) (src.width / size.width).coerceAtMost(1f) else 1f
         val sy = if (h > 0) (src.height / h).coerceAtMost(1f) else 1f
-        val shape = RoundedCornerShape(28.dp)
+        // Closing, the corners round up as it shrinks, so the glass ends as the button's circle (the
+        // reference folds into a tall pill, then the round button; ours ended as a square ghost).
+        val fold = if (closing) (1f - g).coerceIn(0f, 1f) else 0f
+        val r0 = with(density) { 28.dp.toPx() }
+        val shape = RoundedCornerShape(r0 + (minOf(size.width, size.height) / 2f - r0).coerceAtLeast(0f) * fold)
         val glassMod = if (backdrop != null) Modifier.drawBackdrop(
             backdrop = backdrop, shape = { shape },
             effects = { vibrancy(); blur(24.dp.toPx()); lens(14.dp.toPx(), 28.dp.toPx()) },
@@ -167,7 +171,8 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     // of the button instead of zooming; the overshoot of [grow] gives the bounce.
                     // Both sides grow together, out of the round button and back into it (owner 2026-11-08:
                     // the width-first jelly read as "coming out flat").
-                    val kx = k.coerceAtLeast(0f)
+                    // Closing, the width goes first (the reference's tall pill), the height after.
+                    val kx = if (closing) (k * k).coerceAtLeast(0f) else k.coerceAtLeast(0f)
                     val ky = k.coerceAtLeast(0f)
                     scaleX = (sx + (1f - sx) * kx) * (1f + 0.025f * lean.value)
                     scaleY = (sy + (1f - sy) * ky) * (1f - 0.015f * lean.value)
@@ -177,7 +182,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
                     this.shape = shape; clip = true
                 }
                 .then(glassMod)
-                .glassRim(c)
+                .glassRim(c, shape)
                 // Finger tracking: the pill follows the row under the finger; lifting on a row picks it.
                 .pointerInput(open) {   // open: [sub] is a new state per opening
                     awaitEachGesture {
@@ -221,7 +226,7 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
             // The rows come in after the glass has opened, and leave first.
             // Reference: the rows are there (scaled with the glass) from the second frame on, and on
             // the way back they fade in the first half while the empty glass folds into the button.
-            Box(Modifier.graphicsLayer { alpha = (if (closing) (grow.value - 0.45f) / 0.4f else (grow.value - 0.08f) / 0.3f).coerceIn(0f, 1f) }) {
+            Box(Modifier.graphicsLayer { alpha = (if (closing) (grow.value - 0.4f) / 0.45f else (grow.value - 0.08f) / 0.3f).coerceIn(0f, 1f) }) {
                 // The light pill under the finger.
                 if (pressed >= 0 && rowH > 0) Box(Modifier.offset { IntOffset(0, (captionH + pill.value * rowH).roundToInt()) }
                     .padding(horizontal = 6.dp).fillMaxWidth().height(with(density) { rowH.toDp() })
@@ -257,6 +262,6 @@ fun GlassMenu(open: Boolean, anchor: GlassMenuAnchor, items: List<GlassMenuItem>
 }
 
 /** A bright glass rim, as the glass buttons. */
-private fun Modifier.glassRim(c: com.fariin.app.ui.theme.FariinColors): Modifier =
+private fun Modifier.glassRim(c: com.fariin.app.ui.theme.FariinColors, shape: androidx.compose.ui.graphics.Shape): Modifier =
     this.then(Modifier.border(if (c.dark) 0.5.dp else 1.dp,
-        if (c.dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.9f), RoundedCornerShape(28.dp)))
+        if (c.dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.9f), shape))
