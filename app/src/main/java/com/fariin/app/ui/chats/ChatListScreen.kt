@@ -421,7 +421,9 @@ fun ChatListScreen(
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.nestedScroll((if (selecting || searching) pinBar else scroll).nestedScrollConnection).nestedScroll(fabScroll),
-        containerColor = c.bg,
+        // The shell already paints this colour under the whole screen: painting it again cost a full
+        // screen of fill every frame (overdraw view, 2026-11-10).
+        containerColor = Color.Transparent,
         // Bottom inset = the floating tab bar (ui/shell), so the FABs sit above it.
         contentWindowInsets = WindowInsets(bottom = com.fariin.app.ui.shell.bottomBarInset()),
         // In the Archive and in search the back (and the Archive's search button) are glass circles over
