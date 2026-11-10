@@ -2577,7 +2577,10 @@ private fun Composer(
                     lightTap()   // iOS: a light tap as the sticker panel opens or closes
                     panelToKeys = emojiOpen
                     emojiOpen = !emojiOpen
-                    if (emojiOpen) keyboard?.hide() else keyboard?.show()
+                    // Back to the keys: the field takes focus first. The panel opened with no keyboard
+                    // up left the field unfocused, and show() alone did nothing, so the field fell to
+                    // the bottom with no keys (owner's Pixel 2026-11-10).
+                    if (emojiOpen) keyboard?.hide() else { runCatching { fieldFocus.requestFocus() }; keyboard?.show() }
                 }
                 Spacer(Modifier.width(8.dp))
                 }
