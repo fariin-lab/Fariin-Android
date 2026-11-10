@@ -77,11 +77,14 @@ class FariinApp : Application() {
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // The benchmark build (release code, debug key, never shipped) may use the local backend too.
-        val benchmark = runCatching {
+        // Asked only when the flag file is there: the package manager call is a binder round trip
+        // on every cold start (~5-10 ms on the Pixel), and real phones never have the file.
+        val flagFile = File(filesDir, LOCAL_FLAG).exists()
+        val benchmark = flagFile && !debuggable && runCatching {
             packageManager.getApplicationInfo(packageName, android.content.pm.PackageManager.GET_META_DATA)
                 .metaData?.getBoolean("fariin.local_backend_allowed") == true
         }.getOrDefault(false)
-        val local = (debuggable || benchmark) && File(filesDir, LOCAL_FLAG).exists()
+        val local = (debuggable || benchmark) && flagFile
         // Debug builds start Firebase here (the debug manifest removes FirebaseInitProvider), so a
         // local run can use the emulators' project id. Without it every read and write went to a
         // "kulan-2ef85" namespace inside the emulator, where no seeded user exists. Release builds
