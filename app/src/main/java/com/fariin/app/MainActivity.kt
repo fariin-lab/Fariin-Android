@@ -235,27 +235,30 @@ class MainActivity : ComponentActivity() {
         )
         val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
         val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
-        val chats by vm.state.collectAsState()
+        // Held as a State and read only where it is used (owner's Pixel 2026-11-09, trace of a group
+        // open: every list update, a dozen while a chat opens, recomposed this whole screen, the nav
+        // host and the chat list with it, 16 times in a second). Now only the list itself does.
+        val chatsState = vm.state.collectAsState()
+        val chatsLoading by remember { androidx.compose.runtime.derivedStateOf { chatsState.value.loading } }
         val activity = LocalContext.current as? android.app.Activity
-        LaunchedEffect(chats.loading) {
-            if (!chats.loading) {
+        LaunchedEffect(chatsLoading) {
+            if (!chatsLoading) {
                 keepSplash = false
                 // "Fully drawn" in the system log = the chat list is up (the start-up number we track).
                 activity?.reportFullyDrawn()
             }
         }
-        if (explain && !chats.loading) NotificationsSheet { explain = false }
+        if (explain && !chatsLoading) NotificationsSheet { explain = false }
         val nav = rememberNavController()
         // Notifications: the chat list's names and photos for the push service, the open chat
         // (no notification for it), and a tapped notification opening its chat.
-        LaunchedEffect(chats.chats) {
-            val list = chats.chats
+        LaunchedEffect(vm) { androidx.compose.runtime.snapshotFlow { chatsState.value.chats }.collect { list ->
             if (list.isNotEmpty()) withContext(Dispatchers.Default) { NotifStore.saveChats(applicationContext, me, list) }
             // Recent chats as conversation shortcuts: share sheet, launcher, notification settings.
             if (list.isNotEmpty()) com.fariin.app.system.ChatShortcuts.publish(applicationContext, me, list)
             // The chats about to be opened, warmed (iOS ChatHistoryPreloader).
             com.fariin.app.data.ChatHistoryPreloader.refresh(list, me, openChat)
-        }
+        } }
         DisposableEffect(me) { onDispose { com.fariin.app.data.ChatHistoryPreloader.stopAll() } }
         // The home screen widget: the same list, its previews opened again once a missing key lands.
         // Collected here, not keyed on the drawn state: the list keeps changing while the app is
@@ -371,7 +374,7 @@ class MainActivity : ComponentActivity() {
                 translationX = shell.shift * size.width
             }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
                 CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides if (onTop) this@MainActivity else inertBack) {
-                    MainShell(me, chats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }, onRetryChats = vm::retry)
+                    HeldChats(chatsState) { listChats -> MainShell(me, listChats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }, onRetryChats = vm::retry) }
                 }
                 if (!onTop) Box(Modifier.fillMaxSize().pointerInput(Unit) {
                     awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
@@ -380,9 +383,9 @@ class MainActivity : ComponentActivity() {
             NavHost(nav, startDestination = "main",
                 enterTransition = com.fariin.app.ui.components.Motion.enter(), exitTransition = com.fariin.app.ui.components.Motion.exit(),
                 popEnterTransition = com.fariin.app.ui.components.Motion.popEnter(), popExitTransition = com.fariin.app.ui.components.Motion.popExit()) {
-                peopleRoutes(nav, people, chats = { chats.chats }, requests = { chats.requests },
+                peopleRoutes(nav, people, chats = { chatsState.value.chats }, requests = { chatsState.value.requests },
                     groupDoc = { com.fariin.app.ui.people.liveGroupDoc(it) })
-                channelRoutes(nav, me, chats = { chats.chats })
+                channelRoutes(nav, me, chats = { chatsState.value.chats })
                 // A real (see-through) box, never an empty page: with nothing to measure, the page
                 // change back to it could freeze half way (owner 2026-11-03, the stuck back arrow).
                 composable("main") { entry ->
@@ -551,4 +554,17 @@ private class ShellMotion {
             onDispose { if (t === tr) { shown = false; t = null } }
         }
     }
+}
+
+/**
+ * The chat list's data, read here only, so a list update recomposes the list and not the screen
+ * around it. Held while a page slides over the list (PageMotion): the open marking a chat read
+ * rebuilt every row under the sliding page; the news lands the moment the page does.
+ */
+@Composable
+private fun HeldChats(state: State<ChatsUiState>, content: @Composable (ChatsUiState) -> Unit) {
+    val moving by remember { androidx.compose.runtime.derivedStateOf { com.fariin.app.ui.components.PageMotion.moving } }
+    val held = remember { androidx.compose.runtime.mutableStateOf(state.value) }
+    if (!moving) held.value = state.value
+    content(held.value)
 }
