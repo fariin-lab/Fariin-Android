@@ -19,6 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
+import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
@@ -202,6 +206,9 @@ private const val STALL_STEP_MS = 6f
 /** A nav host page placed by [PageMotion]. */
 @Composable
 fun PageFrame(id: String, content: @Composable () -> Unit) {
+    val inner = androidx.compose.runtime.remember { InnerPages() }
+    val innerOld = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val innerScope = androidx.compose.runtime.rememberCoroutineScope()
     // Moved in placement, not in a draw layer: the header's blur (Haze) finds where the page is
     // from placement, and a layer-only move left it a frame behind, so it drew the messages sharp
     // for single frames while the page slid (owner's Pixel 2026-11-09).
@@ -217,11 +224,89 @@ fun PageFrame(id: String, content: @Composable () -> Unit) {
             awaitPointerEventScope {
                 while (true) {
                     val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                    if (PageMotion.moving) ev.changes.forEach { it.consume() }
+                    if (PageMotion.moving || inner.moving) ev.changes.forEach { it.consume() }
                 }
             }
-        }) { content() }
+        }
+        .drawWithContentCompat(inner, innerOld, innerScope)) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalInnerPages provides inner) { content() }
+    }
 }
+
+/**
+ * The pages a screen swaps in place of itself (a profile's Sounds & Notifications, a group's Storage
+ * or Group Settings, a channel's pages): owner 2026-11-10, "they open raw". The screen says how deep
+ * it is with [InnerPageDepth]; when that changes, its page frame slides like a nav push: the new page
+ * in from the right over a picture of the one it covers (drifting a third left), and back the other
+ * way. Same clock as [PageMotion]. A screen that never says a depth is drawn as before, untouched.
+ */
+class InnerPages {
+    internal var depth by androidx.compose.runtime.mutableIntStateOf(0)
+    internal var used = false
+    internal var shown = 0
+    internal var forward = true
+    internal var p by androidx.compose.runtime.mutableFloatStateOf(1f)
+    internal var run = 0
+    val moving: Boolean get() = p < 1f
+}
+
+val LocalInnerPages = androidx.compose.runtime.staticCompositionLocalOf<InnerPages?> { null }
+
+/** This screen is showing its base (0) or a page pushed in place over it (1, 2...). Call it on the
+ *  path that draws, right before what it draws; the last call in a composition wins. */
+@Composable
+fun InnerPageDepth(depth: Int) {
+    val h = LocalInnerPages.current ?: return
+    h.used = true
+    // Written in composition and read only in this frame's draw, so the first frame of a new page
+    // is already placed off to the right, never drawn in place first.
+    if (h.depth != depth) h.depth = depth
+}
+
+private fun androidx.compose.ui.Modifier.drawWithContentCompat(
+    inner: InnerPages, old: androidx.compose.ui.graphics.layer.GraphicsLayer, scope: kotlinx.coroutines.CoroutineScope,
+) = this.then(androidx.compose.ui.Modifier.drawWithContent {
+    if (!inner.used) { drawContent(); return@drawWithContent }
+    val d = inner.depth
+    if (d != inner.shown) {
+        inner.forward = d > inner.shown
+        inner.shown = d
+        if (Motion.on && size.width > 0f) {
+            val mine = ++inner.run
+            inner.p = 0f
+            scope.launch {
+                val ms = if (inner.forward) Motion.PAGE_MS else Motion.PAGE_BACK_MS
+                val ease = if (inner.forward) Motion.PageEase else Motion.BackEase
+                try {
+                    var last = androidx.compose.runtime.withFrameNanos { it }
+                    var v = 0f
+                    while (v < ms && mine == inner.run) {
+                        val t = androidx.compose.runtime.withFrameNanos { it }
+                        val gap = (t - last) / 1_000_000f
+                        v += if (gap > SLOW_FRAME_MS) STALL_STEP_MS else gap.coerceAtMost(MAX_STEP_MS)
+                        last = t
+                        inner.p = ease.transform((v / ms).coerceAtMost(1f))
+                    }
+                } finally { if (mine == inner.run) inner.p = 1f }
+            }
+        }
+    }
+    val p = inner.p
+    if (p >= 1f) {
+        // Settled: the frame is kept, so the next change has the page it leaves to slide from.
+        old.record { this@drawWithContent.drawContent() }
+        drawLayer(old)
+        return@drawWithContent
+    }
+    val w = size.width
+    if (inner.forward) {
+        translate(left = -Motion.UNDER_SHIFT * p * w) { drawLayer(old) }
+        translate(left = (1f - p) * w) { this@drawWithContent.drawContent() }
+    } else {
+        translate(left = -Motion.UNDER_SHIFT * (1f - p) * w) { this@drawWithContent.drawContent() }
+        translate(left = p * w) { drawLayer(old) }
+    }
+})
 
 /** [composable] with the page placed by [PageMotion]. */
 fun androidx.navigation.NavGraphBuilder.page(

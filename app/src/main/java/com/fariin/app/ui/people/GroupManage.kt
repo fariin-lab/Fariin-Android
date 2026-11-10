@@ -245,6 +245,7 @@ private fun GroupSettingsPage(cid: String, me: String, onBack: () -> Unit, open:
 internal fun GroupPages(cid: String, me: String, stack: MutableList<GroupPage>, onOpenPerson: (String) -> Unit,
                         onAddMembers: () -> Unit = {}, onHandedOver: () -> Unit = {}, onTimer: () -> Unit = {}): Boolean {
     val top = stack.lastOrNull() ?: return false
+    com.fariin.app.ui.components.InnerPageDepth(stack.size)
     val pop: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
     val push: (GroupPage) -> Unit = { stack.add(it) }
     BackHandler(onBack = pop)

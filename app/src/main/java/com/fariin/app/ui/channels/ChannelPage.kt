@@ -163,6 +163,8 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     // iOS: Edit Channel is a sheet over this page.
     var editSheet by remember { mutableStateOf(false) }
     if (editSheet) ChannelEditSheet(info.cid, me, onClosed = { editSheet = false })
+    // Its pages slide over it like a pushed page (owner 2026-11-10: "they open raw").
+    com.fariin.app.ui.components.InnerPageDepth(if (allMedia || sub == "storage" || sub == "stats" || sub == "sounds") 1 else 0)
     if (allMedia) { com.fariin.app.ui.people.SharedMediaScreen(info.cid, shared, onBack = { allMedia = false }); return }
     when (sub) {
         "storage" -> { com.fariin.app.ui.people.ChatStoragePage(info.cid, me, info.title, pop = { sub = null }); return }

@@ -480,18 +480,18 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         }
     }
     var soundsOpen by remember { mutableStateOf(false) }
-    if (soundsOpen) { ContactSoundsPage(muteUntil, onMute = { setMute(it) }, cid = cid, onBack = { soundsOpen = false }); return }
+    if (soundsOpen) { com.fariin.app.ui.components.InnerPageDepth(1); ContactSoundsPage(muteUntil, onMute = { setMute(it) }, cid = cid, onBack = { soundsOpen = false }); return }
     // iOS reachedMeWithMyKey: they opened this chat with my Chat Key (the server's acceptedVia "pin").
     val reachedWithMyKey = uid != me && live["acceptedVia"] == "pin" && live["acceptedBy"] == uid
     var timerOpen by remember { mutableStateOf(false) }
     if (DisappearingEditor(api, cid, isGroup = false, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
     val shared = rememberSharedMedia(cid, me)
     var allMedia by remember { mutableStateOf(false) }
-    if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
+    if (allMedia) { com.fariin.app.ui.components.InnerPageDepth(1); SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
     // iOS sharedGroups: groups we are both in, from the live chat list (not on my own page).
     val commonGroups = if (uid != me) com.fariin.app.data.GroupsInCommon.shared(com.fariin.app.data.ChatsNow.list, me, uid) else emptyList()
     var allGroups by remember { mutableStateOf(false) }
-    if (allGroups) { GroupsInCommonPage(commonGroups, me, onBack = { allGroups = false }, onOpenChat = onOpenChat); return }
+    if (allGroups) { com.fariin.app.ui.components.InnerPageDepth(1); GroupsInCommonPage(commonGroups, me, onBack = { allGroups = false }, onOpenChat = onOpenChat); return }
     var restrictOpen by remember { mutableStateOf(false) }
     if (restrictOpen) {
         // A sheet over the profile, rising from the bottom like Disappearing Messages (owner 2026-11-10).
@@ -504,7 +504,8 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     }
     // Chat Bubble (SPEC 4): my one bubble style for every chat, the Settings picker itself.
     var bubbleOpen by remember { mutableStateOf(false) }
-    if (bubbleOpen) { com.fariin.app.ui.settings.BubbleStylePage { bubbleOpen = false }; return }
+    if (bubbleOpen) { com.fariin.app.ui.components.InnerPageDepth(1); com.fariin.app.ui.settings.BubbleStylePage { bubbleOpen = false }; return }
+    com.fariin.app.ui.components.InnerPageDepth(0)   // the profile itself: its pages slide over it (owner 2026-11-10)
     // The full Encryption page, as iOS VerifyEncryptionView (the old dialog wrapped the numbers).
     if (showSafety) {
         var myPhotoUrl by remember { mutableStateOf<String?>(null) }

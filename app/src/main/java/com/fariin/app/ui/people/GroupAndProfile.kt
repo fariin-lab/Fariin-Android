@@ -167,6 +167,7 @@ fun EditProfileScreen(api: PeopleApi, onBack: () -> Unit,
         }
     }
     if (picker.pending != null) { picker.Host("Avatar", "Shown in chats, stories and groups"); return }
+    com.fariin.app.ui.components.InnerPageDepth(if (page == "links" || page == "username") 1 else 0)
     if (page == "links") { ProfileLinksPage(api.me, links, onChanged = { links = it }, onBack = { page = "" }); return }
     if (page == "username") { UsernameScreen(api, me?.handle ?: "", onBack = { page = ""; scope.launch { me = api.profile(api.me) } }); return }
     error?.let { e -> com.fariin.app.ui.components.GlassAlert(onDismissRequest = { error = null }, text = { Text(e) },
@@ -718,6 +719,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     val muteUntil = muteOverride ?: liveUntil
     var soundsOpen by remember { mutableStateOf(false) }
     if (soundsOpen) {
+        com.fariin.app.ui.components.InnerPageDepth(1)
         ContactSoundsPage(muteUntil, onMute = { until ->
             muteOverride = until
             scope.launch { if (!writeContactMute(cid, me, until)) muteOverride = null }
@@ -830,6 +832,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
             ))
     }
     if (adding) {
+        com.fariin.app.ui.components.InnerPageDepth(1)
         val people = remember(chats) { contactsFrom(chats, me).filter { it.uid !in users } }
         // System Back closes Add Members to the page it was opened from (Group Info or Members). It had
         // no handler of its own, so Back left the whole route and landed in the chat.
@@ -873,7 +876,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     if (DisappearingEditor(api, cid, isGroup = true, current = timer, open = timerOpen, onClose = { timerOpen = false })) return
     // Chat Bubble (SPEC 4): my one bubble style for every chat, the Settings picker itself.
     var bubbleOpen by remember { mutableStateOf(false) }
-    if (bubbleOpen) { com.fariin.app.ui.settings.BubbleStylePage { bubbleOpen = false }; return }
+    if (bubbleOpen) { com.fariin.app.ui.components.InnerPageDepth(1); com.fariin.app.ui.settings.BubbleStylePage { bubbleOpen = false }; return }
     if (GroupPages(cid, me, pages, onOpenPerson, onAddMembers = { adding = true }, onTimer = {
             if (com.fariin.app.data.Disappearing.canChangeInGroup(conv, me)) timerOpen = true
             else notice = com.fariin.app.data.Disappearing.refusal(conv, me)
@@ -885,7 +888,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
         })) return
     val shared = rememberSharedMedia(cid, me)
     var allMedia by remember { mutableStateOf(false) }
-    if (allMedia) { SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
+    if (allMedia) { com.fariin.app.ui.components.InnerPageDepth(1); SharedMediaScreen(cid, shared, onBack = { allMedia = false }); return }
     card?.let { u -> MemberCard(cid, me, u, conv, onClose = { card = null }, onProfile = onOpenPerson, open = { pages.add(it) },
         onMessage = { other -> onOpenChat(chats.firstOrNull { !it.isGroup && it.users.contains(other) }?.id
             ?: com.fariin.app.crypto.Wire.directCid(me, other)) }) }
@@ -908,6 +911,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
     if (closing) { Box(Modifier.fillMaxSize().background(c.bgSecondary)); return }
     // On Group Info itself: from here on, Back from any page returns here.
     if (startOpen) androidx.compose.runtime.SideEffect { startOpen = false }
+    com.fariin.app.ui.components.InnerPageDepth(0)   // the base page: a page pushed in place slides over it (owner 2026-11-10)
     // iOS loadShareCode: the server's primary link code; null until it answers (or fails) keeps the doc's old code.
     val serverCode by androidx.compose.runtime.produceState<String?>(null, cid, iAmMember) {
         if (iAmMember) value = runCatching { com.fariin.app.data.GroupManage.shareCode(cid) }.getOrNull()

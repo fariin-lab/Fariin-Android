@@ -185,7 +185,8 @@ fun FariinSheetDialog(motion: SheetMotion, handle: Boolean = false, fill: Color?
     Dialog(onDismissRequest = { motion.close() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnClickOutside = false)) {
         SheetDialogWindow(Fariin.colors.dark, typing)
-        FariinSheet(motion, handle, fill) { content(motion) }
+        // A page swapped inside a sheet must never slide the page under the sheet (InnerPages).
+        FariinSheet(motion, handle, fill) { androidx.compose.runtime.CompositionLocalProvider(LocalInnerPages provides null) { content(motion) } }
     }
 }
 
