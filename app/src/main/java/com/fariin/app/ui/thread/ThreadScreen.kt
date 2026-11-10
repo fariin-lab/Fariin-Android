@@ -956,12 +956,14 @@ private fun ThreadContent(
                     if (search.matches.isNotEmpty()) { search.index = minOf(search.index + 1, search.matches.size - 1); goToMatch() }
                 })
                 else if (selecting) SelectTopBar(picked.size) { selected.clear() } else {
-                    // Over a dark-topped animated wallpaper the header's words are light (iOS headerBackdrop).
+                    // Over a wallpaper whose top is the other tone, only the header's WORDS flip (light over a
+                    // dark top): the buttons keep the app's own light or dark glass, as the composer does
+                    // (owner 2026-11-10: in light mode the back and call buttons turned dark mode's black).
                     val headerDark = com.fariin.app.ui.components.chatHeaderDark(ui.cid)
                     val flipped = headerDark != null && headerDark != Fariin.colors.dark
-                    if (flipped) com.fariin.app.ui.theme.FariinTheme(dark = headerDark!!, bars = false) {
+                    androidx.compose.runtime.CompositionLocalProvider(LocalHeaderWordsDark provides if (flipped) headerDark else null) {
                         Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
-                    } else Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
+                    }
                 }
                 // Another chat's voice message still playing: its bar under the header (iOS VoiceNoteBar).
                 val openChat = LocalOpenChat.current
@@ -1559,6 +1561,9 @@ private fun youNotice(m: Message, ui: ThreadUi): String {
 
 /** The header's words grow with the phone's text size only up to 115% (as iOS caps its bars): the
  *  header is 52 dp high, and at 130% its second line ("last seen", "9 followers") was cut off. */
+/** Over a wallpaper of the other tone: the header's words drawn for a dark (true) or light (false) top; null = the app's. */
+private val LocalHeaderWordsDark = androidx.compose.runtime.staticCompositionLocalOf<Boolean?> { null }
+
 @Composable
 private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}, onToggleMute: () -> Unit = {}) {
     val d = androidx.compose.ui.platform.LocalDensity.current
@@ -1592,7 +1597,8 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                 Spacer(Modifier.width(if (narrow) 8.dp else 12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(ui.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label,
+                        Text(ui.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                            color = when (LocalHeaderWordsDark.current) { true -> Color.White; false -> Color.Black; null -> c.label },
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         // A verified channel: the blue tick beside its name (iOS ChatHeaderView).
                         if (ui.channel?.info?.verified == true) {
@@ -1603,7 +1609,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                         if (ui.disappearSeconds > 0) {
                             Spacer(Modifier.width(5.dp))
                             Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_disappearing),
-                                contentDescription = "Disappearing messages on", tint = if (c.dark) Color(0xFFD1D1D1) else Color(0xFF525252), modifier = Modifier.size(16.dp))
+                                contentDescription = "Disappearing messages on", tint = if (LocalHeaderWordsDark.current ?: c.dark) Color(0xFFD1D1D1) else Color(0xFF525252), modifier = Modifier.size(16.dp))
                         }
                     }
                     // The second line's room is kept even while it is empty, so the name never jumps when
@@ -1612,9 +1618,10 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
                     // wallpaper that grey all but vanished (owner: "test" and channel kk on Water). A group's or
                     // channel's count is a step stronger, as on iOS (subtitleStrongColor).
                     val strong = ui.isGroup || ui.channel != null
+                    val wordsDark = LocalHeaderWordsDark.current ?: c.dark
                     val sub = when {
-                        strong -> if (c.dark) Color(0xFFE6E6E6) else Color(0xFF2E2E2E)
-                        else -> if (c.dark) Color(0xFFD1D1D1) else Color(0xFF525252)
+                        strong -> if (wordsDark) Color(0xFFE6E6E6) else Color(0xFF2E2E2E)
+                        else -> if (wordsDark) Color(0xFFD1D1D1) else Color(0xFF525252)
                     }
                     Text(ui.subtitle.ifEmpty { " " }, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = sub, maxLines = 1)
                 }
