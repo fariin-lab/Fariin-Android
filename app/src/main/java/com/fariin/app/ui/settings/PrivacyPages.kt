@@ -41,6 +41,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -459,6 +463,14 @@ internal fun ChatKeyPage(pop: () -> Unit) {
     var confirmReset by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
     var intro by remember { mutableStateOf(false) }
+    // The digits rolling while a key is made (iOS ChatKeySlotView); rollingTo = the key once it is here.
+    var rolling by remember { mutableStateOf(false) }
+    var rollingTo by remember { mutableStateOf<String?>(null) }
+    /** Makes a key on the server with the six digits rolling meanwhile; the card shows it when they stop. */
+    suspend fun makeKey() {
+        rollingTo = null; rolling = true
+        try { rollingTo = ChatKey.generate() } catch (e: Exception) { rolling = false; throw e }
+    }
     // Taken once, so coming back to this page later does not make another key.
     val autoMake = remember { ChatKey.makeThenKeyOnly.also { ChatKey.makeThenKeyOnly = false } }
     fun run(work: suspend () -> Unit) {
@@ -471,7 +483,7 @@ internal fun ChatKeyPage(pop: () -> Unit) {
         s?.let { set = it; if (!it) pin = null }
         // From the Messages page's intro sheet: make the key, then the mode follows the key that exists.
         if (autoMake) run {
-            if (set != true) { pin = ChatKey.generate(); set = true }
+            if (set != true) makeKey()
             PrivacySettings.setAudience("messages", Audience.CONTACTS)?.let { throw IllegalStateException(it) }
         }
     }
@@ -479,7 +491,16 @@ internal fun ChatKeyPage(pop: () -> Unit) {
     ScrollPage("Chat Key", pop) {
         ErrorNote(error)
         val footer = "Anyone with your Chat Key can message and call you. Share it only with people you trust."
-        if (set == true) {
+        if (rolling) {
+            SettingsSection(footer = footer) {
+                Column(Modifier.fillMaxWidth().padding(vertical = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ChatKeySlot(rollingTo) { pin = rollingTo; set = true; rolling = false; rollingTo = null }
+                    // Say what is happening (iOS): the zeroes alone read as a frozen screen.
+                    Text(if (rollingTo == null) "Creating your Chat Key…" else "Your new Chat Key", fontSize = 13.sp,
+                        color = c.secondary, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        } else if (set == true) {
             // iOS ChatPinPage: the key in large digits with Copy and Share under it, in one card.
             SettingsSection(header = "Your Chat Key", footer = footer) {
                 val p = pin
@@ -519,7 +540,7 @@ internal fun ChatKeyPage(pop: () -> Unit) {
             }
         }
     }
-    if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { pin = ChatKey.generate(); set = true; syncMessagesMode(true) } }
+    if (intro) ChatKeyIntroSheet(onDismiss = { intro = false }) { run { makeKey(); syncMessagesMode(true) } }
     // The contact page's bottom sheet (no photo: it is my own key). Same work as run(), awaited so the
     // button spins; a failure still shows on the page.
     suspend fun runNow(done: String, work: suspend () -> Unit): Boolean {
@@ -530,11 +551,55 @@ internal fun ChatKeyPage(pop: () -> Unit) {
         return ok
     }
     if (confirmReset) com.fariin.app.ui.people.PersonConfirmSheet(null, "", "Reset your Chat Key?", "You'll get a new key and the old one will stop working.",
-        listOf(com.fariin.app.ui.people.PersonAction("Reset") { runNow("Your new Chat Key is ready") { pin = ChatKey.generate(); set = true; syncMessagesMode(true) } }),
+        listOf(com.fariin.app.ui.people.PersonAction("Reset") { runNow("Your new Chat Key is ready") { makeKey(); syncMessagesMode(true) } }),
         onDismiss = { confirmReset = false }, face = false)
     if (confirmRemove) com.fariin.app.ui.people.PersonConfirmSheet(null, "", "Remove your Chat Key?", "Nobody will be able to use it to message you. People who already did stay in your chats.",
         listOf(com.fariin.app.ui.people.PersonAction("Remove") { runNow("Chat Key removed") { ChatKey.remove(); set = false; pin = null; syncMessagesMode(false) } }),
         onDismiss = { confirmRemove = false }, face = false)
+}
+
+/**
+ * The key counted up to like a meter (iOS ChatKeySlotView): six zeroes while the server chooses, a
+ * beat, then the whole number counts from 000000 to the key in 40 steps, fast first and slowing at
+ * the end, every digit rolling upward and all six stopping together; a light tick every fourth
+ * step, the success buzz at the end, then [onDone].
+ */
+@Composable
+private fun ChatKeySlot(final: String?, onDone: () -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    var shown by remember { mutableStateOf(List(6) { 0 }) }
+    LaunchedEffect(final) {
+        shown = List(6) { 0 }
+        val target = final?.takeIf { it.length == 6 }?.toIntOrNull() ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(300)
+        val steps = 40
+        for (st in 1..steps) {
+            val t = st / steps.toDouble()
+            val eased = 1 - Math.pow(1 - t, 3.0)
+            val v = if (st == steps) target else (target * eased).toInt()
+            shown = v.toString().padStart(6, '0').map { it - '0' }
+            if (st % 4 == 0) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+            kotlinx.coroutines.delay(60)
+        }
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+        kotlinx.coroutines.delay(450)
+        onDone()
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.semantics { contentDescription = if (final == null) "Making your Chat Key" else "Your Chat Key" }) {
+        shown.forEach { d ->
+            androidx.compose.animation.AnimatedContent(d, transitionSpec = {
+                // Upward, as iOS numericText: the new digit comes from below, the old one leaves above.
+                (androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(180)) { it } +
+                    androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180))) togetherWith
+                    (androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(180)) { -it } +
+                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180)))
+            }, modifier = Modifier.width(22.dp).clipToBounds(), label = "keyDigit") { n ->
+                Text("$n", fontSize = 34.sp, fontWeight = FontWeight.SemiBold, color = Fariin.colors.label,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
 }
 
 @Composable
