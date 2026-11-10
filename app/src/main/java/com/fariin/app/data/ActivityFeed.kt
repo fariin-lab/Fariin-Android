@@ -252,6 +252,22 @@ data class Reactor(val uid: String, val name: String, val photo: String, val han
 data class ReactorsPage(val people: List<Reactor>, val rx: Map<String, Int>, val total: Int, val next: String)
 
 object ReplyReactors {
+    /** The last answer per item and tab (owner 2026-11-10): a sheet opened again draws it at once,
+     *  then the fresh one replaces it. Process memory only. */
+    data class Kept(val people: List<Reactor>, val next: String, val rx: Map<String, Int>)
+    private val kept = java.util.concurrent.ConcurrentHashMap<String, Kept>()
+    fun kept(itemId: String, emoji: String): Kept? = kept["$itemId|$emoji"]
+    fun keep(itemId: String, emoji: String, k: Kept) { kept["$itemId|$emoji"] = k }
+
+    /** The Activity page opened: the newest few "X and N others reacted" rows' first page, made ahead. */
+    suspend fun prefetch(items: List<ActivityItem>) {
+        for (i in items.filter { it.isReact && it.others > 0 }.take(PREFETCH)) {
+            if (kept(i.id, "") != null) continue
+            page(i.cid, i.mid, i.mineRid, i.mineAid)?.let { keep(i.id, "", Kept(it.people, it.next, it.rx)) }
+        }
+    }
+    private const val PREFETCH = 3
+
     suspend fun page(cid: String, mid: String, rid: String, aid: String, emoji: String = "", cursor: String = ""): ReactorsPage? = try {
         val args = mutableMapOf<String, Any>("cid" to cid, "mid" to mid, "rid" to rid, "aid" to aid, "emoji" to emoji)
         if (cursor.isNotEmpty()) args["cursor"] = cursor

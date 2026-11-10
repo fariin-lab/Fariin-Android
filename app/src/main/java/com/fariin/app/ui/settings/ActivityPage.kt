@@ -84,6 +84,8 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
     }
     var unreadOnly by remember { mutableStateOf(false) }
     var reactorsFor by remember { mutableStateOf<ActivityItem?>(null) }
+    // The newest reaction sheets, fetched ahead so a tap opens them filled (owner 2026-11-10).
+    LaunchedEffect(items != null) { items?.let { com.fariin.app.data.ReplyReactors.prefetch(it) } }
     reactorsFor?.let { item -> ReactorsSheet(item, onDismiss = { reactorsFor = null }, onComment = { reactorsFor = null; onOpen(item) }) }
     val scroll = rememberScrollState()
     BarPage("Activity", onBack = onBack, under = com.fariin.app.ui.components.underBar(scroll), action = {
@@ -319,8 +321,14 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
         if (pg.rx.isNotEmpty()) rx = pg.rx
         list = if (more) list.orEmpty() + got else got
         next = cursor
+        if (!more) com.fariin.app.data.ReplyReactors.keep(i.id, asked, com.fariin.app.data.ReplyReactors.Kept(got, cursor, rx))
     }
-    LaunchedEffect(emoji) { list = null; next = ""; load(false) }
+    LaunchedEffect(emoji) {
+        // The last answer for this tab first (instant), then the fresh one.
+        val k = com.fariin.app.data.ReplyReactors.kept(i.id, emoji)
+        list = k?.people; next = k?.next ?: ""; if (k != null && k.rx.isNotEmpty()) rx = k.rx
+        load(false)
+    }
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = c.bgSecondary) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             // My comment and the post's picture.
@@ -354,7 +362,22 @@ private fun ReactorsSheet(i: ActivityItem, onDismiss: () -> Unit, onComment: () 
                 rows == null && failed -> Text("Couldn't load. Tap to try again.", fontSize = 15.sp, color = c.secondary,
                     modifier = Modifier.fillMaxWidth().clickable { scope.launch { load(false) } }.padding(24.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                rows == null -> com.fariin.app.ui.components.LoadingLine("Loading…", Modifier.padding(16.dp), fontSize = 17.sp)
+                // No spinner (owner 2026-11-10): grey rows shaped like the people, as many as the tab holds (max 8).
+                rows == null -> Column(Modifier.fillMaxWidth()) {
+                    val n = (if (emoji.isEmpty()) rx.values.sum() else rx[emoji] ?: 0).coerceIn(1, 8)
+                    val shade = c.label.copy(alpha = 0.08f)
+                    repeat(n) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(48.dp).clip(CircleShape).background(shade))
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Box(Modifier.width(140.dp).height(14.dp).clip(RoundedCornerShape(7.dp)).background(shade))
+                                Spacer(Modifier.height(8.dp))
+                                Box(Modifier.width(90.dp).height(12.dp).clip(RoundedCornerShape(6.dp)).background(shade))
+                            }
+                        }
+                    }
+                }
                 else -> androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
                     items(rows.size, key = { rows[it].uid + rows[it].emoji }) { k ->
                         val r = rows[k]
