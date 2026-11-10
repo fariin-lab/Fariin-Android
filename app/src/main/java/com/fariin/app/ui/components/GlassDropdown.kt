@@ -70,15 +70,20 @@ fun GlassDropdown(
     androidx.compose.ui.window.Popup(popupPositionProvider = provider, onDismissRequest = onDismissRequest, properties = properties) {
         val t = androidx.compose.animation.core.rememberTransition(state, "glassDropdown")
         val k by t.animateFloat({
-            if (targetState) androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 420f)
-            else androidx.compose.animation.core.tween(170, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+            // The same clock as GlassMenu (timed against the reference app, 2026-11-10): out on a
+            // spring with a small overshoot, back in one 240 ms eased fold.
+            if (targetState) androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 420f)
+            else androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.CubicBezierEasing(0.4f, 0f, 0.2f, 1f))
         }, label = "k") { if (it) 1f else 0f }
         val shape = RoundedCornerShape(24.dp)
         androidx.compose.foundation.layout.Column(
             modifier.graphicsLayer {
-                val s = 0.15f + 0.85f * k
-                scaleX = s; scaleY = s
-                alpha = (k * 2.2f).coerceIn(0f, 1f)
+                // Closing, the width goes first (a tall pill into the button), as GlassMenu; the
+                // glass fades only in the last quarter, so the menu is seen going back.
+                val closing = !state.targetState
+                val kx = if (closing) Math.pow(k.coerceAtLeast(0f).toDouble(), 1.5).toFloat() else k
+                scaleX = 0.15f + 0.85f * kx; scaleY = 0.15f + 0.85f * k
+                alpha = (k * if (closing) 4f else 6f).coerceIn(0f, 1f)
                 transformOrigin = origin.value
             }
                 .padding(4.dp)   // room for the shadow
