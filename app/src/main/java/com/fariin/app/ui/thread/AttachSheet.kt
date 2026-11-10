@@ -94,7 +94,23 @@ internal object AttachSource { @Volatile var rect: androidx.compose.ui.geometry.
  * something is chosen the bar is a caption field, a "View once" switch (one photo only, as iOS)
  * and Send.
  */
-@Composable
+/**
+ * ⛔ THE SHEET TAKES THE KEYBOARD'S PLACE (owner 2026-11-10, recorded beside the reference app on the
+ * Pixel): + tapped with the keyboard up used to drop the keyboard in one frame, the chat jumped down
+ * and the sheet popped out of the + in the middle. Now the chat holds the keyboard's height
+ * ([heldPx], read by ThreadScreen) while the sheet rises from the bottom into that place, and
+ * glides back down when the sheet closes.
+ */
+object AttachKeyboard {
+    /** The keyboard's height (px) on the last frame the chat drew; ThreadScreen keeps it current. */
+    @Volatile var lastImePx = 0
+    /** The height the chat holds while the sheet is up; 0 = not holding. */
+    var heldPx by androidx.compose.runtime.mutableIntStateOf(0)
+    fun holdIfTyping() { heldPx = lastImePx }
+    fun release() { heldPx = 0 }
+}
+
+@androidx.compose.runtime.Composable
 internal fun AttachSheet(
     allowViewOnce: Boolean,
     onDismiss: () -> Unit,
@@ -122,7 +138,8 @@ internal fun AttachSheet(
     // drag grows it to full, pulling the grid down from its top returns it to half, then closes it.
     val motion = com.fariin.app.ui.components.rememberSheetMotion(onDismiss)
     // Grows out of the composer's "+" and shrinks back into it (iOS); not when the camera opens first.
-    motion.source = if (cameraFirst) null else ({ AttachSource.rect })
+    // From the keyboard it rises into the keyboard's place, not out of the + (AttachKeyboard).
+    motion.source = if (cameraFirst || AttachKeyboard.heldPx > 0) null else ({ AttachSource.rect })
     val density = androidx.compose.ui.platform.LocalDensity.current
     val windowH = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
     // The sheet's top at full height sits 10 dp under the status bar (FariinSheet's frame). At rest

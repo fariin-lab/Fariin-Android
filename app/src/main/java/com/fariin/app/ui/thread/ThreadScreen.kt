@@ -909,8 +909,17 @@ private fun ThreadContent(
     // Not while a sheet with its own field covers the chat (post replies): the chat behind stays
     // still and only the sheet's field rides the keyboard (owner's Pixel 2026-11-09: the posts behind
     // jumped up).
+    // The keyboard's height now, kept for AttachKeyboard; while the attach sheet holds it, the chat
+    // keeps that height under it (the extra padding fills what the closing keyboard gives back), and
+    // glides back down when the sheet closes.
+    val imeNowPx = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+    androidx.compose.runtime.SideEffect { AttachKeyboard.lastImePx = imeNowPx }
+    val heldAnim by androidx.compose.animation.core.animateIntAsState(AttachKeyboard.heldPx,
+        androidx.compose.animation.core.tween(if (AttachKeyboard.heldPx > 0) 0 else 260), label = "attachHold")
+    val holdDp = with(androidx.compose.ui.platform.LocalDensity.current) { (heldAnim - imeNowPx).coerceAtLeast(0).toDp() }
     Column(Modifier.fillMaxSize().then(com.fariin.app.ui.components.chatWallpaperOf(ui.cid))
-        .then(if (com.fariin.app.ui.components.SheetKeyboard.covering) Modifier else Modifier.imePadding())) {
+        .then(if (com.fariin.app.ui.components.SheetKeyboard.covering) Modifier else Modifier.imePadding())
+        .padding(bottom = holdDp)) {
         OpenWhen(showPins) {
             // Pins found in the loaded page or fetched by id (iOS pinnedPreviews), oldest first.
             val all = com.fariin.app.data.PinRules.sheetOrder(pins) { id -> ui.messages.firstOrNull { it.id == id } ?: ui.pinned[id] }
@@ -1430,7 +1439,7 @@ private fun ThreadContent(
                     val stop = slow() ?: links ?: long
                     if (stop != null && editing == null) actions.onNotice(stop) else send(t, ids, fmt)
                 }
-                if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false; attachCamera = false },
+                if (attachOpen) AttachSheet(allowViewOnce = !ui.isGroup, onDismiss = { attachOpen = false; attachCamera = false; AttachKeyboard.release() },
                     cameraFirst = attachCamera,
                     onSendMedia = { uris, cap, once ->
                         val kinds = uris.map { if ((resolver.getType(it) ?: "").startsWith("video/")) com.fariin.app.data.GroupAdmins.SendKind.VIDEOS
@@ -1471,7 +1480,7 @@ private fun ThreadContent(
                 // newest code. A new message used to hand the composer fresh lambdas (they hold `ui`
                 // and `actions`, both new on every update), so the whole composer and its field were
                 // rebuilt in the very frame my sent bubble should start rising; now it skips.
-                Composer(steady3(gatedSend), steady0 { attachOpen = true }, steady1 { r: VoiceRecorder.Result ->
+                Composer(steady3(gatedSend), steady0 { AttachKeyboard.holdIfTyping(); attachOpen = true }, steady1 { r: VoiceRecorder.Result ->
                         val stop = slow() ?: held(com.fariin.app.data.GroupAdmins.SendKind.VOICE)
                         if (stop != null) actions.onNotice(stop) else {
                             sendMotion.arm(SendMotion.Kind.VOICE, ui.messages, sendAnim)
