@@ -52,6 +52,103 @@ object GroupStats {
         val recentPosts: List<Post> = emptyList(),
     )
 
+    // ---- A channel's statistics (iOS GroupStatsChannelData, owner 2026-10-29) ----------------------
+    // The same `groupStats` callable answers `kind: "channel"` for a channel: Overview tiles of
+    // followers and per-post / per-story means, day charts, views by hour, recent posts. A figure the
+    // server has no data for is null and its tile or chart is left out; nothing is made up.
+
+    data class ChannelTile(val label: String, val value: String, val change: Pair<String, Int>?)
+
+    /** Days and one value list per series, aligned (a chart's input). Empty = no chart. */
+    data class DaySeries(val days: List<LocalDate>, val series: List<Series>) { val isEmpty get() = days.isEmpty() }
+
+    data class ChannelData(
+        val tiles: List<ChannelTile>,
+        val growth: DaySeries, val followers: DaySeries, val notifications: DaySeries,
+        val hours: List<Bin>, val interactions: DaySeries, val emoji: DaySeries, val stories: DaySeries,
+        val recentPosts: List<Post>,
+    ) {
+        val isEmpty get() = tiles.isEmpty() && growth.isEmpty && followers.isEmpty && notifications.isEmpty &&
+            hours.isEmpty() && interactions.isEmpty && emoji.isEmpty && stories.isEmpty && recentPosts.isEmpty()
+    }
+
+    fun isChannelAnswer(d: Map<*, *>) = d["kind"] == "channel"
+
+    fun parseChannel(d: Map<*, *>, zone: ZoneId = ZoneId.systemDefault()): ChannelData {
+        val c = dict(d["charts"])
+        val utc = (c["viewsByHour"] as? List<*>)?.map { int(it) }.orEmpty()
+        val hours = if (utc.size == 24) hourBins(localHourOfWeek(utc + List(144) { 0 }, zone)) else emptyList()
+        // Story shares only when any story was shared, so an all-zero line does not crowd the chart.
+        val storyRows = c["stories"] as? List<*> ?: emptyList<Any>()
+        val shared = storyRows.any { int(dict(it)["reposts"]) > 0 }
+        val storyKeys = listOf("views" to "Views", "reactions" to "Reactions") + (if (shared) listOf("reposts" to "Shares") else emptyList())
+        return ChannelData(
+            tiles = channelTiles(dict(d["overview"])),
+            growth = daySeries(c["growth"], listOf("followers" to "Followers")),
+            followers = daySeries(c["followers"], listOf("joined" to "Joined", "left" to "Left")),
+            notifications = daySeries(c["notifications"], listOf("muted" to "Muted", "unmuted" to "Unmuted")),
+            hours = hours,
+            interactions = daySeries(c["interactions"], listOf("views" to "Views", "reactions" to "Reactions")),
+            emoji = emojiSeries(c["reactionsByEmoji"]),
+            stories = daySeries(storyRows, storyKeys),
+            recentPosts = posts(d["recentPosts"]),
+        )
+    }
+
+    /** iOS tiles(): eight in the reference order; a null figure, or a zero with no change, is left out. */
+    private fun channelTiles(o: Map<*, *>): List<ChannelTile> {
+        val out = mutableListOf<ChannelTile>()
+        fun add(label: String, v: Any?) {
+            val m = dict(v)
+            val now = (m["now"] as? Number)?.toDouble() ?: return
+            val ch = change(now, (m["prev"] as? Number)?.toDouble())
+            if (now == 0.0 && ch == null) return
+            out += ChannelTile(label, number().format(kotlin.math.round(now).toLong()), ch)
+        }
+        add("Followers", o["followers"])
+        val n = dict(o["enabledNotifications"])
+        val part = (n["part"] as? Number)?.toDouble(); val total = (n["total"] as? Number)?.toDouble()
+        if (part != null && total != null && total > 0 && part > 0) out += ChannelTile("Enabled Notifications", "${kotlin.math.round(part / total * 100).toInt()}%", null)
+        add("Views Per Post", o["viewsPerPost"]); add("Views Per Story", o["viewsPerStory"])
+        add("Shares Per Post", o["sharesPerPost"]); add("Shares Per Story", o["sharesPerStory"])
+        add("Reactions Per Post", o["reactionsPerPost"]); add("Reactions Per Story", o["reactionsPerStory"])
+        return out
+    }
+
+    private fun parseDay(v: Any?): LocalDate? = (v as? String)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+
+    /** Day rows `{ d, key: n }`; a day from before counting started (`counted: false`) is left out. */
+    private fun daySeries(v: Any?, keys: List<Pair<String, String>>): DaySeries {
+        val rows = (v as? List<*>).orEmpty().map { dict(it) }.filter { it["counted"] != false }
+            .mapNotNull { r -> parseDay(r["d"])?.let { it to r } }
+        if (rows.isEmpty()) return DaySeries(emptyList(), emptyList())
+        return DaySeries(rows.map { it.first }, keys.map { (k, name) -> Series(name, rows.map { int(it.second[k]) }) })
+    }
+
+    /** Reactions by emoji, stacked: the ten most used each a series, the rest as "Other". */
+    private fun emojiSeries(v: Any?): DaySeries {
+        val rows = (v as? List<*>).orEmpty().map { dict(it) }.mapNotNull { r ->
+            val day = parseDay(r["d"]) ?: return@mapNotNull null
+            val counts = HashMap<String, Int>()
+            for ((e, n) in dict(r["counts"])) {
+                val k = e as? String ?: continue
+                val cnt = int(n); if (cnt <= 0) continue
+                val name = if (k.startsWith("custom:") || k.length > 16) "Custom" else k
+                counts[name] = (counts[name] ?: 0) + cnt
+            }
+            day to counts
+        }
+        val totals = HashMap<String, Int>()
+        rows.forEach { (_, m) -> m.forEach { (k, n) -> totals[k] = (totals[k] ?: 0) + n } }
+        val ranked = totals.entries.sortedWith(compareBy({ -it.value }, { it.key })).map { it.key }
+        if (ranked.isEmpty()) return DaySeries(emptyList(), emptyList())
+        val top = ranked.take(10)
+        val names = if (ranked.size > top.size) top + "Other" else top
+        return DaySeries(rows.map { it.first }, names.map { name ->
+            Series(name, rows.map { (_, m) -> if (name == "Other") m.filterKeys { it !in top }.values.sum() else m[name] ?: 0 })
+        })
+    }
+
     /** The Statistics row on Group Info (iOS showStatsRow): owner or admin, not locked, big enough or a Fariin admin. */
     fun showRow(conv: Map<String, Any?>, me: String, appAdmin: Boolean, featureOn: Boolean = true, min: Int = MIN_MEMBERS): Boolean {
         if (!featureOn || locked(conv, System.currentTimeMillis().toDouble())) return false

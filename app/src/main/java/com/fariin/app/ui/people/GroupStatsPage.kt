@@ -103,6 +103,8 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
     var stats by remember(cid) { mutableStateOf<GroupStats.Data?>(null) }
+    // A channel answers in its own shape (iOS channelPage): followers, views, reactions, stories.
+    var channelStats by remember(cid) { mutableStateOf<GroupStats.ChannelData?>(null) }
     var failure by remember(cid) { mutableStateOf<String?>(null) }
     var retry by remember(cid) { mutableStateOf(true) }
     val isChannel = remember(cid) { com.fariin.app.data.ChatsNow.find(cid)?.isChannel == true }
@@ -110,7 +112,8 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
         try {
             val r = FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("groupStats")
                 .call(mapOf("cid" to cid)).await()
-            stats = GroupStats.parse(r.getData() as? Map<*, *> ?: emptyMap<String, Any>())
+            val d = r.getData() as? Map<*, *> ?: emptyMap<String, Any>()
+            if (GroupStats.isChannelAnswer(d)) channelStats = GroupStats.parseChannel(d) else stats = GroupStats.parse(d)
             failure = null
         } catch (e: Exception) {
             val code = (e as? FirebaseFunctionsException)?.code?.name
@@ -118,7 +121,7 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
             retry = GroupStats.canRetry(code)
         }
     }
-    LaunchedEffect(cid) { if (stats == null) load() }
+    LaunchedEffect(cid) { if (stats == null && channelStats == null) load() }
     com.fariin.app.ui.components.GlassColumnPage(false, Modifier.background(c.bgSecondary), bar = {
         Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding()) {
             FariinTopBar("Statistics", onBack = onBack, subtitle = title, container = c.bgSecondary)
@@ -127,7 +130,10 @@ internal fun GroupStatsPage(cid: String, title: String, onBack: () -> Unit) {
         androidx.compose.foundation.layout.Spacer(Modifier.height(top))
         val s = stats
         val f = failure
+        val ch = channelStats
         when {
+            ch != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { ChannelStatsBody(ch) }
             s != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { StatsBody(s) }
             f != null -> Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
@@ -493,4 +499,44 @@ private fun StatsSkeleton() {
             }
         }
     }
+}
+
+/** A channel's statistics (iOS channelPage): Overview, the charts the server filled, Recent Posts. */
+@Composable
+private fun ChannelStatsBody(s: GroupStats.ChannelData) {
+    val c = Fariin.colors
+    val dark = c.dark
+    val locale = Locale.getDefault()
+    val monthDay = remember(locale) { DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "MMMd"), locale) }
+    val dayText: (LocalDate) -> String = { it.format(monthDay) }
+    val blue = ChartColors.blue
+    val orange = ChartColors.orange(dark)
+    if (s.isEmpty) Text("No activity in the last 30 days yet. Numbers show here once the channel gets follows and views.",
+        fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 40.dp))
+    if (s.tiles.isNotEmpty()) StatsCard("Overview") {
+        s.tiles.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                pair.forEach { t ->
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(t.value, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = c.label, style = TextStyle(fontFeatureSettings = "tnum"))
+                        t.change?.let { chg -> Text(chg.first, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                            color = when (chg.second) { 1 -> ChartColors.green(dark); -1 -> ChartColors.red(dark); else -> c.secondary }) }
+                        Text(t.label, fontSize = 13.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+    if (!s.growth.isEmpty) DayChart("Growth", true, s.growth.series, listOf(blue), s.growth.days, dayText)
+    if (!s.followers.isEmpty) DayChart("Followers", false, s.followers.series, listOf(blue, orange), s.followers.days, dayText)
+    if (!s.notifications.isEmpty) DayChart("Notifications", false, s.notifications.series, listOf(blue, orange), s.notifications.days, dayText)
+    if (s.hours.isNotEmpty()) BinsCard("Views by Hours", s.hours, setOf("0", "6", "12", "18"), GroupStats.busiestHour(s.hours))
+    if (!s.interactions.isEmpty) DayChart("Views and Reactions", true, s.interactions.series, listOf(blue, orange), s.interactions.days, dayText)
+    val palette = ChartColors.palette(dark)
+    if (!s.emoji.isEmpty) DayChart("Reactions", false, s.emoji.series, s.emoji.series.indices.map { palette[it % palette.size] }, s.emoji.days, dayText)
+    if (!s.stories.isEmpty) DayChart("Story Views and Reactions", true, s.stories.series,
+        listOf(blue, orange, ChartColors.teal(dark)).take(s.stories.series.size), s.stories.days, dayText)
+    if (s.recentPosts.isNotEmpty()) PostsCard("Recent Posts", s.recentPosts, dayText)
 }
