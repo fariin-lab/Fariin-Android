@@ -88,7 +88,9 @@ internal fun edgeAlphaBrush(color: Color, heightPx: Float, fadePx: Float): Brush
 }
 
 /** No-blur edge: [color] at 97 % down through the bar, then a smoothstep ease to clear over [fadePx]. */
-private fun cheapEdgeBrush(color: Color, heightPx: Float, fadePx: Float): Brush {
+internal val CHEAP_EDGE_FADE = 56.dp
+
+internal fun cheapEdgeBrush(color: Color, heightPx: Float, fadePx: Float): Brush {
     val f = fadePx.coerceAtMost(heightPx)
     val start = ((heightPx - f) / heightPx).coerceIn(0f, 1f)
     val top = 0.97f
@@ -140,7 +142,7 @@ internal fun ThreadEdgeGlass(haze: HazeState?, top: Boolean, barPx: Int, under: 
         // photo show through as a muddy white smear. Now the header sits on the page colour almost
         // solid, and only below it does the colour ease away over 56 dp in many small steps, so the
         // edge is soft and nothing busy shows behind the name.
-        val fade = 56.dp
+        val fade = CHEAP_EDGE_FADE
         val heightDp = barDp + fade
         val alpha by com.fariin.app.ui.components.rememberEdgeAlpha(under, startOn = true)
         Box(modifier.fillMaxWidth().height(heightDp).drawBehind {

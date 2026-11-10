@@ -941,11 +941,11 @@ private fun ThreadContent(
                 // page colour (ThreadEdgeGlass.kt), so the messages show faintly through it and are
                 // sharp right under the header.
                 Box(Modifier.align(Alignment.TopCenter).zIndex(0.5f).fillMaxWidth()
-                    .height(with(density) { topBarPx.toDp() } + EDGE_FADE)
+                    .height(with(density) { topBarPx.toDp() } + CHEAP_EDGE_FADE)
                     .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
-                        drawRect(edgeAlphaBrush(Color.Black, size.height, EDGE_FADE.toPx()),
+                        drawRect(cheapEdgeBrush(Color.Black, size.height, CHEAP_EDGE_FADE.toPx()),
                             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
                     }
                     .then(com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid)))
