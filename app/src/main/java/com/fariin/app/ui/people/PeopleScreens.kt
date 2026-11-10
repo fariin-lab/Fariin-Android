@@ -614,7 +614,10 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(Modifier.fillMaxSize()) {
     com.fariin.app.ui.components.GlassBarPage(underBar, Modifier.background(c.bgSecondary)
-        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true, bar = {
+        .then(if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier), frosted = true,
+        // No bar behind back and Edit (owner 2026-11-10): the page runs to the top and the photo
+        // melts into the camera hole (ProfileMelt).
+        clear = true, bar = {
         Box(Modifier.graphicsLayer { alpha = chromeAlpha }) {
         PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }

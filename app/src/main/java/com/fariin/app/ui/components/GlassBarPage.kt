@@ -72,6 +72,20 @@ fun GlassBarPage(
     @Suppress("NAME_SHADOWING") val frosted = frosted && !PAGE_BAR_SOLID
     val glass = com.fariin.app.perf.rememberPowerState().glass()
     val liquid = enabled && GlassQuality.liquid(glass)
+    if (!liquid && clear) {
+        // No bar, plain path too (owner 2026-11-10, the profile): the page runs to the top under the
+        // floating buttons, padded by their height, instead of starting below them and being cut there.
+        val d = LocalDensity.current
+        val firstH = WindowInsets.statusBars.getTop(d) + with(d) { barEstimate.roundToPx() }
+        var barH by remember { mutableIntStateOf(firstH) }
+        Box(modifier.fillMaxSize()) {
+            content(with(d) { barH.toDp() })
+            Box(Modifier.fillMaxWidth().align(Alignment.TopCenter).onSizeChanged { barH = it.height }) {
+                CompositionLocalProvider(LocalFrostedBar provides true) { bar() }
+            }
+        }
+        return
+    }
     if (!liquid) {
         Column(modifier.fillMaxSize()) { bar(); content(0.dp) }
         return

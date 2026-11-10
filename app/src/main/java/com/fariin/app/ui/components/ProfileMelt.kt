@@ -84,6 +84,9 @@ private fun rememberCameraHole(): Pair<Offset, Float>? {
     }
 }
 
+/** Melt into the camera hole (true) or the top centre (false, the owner's choice). */
+private const val MELT_TO_CAMERA = false
+
 private const val MELT_SKSL = """
 uniform shader content;
 half4 main(float2 p) {
@@ -103,13 +106,15 @@ half4 main(float2 p) {
 @Composable
 fun ProfileMeltOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = false, photo: @Composable () -> Unit) {
     val density = LocalDensity.current
-    val hole = rememberCameraHole()
+    // Always the top centre (owner 2026-11-10: cameras sit in different places, some at the side;
+    // go to the middle like the reference app). The camera-hole target is kept behind MELT_TO_CAMERA.
+    val hole = if (MELT_TO_CAMERA) rememberCameraHole() else null
     val view = LocalView.current
     val topInset = remember(view) { (view.rootWindowInsets?.systemWindowInsetTop ?: 0).toFloat() }
     val liquid = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
         PowerSaving.state.value.deviceClass != PerfClass.LOW
     val target = hole?.first ?: Offset(view.width / 2f, topInset / 2f)
-    val targetSide = hole?.second ?: with(density) { 6.dp.toPx() }
+    val targetSide = hole?.second ?: with(density) { 22.dp.toPx() }
     // How far the page scrolls before the photo is gone: from where it rests up to the hole.
     val travel by remember(target) {
         derivedStateOf { if (m.restCenter.isSpecified) (m.restCenter.y - target.y).coerceAtLeast(1f) else 1f }
