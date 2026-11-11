@@ -80,7 +80,8 @@ private object GroupClock {
 }
 
 /**
- * The bar across the top of the app during a call (owner 2026-11-08, the reference's): 64dp under
+ * The bar across the top of the app during a call (owner 2026-11-08, the reference's; made thin
+ * 2026-11-11, owner: it took too much room): 40dp under
  * the status bar, my mic in a dark circle on the left, the call's name and clock in green in the
  * middle (a tap goes back to the call; a group adds "N in call" under it), the red end on the
  * right. It takes the status bar's strip with it, so the app below starts under it.
@@ -125,25 +126,25 @@ fun OngoingCallBar() {
         }
     }
     val green = Color(0xFF34C759)
-    Row(Modifier.fillMaxWidth().background(CallBarBackdrop).statusBarsPadding().height(64.dp).padding(horizontal = 12.dp),
+    Row(Modifier.fillMaxWidth().background(CallBarBackdrop).statusBarsPadding().height(40.dp).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(Color(0xFF24262B)).clickable {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(Color(0xFF24262B)).clickable {
             if (m.isOne) CallManager.toggleMute() else GroupCall.toggleMic()
         }.semantics { contentDescription = if (m.muted) "Unmute" else "Mute" }, contentAlignment = Alignment.Center) {
-            Icon(if (m.muted) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(if (m.muted) androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic_off) else androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_mic), null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp).clip(RoundedCornerShape(12.dp)).clickable { CallActivity.startRing(ctx) }
-            .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            .padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                if (m.video) { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), null, tint = green, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)) }
-                Text(m.title, color = green, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (m.video) { Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_call_video), null, tint = green, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)) }
+                Text(m.title, color = green, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            m.line2?.let { Text(it, color = Color(0xFF9EA3AB), fontSize = 12.sp, maxLines = 1) }
+            m.line2?.let { Text(it, color = Color(0xFF9EA3AB), fontSize = 11.sp, lineHeight = 12.sp, maxLines = 1) }
         }
-        Box(Modifier.size(48.dp).clip(CircleShape).background(Color(0xFFFF3B30)).clickable {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(Color(0xFFFF3B30)).clickable {
             if (m.isOne) CallManager.hangUp() else GroupCall.leave()
         }.semantics { contentDescription = "End call" }, contentAlignment = Alignment.Center) {
-            Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_phone_down), null, tint = Color.White, modifier = Modifier.size(24.dp))
+            Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_phone_down), null, tint = Color.White, modifier = Modifier.size(17.dp))
         }
     }
 }
