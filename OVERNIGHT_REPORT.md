@@ -100,3 +100,6 @@ Nothing shipped, no tester builds, nothing pushed to main.
 ### 14. Group admin
 - Works: member sheet (Message, Voice, Video, Make Group Admin, Transfer Ownership, Add Tag, Open Profile, Ban), Make Admin (label "Admin"), Dismiss Admin (notice "is no longer an admin").
 - QUESTION FOR YOU (not changed): there is no plain "Remove from group", only "Ban from Group". Someone you just want out of a public group must be banned.
+
+## Still to test (next rounds)
+Username change, Chat Key, delete chat / clear history, Report flow, polls, location and contact cards, view-once photo, photo viewer and editor, video and voice playback on the receiving phone, channel comments/replies and reactions, story replies and reactions, group invite link, chat wallpaper, Night Mode, App Icon, Share Profile / QR, Security Checkup, Your Account Data, Passkeys, screen share, picture-in-picture during a call.
