@@ -1,6 +1,27 @@
-# Overnight full-app test (Android, 2026-11-10 night)
+# ALL DONE. Overnight full-app test (Android, 2026-11-10 night)
 
-Status: IN PROGRESS
+Status: ALL DONE (every feature in the list tested or skipped on purpose; see "Skipped on purpose")
+
+## In short
+13 problems found by the test and fixed (plus 5 you reported before it started), all on `chat-speed`, all checked again on the phones:
+
+| # | What was broken | Commit |
+|---|---|---|
+| 1 | New account could not find anyone (no search on empty Chats) | fd276262 |
+| 2 | New account could not start a video call (call screen closed before the camera question) | 8ad1fb51 |
+| 3 | View-once photos never opened, on either phone | 0dafe2e4 |
+| 4 | Opening Location crashed the app | f6ca921d |
+| 5 | Leaving the app mid page change left the chat list shifted and frozen | 7ed02f3d |
+| 6 | Forwarding a sticker or GIF sent nothing but said "Forwarded" | a100849e |
+| 7 | Delete question showed one pill only (no Delete for Me, no Cancel); same in the channel ban question | e844381e |
+| 8 | Find Channels could not find a new public channel | 664b8ca7 |
+| 9 | A message sent while blocked showed as the chat-list preview | a603b488 |
+| 10 | Empty Chats text ran under the floating buttons | 7b9f9c09 |
+| 11 | GIF tab blank for ~8 s on a new phone | 74454655 |
+| 12 | Poll icon shown twice in the chat list | 0c194433 |
+| 13 | "1 views" | 6a0dd042 |
+
+Questions for you (not changed): Explore lists channels only (groups are found in the Chats search); after Log out the remembered account card signs back in with no password; groups have "Ban" but no plain "Remove"; a blocked person still sees you "online" (server side); channel reactions don't update live (server side).
 
 Branch: `chat-speed` (worktree `awt-speed`). Fast build (`installPixelfast`) on the Pixel 5.
 Nothing shipped, no tester builds, nothing pushed to main.
@@ -101,8 +122,6 @@ Nothing shipped, no tester builds, nothing pushed to main.
 - Works: member sheet (Message, Voice, Video, Make Group Admin, Transfer Ownership, Add Tag, Open Profile, Ban), Make Admin (label "Admin"), Dismiss Admin (notice "is no longer an admin").
 - QUESTION FOR YOU (not changed): there is no plain "Remove from group", only "Ban from Group". Someone you just want out of a public group must be banned.
 
-## Still to test (next rounds)
-Username change, Chat Key, delete chat / clear history, Report flow, polls, location and contact cards, view-once photo, photo viewer and editor, video and voice playback on the receiving phone, channel comments/replies and reactions, story replies and reactions, group invite link, chat wallpaper, Night Mode, App Icon, Share Profile / QR, Security Checkup, Your Account Data, Passkeys, screen share, picture-in-picture during a call.
 
 ## Round 2
 
@@ -125,3 +144,28 @@ Username change, Chat Key, delete chat / clear history, Report flow, polls, loca
 ### 19. Channel replies and reactions
 - Works: Turn On Replies on a post, the follower opens Replies / Quotes, writes a reply, the owner sees it, the post shows "1 Reply"; a follower's reaction (🔥 1).
 - FINDING (not changed, likely server design): reactions from others don't update live on the owner's open channel; they show after reopening it (a changed reaction was still the old one after 20 s). The app shows the counts stored on each post, and the server doesn't seem to push them live.
+
+### 20. Stories, part 2
+- Works: a new story reaches the other phone; it moves to "Viewed Stories" after viewing; "Send message…" reply arrives in the chat as "Night Friend replied to your story" with the story picture.
+- FINDING (not changed): my first story vanished from the other phone after I blocked and unblocked them; a new story after the unblock shows normally. So a block takes the person out of a story already posted and an unblock doesn't put them back. Probably fine, but noting it.
+- Note: a story closes by itself after a few seconds, so a slow typist can lose the reply they were writing. Not changed.
+
+### 21. Look and settings, part 2
+- Works: Night Mode (Light switches at once; set back to System), App Icon page (7 colours; I did not switch the icon so other test sessions keep launching the same way), Set Wallpaper page (photos, colour, presets), Your Account Data (makes "Fariin-Account-Information.txt" and opens the share sheet; nothing sent), Passkeys page.
+- Works: group Invite Links, public link with Copy / Send / Share, Create a New Link with a 1-day limit (shows within 3 s, "No one joined").
+
+### 22. Calls, part 2
+- Works: picture-in-picture. Minimize on a video call shrinks it to a floating window over the chat with a green call bar (mute, name and time, end). End from the bar ends it on both phones.
+- Not a bug: on a video call the controls fade after a few seconds; a tap on a faded button only brings them back.
+
+### 23. Report and clear
+- Works: Report Night Friend opens the reason list and the second question. I stopped before sending so no fake report reaches your moderation queue.
+- Works: group Clear Messages clears for both ("cleared the chat history" on both phones).
+
+## Skipped on purpose (my decisions)
+- Screen share during a call: it would send your Pixel's real screen (your other apps' notifications) to the test account.
+- Creating a passkey: it would be saved into your real Google Password Manager.
+- Changing the app icon: it changes how the app is launched for the other test sessions.
+- Entering someone's Chat Key: needs a third account whose Messages privacy shuts strangers out.
+- Sending a report, deleting an account, deleting the group or channel: not reversible, and the test accounts are kept for you to look at.
+- Group calls with three or more people: only two test accounts.
