@@ -85,7 +85,8 @@ import com.fariin.app.ui.theme.Fariin
  * (SettingsSearch.kt), Share profile = my QR code and the scanner, Invite Friends (QrPages.kt),
  * Chat Wallpaper and Chat Color (LookPages.kt), App Icon (AppIconPage.kt).
  *
- * TODO: Subscriptions (iOS shows it to @v only), the admin sections.
+ * Subscriptions (SubscriptionsPage.kt): a preview for @v only, as iOS.
+ * TODO: the admin sections.
  */
 @Composable
 fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
@@ -155,6 +156,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             lookRoute(page, push, pop) -> Unit
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
             page == PAGE_APP_ICON -> AppIconPage(pop)
+            page == PAGE_SUBSCRIPTIONS -> SubscriptionsPage(pop)
             page == PAGE_BUBBLE_STYLE -> BubbleStylePage(onClose = pop)
             page == PAGE_GLOW_PROFILE -> com.fariin.app.ui.glow.GlowProfilePage(me, profile,
                 onEdit = com.fariin.app.ui.people.LocalPeopleNav.current.editProfile, onBack = pop)
@@ -223,14 +225,17 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             ProfileHeader(profile, photo, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
             if (myQrOpen.value) MyQrSheet(profile, onClose = { myQrOpen.value = false }, onScan = { push(PAGE_SCAN) })
             Spacer(Modifier.height(8.dp))
-            // The admin panel's "New" pills (config/features newBadges). No Subscriptions row on
-            // Android yet; its key is read but has nowhere to show.
+            // The admin panel's "New" pills (config/features newBadges).
             // My Profile, its own card under the header (iOS; hidden unless the switch is on).
             if (com.fariin.app.data.AppFeatures.myProfileCard) SettingsSection {
                 SettingsRow("My Profile", painterResource(R.drawable.ic_account), last = true,
                     badge = NewBadgeSpots.MY_PROFILE) { push(PAGE_GLOW_PROFILE) }
             }
             SettingsSection {
+                // Subscriptions, first in this card, for @v alone while it is being built (iOS,
+                // owner 2026-10-27). The page is a preview: nothing on it is sold or switched on.
+                if (showsSubscriptions(profile?.handle)) SettingsRow("Subscriptions", painterResource(R.drawable.ic_star_outline),
+                    badge = NewBadgeSpots.SUBSCRIPTIONS) { push(PAGE_SUBSCRIPTIONS) }
                 SettingsRow("Account", painterResource(R.drawable.ic_account),
                     badge = NewBadgeSpots.ACCOUNT) { push(PAGE_ACCOUNT) }
                 SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true,
