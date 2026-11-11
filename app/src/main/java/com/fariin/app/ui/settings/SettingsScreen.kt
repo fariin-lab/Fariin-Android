@@ -169,7 +169,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
 
 internal const val PAGE_ACCOUNT = "account"
 /** My Profile (iOS GlowProfileView), behind the myProfileCard switch. */
-private const val PAGE_GLOW_PROFILE = "glow:profile"
+internal const val PAGE_GLOW_PROFILE = "glow:profile"
 internal const val PAGE_APPEARANCE = "appearance"
 private const val PAGE_NIGHT = "night"
 internal const val PAGE_ABOUT = "about"
