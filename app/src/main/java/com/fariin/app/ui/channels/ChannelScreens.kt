@@ -1,5 +1,12 @@
 package com.fariin.app.ui.channels
 
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.role
 import com.fariin.app.ui.components.linkShake
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.core.animateFloat
@@ -82,81 +89,107 @@ import kotlinx.coroutines.tasks.await
 fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
     val c = Fariin.colors
     val scope = rememberCoroutineScope()
-    // The last list draws at once (owner 2026-11-10: the skeleton sat ~4 s on every open), then the
-    // server's answer replaces it.
-    var rows by remember { mutableStateOf(FindChannelsCache.rows) }
-    var loading by remember { mutableStateOf(FindChannelsCache.rows.isEmpty()) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    // Explore (iOS explore-fast, owner 2026-11-11): Channels | Groups. Each tab draws its last list
+    // (kept on the phone per account) on the first frame; the server's answer replaces it in place.
+    var groupsTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var rows by remember { mutableStateOf(com.fariin.app.channel.ExploreCache.cachedChannels(ctx, me) ?: emptyList()) }
+    var groupRows by remember { mutableStateOf(com.fariin.app.channel.ExploreCache.cachedGroups(ctx, me) ?: emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var groupsLoading by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
+    var groupsFailed by remember { mutableStateOf(false) }
+    // A skeleton only when nothing was kept and the answer is not back within 0.3 s.
+    var skeleton by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
     val justFollowed = remember { mutableStateListOf<String>() }
+    val justJoined = remember { mutableStateListOf<String>() }
+    var groupOpen by remember { mutableStateOf<String?>(null) }
     val entries by ChannelFollows.entries.collectAsState()
     val bias by ChannelFollows.biasFlow.collectAsState()
-    // Design A (owner 2026-11-10, iOS find-channels-a): search under the title, always shown.
     var query by remember { mutableStateOf("") }
     // A keyboard left up by the page this came from (the chat search, owner 2026-11-10) goes down.
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     LaunchedEffect(Unit) { focus.clearFocus(force = true); keyboard?.hide() }
     LaunchedEffect(Unit) {
-        try { rows = ChannelService.discover().also { FindChannelsCache.rows = it }; failed = false } catch (_: Exception) { failed = true }
+        try { rows = com.fariin.app.channel.ExploreCache.fetchChannels(ctx, me); failed = false } catch (_: Exception) { failed = true }
         loading = false
     }
+    LaunchedEffect(groupsTab) {
+        if (!groupsTab) return@LaunchedEffect
+        try { groupRows = com.fariin.app.channel.ExploreCache.fetchGroups(ctx, me); groupsFailed = false } catch (_: Exception) { groupsFailed = true }
+        groupsLoading = false
+    }
+    LaunchedEffect(groupsTab) { skeleton = false; delay(300); skeleton = true }
     toast?.let { t -> LaunchedEffect(t) { delay(2500); toast = null } }
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        com.fariin.app.ui.components.FloatingBarPage("Find Channels", onBack, page = c.bgSecondary) { top ->
-            androidx.compose.foundation.layout.Spacer(Modifier.height(top))
-            com.fariin.app.ui.people.SearchField(query, "Search") { query = it }
-            // Name or @handle of the loaded channels.
+        com.fariin.app.ui.components.GlassColumnPage(false, page = c.bgSecondary, bar = {
+            Box(Modifier.fillMaxWidth().background(c.bgSecondary).statusBarsPadding().height(64.dp).padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center) {
+                com.fariin.app.ui.components.FloatingBack(onBack, Modifier.align(Alignment.CenterStart))
+                // Design C: the switch is the title, centred, the back button's width free on both sides.
+                ExploreSwitch(groupsTab, Modifier.padding(horizontal = 56.dp)) { g -> if (g != groupsTab) { groupsTab = g; query = "" } }
+            }
+        }) { top ->
+            Spacer(Modifier.height(top))
+            com.fariin.app.ui.people.SearchField(query, if (groupsTab) "Search groups" else "Search channels") { query = it }
             val q = query.trim().removePrefix("@")
-            // Plus the server's public search (the Chats page's Global Search) for what the ranked list
-            // does not carry: a new public channel was found from Chats but never here, "No channels
-            // match" (overnight test 2026-11-10).
-            var serverHits by remember { mutableStateOf<List<DiscoveredChannel>>(emptyList()) }
-            LaunchedEffect(q) {
+            // Plus the server's public search for what the ranked list does not carry.
+            var serverHits by remember { mutableStateOf<List<com.fariin.app.data.PublicGroupHit>>(emptyList()) }
+            LaunchedEffect(q, groupsTab) {
                 serverHits = emptyList()
                 if (q.length < 3) return@LaunchedEffect
                 delay(300)   // one ask per pause in typing
                 serverHits = runCatching { com.fariin.app.data.PublicGroups.search(q) }.getOrDefault(emptyList())
-                    .filter { it.isChannel }
-                    .map { DiscoveredChannel(it.cid, it.handle, it.title, it.photoUrl, "", it.memberCount, verified = it.verified) }
+                    .filter { it.isChannel != groupsTab }
             }
-            val local = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
-            val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
-            when {
-                loading && rows.isEmpty() -> Column(Modifier.padding(top = 4.dp)) {
-                    // Skeleton rows in the real rows' shape: a round 52 photo, a name, a count.
-                    repeat(6) { i ->
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            com.fariin.app.ui.components.SkeletonBlock(52.dp, 52.dp, radius = 16.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                com.fariin.app.ui.components.SkeletonBlock(listOf(130, 100, 160, 115)[i % 4].dp, 14.dp)
-                                Spacer(Modifier.height(8.dp))
-                                com.fariin.app.ui.components.SkeletonBlock(80.dp, 11.dp)
+            if (!groupsTab) {
+                val local = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
+                val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
+                    .map { DiscoveredChannel(it.cid, it.handle, it.title, it.photoUrl, "", it.memberCount, verified = it.verified) }
+                when {
+                    loading && rows.isEmpty() -> if (skeleton) ExploreSkeleton(squircle = true)
+                    failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
+                    rows.isEmpty() && shown.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
+                    shown.isEmpty() -> Note("No channels match “${query.trim()}”.")
+                    else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        items(shown, key = { it.cid }) { r ->
+                            @Suppress("UNUSED_VARIABLE") val b = bias.size
+                            // Followed, just followed, or one I run (owner/admin: in its `users`, no follow entry).
+                            val mine = entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
+                                com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true
+                            DiscoverRow(r, mine, onOpen = { onOpen(r.cid) }) {
+                                justFollowed.add(r.cid)
+                                scope.launch {
+                                    try {
+                                        if (ChannelService.follow(r.cid) == "requested") { justFollowed.remove(r.cid); toast = ChannelRules.REQUEST_SENT }
+                                    } catch (e: Exception) { justFollowed.remove(r.cid); toast = ChannelService.errorText(e) }
+                                }
                             }
                         }
                     }
                 }
-                failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
-                rows.isEmpty() && shown.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
-                shown.isEmpty() -> Note("No channels match “${query.trim()}”.")
-                else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
-                    item {
-                        // A plain list: no card, no footer (design A).
-                        Column {
-                            // No lines between rows (find-channels design A, item 12).
-                            shown.forEach { r ->
-                                @Suppress("UNUSED_VARIABLE") val b = bias.size
-                                // Followed, just followed, or one I run (owner/admin: in its `users`, no follow entry).
-                                val mine = entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
-                                    com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true
-                                DiscoverRow(r, mine, onOpen = { onOpen(r.cid) }) {
-                                    justFollowed.add(r.cid)
-                                    scope.launch {
-                                        try {
-                                            if (ChannelService.follow(r.cid) == "requested") { justFollowed.remove(r.cid); toast = ChannelRules.REQUEST_SENT }
-                                        } catch (e: Exception) { justFollowed.remove(r.cid); toast = ChannelService.errorText(e) }
-                                    }
+            } else {
+                val local = if (q.isEmpty()) groupRows else groupRows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
+                val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
+                    .map { com.fariin.app.channel.DiscoveredGroup(it.cid, it.handle, it.title, it.photoUrl, it.memberCount, it.verified, "") }
+                when {
+                    groupsLoading && groupRows.isEmpty() -> if (skeleton) ExploreSkeleton(squircle = false)
+                    groupsFailed && groupRows.isEmpty() -> Note("Couldn't load groups. Check your connection and try again.")
+                    groupRows.isEmpty() && shown.isEmpty() -> Note("No public groups yet.")
+                    shown.isEmpty() -> Note("No groups match “${query.trim()}”.")
+                    else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        items(shown, key = { it.cid }) { r ->
+                            val mine = justJoined.contains(r.cid) ||
+                                com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true
+                            GroupRow(r, mine, onOpen = { if (mine) onOpen(r.cid) else groupOpen = r.cid }) {
+                                // Grey "Joined" at the tap; a refusal or a request puts Join back with a word.
+                                justJoined.add(r.cid)
+                                scope.launch {
+                                    try {
+                                        if (com.fariin.app.data.PublicGroups.join(r.cid) == "requested") { justJoined.remove(r.cid); toast = "Request sent." }
+                                    } catch (e: Exception) { justJoined.remove(r.cid); toast = e.message ?: "Couldn't join. Try again." }
                                 }
                             }
                         }
@@ -164,6 +197,8 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                 }
             }
         }
+        groupOpen?.let { gid -> com.fariin.app.ui.people.PublicGroupSheet(gid, onClose = { groupOpen = null },
+            onOpenChat = { cid -> groupOpen = null; onOpen(cid) }, onOpenChannel = { cid -> groupOpen = null; onOpen(cid) }) }
         toast?.let {
             Text(it, fontSize = 15.sp, color = c.label, textAlign = TextAlign.Center,
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(24.dp)
@@ -172,9 +207,75 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     }
 }
 
-/** Find Channels' last answer, for this run of the app. */
-internal object FindChannelsCache {
-    @Volatile var rows: List<DiscoveredChannel> = emptyList()
+/** "Channels | Groups" (design C): a capsule whose chosen half is a lighter pill that slides. */
+@Composable
+private fun ExploreSwitch(groups: Boolean, modifier: Modifier, onPick: (Boolean) -> Unit) {
+    val c = Fariin.colors
+    val at by androidx.compose.animation.core.animateFloatAsState(if (groups) 1f else 0f,
+        androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 500f), label = "exploreSwitch")
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.widthIn(max = 260.dp).fillMaxWidth().height(40.dp)
+        .clip(CircleShape).background(c.fieldFill).padding(3.dp)) {
+        val half = maxWidth / 2
+        Box(Modifier.offset(x = half * at).width(half).fillMaxHeight().shadow(2.dp, CircleShape).clip(CircleShape)
+            .background(if (c.dark) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.22f) else c.card))
+        Row(Modifier.fillMaxSize()) {
+            listOf("Channels" to false, "Groups" to true).forEach { (label, g) ->
+                Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
+                    .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { onPick(g) }
+                    .semantics { selected = g == groups; role = androidx.compose.ui.semantics.Role.Tab },
+                    contentAlignment = Alignment.Center) {
+                    Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (g == groups) c.label else c.secondary, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/** Grey rows in the real rows' shape while nothing is kept yet. */
+@Composable
+private fun ExploreSkeleton(squircle: Boolean) {
+    Column(Modifier.padding(top = 4.dp)) {
+        repeat(6) { i ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.fariin.app.ui.components.SkeletonBlock(52.dp, 52.dp, radius = if (squircle) 16.dp else 26.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    com.fariin.app.ui.components.SkeletonBlock(listOf(130, 100, 160, 115)[i % 4].dp, 14.dp)
+                    Spacer(Modifier.height(8.dp))
+                    com.fariin.app.ui.components.SkeletonBlock(80.dp, 11.dp)
+                }
+            }
+        }
+    }
+}
+
+/** A public group in Explore: round photo, name, "N members", Join (grey "Joined" once in). */
+@Composable
+private fun GroupRow(r: com.fariin.app.channel.DiscoveredGroup, mine: Boolean, onOpen: () -> Unit, onJoin: () -> Unit) {
+    val c = Fariin.colors
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+            Avatar(r.photoUrl, 52.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(r.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (r.verified) {
+                        Spacer(Modifier.width(4.dp))
+                        com.fariin.app.ui.components.VerifiedSeal(c.blue, Modifier.size(15.dp), "Verified")
+                    }
+                }
+                Text(if (r.memberCount == 1) "1 member" else "${r.memberCount} members", fontSize = 15.sp, color = c.secondary)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier.height(34.dp).clip(CircleShape).background(if (mine) c.fieldFill else c.accent)
+                .clickable(enabled = !mine, onClick = onJoin).padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) { Text(if (mine) "Joined" else "Join", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (mine) c.secondary else c.onAccent) }
+    }
 }
 
 @Composable

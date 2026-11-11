@@ -186,6 +186,8 @@ fun ChatListScreen(
     val liveCallAll = LiveCallRow.live.collectAsState()
     val listCtx = LocalContext.current
     LaunchedEffect(Unit) { com.fariin.app.data.PlayedVoice.init(listCtx.applicationContext) }
+    // Explore's lists fetched quietly a few seconds after the list shows, so its first open is fresh (iOS).
+    LaunchedEffect(me) { com.fariin.app.channel.ExploreCache.warm(listCtx.applicationContext, me) }
     val playedAll = com.fariin.app.data.PlayedVoice.upTo.collectAsState()
     val cheapDrawing = com.fariin.app.perf.rememberPowerState().cheapDrawing
     var filter by rememberSaveable { mutableIntStateOf(FILTER_ALL) }

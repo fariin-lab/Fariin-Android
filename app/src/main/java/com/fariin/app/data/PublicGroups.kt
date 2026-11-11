@@ -51,6 +51,19 @@ object PublicGroups {
         if (d?.get("found") == true && d["kind"] == "group") (d["cid"] as? String)?.takeIf { com.fariin.app.channel.ChannelRules.safeId(it) } else null
     }.getOrNull()
 
+    /** Explore's Groups tab (iOS GroupDirectory.discover): the biggest public groups the panel allows, pinned first. */
+    suspend fun discover(): List<com.fariin.app.channel.DiscoveredGroup> {
+        val d = fns.getHttpsCallable("discoverGroups").withTimeout(20, TimeUnit.SECONDS).call(emptyMap<String, Any>()).await().getData() as? Map<*, *>
+        return (d?.get("groups") as? List<*>)?.mapNotNull { (it as? Map<*, *>)?.let(::discovered) } ?: emptyList()
+    }
+
+    fun discovered(d: Map<*, *>): com.fariin.app.channel.DiscoveredGroup? {
+        val cid = (d["cid"] as? String)?.takeIf { com.fariin.app.channel.ChannelRules.safeId(it) } ?: return null
+        return com.fariin.app.channel.DiscoveredGroup(cid, d["handle"] as? String ?: "",
+            (d["title"] as? String)?.takeIf { it.isNotBlank() } ?: "Group", (d["photoUrl"] as? String)?.ifEmpty { null },
+            (d["memberCount"] as? Number)?.toInt() ?: 0, d["verified"] == true, d["label"] as? String ?: "")
+    }
+
     /** "joined", "requested" or "already"; a refusal throws with the server's own words. */
     suspend fun join(cid: String): String = try {
         (fns.getHttpsCallable("joinPublicGroup").withTimeout(20, TimeUnit.SECONDS)
