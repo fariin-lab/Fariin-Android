@@ -29,6 +29,12 @@ object AppLock {
 
     private lateinit var app: Application
     private var started = 0
+    /** Started activities that are not the call screen (LockActivity counts: it is the app). */
+    private var appStarted = 0
+    /** The app went out of sight since the last check (Home, or the call shrank into its window). */
+    private var pending = false
+    /** The call screen is in its picture-in-picture window, so it no longer shows the app. */
+    private var callInPip = false
     private var backgroundAt = -1L          // elapsedRealtime when the last activity stopped; -1 = cold
     @Volatile var unlocked = false
         private set
@@ -85,7 +91,19 @@ object AppLock {
         else a.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
-    private fun exempt(a: Activity) = a is LockActivity || a.javaClass.simpleName.contains("Call")
+    private fun callScreen(a: Activity) = a !is LockActivity && a.javaClass.simpleName.contains("Call")
+    private fun exempt(a: Activity) = a is LockActivity || callScreen(a)
+
+    private fun hidden() { backgroundAt = SystemClock.elapsedRealtime(); pending = true }
+
+    /**
+     * The call screen entered or left picture-in-picture. [byButton]: its own minimize, inside the
+     * app; any other way in (Home, Recents) means the person left Fariin, so the next return asks.
+     */
+    fun onCallPip(inPip: Boolean, byButton: Boolean) {
+        callInPip = inPip
+        if (inPip && !byButton && appStarted == 0) hidden()
+    }
 
     fun install(application: Application) {
         app = application
@@ -93,19 +111,27 @@ object AppLock {
             override fun onActivityCreated(a: Activity, b: Bundle?) { live.add(a); apply(a) }
             override fun onActivityStarted(a: Activity) {
                 started++
-                if (started == 1 && !exempt(a)) {
-                    val now = SystemClock.elapsedRealtime()
-                    if (shouldLock(enabled(), unlocked, backgroundAt, now, delaySeconds())) {
-                        unlocked = false
-                        a.startActivity(Intent(a, LockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION))
-                    }
+                if (!callScreen(a)) appStarted++
+                if (exempt(a)) return
+                // Checked on the first app screen after the app was out of sight, even when a call
+                // in picture-in-picture (or a call that woke the app) kept an activity started.
+                val cold = backgroundAt < 0 && !unlocked
+                if (!pending && !cold) return
+                pending = false
+                if (live.any { it is LockActivity && !it.isFinishing }) return
+                val now = SystemClock.elapsedRealtime()
+                if (shouldLock(enabled(), unlocked, backgroundAt, now, delaySeconds())) {
+                    unlocked = false
+                    a.startActivity(Intent(a, LockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION))
                 }
             }
             override fun onActivityResumed(a: Activity) { apply(a) }
             override fun onActivityPaused(a: Activity) {}
             override fun onActivityStopped(a: Activity) {
                 started = (started - 1).coerceAtLeast(0)
-                if (started == 0) backgroundAt = SystemClock.elapsedRealtime()
+                if (!callScreen(a)) appStarted = (appStarted - 1).coerceAtLeast(0)
+                // Out of sight: nothing started, or only the call's picture-in-picture window left.
+                if (started == 0 || (appStarted == 0 && callInPip && !callScreen(a))) hidden()
             }
             override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
             override fun onActivityDestroyed(a: Activity) { live.remove(a); secureHolds.remove(a.window) }

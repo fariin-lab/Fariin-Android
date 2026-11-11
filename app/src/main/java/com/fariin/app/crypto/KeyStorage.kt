@@ -171,8 +171,7 @@ class PeerKeys(private val store: KeyValueStore) {
     }
 
     /** `rememberKeys`: each new key is inserted at the FRONT in the order given, then cut to 8.
-     *  (Note: with the server history passed reversed, as iOS does, the oldest ends up first;
-     *  every open tries all of them, so the order only matters for which 8 are kept.) */
+     *  Give it oldest first (the server history's own order), so the 8 kept are the newest. */
     fun remember(uid: String, b64s: List<String>) {
         if (uid.isEmpty() || b64s.isEmpty()) return
         val before = ringB64(uid)

@@ -139,6 +139,7 @@ class MainActivity : ComponentActivity() {
                             com.fariin.app.data.HiddenMessages.clear(applicationContext)
                             com.fariin.app.data.HiddenCalls.clear(applicationContext)
                             com.fariin.app.data.DeliveryReceipts.reset()
+                            com.fariin.app.data.StoryPrivacyStore.stop()   // the same account signing back in listens again
                         }
                     }
                     // The server removed this phone's device record: the same teardown as Log out,
@@ -514,6 +515,19 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
             PushRouter.pendingOpen.value = cid
             return
+        }
+        // Safety net: a push the system drew itself (a token not yet marked as Android on the server)
+        // brings its plain `cid` and `mid`. Calls and stories have their own routes, so only chat kinds.
+        if (intent != null && intent.getStringExtra(PushRouter.EXTRA_OPEN_CID).isNullOrEmpty()) {
+            val plainKind = intent.getStringExtra("kind")
+            val plain = intent.getStringExtra("cid")
+            if (plainKind != "call" && plainKind != "story" && plain != null && com.fariin.app.channel.ChannelRules.safeId(plain)) {
+                intent.removeExtra("cid")
+                intent.putExtra(PushRouter.EXTRA_OPEN_CID, plain)
+                val plainMid = intent.getStringExtra("mid")
+                if (plainMid != null && com.fariin.app.channel.ChannelRules.safeId(plainMid)) intent.putExtra(PushRouter.EXTRA_OPEN_MID, plainMid)
+                intent.removeExtra("mid")
+            }
         }
         val cid = intent?.getStringExtra(PushRouter.EXTRA_OPEN_CID)?.takeIf { it.isNotEmpty() } ?: return
         intent.removeExtra(PushRouter.EXTRA_OPEN_CID)

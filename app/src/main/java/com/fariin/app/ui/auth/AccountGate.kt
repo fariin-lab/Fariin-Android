@@ -27,6 +27,7 @@ import com.fariin.app.data.TwoStepGate
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -43,6 +44,7 @@ import kotlinx.coroutines.tasks.await
 @Composable
 fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val newPasswordFor by AuthHandoff.newPasswordFor.collectAsState()
     // An account this phone has opened before opens at once (owner 2026-11-03: Fariin took 1.5 to
     // 3.5 s to show anything, others under 1 s; the profile was fetched from the SERVER on every
@@ -119,7 +121,10 @@ fun AccountGate(me: String, auth: AuthRepository, onOwnPage: () -> Unit = {}, co
         phase is Phase.ProveEmail -> Box(box.statusBarsPadding().navigationBarsPadding()) {
             CodePage(auth, CodePurpose.Unproven, (phase as Phase.ProveEmail).address, onBack = null, onAuthed = { phase = Phase.Loading })
             // iOS: the way out of a page that replaces the app is Log Out (the gate stays the gate).
-            TextLink("Log Out", color = com.fariin.app.ui.theme.Fariin.colors.accent) { auth.signOut() }
+            // The same teardown as every other Log Out (presence, device record, push token, wipe).
+            TextLink("Log Out", color = com.fariin.app.ui.theme.Fariin.colors.accent) {
+                scope.launch { com.fariin.app.device.SessionEnd.signOut(ctx) }
+            }
         }
         phase == Phase.TwoStep -> Box(box) { TwoStepSignInPage(onPassed = { phase = Phase.Loading }) }
         phase is Phase.Restore -> Box(box) {

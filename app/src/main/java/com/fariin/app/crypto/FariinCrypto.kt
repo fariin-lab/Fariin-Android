@@ -175,7 +175,9 @@ class FariinCrypto(
     private suspend fun fetchKeyResult(uid: String, serverOnly: Boolean = false): KeyDirectory.Fetch {
         val r = directory.fetch(uid, serverOnly)
         if (r is KeyDirectory.Fetch.Key) {
-            peers.remember(uid, r.history.reversed())
+            // Oldest first, as stored: each key goes to the front, so the newest end up first and
+            // the ring of 8 keeps the newest earlier keys (reversed, it kept the 8 oldest).
+            peers.remember(uid, r.history)
             adoptKey(uid, B64.decode(r.publicKeyB64)!!)
         }
         return r
