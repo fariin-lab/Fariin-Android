@@ -375,7 +375,18 @@ private fun NotificationsPage(pop: () -> Unit) {
     var inPreview by remember { mutableStateOf(get("notif.inAppPreview")) }
     var sent by remember { mutableStateOf(get("chat.sentSound")) }
     var askOn by remember { mutableStateOf(false) }
-    if (askOn) com.fariin.app.push.NotificationsSheet { askOn = false }
+    // Read again on every return to the page (back from the system settings) and after the ask,
+    // or "Notifications are off" stayed up after the person turned them on.
+    var permitted by remember { mutableStateOf(Push.permitted(ctx)) }
+    if (askOn) com.fariin.app.push.NotificationsSheet { askOn = false; permitted = Push.permitted(ctx) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) permitted = Push.permitted(ctx)
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
     var reset by remember { mutableStateOf(false) }
     val me = FirebaseAuth.getInstance().currentUser?.uid
     var resetting by remember { mutableStateOf(false) }
@@ -394,7 +405,7 @@ private fun NotificationsPage(pop: () -> Unit) {
         runCatching { ctx.startActivity(i.putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
     ScrollPage("Notifications", pop) {
-        if (!Push.permitted(ctx)) SettingsSection(header = "Notifications are off", footer = "Turn them on to be told about new messages and calls.") {
+        if (!permitted) SettingsSection(header = "Notifications are off", footer = "Turn them on to be told about new messages and calls.") {
             SettingsRow("Turn On Notifications", last = true) { if (android.os.Build.VERSION.SDK_INT >= 33) askOn = true else openSystem() }
         }
         SettingsSection(footer = "Everything below depends on this. With it off, Fariin does not notify you at all, on the lock screen or inside the app.") {
@@ -488,7 +499,7 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         // Swipe Actions (iOS ChatsSettingsView): off by default; on shows the two picks.
         SwipeActionsSection()
         SettingsSection(header = "New Chats from Your Chat Key", footer = "When someone uses your Chat Key to message you, the chat goes to Archived, muted.") {
-            SwitchRow("Automatically Archive", archive, last = true, badge = NewBadgeSpots.CHATS_AUTO_ARCHIVE) { archive = it; p.edit().putBoolean("unknownChats.autoArchive", it).apply() }
+            SwitchRow("Automatically Archive", archive, last = true, badge = NewBadgeSpots.CHATS_AUTO_ARCHIVE) { archive = it; com.fariin.app.data.UnknownChatArchiver.setOn(p, it) }
         }
         // iOS ChatsSettingsView: the last row, red, with what it does written under it.
         SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {

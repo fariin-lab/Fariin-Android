@@ -72,6 +72,10 @@ data class Conversation(
     val lastReactionToEnc: String? = null,
     val lastReactionToAuthor: String = "",
     val startedBy: String = "",
+    /** "pin" when someone opened this chat with a Chat Key; who typed it, and when (iOS). */
+    val acceptedVia: String = "",
+    val acceptedBy: String = "",
+    val acceptedAtMillis: Double = 0.0,
     val accepted: Boolean = true,
     val reqOff: Boolean = false,
     /** Restricted chat (iOS): each person's own switch, and the older shared fields. */
@@ -322,6 +326,9 @@ data class Conversation(
                 lastReactionToEnc = (data["lastReactionToEnc"] as? String)?.takeIf { it.isNotEmpty() },
                 lastReactionToAuthor = data["lastReactionToAuthor"] as? String ?: "",
                 startedBy = startedBy ?: "",
+                acceptedVia = data["acceptedVia"] as? String ?: "",
+                acceptedBy = data["acceptedBy"] as? String ?: "",
+                acceptedAtMillis = (data["acceptedAt"] as? Timestamp)?.let { millis(it) } ?: 0.0,
                 // Absent means "from before message requests existed": accepted.
                 accepted = data["accepted"] as? Boolean ?: (data["startedBy"] == null),
                 reqOff = data["reqOff"] as? Boolean ?: false,

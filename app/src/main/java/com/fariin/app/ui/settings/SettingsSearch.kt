@@ -49,8 +49,6 @@ import com.fariin.app.ui.theme.Fariin
  */
 
 internal const val PAGE_SETTINGS_SEARCH = "settings:search"
-/** "My Profile" opens the profile editor, which is not a Settings page. */
-internal const val PAGE_MY_PROFILE = "settings:myprofile"
 
 /**
  * ⛔ EVERY SETTING, NOT JUST EVERY CARD (iOS SettingsIndex, owner 2026-11-05 + Android 2026-11-10:
@@ -84,7 +82,7 @@ internal object SettingsIndex {
         fun card(t: String, icon: String, kw: String, page: String) = add(Entry(t, icon, kw, page, isPage = true))
         fun page(t: String, path: List<String>, kw: String, page: String) = add(Entry(t, null, kw, page, path, isPage = true))
         fun row(t: String, path: List<String>, kw: String, page: String) = add(Entry(t, null, kw, page, path))
-        if (com.fariin.app.data.AppFeatures.myProfileCard) card("My Profile", "account", "profile bio photo edit stories", PAGE_MY_PROFILE)
+        if (com.fariin.app.data.AppFeatures.myProfileCard) card("My Profile", "account", "profile bio photo edit stories", PAGE_GLOW_PROFILE)
         card(ACC, "account", "account email password username sign in sign out log out delete", PAGE_ACCOUNT)
         card(DEV, "devices", "devices sessions linked signed in log out sign out", PAGE_DEVICES)
         card(NOT, "notifications", "notifications push alerts sound vibrate preview", PAGE_NOTIFS)
@@ -98,7 +96,7 @@ internal object SettingsIndex {
         val acc = listOf(ACC)
         page("Email address", acc, "email address change mail sign in", PAGE_EMAIL)
         row("Password", acc, "password change set sign in", PAGE_ACCOUNT)
-        page("Username", acc, "username handle @ who can find me contact me", PAGE_USERNAME)
+        page("Username", acc, "username handle @ who can find me contact me", PAGE_CONTACT_USERNAME)
         page("Passkeys", acc, "passkeys passkey fingerprint face sign in key", PAGE_PASSKEYS)
         if (hasTwoStep) page("Two-step verification", acc, "two step twostep verification 2fa additional password code security", PAGE_TWOSTEP)
         page("Security notifications", acc, "security notifications alerts new login sign in email", PAGE_SEC_NOTIFS)
@@ -251,7 +249,6 @@ internal fun SettingsSearchPage(push: (String) -> Unit, pop: () -> Unit) {
     val results = SettingsIndex.matching(query)
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    val people = com.fariin.app.ui.people.LocalPeopleNav.current
     LaunchedEffect(Unit) {
         // Up with the page (iOS waits 0.15 s): a search page opened to be typed into.
         kotlinx.coroutines.delay(150)
@@ -275,7 +272,7 @@ internal fun SettingsSearchPage(push: (String) -> Unit, pop: () -> Unit) {
             items(results, key = { it.id }) { e ->
                 Row(Modifier.fillMaxWidth().clickable {
                     focusManager.clearFocus()
-                    if (e.page == PAGE_MY_PROFILE) people.editProfile() else push(e.page)
+                    push(e.page)   // My Profile opens the My Profile page, as its row does
                 }
                     .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically) {

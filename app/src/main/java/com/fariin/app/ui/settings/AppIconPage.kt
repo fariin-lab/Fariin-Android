@@ -63,12 +63,39 @@ internal object AppIcons {
 
     private fun component(c: Context, alias: String) = ComponentName(c.packageName, "com.fariin.app$alias")
 
-    /** The alias the launcher shows now: the one enabled, else the default (enabled in the manifest). */
-    fun current(c: Context): String = all.firstOrNull { ch ->
-        val s = c.packageManager.getComponentEnabledSetting(component(c, ch.alias))
-        if (ch.alias == all[0].alias) s != PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-        else s == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-    }?.alias ?: all[0].alias
+    private fun enabled(c: Context, alias: String): Boolean {
+        val s = c.packageManager.getComponentEnabledSetting(component(c, alias))
+        return if (alias == all[0].alias) s != PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            else s == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+    }
+
+    /** The last pick, kept on disk so a pick the app died before finishing can be finished later. */
+    private fun saved(c: Context): String? =
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CHOSEN, null)?.takeIf { a -> all.any { it.alias == a } }
+    private const val PREFS = "fariin_appicon"
+    private const val KEY_CHOSEN = "chosen"
+
+    /** The alias the launcher shows now: the one enabled, else the default (enabled in the manifest).
+     *  With more than one enabled (a pick not finished yet), the last pick. */
+    fun current(c: Context): String {
+        val on = all.filter { enabled(c, it.alias) }.map { it.alias }
+        if (on.size > 1) saved(c)?.takeIf { it in on }?.let { return it }
+        return on.firstOrNull() ?: all[0].alias
+    }
+
+    /**
+     * App start: if the app was stopped (force-stop, killed) after a pick but before the old icon
+     * went off, two launcher icons are left. The last pick is kept and the rest go off the next time
+     * the app leaves the screen, the same moment as a normal pick (never while it is open).
+     */
+    fun heal(c: Context) {
+        val app = c.applicationContext
+        val keep = saved(app) ?: return
+        val extra = runCatching { all.count { it.alias != keep && enabled(app, it.alias) } }.getOrDefault(0)
+        if (extra == 0 || !enabled(app, keep)) return
+        chosen = keep
+        watch(app)
+    }
 
     @Volatile private var chosen: String? = null
     private var watching = false
@@ -83,7 +110,12 @@ internal object AppIcons {
     fun choose(c: Context, alias: String) {
         val app = c.applicationContext
         app.packageManager.setComponentEnabledSetting(component(app, alias), PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_CHOSEN, alias).commit()
         chosen = alias
+        watch(app)
+    }
+
+    private fun watch(app: Context) {
         if (watching) return
         watching = true
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {

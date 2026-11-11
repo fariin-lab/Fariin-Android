@@ -85,7 +85,8 @@ import com.fariin.app.ui.theme.Fariin
  * (SettingsSearch.kt), Share profile = my QR code and the scanner, Invite Friends (QrPages.kt),
  * Chat Wallpaper and Chat Color (LookPages.kt), App Icon (AppIconPage.kt).
  *
- * TODO: Subscriptions (iOS shows it to @v only), the admin sections.
+ * Subscriptions (SubscriptionsPage.kt): a preview for @v only, as iOS.
+ * TODO: the admin sections.
  */
 @Composable
 fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
@@ -147,6 +148,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             page.startsWith(PAGE_RESET) == true -> com.fariin.app.ui.auth.ResetCodePage(remember { AuthRepository() }, page.removePrefix(PAGE_RESET), pop,
                 onDone = { stack = stack.dropLast(2) }, demo = demoProfile != null)
             page == PAGE_USERNAME -> UsernamePage(me, profile, pop)
+            page == PAGE_CONTACT_USERNAME -> MessagesPrivacyPage(push, pop, usernameMode = true, handle = profile?.handle)
             accountSecurityRoute(page, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             privacyRoute(page, push, pop) -> Unit
             securityCheckupRoute(page, profile, demoProfile != null, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
@@ -154,6 +156,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             lookRoute(page, push, pop) -> Unit
             page == PAGE_SETTINGS_SEARCH -> SettingsSearchPage(push, pop)
             page == PAGE_APP_ICON -> AppIconPage(pop)
+            page == PAGE_SUBSCRIPTIONS -> SubscriptionsPage(pop)
             page == PAGE_BUBBLE_STYLE -> BubbleStylePage(onClose = pop)
             page == PAGE_GLOW_PROFILE -> com.fariin.app.ui.glow.GlowProfilePage(me, profile,
                 onEdit = com.fariin.app.ui.people.LocalPeopleNav.current.editProfile, onBack = pop)
@@ -168,7 +171,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
 
 internal const val PAGE_ACCOUNT = "account"
 /** My Profile (iOS GlowProfileView), behind the myProfileCard switch. */
-private const val PAGE_GLOW_PROFILE = "glow:profile"
+internal const val PAGE_GLOW_PROFILE = "glow:profile"
 internal const val PAGE_APPEARANCE = "appearance"
 private const val PAGE_NIGHT = "night"
 internal const val PAGE_ABOUT = "about"
@@ -222,14 +225,17 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             ProfileHeader(profile, photo, onEdit = people.editProfile, onShare = { myQrOpen.value = true })
             if (myQrOpen.value) MyQrSheet(profile, onClose = { myQrOpen.value = false }, onScan = { push(PAGE_SCAN) })
             Spacer(Modifier.height(8.dp))
-            // The admin panel's "New" pills (config/features newBadges). No Subscriptions row on
-            // Android yet; its key is read but has nowhere to show.
+            // The admin panel's "New" pills (config/features newBadges).
             // My Profile, its own card under the header (iOS; hidden unless the switch is on).
             if (com.fariin.app.data.AppFeatures.myProfileCard) SettingsSection {
                 SettingsRow("My Profile", painterResource(R.drawable.ic_account), last = true,
                     badge = NewBadgeSpots.MY_PROFILE) { push(PAGE_GLOW_PROFILE) }
             }
             SettingsSection {
+                // Subscriptions, first in this card, for @v alone while it is being built (iOS,
+                // owner 2026-10-27). The page is a preview: nothing on it is sold or switched on.
+                if (showsSubscriptions(profile?.handle)) SettingsRow("Subscriptions", painterResource(R.drawable.ic_star_outline),
+                    badge = NewBadgeSpots.SUBSCRIPTIONS) { push(PAGE_SUBSCRIPTIONS) }
                 SettingsRow("Account", painterResource(R.drawable.ic_account),
                     badge = NewBadgeSpots.ACCOUNT) { push(PAGE_ACCOUNT) }
                 SettingsRow("Devices", painterResource(R.drawable.ic_linked_devices), last = true,
@@ -314,6 +320,9 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
                     modifier = Modifier.profilePhotoSource(photo))
             }
             Spacer(Modifier.height(12.dp))
+            // iOS: the picture opens the photo, the name and @username under it open Edit.
+            Column(Modifier.clickable(onClickLabel = "Edit profile", onClick = onEdit),
+                horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(profile?.name?.ifEmpty { null } ?: "You", fontSize = 26.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = c.label, maxLines = 1,
@@ -325,6 +334,7 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
             }
             val h = profile?.handle.orEmpty()
             if (h.isNotEmpty()) Text("@$h", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(top = 2.dp))
+            }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Capsule("Edit profile", onEdit, Modifier.weight(1f))
@@ -390,7 +400,7 @@ private fun AccountPage(
                     "Username",
                     value = when { profile == null -> ""; handle.isNullOrEmpty() -> "Not set"; else -> "@$handle" },
                     badge = NewBadgeSpots.ACCOUNT_USERNAME,
-                ) { push(PAGE_USERNAME) }
+                ) { push(PAGE_CONTACT_USERNAME) }   // iOS: the "Contact me by username" page first
                 SettingsRow("Passkeys", badge = NewBadgeSpots.ACCOUNT_PASSKEYS) { push(PAGE_PASSKEYS) }
                 // iOS: hidden while the feature is off (Flags.twoStepEnabled), except for an account
                 // that already has it on, so it can be turned off again.
@@ -401,8 +411,11 @@ private fun AccountPage(
                 header = "Account",
                 footer = "Saves your profile, devices and privacy settings to a text file you can share or keep. Messages are not included.",
             ) {
+                val exporting by AccountReport.exporting.collectAsState()
                 SettingsRow("Your Account Data", trailing = Trailing.NONE, last = true,
-                    badge = NewBadgeSpots.ACCOUNT_ACCOUNT_DATA) {
+                    badge = NewBadgeSpots.ACCOUNT_ACCOUNT_DATA,
+                    accessory = if (exporting) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) {
+                    if (exporting) return@SettingsRow
                     exportScope.launch {
                         try { AccountReport.share(ctx) } catch (e: Exception) { toast(ctx, e.message ?: "Could not load everything. Check your connection and try again.") }
                     }

@@ -70,8 +70,16 @@ object AccountReport {
         append("your phones can read them.\n")
     }
 
+    /** True while an export is being read; a second tap meanwhile does nothing (one share sheet). */
+    val exporting = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     /** Reads what the file needs and opens the share sheet. Throws a sentence to show. */
     suspend fun share(context: Context) {
+        if (!exporting.compareAndSet(false, true)) return
+        try { shareOnce(context) } finally { exporting.value = false }
+    }
+
+    private suspend fun shareOnce(context: Context) {
         val user = FirebaseAuth.getInstance().currentUser ?: throw IllegalStateException("You are logged out.")
         val uid = user.uid
         val db = FirebaseFirestore.getInstance()

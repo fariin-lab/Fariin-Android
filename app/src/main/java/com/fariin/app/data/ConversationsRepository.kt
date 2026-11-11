@@ -67,6 +67,8 @@ class ConversationsRepository(
                 val datas = snap.documents.map { it.id to (it.getData(DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: emptyMap()) }
                 val convs = snap.documents.mapIndexed { i, d -> parse(d, datas[i].second) }
                 trySend(State.Loaded(convs, snap.metadata.isFromCache))
+                // Settings > Chats > Automatically Archive (iOS sweeps every chat-list snapshot).
+                if (useDiskCache) UnknownChatArchiver.sweep(uid, convs)
                 // iOS syncGroupWallpapers on the list snapshot: a group's shared wallpaper (and its
                 // photo) is ready before the chat is opened. Unchanged values cost nothing.
                 if (useDiskCache) runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()?.let { app ->

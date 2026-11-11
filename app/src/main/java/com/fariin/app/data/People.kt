@@ -210,7 +210,11 @@ class FirestorePeople(
         return cid
     }
 
-    override suspend fun acceptRequest(cid: String): Boolean = ok { conv(cid).set(mapOf("accepted" to true), SetOptions.merge()).await() }
+    override suspend fun acceptRequest(cid: String): Boolean = ok {
+        conv(cid).set(mapOf("accepted" to true), SetOptions.merge()).await()
+        // If Automatically Archive put it away, accepting takes it back out (iOS MessageRequests.accept).
+        UnknownChatArchiver.undoAutoArchive(me, cid)
+    }
 
     /** MessageRequests.decline: a 7-day decline mark for the sender, and the chat deleted. */
     override suspend fun declineRequest(cid: String): Boolean = ok {
@@ -324,12 +328,23 @@ class FirestorePeople(
      */
     override suspend fun uploadPhoto(jpegOrAny: ByteArray) {
         val jpeg = squareJpeg(jpegOrAny, 640, 80) ?: error("unreadable photo")
+        // The poster goes with the circle, as on iOS: 1280 at 0.78. Without it an account whose
+        // poster was set on an iPhone kept the OLD face as the big profile header there.
+        val posterJpeg = squareJpeg(jpegOrAny, 1280, 78) ?: jpeg
         val path = "profiles/$me.jpg"
-        FirebaseStorage.getInstance().reference.child(path).putBytes(jpeg,
-            StorageMetadata.Builder().setContentType("image/jpeg").setCustomMetadata("audience", "checked").build()).await()
-        val refStr = PhotoRef.reference(path, System.currentTimeMillis())
-        db.collection("users").document(me).set(mapOf("photoUrl" to refStr, "photoThumb" to ""), SetOptions.merge()).await()
-        updateMyConvs(mapOf("photos.$me" to refStr))
+        val posterPath = "profiles/$me-poster.jpg"
+        val meta = StorageMetadata.Builder().setContentType("image/jpeg").setCustomMetadata("audience", "checked").build()
+        val storage = FirebaseStorage.getInstance().reference
+        kotlinx.coroutines.coroutineScope {
+            val c = async { storage.child(path).putBytes(jpeg, meta).await() }
+            val p = async { storage.child(posterPath).putBytes(posterJpeg, meta).await() }
+            c.await(); p.await()
+        }
+        val v = System.currentTimeMillis()
+        val refStr = PhotoRef.reference(path, v)
+        val posterRef = PhotoRef.reference(posterPath, v)
+        db.collection("users").document(me).set(mapOf("photoUrl" to refStr, "posterUrl" to posterRef, "photoThumb" to ""), SetOptions.merge()).await()
+        updateMyConvs(mapOf("photos.$me" to refStr, "posters.$me" to posterRef))
     }
 
     /**
