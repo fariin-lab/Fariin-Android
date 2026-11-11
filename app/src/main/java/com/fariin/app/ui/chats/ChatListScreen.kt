@@ -648,7 +648,12 @@ fun ChatListScreen(
                         "New Group" to people.newGroup)
                     filter == FILTER_CHANNELS -> Centered(ImageVector.vectorResource(R.drawable.ic_channel_megaphone), "No channels yet", "Channels you follow or run will appear here.",
                         "Find Channels" to channels.find)
-                    else -> Centered(fi(R.drawable.ic_chat), "No chats yet", "Find a friend by username to start talking.")
+                    else -> {
+                        Centered(fi(R.drawable.ic_chat), "No chats yet", "Find a friend by username to start talking.")
+                        // The search field heads the list, so with no chats it was gone: a new account
+                        // had no way to find anyone by username (overnight test 2026-11-10).
+                        if (!showArchive && !searching) Box(Modifier.align(Alignment.TopCenter)) { SearchCapsule(hiddenPx = { 0f }) { searching = true } }
+                    }
                 } }
                 else -> LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier)
                     .then(if (glassLayer != null) Modifier.layerBackdrop(glassLayer) else Modifier), state = listState,
