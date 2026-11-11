@@ -439,6 +439,8 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         started = true
+        // A page change cut off by leaving the app lands now, never left a third of the way across.
+        com.fariin.app.ui.components.PageMotion.settle()
         com.fariin.app.system.AppUpdateGate.onForeground(this)
         com.fariin.app.system.LowStorage.checkAndWarn(applicationContext)
         PushRouter.activeChatId = openChat
@@ -447,6 +449,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         started = false
+        com.fariin.app.ui.components.PageMotion.settle()
         PushRouter.activeChatId = null   // a chat open behind the home screen still gets its notification
         DeviceRegistry.stopHeartbeat()
         // A leave still waiting for its Undo runs now, so leaving the app cannot lose it (iOS LeaveGroupUndo).

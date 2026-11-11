@@ -151,6 +151,18 @@ object PageMotion {
         e = if (oldTop == null || !Motion.on) 1f else 0f
     }
 
+    /**
+     * Lands any change still under way, at once. Called when the app comes back to the front: a back
+     * press queued during a pop left the app mid-change, and on return the list sat a third off to
+     * the left, still "moving", so it took no touch and never loaded (overnight test 2026-11-10,
+     * chat > profile > three quick backs > reopen).
+     */
+    fun settle() {
+        if (e >= 1f) return
+        run++
+        e = 1f
+    }
+
     /** Plays the change begun last; called from an effect keyed on the top page. */
     suspend fun play() {
         if (e >= 1f) return
