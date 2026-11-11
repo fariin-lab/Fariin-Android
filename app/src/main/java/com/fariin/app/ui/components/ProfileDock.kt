@@ -80,7 +80,10 @@ fun ProfileDockOverlay(m: ProfileMeltState, photoSize: Dp, squircle: Boolean = f
                 // A soft start and landing on the way up.
                 val e = p * p * (3f - 2f * p)
                 val rest = m.restCenter - m.origin
-                val goal = target - m.origin
+                // Across: from the PAGE's left edge, not the screen's. As the page slides out on back,
+                // its origin moves right; a screen spot left the photo behind on the chat's header
+                // (owner's video 2026-11-11: two photos there).
+                val goal = Offset(target.x, target.y - m.origin.y)
                 val cx = rest.x + (goal.x - rest.x) * e
                 val cy = rest.y + (goal.y - rest.y) * e
                 val s = 1f + (DOCK_SIDE.toPx() / sidePx - 1f) * e
