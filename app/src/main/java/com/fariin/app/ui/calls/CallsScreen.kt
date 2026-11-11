@@ -299,7 +299,9 @@ private fun CallsScreen(me: String, calls: List<CallEntry>, loaded: Boolean, gro
                     onClick = { if (picked.isNotEmpty()) askDelete = true }, tint = if (picked.isEmpty()) c.secondary else c.red,
                     modifier = Modifier.align(Alignment.CenterEnd))
             } else {
-                if (hasHistory) com.fariin.app.ui.components.FloatingTextAction("Edit", modifier = Modifier.align(Alignment.CenterStart)) { selecting = true }
+                // Plain on a solid bar, its capsule only over glass (owner 2026-11-11); All | Missed keeps its track.
+                if (hasHistory) androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalPlainBarButtons provides true) {
+                    com.fariin.app.ui.components.FloatingTextAction("Edit", modifier = Modifier.align(Alignment.CenterStart)) { selecting = true } }
                 CallsSegments(if (missedOnly) 1 else 0, { missedOnly = it == 1 }, Modifier.align(Alignment.Center))
                 // The field scrolled up under the bar: a search button takes its place (as the chat list).
                 androidx.compose.animation.AnimatedVisibility(searchGone, Modifier.align(Alignment.CenterEnd),
