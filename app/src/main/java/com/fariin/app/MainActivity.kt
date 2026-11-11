@@ -517,7 +517,11 @@ class MainActivity : ComponentActivity() {
             val act = intent?.getStringExtra("act")?.takeIf { it.isNotEmpty() }
             val wcid = intent?.getStringExtra("wcid")?.takeIf { kind == "postQuote" && com.fariin.app.channel.ChannelRules.safeId(it) }
             val wmid = intent?.getStringExtra("wmid")?.takeIf { wcid != null && com.fariin.app.channel.ChannelRules.safeId(it) }
-            listOf("act", "wcid", "wmid").forEach { intent?.removeExtra(it) }
+            // Everything this tap carried is used now: a recreate must not open the chat or Replies again
+            // (through the plain cid/mid safety net below or the poster's own extras).
+            listOf("act", "wcid", "wmid", "cid", "mid", "rid", "aid", PushRouter.EXTRA_OPEN_CID, PushRouter.EXTRA_OPEN_MID,
+                com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_MID, com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_RID,
+                com.fariin.app.push.NotificationPoster.EXTRA_REPLIES_AID).forEach { intent?.removeExtra(it) }
             lifecycleScope.launch {
                 if (act != null) com.fariin.app.data.ActivityFeed.markRead(listOf(act))
             }

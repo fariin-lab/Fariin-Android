@@ -135,7 +135,8 @@ object StoryList {
         val blocked = convs.filter { !it.isGroup && it.isBlockedByMe(me) }.map { it.otherUid(me) }.toSet() + accountBlocked
         // Anyone whose 1:1 chat with me is still an unanswered request (iOS requestAuthors): their
         // own ring only, never a group story (being in the group is the tie).
-        val requestAuthors = convs.filter { !it.isGroup && it.startedBy.isNotEmpty() && !it.accepted }.map { it.otherUid(me) }.toSet()
+        // Only a request someone ELSE sent me (iOS isUnansweredRequest): a chat I started stays.
+        val requestAuthors = convs.filter { ChatList.isIncomingRequest(it, me) }.map { it.otherUid(me) }.toSet()
         val byRing = stories.distinctBy { it.id }.filter { it.expiresAtMs > nowMs }
             .filter { s -> !blocked.contains(s.authorUid) }
             .filter { s -> !(s.ringKey == s.authorUid && s.authorUid in requestAuthors) }

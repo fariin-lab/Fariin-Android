@@ -1157,7 +1157,7 @@ private fun StoryPage(
     if (active && !com.fariin.app.data.OfficialStories.isOfficial(story) && story.mediaUrl.isNotEmpty()) {
         val goneNow by rememberUpdatedState(onGone)
         DisposableEffect(story.id) {
-            val stop = service.watchGone(story.id, story.authorUid) { goneNow(story) }
+            val stop = service.watchGone(story.id, story.authorUid, story.oneTime) { goneNow(story) }
             onDispose { stop() }
         }
         LaunchedEffect(story.id) {

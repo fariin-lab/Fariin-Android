@@ -434,6 +434,16 @@ class ThreadRepository(
                 rebuild()
             }
         olderRegs.add(reg)
+        // Offline with nothing saved for that page, no answer comes: after 8 s the spinner stops and
+        // this page's listener goes, so the next scroll asks again instead of waiting forever.
+        scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            kotlinx.coroutines.delay(8_000)
+            if (first && page < olderPageIds.size) {
+                first = false
+                reg.remove(); olderRegs.remove(reg)
+                _state.update { it.copy(loadingOlder = false) }
+            }
+        }
     }
 
     @Synchronized
@@ -455,9 +465,11 @@ class ThreadRepository(
         for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
             var m = parse(d)
             if (historyStart != null && m.hasServerTime && m.createdAtMillis < historyStart && m.authorId != me) continue
-            if (Wire.isGroupCid(cid)) {
+            // Only a message that could not be opened (drawn as the lock) is worth parsing again: the
+            // envelope check is heavy, and rebuild runs on every change (mid phones).
+            if (m.text == Wire.LOCKED && Wire.isGroupCid(cid)) {
                 val raw = d.get("text") as? String ?: ""
-                if (raw.startsWith("encg1:") && crypto.groupEnvelopeSkipsMe(raw, cid) &&
+                if (raw.startsWith(Wire.ENCG1) && crypto.groupEnvelopeSkipsMe(raw, cid) &&
                     (joinedAt <= 0 || m.createdAtMillis < joinedAt + 5000)) continue
             }
             // The disappearing timer: the server's stamp only (iOS). Due = off the screen now, from
@@ -1819,9 +1831,10 @@ class ThreadRepository(
     /**
      * iOS ThreadView reaction thumbs: the photo(s) a reaction was on, for the other person's chat list
      * (an album's first three tiles, a video's poster). The same url + envelope the message already
-     * carries. Never a view-once photo.
+     * carries. Never view-once media (photo, video or voice): its picture must not reach the list.
      */
     private fun reactionImages(m: Message): List<Map<String, Any>> {
+        if (m.viewOnce) return emptyList()
         fun row(url: String?, enc: EncMeta?): Map<String, Any>? =
             url?.takeIf { it.isNotEmpty() }?.let { u -> buildMap { put("url", u); enc?.let { put("enc", it.asMap()) } } }
         return when (m.mediaKind) {
@@ -1940,11 +1953,15 @@ class ThreadRepository(
         if (chSync != null || _state.value.former || !Wire.isGroupCid(cid) || !isChannelChat()) return
         val member = CryptoHub.listedConversation(cid)?.users?.contains(me) == true
         if (!member && !com.fariin.app.channel.ChannelFollows.follows(cid)) return   // a visitor: the window path
-        chSync = ChannelSync(cid, me, convRef, scope, PAGE_SIZE,
+        val sync = ChannelSync(cid, me, convRef, scope, PAGE_SIZE,
             held = { (olderDocs.values + liveDocs.values).toList() },
             onChange = { loaded -> rebuild(loaded) },
             setOlder = { loading, can -> _state.update { it.copy(loadingOlder = loading ?: it.loadingOlder, canLoadOlder = can ?: it.canLoadOlder) } },
-        ).also { it.start() }
+        )
+        // Assigned BEFORE start(): start() paints at once from the store, and rebuild() must already
+        // see it (else the first paint takes the window path and can show "loaded" with no rows).
+        chSync = sync
+        sync.start()
     }
 
     /** The list's "older" request: a synced channel reads its next hole, anything else [loadOlder]. */

@@ -108,7 +108,9 @@ object StoryOutbox {
             val id = dir.name
             val doc = FirebaseFirestore.getInstance().collection("stories").document(id)
             // Unreadable (offline): wait for a start that can tell whether it landed, never guess.
-            val existing = runCatching { doc.get(com.google.firebase.firestore.Source.SERVER).await() }.getOrNull() ?: continue
+            // Any wait below STOPS the pass (return, not continue): a later ticket, such as the next part
+            // of a long video, must never post before this one (parts 1, 3, 4, 2).
+            val existing = runCatching { doc.get(com.google.firebase.firestore.Source.SERVER).await() }.getOrNull() ?: return
             if (existing.getString("mediaUrl")?.isNotEmpty() == true) { dir.deleteRecursively(); continue }   // it did land
             if (existing.exists()) runCatching { doc.delete().await() }
             val media = prepared(dir, o) ?: run { dir.deleteRecursively(); null } ?: continue
@@ -130,8 +132,8 @@ object StoryOutbox {
                 myFriends = StoryPrivacyRules.defaultMyFriends; hidden = emptySet(); lists = emptyList()
             } else {
                 val needStore = aud == null || choice == StoryAudienceChoice.GLOWERS
-                if (needStore && !StoryPrivacyStore.awaitLoaded(me, 15_000)) continue
-                if (choice == StoryAudienceChoice.GLOWERS && !Glow.state.value.known) continue
+                if (needStore && !StoryPrivacyStore.awaitLoaded(me, 15_000)) return
+                if (choice == StoryAudienceChoice.GLOWERS && !Glow.state.value.known) return
                 if (aud != null) {
                     myFriends = aud.optJSONObject("myFriends")?.let { listFrom(it) } ?: continue
                     hidden = aud.optJSONArray("hidden")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: continue
@@ -154,6 +156,8 @@ object StoryOutbox {
                 throw e
             } catch (e: Exception) {
                 android.util.Log.w("StoryOutbox", "resume failed, kept for later", e)
+                active -= id
+                return   // kept; the tickets after it wait so they stay in order
             } finally {
                 active -= id
             }

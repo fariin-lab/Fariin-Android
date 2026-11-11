@@ -91,8 +91,15 @@ object Push {
                 }
             }
             if (!pushOn(app)) return@launch
-            // A token a Log Out retired goes first, so it is never saved under the new account.
-            kotlinx.coroutines.withTimeoutOrNull(10_000) { retirePending(app) }
+            // A token a Log Out retired goes first, so it is never saved under the new account. While
+            // it is still waiting (offline, no answer), nothing is saved: the old account's pushes must
+            // not reach this one. Tried a few times; the next app start tries again.
+            var retired = false
+            for (attempt in 0 until 5) {
+                if (kotlinx.coroutines.withTimeoutOrNull(10_000) { retirePending(app) } == true) { retired = true; break }
+                delay(15_000)
+            }
+            if (!retired) return@launch
             val token = try { FirebaseMessaging.getInstance().token.await() } catch (_: Exception) { null }
             if (!token.isNullOrEmpty()) saveToken(token, uid)
         }
@@ -103,6 +110,8 @@ object Push {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         if (com.fariin.app.FariinApp.usingLocalBackend) return
         if (!pushOn(c)) return
+        // A retired token still waiting to be deleted: register() saves the new one once it is gone.
+        if (prefs(c.applicationContext).getBoolean(RETIRE, false)) return
         DeviceRegistry.init(c)
         saveToken(token, uid)
     }

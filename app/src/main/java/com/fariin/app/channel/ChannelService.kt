@@ -117,13 +117,6 @@ object ChannelService {
         return raw.entries.mapNotNull { (k, v) -> val n = (v as? Number)?.toInt() ?: 0; if (k is String && n > 0) k to n else null }.toMap()
     }
 
-    /** Count my view of these posts once each (the server keeps who; 100 per call). */
-    suspend fun views(cid: String, mids: List<String>) {
-        for (part in mids.filter(ChannelRules::safeId).distinct().chunked(100)) {
-            call("channelViews", mapOf("cid" to cid, "mids" to part))
-        }
-    }
-
     suspend fun makeChannel(cid: String) {
         call("makeChannel", buildMap { put("cid", cid); region()?.let { put("country", it) } })
     }

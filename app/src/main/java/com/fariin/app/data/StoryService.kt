@@ -27,12 +27,6 @@ class StoryService(
 ) {
     // ---- seen and receipts -------------------------------------------------------------------
 
-    /** iOS StoryReceiptPrefs: `users/{me}/private/storyPrefs.receipts`, on unless switched off. */
-    suspend fun receiptsOn(): Boolean = try {
-        db.collection("users").document(me).collection("private").document("storyPrefs")
-            .get().await().getBoolean("receipts") ?: true
-    } catch (_: Exception) { false }   // unknown = no receipt (fail closed)
-
     /**
      * iOS markViewed: consume a one-time story, move my seen watermark for the ring when this
      * story is newer, then the receipt (`views/{me}`) or, with receipts off, the private record.
@@ -124,7 +118,7 @@ class StoryService(
      * rules refuse the read after Edit Viewers dropped me; a public story is then checked through its
      * mirror). Server answers only, so a cache miss never closes a story. Returns the stop.
      */
-    fun watchGone(storyId: String, authorUid: String, onGone: () -> Unit): () -> Unit {
+    fun watchGone(storyId: String, authorUid: String, oneTime: Boolean = false, onGone: () -> Unit): () -> Unit {
         var stopped = false
         var fired = false
         var reg: ListenerRegistration? = null
@@ -135,6 +129,9 @@ class StoryService(
             if (stopped) return@addSnapshotListener
             if (err != null) {
                 if (!denied(err)) return@addSnapshotListener
+                // A one-time story I opened stops being readable once it is used (consumeOneTime): that
+                // refusal is not "gone", it must play to its end. Only a server "no such doc" closes it.
+                if (oneTime && authorUid != me) return@addSnapshotListener
                 reg?.remove()
                 reg = if (authorUid.isEmpty()) { gone(); null } else db.collection("users").document(authorUid)
                     .collection("publicStories").document(storyId).addSnapshotListener { m, e2 ->
