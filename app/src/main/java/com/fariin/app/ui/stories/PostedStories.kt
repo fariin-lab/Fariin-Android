@@ -358,7 +358,7 @@ private fun PostedTile(s: Story, views: Int?, editing: Boolean, chosen: Boolean,
             .graphicsLayer { alpha = if (StoryOrigins.hiddenKey == key) 0f else 1f }
             .clip(shape).background(c.placeholderFill)
             .combinedClickable(onClick = onTap, onLongClick = onHold)
-            .semantics { contentDescription = (if (s.isVideo) "Video story" else "Photo story") + (views?.let { ", ${shortCount(it)} views" } ?: "") },
+            .semantics { contentDescription = (if (s.isVideo) "Video story" else "Photo story") + (views?.let { ", ${shortCount(it)} " + (if (it == 1) "view" else "views") } ?: "") },
     ) {
         AsyncImage(s.listThumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         if (views != null) {
