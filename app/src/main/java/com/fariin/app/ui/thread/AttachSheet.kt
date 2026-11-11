@@ -266,7 +266,9 @@ internal fun AttachSheet(
     val attachLiquid = com.fariin.app.perf.rememberPowerState().glass() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
     // The sheet's own window (a Dialog), so the photos are its glass source; the photo grid starts
     // right at the rounded top, nothing above it (iOS; the old sheet kept a status-bar band there).
-    com.fariin.app.ui.components.FariinSheetDialog(motion, fill = com.fariin.app.ui.components.sheetFill, typing = true) { _ ->
+    // From the field's camera the sheet is never drawn: it rose for a moment before the camera app
+    // came over it (owner's Pixel 2026-11-10, "it thinks I tapped +"). The camera, then the editor.
+    if (!cameraFirst) com.fariin.app.ui.components.FariinSheetDialog(motion, fill = com.fariin.app.ui.components.sheetFill, typing = true) { _ ->
         // Lists other than the photos open the sheet fully, as iOS does.
         androidx.compose.runtime.LaunchedEffect(page, folder) { if (page != SheetPage.PHOTOS || folder != null) motion.expand() }
         // The page runs to the screen's bottom edge; the gesture bar's strip is kept free by padding.
@@ -401,19 +403,21 @@ internal fun AttachSheet(
             }
         }
     }
+    // Sent: the sheet closes on its curve; from the field's camera there is no sheet, so straight back.
+    val finish = { if (cameraFirst) onDismiss() else motion.close() }
     drawOn?.let { u ->
         // From the composer camera, closing the editor goes back to the chat, as iOS (no grid behind it).
         if (onePhoto) PhotoDrawEditor(u, editOnly = false, startDrawing = false,
             onClose = { drawOn = null; if (cameraFirst && picked.size == 1) onDismiss() },
             allowViewOnce = allowViewOnce,
-            onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); motion.close() })
+            onSend = { photo, cap, once -> drawOn = null; onSendMedia(listOf(photo), cap, once); finish() })
         // One video chosen: the video editor (iOS VideoApprovalView), the trimmer and Send.
         else if (picked.size == 1 && u in videos) VideoEditor(u, caption, onCaption = { caption = it }, onClose = { drawOn = null },
-            onSend = { cap -> drawOn = null; onSendMedia(listOf(u), cap, false); motion.close() })
+            onSend = { cap -> drawOn = null; onSendMedia(listOf(u), cap, false); finish() })
     }
     pagerAt?.let { at ->
         MediaPagerEditor(picked, videos, at, caption, onCaption = { caption = it }, onClose = { pagerAt = null },
-            onSend = { list, cap -> pagerAt = null; onSendMedia(list, cap, false); motion.close() })
+            onSend = { list, cap -> pagerAt = null; onSendMedia(list, cap, false); finish() })
     }
 }
 
