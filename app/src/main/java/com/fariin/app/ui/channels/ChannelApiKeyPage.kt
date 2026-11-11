@@ -74,7 +74,8 @@ object ChannelApiKey {
     )
     const val ENDPOINT = "https://me-central1-kulan-2ef85.cloudfunctions.net/channelApi"
 
-    fun shows(isOwner: Boolean, me: String) = isOwner && me in MAKERS
+    /** The owner, on an allowed account, of a channel Fariin has not locked (spec "Who sees it"). */
+    fun shows(isOwner: Boolean, me: String, locked: Boolean = false) = isOwner && me in MAKERS && !locked
 
     suspend fun call(cid: String, action: String): Map<*, *> =
         (FirebaseFunctions.getInstance(AuthRepository.FUNCTIONS_REGION).getHttpsCallable("channelApiKey")

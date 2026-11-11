@@ -190,7 +190,7 @@ private fun ChannelManageList(info: ChannelInfo, team: Team, me: String, shownCo
         }
     }
     // owner 2026-11-10 (iOS ChannelApiKeyView): the channel's API key, its owner on the allowed accounts only.
-    if (ChannelApiKey.shows(owner, me)) Card {
+    if (ChannelApiKey.shows(owner, me, com.fariin.app.data.CryptoHub.listedConversation(info.cid)?.fariinLocked() == true)) Card {
         SettingsRow("API Key", last = true) { nav.apiKey(info.cid) }
     }
 }
