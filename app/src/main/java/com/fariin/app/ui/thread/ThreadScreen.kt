@@ -393,6 +393,9 @@ private fun ThreadContent(
     // Swipe Actions (Settings > Chats, off by default): the capsule's Up and Down slots for a message.
     val swipeCtx = androidx.compose.ui.platform.LocalContext.current
     val swipeOn = remember(ui.me) { SwipeActions.on(swipeCtx, ui.me) }
+    // A message's words keep their bold on the clipboard (iOS bold-everywhere); any other text goes plain.
+    fun copyOf(m: com.fariin.app.data.Message, t: String) =
+        if (t == m.text && m.bold.isNotEmpty()) BoldClip.copy(swipeCtx, t, m.bold) else clipboard.setText(androidx.compose.ui.text.AnnotatedString(t))
     fun swipeMenu(m: com.fariin.app.data.Message): (() -> Pair<SwipeActions.Slot?, SwipeActions.Slot?>)? {
         if (!swipeOn || !SwipeActions.hasMenu(m)) return null
         return {
@@ -400,7 +403,7 @@ private fun ThreadContent(
             val restricted = com.fariin.app.data.ChatRestrictions.isOn(u.cid)
             val quoteOk = u.channel?.info?.quotesOff == false
             fun slot(p: SwipeActions.Pick) = SwipeActions.slot(p, m, restricted, quoteOk,
-                copy = { t -> clipboard.setText(androidx.compose.ui.text.AnnotatedString(t)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
+                copy = { t -> copyOf(m, t); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
                 save = { actions.onSave(m) }, forward = { actions.onForward(m) },
                 share = { t ->
                     val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, t)
@@ -482,7 +485,7 @@ private fun ThreadContent(
         val m = ui.messages.firstOrNull { it.rowId == m0.rowId } ?: m0
         MessageMenu(m, ui, onDismiss = { menuFor = null; menuLifted = null }, actions = actions.copy(onForward = { forwardFor = it }, onQuote = { quoteFor = it }),
             onReply = { replyTo = it; editing = null }, onStartEdit = { editing = it; replyTo = null },
-            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
+            onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onInfo = { infoFor = it }, onDelete = { deleteFor = it },
             onSelect = { selected.clear(); selected.add(it.rowId); replyTo = null },
             onEditHistory = { historyFor = it },
@@ -533,7 +536,7 @@ private fun ThreadContent(
     val ch = ui.channel
     postMenuFor?.let { m ->
         if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
-            onCopy = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(it)); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
+            onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
             onSelect = if (com.fariin.app.data.SelectRules.selectable(m)) ({ selected.clear(); selected.add(it.rowId) }) else null,
@@ -1532,8 +1535,9 @@ private fun ThreadContent(
                             onSendVoice(r)
                         }
                     }, prefill = editing?.let { it.id to it.text }, prefillBold = editing?.bold ?: emptyList(), banner = banner, voiceKey = ui.cid,
-                    // Bold in the selection menu: a channel post only (iOS Format > Bold).
-                    boldable = ch != null,
+                    // Bold in the selection menu (iOS Format > Bold): 1:1s, groups and channel posts
+                    // (owner 2026-11-11); a follower of a channel has no composer at all.
+                    boldable = true,
                     onTyping = steady1(actions.onTyping),
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
                     voiceOff = held(com.fariin.app.data.GroupAdmins.SendKind.VOICE), onVoiceOff = steady1(actions.onNotice),
@@ -2738,6 +2742,7 @@ private fun Composer(
                             if (now - lastKey > 10_000 || draft.isBlank()) lastKey = now
                             // What is typed or pasted starts regular, even next to bold.
                             if (boldable) boxBold = com.fariin.app.data.TextFormat.adjust(boxBold, boxValue.text, fv.text)
+                                .let { b -> val got = BoldClip.pasted(context, boxValue.text, fv.text); if (got.isEmpty()) b else com.fariin.app.data.TextFormat.normalize(b + got, fv.text.length) }
                             boxValue = fv
                             draft = fv.text
                         },

@@ -152,7 +152,8 @@ object Forwarder {
             is Payload.Voice -> registered { sender.audio((payload as Payload.Voice).bytes, m.duration ?: 0.0, m.waveform, fwd, clientId, ts) }
             is Payload.Doc -> registered { sender.file((payload as Payload.Doc).prep, fwd, clientId, ts) }
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
-                .sendForwardedText(m.text, fwd, fwdChannelJson, source)
+                .sendForwardedText(m.text, fwd, fwdChannelJson, source,
+                    fmt = com.fariin.app.data.TextFormat.serialize(m.bold, m.text.length))
             is Payload.Sticker -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendSticker((payload as Payload.Sticker).ref, null)
             is Payload.Gif -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))

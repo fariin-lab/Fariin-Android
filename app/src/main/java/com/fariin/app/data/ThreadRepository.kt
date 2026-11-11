@@ -625,7 +625,7 @@ class ThreadRepository(
         val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
         val clientId = UUID.randomUUID().toString().uppercase()
         val e = SendQueue.Entry(clientId, cid, t, tap, ref?.id, ref?.authorId, ref?.text, mentions,
-            fmt = fmt?.takeIf { Wire.isGroupCid(cid) })
+            fmt = fmt)
         // The link card follows the text (iOS attachLinkPreview): one built while typing shows on
         // my bubble at once; otherwise it is fetched for up to 6 s beside the send.
         if (card) LinkPreviews.cardUrlFor(t, LinkPreviews.enabled(), LinkPreviews.takeSuppressed(cid))
@@ -688,7 +688,7 @@ class ThreadRepository(
                 after?.join()
                 if (checkFirst && alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return@launch }
                 turn.withLock {
-                    if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref)
+                    if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref, fmt = e.fmt)
                 }
                 SendQueue.remove(me, e.clientId)
                 styleAtSend.remove(e.clientId)
@@ -722,7 +722,7 @@ class ThreadRepository(
         return try {
             if (alreadySent(e.clientId)) { SendQueue.remove(me, e.clientId); return QueuedResult.SENT }
             turn.withLock {
-                if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref)
+                if (Wire.isGroupCid(cid)) sendGroup(e.text, e.clientId, e.ts, ref, mentions = e.mentions, fmt = e.fmt) else sendDirect(e.text, e.clientId, e.ts, ref, fmt = e.fmt)
             }
             SendQueue.remove(me, e.clientId)
             QueuedResult.SENT
@@ -759,7 +759,7 @@ class ThreadRepository(
         // iOS resend: the same clientId (dropped if the first try did land after all), with its
         // quoted reply, its mentions and its bold. It used to go as a new plain message.
         val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
-        val fmt = TextFormat.serialize(m.bold, m.text.length)?.takeIf { Wire.isGroupCid(cid) }
+        val fmt = TextFormat.serialize(m.bold, m.text.length)
         val e = SendQueue.Entry(id, cid, m.text, tap, m.replyTo?.id, m.replyTo?.authorId, m.replyTo?.text, m.mentions, fmt = fmt)
         drive(e, checkFirst = true, sendScope, save = true)
     }
@@ -1070,14 +1070,16 @@ class ThreadRepository(
 
     /** A text forwarded into this chat (iOS sendText with `forwarded`), straight to the server. */
     suspend fun sendForwardedText(text: String, forwarded: Boolean, fwdChannelJson: String? = null,
-                                  fwdSource: Message.ForwardSource? = null) {
+                                  fwdSource: Message.ForwardSource? = null, fmt: String? = null) {
         val t = text.trim()
         if (t.isEmpty()) return
         val clientId = UUID.randomUUID().toString().uppercase()
         val ts = System.currentTimeMillis().toDouble()
+        // The source's bold goes along only while the words are exactly the ones it was measured on.
+        val f = fmt?.takeIf { t == text }
         turn.withLock {
-            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource)
-            else sendDirect(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource)
+            if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource, fmt = f)
+            else sendDirect(t, clientId, ts, null, forwarded, fwdChannelJson = fwdChannelJson, fwdSource = fwdSource, fmt = f)
         }
     }
 
@@ -1103,7 +1105,7 @@ class ThreadRepository(
             try {
                 turn.withLock {
                     if (Wire.isGroupCid(cid)) sendGroup(t, clientId, ts, mentions = mentions, quote = qid, fmt = fmt)
-                    else sendDirect(t, clientId, ts, quote = qid)
+                    else sendDirect(t, clientId, ts, quote = qid, fmt = fmt)
                 }
             } catch (_: Exception) {
                 pending.remove(clientId)
@@ -1407,7 +1409,7 @@ class ThreadRepository(
     private suspend fun sendDirect(t: String, clientId: String, clientTs: Double, reply: Message.ReplyRef? = null,
                                    forwarded: Boolean = false, countsAsUnread: Boolean = true,
                                    storyMention: Message.StoryMentionRef? = null, fwdChannelJson: String? = null,
-                                   quote: String? = null, fwdSource: Message.ForwardSource? = null) {
+                                   quote: String? = null, fwdSource: Message.ForwardSource? = null, fmt: String? = null) {
         val other = Wire.otherUid(cid, me)
         val cipher = crypto.encryptForConversation(cid, t)
         // A quote sent with no words of mine: the list says "Quoted post" (sealed like any preview), not a blank line.
@@ -1447,6 +1449,9 @@ class ThreadRepository(
         )
         // iOS replyEnc: {id, authorId, text sealed like the message}.
         if (reply != null) msg["replyTo"] = replyMap(reply, crypto.encryptForConversation(cid, reply.text))
+        // Bold runs sealed like the words (iOS bold-everywhere); never written unless the seal worked.
+        if (fmt != null && t.isNotEmpty()) runCatching { crypto.encryptForConversation(cid, fmt) }.getOrNull()
+            ?.takeIf { it.startsWith(Wire.ENC1) }?.let { msg["fmt"] = it }
         if (forwarded) msg["forwarded"] = true
         // A story mention card (iOS ChatService: the plain story id and thumbnail).
         // The channel a forwarded post came from, sealed like the text (iOS sealedFwdChannel).
@@ -1593,7 +1598,9 @@ class ThreadRepository(
             while (edits.size > 10 || (edits.size > 1 && size() > 700_000)) edits.removeAt(0)
             val update = hashMapOf<String, Any>("text" to cipher, "edited" to true, "editedAt" to FieldValue.serverTimestamp())
             // The bold goes with the new words (iOS); an edit that leaves none takes the old runs off.
-            if (fmt != null && members != null) update["fmt"] = seal(fmt, members)
+            val sealedFmt = fmt?.let { f -> runCatching { seal(f, members) }.getOrNull() }
+                ?.takeIf { members != null || it.startsWith(Wire.ENC1) }
+            if (sealedFmt != null) update["fmt"] = sealedFmt
             else if (data.containsKey("fmt")) update["fmt"] = FieldValue.delete()
             // Not in a channel post (owner 2026-11-06): every follower reads the post, so the old
             // versions stay off it; the server keeps them for the owner and admins.

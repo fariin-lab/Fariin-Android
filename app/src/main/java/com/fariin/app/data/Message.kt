@@ -343,7 +343,12 @@ data class Message(
                 quoteId = ((data["quote"] as? Map<*, *>)?.get("qid") as? String)?.takeIf { QuoteRules.isQid(it) },
                 bubbleStyle = BubbleStyles.parseId(data["bs"]),
                 bubbleDecor = BubbleStyles.parseDecor(data["bsd"]),
-                bold = if (sticker || data["deleted"] == true) emptyList() else TextFormat.parse(openOptional("fmt"), text.length),
+                // A 1:1 takes bold only when both it and the words are sealed (iOS bold-everywhere):
+                // runs stored in the clear would tell the server where the bold words are.
+                bold = if (sticker || data["deleted"] == true) emptyList()
+                    else if (!Wire.isGroupCid(cid) && (!raw.startsWith(Wire.ENC1) ||
+                        (data["fmt"] as? String)?.startsWith(Wire.ENC1) != true)) emptyList()
+                    else TextFormat.parse(openOptional("fmt"), text.length),
                 storyMention = (data["storyMention"] as? Map<*, *>)?.let { sm ->
                     (sm["id"] as? String)?.takeIf { it.isNotEmpty() }?.let { StoryMentionRef(it, sm["thumb"] as? String ?: "") }
                 },
