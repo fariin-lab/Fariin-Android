@@ -1283,13 +1283,14 @@ private fun ThreadContent(
                     if (idx >= 0 && listState.firstVisibleItemIndex >= idx) {
                         unreadJumpUsed = true
                         scope.launch {
-                            listState.animateScrollToItem(idx)
+                            // Landed on it at once; the lift below is the one glide.
+                            glideTo(listState, idx, glide = false)
                             val info = listState.layoutInfo
                             val row = info.visibleItemsInfo.firstOrNull { it.index == idx } ?: return@launch
                             val usable = info.viewportSize.height - info.beforeContentPadding - info.afterContentPadding
                             listState.animateScrollBy(-(usable - row.size).coerceAtLeast(0).toFloat())   // the divider to the top
                         }
-                    } else scope.launch { listState.animateScrollToItem(0) }
+                    } else scope.launch { glideTo(listState, 0) }
                 // iOS: at the composer's side margin, 10 above it, over the edge glass.
                 }, modifier = Modifier.align(Alignment.BottomEnd).zIndex(1f).padding(end = COMPOSER_SIDE, bottom = with(density) { bottomBarPx.toDp() } + 10.dp))
             }
@@ -2956,6 +2957,27 @@ private fun Modifier.combinedClickableLong(onLong: () -> Unit): Modifier {
         }
     }
 }
+
+/**
+ * The jump arrow's ride to row [index] (the list is reversed: 0 is the newest). From far off it
+ * first lands a few rows short at once, waits a frame so those rows (photos, reply bars) are built,
+ * then glides the last stretch. animateScrollToItem alone built every row on the way inside its
+ * own animation: in a channel or group of photo posts it leapt, stalled ~100 ms on 40-80 ms
+ * frames, then went on (owner's Pixel 2026-11-10; a one-to-one chat of light rows was smooth).
+ */
+private suspend fun glideTo(listState: androidx.compose.foundation.lazy.LazyListState, index: Int, glide: Boolean = true) {
+    if (kotlin.math.abs(listState.firstVisibleItemIndex - index) <= GLIDE_ROWS) { listState.animateScrollToItem(index); return }
+    // One screen short (the row that far below the bottom edge), then exactly that screen on one
+    // curve: animateScrollToItem's own search for an unseen row stalled midway on heavy rows.
+    val screen = listState.layoutInfo.viewportSize.height
+    listState.scrollToItem(index, if (glide) screen else 0)
+    androidx.compose.runtime.withFrameNanos { }
+    if (glide) listState.animateScrollBy(-screen.toFloat(),
+        androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+}
+
+/** Rows within this many of the target: the plain animated scroll (it was smooth over a short way). */
+private const val GLIDE_ROWS = 4
 
 /** Shows [content] while [open] is on. The flag is read here, so flipping it redraws only this. */
 @Composable
