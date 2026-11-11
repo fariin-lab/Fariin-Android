@@ -57,6 +57,8 @@ fun rememberEdgeAlpha(under: Boolean, startOn: Boolean = false): androidx.compos
  * no edge to see. The tail is drawn but not measured, so what sits under the bar keeps its place.
  * Power Saving without glass: the page colour fading to clear over the same tail.
  */
+internal const val TAB_BAR_TINT = 0.90f
+
 fun androidx.compose.ui.Modifier.frostedTopBar(
     haze: dev.chrisbanes.haze.HazeState, page: androidx.compose.ui.graphics.Color, glass: Boolean,
     tail: androidx.compose.ui.unit.Dp = 24.dp,   // a little room for the cross-fade to finish under the bar
@@ -81,21 +83,18 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
             0.60f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.90f), 0.70f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.66f),
             0.80f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.36f), 0.90f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.12f),
             0.96f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.03f), 1f to androidx.compose.ui.graphics.Color.Transparent)
+    }.drawBehind {
+        // ALMOST SOLID (owner 2026-11-11, Chats/Stories/Settings: "not that solid, a little blurry"):
+        // 90 % page colour over the blur, solid down the whole bar and eased away only over the tail.
+        // A stronger blur tint alone was not enough: the blur's own mask fades from half way down,
+        // so a row's words showed sharp beside the title. The search field shrinks in its own place
+        // under the bar, so it never meets it.
+        drawSolidThenTail(page.copy(alpha = page.alpha * TAB_BAR_TINT), tail.toPx())
     } else androidx.compose.ui.Modifier.drawBehind {
         // No glass (a cheap phone, Battery Saver, blur off). Owner 2026-11-10, cheap-phone check: the
         // fade began 40 % down the bar, so a chat's photo showed through under the title. Now solid
         // through the whole bar and eased away only over the tail below it.
-        val t = tail.toPx().coerceAtMost(size.height)
-        val start = ((size.height - t) / size.height).coerceIn(0f, 1f)
-        val n = 8
-        val stops = Array(n + 2) { i ->
-            if (i == 0) 0f to page
-            else {
-                val x = (i - 1).toFloat() / n
-                (start + (1f - start) * x) to page.copy(alpha = page.alpha * (1f - x * x * (3f - 2f * x)))
-            }
-        }
-        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(*stops, startY = 0f, endY = size.height))
+        drawSolidThenTail(page, tail.toPx())
     })
     // The blur fades at its own top edge, so the screen's first pixels let the page show through sharp
     // (owner's photo of the physical screen 2026-11-08; a screenshot does not catch it). A band of the
@@ -107,6 +106,21 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
             1f to page.copy(alpha = 0f), startY = 0f, endY = band), size = androidx.compose.ui.geometry.Size(size.width, band))
     }
     .padding(bottom = tail)
+
+/** [page] solid down the bar, then eased to nothing over the last [tailPx] (smoothstep). */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSolidThenTail(page: androidx.compose.ui.graphics.Color, tailPx: Float) {
+        val t = tailPx.coerceAtMost(size.height)
+        val start = ((size.height - t) / size.height).coerceIn(0f, 1f)
+        val n = 8
+        val stops = Array(n + 2) { i ->
+            if (i == 0) 0f to page
+            else {
+                val x = (i - 1).toFloat() / n
+                (start + (1f - start) * x) to page.copy(alpha = page.alpha * (1f - x * x * (3f - 2f * x)))
+            }
+        }
+        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(*stops, startY = 0f, endY = size.height))
+}
 
 /** How long "nothing under the bar" must last before the edge goes (a re-layout's frame or two never counts). */
 private const val OFF_AFTER_MS = 250L
