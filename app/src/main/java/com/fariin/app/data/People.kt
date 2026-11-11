@@ -210,7 +210,11 @@ class FirestorePeople(
         return cid
     }
 
-    override suspend fun acceptRequest(cid: String): Boolean = ok { conv(cid).set(mapOf("accepted" to true), SetOptions.merge()).await() }
+    override suspend fun acceptRequest(cid: String): Boolean = ok {
+        conv(cid).set(mapOf("accepted" to true), SetOptions.merge()).await()
+        // If Automatically Archive put it away, accepting takes it back out (iOS MessageRequests.accept).
+        UnknownChatArchiver.undoAutoArchive(me, cid)
+    }
 
     /** MessageRequests.decline: a 7-day decline mark for the sender, and the chat deleted. */
     override suspend fun declineRequest(cid: String): Boolean = ok {

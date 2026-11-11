@@ -488,7 +488,7 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         // Swipe Actions (iOS ChatsSettingsView): off by default; on shows the two picks.
         SwipeActionsSection()
         SettingsSection(header = "New Chats from Your Chat Key", footer = "When someone uses your Chat Key to message you, the chat goes to Archived, muted.") {
-            SwitchRow("Automatically Archive", archive, last = true, badge = NewBadgeSpots.CHATS_AUTO_ARCHIVE) { archive = it; p.edit().putBoolean("unknownChats.autoArchive", it).apply() }
+            SwitchRow("Automatically Archive", archive, last = true, badge = NewBadgeSpots.CHATS_AUTO_ARCHIVE) { archive = it; com.fariin.app.data.UnknownChatArchiver.setOn(p, it) }
         }
         // iOS ChatsSettingsView: the last row, red, with what it does written under it.
         SettingsSection(footer = "Deletes every message, photo, video and call from all your devices. It cannot be undone.") {
