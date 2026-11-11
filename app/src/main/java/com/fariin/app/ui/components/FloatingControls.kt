@@ -71,6 +71,16 @@ fun FloatingIcon(icon: ImageVector, contentDescription: String?, onClick: () -> 
  */
 val LocalGlassBar = androidx.compose.runtime.staticCompositionLocalOf { false }
 
+/**
+ * A profile page's bar (person, group, channel): when it is a solid bar (no glass), back and the
+ * word buttons are plain, no circle or capsule (owner 2026-11-11 photo); with glass they keep them.
+ */
+val LocalPlainBarButtons = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/** True when bar buttons should be drawn plain here (see [LocalPlainBarButtons]). */
+@Composable
+internal fun plainBarButtons(): Boolean = LocalPlainBarButtons.current && !glassBar()
+
 @Composable
 internal fun glassBar(): Boolean {
     if (!LocalGlassBar.current || LocalLiquidBackdrop.current == null) return false
@@ -183,7 +193,7 @@ fun FloatingSegments(options: List<String>, selected: Int, onSelect: (Int) -> Un
 fun FloatingTextAction(text: String, enabled: Boolean = true, modifier: Modifier = Modifier, busy: Boolean = false, onClick: () -> Unit) {
     val c = Fariin.colors
     // Busy: the ring takes the word's place inside the same capsule (iOS), the capsule keeps its width.
-    Box(modifier.padding(end = 4.dp).height(44.dp).floating(CircleShape)
+    Box(modifier.padding(end = 4.dp).height(44.dp).then(if (plainBarButtons()) Modifier else Modifier.floating(CircleShape))
         .clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center) {
         BusyContent(busy, c.label, size = 20.dp) {

@@ -337,13 +337,13 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             // The ••• menu holds Change Wallpaper for the same people (iOS Group Info's first menu
             // section): back to the chat, which opens the channel's shared picker for every follower.
-            PageBar("", onBack, action = {
+            androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalPlainBarButtons provides true) { PageBar("", onBack, action = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // iOS: the Add Story mark for whoever may post, then Edit; the rest is under More.
                     com.fariin.app.ui.stories.GroupStoryButton(me, info.cid, onLeave = onBack)
                     if (canEdit) com.fariin.app.ui.components.FloatingTextAction("Edit") { editSheet = true }
                 }
-            })
+            }) }
             }
         }) { top ->
             Column(Modifier.fillMaxSize().verticalScroll(pageScroll).padding(top = top).padding(horizontal = 16.dp).navigationBarsPadding(),

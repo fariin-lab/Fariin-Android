@@ -629,7 +629,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
         // between back and Edit (the reference app's profile, owner's recording 2026-11-10).
         Box(Modifier.graphicsLayer { alpha = chromeAlpha }.profileMeltBarGround(melt, c.bgSecondary)) {
         ProfileMeltTitle(melt, name, person?.handle?.takeIf { it.isNotEmpty() }?.let { "@$it" })
-        PageBar("", onBack = onBack) {
+        androidx.compose.runtime.CompositionLocalProvider(com.fariin.app.ui.components.LocalPlainBarButtons provides true) { PageBar("", onBack = onBack) {
             if (uid != me) com.fariin.app.ui.components.FloatingTextAction("Edit") { nickname = true }
             if (glowOn) com.fariin.app.ui.glow.GlowOverflow(glowDoor) { close ->
                 if (fromChat || addToGroup != null) androidx.compose.material3.HorizontalDivider(color = c.separator)
@@ -640,7 +640,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
                 if (clearMine != null) ClearMineItem { close(); clearMine() }
             }
             // More is the last circle in the actions row now (iOS, owner 2026-11-10), not up here.
-        }
+        } }
         }
     }) { top ->
         exportJob?.let { j -> ChatExportDialog(j) { exportJob = null } }

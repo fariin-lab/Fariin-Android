@@ -67,7 +67,7 @@ fun FariinTopBar(
             }
         },
         navigationIcon = {
-            if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp), circle = true)
+            if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp), circle = !plainBarButtons())
         },
         // Glass circles at the end keep the back circle's distance from the edge (the last one was cut).
         actions = { actions(); if (glassBar()) androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp)) },
