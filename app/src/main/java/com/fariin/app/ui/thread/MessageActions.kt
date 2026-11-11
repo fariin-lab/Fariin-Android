@@ -341,6 +341,19 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
         return
     }
     val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete)
+    // A channel post (iOS GlassConfirmDoor): one question about the post, Delete and Cancel.
+    if (ui.groupDoc["channel"] == true && everyone) {
+        com.fariin.app.ui.components.GlassAlert(
+            onDismissRequest = onDismiss,
+            title = "Delete this post?",
+            message = "It will be removed for all followers.",
+            actions = listOf(
+                com.fariin.app.ui.components.GlassAlertAction("Delete", com.fariin.app.ui.components.GlassAlertStyle.Red) { actions.onDeleteForEveryone(m) },
+                com.fariin.app.ui.components.GlassAlertAction("Cancel", com.fariin.app.ui.components.GlassAlertStyle.Bold) { },
+            ),
+        )
+        return
+    }
     // The list form: one glass pill per choice. The three buttons sat in one Column inside the
     // single confirm slot, which the glass alert draws as ONE pill: only "Delete for Everyone"
     // showed, pushed right, with no Delete for Me and no Cancel (overnight test 2026-11-10).
