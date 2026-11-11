@@ -136,6 +136,8 @@ internal const val PAGE_PRIVACY = "privacy"
 internal const val PAGE_AUDIENCE = "privacy:aud:"
 internal const val PAGE_HIDE_FROM = "privacy:hidefrom"
 internal const val PAGE_MESSAGES = "privacy:messages"
+/** Account > Username: the Messages page in username mode (iOS MessagesPrivacyPage(usernameMode: true)). */
+internal const val PAGE_CONTACT_USERNAME = "privacy:messages:username"
 internal const val PAGE_CHAT_KEY = "privacy:chatkey"
 internal const val PAGE_BLOCKED = "privacy:blocked"
 internal const val PAGE_MY_REPORTS = "privacy:myreports"
@@ -348,9 +350,13 @@ internal suspend fun syncMessagesMode(keyExists: Boolean) {
     }
 }
 
-/** iOS MessagesPrivacyPage: who can contact me by username, the Chat Key row, the two switches. */
+/**
+ * iOS MessagesPrivacyPage: who can contact me by username, the Chat Key row, the two switches.
+ * [usernameMode] (Account > Username): titled "Contact me by username", the Username row on top
+ * (opens the editor), and no Read Receipts / Typing switches.
+ */
 @Composable
-private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
+internal fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit, usernameMode: Boolean = false, handle: String? = null) {
     val map by PrivacySettings.map.collectAsState()
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
@@ -367,8 +373,11 @@ private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
         }
     }
     val sel = PrivacyRules.audience(map, "messages")
-    ScrollPage("Messages", pop) {
+    ScrollPage(if (usernameMode) "Contact me by username" else "Messages", pop) {
         ErrorNote(error)
+        if (usernameMode) SettingsSection {
+            SettingsRow("Username", value = if (handle.isNullOrEmpty()) "Not set" else "@$handle", last = true) { push(PAGE_USERNAME) }
+        }
         SettingsSection(header = "Who can contact me by username", footer = "Who new people can message. Your chats are never affected.") {
             for (a in PrivacyRules.options("messages")) CheckRow(a.label("messages"), a == sel, last = a == Audience.CONTACTS) {
                 if (a == Audience.CONTACTS && keySet != true) { explain = true; return@CheckRow }
@@ -382,7 +391,7 @@ private fun MessagesPrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
             else "You haven't set a Chat Key, so nobody new can message you yet.") {
             SettingsRow("Chat Key", value = if (keySet == true) "On" else "Off", last = true) { push(PAGE_CHAT_KEY) }
         }
-        SettingsSection(footer = "Turning one off stops you sending it. You will still see read receipts and typing from other people.") {
+        if (!usernameMode) SettingsSection(footer = "Turning one off stops you sending it. You will still see read receipts and typing from other people.") {
             SwitchRow("Read Receipts", PrivacyRules.flag(map, "readReceipts")) { on -> scope.launch { error = PrivacySettings.setFlag("readReceipts", on) } }
             SwitchRow("Typing Indicators", PrivacyRules.flag(map, "typingIndicators"), last = true) { on -> scope.launch { error = PrivacySettings.setFlag("typingIndicators", on) } }
         }

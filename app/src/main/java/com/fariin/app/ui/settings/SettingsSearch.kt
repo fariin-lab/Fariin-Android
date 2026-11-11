@@ -98,7 +98,7 @@ internal object SettingsIndex {
         val acc = listOf(ACC)
         page("Email address", acc, "email address change mail sign in", PAGE_EMAIL)
         row("Password", acc, "password change set sign in", PAGE_ACCOUNT)
-        page("Username", acc, "username handle @ who can find me contact me", PAGE_USERNAME)
+        page("Username", acc, "username handle @ who can find me contact me", PAGE_CONTACT_USERNAME)
         page("Passkeys", acc, "passkeys passkey fingerprint face sign in key", PAGE_PASSKEYS)
         if (hasTwoStep) page("Two-step verification", acc, "two step twostep verification 2fa additional password code security", PAGE_TWOSTEP)
         page("Security notifications", acc, "security notifications alerts new login sign in email", PAGE_SEC_NOTIFS)

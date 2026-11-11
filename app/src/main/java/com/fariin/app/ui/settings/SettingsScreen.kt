@@ -147,6 +147,7 @@ fun SettingsTab(me: String, demoProfile: MyProfile?, onSignOut: () -> Unit,
             page.startsWith(PAGE_RESET) == true -> com.fariin.app.ui.auth.ResetCodePage(remember { AuthRepository() }, page.removePrefix(PAGE_RESET), pop,
                 onDone = { stack = stack.dropLast(2) }, demo = demoProfile != null)
             page == PAGE_USERNAME -> UsernamePage(me, profile, pop)
+            page == PAGE_CONTACT_USERNAME -> MessagesPrivacyPage(push, pop, usernameMode = true, handle = profile?.handle)
             accountSecurityRoute(page, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
             privacyRoute(page, push, pop) -> Unit
             securityCheckupRoute(page, profile, demoProfile != null, push, pop, drop = { n -> stack = stack.dropLast(n) }) -> Unit
@@ -390,7 +391,7 @@ private fun AccountPage(
                     "Username",
                     value = when { profile == null -> ""; handle.isNullOrEmpty() -> "Not set"; else -> "@$handle" },
                     badge = NewBadgeSpots.ACCOUNT_USERNAME,
-                ) { push(PAGE_USERNAME) }
+                ) { push(PAGE_CONTACT_USERNAME) }   // iOS: the "Contact me by username" page first
                 SettingsRow("Passkeys", badge = NewBadgeSpots.ACCOUNT_PASSKEYS) { push(PAGE_PASSKEYS) }
                 // iOS: hidden while the feature is off (Flags.twoStepEnabled), except for an account
                 // that already has it on, so it can be turned off again.
