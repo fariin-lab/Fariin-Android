@@ -282,28 +282,50 @@ object CallManager {
             newest[d.caller]?.let { old -> if (old.id != callId) signaling.update(old.id, CallWire.endFields(EndReason.MISSED)) }
             newest[d.caller] = d
         }
-        for (d in newest.values) ring(d)
+        for (d in newest.values) ring(d, createdMs[d.id])
     }
 
-    private fun ring(d: CallDoc) {
+    /** Young rings waiting for the server's screen (iOS screenWaiting / screenWaitDone). */
+    private val screenWaiting = HashSet<String>()
+    private val screenWaitDone = HashSet<String>()
+
+    private fun ring(d: CallDoc, createdAt: Long?) {
         if (d.id == callId || d.id in finished || d.accepted) return
         if (!d.answeredDevice.isNullOrEmpty() && d.answeredDevice != deviceClaim) return
+        // The server screens every ring (block, Calls privacy) and stamps `screenedAt`. A young doc
+        // without it waits for that write (this listener sees it); after 3 s one server read decides,
+        // and only a doc still ringing goes on (iOS handleRingingDoc). A failed read fails open.
+        if (!d.screened && d.id !in screenWaitDone && createdAt != null && System.currentTimeMillis() - createdAt < 4000) {
+            if (screenWaiting.add(d.id)) main.launch {
+                delay(3000)
+                if (!screenWaiting.remove(d.id) || callId == d.id || d.id in finished) return@launch
+                val fresh = signaling.readServer(d.id)?.let { CallWire.parse(d.id, it) }
+                if (fresh != null && (fresh.status != "ringing" || fresh.accepted ||
+                        (!fresh.answeredDevice.isNullOrEmpty() && fresh.answeredDevice != deviceClaim))) return@launch
+                screenWaitDone += d.id
+                ring(fresh ?: d, createdAt)
+            }
+            return
+        }
+        screenWaiting.remove(d.id)
+        screenWaitDone.remove(d.id)
         if (d.offerEnc == null) {
             // No plaintext offers are answered (iOS G2): ends quietly as failed.
             finished += d.id
             if (d.plainOffer) main.launch { signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.FAILED), deviceClaim) }
             return
         }
-        if (status.live) {
-            // Already in a call: busy (iOS endRingIfUnclaimed with busy).
-            finished += d.id
-            main.launch { signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.BUSY), deviceClaim) }
-            return
-        }
         finished += d.id
         main.launch {
-            if (signaling.screenRefused(me, d.id)) return@launch   // the server's privacy screen said no
-            if (status.live) return@launch
+            // The server's verdict comes BEFORE the busy decision (iOS audit M-014): a blocked or
+            // privacy-refused caller gets no write at all, so "busy" never shows I am on a call.
+            if (signaling.screenRefused(me, d.id)) return@launch
+            if (status.live) {
+                // Already in a call (also one started during the read above): busy, as iOS
+                // endRingIfUnclaimed with busy.
+                signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.BUSY), deviceClaim)
+                return@launch
+            }
             resetCallVars()
             callId = d.id
             peer = d.caller
