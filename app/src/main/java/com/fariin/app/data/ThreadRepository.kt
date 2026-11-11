@@ -565,7 +565,7 @@ class ThreadRepository(
         Disappearing.askBurn(cid, fresh.map { it.id })
     }
 
-    private class Parsed(val data: Map<String, Any?>, val pending: Boolean, val epoch: Int, val message: Message)
+    private class Parsed(val snap: DocumentSnapshot, val data: Map<String, Any?>, val pending: Boolean, val epoch: Int, val message: Message)
     /**
      * Each update re-built the whole page (60 to 120 messages), opening every sealed message again on
      * the main thread, twice per send (metadata too). A message whose fields, pending state and the
@@ -575,14 +575,20 @@ class ThreadRepository(
     private val parsed = java.util.concurrent.ConcurrentHashMap<String, Parsed>()   // pins parse on IO too
 
     private fun parse(d: DocumentSnapshot): Message {
+        val epoch = CryptoHub.keysEpoch.value
+        // The very same snapshot as last time (an older page kept as it was): nothing to compare.
+        // d.data builds a fresh map of every field on each call, and the compare walked them all,
+        // for every message on every update (Pixel 2026-11-11: the chat hitched as pages came in).
+        parsed[d.id]?.let { p -> if (p.snap === d && p.epoch == epoch) return p.message }
         val data = d.data ?: emptyMap()
         val pending = d.metadata.hasPendingWrites()
-        val epoch = CryptoHub.keysEpoch.value
-        parsed[d.id]?.let { p -> if (p.pending == pending && p.epoch == epoch && p.data == data) return p.message }
+        parsed[d.id]?.let { p -> if (p.pending == pending && p.epoch == epoch && p.data == data) {
+            parsed[d.id] = Parsed(d, p.data, pending, epoch, p.message); return p.message } }
         val m0 = Message.fromFirestore(d.id, data, cid) { raw, author -> crypto.decrypt(raw, cid, author) }
         val m = if (pending && m0.authorId == me) m0.copy(sendState = Message.SendState.SENDING) else m0
-        if (parsed.size > 400) parsed.clear()
-        parsed[d.id] = Parsed(data, pending, epoch, m)
+        // Was 400: a long chat scrolled past 400 wiped it, and every page after opened all again.
+        if (parsed.size > 4000) parsed.clear()
+        parsed[d.id] = Parsed(d, data, pending, epoch, m)
         return m
     }
 
