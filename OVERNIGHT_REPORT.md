@@ -117,3 +117,11 @@ Username change, Chat Key, delete chat / clear history, Report flow, polls, loca
 ### 17. Location
 - BROKEN, FIXED (crash): opening Location closed the app as soon as the map loaded. Commit (Location: the map no longer closes the app). After the fix the map opens, Send Location works, and the other phone shows a map card. I sent it from the emulator (pretend location) so your real location was never shared.
 - Works: with photo access denied, the + sheet shows "Allow access to your photos to send them here" and GIF / Files / Location / Poll still work.
+
+### 18. View-once, photo / video / voice playback
+- BROKEN, FIXED (big one): no view-once photo could be opened, on either phone; the viewer spun forever. Its clean-up deleted the photo the moment it arrived. Commit 0dafe2e4. After the fix it opens in about 2 s both ways, then both sides read "Opened".
+- Works: view-once switch in the caption bar ("Photo · Tap to view", "Not opened yet"), voice note playback (Pause shows), video viewer with time bar.
+
+### 19. Channel replies and reactions
+- Works: Turn On Replies on a post, the follower opens Replies / Quotes, writes a reply, the owner sees it, the post shows "1 Reply"; a follower's reaction (🔥 1).
+- FINDING (not changed, likely server design): reactions from others don't update live on the owner's open channel; they show after reopening it (a changed reaction was still the old one after 20 s). The app shows the counts stored on each post, and the server doesn't seem to push them live.
