@@ -68,6 +68,9 @@ object AdminDelete {
     /** ThreadView.adminDeleteRequestFor: a group, I hold Delete messages, every pick goes for everyone, one is another member's. */
     fun opens(doc: Map<String, Any?>, me: String, picked: List<Message>): Boolean {
         if ((doc["type"] as? String) != "group" || picked.isEmpty()) return false
+        // A channel is a group doc too, but its admins delete their own channel's posts: never the
+        // group sheet with Report Spam / Delete all from (owner 2026-11-11, iOS fix-chdel-calls).
+        if (doc["channel"] == true) return false
         if (!GroupAdmins.Team.from(doc).can(me, GroupAdmins.Right.DELETE_MESSAGES)) return false
         return picked.all { mayDelete(doc, me, it) } && picked.any { it.authorId != me && !it.isSystem }
     }

@@ -2157,7 +2157,8 @@ private fun MediaRow(
             }
             else -> {
                 val threadCid = LocalThreadCid.current
-                AlbumMosaic(m, maxW, onView, capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null)
+                AlbumMosaic(m, maxW, onView, capsule, autoSaveId = if (!isMe && !m.viewOnce && threadCid.isNotEmpty()) "$threadCid/${m.id}" else null,
+                    wide = ui.channel != null)
             }
         }
         }
