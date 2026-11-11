@@ -248,6 +248,8 @@ object ChatList {
         if (c.fariinLocked()) return RowPreview(if (c.isChannel) "This channel is unavailable" else "This group is unavailable")
         if (hidden) return RowPreview("")
         val text = (if (c.isGroup && c.e2eeOff && c.lastIsPlainText) raw else decryptor.previewText(c, me)) ?: "Message"
+        // Sealed to a key this phone no longer has: nothing under the name, never the lock.
+        if (text == com.fariin.app.crypto.Wire.LOCKED) return RowPreview("")
         // A channel never shows an admin's wallpaper line (owner 2026-11-07).
         if (c.isChannel && isWallpaperNotice(text)) return RowPreview("")
         return when {

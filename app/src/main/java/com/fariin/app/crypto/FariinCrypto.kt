@@ -460,6 +460,45 @@ class FariinCrypto(
         return noteOpen(other, r)
     }
 
+    /** Opens checked before, keyed by the wrap's nonce and the sender key it was tried against. */
+    private val fileOpenSeen: MutableMap<String, Boolean> = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Boolean>(256, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) = size > 3000
+        })
+
+    /**
+     * A sealed file this phone can never open: its key was sealed to a key this phone no longer has
+     * (a reinstall, a new phone). The chat leaves it out, as the big messengers do after a reinstall,
+     * instead of an endless grey box. False whenever the keys are not in yet, so a slow start never
+     * hides anything; a group file not sealed for me at all stays as before.
+     */
+    fun fileWillNotOpen(cid: String, meta: EncMeta?): Boolean {
+        if (meta == null || meta.isPlain || meta.v != 1) return false
+        warmIfNeeded()
+        val sk = mySecretKey ?: return false
+        val wraps = meta.w
+        val author = meta.a
+        if (wraps != null && author != null) {
+            if (releasedKey(meta.n) != null) return false
+            val cur = pubCache[author] ?: return false
+            val mine = wraps[currentUid() ?: return false] ?: return false
+            val seenKey = "g|$mine|${cur.contentHashCode()}"
+            fileOpenSeen[seenKey]?.let { return !it }
+            val opens = wire.openWrap(mine, candidates(author, cur), sk) != null
+            fileOpenSeen[seenKey] = opens
+            return !opens
+        }
+        val other = otherUid(cid)
+        val cur = pubCache[other] ?: return false
+        val seenKey = "d|${meta.kn}|${cur.contentHashCode()}"
+        fileOpenSeen[seenKey]?.let { return !it }
+        val wrapped = B64.decode(meta.k) ?: return false
+        val kn = B64.decode(meta.kn) ?: return false
+        val opens = wire.openBoxAny(wrapped, kn, candidates(other, cur), sk) != null
+        fileOpenSeen[seenKey] = opens
+        return !opens
+    }
+
     // ------------------------------------------------------------------ released group keys
 
     private val released = ConcurrentHashMap<String, ByteArray>()   // b64(nonce) -> key

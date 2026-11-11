@@ -446,6 +446,15 @@ class ThreadRepository(
         }
     }
 
+    /** A message this phone can never open: a lock for words, or a photo/video/file/album whose key
+     *  will not open. Deleted messages and plain (unsealed) ones never count. */
+    private fun wontOpenHere(m: Message): Boolean {
+        if (m.deleted) return false
+        if (m.text == Wire.LOCKED) return true
+        if (m.enc != null && crypto.fileWillNotOpen(cid, m.enc)) return true
+        return m.album.isNotEmpty() && m.album.all { crypto.fileWillNotOpen(cid, it.enc) }
+    }
+
     @Synchronized
     private fun rebuild(loaded: Boolean? = null) {
         val all = LinkedHashMap<String, Message>()
@@ -486,6 +495,10 @@ class ThreadRepository(
                 if (m.linkPreview == null && !m.deleted) m = m.copy(linkPreview = card) else localCards.remove(k)
             } }
             if (HiddenMessages.isHidden(m.id)) continue
+            // Sealed to a key this phone no longer has (a reinstall, a new phone): left out, never a
+            // lock or a grey box (owner 2026-11-11, the big messengers' way). The server keeps it,
+            // and the other person still has it; a key backup brings it back.
+            if (wontOpenHere(m)) continue
             // Sent while I had them blocked (now or in a past block): never shown (iOS BlockList.hides).
             if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
             all[m.rowId] = m
