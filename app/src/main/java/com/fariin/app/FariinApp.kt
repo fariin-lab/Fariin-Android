@@ -82,6 +82,7 @@ class FariinApp : Application() {
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
+        com.fariin.app.data.AppearancePrefs.applySplash(this)   // the next launch screen follows Night Mode
         StartClock.mark("features")
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // The benchmark build (release code, debug key, never shipped) may use the local backend too.
