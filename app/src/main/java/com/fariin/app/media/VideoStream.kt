@@ -98,6 +98,10 @@ object VideoStream {
         len > 0 && sc.isCached(k, 0, len)
     }.getOrDefault(false)
 
+    /** How many bytes from the start of [url] are already cached (what a preload left). */
+    fun cachedPrefix(c: Context, url: String): Long =
+        runCatching { cache(c).getCachedLength(key(url), 0, VideoPreload.BYTES * 4) }.getOrDefault(0L).coerceAtLeast(0L)
+
     /** The cached clip written to [out] (for Save / Forward / Share); false when it is not all here. */
     fun copyCached(c: Context, url: String, out: File): Boolean {
         if (!fullyCached(c, url)) return false

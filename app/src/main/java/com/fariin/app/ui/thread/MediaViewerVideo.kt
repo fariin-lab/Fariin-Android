@@ -147,7 +147,9 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
         val player = if ((file != null || streaming) && current) remember(file, streaming) {
             VoicePlayer.stop()   // one sound at a time
             if (streaming) {
-                com.fariin.app.media.VideoStream.log("open stream fullyCached=${com.fariin.app.media.VideoStream.fullyCached(ctx, p.url)}")
+                // The player takes over from a preload still running (one writer per clip).
+                com.fariin.app.media.VideoPreload.cancel(p.url)
+                com.fariin.app.media.VideoStream.log("open stream preloaded=${com.fariin.app.media.VideoStream.cachedPrefix(ctx, p.url)}")
                 ExoPlayer.Builder(ctx).setMediaSourceFactory(com.fariin.app.media.VideoStream.mediaSourceFactory(ctx)).build().apply {
                     setMediaItem(MediaItem.fromUri(p.url))
                     prepare()

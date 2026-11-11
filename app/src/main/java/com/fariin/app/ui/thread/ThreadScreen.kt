@@ -2131,6 +2131,15 @@ private fun MediaRow(
                 val streams = ready && !busy && local == null && remember(m.videoUrl, threadCid) {
                     com.fariin.app.media.VideoStream.streamable(threadCid, m.videoUrl, m.enc) && bubbleMedia.cached(m.videoUrl!!) == null
                 }
+                // Its first piece comes down while it is on screen, so Play starts at once.
+                if (streams) {
+                    val preCtx = LocalContext.current
+                    val preUrl = m.videoUrl!!
+                    DisposableEffect(preUrl) {
+                        com.fariin.app.media.VideoPreload.start(preCtx, preUrl)
+                        onDispose { com.fariin.app.media.VideoPreload.cancel(preUrl) }
+                    }
+                }
                 // iOS MediaDownloadOverlay: a sealed clip comes down IN the bubble (sealed as one piece,
                 // it cannot stream), by the Videos auto-download rule or a tap; play only once it is here.
                 val clip = rememberGatedFile(if (ready && !busy && !streams) m.videoUrl else null, m.enc, com.fariin.app.media.AutoDownload.Kind.VIDEOS)
