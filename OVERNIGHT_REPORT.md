@@ -103,3 +103,17 @@ Nothing shipped, no tester builds, nothing pushed to main.
 
 ## Still to test (next rounds)
 Username change, Chat Key, delete chat / clear history, Report flow, polls, location and contact cards, view-once photo, photo viewer and editor, video and voice playback on the receiving phone, channel comments/replies and reactions, story replies and reactions, group invite link, chat wallpaper, Night Mode, App Icon, Share Profile / QR, Security Checkup, Your Account Data, Passkeys, screen share, picture-in-picture during a call.
+
+## Round 2
+
+### 15. Username, Share Profile, Security Checkup, Chat Key
+- Works: username change (live "available" check, new fariin.com/u/ link) shows on the other phone; Share Profile with QR, colours, Share / Save / Copy link / Scan; Security Checkup lists passkey, password, devices, Chat Key; Create Chat Key (explainer, rolling digits, then Copy / Share / Reset / Remove).
+- Partly tested: entering someone's Chat Key. The entry pad only opens when messaging someone whose Messages privacy shuts strangers out, which needs a third account.
+
+### 16. Polls
+- Works: New Poll in the group (question, options, multiple answers, hide voters, quiz, end time), vote from the other phone, "1 vote · View results" on both.
+- FIXED: the chat list showed the poll icon twice ("[poll] Overnight: 📊 Poll"). Commit 0c194433.
+
+### 17. Location
+- BROKEN, FIXED (crash): opening Location closed the app as soon as the map loaded. Commit (Location: the map no longer closes the app). After the fix the map opens, Send Location works, and the other phone shows a map card. I sent it from the emulator (pretend location) so your real location was never shared.
+- Works: with photo access denied, the + sheet shows "Allow access to your photos to send them here" and GIF / Files / Location / Poll still work.
