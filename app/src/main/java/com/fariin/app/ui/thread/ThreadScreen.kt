@@ -1154,7 +1154,7 @@ private fun ThreadContent(
                             // "X asked to turn off Restricted chat": answered here by the one it was
                             // asked of, while it is still open (iOS restrictRequestTarget).
                             m.isSystem && m.isRestrictRequest && m.authorId != ui.me -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) {
-                                val conv = com.fariin.app.data.ChatsNow.find(ui.cid)
+                                val conv = com.fariin.app.data.ChatsNow.findAny(ui.cid)
                                 val by = conv?.let { com.fariin.app.data.ChatRestrictions.pendingRequestBy(it) }
                                 if (by != null && by != ui.me && com.fariin.app.data.ChatRestrictions.restrictedByMe(conv, ui.me)) restrictAnswer = true
                                 else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()

@@ -12,6 +12,10 @@ object ChatsNow {
     /** Snapshot state, so a screen reading it (a restricted chat's menus) redraws when it changes. */
     var list: List<Conversation> by androidx.compose.runtime.mutableStateOf(emptyList())
     fun find(cid: String): Conversation? = list.firstOrNull { it.id == cid }
+    /** Every loaded conversation, archived, requests, cleared and empty ones too (iOS
+     *  ConversationsRepository.conversations). The restricted-chat checks read this one. */
+    var all: List<Conversation> by androidx.compose.runtime.mutableStateOf(emptyList())
+    fun findAny(cid: String): Conversation? = all.firstOrNull { it.id == cid } ?: find(cid)
 }
 
 /**
@@ -29,7 +33,7 @@ object ChatRestrictions {
     private val db get() = FirebaseFirestore.getInstance()
 
     /** The open chat's restriction, read from the live list (every screen asks the same place). */
-    fun isOn(cid: String): Boolean = cid.isNotEmpty() && ChatsNow.find(cid)?.isRestricted == true
+    fun isOn(cid: String): Boolean = cid.isNotEmpty() && ChatsNow.findAny(cid)?.isRestricted == true
 
     fun restrictedByMe(c: Conversation, me: String) = c.restrictedBy[me] == true
     fun restrictedByThem(c: Conversation, me: String) =

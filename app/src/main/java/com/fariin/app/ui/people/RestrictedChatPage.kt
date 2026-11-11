@@ -53,7 +53,7 @@ fun RestrictedChatPage(cid: String, me: String, them: String, myName: () -> Stri
                        /** Non-null: drawn as a sheet rising from the bottom, as Disappearing Messages (owner 2026-11-10). */
                        sheet: com.fariin.app.ui.components.SheetMotion? = null) {
     val c = Fariin.colors
-    val conv = ChatsNow.list.firstOrNull { it.id == cid }
+    val conv = ChatsNow.findAny(cid)
     var pending by remember { mutableStateOf<Boolean?>(null) }
     var askRequest by remember { mutableStateOf(false) }
     val mine = conv?.let { ChatRestrictions.restrictedByMe(it, me) } == true

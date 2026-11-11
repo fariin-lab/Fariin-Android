@@ -199,6 +199,7 @@ fun MainShell(
     // The same feed for screens outside the tabs (a chat's story mention card asks if a story is live).
     LaunchedEffect(stories) { com.fariin.app.data.LiveStories.state.value = stories }
     LaunchedEffect(chats.chats) { com.fariin.app.data.ChatsNow.list = chats.chats }
+    LaunchedEffect(chats.all) { com.fariin.app.data.ChatsNow.all = chats.all }
     // A story post the app died in the middle of (StoryOutbox): finished once the chat list is here.
     var outboxRan by remember(me) { mutableStateOf(false) }
     LaunchedEffect(me, chats.chats.isNotEmpty()) {
