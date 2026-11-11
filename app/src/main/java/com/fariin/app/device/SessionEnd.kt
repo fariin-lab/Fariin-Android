@@ -173,6 +173,7 @@ object SessionEnd {
         else prefs.edit().putString(KEPT_KEY, keepFor).apply()   // per account on disk, so nobody else reads it
         com.fariin.app.local.Drafts.clear()
         com.fariin.app.local.SendQueue.wipe()
+        com.fariin.app.crypto.SafetyKeyLog.wipe()   // the next account starts its own key record (iOS)
         com.fariin.app.call.CallLinks.reset()
         com.fariin.app.data.StickerFavorites.wipe(c)   // the account keeps its backup
         com.fariin.app.ui.auth.GateMemory.clear(c)   // the next account waits for its checks

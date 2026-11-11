@@ -51,7 +51,7 @@ class FariinCrypto(
             context: Context, directory: KeyDirectory, currentUid: () -> String?,
             groupIsPlain: suspend (String) -> Boolean = { false },
         ) = FariinCrypto(
-            NaCl.android(), KeystoreSecretStore(context),
+            NaCl.android().also { SafetyKeyLog.init(context) }, KeystoreSecretStore(context),
             PeerKeys(PrefsKeyValueStore(context.getSharedPreferences("fariin_crypto_public", Context.MODE_PRIVATE))),
             directory, currentUid, groupIsPlain,
         )
@@ -165,7 +165,10 @@ class FariinCrypto(
     /** Every fetched key enters here (Crypto.swift:645). */
     private fun adoptKey(uid: String, key: ByteArray): ByteArray {
         pubCache[uid] = key
-        if (peers.adopt(uid, key)) onPeerKeyChanged(uid)
+        peers.adopt(uid, key)
+        // Asked of the append-only record, not of the cache: the cache forgets a key on purpose
+        // after a failed open, so it would call a swapped key a first sighting.
+        if (SafetyKeyLog.note(uid, key)) onPeerKeyChanged(uid)
         return key
     }
 

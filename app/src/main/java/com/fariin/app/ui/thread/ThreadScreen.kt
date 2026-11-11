@@ -984,6 +984,11 @@ private fun ThreadContent(
                 }
                 // Another chat's voice message still playing: its bar under the header (iOS VoiceNoteBar).
                 val openChat = LocalOpenChat.current
+                // The other person's key was replaced (iOS keyChangeNotice, 1:1 only: groups are not
+                // end-to-end encrypted). Tapping it marks it seen and opens their profile, where
+                // Verify Encryption shows the new safety number.
+                if (!search.active && !selecting && !ui.isGroup && ui.channel == null)
+                    SafetyChangedPill(com.fariin.app.crypto.Wire.otherUid(ui.cid, ui.me), ui.title, actions.onTitleClick)
                 if (!search.active && !selecting) VoiceNoteBar(ui.cid, ui.me) { cid -> com.fariin.app.data.ChatsNow.find(cid)?.let(openChat) }
                 // Search owns the top: the pinned bar hides while searching (iOS).
                 // A group's live call takes the pinned bar's place while it runs (iOS CallBarOrPin).
@@ -1581,6 +1586,26 @@ private fun youNotice(m: Message, ui: ThreadUi): String {
  *  header is 52 dp high, and at 130% its second line ("last seen", "9 followers") was cut off. */
 /** Over a wallpaper of the other tone: the header's words drawn for a dark (true) or light (false) top; null = the app's. */
 private val LocalHeaderWordsDark = androidx.compose.runtime.staticCompositionLocalOf<Boolean?> { null }
+
+/** A small capsule, not a bar (iOS owner 2026-11-01). It accuses nobody: a reinstall or a new phone
+ *  changes a key too, and is by far the commonest cause. */
+@Composable
+private fun SafetyChangedPill(peer: String, name: String, onOpen: () -> Unit) {
+    val pending by com.fariin.app.crypto.SafetyKeyLog.pending.collectAsState()
+    if (peer.isEmpty() || peer !in pending) return
+    val c = Fariin.colors
+    Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
+        Row(Modifier.clip(RoundedCornerShape(50)).background(c.card)
+            .clickable { com.fariin.app.crypto.SafetyKeyLog.acknowledge(peer); onOpen() }
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_lock), null, tint = c.label, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("${name.ifEmpty { "Their" }}'s safety number changed".replace("Their's", "Their"),
+                fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
 
 @Composable
 private fun Header(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Unit = {}, onToggleMute: () -> Unit = {}) {
