@@ -1128,7 +1128,9 @@ private fun ListRow(title: String, icon: ImageVector, trailing: String?, subtitl
 private fun Centered(icon: ImageVector?, title: String, body: String?, action: Pair<String, () -> Unit>? = null) {
     val c = Fariin.colors
     // iOS ContentUnavailableView: a grey glyph, the title, a line under it, then one next step.
-    Column(Modifier.fillMaxSize().padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    // 88 a side: the camera and pencil buttons float at the right edge at this height, and a
+    // full-width line ran under them ("Find a friend by username to start talki…", new account, 2026-11-10).
+    Column(Modifier.fillMaxSize().padding(horizontal = 88.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = c.secondary, modifier = Modifier.size(48.dp))
             Spacer(Modifier.height(14.dp))
