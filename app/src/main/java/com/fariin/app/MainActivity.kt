@@ -486,7 +486,20 @@ class MainActivity : ComponentActivity() {
             !intent.dataString.orEmpty().contains("call", ignoreCase = true)) {
             com.fariin.app.ui.settings.openWeb(this, intent.dataString!!); intent.data = null
         }
-        else if (intent.data != null) android.widget.Toast.makeText(this, "This call link is no longer valid", android.widget.Toast.LENGTH_LONG).show()
+        // Only a link shaped like a call link hears that it is gone; any other link nothing claims
+        // is ignored (iOS: no route, no action).
+        else if (intent.data != null && looksLikeCallLink(intent.dataString.orEmpty()))
+            android.widget.Toast.makeText(this, "This call link is no longer valid", android.widget.Toast.LENGTH_LONG).show()
+    }
+
+    /** call.fariin.com, a /video/, /voice/ or /call path, or the kulan:// / fariin:// call forms. */
+    private fun looksLikeCallLink(url: String): Boolean {
+        val u = url.trim().lowercase()
+        if (Regex("^(kulan|fariin)://(video|voice|call)(/|$)").containsMatchIn(u)) return true
+        val uri = runCatching { android.net.Uri.parse(u) }.getOrNull() ?: return false
+        if (uri.host == "call.fariin.com") return true
+        val path = uri.path.orEmpty()
+        return path.startsWith("/video/") || path.startsWith("/voice/") || path == "/call" || path.startsWith("/call/")
     }
 
     /** A notification tap (or its conversation shortcut) carries the chat to open. */
