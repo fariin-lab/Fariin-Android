@@ -100,9 +100,16 @@ class CallActivity : ComponentActivity() {
 
     private var pending: (() -> Unit)? = null
     private var denied: (() -> Unit)? = null
+    /**
+     * On while the mic/camera question is up, until the call has left IDLE. The 1:1 screen closes
+     * itself on IDLE, and before the answer no call exists yet: it closed under the question, Android
+     * dropped the request ("null callingPackageName"), and a new account could never start a video
+     * call, nor any call before the mic was allowed (overnight test 2026-11-10).
+     */
+    private var asking by mutableStateOf(false)
     private val ask = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         val mic = r[Manifest.permission.RECORD_AUDIO] ?: granted(Manifest.permission.RECORD_AUDIO)
-        if (mic) pending?.invoke() else denied?.invoke()
+        if (mic) pending?.invoke() else { asking = false; denied?.invoke() }
         pending = null; denied = null
     }
     private var cameraAfterAsk = false
@@ -171,6 +178,7 @@ class CallActivity : ComponentActivity() {
         }
         if (need.isEmpty()) { then(); return }
         pending = then; denied = otherwise
+        asking = true
         ask.launch(need.toTypedArray())
     }
 
@@ -232,7 +240,9 @@ class CallActivity : ComponentActivity() {
                         onRoute = { GroupCall.setRoute(it) }, onFlip = { GroupCall.flipCamera() })
                 } else {
                     val ui by CallManager.ui.collectAsState()
-                    LaunchedEffect(ui.status.phase) { if (ui.status.phase == CallPhase.IDLE) finish() }
+                    LaunchedEffect(ui.status.phase, asking) {
+                        if (ui.status.phase != CallPhase.IDLE) asking = false else if (!asking) finish()
+                    }
                     val pip = CallRouting.pipWanted(ui.status.phase, ui.cameraOn, ui.remoteCameraOn)
                     val pipTall = CallRouting.pipVideo(ui.cameraOn, ui.remoteCameraOn)
                     LaunchedEffect(pip, pipTall) { updatePip(pip) }
