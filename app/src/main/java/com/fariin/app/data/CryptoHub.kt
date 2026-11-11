@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.asStateFlow
 object CryptoHub {
     @Volatile private var instance: FariinCrypto? = null
 
+    /** When this phone's keypair was made (ms), or null when not known or not set up yet. */
+    fun keysSince(): Long? = instance?.keysSince()
+
     /** Groups known to send in the clear (`e2ee == false`). The switch only goes one way, so a
      *  remembered "plain" never goes stale (ChatService.groupIsPlain). */
     private val plainGroups = ConcurrentHashMap.newKeySet<String>()

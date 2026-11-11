@@ -37,6 +37,8 @@ class FariinCrypto(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     /** A peer's key differs from the one seen before (iOS posts `.peerKeyChanged`). */
     var onPeerKeyChanged: (uid: String) -> Unit = {},
+    /** When this phone's key store was made (ms), for a keypair older than the keys-since stamp. */
+    private val keyStoreMadeAt: () -> Long? = { null },
 ) {
     val wire = Wire(nacl)
 
@@ -45,6 +47,8 @@ class FariinCrypto(
         private const val LEGACY_PK = "fariin_public_key_v1"
         fun skName(uid: String) = "fariin_secret_key_v1.$uid"
         fun pkName(uid: String) = "fariin_public_key_v1.$uid"
+        /** When this phone's keypair was made, ms as a string (iOS Keychain, same name). */
+        fun sinceName(uid: String) = "fariin_keys_since_v1.$uid"
 
         /** The app's instance wiring: Keystore-wrapped private key, prefs for public keys. */
         fun android(
@@ -54,6 +58,7 @@ class FariinCrypto(
             NaCl.android().also { SafetyKeyLog.init(context) }, KeystoreSecretStore(context),
             PeerKeys(PrefsKeyValueStore(context.getSharedPreferences("fariin_crypto_public", Context.MODE_PRIVATE))),
             directory, currentUid, groupIsPlain,
+            keyStoreMadeAt = { KeystoreSecretStore.Made.at() },
         )
     }
 
@@ -95,6 +100,9 @@ class FariinCrypto(
             else -> {
                 val kp = nacl.boxKeyPair()
                 sk = kp.secretKey; pk = kp.publicKey
+                // A brand-new keypair: everything sealed before now was for another key.
+                secrets.set(sinceName(uid), now().toString())
+                keysSinceCache = uid to now()
                 val okSk = secrets.set(skName(uid), B64.encode(sk))
                 val okPk = secrets.set(pkName(uid), B64.encode(pk))
                 if (!okSk || !okPk) {
@@ -125,13 +133,13 @@ class FariinCrypto(
 
     /** Sign-out: forget in memory; the stored key is KEPT (keys are per uid). */
     fun wipeIdentity() {
-        mySecretKey = null; myPublicKey = null
+        mySecretKey = null; myPublicKey = null; keysSinceCache = null
         pubCache.clear(); didWarm = false; opened.clear()
     }
 
     /** Account deletion: the stored key goes too. */
     fun destroyIdentity(uid: String) {
-        listOf(skName(uid), pkName(uid), LEGACY_SK, LEGACY_PK).forEach { secrets.delete(it) }
+        listOf(skName(uid), pkName(uid), sinceName(uid), LEGACY_SK, LEGACY_PK).forEach { secrets.delete(it) }
         wipeIdentity()
     }
 
@@ -458,6 +466,28 @@ class FariinCrypto(
             return null
         }
         return noteOpen(other, r)
+    }
+
+    @Volatile private var keysSinceCache: Pair<String, Long?>? = null
+
+    /**
+     * When this phone's keypair was made, in ms (iOS keysSince, same rule): the stamp written when a
+     * keypair is made; for an older keypair, once, the date this phone's key store was made (a
+     * reinstall makes a new one; never later than the keypair, so it can only hide less). Null =
+     * unknown, and then nothing is hidden.
+     */
+    fun keysSince(): Long? {
+        val uid = currentUid() ?: return null
+        keysSinceCache?.takeIf { it.first == uid }?.let { return it.second }
+        warmIfNeeded()
+        val stored = when (val l = secrets.lookup(sinceName(uid))) {
+            is SecretStore.Lookup.Found -> l.value.toLongOrNull()
+            is SecretStore.Lookup.Unreadable -> return null   // ask again later
+            else -> null
+        }
+        val since = stored ?: if (mySecretKey != null) keyStoreMadeAt()?.also { secrets.set(sinceName(uid), it.toString()) } else null
+        if (since != null || mySecretKey != null) keysSinceCache = uid to since
+        return since
     }
 
     /** Opens checked before, keyed by the wrap's nonce and the sender key it was tried against. */

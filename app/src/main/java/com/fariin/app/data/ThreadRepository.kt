@@ -446,10 +446,12 @@ class ThreadRepository(
         }
     }
 
-    /** A message this phone can never open: a lock for words, or a photo/video/file/album whose key
-     *  will not open. Deleted messages and plain (unsealed) ones never count. */
-    private fun wontOpenHere(m: Message): Boolean {
-        if (m.deleted) return false
+    /** A message this phone can never open (iOS, same rule): sent BEFORE this phone's keypair was
+     *  made, and a lock for words or a photo/video/file/album whose key will not open. A newer one
+     *  keeps its lock (a stale key can still heal); an unknown date hides nothing. Deleted messages
+     *  and plain (unsealed) ones never count. */
+    private fun wontOpenHere(m: Message, since: Long?): Boolean {
+        if (m.deleted || since == null || !m.hasServerTime || m.createdAtMillis >= since) return false
         if (m.text == Wire.LOCKED) return true
         if (m.enc != null && crypto.fileWillNotOpen(cid, m.enc)) return true
         return m.album.isNotEmpty() && m.album.all { crypto.fileWillNotOpen(cid, it.enc) }
@@ -465,6 +467,9 @@ class ThreadRepository(
         // Chat History for new members hidden before I joined (iOS historyStart): the chat starts
         // when I came in, as a new group would. My own messages are always there.
         val historyStart = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
+        // Messages from before this phone's keys: left out, ONE notice at the newest one's place (iOS).
+        val keysSince = crypto.keysSince()
+        var newestUnopened: Message? = null
         // iOS notForMe: an old end-to-end group message sealed without me, sent before I came in
         // (memberSince + 5 s), is not mine to read; it goes instead of drawing as a lock. One sealed by
         // a phone that had not seen me join yet stays (the lock), as iOS.
@@ -498,11 +503,18 @@ class ThreadRepository(
             // Sealed to a key this phone no longer has (a reinstall, a new phone): left out, never a
             // lock or a grey box (owner 2026-11-11, the big messengers' way). The server keeps it,
             // and the other person still has it; a key backup brings it back.
-            if (wontOpenHere(m)) continue
+            if (wontOpenHere(m, keysSince)) {
+                if (newestUnopened == null || m.createdAtMillis > newestUnopened!!.createdAtMillis) newestUnopened = m
+                continue
+            }
             // Sent while I had them blocked (now or in a past block): never shown (iOS BlockList.hides).
             if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
             all[m.rowId] = m
             if (d.metadata.hasPendingWrites()) unconfirmed.add(m.rowId)
+        }
+        newestUnopened?.let { n ->
+            all[KEYS_NOTICE_ID] = Message(id = KEYS_NOTICE_ID, authorId = "", text = KEYS_NOTICE, type = "system",
+                createdAtMillis = n.createdAtMillis, hasServerTime = true)
         }
         // A pending copy shows until its echo arrives (same clientId). It is dropped only once the
         // SERVER has the message: a refused write rolls the local echo back, and the copy must still
@@ -1996,6 +2008,9 @@ class ThreadRepository(
     }
 
     companion object {
+        /** The one row standing for the messages sealed before this phone's keys (iOS words). */
+        const val KEYS_NOTICE_ID = "fariin-keys-notice"
+        const val KEYS_NOTICE = "Messages from before you signed in on this device aren't available here. They're end-to-end encrypted."
         /** The list's line for a quote sent without words of mine. */
         const val QUOTED_POST = "Quoted post"
 

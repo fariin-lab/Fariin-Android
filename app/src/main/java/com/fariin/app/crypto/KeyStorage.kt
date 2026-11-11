@@ -89,6 +89,13 @@ class KeystoreSecretStore(context: Context) : SecretStore {
 
     private fun keyStore(): KeyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
+    object Made {
+        /** When the wrapping key was made (ms): this install's key store, gone with an uninstall. */
+        fun at(): Long? = runCatching {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.getCreationDate(ALIAS)?.time
+        }.getOrNull()
+    }
+
     private fun existingKey(): SecretKey? = keyStore().getKey(ALIAS, null) as? SecretKey
 
     private fun createKey(): SecretKey {
