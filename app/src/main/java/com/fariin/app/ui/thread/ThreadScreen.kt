@@ -962,11 +962,14 @@ private fun ThreadContent(
                     .then(com.fariin.app.ui.components.chatWallpaperStripOf(ui.cid)))
             }
             Column(Modifier.fillMaxWidth().zIndex(1f).align(Alignment.TopCenter)
-                // CHAT_TOP_SOLID: a plain bar in the page colour behind the header (owner 2026-11-10,
-                // pointing at the reference app's solid white header: the blur kept competing).
-                .then(if (CHAT_TOP_SOLID) Modifier.background(Fariin.colors.bg) else Modifier)
                 // The same wallpaper, top-anchored like the chat's: the header reads as part of it and bubbles pass behind.
                 .onSizeChanged { topBarPx = it.height }) {
+              // CHAT_TOP_SOLID: a plain bar in the page colour behind the HEADER ONLY (owner 2026-11-10,
+              // pointing at the reference app's solid white header). The pinned message, the voice bar
+              // and the safety notice float over the messages under it: the solid colour was laid
+              // behind them too, a white band under the pin with the photos cut off below it
+              // (owner 2026-11-11: "the bar is supposed to be only the top").
+              Box(Modifier.fillMaxWidth().then(if (CHAT_TOP_SOLID) Modifier.background(Fariin.colors.bg) else Modifier)) {
                 if (search.active) SearchTopBar(search, searchFocus, onClose = { closeSearch() }, onSubmit = {
                     // The keyboard's Search key drops the keyboard and steps on (iOS onSubmit).
                     keyboard?.hide()
@@ -982,6 +985,7 @@ private fun ThreadContent(
                         Header(ui, onBack, actions.onTitleClick, actions.onToggleMute)
                     }
                 }
+              }
                 // Another chat's voice message still playing: its bar under the header (iOS VoiceNoteBar).
                 val openChat = LocalOpenChat.current
                 // The other person's key was replaced (iOS keyChangeNotice, 1:1 only: groups are not
