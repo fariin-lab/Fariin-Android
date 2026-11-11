@@ -1669,7 +1669,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
     val side = if (narrow) 8.dp else 16.dp
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = side), verticalAlignment = Alignment.CenterVertically) {
-            com.fariin.app.ui.components.FloatingBack(onBack, circle = true)
+            com.fariin.app.ui.components.FloatingBack(onBack, circle = !CHAT_TOP_SOLID)
             Spacer(Modifier.width(if (narrow) 8.dp else 16.dp))
             // Photo and name beside it; the whole block opens the profile.
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onTitleClick).padding(vertical = 4.dp),
@@ -1714,7 +1714,7 @@ private fun HeaderBody(ui: ThreadUi, onBack: () -> Unit, onTitleClick: () -> Uni
             // A visitor gets neither (Search needs following).
             ui.channel?.takeIf { it.role != com.fariin.app.channel.ChannelRules.Role.VISITOR }?.let {
                 com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios),
-                    contentDescription = "Search", onClick = { InChatSearchLink.request(ui.cid) }, circle = true)
+                    contentDescription = "Search", onClick = { InChatSearchLink.request(ui.cid) }, circle = !CHAT_TOP_SOLID)
             }
             HeaderMenu(ui, onToggleMute)
         }
@@ -1734,7 +1734,7 @@ private fun HeaderMenu(ui: ThreadUi, onToggleMute: () -> Unit) {
     val c = Fariin.colors
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(start = 8.dp)) {
-        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, circle = true)
+        com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_more_ios), contentDescription = "More", onClick = { open = true }, circle = !CHAT_TOP_SOLID)
         GlassDropdown(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Search") }, leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_search_ios), null) },
                 onClick = { open = false; InChatSearchLink.request(ui.cid) })

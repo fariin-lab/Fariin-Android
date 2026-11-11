@@ -86,7 +86,8 @@ fun ThreadCallButtons(cid: String, me: String, isGroup: Boolean, title: String, 
 /** The calls' glass capsule, 44 high (one button alone is a 44 circle). */
 @Composable
 private fun CallCapsule(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
-    Row(Modifier.height(44.dp).floating(CircleShape), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, content = content)
+    // On the solid chat bar the icons stand alone, no capsule (owner 2026-11-11 photo).
+    Row(Modifier.height(44.dp).then(if (com.fariin.app.ui.thread.CHAT_TOP_SOLID) Modifier else Modifier.floating(CircleShape)), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, content = content)
 }
 
 /** One call button in the capsule: a 48 x 44 slot (the recording's spacing), a 22 icon. */
