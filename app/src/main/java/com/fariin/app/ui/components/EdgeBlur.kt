@@ -82,20 +82,11 @@ fun androidx.compose.ui.Modifier.frostedTopBar(
             0.80f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.36f), 0.90f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.12f),
             0.96f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.03f), 1f to androidx.compose.ui.graphics.Color.Transparent)
     } else androidx.compose.ui.Modifier.drawBehind {
-        // No glass (a cheap phone, Battery Saver, blur off). Owner 2026-11-10, cheap-phone check: the
-        // fade began 40 % down the bar, so a chat's photo showed through under the title. Now solid
-        // through the whole bar and eased away only over the tail below it.
-        val t = tail.toPx().coerceAtMost(size.height)
-        val start = ((size.height - t) / size.height).coerceIn(0f, 1f)
-        val n = 8
-        val stops = Array(n + 2) { i ->
-            if (i == 0) 0f to page
-            else {
-                val x = (i - 1).toFloat() / n
-                (start + (1f - start) * x) to page.copy(alpha = page.alpha * (1f - x * x * (3f - 2f * x)))
-            }
-        }
-        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(*stops, startY = 0f, endY = size.height))
+        // No glass (a cheap phone, Battery Saver, blur off). A CLEAN SOLID BAR in the page colour,
+        // ending at the bar's own edge with no fade (owner 2026-11-11: without blur, a solid bar
+        // looks professional; the soft white wash below it looked forced). Rows go under it cleanly.
+        val barH = (size.height - tail.toPx()).coerceAtLeast(0f)
+        drawRect(page, size = androidx.compose.ui.geometry.Size(size.width, barH))
     })
     // The blur fades at its own top edge, so the screen's first pixels let the page show through sharp
     // (owner's photo of the physical screen 2026-11-08; a screenshot does not catch it). A band of the
