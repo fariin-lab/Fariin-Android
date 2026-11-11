@@ -317,7 +317,7 @@ object GroupCall {
      * joins a running call or starts one.
      */
     fun join(context: Context, cid: String, title: String, video: Boolean, requireLive: Boolean = true, mic: Boolean = true) {
-        if (_ui.value.cid != null || CallManager.ui.value.status.live) return
+        if (busy()) return
         recordId = null; startedHere = false; someoneCame = false; startedAtMs = null; micWish = mic; linkKey = null
         dialing = !requireLive; joinedAtMs = 0L; lastRemote = emptySet()
         _ui.value = GroupCallUi(cid = cid, title = title, connecting = true, cameraOn = video, micOn = mic, calling = dialing)
@@ -350,7 +350,7 @@ object GroupCall {
      * pass by `roomId`, then the room. No group chat and no chat bubble behind it.
      */
     fun startAdhoc(context: Context, people: List<CallPerson>, video: Boolean, mic: Boolean = true) {
-        if (_ui.value.cid != null || CallManager.ui.value.status.live) return
+        if (busy()) return
         val meUid = FirebaseAuth.getInstance().currentUser?.uid ?: run { _ui.value = GroupCallUi(notice = "Call failed"); return }
         val others = GroupCallWire.adhocOthers(meUid, people)
         if (others.isEmpty()) { _ui.value = GroupCallUi(notice = "Call failed"); return }
@@ -422,7 +422,7 @@ object GroupCall {
      * from the link doc's sealed name alongside. Never writes a group chat's call doc.
      */
     fun joinLink(context: Context, key: CallLinkKey, video: Boolean, mic: Boolean = true) {
-        if (_ui.value.cid != null || CallManager.ui.value.status.live) return
+        if (busy()) return
         recordId = null; startedHere = false; someoneCame = true; startedAtMs = null; micWish = mic
         dialing = false; joinedAtMs = 0L; lastRemote = emptySet()
         faces = emptyMap(); asked.clear(); team = null; linkKey = key
@@ -1058,6 +1058,15 @@ object GroupCall {
     private fun fail(notice: String) {
         leave()
         _ui.value = GroupCallUi(notice = notice)
+    }
+
+    /** Already in a call. In a 1:1 call this says so (iOS busyNotice "Can't Call. You're already
+     *  in a call."); in a group call that call stays as it is. */
+    private fun busy(): Boolean {
+        if (_ui.value.cid != null) return true
+        if (!CallManager.ui.value.status.live) return false
+        _ui.value = GroupCallUi(notice = "You're already in a call.")
+        return true
     }
 
     fun clearNotice() { if (_ui.value.cid == null) _ui.value = GroupCallUi() }
