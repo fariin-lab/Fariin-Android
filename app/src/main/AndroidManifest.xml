@@ -133,6 +133,20 @@
                 <data android:host="wchat" />
             </intent-filter>
         </activity>
+        <!-- Group invite links on their own host, https://group.fariin.com/<code> (iOS groupHost).
+             No autoVerify yet: the host is not live, and before Android 12 one host that fails
+             verification un-verifies every App Link of the app. Add autoVerify="true" once
+             https://group.fariin.com/.well-known/assetlinks.json is served. -->
+        <activity-alias android:name=".GroupHostLinks" android:targetActivity=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="group.fariin.com" />
+                <data android:pathPattern="/..*" />
+            </intent-filter>
+        </activity-alias>
         <!-- fariin.com/<name> on Android 9-11 (pathAdvancedPattern above is Android 12+ only). The
              older pattern syntax cannot say "one segment", so this claims every fariin.com path;
              MainActivity hands the site's own pages on to the browser (ExternalLinks.isSitePage).

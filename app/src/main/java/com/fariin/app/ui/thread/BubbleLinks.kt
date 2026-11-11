@@ -251,7 +251,7 @@ object ExternalLinks {
                 else -> return false
             }
         }
-        if (re.containsMatchIn(u)) { pending.value = u; return true }
+        if (re.containsMatchIn(u) || com.fariin.app.ui.people.GroupInviteLink.code(u) != null) { pending.value = u; return true }
         name.find(u)?.let { m ->
             if (m.groupValues[2].lowercase() !in sitePages) { pending.value = u; return true }
         }

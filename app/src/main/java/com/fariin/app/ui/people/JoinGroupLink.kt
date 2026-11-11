@@ -46,10 +46,13 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.async
 import androidx.compose.animation.animateContentSize
 
-/** A group or channel invite link, https://fariin.com/g/<code> (iOS KulanApp.groupLink). */
+/** A group or channel invite link, https://fariin.com/g/<code>, or on the group host,
+ *  https://group.fariin.com/<code> (iOS KulanApp.groupLink, read before that host is live). */
 object GroupInviteLink {
     private val re = Regex("^https?://(www\\.)?fariin\\.com/g/([A-Za-z0-9_-]{4,64})/?$", RegexOption.IGNORE_CASE)
+    private val hostRe = Regex("^https?://group\\.fariin\\.com/([A-Za-z0-9_-]{4,64})/?$", RegexOption.IGNORE_CASE)
     fun code(url: String): String? = re.find(url.trim())?.groupValues?.get(2)
+        ?: hostRe.find(url.trim())?.groupValues?.get(1)
 }
 
 /**
