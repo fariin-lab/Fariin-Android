@@ -89,7 +89,10 @@ internal fun OneTimePhotoPage(m: Message, cid: String, onClose: () -> Unit) {
             ViewedOnce.mark(ctx, m.id)
             OnceBurn.burn(cid, m.id)
         }
-        DisposableEffect(file) { onDispose { file?.delete() } }
+        // The copy this effect was made for, taken now: `file` read inside onDispose is the state's
+        // CURRENT value, so the effect for "no file yet" deleted the photo the moment it arrived, and
+        // the viewer spun forever (overnight test 2026-11-10: a view-once photo never opened).
+        DisposableEffect(file) { val mine = file; onDispose { mine?.delete() } }
 
         CloseWhenBackgrounded(onClose)
         var scale by remember { mutableFloatStateOf(1f) }
