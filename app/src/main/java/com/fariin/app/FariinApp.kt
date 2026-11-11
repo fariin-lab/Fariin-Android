@@ -31,6 +31,8 @@ import java.io.File
 class FariinApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // A launcher icon pick the app died before finishing leaves two icons; finish it.
+        runCatching { com.fariin.app.ui.settings.AppIcons.heal(this) }
         // The picture loader, set ONCE before any screen draws. It was set by MainActivity's content,
         // so a call that woke the app straight into CallActivity made the loader first, and opening
         // the app then crashed ("singleton image loader has already been created") and dropped the
