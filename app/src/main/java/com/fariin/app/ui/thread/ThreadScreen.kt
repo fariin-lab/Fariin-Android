@@ -1073,7 +1073,8 @@ private fun ThreadContent(
                         .arrivalGlide(glide)
                         .fillMaxWidth().padding(top = g.gapDp.dp)) {
                         if (g.showDate) DatePill(ThreadLogic.dayLabel(m.createdAtMillis, now))
-                        if (m.rowId == dividerId) UnreadDivider()
+                        // Not in a channel (owner 2026-11-11: "remove unread on channel"); the open still lands there.
+                        if (m.rowId == dividerId && ui.channel == null) UnreadDivider()
                         val pinNote = com.fariin.app.data.PinRules.notice(m.text)
                         // This row's coordinates, read only at a long press.
                         val coords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
