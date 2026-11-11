@@ -227,6 +227,11 @@ fun ThreadScreen(
     onSendFiles: (List<Uri>) -> Unit = { it.forEach(onSendFile) },
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    // Not ready on the first frame (no saved rows read yet): the slide waits for the messages, at most
+    // 200 ms (PageMotion.hold), so the chat never slides in as bare wallpaper and fills at the end
+    // (a tester's mid-range phone right after launch, 2026-11-11). Asked once, on the first composition.
+    val heldSlide = remember { if (!ui.loaded) com.fariin.app.ui.components.PageMotion.holdArriving() else null }
+    if (heldSlide != null) LaunchedEffect(ui.loaded) { if (ui.loaded) com.fariin.app.ui.components.PageMotion.release(heldSlide) }
     // One bubble size, as iOS (Message Text Size is gone from Settings, 2026-11-08; a saved Small or
     // Large no longer applies). The phone's own text size still scales it.
     val text = remember { bubbleText("medium") }

@@ -1,5 +1,6 @@
 package com.fariin.app.ui.components
 
+import kotlinx.coroutines.flow.first
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -163,10 +164,29 @@ object PageMotion {
         e = 1f
     }
 
+    /**
+     * A page that is not ready to be seen yet (a chat whose messages are still being read) holds the
+     * forward slide, at most [HOLD_MAX_MS], so it never slides in empty and fills at the end (a tester's
+     * mid-range phone, 2026-11-11; the reference app waits the same way for its first messages).
+     * Set from the page's first composition, cleared by [release] once it has what it needs.
+     */
+    var held by androidx.compose.runtime.mutableStateOf<String?>(null)
+        private set
+    /** Holds the page arriving now (called from its first composition, which runs as it arrives). */
+    fun holdArriving(): String? { val t = top ?: return null; if (e < 1f && forward) { held = t; return t }; return null }
+    fun release(id: String?) { if (id != null && held == id) held = null }
+
     /** Plays the change begun last; called from an effect keyed on the top page. */
     suspend fun play() {
         if (e >= 1f) return
         val mine = run
+        if (forward && held != null) {
+            kotlinx.coroutines.withTimeoutOrNull(HOLD_MAX_MS) {
+                androidx.compose.runtime.snapshotFlow { held }.first { it == null }
+            }
+            held = null
+            if (mine != run) return
+        }
         val ms = if (forward) Motion.PAGE_MS else Motion.PAGE_BACK_MS
         val ease = if (forward) Motion.PageEase else Motion.BackEase
         try {
@@ -211,6 +231,8 @@ object PageMotion {
 
 /** The most [PageMotion]'s own time moves in one frame: a 60 Hz frame. */
 private const val MAX_STEP_MS = 17f
+/** The longest a page may hold its slide waiting to be ready ([PageMotion.hold]). */
+private const val HOLD_MAX_MS = 200L
 /** A frame slower than this is a stall: it moves the slide by [STALL_STEP_MS] only. */
 private const val SLOW_FRAME_MS = 25f
 private const val STALL_STEP_MS = 6f
