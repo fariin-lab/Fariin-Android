@@ -1804,6 +1804,22 @@ class ThreadRepository(
     }
 
     /**
+     * iOS ThreadView reaction thumbs: the photo(s) a reaction was on, for the other person's chat list
+     * (an album's first three tiles, a video's poster). The same url + envelope the message already
+     * carries. Never a view-once photo.
+     */
+    private fun reactionImages(m: Message): List<Map<String, Any>> {
+        fun row(url: String?, enc: EncMeta?): Map<String, Any>? =
+            url?.takeIf { it.isNotEmpty() }?.let { u -> buildMap { put("url", u); enc?.let { put("enc", it.asMap()) } } }
+        return when (m.mediaKind) {
+            Message.MediaKind.ALBUM -> m.album.take(3).mapNotNull { row(it.imageUrl, it.enc) }
+            Message.MediaKind.PHOTO -> listOfNotNull(row(m.imageUrl, m.enc))
+            Message.MediaKind.VIDEO -> listOfNotNull(row(m.thumbUrl, m.thumbEnc))
+            else -> emptyList()
+        }
+    }
+
+    /**
      * ChatService.setReaction: `reactions.<me>` sealed like text (for all members in a group),
      * or deleted; then the chat list's "Reacted" preview (best effort, never bumps updatedAt).
      */
@@ -1831,7 +1847,7 @@ class ThreadRepository(
                     "lastReactionEnc" to enc, "lastReactionBy" to me, "lastReactionToAuthor" to m.authorId,
                     "lastReactionAt" to FieldValue.serverTimestamp(),
                     "lastReactionToEnc" to (snippet?.let { seal(it, members) } ?: FieldValue.delete()),
-                    "lastReactionToImages" to FieldValue.delete(),
+                    "lastReactionToImages" to (reactionImages(m).takeIf { members == null && it.isNotEmpty() } ?: FieldValue.delete()),
                 )).await()
             } catch (_: Exception) {}
             true
