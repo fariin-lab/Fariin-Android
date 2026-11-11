@@ -496,6 +496,13 @@ internal fun GifTab(
     }
 }
 
+/** A GIPHY GIF's animated WebP at the same size (…/200w.gif -> …/200w.webp); any other link as it is. */
+internal fun gridWebp(url: String): String {
+    val path = url.substringBefore('?')
+    return if (url.contains("giphy.com/media", ignoreCase = true) && path.endsWith(".gif", ignoreCase = true))
+        path.dropLast(4) + ".webp" else url
+}
+
 /**
  * GifPickerView's masonry: two columns, each GIF at its own aspect, 6 apart, corners 8. A long
  * press offers Add to / Remove from Favourites, and Remove from Recent on the Recent tab only.
@@ -541,12 +548,13 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
                 AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, g.url), contentDescription = null,
                     imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize().background(c.secondary.copy(alpha = 0.15f)))
-                // The moving one: its MP4 on the video chip (a few shared players, only tiles on
-                // screen), else the picture as before. The tap area lies over it.
-                val hasMp4 = remember(g.url) { GifVideo.mp4Of(g.url) != null }
+                // The moving one: GIPHY's animated WebP of the same size, drawn as a picture, over the
+                // still once decoded. Not the MP4 on a video view (the chat bubbles keep that): a
+                // grid of video views made every fast scroll stutter, 3-6 % late frames on the
+                // owner's Pixel against ~1 % with WebP, at no more CPU (2026-11-10). The tap area lies over it.
                 Box(Modifier.fillMaxWidth().aspectRatio(ratio).clipToBounds()) {
-                    if (hasMp4) GifMp4(g.url, play, Modifier.matchParentSize()) {}
-                    else AsyncImage(animatedRequest(g.url, play), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
+                    if (play) AsyncImage(animatedRequest(remember(g.url) { gridWebp(g.url) }, true), contentDescription = "GIF",
+                        imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
                         contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
                     Box(Modifier.matchParentSize().semantics { contentDescription = "GIF" }
                         .combinedClickable(onLongClick = { menu = true }) { onGif(g) })
