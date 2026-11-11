@@ -1051,19 +1051,17 @@ private fun SmallLink(label: String, modifier: Modifier, center: Boolean = false
 /** "Remove this person?": delete this reply and ban, or ban and delete every reply they wrote here. */
 @Composable
 private fun BanSheet(onDismiss: () -> Unit, onBan: (Boolean) -> Unit) {
-    val c = Fariin.colors
+    // One glass pill per choice: three buttons in the single confirm slot drew as one pill, so only
+    // "Delete and Ban" showed (same fault as the message delete question, 2026-11-10).
     com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = onDismiss,
-        title = { Text("Remove this person?") },
-        text = { Text("They leave the channel and can't come back or reply.") },
-        confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = { onDismiss(); onBan(false) }) { Text("Delete and Ban", color = c.red) }
-                TextButton(onClick = { onDismiss(); onBan(true) }) { Text("Ban and Delete All Their Replies", color = c.red) }
-                TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent, fontWeight = FontWeight.SemiBold) }
-            }
-        },
-        containerColor = c.card,
+        title = "Remove this person?",
+        message = "They leave the channel and can't come back or reply.",
+        actions = listOf(
+            com.fariin.app.ui.components.GlassAlertAction("Delete and Ban", com.fariin.app.ui.components.GlassAlertStyle.Red) { onBan(false) },
+            com.fariin.app.ui.components.GlassAlertAction("Ban and Delete All Their Replies", com.fariin.app.ui.components.GlassAlertStyle.Red) { onBan(true) },
+            com.fariin.app.ui.components.GlassAlertAction("Cancel", com.fariin.app.ui.components.GlassAlertStyle.Bold) { },
+        ),
     )
 }
 

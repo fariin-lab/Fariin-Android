@@ -340,22 +340,19 @@ internal fun DeleteDialog(m: Message, ui: ThreadUi, actions: ThreadActions,
         AdminDeleteSheet(listOf(m), ui, actions, onDismiss)
         return
     }
-    val c = Fariin.colors
     val everyone = MessageRules.canDeleteForEveryone(m, ui.me, ui.adminMayDelete)
-    GlassAlert(
+    // The list form: one glass pill per choice. The three buttons sat in one Column inside the
+    // single confirm slot, which the glass alert draws as ONE pill: only "Delete for Everyone"
+    // showed, pushed right, with no Delete for Me and no Cancel (overnight test 2026-11-10).
+    com.fariin.app.ui.components.GlassAlert(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                if (everyone) TextButton(onClick = { onDismiss(); actions.onDeleteForEveryone(m) }) {
-                    Text("Delete for Everyone", color = c.red)
-                }
-                if (!ui.isGroup) TextButton(onClick = { onDismiss(); actions.onDeleteForMe(m) }) { Text("Delete for Me", color = c.red) }
-                else if (m.sendState != null) TextButton(onClick = { onDismiss(); actions.onDeleteForMe(m) }) { Text("Delete", color = c.red) }
-                TextButton(onClick = onDismiss) { Text("Cancel", color = c.accent) }
-            }
+        title = title,
+        actions = buildList {
+            if (everyone) add(com.fariin.app.ui.components.GlassAlertAction("Delete for Everyone", com.fariin.app.ui.components.GlassAlertStyle.Red) { actions.onDeleteForEveryone(m) })
+            if (!ui.isGroup) add(com.fariin.app.ui.components.GlassAlertAction("Delete for Me", com.fariin.app.ui.components.GlassAlertStyle.Red) { actions.onDeleteForMe(m) })
+            else if (m.sendState != null) add(com.fariin.app.ui.components.GlassAlertAction("Delete", com.fariin.app.ui.components.GlassAlertStyle.Red) { actions.onDeleteForMe(m) })
+            add(com.fariin.app.ui.components.GlassAlertAction("Cancel", com.fariin.app.ui.components.GlassAlertStyle.Bold) { })
         },
-        containerColor = c.card,
     )
 }
 
