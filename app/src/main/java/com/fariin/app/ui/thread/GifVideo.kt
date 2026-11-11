@@ -54,14 +54,25 @@ internal object GifVideo {
 
     private val free = ArrayDeque<ExoPlayer>()
     private var made = 0
-    private fun limit(): Int = if (com.fariin.app.perf.PowerSaving.state.value.deviceClass == com.fariin.app.perf.PerfClass.LOW) 4 else 6
+    private var busy = 0
+    // How many GIFs play at once (owner 2026-11-11: a tester's mid-range phone lagged after a burst of
+    // GIFs and stickers; its small graphics chip ran six videos while the chat scrolled). The newest
+    // GIFs on screen ask first, so they are the ones that play; the rest show their stills.
+    private fun limit(): Int = when (com.fariin.app.perf.PowerSaving.state.value.deviceClass) {
+        com.fariin.app.perf.PerfClass.LOW -> 1
+        com.fariin.app.perf.PerfClass.AVERAGE -> 2
+        else -> 4
+    }
+    /** Bumped when a player comes free, so a GIF that was turned away asks again. */
+    var freed by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
 
     /** A player for one GIF on screen, or null when all are busy (that GIF shows its still). */
     @OptIn(UnstableApi::class)
     fun take(c: Context): ExoPlayer? {
-        free.removeFirstOrNull()?.let { return it }
-        if (made >= limit()) return null
-        made++
+        if (busy >= limit()) return null
+        free.removeFirstOrNull()?.let { busy++; return it }
+        made++; busy++
         val app = c.applicationContext
         val source = CacheDataSource.Factory().setCache(cache(app))
             .setUpstreamDataSourceFactory(DefaultDataSource.Factory(app))
@@ -74,6 +85,8 @@ internal object GifVideo {
     fun give(p: ExoPlayer) {
         p.stop(); p.clearMediaItems(); p.clearVideoSurface()
         free.addLast(p)
+        busy = (busy - 1).coerceAtLeast(0)
+        freed++
     }
 }
 
@@ -91,9 +104,14 @@ internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, still: @
         if (mp4 != null && play) {
             var player by remember(mp4) { mutableStateOf<ExoPlayer?>(null) }
             var video by remember(mp4) { mutableStateOf<Pair<Int, Int>?>(null) }
-            DisposableEffect(mp4) {
+            // Turned away (all players busy): ask again each time one comes free. Once it has one,
+            // the key stays put, so it is never taken back by its own success.
+            var heldAt by remember(mp4) { androidx.compose.runtime.mutableIntStateOf(-1) }
+            val key = if (heldAt >= 0) heldAt else GifVideo.freed
+            DisposableEffect(mp4, key) {
                 val p = GifVideo.take(ctx)
                 player = p
+                if (p != null) heldAt = key
                 val l = object : Player.Listener {
                     override fun onRenderedFirstFrame() { shown = true }
                     override fun onVideoSizeChanged(s: androidx.media3.common.VideoSize) {
@@ -102,7 +120,7 @@ internal fun GifMp4(gifUrl: String?, play: Boolean, modifier: Modifier, still: @
                 }
                 p?.addListener(l)
                 p?.setMediaItem(MediaItem.fromUri(mp4)); p?.prepare(); p?.playWhenReady = true
-                onDispose { p?.removeListener(l); p?.let { GifVideo.give(it) }; player = null; shown = false }
+                onDispose { p?.removeListener(l); p?.let { GifVideo.give(it) }; player = null; shown = false; if (p != null) heldAt = -1 }
             }
             val p = player
             val vs = video
