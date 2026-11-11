@@ -551,8 +551,12 @@ fun ChatListScreen(
                                     onMarkAllRead = {
                                         val list = state.chats.filter { !it.isBlockedByMe(me) && it.hasUnreadMark(me) }
                                         scope.launch {
-                                            list.forEach { ChatListActions.setUnread(me, it, false) }
-                                            Snack.show(if (list.isEmpty()) "No unread chats" else "All chats marked as read")
+                                            val ok = list.map { ChatListActions.setUnread(me, it, false) }.all { it }
+                                            Snack.show(when {
+                                                list.isEmpty() -> "No unread chats"
+                                                ok -> "All chats marked as read"
+                                                else -> "Couldn't mark them all. Try again."
+                                            })
                                         }
                                     },
                                     onSelect = { selectMode = true },

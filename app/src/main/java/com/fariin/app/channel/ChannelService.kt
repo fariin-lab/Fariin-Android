@@ -268,6 +268,26 @@ object ChannelService {
         db.collection("users").document(uid).collection("channels").document(cid).update("read", count)
     }
 
+    /**
+     * Mark as Read / Mark as Unread on a channel I follow (iOS ChannelService.markRead / markUnread):
+     * `read` on my follow entry, which may go back by one post so the badge shows 1. Shown at once,
+     * put back if the server refuses.
+     */
+    suspend fun setRead(cid: String, read: Int): Boolean {
+        val uid = me
+        val cur = ChannelFollows.entry(cid)?.read
+        if (uid.isEmpty() || cur == null) return false
+        if (read == cur) return true
+        ChannelFollows.noteLocal(cid, read = read)
+        return try {
+            db.collection("users").document(uid).collection("channels").document(cid).update("read", read).await()
+            true
+        } catch (_: Exception) {
+            ChannelFollows.noteLocal(cid, read = cur)
+            false
+        }
+    }
+
     /** Mute (until ms, 0 = always) or unmute my follow entry; the server skips muted followers. */
     suspend fun setMuted(cid: String, muted: Boolean, until: Double = 0.0): Boolean {
         val uid = me
