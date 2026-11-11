@@ -268,13 +268,6 @@ object ChannelService {
         db.collection("users").document(uid).collection("channels").document(cid).update("read", count)
     }
 
-    /** Muted as shown on the channel's pages: my follow entry, else (owner/admin) `mutedBy.<me>`. */
-    fun mutedFor(cid: String, doc: Map<String, Any?>, uid: String): Boolean {
-        ChannelFollows.entry(cid)?.let { return it.isMuted() }
-        val until = ((doc["mutedBy"] as? Map<*, *>)?.get(uid) as? Number)?.toDouble() ?: 0.0
-        return until > System.currentTimeMillis()
-    }
-
     /** Mute (until ms, 0 = always) or unmute my follow entry; the server skips muted followers. */
     suspend fun setMuted(cid: String, muted: Boolean, until: Double = 0.0): Boolean {
         val uid = me
@@ -295,6 +288,13 @@ object ChannelService {
                 .update(mapOf("muted" to muted, "mutedUntil" to if (muted) until else 0.0)).await()
             true
         } catch (_: Exception) { false }
+    }
+
+    /** Muted as shown on the channel's pages: my follow entry, else (owner/admin) `mutedBy.<me>`. */
+    fun mutedFor(cid: String, doc: Map<String, Any?>, uid: String): Boolean {
+        ChannelFollows.entry(cid)?.let { return it.isMuted() }
+        val until = ((doc["mutedBy"] as? Map<*, *>)?.get(uid) as? Number)?.toDouble() ?: 0.0
+        return until > System.currentTimeMillis()
     }
 
     /**
