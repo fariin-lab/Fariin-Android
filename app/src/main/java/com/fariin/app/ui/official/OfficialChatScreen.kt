@@ -183,6 +183,25 @@ fun OfficialChatScreen(onBack: () -> Unit) {
             confirmButton = { TextButton({ rejectResult = null }) { Text("OK", color = c.accent) } }, containerColor = c.card)
     }
 
+    // The chat's profile (iOS OfficialChatInfoView), opened from the bar's name; Search there comes
+    // back and searches here, as a normal chat's profile does.
+    var showInfo by remember { mutableStateOf(false) }
+    var zoomed by remember { mutableStateOf<String?>(null) }
+    zoomed?.let { url ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { zoomed = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black).clickable { zoomed = null },
+                contentAlignment = Alignment.Center) {
+                AsyncImage(url, contentDescription = "Photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            }
+        }
+    }
+    if (showInfo && !selecting) {
+        OfficialInfoPage(onBack = { showInfo = false },
+            onSearch = { showInfo = false; searching = true; query = ""; fromNewest = 0 },
+            onOpenImage = { zoomed = it })
+        return
+    }
     // The grey page with the notes as white rounded cards and no hard lines at the bar edges
     // (iOS OfficialChatView), the back in its floating circle as in a chat.
     // The bar's back and buttons are liquid glass over the notes passing under (GlassBarPage).
@@ -216,7 +235,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            else FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE,
+            else Box(Modifier.clickable(onClickLabel = "Chat info") { showInfo = true }) { FariinTopBar(OfficialChannel.NAME, onBack = onBack, subtitle = OfficialChannel.SUBTITLE,
                 container = c.bgSecondary) {
                 // Search and the bell in floating circles, as the chat header's buttons.
                 com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_search_ios), "Search",
@@ -246,7 +265,7 @@ fun OfficialChatScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-            }
+            } }
         }
     }) { top ->
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
