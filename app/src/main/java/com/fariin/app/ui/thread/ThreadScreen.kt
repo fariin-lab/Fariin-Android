@@ -3031,10 +3031,11 @@ internal fun RestrictedWindow(on: Boolean) {
         val w = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
             ?: (view.context as? android.app.Activity)?.window
             ?: (view.context as? android.content.ContextWrapper)?.baseContext?.let { it as? android.app.Activity }?.window
-        val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
-        if (on) w?.addFlags(secure)
+        // Held through AppLock, so its resume pass (Home and back, another Activity closing) never
+        // clears the flag while this chat is open.
+        if (on && w != null) com.fariin.app.security.AppLock.holdSecure(w)
         onDispose {
-            if (on && !com.fariin.app.security.AppLock.secureWindows(view.context)) w?.clearFlags(secure)
+            if (on && w != null) com.fariin.app.security.AppLock.releaseSecure(view.context, w)
         }
     }
 }
