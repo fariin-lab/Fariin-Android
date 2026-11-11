@@ -8,6 +8,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
+import androidx.media3.transformer.VideoEncoderSettings
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
@@ -51,6 +53,9 @@ class VideoPrep(
 
         /** Length, size and poster of a clip already on disk (also used for a forwarded video). */
         suspend fun describe(file: File, posterJpeg: ByteArray? = null): VideoPrep? = withContext(Dispatchers.IO) {
+            // The index goes in front of the samples, so the receiver's player can start while the
+            // rest comes down (iOS shouldOptimizeForNetworkUse). Transcoded, original or forwarded.
+            runCatching { Faststart.apply(file) }
             val r = MediaMetadataRetriever()
             try {
                 r.setDataSource(file.absolutePath)
@@ -78,6 +83,7 @@ class VideoPrep(
             suspendCancellableCoroutine { cont ->
                 val t = Transformer.Builder(context)
                     .setMuxerFactory(NoLocationMuxerFactory())   // never the place it was filmed
+                    .apply { if (resize) setEncoderFactory(encoderFor(context, shortSide)) }
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
                     .setAudioMimeType(MimeTypes.AUDIO_AAC)
                     .addListener(object : Transformer.Listener {
@@ -105,6 +111,14 @@ class VideoPrep(
                 cont.invokeOnCancellation { runCatching { t.cancel() } }
             }
         }
+
+        /** A steady bitrate for a resized clip: about 2 Mbit/s at 540 (iOS's 960x540 export), 5 at
+         *  1080. Small enough to stream on a mobile network, the encoder's own choice otherwise. */
+        fun bitrateFor(shortSide: Int): Int = if (shortSide >= 1080) 5_000_000 else 2_000_000
+
+        private fun encoderFor(context: Context, shortSide: Int) = DefaultEncoderFactory.Builder(context)
+            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrateFor(shortSide)).build())
+            .build()
 
         private suspend fun copyOriginal(context: Context, uri: Uri, out: File): File? = withContext(Dispatchers.IO) {
             val type = context.contentResolver.getType(uri) ?: ""

@@ -79,6 +79,11 @@ class ChatMedia(
     }
 
     private suspend fun download(url: String, enc: EncMeta?): File? {
+        // A plain clip already watched to the end through the stream cache: copied out, not fetched again.
+        if ((enc == null || enc.isPlain) && Wire.isGroupCid(cid) && url.startsWith("https://")) {
+            val f = key(url)
+            if (VideoStream.copyCached(context, url, f)) return f
+        }
         val ref = try { FirebaseStorage.getInstance().getReferenceFromUrl(url) } catch (_: Exception) { null }
         val cipher = try {
             if (ref != null) fetchWithProgress(ref, url) else fetchByUrl(url)
@@ -183,6 +188,7 @@ class ChatMedia(
         fun wipe(context: Context) {
             File(context.cacheDir, "chat-media").deleteRecursively()
             File(context.cacheDir, "outgoing").deleteRecursively()
+            VideoStream.wipe(context)
         }
 
         /** One transfer per URL in this process, whichever chat or bubble asked first. */

@@ -42,6 +42,9 @@ object AppFeatures {
     val groupCalls: Boolean get() = offOnly("groupCalls", true)
     /** Call links: the Create a Call Link row (iOS CallFeatures.callLinks). */
     val callLinks: Boolean get() = offOnly("callLinks", true)
+    /** Plain group and channel videos play while they come down (VideoStream); off = the whole
+     *  file first, as before. */
+    val videoStream: Boolean get() = offOnly("videoStream", true)
 
     fun value(key: String, default: Boolean): Boolean = snapshot[key] ?: default
     /** A switch the server may only turn off (iOS RemoteFeatures.offOnly). */
