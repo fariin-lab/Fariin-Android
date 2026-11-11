@@ -54,8 +54,8 @@ fun FariinTopBar(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Fariin.colors
-    // iOS (owner 2026-11-10): the title centred, 17 semibold, and Back always in its 44 white circle
-    // (on a plain page the circle was not drawn, so the arrow looked small and faint).
+    // The title centred, 17 semibold. Back is the plain Android arrow on a solid bar; its circle only
+    // over glass (owner 2026-11-11: "remove the liquid glass" on the backs, replacing 2026-11-10's always-circle).
     CenterAlignedTopAppBar(
         title = {
             Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
@@ -67,7 +67,7 @@ fun FariinTopBar(
             }
         },
         navigationIcon = {
-            if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp), circle = !plainBarButtons())
+            if (onBack != null) FloatingBack(onBack, Modifier.padding(start = 8.dp, end = 4.dp))   // its circle only over glass (owner 2026-11-11)
         },
         // Glass circles at the end keep the back circle's distance from the edge (the last one was cut).
         actions = { actions(); if (glassBar()) androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp)) },
