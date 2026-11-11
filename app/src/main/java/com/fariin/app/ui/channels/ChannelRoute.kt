@@ -223,7 +223,7 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         info = info.copy(followerCount = ChannelFollows.adjusted(cid, info.followerCount)),
         role = role,
         guest = role == ChannelRules.Role.VISITOR,
-        muted = entry?.isMuted() ?: false,
+        muted = ChannelService.mutedFor(cid, doc, me),
         canReact = ChannelRules.canReact(info, role, guest = false),
         offered = ChannelRules.offered(info.reactMode, liveList),
         pickable = ChannelRules.pickable(info.reactMode, liveList),

@@ -268,10 +268,27 @@ object ChannelService {
         db.collection("users").document(uid).collection("channels").document(cid).update("read", count)
     }
 
+    /** Muted as shown on the channel's pages: my follow entry, else (owner/admin) `mutedBy.<me>`. */
+    fun mutedFor(cid: String, doc: Map<String, Any?>, uid: String): Boolean {
+        ChannelFollows.entry(cid)?.let { return it.isMuted() }
+        val until = ((doc["mutedBy"] as? Map<*, *>)?.get(uid) as? Number)?.toDouble() ?: 0.0
+        return until > System.currentTimeMillis()
+    }
+
     /** Mute (until ms, 0 = always) or unmute my follow entry; the server skips muted followers. */
     suspend fun setMuted(cid: String, muted: Boolean, until: Double = 0.0): Boolean {
         val uid = me
         if (uid.isEmpty()) return false
+        // The owner and admins are members, not followers: no follow entry to write. Their mute is
+        // `mutedBy.<me>` on the channel, as for any group (iOS ChatService.setMute falls through).
+        if (ChannelFollows.entry(cid) == null) {
+            val v = if (!muted) 0.0 else if (until <= 0.0) com.fariin.app.data.GroupInfoCircles.FOREVER else until
+            return try {
+                db.collection("conversations").document(cid)
+                    .set(mapOf("mutedBy" to mapOf(uid to v)), com.google.firebase.firestore.SetOptions.merge()).await()
+                true
+            } catch (_: Exception) { false }
+        }
         ChannelFollows.noteLocal(cid, muted = muted, mutedUntil = if (muted) until else 0.0)
         return try {
             db.collection("users").document(uid).collection("channels").document(cid)
