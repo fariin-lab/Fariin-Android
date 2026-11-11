@@ -431,7 +431,7 @@ private fun AccountPage(
             }
             // Alone at the bottom, no note under it; the note above belongs to Your Account Data only.
             SettingsSection {
-                SettingsRow("Log out", trailing = Trailing.NONE, titleColor = c.red, last = true,
+                SettingsRow("Log out", icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_log_out), trailing = Trailing.NONE, titleColor = c.red, last = true,
                     badge = NewBadgeSpots.ACCOUNT_LOG_OUT) { confirm = true }
             }
         }
