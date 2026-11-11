@@ -23,10 +23,15 @@ object MessageRules {
 
     private fun unopened(m: Message) = m.text == Wire.LOCKED || m.text == Wire.NOT_READY
 
+    private val FEATURE_MARKER = Regex("^fariin-[a-z0-9]+:")
+
+    /** iOS Message.isFeatureMarker: a poll, pin notice or any other "fariin-xxx:" text, never edited or copied raw. */
+    fun isFeatureMarker(text: String): Boolean = FEATURE_MARKER.containsMatchIn(text)
+
     /** ThreadView.canEdit: mine, not forwarded, has words, delivered, inside the window. */
     fun canEdit(m: Message, me: String, nowMs: Double, channel: Boolean = false): Boolean =
         m.authorId == me && !m.forwarded && !m.deleted && m.type != "audio" && !m.isCall && !m.isSystem &&
-            !m.viewOnce && m.text.isNotEmpty() && !unopened(m) && m.sendState == null &&
+            !m.viewOnce && m.text.isNotEmpty() && !unopened(m) && m.sendState == null && !isFeatureMarker(m.text) &&
             // iOS: a channel post has no window (owner 2026-11-05); the rules drop it for channels too.
             (channel || nowMs - m.createdAtMillis < EDIT_WINDOW_MS)
 
@@ -53,7 +58,7 @@ object MessageRules {
     /** Quote: where Forward is, never on a service line (the server refuses them too). */
     fun canQuote(m: Message): Boolean = canForward(m) && !isServiceLine(m)
 
-    fun canCopy(m: Message): Boolean = !m.deleted && !m.viewOnce && m.text.isNotEmpty() && !unopened(m)
+    fun canCopy(m: Message): Boolean = !m.deleted && !m.viewOnce && m.text.isNotEmpty() && !unopened(m) && !isFeatureMarker(m.text)
 
     /** Reply needs a server copy (a clientId-only send cannot be quoted yet). */
     fun canReply(m: Message): Boolean = m.sendState == null && !m.deleted && !m.isSystem
