@@ -117,6 +117,8 @@ data class Conversation(
     val modState: String = "ok",
     val modLabel: String = "",
     val modUntilMillis: Double = 0.0,
+    /** The owner ended the group (`endedAt`, iOS groupMod state "ended"). */
+    val ended: Boolean = false,
 ) {
     /** One small picture the list draws (iOS ListThumb / ReactionThumb). */
     @androidx.compose.runtime.Immutable
@@ -199,7 +201,9 @@ data class Conversation(
 
     /** A group call I may start here, as GroupCallWire.mayStart (the server checks again). */
     fun mayStartCall(me: String): Boolean =
-        isGroup && !isChannel && users.contains(me) && (!onlyAdminsCall || admins.contains(me))
+        isGroup && !isChannel && users.contains(me) && (!onlyAdminsCall || admins.contains(me)) &&
+            // iOS canStartCall: a closed group (ended, suspended, disabled) starts no calls.
+            !ended && !fariinLocked()
 
     fun lastReadByOther(me: String): Boolean {
         if (isGroup) return others(me).all { (unreadCount[it] ?: 0) <= 0 }
@@ -307,6 +311,7 @@ data class Conversation(
                     ?.takeIf { it in listOf("ok", "limited", "suspended", "disabled") } ?: "ok",
                 modLabel = modLabel(data["mod"]),
                 modUntilMillis = millis((data["mod"] as? Map<*, *>)?.get("until")),
+                ended = GroupMod.ended(data),
                 typing = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                     (k as? String)?.takeIf { MessageRules.isTyping(v) }?.let { it to true } }?.toMap() ?: emptyMap(),
                 recording = (data["typing"] as? Map<*, *>)?.mapNotNull { (k, v) ->

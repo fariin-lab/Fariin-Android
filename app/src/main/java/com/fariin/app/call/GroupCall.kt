@@ -76,6 +76,8 @@ object GroupCallWire {
         if (conv["type"] != "group") return false
         if ((conv["users"] as? List<*>)?.contains(me) != true) return false
         if (conv["onlyAdminsCall"] == true && (conv["admins"] as? List<*>)?.contains(me) != true) return false
+        // iOS canStartCall: a closed group (ended by its owner, suspended or disabled) starts no calls.
+        if (com.fariin.app.data.GroupMod.blocksSending(conv)) return false
         return true
     }
 
