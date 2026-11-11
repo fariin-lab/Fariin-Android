@@ -107,6 +107,10 @@ class ThreadRepository(
     /** Raw docs by id, so a key arriving later can re-open them. */
     private val liveDocs = LinkedHashMap<String, DocumentSnapshot>()
     private val olderDocs = LinkedHashMap<String, DocumentSnapshot>()
+    /** One listener per older page, so an edit, delete or reaction on an older message shows at once. */
+    private val olderRegs = ArrayList<ListenerRegistration>()
+    /** The ids each older page last held, to drop a message the server deleted from that page. */
+    private val olderPageIds = ArrayList<Set<String>>()
     /** Sends this phone has started, by clientId, until the server echo carries the same clientId. */
     private val pending = ConcurrentHashMap<String, Message>()
     /** My own media files by clientId: drawn and played locally until the server copy has its URL. */
@@ -217,6 +221,7 @@ class ThreadRepository(
                 if (snap.metadata.isFromCache && snap.isEmpty && (liveDocs.isNotEmpty() || seeded)) return@addSnapshotListener
                 seeded = false
                 live = true
+                keepSlidOut(snap.documents, full = snap.size() >= PAGE_SIZE)
                 liveDocs.clear()
                 for (d in snap.documents) liveDocs[d.id] = d
                 if (!snap.metadata.isFromCache && snap.size() < PAGE_SIZE) _state.update { it.copy(canLoadOlder = false) }
@@ -313,6 +318,7 @@ class ThreadRepository(
         FormerGroups.note(cid, stripped, CryptoHub.listedConversation(cid)?.updatedAtMillis ?: 0.0)
         msgReg?.remove(); msgReg = null
         convReg?.remove(); convReg = null
+        stopOlder()
         _state.update { it.copy(conv = stripped, former = true) }
         watchBack()
     }
@@ -339,6 +345,7 @@ class ThreadRepository(
         myReg?.remove(); myReg = null
         msgReg?.remove(); msgReg = null
         convReg?.remove(); convReg = null
+        stopOlder()
         burnJob?.cancel(); burnJob = null
     }
 
@@ -350,31 +357,81 @@ class ThreadRepository(
         } catch (_: Exception) { emptyList() }
     }
 
-    /** iOS `loadOlder`: the page before the oldest held, by value (`start(at:)`), deduped by id. */
+    /**
+     * The live window is the newest [PAGE_SIZE]; each new message pushes its oldest one out. A message
+     * that left by sliding (older than everything the window holds now) moves to [olderDocs] instead
+     * of vanishing from the open screen. One that left while newer than the window's oldest was
+     * deleted, and goes.
+     */
+    private fun keepSlidOut(now: List<DocumentSnapshot>, full: Boolean) {
+        if (!full || liveDocs.isEmpty()) return
+        val ids = now.mapTo(HashSet()) { it.id }
+        val floor = now.mapNotNull { it.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }.minOrNull() ?: return
+        for ((id, d) in liveDocs) {
+            if (id in ids) continue
+            val at = d.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) ?: continue
+            if (at <= floor) olderDocs[id] = d
+        }
+    }
+
+    private fun stopOlder() {
+        olderRegs.forEach { it.remove() }
+        olderRegs.clear(); olderPageIds.clear()
+    }
+
+    /**
+     * iOS `loadOlder`: the page before the oldest held, by value (`start(at:)`), deduped by id. The page
+     * stays listened to while the chat is open, so changes to older messages reach the screen.
+     */
     fun loadOlder() {
         val s = _state.value
         if (!s.canLoadOlder || s.loadingOlder || !s.loaded) return
         val oldest = (liveDocs.values + olderDocs.values).mapNotNull { it.getTimestamp("createdAt") }.minOrNull() ?: return
         _state.update { it.copy(loadingOlder = true) }
-        scope.launch {
-            try {
-                val snap = convRef.collection("messages")
-                    .orderBy("createdAt", Query.Direction.DESCENDING)
-                    .startAt(oldest)
-                    .limit(PAGE_SIZE)
-                    .get().await()
-                var added = 0
-                for (d in snap.documents) {
-                    if (!liveDocs.containsKey(d.id) && !olderDocs.containsKey(d.id)) { olderDocs[d.id] = d; added++ }
+        val page = olderPageIds.size
+        olderPageIds.add(emptySet())
+        var first = true
+        val reg = convRef.collection("messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .startAt(oldest)
+            .limit(PAGE_SIZE)
+            .addSnapshotListener { snap, _ ->
+                if (page >= olderPageIds.size) return@addSnapshotListener
+                if (snap == null) {
+                    if (first) { first = false; _state.update { it.copy(loadingOlder = false) } }
+                    return@addSnapshotListener
                 }
-                // A short page from the server is the start of the chat; nothing new means the same.
-                val more = added > 0 && (snap.metadata.isFromCache || snap.size() >= PAGE_SIZE)
-                _state.update { it.copy(loadingOlder = false, canLoadOlder = more) }
+                val ids = snap.documents.mapTo(HashSet()) { it.id }
+                // An empty first answer from the phone's own copy waits for the server's (a one-shot
+                // read would have asked the server first).
+                if (first && snap.metadata.isFromCache && snap.isEmpty) return@addSnapshotListener
+                if (first) {
+                    first = false
+                    var added = 0
+                    for (d in snap.documents) {
+                        if (!liveDocs.containsKey(d.id) && !olderDocs.containsKey(d.id)) added++
+                        if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
+                    }
+                    olderPageIds[page] = ids
+                    // A short page from the server is the start of the chat; nothing new means the same.
+                    val more = added > 0 && (snap.metadata.isFromCache || snap.size() >= PAGE_SIZE)
+                    _state.update { it.copy(loadingOlder = false, canLoadOlder = more) }
+                    rebuild()
+                    return@addSnapshotListener
+                }
+                // A later change on this page: edits, reactions, delete-for-everyone, or a message
+                // the server removed (gone from this page and from every other one).
+                for (d in snap.documents) if (!liveDocs.containsKey(d.id)) olderDocs[d.id] = d
+                for (id in olderPageIds[page]) {
+                    if (id in ids || liveDocs.containsKey(id)) continue
+                    if (olderPageIds.withIndex().none { (i, set) -> i != page && id in set }) olderDocs.remove(id)
+                }
+                olderPageIds[page] = ids
+                if (page == olderPageIds.size - 1 && !snap.metadata.isFromCache && snap.size() < PAGE_SIZE)
+                    _state.update { it.copy(canLoadOlder = false) }
                 rebuild()
-            } catch (_: Exception) {
-                _state.update { it.copy(loadingOlder = false) }
             }
-        }
+        olderRegs.add(reg)
     }
 
     @Synchronized
