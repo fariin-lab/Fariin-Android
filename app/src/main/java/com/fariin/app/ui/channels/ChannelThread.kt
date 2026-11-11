@@ -286,6 +286,8 @@ internal fun ChannelPostMenu(
     /** null: no Pin row; else whether the post is pinned now. */
     pinned: Boolean? = null,
     onPin: ((Message) -> Unit)? = null,
+    /** The post's own bubble, drawn for a photo, video or album post (else the words' pill). */
+    preview: (@Composable () -> Unit)? = null,
 ) {
     val c = Fariin.colors
     val ctx = LocalContext.current
@@ -377,7 +379,11 @@ internal fun ChannelPostMenu(
                     }
                     Spacer(Modifier.height(10.dp))
                 }
-                Text(
+                // A photo, video or album post shows itself, picture and caption, scaled down to fit
+                // (owner 2026-11-11: the menu left the photo out and showed only the words).
+                if (preview != null && m.mediaKind != null && m.mediaKind != Message.MediaKind.VOICE && m.mediaKind != Message.MediaKind.FILE)
+                    FitPreview(androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.38f) { preview() }
+                else Text(
                     if (m.deleted) "This post was deleted" else com.fariin.app.data.CardRules.previewWord(m.text) ?: m.bodyText.ifEmpty { "Post" },
                     fontSize = 15.sp, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp))
@@ -509,6 +515,23 @@ private fun SimilarChannelsStrip(cid: String) {
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(com.fariin.app.channel.ChannelRules.followersLine(ch.followerCount), fontSize = 10.sp, color = c.secondary, maxLines = 1)
                 }
+            }
+        }
+    }
+}
+
+/** [content] at the full width, scaled down (from its top centre) when it is taller than [maxHeight]. */
+@Composable
+private fun FitPreview(maxHeight: androidx.compose.ui.unit.Dp, content: @Composable () -> Unit) {
+    androidx.compose.ui.layout.Layout(content) { ms, k ->
+        val p = ms.first().measure(k.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+        val limit = maxHeight.roundToPx()
+        val s = if (p.height > limit) limit.toFloat() / p.height else 1f
+        val h = (p.height * s).toInt()
+        layout(p.width, h) {
+            p.placeWithLayer(0, 0) {
+                scaleX = s; scaleY = s
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
             }
         }
     }

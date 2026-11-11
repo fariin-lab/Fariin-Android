@@ -333,6 +333,8 @@ private fun ThreadContent(
     // for the lifted message (MessageMenuOverlay); the real row hides while its copy is up.
     var menuSource by remember { mutableStateOf<MenuSource?>(null) }
     var menuPreview by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
+    // A channel post's own bubble for its long-press menu (owner 2026-11-11: only the words showed).
+    var postPreview by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     var menuLifted by remember { mutableStateOf<String?>(null) }   // the row whose copy is up
     val quickReaction = rememberQuickReaction()
     val mayReply = mayReplyHere(ui)   // iOS: no Reply where only admins send and I am not one
@@ -535,7 +537,7 @@ private fun ThreadContent(
     }
     val ch = ui.channel
     postMenuFor?.let { m ->
-        if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null },
+        if (ch != null) com.fariin.app.ui.channels.ChannelPostMenu(ch, m, onDismiss = { postMenuFor = null; postPreview = null }, preview = postPreview,
             onCopy = { copyOf(m, it); if (android.os.Build.VERSION.SDK_INT < 33) actions.onNotice("Copied") },
             onDelete = { deleteFor = it }, onQuote = { quoteFor = it },
             // The owner's and admins' own tools, as the chat menu has them (iOS uses one menu for both).
@@ -1186,7 +1188,7 @@ private fun ThreadContent(
                                 com.fariin.app.ui.channels.LocalPostViews provides
                                     if (m.deleted) null else com.fariin.app.channel.ChannelRules.shownViews(m.views, m.authorId, ui.me),
                             ) {
-                                Column(Modifier.fillMaxWidth().combinedClickableLong { postMenuFor = m }) {
+                                Column(Modifier.fillMaxWidth().combinedClickableLong { postPreview = { MessageRow(ui, m, g, is24h, {}) {} }; postMenuFor = m }) {
                                     MessageRow(ui, m, g, is24h, { failedFor = it }) { viewing = withChatGallery(it, uiNow.value.messages, uiNow.value.isGroup || uiNow.value.channel != null) }
                                     // A text post carries its reactions inside the bubble; the rest under it.
                                     // A photo, video or album post draws its bar inside its bubble (MediaRow), as text posts do.
