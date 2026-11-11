@@ -64,8 +64,14 @@ object ChatListActions {
         return merge(me, c.id, mapOf("mutedBy" to mapOf(me to until)))
     }
 
+    /**
+     * A channel I only follow keeps its read mark on my follow entry (iOS ChatService.resetUnread /
+     * markUnread): read = every post, or one post back for Mark as Unread. The channel's own
+     * document is refused to a follower.
+     */
     suspend fun setUnread(me: String, c: Conversation, on: Boolean): Boolean =
-        if (on) merge(me, c.id, mapOf("markedUnread" to mapOf(me to true)))
+        if (c.isFollower(me)) (me == DemoChats.ME || com.fariin.app.channel.ChannelService.setRead(c.id, if (on) maxOf(0, c.postCount - 1) else c.postCount))
+        else if (on) merge(me, c.id, mapOf("markedUnread" to mapOf(me to true)))
         else merge(me, c.id, mapOf("markedUnread" to mapOf(me to false), "unreadCount" to mapOf(me to 0)))
 
     /** Delete for me: the chat empties and leaves my list until something new arrives (iOS deleteForMe). */
@@ -82,7 +88,9 @@ object ChatListActions {
 
     /** True when pinning [adding] more would pass the cap; says so in a snackbar. */
     fun pinsFull(me: String, all: List<Conversation>, adding: Int): Boolean {
-        val pinned = all.count { it.isPinned(me) }
+        // The Fariin chat counts when it is pinned and in the list (iOS ChatService pin cap).
+        val official = com.fariin.app.data.OfficialChannel.view.value
+        val pinned = all.count { it.isPinned(me) } + if (official.state.pinned && official.latest != null) 1 else 0
         if (pinned + adding <= PINNED_MAX) return false
         Snack.show("You can pin up to $PINNED_MAX chats. Unpin one to pin this chat.")
         return true
