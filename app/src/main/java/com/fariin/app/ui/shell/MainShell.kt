@@ -531,5 +531,6 @@ const val TAB_SETTINGS = 3
 private const val CALLS_FIRST_LOAD_DELAY_MS = 1_500L
 
 /** The tab bar's frosted surface over the list (was 0.86 / 0.84: too thick to see the rows pass). */
-private const val TAB_FROST_LIGHT = 0.62f
-private const val TAB_FROST_DARK = 0.64f
+// More solid, still glass (owner 2026-11-11, his Pixel photo: the rows read through the tab bar).
+private const val TAB_FROST_LIGHT = 0.86f
+private const val TAB_FROST_DARK = 0.86f
