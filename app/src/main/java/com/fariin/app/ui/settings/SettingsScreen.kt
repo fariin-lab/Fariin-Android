@@ -345,8 +345,15 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
 
 @Composable
 private fun Capsule(title: String, onClick: () -> Unit, modifier: Modifier) {
-    // A floating white capsule with the blue title (iOS glass buttons), not Material's tonal fill.
-    Box(modifier.height(44.dp).floating(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onClick),
+    // A solid capsule in the cards' colour, dimmed while pressed (iOS ProfileCapsuleButtonStyle).
+    // No glass (owner 2026-11-11: "remove the liquid glass" on these two).
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val down by press.collectIsPressedAsState()
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (down) 0.55f else 1f,
+        androidx.compose.animation.core.tween(150), label = "capsulePress")
+    Box(modifier.height(44.dp).graphicsLayer { alpha = dim }
+        .clip(androidx.compose.foundation.shape.CircleShape).background(Fariin.colors.card)
+        .clickable(press, null, onClick = onClick),
         contentAlignment = Alignment.Center) {
         Text(title, style = androidx.compose.material3.MaterialTheme.typography.labelLarge, color = Fariin.colors.accent)
     }
