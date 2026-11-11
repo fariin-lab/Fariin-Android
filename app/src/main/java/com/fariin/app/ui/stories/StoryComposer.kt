@@ -126,6 +126,18 @@ object StoryUploads {
 
     @Synchronized private fun begin() { inFlight++ }
 
+    /** The posts running now (iOS cancelUpload): Cancel Upload stops them. */
+    private val jobs = java.util.Collections.synchronizedSet(HashSet<kotlinx.coroutines.Job>())
+
+    /**
+     * Cancel Upload (iOS cancelUpload): every post going up stops, its Storage transfer is cancelled,
+     * its half-written story document removed and its ticket thrown away, so nothing resumes later.
+     */
+    fun cancel() {
+        val running = synchronized(jobs) { jobs.toList() }
+        running.forEach { it.cancel() }
+    }
+
     @Synchronized private fun finish(result: State?) {
         if (result is State.Failed && failure == null) failure = result
         inFlight = (inFlight - 1).coerceAtLeast(0)
@@ -147,11 +159,19 @@ object StoryUploads {
         state.value = State.Uploading
         pending.value = media.jpeg
         // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
-        val myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
-        val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
+        var myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
+        var hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
         val app = context.applicationContext
-        scope.launch {
+        val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             var outcome: State? = null
+            // Fail closed: the hidden-from list and My Chats only count once the server sent them.
+            // Not loaded in time = the post waits on disk (Try Again / reconnect), never goes wider.
+            val audienceKnown = group != null || com.fariin.app.data.StoryPrivacyStore.serverLoaded.value ||
+                com.fariin.app.data.StoryPrivacyStore.awaitLoaded(me, 10_000)
+            if (group == null && audienceKnown) {
+                myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
+                hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
+            }
             // The edited clip first, as one new file; everything after posts it like a picked one.
             var exported: java.io.File? = null
             try {
@@ -173,32 +193,53 @@ object StoryUploads {
             val video = media.video
             val pieces = video?.let { com.fariin.app.data.StoryLimits.segments(it.info.durationSec) }.orEmpty()
             outcome = if (video == null || pieces.isEmpty()) {
-                postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group)
+                postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group, audienceKnown)
             } else {
                 // iOS postVideo: a clip past 90 s goes as several stories in order, each its own
                 // 90 s piece; the caption and the tap areas ride the first, the one seen first.
+                // iOS postVideo: each part gets three tries; a part that still fails leaves itself and
+                // every later part waiting on disk, so Try Again (or the reconnect) sends the rest.
                 var result: State? = null
+                var waitingFrom = -1
                 for ((i, range) in pieces.withIndex()) {
                     val file = java.io.File(app.cacheDir, "story-part-${System.nanoTime()}.mp4")
                     try {
                         val part = if (com.fariin.app.media.StoryVideoCut.cut(app, video.file, file, range))
                             StoryMedia.prepareVideo(app, Uri.fromFile(file)) else null
                         if (part == null) {
-                            result = State.Failed(if (i == 0) "Couldn't prepare this video for your story."
+                            if (waitingFrom < 0) result = State.Failed(if (i == 0) "Couldn't prepare this video for your story."
                                 else "Only the first $i parts of this video were posted. The rest couldn't be prepared.")
                             break
                         }
                         val clip = part.video?.let { v -> StoryMedia.Video(v.file, v.info.copy(bytes = file.length())) }
                         val one = StoryMedia.Prepared(part.jpeg, part.blurThumb, clip, part.width, part.height,
                             if (i == 0) media.stickers else emptyList(), media.repostOf)
-                        result = postOne(app, me, one, if (i == 0) caption else "", choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group)
-                        if (result != null) break
+                        val cap = if (i == 0) caption else ""
+                        if (waitingFrom >= 0) {
+                            // An earlier part is waiting: this one waits behind it, in order.
+                            com.fariin.app.data.StoryOutbox.write(app, me, one, cap, choice, picked, hours, captureSwitch, lists, group,
+                                audience = if (group == null && audienceKnown) myFriends to hidden else null)
+                                ?.let { com.fariin.app.data.StoryOutbox.release(it) }
+                            continue
+                        }
+                        result = postOne(app, me, one, cap, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group, audienceKnown, attempts = 3)
+                        if (result != null) {
+                            // A network failure leaves its ticket waiting: the later parts wait with it.
+                            if (result == State.Failed(NETWORK_FAILED) && com.fariin.app.data.StoryOutbox.hasWaiting(app, me)) {
+                                waitingFrom = i
+                                result = State.Failed("Part ${i + 1} of ${pieces.size} didn't upload. The parts before it were posted. Try again to send the rest.")
+                                continue
+                            }
+                            break
+                        }
                     } finally {
                         file.delete()   // the outbox keeps its own copy
                     }
                 }
                 result
             }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                outcome = null   // Cancel Upload: nothing to report
             } catch (e: Exception) {
                 android.util.Log.w("StoryPost", "post failed", e)
                 outcome = State.Failed(NETWORK_FAILED)
@@ -208,6 +249,9 @@ object StoryUploads {
                 com.fariin.app.data.StoryLimits.refresh(me)
             }
         }
+        jobs += job
+        job.invokeOnCompletion { jobs -= job }
+        job.start()
     }
 
     const val NETWORK_FAILED = "Couldn't post your story. Check your connection and try again."
@@ -221,26 +265,61 @@ object StoryUploads {
         val app = context.applicationContext
         if (state.value == State.Uploading || !com.fariin.app.data.StoryOutbox.hasWaiting(app, me)) return
         if (!quiet) state.value = State.Uploading
-        scope.launch {
-            com.fariin.app.data.StoryOutbox.resume(app, me, convs)
+        val job = scope.launch {
+            try {
+                com.fariin.app.data.StoryOutbox.resume(app, me, convs)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                state.value = null   // Cancel Upload: the waiting post was thrown away
+                throw e
+            }
             val waiting = com.fariin.app.data.StoryOutbox.hasWaiting(app, me)
             if (!quiet && state.value == State.Uploading) state.value = if (waiting) State.Failed(NETWORK_FAILED) else null
             else if (quiet && !waiting && state.value is State.Failed) state.value = null
             com.fariin.app.data.StoryLimits.refresh(me)
         }
+        jobs += job
+        job.invokeOnCompletion { jobs -= job }
     }
 
     /** One story through the outbox; null when it is up, else what to say. */
     private suspend fun postOne(app: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice,
                                 picked: Set<String>, hours: Int, convs: List<Conversation>, captureSwitch: Boolean,
                                 myFriends: com.fariin.app.data.StoryListDoc, hidden: Set<String>,
-                                lists: List<com.fariin.app.data.StoryListDoc>, group: com.fariin.app.data.GroupStoryPost?): State? {
-        // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start.
-        val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists, group)
+                                lists: List<com.fariin.app.data.StoryListDoc>, group: com.fariin.app.data.GroupStoryPost?,
+                                audienceKnown: Boolean, attempts: Int = 1): State? {
+        // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start, with the
+        // audience resolved now so the resume never depends on lists that have not loaded.
+        val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists, group,
+            audience = if (group == null && audienceKnown) myFriends to hidden else null)
+        if (!audienceKnown) {
+            // The privacy lists never arrived: keep the post waiting rather than send it to a default audience.
+            ticket?.let { com.fariin.app.data.StoryOutbox.release(it) }
+            return State.Failed(NETWORK_FAILED)
+        }
         return try {
-            StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket, group = group)
+            // A long video's part tries again before giving up (iOS: three tries, 1.5 s then 3 s apart).
+            var tries = 0
+            while (true) {
+                try {
+                    StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket, group = group)
+                    break
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: StoryService.PostRefused) {
+                    throw e
+                } catch (e: Exception) {
+                    val refused = (e as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
+                        com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+                    if (refused || ++tries >= attempts) throw e
+                    kotlinx.coroutines.delay(1_500L * tries)
+                }
+            }
             ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
             null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Cancel Upload: the half document is gone (StoryService), the ticket goes too.
+            ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
+            throw e
         } catch (e: StoryService.PostRefused) {
             ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }
             State.Failed(e.message ?: "Couldn't post your story.")

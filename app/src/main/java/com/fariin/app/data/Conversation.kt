@@ -42,6 +42,12 @@ data class Conversation(
     val admins: List<String> = emptyList(),
     /** A group's owner (Firestore `createdBy`). */
     val createdBy: String = "",
+    /** Per admin, the rights they hold (Firestore `adminRights`); no entry = every right (legacy). */
+    val adminRights: Map<String, List<String>> = emptyMap(),
+    /** iOS groupNoReport: the group switched off reporting its content (Firestore `noReport`). */
+    val noReport: Boolean = false,
+    /** iOS isPublic: a group with a public @name that is switched to public. */
+    val isPublicGroup: Boolean = false,
     val onlyAdminsCall: Boolean = false,
     /** This phone's own write to the chat doc (a send made offline) has not reached the server yet. */
     val localPending: Boolean = false,
@@ -280,6 +286,11 @@ data class Conversation(
                 lastHeld = data["lastHeld"] as? Boolean ?: false,
                 admins = stringList(data["admins"]),
                 createdBy = data["createdBy"] as? String ?: "",
+                adminRights = (data["adminRights"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
+                    if (k is String && v is List<*>) k to v.filterIsInstance<String>() else null
+                }?.toMap() ?: emptyMap(),
+                noReport = data["noReport"] as? Boolean ?: false,
+                isPublicGroup = type == "group" && (data["username"] as? String).orEmpty().isNotEmpty() && data["isPublic"] == true,
                 onlyAdminsCall = data["onlyAdminsCall"] as? Boolean ?: false,
                 convType = type,
                 title = data["title"] as? String ?: "",

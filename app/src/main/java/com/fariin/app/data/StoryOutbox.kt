@@ -41,7 +41,10 @@ object StoryOutbox {
     /** Written before the upload starts; returns the story id the post must use. */
     fun write(c: Context, owner: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice,
               picked: Set<String>, hours: Int, capture: Boolean, lists: List<StoryListDoc>,
-              group: GroupStoryPost? = null): String? = runCatching {
+              group: GroupStoryPost? = null,
+              /** The audience as resolved at Post Story (My Chats, hidden-from, the lists themselves), so a
+               *  resumed post never leans on a privacy store that has not loaded yet. Null = not known then. */
+              audience: Pair<StoryListDoc, Set<String>>? = null): String? = runCatching {
         val id = StoryRules.newStoryId()
         val dir = File(root(c), id).also { it.mkdirs() }
         File(dir, "photo.jpg").writeBytes(media.jpeg)
@@ -52,6 +55,10 @@ object StoryOutbox {
             .put("blur", media.blurThumb).put("w", media.width).put("h", media.height)
             .put("stickers", JSONArray(media.stickers.map { JSONObject(StoryTaps.asMap(it)) }))
         media.repostOf?.let { o.put("repost", JSONObject(it.asMap())) }
+        audience?.let { (friends, hidden) ->
+            o.put("aud", JSONObject().put("myFriends", listJson(friends)).put("hidden", JSONArray(hidden.toList()))
+                .put("lists", JSONArray(lists.map { listJson(it) })))
+        }
         // A group story keeps its group through a retry (iOS: the tag rides the upload queue).
         group?.let { g ->
             o.put("group", JSONObject().put("id", g.target.id).put("name", g.target.name).put("photo", g.target.photoUrl ?: "")
@@ -89,7 +96,9 @@ object StoryOutbox {
     suspend fun resume(c: Context, me: String, convs: List<Conversation>) = pass.withLock { resumeOnce(c, me, convs) }
 
     private suspend fun resumeOnce(c: Context, me: String, convs: List<Conversation>) {
+        // Oldest ticket first, so the waiting parts of a long video still post in order.
         val dirs = root(c).listFiles().orEmpty().filter { it.isDirectory && it.name !in active }
+            .sortedBy { d -> runCatching { JSONObject(File(d, "ticket.json").readText()).optLong("first") }.getOrDefault(0L) }
         for (dir in dirs) {
             val o = runCatching { JSONObject(File(dir, "ticket.json").readText()) }.getOrNull()
             // Unreadable, another account's, or too old to still be news: never posted under anyone.
@@ -106,18 +115,43 @@ object StoryOutbox {
             val choice = runCatching { StoryAudienceChoice.valueOf(o.getString("choice")) }.getOrNull() ?: run { dir.deleteRecursively(); null } ?: continue
             val picked = o.optJSONArray("picked")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }.orEmpty()
             val listIds = o.optJSONArray("lists")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
-            val lists = StoryPrivacyStore.custom.value.filter { it.id in listIds }
             val group = o.optJSONObject("group")?.takeIf { it.optString("id").isNotEmpty() }?.let { g ->
                 GroupStoryPost(GroupStoryTarget(g.optString("id"), g.optString("name"), g.optString("photo").ifEmpty { null },
                     g.optInt("count"), g.optBoolean("channel")), g.optBoolean("replies", true))
             }
+            // Who it goes to, fail closed: the audience the ticket carries, else the privacy store once
+            // the server has sent it. Not known yet = keep the ticket for a later pass, never post it
+            // to a default audience and never drop it as "refused" because nothing had loaded.
+            val aud = o.optJSONObject("aud")
+            val myFriends: StoryListDoc
+            val hidden: Set<String>
+            val lists: List<StoryListDoc>
+            if (group != null) {
+                myFriends = StoryPrivacyRules.defaultMyFriends; hidden = emptySet(); lists = emptyList()
+            } else {
+                val needStore = aud == null || choice == StoryAudienceChoice.GLOWERS
+                if (needStore && !StoryPrivacyStore.awaitLoaded(me, 15_000)) continue
+                if (choice == StoryAudienceChoice.GLOWERS && !Glow.state.value.known) continue
+                if (aud != null) {
+                    myFriends = aud.optJSONObject("myFriends")?.let { listFrom(it) } ?: continue
+                    hidden = aud.optJSONArray("hidden")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: continue
+                    lists = aud.optJSONArray("lists")?.let { a -> (0 until a.length()).mapNotNull { listFrom(a.getJSONObject(it)) } }.orEmpty()
+                } else {
+                    myFriends = StoryPrivacyStore.myFriends.value
+                    hidden = StoryPrivacyStore.hidden.value
+                    lists = StoryPrivacyStore.custom.value.filter { it.id in listIds }
+                }
+            }
             active += id   // running: not "waiting" to the alert while it goes
             try {
                 StoryService(me).post(media, o.optString("caption"), choice, picked, o.optInt("hours", 24), convs, o.optBoolean("capture"),
-                    StoryPrivacyStore.myFriends.value, StoryPrivacyStore.hidden.value, lists, fixedId = id, group = group)
+                    myFriends, hidden, lists, fixedId = id, group = group)
                 dir.deleteRecursively()
             } catch (e: StoryService.PostRefused) {
                 dir.deleteRecursively()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                dir.deleteRecursively()   // Cancel Upload during a retry: never resumed again
+                throw e
             } catch (e: Exception) {
                 android.util.Log.w("StoryOutbox", "resume failed, kept for later", e)
             } finally {
@@ -125,6 +159,16 @@ object StoryOutbox {
             }
         }
     }
+
+    private fun listJson(l: StoryListDoc) = JSONObject().put("id", l.id).put("kind", l.kind).put("mode", l.mode)
+        .put("members", JSONArray(l.members)).put("replies", l.allowReplies).put("name", l.name).put("emoji", l.emoji)
+        .put("at", l.createdAtMs)
+
+    private fun listFrom(j: JSONObject): StoryListDoc? = runCatching {
+        StoryListDoc(j.getString("id"), j.getString("kind"), j.getString("mode"),
+            j.getJSONArray("members").let { a -> (0 until a.length()).map { a.getString(it) } },
+            j.optBoolean("replies", true), j.optString("name"), j.optString("emoji"), j.optLong("at"))
+    }.getOrNull()
 
     private fun prepared(dir: File, o: JSONObject): StoryMedia.Prepared? {
         val jpeg = runCatching { File(dir, "photo.jpg").readBytes() }.getOrNull() ?: return null

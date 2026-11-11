@@ -31,7 +31,7 @@ class StoryService(
     suspend fun receiptsOn(): Boolean = try {
         db.collection("users").document(me).collection("private").document("storyPrefs")
             .get().await().getBoolean("receipts") ?: true
-    } catch (_: Exception) { true }
+    } catch (_: Exception) { false }   // unknown = no receipt (fail closed)
 
     /**
      * iOS markViewed: consume a one-time story, move my seen watermark for the ring when this
@@ -118,6 +118,37 @@ class StoryService(
     /** Live counter while my story is on screen (iOS observeViewCount); any change re-reads. */
     fun watchViews(storyId: String, onChange: () -> Unit): ListenerRegistration =
         db.collection("stories").document(storyId).collection("views").addSnapshotListener { s, _ -> if (s != null) onChange() }
+
+    /**
+     * iOS watchStoryGone: [onGone] once the story on screen is deleted, or no longer reaches me (the
+     * rules refuse the read after Edit Viewers dropped me; a public story is then checked through its
+     * mirror). Server answers only, so a cache miss never closes a story. Returns the stop.
+     */
+    fun watchGone(storyId: String, authorUid: String, onGone: () -> Unit): () -> Unit {
+        var stopped = false
+        var fired = false
+        var reg: ListenerRegistration? = null
+        val gone = { if (!stopped && !fired) { fired = true; onGone() } }
+        fun denied(e: Exception) = (e as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
+            com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+        reg = db.collection("stories").document(storyId).addSnapshotListener { snap, err ->
+            if (stopped) return@addSnapshotListener
+            if (err != null) {
+                if (!denied(err)) return@addSnapshotListener
+                reg?.remove()
+                reg = if (authorUid.isEmpty()) { gone(); null } else db.collection("users").document(authorUid)
+                    .collection("publicStories").document(storyId).addSnapshotListener { m, e2 ->
+                        if (e2 != null) { if (denied(e2)) gone(); return@addSnapshotListener }
+                        if (m == null || m.metadata.isFromCache) return@addSnapshotListener
+                        if (!m.exists()) gone()
+                    }
+                return@addSnapshotListener
+            }
+            if (snap == null || snap.metadata.isFromCache) return@addSnapshotListener
+            if (!snap.exists()) gone()
+        }
+        return { stopped = true; reg?.remove(); reg = null }
+    }
 
     private fun summaryOf(data: Map<String, Any?>, who: (String) -> Pair<String, String?>): StoryViewSummary? {
         val count = (data["count"] as? Number)?.toInt() ?: if (data["repostCount"] is Number) 0 else return null
@@ -238,13 +269,13 @@ class StoryService(
             doc.set(payload).await()
             val urls = coroutineScope {
                 val main = async {
-                    if (isVideo) mainRef.putFile(media.video!!.file, StorageMetadata.Builder().setContentType("video/mp4").build()).await()
-                    else mainRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+                    awaitOrCancel(if (isVideo) mainRef.putFile(media.video!!.file, StorageMetadata.Builder().setContentType("video/mp4").build())
+                        else mainRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()))
                     mainRef.downloadUrl.await().toString()
                 }
                 val thumb = async {
                     if (!isVideo) return@async ""
-                    thumbRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+                    awaitOrCancel(thumbRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()))
                     thumbRef.downloadUrl.await().toString()
                 }
                 main.await() to thumb.await()
@@ -270,6 +301,11 @@ class StoryService(
             runCatching { doc.delete().await() }
             throw e
         }
+    }
+
+    /** Cancel Upload (iOS cancelUpload): a cancelled post stops its Storage transfer too. */
+    private suspend fun awaitOrCancel(t: com.google.firebase.storage.UploadTask) {
+        try { t.await() } catch (e: kotlinx.coroutines.CancellationException) { t.cancel(); throw e }
     }
 
     /**

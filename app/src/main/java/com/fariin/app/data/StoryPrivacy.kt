@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.Date
@@ -234,6 +235,16 @@ object StoryPrivacyStore {
     private var reg: ListenerRegistration? = null
     private var linkReg: ListenerRegistration? = null
     private var loadedFor = ""
+    /** True once the lists came from the server for [loadedFor]: until then `hidden` is empty and
+     *  My Chats is its default only because nothing has arrived, so a post must not trust them. */
+    private val _serverLoaded = MutableStateFlow(false)
+    val serverLoaded: StateFlow<Boolean> = _serverLoaded
+
+    /** Start for [me] and wait for the server's lists; false when they did not come in time. */
+    suspend fun awaitLoaded(me: String, timeoutMs: Long): Boolean {
+        start(me)
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { serverLoaded.first { it } } ?: false
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val db get() = FirebaseFirestore.getInstance()
 
@@ -241,14 +252,16 @@ object StoryPrivacyStore {
         if (me.isEmpty() || me == loadedFor) return
         reg?.remove(); linkReg?.remove()
         loadedFor = me
+        _serverLoaded.value = false
         _myFriends.value = StoryPrivacyRules.defaultMyFriends
         _hidden.value = emptySet()
         _glowers.value = StoryPrivacyRules.defaultGlowers
         _custom.value = emptyList()
         _links.value = emptyMap()
         val user = db.collection("users").document(me)
-        reg = user.collection("storyLists").addSnapshotListener { snap, _ ->
+        reg = user.collection("storyLists").addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, _ ->
             snap ?: return@addSnapshotListener
+            if (loadedFor != me) return@addSnapshotListener
             // The whole snapshot each time, as iOS: a deleted list or a missing doc is its default again.
             var friends = StoryPrivacyRules.defaultMyFriends
             var hidden = emptySet<String>()
@@ -267,6 +280,7 @@ object StoryPrivacyStore {
             _hidden.value = hidden
             _glowers.value = glowers
             _custom.value = lists.sortedBy { it.createdAtMs }
+            if (!snap.metadata.isFromCache) _serverLoaded.value = true
         }
         linkReg = user.collection("storyAudiences").addSnapshotListener { snap, _ ->
             snap ?: return@addSnapshotListener
@@ -276,7 +290,7 @@ object StoryPrivacyStore {
         }
     }
 
-    fun stop() { reg?.remove(); reg = null; linkReg?.remove(); linkReg = null; loadedFor = "" }
+    fun stop() { reg?.remove(); reg = null; linkReg?.remove(); linkReg = null; loadedFor = ""; _serverLoaded.value = false }
 
     val canAddCustom: Boolean get() = _custom.value.size < StoryPrivacyRules.MAX_CUSTOM
 
@@ -423,6 +437,8 @@ object StoryMutes {
      *  this one hid, nor its story view-receipts choice. */
     fun wipe(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).remove("storyViewReceipts").apply()
+        StoryReceiptPrefs.stop()
+        StoryOneTimeUsed.wipe(ctx)
         _set.value = emptySet()
         loaded = false
     }
@@ -439,9 +455,10 @@ object StoryMutes {
     fun parse(s: String): Set<String> = s.split(' ').filter { it.isNotEmpty() }.toSet()
     fun join(s: Set<String>): String = s.joinToString(" ")
 
-    /** Splits the rings into what the list shows and the Hidden Stories list (iOS visibleFriends / hiddenFriends). */
+    /** Splits the rings into what the list shows and the Hidden Stories list (iOS visibleFriends / hiddenFriends).
+     *  Keyed by the ring (iOS bucket userId): a person's uid, or "g:<gid>" for a group, never the first poster. */
     fun split(groups: List<StoryGroup>, hidden: Set<String>): Pair<List<StoryGroup>, List<StoryGroup>> =
-        groups.partition { g -> g.stories.firstOrNull()?.authorUid?.let { it !in hidden } ?: true }
+        groups.partition { g -> g.key !in hidden }
 }
 
 /** Posted Stories (iOS PostedStoriesView): the filter and the folders by audience, pure. */
