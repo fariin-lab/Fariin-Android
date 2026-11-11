@@ -254,7 +254,7 @@ object ChatList {
             text.startsWith(CardRules.CONTACT) -> RowPreview("Contact", prefix = prefix, icon = PreviewIcon.CONTACT)
             text.startsWith(CardRules.LOCATION) -> RowPreview("Location", prefix = prefix, icon = PreviewIcon.LOCATION)
             text.startsWith(PinRules.MARKER) -> RowPreview("Pinned a message", prefix = prefix, icon = PreviewIcon.PIN)
-            PollRules.isPoll(text) -> RowPreview(PollRules.PREVIEW, prefix = prefix, icon = PreviewIcon.POLL)
+            PollRules.isPoll(text) -> RowPreview(PollRules.PREVIEW.removePrefix("📊 "), prefix = prefix, icon = PreviewIcon.POLL)   // the icon is the 📊: it showed twice
             // A newer build's feature this one does not know: never the raw marker.
             featureMarker.find(text)?.value?.let { it !in knownMarkers } == true ->
                 RowPreview("Message from a newer version", icon = PreviewIcon.NEWER)
