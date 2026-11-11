@@ -62,7 +62,7 @@ fun NavGraphBuilder.channelRoutes(nav: NavHostController, me: String, chats: () 
     }
     page("channelpage/{cid}") { e ->
         val cid = e.arguments?.getString("cid") ?: return@page
-        ChannelPageRoute(cid, me, onBack = { nav.popBackStack() }, onLeft = { nav.popBackStack("main", false) },
+        ChannelPageRoute(cid, me, onBack = { nav.popBackStack() }, onLeft = { if (!nav.popBackStack("findchannels", false)) nav.popBackStack("main", false) },
             manage = ChannelManageNav(
                 edit = { nav.navigate("channeledit/$it") { launchSingleTop = true } },
                 followers = { nav.navigate("channelfollowers/$it") { launchSingleTop = true } },
@@ -198,6 +198,9 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
             preview = r.preview
             ChannelGuestPreviews.cache[cid] = r.preview
             CryptoHub.notePlainGroup(cid)   // read from outside = public and not end-to-end encrypted
+        } else if (r is ChannelService.PreviewResult.Found && !r.preview.isMember) {
+            // A public group, not a channel: the guest's header and Join bar (GroupGuest.kt).
+            com.fariin.app.ui.people.GroupGuestPreviews.cache[cid] = r.preview
         }
         } finally { ChannelGuestPreviews.answered[cid] = true }
     }

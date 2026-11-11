@@ -60,7 +60,7 @@ fun NavGraphBuilder.peopleRoutes(
         type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null })) { e ->
         val cid = e.arguments?.getString("cid") ?: return@page
         GroupInfoScreen(api, groupDoc(cid), cid, chats(), onBack = { nav.popBackStack() },
-            onLeft = { nav.popBackStack("main", false) }, onOpenPerson = { nav.navigate("contact/$it") },
+            onLeft = { if (!nav.popBackStack("findchannels", false)) nav.popBackStack("main", false) }, onOpenPerson = { nav.navigate("contact/$it") },
             start = e.arguments?.getString("open"), onOpenChat = openChat)
     }
     page("newgroup") { NewGroupScreen(api, chats(), onBack = { nav.popBackStack() }, onCreated = openChat) }

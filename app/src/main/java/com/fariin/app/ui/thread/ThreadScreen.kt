@@ -159,6 +159,8 @@ data class ThreadUi(
     val sendBlockedByMod: Boolean = false,
     /** A group I am no longer in (iOS notAMember): a plain line instead of the composer, no calls. */
     val notAMember: Boolean = false,
+    /** A public group I am not in, opened from Explore or a link (iOS PublicGroupGuest): Join bar. */
+    val groupGuest: com.fariin.app.ui.people.GroupGuestUi? = null,
     /** A 1:1 whose other person deleted their account (iOS otherAccountDeleted): a solid bar, no composer. */
     val otherDeleted: Boolean = false,
     /** The chat id (voice speed is per chat, as on iOS). */
@@ -1038,6 +1040,8 @@ private fun ThreadContent(
             if (!ui.loaded) {
                 // iOS ThreadSkeleton: bubble shapes while the first page comes.
                 com.fariin.app.ui.components.ThreadSkeleton()
+            } else if (ui.groupGuest != null && ui.messages.isEmpty()) {
+                com.fariin.app.ui.people.GroupGuestEmpty(ui.groupGuest, Modifier.align(Alignment.Center))
             } else if (ui.messages.isEmpty() && ui.loadError != null && !ui.notAMember) {
                 // A failed load is never drawn as an empty chat.
                 com.fariin.app.ui.components.CenteredNotice("Couldn't load messages", ui.loadError, "Try Again", actions.onReload,
@@ -1382,6 +1386,8 @@ private fun ThreadContent(
                 val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
                 LaunchedEffect(ui.requestBar.kind) { kb?.hide() }
                 RequestBarView(ui.requestBar, ui.me, ui.title, onBack, actions.onKeyAccepted)
+            } else if (ui.groupGuest != null) {
+                com.fariin.app.ui.people.GroupGuestJoinBar(ui.groupGuest)
             } else if (ui.notAMember) {
                 // iOS removedBar: one centred line where the composer was.
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)

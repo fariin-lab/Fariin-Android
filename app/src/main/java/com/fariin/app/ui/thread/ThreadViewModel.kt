@@ -119,6 +119,21 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     val followedDocs by com.fariin.app.channel.ChannelFollows.docs.collectAsState()
     val channelDoc = s.conv.ifEmpty { followedDocs[cid] ?: com.fariin.app.data.ThreadSeed.conv(cid).orEmpty() }
     val channel = com.fariin.app.ui.channels.rememberChannelThread(cid, me, channelDoc, s.messages) { notice = it }
+    // A public group I am not in (Explore, a link): its header from the preview, Join where the composer goes.
+    val leavingNow by com.fariin.app.data.LeaveUndo.hidden.collectAsState()
+    val guest = com.fariin.app.ui.people.rememberGroupGuest(cid, me, channelDoc, channel != null,
+        left = s.former || cid in leavingNow) { vm.repo.reload() }
+    // A guest may not read the group's names: each sender's own profile gives it, 20 at a time
+    // (iOS fillGuestNames). Without it every bubble said "Someone".
+    val guestNames = remember(cid) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
+    LaunchedEffect(guest != null, s.messages.size) {
+        if (guest == null) return@LaunchedEffect
+        val missing = s.messages.asSequence().filter { !it.isSystem && it.authorId.isNotEmpty() && it.authorId != me }
+            .map { it.authorId }.distinct().filter { it !in guestNames }.take(20).toList()
+        if (missing.isEmpty()) return@LaunchedEffect
+        val people = com.fariin.app.data.FirestorePeople(me, CryptoHub.get(ctx))
+        for (uid in missing) guestNames[uid] = people.profile(uid)?.name?.ifEmpty { null } ?: "User"
+    }
     // Whether this chat's history began on its first page the last time the server said so.
     val startKnown = remember(cid) { HistoryStart.known(app, me, cid) }
     LaunchedEffect(s.synced, s.canLoadOlder) {
@@ -128,15 +143,16 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     }
     val channelNav = com.fariin.app.ui.channels.LocalChannelNav.current
     val ui = ThreadUi(
-        title = channel?.info?.title?.ifEmpty { null } ?: conv?.displayName(me) ?: "",
+        title = channel?.info?.title?.ifEmpty { null } ?: guest?.preview?.title ?: conv?.displayName(me) ?: "",
         subtitle = channel?.let { com.fariin.app.channel.ChannelRules.followersLine(it.info.shownCount) }
+            ?: guest?.let { com.fariin.app.data.GroupRules.memberCount(it.preview.memberCount) }
             ?: typingLine ?: if (conv?.isGroup == true) com.fariin.app.data.GroupRules.memberCount(conv.users.size) else presenceLine ?: "",
-        photoUrl = channel?.info?.avatarUrl ?: conv?.displayPhoto(me),
-        isGroup = conv?.isGroup == true,
+        photoUrl = channel?.info?.avatarUrl ?: guest?.preview?.photoUrl ?: conv?.displayPhoto(me),
+        isGroup = conv?.isGroup == true || guest != null,
         me = me,
         messages = s.messages,
         receipts = receipts,
-        names = conv?.names ?: emptyMap(),
+        names = if (guest != null) guestNames.toMap() else conv?.names ?: emptyMap(),
         roles = if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupRole.all(s.conv) else emptyMap(),
         photos = conv?.photos ?: emptyMap(),
         loaded = s.loaded,
@@ -169,7 +185,8 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         canPin = com.fariin.app.data.PinRules.canPin(s.conv, me, conv?.isGroup == true),   // channels too: their owner and admins pin (iOS adminCan pinMessages)
         disappearSeconds = (s.conv["disappearSeconds"] as? Number)?.toInt() ?: conv?.disappearSeconds ?: 0,
         groupDoc = if (conv?.isGroup == true && channel == null) s.conv else emptyMap(),
-        notAMember = s.former && channel == null,
+        notAMember = s.former && channel == null && guest == null,
+        groupGuest = guest,
         muted = conv?.takeIf { !s.former }?.isMuted(me, System.currentTimeMillis().toDouble()),
         loadError = s.error,
     )

@@ -104,6 +104,13 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
     var toast by remember { mutableStateOf<String?>(null) }
     val justFollowed = remember { mutableStateListOf<String>() }
     val justJoined = remember { mutableStateListOf<String>() }
+    // The Join pill's own states (JoinPill.kt): waiting on the server, requested, refusals so far.
+    val joiningNow = remember { mutableStateListOf<String>() }
+    val requestedNow = remember { mutableStateListOf<String>() }
+    val joinShakes = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
+    // A group left from its page (back here, owner 2026-11-11) shows Join again at once.
+    val leaving by com.fariin.app.data.LeaveUndo.hidden.collectAsState()
+    LaunchedEffect(leaving) { justJoined.removeAll { it in leaving } }
     var groupOpen by remember { mutableStateOf<String?>(null) }
     val entries by ChannelFollows.entries.collectAsState()
     val bias by ChannelFollows.biasFlow.collectAsState()
@@ -157,14 +164,25 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                         items(shown, key = { it.cid }) { r ->
                             @Suppress("UNUSED_VARIABLE") val b = bias.size
                             // Followed, just followed, or one I run (owner/admin: in its `users`, no follow entry).
-                            val mine = entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
-                                com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true
-                            DiscoverRow(r, mine, onOpen = { onOpen(r.cid) }) {
-                                justFollowed.add(r.cid)
+                            val mine = r.cid !in leaving && (entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
+                                com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true)
+                            val pill = when {
+                                mine -> JoinPillState.JOINED
+                                joiningNow.contains(r.cid) -> JoinPillState.JOINING
+                                requestedNow.contains(r.cid) -> JoinPillState.REQUESTED
+                                else -> JoinPillState.JOIN
+                            }
+                            DiscoverRow(r, pill, joinShakes[r.cid] ?: 0, onOpen = { onOpen(r.cid) }) {
+                                // The same pill as Groups (iOS): spinner, then Following with its check;
+                                // a private channel ends on a grey "Requested", no toast.
+                                joiningNow.add(r.cid)
                                 scope.launch {
                                     try {
-                                        if (ChannelService.follow(r.cid) == "requested") { justFollowed.remove(r.cid); toast = ChannelRules.REQUEST_SENT }
-                                    } catch (e: Exception) { justFollowed.remove(r.cid); toast = ChannelService.errorText(e) }
+                                        if (ChannelService.follow(r.cid) == "requested") requestedNow.add(r.cid) else justFollowed.add(r.cid)
+                                    } catch (e: Exception) {
+                                        joinShakes[r.cid] = (joinShakes[r.cid] ?: 0) + 1
+                                        toast = joinRefusal(e) ?: ChannelService.errorText(e)
+                                    } finally { joiningNow.remove(r.cid) }
                                 }
                             }
                         }
@@ -181,15 +199,26 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     shown.isEmpty() -> Note("No groups match “${query.trim()}”.")
                     else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                         items(shown, key = { it.cid }) { r ->
-                            val mine = justJoined.contains(r.cid) ||
-                                com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true
-                            GroupRow(r, mine, onOpen = { if (mine) onOpen(r.cid) else groupOpen = r.cid }) {
-                                // Grey "Joined" at the tap; a refusal or a request puts Join back with a word.
-                                justJoined.add(r.cid)
+                            val mine = r.cid !in leaving && (justJoined.contains(r.cid) ||
+                                com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true)
+                            val pill = when {
+                                mine -> JoinPillState.JOINED
+                                joiningNow.contains(r.cid) -> JoinPillState.JOINING
+                                requestedNow.contains(r.cid) -> JoinPillState.REQUESTED
+                                else -> JoinPillState.JOIN
+                            }
+                            GroupRow(r, pill, joinShakes[r.cid] ?: 0, onOpen = { onOpen(r.cid) }) {
+                                // A spinner in the pill while the server works, then Joined with its
+                                // check; a refusal shakes it back to Join with a word (owner 2026-11-11).
+                                joiningNow.add(r.cid)
                                 scope.launch {
                                     try {
-                                        if (com.fariin.app.data.PublicGroups.join(r.cid) == "requested") { justJoined.remove(r.cid); toast = "Request sent." }
-                                    } catch (e: Exception) { justJoined.remove(r.cid); toast = e.message ?: "Couldn't join. Try again." }
+                                        if (com.fariin.app.data.PublicGroups.join(r.cid) == "requested") requestedNow.add(r.cid)
+                                        else justJoined.add(r.cid)
+                                    } catch (e: Exception) {
+                                        joinShakes[r.cid] = (joinShakes[r.cid] ?: 0) + 1
+                                        toast = joinRefusal(e) ?: e.message ?: "Couldn't join. Try again."
+                                    } finally { joiningNow.remove(r.cid) }
                                 }
                             }
                         }
@@ -251,7 +280,7 @@ private fun ExploreSkeleton(squircle: Boolean) {
 
 /** A public group in Explore: round photo, name, "N members", Join (grey "Joined" once in). */
 @Composable
-private fun GroupRow(r: com.fariin.app.channel.DiscoveredGroup, mine: Boolean, onOpen: () -> Unit, onJoin: () -> Unit) {
+private fun GroupRow(r: com.fariin.app.channel.DiscoveredGroup, pill: JoinPillState, shake: Int, onOpen: () -> Unit, onJoin: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
@@ -270,16 +299,21 @@ private fun GroupRow(r: com.fariin.app.channel.DiscoveredGroup, mine: Boolean, o
             }
         }
         Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier.height(34.dp).clip(CircleShape).background(if (mine) c.fieldFill else c.accent)
-                .clickable(enabled = !mine, onClick = onJoin).padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) { Text(if (mine) "Joined" else "Join", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (mine) c.secondary else c.onAccent) }
+        JoinPill(pill, shake, onClick = onJoin)
     }
 }
 
+/** No connection (offline, server unreachable, too slow): one plain line (iOS). Else null. */
+private fun joinRefusal(e: Exception): String? {
+    val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
+    val offline = e is java.io.IOException || e.cause is java.io.IOException ||
+        code == com.google.firebase.functions.FirebaseFunctionsException.Code.UNAVAILABLE ||
+        code == com.google.firebase.functions.FirebaseFunctionsException.Code.DEADLINE_EXCEEDED
+    return if (offline) "No connection. Try again." else null
+}
+
 @Composable
-private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit, onFollow: () -> Unit) {
+private fun DiscoverRow(r: DiscoveredChannel, pill: JoinPillState, shake: Int, onOpen: () -> Unit, onFollow: () -> Unit) {
     val c = Fariin.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
@@ -303,12 +337,8 @@ private fun DiscoverRow(r: DiscoveredChannel, mine: Boolean, onOpen: () -> Unit,
             }
         }
         Spacer(Modifier.width(8.dp))
-        Box(
-            // Solid action capsule (black light / white dark); once following, a grey capsule, not tappable.
-            Modifier.height(34.dp).clip(CircleShape).background(if (mine) c.fieldFill else c.accent)
-                .clickable(enabled = !mine, onClick = onFollow).padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) { Text(if (mine) "Following" else "Follow", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (mine) c.secondary else c.onAccent) }
+        // Solid action capsule (black light / white dark); once following, a grey capsule, not tappable.
+        JoinPill(pill, shake, channel = true, onClick = onFollow)
     }
 }
 

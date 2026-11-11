@@ -122,6 +122,9 @@ object LeaveUndo {
         }
     }
 
+    /** This group's leave is still inside its Undo window (nothing sent yet). */
+    fun isPending(cid: String): Boolean = pending?.first == cid
+
     /** Taken back: nothing went to the server, so the group simply comes back. */
     fun undo() {
         timer?.cancel(); timer = null
