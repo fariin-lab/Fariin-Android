@@ -2,6 +2,9 @@ package com.fariin.app.ui.channels
 
 import androidx.compose.foundation.combinedClickable
 import com.fariin.app.ui.photo.profilePhotoSource
+import com.fariin.app.ui.components.profileMeltBarGround
+import com.fariin.app.ui.components.profileMeltSource
+import com.fariin.app.ui.components.ProfileMeltTitle
 import androidx.compose.ui.graphics.graphicsLayer
 import com.fariin.app.R
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -316,14 +319,21 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
     // The page runs under its bar, so back and Edit are glass over it (GlassBarPage).
     val pageScroll = rememberScrollState()
     val underBar by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { pageScroll.value > 0 } }
+    // No bar over the photo (owner 2026-11-11: the solid bar cut the channel photo in half; the
+    // reference app's channel page has only a thin bar once scrolled): the photo melts into the top
+    // as the page scrolls, then the bar's ground and the name come in, as the group and contact pages.
+    val melt = com.fariin.app.ui.components.rememberProfileMelt(pageScroll)
     // The photo viewer (iOS GroupInfoView for a channel: ProfilePhotoViewer landsSquare + squareCrop
     // + squircle): out of the rounded square, landing on a 1:1 square, never through a circle. The
     // bar's items step aside until it has landed back.
     val photo = com.fariin.app.ui.photo.rememberProfilePhotoState()
     val photoHaptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
-        com.fariin.app.ui.components.GlassBarPage(underBar, modifier = if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier, frosted = true, bar = {
-            Box(Modifier.graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }) {
+        com.fariin.app.ui.components.GlassBarPage(underBar, modifier = if (menuGlass) Modifier.layerBackdrop(menuBackdrop) else Modifier, frosted = true,
+            clear = true, enabled = false, bar = {
+            Box(Modifier.graphicsLayer { alpha = if (photo.chromeHidden) 0f else 1f }
+                .then(Modifier.profileMeltBarGround(melt, c.bgSecondary))) {
+            ProfileMeltTitle(melt, info.title.ifEmpty { "Channel" }, ChannelRules.pageCountLine(shownCount))
             // Edit at the end of the bar for an admin who may change the channel's info (iOS Group Info's Edit).
             // The ••• menu holds Change Wallpaper for the same people (iOS Group Info's first menu
             // section): back to the chat, which opens the channel's shared picker for every follower.
@@ -344,7 +354,7 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                     onPhoto = if (photo.hasPhoto) ({ photo.show() }) else null)
                 Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL,
                     onResolved = photo::resolved,
-                    modifier = Modifier.profilePhotoSource(photo).then(
+                    modifier = Modifier.profilePhotoSource(photo).then(Modifier.profileMeltSource(melt)).then(
                     if (photoChoice != null) Modifier.combinedClickable(onClickLabel = "View story", onClick = photoChoice.tap,
                         onLongClickLabel = "View photo", onLongClick = photoChoice.hold)
                     else if (photo.hasPhoto) Modifier.combinedClickable(onClickLabel = "View photo", onClick = { photo.show() },
@@ -492,6 +502,10 @@ fun ChannelPage(info: ChannelInfo, shownCount: Int, role: Role, muted: Boolean, 
                 Spacer(Modifier.width(14.dp))
                 Text("Undo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.accent)
             }
+        }
+        // Over the page, under the photo viewer: the photo's melting copy (its rounded square).
+        com.fariin.app.ui.components.ProfileMeltOverlay(melt, 132.dp, squircle = true) {
+            Avatar(info.avatarUrl, 132.dp, squircle = true, kind = com.fariin.app.ui.components.AvatarKind.CHANNEL)
         }
         // Over everything on the page: the channel's photo, out of its rounded square and back.
         com.fariin.app.ui.photo.ProfilePhotoViewer(photo, info.avatarUrl,
