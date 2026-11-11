@@ -325,8 +325,10 @@ fun StoryViewer(
     // Seen watermarks as this viewer moves them, so a ring is not written twice.
     val watermarks = remember { mutableStateMapOf<String, Long>().apply { initialGroups.forEach { g -> g.lastViewedAtMs?.let { put(g.key, it) } } } }
     val marked = remember { mutableSetOf<String>() }
-    var receipts by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { receipts = service.receiptsOn() }
+    // The View Receipts switch (StoryReceiptPrefs): unknown counts as OFF, never as on.
+    LaunchedEffect(me) { com.fariin.app.data.StoryReceiptPrefs.start(context, me) }
+    val receiptsKnown by com.fariin.app.data.StoryReceiptPrefs.on.collectAsState()
+    val receipts = receiptsKnown == true
 
     // Owner-bar numbers by story id (never by "the item I last heard about").
     val summaries = remember { mutableStateMapOf<String, StoryViewSummary>() }
@@ -791,7 +793,8 @@ fun StoryViewer(
                         if (s.authorUid != me && marked.add(s.id)) {
                             val wm = watermarks[s.ringKey]
                             if (StoryRules.advancesWatermark(wm, s.createdAtMs)) watermarks[s.ringKey] = s.createdAtMs + 1
-                            storyScope.launch { service.markViewed(s, wm, receipts) }
+                            // Waits for the switch when it is not known yet; still unknown = no receipt.
+                            storyScope.launch { service.markViewed(s, wm, com.fariin.app.data.StoryReceiptPrefs.awaitKnown(10_000) == true) }
                         }
                     },
                     onEnd = { nextGroup() }, onBeforeStart = { previousGroup() },

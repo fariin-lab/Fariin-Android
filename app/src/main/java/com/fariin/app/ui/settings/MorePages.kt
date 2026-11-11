@@ -650,17 +650,17 @@ private fun StoriesSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
     var on by remember { mutableStateOf(p.getBoolean("storyViewReceipts", true)) }
     val me = FirebaseAuth.getInstance().currentUser?.uid
     val ref = me?.let { FirebaseFirestore.getInstance().collection("users").document(it).collection("private").document("storyPrefs") }
-    LaunchedEffect(me) { ref?.let { r -> runCatching { r.get().await().getBoolean("receipts") }.getOrNull()?.let { on = it; p.edit().putBoolean("storyViewReceipts", it).apply() } } }
+    LaunchedEffect(me) { ref?.let { r -> runCatching { r.get().await().getBoolean("receipts") }.getOrNull()?.let { on = it; com.fariin.app.data.StoryReceiptPrefs.set(ctx, it) } } }
     ScrollPage("Stories", pop) {
         // iOS StorySettingsView: the audiences first, then View Receipts.
         StoryAudienceRows(push)
         SettingsSection(footer = "See and share when stories are viewed. If disabled, you won't see when others view your stories.") {
             SwitchRow("View Receipts", on, last = true, badge = NewBadgeSpots.STORIES_VIEW_RECEIPTS) { v ->
-                on = v; p.edit().putBoolean("storyViewReceipts", v).apply()
+                on = v; com.fariin.app.data.StoryReceiptPrefs.set(ctx, v)
                 scope.launch {
                     val ok = runCatching { ref?.set(mapOf("receipts" to v, "offAt" to if (v) null else FieldValue.serverTimestamp()))?.await() }.isSuccess
                     if (!ok) {
-                        on = !v; p.edit().putBoolean("storyViewReceipts", !v).apply()
+                        on = !v; com.fariin.app.data.StoryReceiptPrefs.set(ctx, !v)
                         com.fariin.app.ui.components.Snack.show("Couldn't save. Check your connection.")
                     }
                 }

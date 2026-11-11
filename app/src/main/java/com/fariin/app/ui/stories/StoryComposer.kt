@@ -147,11 +147,19 @@ object StoryUploads {
         state.value = State.Uploading
         pending.value = media.jpeg
         // The lists as they stand when Post Story is pressed (iOS reads the store at the same moment).
-        val myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
-        val hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
+        var myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
+        var hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
         val app = context.applicationContext
         scope.launch {
             var outcome: State? = null
+            // Fail closed: the hidden-from list and My Chats only count once the server sent them.
+            // Not loaded in time = the post waits on disk (Try Again / reconnect), never goes wider.
+            val audienceKnown = group != null || com.fariin.app.data.StoryPrivacyStore.serverLoaded.value ||
+                com.fariin.app.data.StoryPrivacyStore.awaitLoaded(me, 10_000)
+            if (group == null && audienceKnown) {
+                myFriends = com.fariin.app.data.StoryPrivacyStore.myFriends.value
+                hidden = com.fariin.app.data.StoryPrivacyStore.hidden.value
+            }
             // The edited clip first, as one new file; everything after posts it like a picked one.
             var exported: java.io.File? = null
             try {
@@ -173,7 +181,7 @@ object StoryUploads {
             val video = media.video
             val pieces = video?.let { com.fariin.app.data.StoryLimits.segments(it.info.durationSec) }.orEmpty()
             outcome = if (video == null || pieces.isEmpty()) {
-                postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group)
+                postOne(app, me, media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group, audienceKnown)
             } else {
                 // iOS postVideo: a clip past 90 s goes as several stories in order, each its own
                 // 90 s piece; the caption and the tap areas ride the first, the one seen first.
@@ -191,7 +199,7 @@ object StoryUploads {
                         val clip = part.video?.let { v -> StoryMedia.Video(v.file, v.info.copy(bytes = file.length())) }
                         val one = StoryMedia.Prepared(part.jpeg, part.blurThumb, clip, part.width, part.height,
                             if (i == 0) media.stickers else emptyList(), media.repostOf)
-                        result = postOne(app, me, one, if (i == 0) caption else "", choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group)
+                        result = postOne(app, me, one, if (i == 0) caption else "", choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, group, audienceKnown)
                         if (result != null) break
                     } finally {
                         file.delete()   // the outbox keeps its own copy
@@ -234,9 +242,17 @@ object StoryUploads {
     private suspend fun postOne(app: android.content.Context, me: String, media: StoryMedia.Prepared, caption: String, choice: StoryAudienceChoice,
                                 picked: Set<String>, hours: Int, convs: List<Conversation>, captureSwitch: Boolean,
                                 myFriends: com.fariin.app.data.StoryListDoc, hidden: Set<String>,
-                                lists: List<com.fariin.app.data.StoryListDoc>, group: com.fariin.app.data.GroupStoryPost?): State? {
-        // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start.
-        val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists, group)
+                                lists: List<com.fariin.app.data.StoryListDoc>, group: com.fariin.app.data.GroupStoryPost?,
+                                audienceKnown: Boolean): State? {
+        // On disk first (iOS StoryOutbox): a kill mid-upload is finished at the next start, with the
+        // audience resolved now so the resume never depends on lists that have not loaded.
+        val ticket = com.fariin.app.data.StoryOutbox.write(app, me, media, caption, choice, picked, hours, captureSwitch, lists, group,
+            audience = if (group == null && audienceKnown) myFriends to hidden else null)
+        if (!audienceKnown) {
+            // The privacy lists never arrived: keep the post waiting rather than send it to a default audience.
+            ticket?.let { com.fariin.app.data.StoryOutbox.release(it) }
+            return State.Failed(NETWORK_FAILED)
+        }
         return try {
             StoryService(me).post(media, caption, choice, picked, hours, convs, captureSwitch, myFriends, hidden, lists, fixedId = ticket, group = group)
             ticket?.let { com.fariin.app.data.StoryOutbox.remove(app, it) }

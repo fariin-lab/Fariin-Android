@@ -31,7 +31,7 @@ class StoryService(
     suspend fun receiptsOn(): Boolean = try {
         db.collection("users").document(me).collection("private").document("storyPrefs")
             .get().await().getBoolean("receipts") ?: true
-    } catch (_: Exception) { true }
+    } catch (_: Exception) { false }   // unknown = no receipt (fail closed)
 
     /**
      * iOS markViewed: consume a one-time story, move my seen watermark for the ring when this
