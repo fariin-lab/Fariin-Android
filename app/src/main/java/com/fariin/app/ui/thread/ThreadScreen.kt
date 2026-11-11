@@ -155,6 +155,8 @@ data class ThreadUi(
     val canLoadOlder: Boolean = true,
     /** Shown instead of the composer when sending is not possible here. */
     val sendBlocked: String? = null,
+    /** [sendBlocked] is the group's closed notice (ended, suspended, disabled): iOS groupModBar's look. */
+    val sendBlockedByMod: Boolean = false,
     /** A group I am no longer in (iOS notAMember): a plain line instead of the composer, no calls. */
     val notAMember: Boolean = false,
     /** A 1:1 whose other person deleted their account (iOS otherAccountDeleted): a solid bar, no composer. */
@@ -1212,7 +1214,8 @@ private fun ThreadContent(
                                         }
                                         menuFor = m
                                     }
-                                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem, key = m.id + ReactNow.mine(m, ui.me)) {
+                                    .doubleTapToReact(!m.deleted && m.sendState == null && !m.isSystem &&
+                                        !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me), key = m.id + ReactNow.mine(m, ui.me)) {
                                         rowView.lightTap()   // iOS: a light tap with the quick reaction
                                         // The pill shows now, not when the sealed write comes back (ReactNow).
                                         val next = MessageRules.nextReaction(ReactNow.mine(m, ui.me), quickReaction)
@@ -1364,6 +1367,8 @@ private fun ThreadContent(
                 Text("You're no longer a member of this group", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.secondary,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp))
+            } else if (ui.sendBlocked != null && ui.sendBlockedByMod) {
+                GroupModBar(ui.sendBlocked)
             } else if (ui.sendBlocked != null) {
                 HorizontalDivider(thickness = 0.5.dp, color = c.separator)
                 Text(ui.sendBlocked, fontSize = 15.sp, color = c.secondary,
@@ -1515,6 +1520,7 @@ private fun ThreadContent(
                     boldable = ch != null,
                     onTyping = steady1(actions.onTyping),
                     onRecording = steady1 { r: Boolean -> voiceRecording = r }, onCapturing = steady1(actions.onRecordingVoice),
+                    voiceOff = held(com.fariin.app.data.GroupAdmins.SendKind.VOICE), onVoiceOff = steady1(actions.onNotice),
                     onRowPlaced = steady1 { r: androidx.compose.ui.geometry.Rect? -> sendMotion.composerRow = r },
                     onCamera = steady0 {
                         val stop = held(com.fariin.app.data.GroupAdmins.SendKind.PHOTOS)
@@ -2452,7 +2458,12 @@ private fun Composer(
     onRecording: (Boolean) -> Unit = {},
     /** The mic is capturing (not paused to listen back): "recording…" for the others (iOS isCapturing). */
     onCapturing: (Boolean) -> Unit = {},
+    /** Why voice messages are off for me here (iOS sendHeldBack(.sendVoice)): the mic says it and records nothing. */
+    voiceOff: String? = null,
+    onVoiceOff: (String) -> Unit = {},
 ) {
+    val voiceOffNow = androidx.compose.runtime.rememberUpdatedState(voiceOff)
+    val onVoiceOffNow = androidx.compose.runtime.rememberUpdatedState(onVoiceOff)
     val c = Fariin.colors
     val context = LocalContext.current
     var draft by rememberSaveable { mutableStateOf(initialDraft) }
@@ -2780,6 +2791,9 @@ private fun Composer(
                                 val down = awaitFirstDown()
                                 val downAt = down.uptimeMillis
                                 var upAt = downAt
+                                // A member an admin restricted from voice cannot start one (iOS): the
+                                // rules refuse the send, so the whole recording was for nothing.
+                                voiceOffNow.value?.let { onVoiceOffNow.value(it); return@awaitEachGesture }
                                 val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                                     PackageManager.PERMISSION_GRANTED
                                 if (!granted) {
