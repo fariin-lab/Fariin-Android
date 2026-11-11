@@ -24,7 +24,14 @@ class SettingsIndexTest {
     }
 
     @Test fun matchesTitleOrKeywords() {
-        assertEquals("Two-step verification", SettingsIndex.matching("2fa").first().title)
+        // Two-step is only listed when the account has it (hidden like iOS since 02053fca).
+        assertTrue(SettingsIndex.matching("2fa").isEmpty())
+        SettingsIndex.hasTwoStep = true
+        try {
+            assertEquals("Two-step verification", SettingsIndex.matching("2fa").first().title)
+        } finally {
+            SettingsIndex.hasTwoStep = false
+        }
         assertTrue(SettingsIndex.matching(" DARK ").any { it.title == "Appearance" })
         assertEquals("App Lock", SettingsIndex.matching("passcode").first().title)
         assertTrue(SettingsIndex.matching("zzz").isEmpty())
