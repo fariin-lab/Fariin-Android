@@ -384,7 +384,8 @@ class CallActivity : ComponentActivity() {
     private fun minimize() {
         val u = CallManager.ui.value
         if (pipAllowed() && CallRouting.pipWanted(u.status.phase, u.cameraOn, u.remoteCameraOn)) {
-            try { enterPictureInPictureMode(pipParams(true)); return } catch (_: Exception) {}
+            pipByButton = true
+            try { enterPictureInPictureMode(pipParams(true)); return } catch (_: Exception) { pipByButton = false }
         }
         moveTaskToBack(true)
     }
@@ -397,11 +398,12 @@ class CallActivity : ComponentActivity() {
     private fun minimizeGroup() {
         val g = GroupCall.ui.value
         if (pipAllowed() && (g.cameraOn || g.members.any { it.video != null || it.screen != null })) {
+            pipByButton = true
             try {
                 val b = PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16))
                 pipSource(9f / 16f)?.let { b.setSourceRectHint(it) }
                 enterPictureInPictureMode(b.build()); return
-            } catch (_: Exception) {}
+            } catch (_: Exception) { pipByButton = false }
         }
         moveTaskToBack(true)
     }
@@ -418,7 +420,13 @@ class CallActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
+        // App Lock: shrinking by Home or Recents leaves the app; the minimize button stays inside it.
+        com.fariin.app.security.AppLock.onCallPip(isInPictureInPictureMode, pipByButton)
+        pipByButton = false
     }
+
+    /** The window was asked for by the call's own minimize button, not by leaving the app. */
+    private var pipByButton = false
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
