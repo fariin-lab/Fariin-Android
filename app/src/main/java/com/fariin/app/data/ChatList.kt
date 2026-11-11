@@ -95,9 +95,13 @@ object ChatList {
         val plain: String = prefix + text,
     )
 
-    /** iOS lastEventHiddenByBlock: a group member I blocked is hidden everywhere in the row. */
+    /**
+     * iOS lastEventHiddenByBlock: someone I blocked is hidden everywhere in the row. A 1:1 too, not
+     * only a group: a message they sent while blocked never shows in the chat, but it was the row's
+     * preview ("Can you see this" under their name, overnight test 2026-11-10).
+     */
     fun hiddenByBlock(c: Conversation, author: String, atMillis: Double): Boolean =
-        c.isGroup && BlockList.hides(author, atMillis)
+        !c.isChannel && BlockList.hides(author, atMillis)
 
     /** iOS ThreadRepository.isWallpaperNotice. */
     fun isWallpaperNotice(t: String): Boolean =
