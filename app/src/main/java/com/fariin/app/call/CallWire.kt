@@ -303,6 +303,7 @@ object CallWire {
         answerEnc = d["answerEnc"] as? String,
         ringing = d["ringingAt"] != null,
         accepted = d["acceptedAt"] != null,
+        screened = d["screenedAt"] != null,
         answeredDevice = d["answeredDevice"] as? String,
         cancelled = d["cancelledAt"] != null,
         glare = d["glare"] == true,
@@ -363,6 +364,8 @@ data class CallDoc(
     val answerEnc: String?,
     val ringing: Boolean,
     val accepted: Boolean,
+    /** The server has screened this ring (block, Calls privacy): `screenedAt` on the doc. */
+    val screened: Boolean = false,
     val answeredDevice: String?,
     val cancelled: Boolean,
     val glare: Boolean,

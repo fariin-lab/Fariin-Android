@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- fariin.com/<name> links before Android 12, which ignores pathAdvancedPattern (AndroidManifest
+         .NameLinksLegacy). Android 12+ uses the exact pattern on MainActivity instead. -->
+    <bool name="legacy_name_links">true</bool>
+</resources>

@@ -736,7 +736,7 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             SettingsSection {
                 DisappearingRow(timer, short = true, badge = NewBadgeSpots.PROFILE_DISAPPEARING) { timerOpen = true }
                 // iOS: Restricted chat, for a chat that exists (the switch lives on it).
-                val chatNow = com.fariin.app.data.ChatsNow.find(cid)
+                val chatNow = com.fariin.app.data.ChatsNow.findAny(cid)
                 // Each row with its iOS icon, so the three line up (only the first had one).
                 if (uid != me && chatNow != null) SettingsRow("Restricted Chat",
                     icon = androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_restricted_chat),

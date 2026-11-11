@@ -29,6 +29,8 @@ data class ChatsUiState(
     val requests: List<Conversation> = emptyList(),
     /** Chats I archived (the overflow menu's Archive page). */
     val archived: List<Conversation> = emptyList(),
+    /** Every loaded conversation, before the list's filter (restricted chat, call history). */
+    val all: List<Conversation> = emptyList(),
 )
 
 class ChatsViewModel(
@@ -122,7 +124,8 @@ class ChatsViewModel(
                     },
                         requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) },
                         archived = s.conversations.filter { it.isArchived(me) && !it.isCleared(me) && !ChatList.isIncomingRequest(it, me) }
-                            .sortedByDescending { it.displayUpdatedAt(me) })
+                            .sortedByDescending { it.displayUpdatedAt(me) },
+                        all = s.conversations)
                 is ConversationsRepository.State.Failed -> ChatsUiState(loading = false, error = s.message)
             }
         }

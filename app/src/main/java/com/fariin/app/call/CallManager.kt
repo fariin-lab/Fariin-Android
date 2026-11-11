@@ -136,6 +136,10 @@ object CallManager {
     private var appliedRestart = 0
     private var restartRequestsSeen = 0
     private var restartRequestsSent = 0
+    /** When the relay list the live connection was built with was fetched (iOS pcIceServersFetchedAt). */
+    private var engineIceAt = 0L
+    private var relayRefreshTries = 0
+    private var relayRefreshTriedAt = 0L
     private var lastPeerBeat = 0.0
     /** When (this phone's clock) their beat last changed, and when the server last took one of mine. */
     private var peerBeatChangedAt = 0L
@@ -282,28 +286,50 @@ object CallManager {
             newest[d.caller]?.let { old -> if (old.id != callId) signaling.update(old.id, CallWire.endFields(EndReason.MISSED)) }
             newest[d.caller] = d
         }
-        for (d in newest.values) ring(d)
+        for (d in newest.values) ring(d, createdMs[d.id])
     }
 
-    private fun ring(d: CallDoc) {
+    /** Young rings waiting for the server's screen (iOS screenWaiting / screenWaitDone). */
+    private val screenWaiting = HashSet<String>()
+    private val screenWaitDone = HashSet<String>()
+
+    private fun ring(d: CallDoc, createdAt: Long?) {
         if (d.id == callId || d.id in finished || d.accepted) return
         if (!d.answeredDevice.isNullOrEmpty() && d.answeredDevice != deviceClaim) return
+        // The server screens every ring (block, Calls privacy) and stamps `screenedAt`. A young doc
+        // without it waits for that write (this listener sees it); after 3 s one server read decides,
+        // and only a doc still ringing goes on (iOS handleRingingDoc). A failed read fails open.
+        if (!d.screened && d.id !in screenWaitDone && createdAt != null && System.currentTimeMillis() - createdAt < 4000) {
+            if (screenWaiting.add(d.id)) main.launch {
+                delay(3000)
+                if (!screenWaiting.remove(d.id) || callId == d.id || d.id in finished) return@launch
+                val fresh = signaling.readServer(d.id)?.let { CallWire.parse(d.id, it) }
+                if (fresh != null && (fresh.status != "ringing" || fresh.accepted ||
+                        (!fresh.answeredDevice.isNullOrEmpty() && fresh.answeredDevice != deviceClaim))) return@launch
+                screenWaitDone += d.id
+                ring(fresh ?: d, createdAt)
+            }
+            return
+        }
+        screenWaiting.remove(d.id)
+        screenWaitDone.remove(d.id)
         if (d.offerEnc == null) {
             // No plaintext offers are answered (iOS G2): ends quietly as failed.
             finished += d.id
             if (d.plainOffer) main.launch { signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.FAILED), deviceClaim) }
             return
         }
-        if (status.live) {
-            // Already in a call: busy (iOS endRingIfUnclaimed with busy).
-            finished += d.id
-            main.launch { signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.BUSY), deviceClaim) }
-            return
-        }
         finished += d.id
         main.launch {
-            if (signaling.screenRefused(me, d.id)) return@launch   // the server's privacy screen said no
-            if (status.live) return@launch
+            // The server's verdict comes BEFORE the busy decision (iOS audit M-014): a blocked or
+            // privacy-refused caller gets no write at all, so "busy" never shows I am on a call.
+            if (signaling.screenRefused(me, d.id)) return@launch
+            if (status.live) {
+                // Already in a call (also one started during the read above): busy, as iOS
+                // endRingIfUnclaimed with busy.
+                signaling.calleeEndRing(d.id, CallWire.endFields(EndReason.BUSY), deviceClaim)
+                return@launch
+            }
             resetCallVars()
             callId = d.id
             peer = d.caller
@@ -634,6 +660,7 @@ object CallManager {
         })
         self = e
         if (!e.open(servers.ifEmpty { CallWire.FALLBACK_STUN }, relayOnly, isCaller, micOn = !_ui.value.muted, cameraOn = camera)) { e.close(); return null }
+        engineIceAt = if (servers === iceServers) iceAt else System.currentTimeMillis()
         engine = e
         edit { it.copy(localVideo = e.localVideo, frontCamera = e.frontCamera) }
         return e
@@ -721,7 +748,33 @@ object CallManager {
                     Log.i(TAG, "peer heartbeat silent 30 s, ending")
                     remoteEnded(EndReason.FAILED)
                 }
+                if (callId == id) refreshRelayIfAging(id)
             }
+        }
+    }
+
+    /**
+     * iOS refreshRelayIfAging: relay credentials last 2 hours, so 100 minutes after the connection's
+     * list was fetched a fresh one is set on it and ICE restarts (the caller restarts, the callee
+     * asks). Never onto a list without a relay; at most 2 tries per call, 2 minutes apart.
+     */
+    private fun refreshRelayIfAging(id: String) {
+        if (status.phase != CallPhase.ACTIVE || !mediaReady || engineIceAt == 0L) return
+        val now = System.currentTimeMillis()
+        if (now - engineIceAt < 100 * 60_000L) return
+        if (now - relayRefreshTriedAt < 120_000L || relayRefreshTries >= 2) return
+        relayRefreshTries++; relayRefreshTriedAt = now
+        Log.i(TAG, "relay list is ${(now - engineIceAt) / 60_000} min old, refreshing mid-call")
+        main.launch {
+            val fresh = withTimeoutOrNull(6000) { signaling.fetchIceServers() }
+            if (fresh.isNullOrEmpty() || !CallWire.hasRelay(fresh)) return@launch
+            iceServers = fresh; iceAt = System.currentTimeMillis()
+            if (callId != id || status.phase != CallPhase.ACTIVE) return@launch
+            val e = engine ?: return@launch
+            if (!e.setServers(fresh)) return@launch
+            engineIceAt = iceAt
+            if (status.isCaller) restartIce()
+            else { restartRequestsSent++; signaling.update(id, mapOf("restartRequest" to restartRequestsSent)) }
         }
     }
 
@@ -1094,6 +1147,7 @@ object CallManager {
         pendingRemote.clear(); localBuffer.clear(); offerSdp = null
         preNegotiated = false; heldAnswer = null; preJob?.cancel(); preJob = null; earlyOut = false
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
+        engineIceAt = 0L; relayRefreshTries = 0; relayRefreshTriedAt = 0L
         lastPeerBeat = 0.0; peerBeatChangedAt = 0L; myBeatAckedAt = 0L
     }
 

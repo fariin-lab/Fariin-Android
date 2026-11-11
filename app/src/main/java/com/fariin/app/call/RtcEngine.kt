@@ -112,8 +112,11 @@ class RtcEngine(
     private var videoSender: livekit.org.webrtc.RtpSender? = null
     private var screenHelper: SurfaceTextureHelper? = null
 
+    private var relayOnlyNow = false
+
     fun open(servers: List<IceServerSpec>, relayOnly: Boolean, isCaller: Boolean, micOn: Boolean, cameraOn: Boolean): Boolean {
         val conn = f.createPeerConnection(rtcConfig(servers, relayOnly), observer) ?: return false
+        relayOnlyNow = relayOnly
         pc = conn
         val src = f.createAudioSource(MediaConstraints())
         audioTrack = f.createAudioTrack("audio0", src).also {
@@ -143,6 +146,9 @@ class RtcEngine(
     val remoteSdp: String? get() = pc?.remoteDescription?.description
 
     fun restartIce() { pc?.restartIce() }
+
+    /** A fresh relay list on the live connection (same relay-only choice); the next ICE restart uses it. */
+    fun setServers(servers: List<IceServerSpec>): Boolean = pc?.setConfiguration(rtcConfig(servers, relayOnlyNow)) ?: false
 
     fun addCandidate(c: Candidate) {
         pc?.addIceCandidate(IceCandidate(c.mid ?: "", c.mLineIndex, c.sdp))

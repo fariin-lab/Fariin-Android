@@ -1154,7 +1154,7 @@ private fun ThreadContent(
                             // "X asked to turn off Restricted chat": answered here by the one it was
                             // asked of, while it is still open (iOS restrictRequestTarget).
                             m.isSystem && m.isRestrictRequest && m.authorId != ui.me -> Box(Modifier.fillMaxWidth().clickable(enabled = !selecting) {
-                                val conv = com.fariin.app.data.ChatsNow.find(ui.cid)
+                                val conv = com.fariin.app.data.ChatsNow.findAny(ui.cid)
                                 val by = conv?.let { com.fariin.app.data.ChatRestrictions.pendingRequestBy(it) }
                                 if (by != null && by != ui.me && com.fariin.app.data.ChatRestrictions.restrictedByMe(conv, ui.me)) restrictAnswer = true
                                 else android.widget.Toast.makeText(ctxR, "This request is no longer open", android.widget.Toast.LENGTH_SHORT).show()
@@ -3031,10 +3031,11 @@ internal fun RestrictedWindow(on: Boolean) {
         val w = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
             ?: (view.context as? android.app.Activity)?.window
             ?: (view.context as? android.content.ContextWrapper)?.baseContext?.let { it as? android.app.Activity }?.window
-        val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
-        if (on) w?.addFlags(secure)
+        // Held through AppLock, so its resume pass (Home and back, another Activity closing) never
+        // clears the flag while this chat is open.
+        if (on && w != null) com.fariin.app.security.AppLock.holdSecure(w)
         onDispose {
-            if (on && !com.fariin.app.security.AppLock.secureWindows(view.context)) w?.clearFlags(secure)
+            if (on && w != null) com.fariin.app.security.AppLock.releaseSecure(view.context, w)
         }
     }
 }

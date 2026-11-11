@@ -156,14 +156,17 @@ fun MainShell(
     var callsError by remember { mutableStateOf<String?>(null) }
     var callsRetry by remember { mutableIntStateOf(0) }
     if (me != DemoChats.ME) {
-        val callKey = chats.chats.joinToString(",") { it.id + ":" + it.updatedAtMillis }
+        // Every chat's calls (archived, cleared, requests too), none from a person I blocked
+        // (iOS CallsRepository: users array-contains me, then !isBlockedByMe).
+        val callConvs = chats.all.filter { !it.isBlockedByMe(me) }
+        val callKey = callConvs.joinToString(",") { it.id + ":" + it.updatedAtMillis }
         LaunchedEffect(me, callKey, callsRetry, com.fariin.app.data.CallsRepository.version.intValue) {
             if (!chats.loading) {
                 // Off the main thread, and not while the app is still drawing its first frames
                 // (owner's Pixel 2026-11-09, cold start: a read per chat and its parsing ran on the
                 // main thread beside the list's first draw). Only the Calls badge waits for it.
                 if (calls == null) kotlinx.coroutines.delay(CALLS_FIRST_LOAD_DELAY_MS)
-                val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { callsRepo.load(me, chats.chats) }
+                val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { callsRepo.load(me, callConvs) }
                 calls = list; callsError = callsRepo.failed
             }
         }
@@ -199,6 +202,7 @@ fun MainShell(
     // The same feed for screens outside the tabs (a chat's story mention card asks if a story is live).
     LaunchedEffect(stories) { com.fariin.app.data.LiveStories.state.value = stories }
     LaunchedEffect(chats.chats) { com.fariin.app.data.ChatsNow.list = chats.chats }
+    LaunchedEffect(chats.all) { com.fariin.app.data.ChatsNow.all = chats.all }
     // A story post the app died in the middle of (StoryOutbox): finished once the chat list is here.
     var outboxRan by remember(me) { mutableStateOf(false) }
     LaunchedEffect(me, chats.chats.isNotEmpty()) {

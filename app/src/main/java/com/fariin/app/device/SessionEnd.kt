@@ -188,7 +188,7 @@ object SessionEnd {
         com.fariin.app.data.ChannelStories.stop()
         com.fariin.app.data.ThreadSeed.clear()
         com.fariin.app.data.QuoteStore.reset()   // the quote cards this account was shown
-        com.fariin.app.data.ChatsNow.list = emptyList()   // the live list restricted-chat checks read
+        com.fariin.app.data.ChatsNow.list = emptyList(); com.fariin.app.data.ChatsNow.all = emptyList()   // the live list restricted-chat checks read
         com.fariin.app.data.BubbleStyles.wipeChats(c)   // per-chat styles name this account's chats
         com.fariin.app.data.StoryLimits.reset()   // the daily story count and badge are per account
         com.fariin.app.data.ChatKey.lockedUntilMs = 0L   // a chat-key lockout is this account's

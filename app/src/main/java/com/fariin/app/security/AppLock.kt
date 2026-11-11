@@ -65,8 +65,23 @@ object AppLock {
 
     private val live = mutableSetOf<Activity>()
     private fun reapply() { live.forEach { apply(it) } }
+    /** Windows a screen asked to keep secure (a restricted chat), counted per window. While a
+     *  window holds any, a resume never clears its FLAG_SECURE. */
+    private val secureHolds = HashMap<android.view.Window, Int>()
+
+    fun holdSecure(w: android.view.Window) {
+        secureHolds[w] = (secureHolds[w] ?: 0) + 1
+        w.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
+    fun releaseSecure(c: Context, w: android.view.Window) {
+        val n = (secureHolds[w] ?: 0) - 1
+        if (n > 0) secureHolds[w] = n else secureHolds.remove(w)
+        if (n <= 0 && !secureWindows(c)) w.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
     private fun apply(a: Activity) {
-        if (secureWindows(a)) a.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (secureWindows(a) || (secureHolds[a.window] ?: 0) > 0) a.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         else a.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
@@ -93,7 +108,7 @@ object AppLock {
                 if (started == 0) backgroundAt = SystemClock.elapsedRealtime()
             }
             override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
-            override fun onActivityDestroyed(a: Activity) { live.remove(a) }
+            override fun onActivityDestroyed(a: Activity) { live.remove(a); secureHolds.remove(a.window) }
         })
     }
 }

@@ -320,6 +320,8 @@ class CallActivity : ComponentActivity() {
     private fun joinFromLobby(video: Boolean, mic: Boolean) {
         val key = lobbyKey?.let { com.fariin.app.call.CallLinkKey.ofText(it) } ?: return
         GroupCall.joinLink(this, key, video && granted(Manifest.permission.CAMERA), mic = mic && granted(Manifest.permission.RECORD_AUDIO))
+        // Refused at once (already in a call): leave the lobby so its alert shows.
+        if (GroupCall.ui.value.notice != null && GroupCall.ui.value.cid == null) lobbyJoined = true
     }
 
     /** The group call's mute: turning the mic on asks for it if a muted join never had it. */
