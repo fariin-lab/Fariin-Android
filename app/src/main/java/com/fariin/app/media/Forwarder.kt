@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
@@ -135,12 +136,21 @@ object Forwarder {
         val clientId = UUID.randomUUID().toString().uppercase()
         val sender = MediaSender(target, me, crypto, ChatMedia(context, target, crypto))
             .also { it.fwdChannelJson = fwdChannelJson; it.fwdSource = source }
+        // Registered with MediaSend like a send from the composer (owner 2026-11-11, iOS fwd-cancel):
+        // the X on a forwarded video still uploading only hid the bubble, and the video arrived anyway,
+        // because nothing held this send for Cancel to stop. A Cancel ends the job quietly (join
+        // returns, no failure counted); a real error still throws out of coroutineScope.
+        suspend fun registered(send: suspend () -> Unit): Unit = kotlinx.coroutines.coroutineScope {
+            val job = this.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { send() }
+            MediaSend.register(clientId, job)
+            try { job.start(); job.join() } finally { MediaSend.finish(clientId) }
+        }
         when (payload ?: throw SourceUnavailable()) {
-            is Payload.Photo -> sender.image((payload as Payload.Photo).prep, m.text, false, fwd, clientId, ts)
-            is Payload.Video -> sender.video((payload as Payload.Video).prep, m.text, fwd, clientId, ts)
-            is Payload.Album -> sender.album((payload as Payload.Album).parts, m.text, fwd, clientId, ts)
-            is Payload.Voice -> sender.audio((payload as Payload.Voice).bytes, m.duration ?: 0.0, m.waveform, fwd, clientId, ts)
-            is Payload.Doc -> sender.file((payload as Payload.Doc).prep, fwd, clientId, ts)
+            is Payload.Photo -> registered { sender.image((payload as Payload.Photo).prep, m.text, false, fwd, clientId, ts) }
+            is Payload.Video -> registered { sender.video((payload as Payload.Video).prep, m.text, fwd, clientId, ts) }
+            is Payload.Album -> registered { sender.album((payload as Payload.Album).parts, m.text, fwd, clientId, ts) }
+            is Payload.Voice -> registered { sender.audio((payload as Payload.Voice).bytes, m.duration ?: 0.0, m.waveform, fwd, clientId, ts) }
+            is Payload.Doc -> registered { sender.file((payload as Payload.Doc).prep, fwd, clientId, ts) }
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendForwardedText(m.text, fwd, fwdChannelJson, source)
             is Payload.Sticker -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
