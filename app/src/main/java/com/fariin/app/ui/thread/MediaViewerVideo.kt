@@ -114,39 +114,80 @@ internal class VideoCtl {
 @Composable
 internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chromeHidden: Boolean, onTap: () -> Unit) {
     val ctx = LocalContext.current
-    val file = rememberPlainFile(p.url, p.enc)
-    // Settings > Chats > Save to Photos: a received video goes to the gallery once it has come down
-    // here (Android fetches a video when it is played). Never mine, never view-once.
-    val saveCtx = androidx.compose.ui.platform.LocalContext.current
+    val media = chatMedia()
     val saveCid = LocalThreadCid.current
+    // A plain group or channel clip plays while it comes down (VideoStream); a sealed one, one
+    // already on the phone, or one whose stream stalled, is fetched whole first as before.
+    var fellBack by remember(p.url) { mutableStateOf(false) }
+    val streaming = !fellBack && remember(p.url, saveCid) {
+        com.fariin.app.media.VideoStream.streamable(saveCid, p.url, p.enc) && media.cached(p.url) == null
+    }
+    val file = rememberPlainFile(if (streaming) null else p.url, p.enc)
+    // Settings > Chats > Save to Photos: a received video goes to the gallery once it has come down
+    // here (Android fetches a video when it is played). Never mine, never view-once. A streamed clip
+    // is saved once all of it is in the stream cache (copied out, not fetched again).
+    val mine = p.authorId == null || p.authorId == com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val autoSave = p.once == null && !mine && saveCid.isNotEmpty() && p.messageId != null
     LaunchedEffect(file) {
         val f = file ?: return@LaunchedEffect
-        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-        val mid = p.messageId ?: return@LaunchedEffect
-        if (p.once == null && p.authorId != null && p.authorId != me && saveCid.isNotEmpty())
-            com.fariin.app.media.AutoSaveMedia.save(saveCtx, "$saveCid/$mid/v/${p.key}", f, isVideo = true)
+        if (autoSave) com.fariin.app.media.AutoSaveMedia.save(ctx, "$saveCid/${p.messageId}/v/${p.key}", f, isVideo = true)
+    }
+    if (streaming && autoSave && current) LaunchedEffect(p.url) {
+        if (!com.fariin.app.media.AutoSaveMedia.savesMedia(ctx, saveCid)) return@LaunchedEffect
+        while (!kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.fariin.app.media.VideoStream.fullyCached(ctx, p.url) }) delay(1_000)
+        media.file(p.url, p.enc, video = true)?.let {
+            com.fariin.app.media.AutoSaveMedia.save(ctx, "$saveCid/${p.messageId}/v/${p.key}", it, isVideo = true)
+        }
     }
     val poster = rememberBitmap(rememberPlainFile(p.posterUrl, p.posterEnc), 720)
     val tap by rememberUpdatedState(onTap)
+    // From the page showing (the tap, near enough) to the clip's first frame, for VSTREAM# lines.
+    val shownAt = remember(p.url) { android.os.SystemClock.elapsedRealtime() }
     Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }, contentAlignment = Alignment.Center) {
-        val player = if (file != null && current) remember(file) {
+        val player = if ((file != null || streaming) && current) remember(file, streaming) {
             VoicePlayer.stop()   // one sound at a time
-            ExoPlayer.Builder(ctx).build().apply {
+            if (streaming) {
+                // The player takes over from a preload still running (one writer per clip).
+                com.fariin.app.media.VideoPreload.cancel(p.url)
+                com.fariin.app.media.VideoStream.log("open stream preloaded=${com.fariin.app.media.VideoStream.cachedPrefix(ctx, p.url)}")
+                ExoPlayer.Builder(ctx).setMediaSourceFactory(com.fariin.app.media.VideoStream.mediaSourceFactory(ctx)).build().apply {
+                    setMediaItem(MediaItem.fromUri(p.url))
+                    prepare()
+                    playWhenReady = true
+                }
+            } else ExoPlayer.Builder(ctx).build().apply {
                 setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
                 prepare()
                 playWhenReady = true
             }
         } else null
         if (player != null) {
+            var drawn by remember(player) { mutableStateOf(false) }
+            val fallBack: (String) -> Unit = { why ->
+                if (streaming && !fellBack) {
+                    com.fariin.app.media.VideoStream.log("fallback reason=$why after=${android.os.SystemClock.elapsedRealtime() - shownAt}ms")
+                    com.fariin.app.media.VideoStream.markFailed(p.url)
+                    fellBack = true
+                }
+            }
             DisposableEffect(player) {
                 val listener = object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) { ctl.playing = isPlaying }
-                    override fun onRenderedFirstFrame() { ctl.firstFrame = true }
+                    override fun onRenderedFirstFrame() {
+                        if (!drawn) com.fariin.app.media.VideoStream.log(
+                            "first frame mode=${if (streaming) "stream" else "file"} ms=${android.os.SystemClock.elapsedRealtime() - shownAt}")
+                        drawn = true
+                        ctl.firstFrame = true
+                    }
                     override fun onVideoSizeChanged(size: VideoSize) {
                         if (size.width > 0 && size.height > 0) ctl.ratio = size.width * size.pixelWidthHeightRatio / size.height
                     }
                     override fun onPlaybackStateChanged(state: Int) {
                         if (player.duration > 0) ctl.durationMs = player.duration
+                    }
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        // A stream that breaks before or while playing: the whole file instead.
+                        fallBack("error ${error.errorCodeName}")
                     }
                 }
                 player.addListener(listener)
@@ -156,6 +197,11 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
                     if (ctl.player === player) { ctl.player = null; ctl.playing = false; ctl.firstFrame = false }
                     player.release()
                 }
+            }
+            // Watchdog: no first frame in time and the stream gives way to the whole download.
+            if (streaming) LaunchedEffect(player) {
+                delay(com.fariin.app.media.VideoStream.WATCHDOG_MS)
+                if (!drawn) fallBack("no first frame")
             }
             // The track moves smoothly: the position is read every frame or so while the clip plays.
             LaunchedEffect(player) {
@@ -173,8 +219,10 @@ internal fun VideoPage(p: ViewerRules.Page, current: Boolean, ctl: VideoCtl, chr
         }
         if (!(current && ctl.firstFrame)) {
             if (poster != null) Image(poster, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            // The clip's bytes fill the ring as they come (iOS), not a bare spinner.
-            if (file == null) DownloadBadge(p.url, Fetch.LOADING, isVideo = true, showPill = false, showCross = false)
+            // The clip's bytes fill the ring as they come (iOS), not a bare spinner. A stream has no
+            // byte count to show: the ring turns until the first frame.
+            if (streaming) DownloadBadge("vstream:" + p.url, Fetch.LOADING, isVideo = false, showPill = false, showCross = false)
+            else if (file == null) DownloadBadge(p.url, Fetch.LOADING, isVideo = true, showPill = false, showCross = false)
         }
     }
 }

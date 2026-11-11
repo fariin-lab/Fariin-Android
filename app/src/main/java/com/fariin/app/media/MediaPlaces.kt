@@ -94,7 +94,7 @@ object AutoDownload {
 
     fun allowedNow(c: Context, k: Kind): Boolean = allowed(policy(c, k), onWifi(c))
 
-    private fun onWifi(c: Context): Boolean = runCatching {
+    fun onWifi(c: Context): Boolean = runCatching {
         val cm = c.getSystemService(ConnectivityManager::class.java)
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) &&
