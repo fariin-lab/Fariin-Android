@@ -160,10 +160,12 @@ internal fun FileBody(m: Message, isMe: Boolean, width: Dp, meta: @Composable ()
 @Composable
 internal fun AlbumMosaic(m: Message, maxW: Dp, onView: (Viewing) -> Unit, capsule: @Composable () -> Unit,
     /** "cid/messageId" when Save to Photos may copy this received album's photos (each once). */
-    autoSaveId: String? = null) {
+    autoSaveId: String? = null,
+    /** A channel post: as wide as a channel text post (iOS e8d0b73c5, owner 2026-11-11 "becomes small"). */
+    wide: Boolean = false) {
     val saveCtx = androidx.compose.ui.platform.LocalContext.current
     // iOS albumPlan: album width min(bubble, 300); tiles keep their real shape (AlbumMosaicLayout).
-    val side = minOf(maxW.value, 300f)
+    val side = if (wide) maxW.value else minOf(maxW.value, 300f)
     val busy = m.sendState == Message.SendState.SENDING
     val clientId = m.clientId
     val dropped by com.fariin.app.media.MediaSend.cancelledItems.collectAsState()
