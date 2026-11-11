@@ -214,21 +214,36 @@ internal object SecurityCheckup {
         running = true
         rerun = false
         var allLanded = true
-        coroutineScope {
-            launch { passkey = checkPasskey() }
-            launch { password = checkPassword() }
-            launch { chatKey = checkChatKey(ctx) }
-            launch {
-                val (s, list) = checkDevices(ctx)
-                // A Yes that landed while this was in flight wins over this older answer; ask again.
-                if (!rerun) { devices = s; unreviewed = list } else allLanded = false
+        // Each ask has its own limit, and `running` is let go however this ends (owner 2026-11-11: every
+        // row spun for good). A scan left mid-way (the sheet closed) used to keep `running` set, so every
+        // later scan only marked a rerun and returned, its rows reset to Checking with nobody asking.
+        try {
+            coroutineScope {
+                launch { passkey = limited { checkPasskey() } }
+                launch { password = limited { checkPassword() } }
+                launch { chatKey = limited { checkChatKey(ctx) } }
+                launch {
+                    val (s, list) = kotlinx.coroutines.withTimeoutOrNull(CHECK_LIMIT_MS) { checkDevices(ctx) } ?: (Status.Failed to emptyList())
+                    // A Yes that landed while this was in flight wins over this older answer; ask again.
+                    if (!rerun) { devices = s; unreviewed = list } else allLanded = false
+                }
             }
+        } finally {
+            running = false
+            // Cancelled: no row stays on Checking with nobody asking; Try Again is offered.
+            if (passkey == Status.Checking) passkey = Status.Failed
+            if (password == Status.Checking) password = Status.Failed
+            if (chatKey == Status.Checking) chatKey = Status.Failed
+            if (devices == Status.Checking) devices = Status.Failed
         }
         val all = listOf(passkey, password, devices, chatKey)
         if (allLanded && !rerun && all.none { it == Status.Checking || it == Status.Failed }) lastCompleted = System.currentTimeMillis()
-        running = false
         if (rerun) run(ctx)
     }
+
+    private const val CHECK_LIMIT_MS = 15_000L
+    private suspend fun limited(ask: suspend () -> Status): Status =
+        kotlinx.coroutines.withTimeoutOrNull(CHECK_LIMIT_MS) { ask() } ?: Status.Failed
 
     private fun date(ms: Long) = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(ms))
     internal fun ago(ms: Long) = DateUtils.getRelativeTimeSpanString(ms, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
