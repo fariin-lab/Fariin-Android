@@ -108,7 +108,20 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
             com.fariin.app.ui.people.SearchField(query, "Search") { query = it }
             // Name or @handle of the loaded channels.
             val q = query.trim().removePrefix("@")
-            val shown = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
+            // Plus the server's public search (the Chats page's Global Search) for what the ranked list
+            // does not carry: a new public channel was found from Chats but never here, "No channels
+            // match" (overnight test 2026-11-10).
+            var serverHits by remember { mutableStateOf<List<DiscoveredChannel>>(emptyList()) }
+            LaunchedEffect(q) {
+                serverHits = emptyList()
+                if (q.length < 3) return@LaunchedEffect
+                delay(300)   // one ask per pause in typing
+                serverHits = runCatching { com.fariin.app.data.PublicGroups.search(q) }.getOrDefault(emptyList())
+                    .filter { it.isChannel }
+                    .map { DiscoveredChannel(it.cid, it.handle, it.title, it.photoUrl, "", it.memberCount, verified = it.verified) }
+            }
+            val local = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.handle.contains(q, ignoreCase = true) }
+            val shown = local + serverHits.filter { h -> local.none { it.cid == h.cid } }
             when {
                 loading && rows.isEmpty() -> Column(Modifier.padding(top = 4.dp)) {
                     // Skeleton rows in the real rows' shape: a round 52 photo, a name, a count.
@@ -125,7 +138,7 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     }
                 }
                 failed && rows.isEmpty() -> Note("Couldn't load channels. Check your connection and try again.")
-                rows.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
+                rows.isEmpty() && shown.isEmpty() -> Note("No public channels yet. Only public channels show here: to list yours, open it, tap its name, then Channel Settings > Channel Type > Public.")
                 shown.isEmpty() -> Note("No channels match “${query.trim()}”.")
                 else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                     item {
