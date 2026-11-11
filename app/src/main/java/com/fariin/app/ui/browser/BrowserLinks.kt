@@ -33,9 +33,16 @@ object BrowserLinks {
             // A web page must not aim at a named component of any app (ours included).
             component = null
             selector = null
+            // Nor carry its own flags: "launchFlags=" could grant another app read access to a
+            // content:// address of ours (our decrypted shared files).
+            flags = 0
+            clipData = null
             addCategory(Intent.CATEGORY_BROWSABLE)
         }
-    }.getOrNull()
+    }.getOrNull()?.takeUnless {
+        val s = it.data?.scheme?.lowercase()
+        s == "content" || s == "file"
+    }
 
     /** The intent's S.browser_fallback_url when it is an ordinary web address. */
     internal fun webFallback(intent: Intent): String? =

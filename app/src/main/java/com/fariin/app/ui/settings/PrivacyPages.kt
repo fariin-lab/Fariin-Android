@@ -513,7 +513,10 @@ internal fun ChatKeyPage(pop: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         KeyPill(if (copied) "Copied" else "Copy", if (copied) com.fariin.app.R.drawable.ic_sf_checkmark else com.fariin.app.R.drawable.ic_sf_doc_on_doc, Modifier.weight(1f)) {
                             (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
-                                .setPrimaryClip(android.content.ClipData.newPlainText("Chat Key", p))
+                                .setPrimaryClip(android.content.ClipData.newPlainText("Chat Key", p).apply {
+                                    // Kept out of the keyboard's clipboard preview (Android 13+).
+                                    description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+                                })
                             copied = true
                         }
                         KeyPill("Share", com.fariin.app.R.drawable.ic_link_share, Modifier.weight(1f)) {

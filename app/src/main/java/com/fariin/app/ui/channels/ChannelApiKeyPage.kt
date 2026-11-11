@@ -138,7 +138,10 @@ fun ChannelApiKeyScreen(cid: String, onBack: () -> Unit) {
     }
 
     fun copy(label: String, text: String) {
-        (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(label, text))
+        // Marked sensitive: kept out of the keyboard's clipboard preview (Android 13+).
+        (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(label, text).apply {
+            description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+        })
         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
     }
     val scroll = rememberScrollState()

@@ -87,13 +87,16 @@ class FariinMessagingService : FirebaseMessagingService() {
             return
         }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)
-        runBlocking { handle(applicationContext, p) }
+        // One cap on the whole push: the key fetch, ack and photo each have their own timeouts, but
+        // together they could pass the ~20 s Android gives a push before it is killed.
+        runBlocking { withTimeoutOrNull(HANDLE_TIMEOUT_MS) { handle(applicationContext, p) } }
     }
 
     companion object {
         private const val ACK_URL = "https://me-central1-kulan-2ef85.cloudfunctions.net/ackDelivered"
         private const val PHOTO_TIMEOUT_MS = 4_000L
         private const val KEY_TIMEOUT_MS = 3_000L
+        private const val HANDLE_TIMEOUT_MS = 15_000L
 
         suspend fun handle(c: Context, p: PushData) {
             DeviceRegistry.init(c)
