@@ -282,7 +282,8 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
             0.74f to Color.Black.copy(alpha = 0.55f), 0.85f to Color.Black.copy(alpha = 0.25f),
             0.93f to Color.Black.copy(alpha = 0.08f), 1f to Color.Transparent)
         // The tab pages' one bar (owner 2026-11-08): frosted, melting away below its edge.
-        Box(Modifier.fillMaxWidth().then(Modifier.frostedTopBar(haze, c.bgSecondary, glass))
+        // Solid like the Chats tab's (owner 2026-11-11 left Settings to me: the same bar on both).
+        Box(Modifier.fillMaxWidth().then(Modifier.frostedTopBar(haze, c.bgSecondary, glass = false))
             .statusBarsPadding().height(barH)) {
             // The title and Search step aside while my photo is open (the viewer's bar is there).
             Box(Modifier.fillMaxWidth().height(barH).padding(horizontal = 8.dp)

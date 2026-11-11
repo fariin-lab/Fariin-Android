@@ -440,7 +440,9 @@ fun ChatListScreen(
                 // strip keeps it while the bar is away.
                 // The tab pages' frosted top (owner 2026-11-08: "this one is ok", on every tab), always on,
                 // from the first frame; when the bar leaves on scroll the status strip stays frosted.
-                Modifier.frostedTopBar(haze, c.bg, glass).statusBarsPadding(),
+                // SOLID on every phone now (owner 2026-11-11: "make chatlist solid bar", as the chat's own
+                // top): a clean bar in the page colour, no blur. The bottom tab bar keeps its glass.
+                Modifier.frostedTopBar(haze, c.bg, glass = false).statusBarsPadding(),
             ) {
                 when {
                     selecting -> SelectionBar(

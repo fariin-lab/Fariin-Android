@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Back on Android (owner 2026-11-11: "use android arrow across the app backs"): the arrow Android
+     users expect, our own drawing in the app's line style (round ends, 2.2 stroke), not Material's. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:autoMirrored="true">
+    <path android:pathData="M20,12L4.5,12M11,5.25L4.25,12L11,18.75"
+        android:strokeColor="#FF000000" android:strokeWidth="2.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

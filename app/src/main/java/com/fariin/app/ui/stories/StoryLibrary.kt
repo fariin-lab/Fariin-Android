@@ -285,7 +285,7 @@ private fun StoryLibrary(busy: Boolean, onPick: (Uri) -> Unit, onClose: () -> Un
             Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.12f))
                 .clickable { if (a != null) album = null else onClose() }, contentAlignment = Alignment.Center) {
-                if (a != null) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = Color.White, modifier = Modifier.size(22.dp))
+                if (a != null) Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back", tint = Color.White, modifier = Modifier.size(22.dp))
                 else Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", tint = Color.White, modifier = Modifier.size(22.dp))
             }
             if (a != null) Text(a.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,

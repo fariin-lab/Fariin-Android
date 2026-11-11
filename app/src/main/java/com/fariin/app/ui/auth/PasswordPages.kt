@@ -70,7 +70,7 @@ private fun TitleBar(title: String, onBack: () -> Unit, action: String? = null, 
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().height(52.dp)) {
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = c.label)
+            Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back", tint = c.label)
         }
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = c.label, modifier = Modifier.align(Alignment.Center))
         if (action != null) Box(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)) {

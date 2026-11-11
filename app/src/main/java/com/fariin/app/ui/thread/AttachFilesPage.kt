@@ -150,7 +150,7 @@ internal fun AttachFilesPage(onBack: () -> Unit, onBrowse: () -> Unit, onGallery
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { if (searching) { searching = false; query = "" } else onBack() }) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = c.label)
+                Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back", tint = c.label)
             }
             if (searching) {
                 com.fariin.app.ui.components.FloatingSearchField(query, { query = it }, "Search files", Modifier.weight(1f).padding(end = 8.dp))

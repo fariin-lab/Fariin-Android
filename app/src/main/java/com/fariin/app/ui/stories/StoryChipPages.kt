@@ -134,7 +134,7 @@ private fun TrayPushHeader(title: String, onBack: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 16.dp)) {
         Box(Modifier.align(Alignment.CenterStart).size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
             .clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Back", tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), contentDescription = "Back", tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Text(title, Modifier.align(Alignment.Center), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
     }

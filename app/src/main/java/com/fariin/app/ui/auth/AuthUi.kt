@@ -85,7 +85,7 @@ internal fun Logo(side: Int, modifier: Modifier = Modifier) {
 internal fun BackRow(onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), contentDescription = "Back", tint = Fariin.colors.label)
+            Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), contentDescription = "Back", tint = Fariin.colors.label)
         }
     }
 }

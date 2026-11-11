@@ -199,7 +199,7 @@ private fun StorySheet(
                 Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp).size(40.dp, 5.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.35f)))
                 // iOS inline bar: the X in its round glass button at the start, the title in the middle.
                 Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp)) {
-                    if (onBackArrow != null) com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back",
+                    if (onBackArrow != null) com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back",
                         onClick = onBackArrow, modifier = Modifier.align(Alignment.CenterStart), circle = true)
                     else com.fariin.app.ui.components.FloatingIcon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Close", onClick = { dismiss() },
                         modifier = Modifier.align(Alignment.CenterStart), circle = true)

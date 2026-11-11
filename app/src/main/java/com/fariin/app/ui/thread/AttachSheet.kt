@@ -352,7 +352,7 @@ internal fun AttachSheet(
                 Row(Modifier.align(Alignment.BottomCenter).then(lift).then(barsPad).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(60.dp).sheetGlass(CircleShape, sourceGlass).clickable(onClick = albumButton), contentAlignment = Alignment.Center) {
-                        if (backShown) Icon(ImageVector.vectorResource(R.drawable.ic_sf_chevron_left), "Back", tint = c.label, modifier = Modifier.size(26.dp))
+                        if (backShown) Icon(ImageVector.vectorResource(R.drawable.ic_back_arrow), "Back", tint = c.label, modifier = Modifier.size(26.dp))
                         else Icon(ImageVector.vectorResource(com.fariin.app.R.drawable.ic_album), "Albums", tint = c.label, modifier = Modifier.size(29.dp))
                     }
                     Spacer(Modifier.weight(1f).widthIn(min = 12.dp))
