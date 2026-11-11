@@ -852,7 +852,9 @@ private fun ThreadContent(
         com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = null
         if (!actions.onEnsureLoaded(mid) || c != ui.cid) return@LaunchedEffect
         val post = uiNow.value.messages.firstOrNull { it.id == mid } ?: return@LaunchedEffect
-        com.fariin.app.ui.channels.PostQuotesSheet.startTab = 0
+        // A quote (push or Activity row) opens on Quotes; everything else on Replies.
+        com.fariin.app.ui.channels.PostQuotesSheet.startTab = com.fariin.app.ui.channels.PostQuotesSheet.pendingTab
+        com.fariin.app.ui.channels.PostQuotesSheet.pendingTab = 0
         com.fariin.app.ui.channels.PostQuotesSheet.open.value = post
     }
     // The Quotes sheet a post's "N Quotes" bar opens (PostQuotesUi.kt).

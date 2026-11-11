@@ -79,11 +79,12 @@ class FariinMessagingService : FirebaseMessagingService() {
             return
         }
         // A reply alert (owner 2026-11-06): its own notification, whose tap opens that post's Replies.
-        // Not while that channel is open: its sheet refreshes there on its own.
+        // Shown even while that channel is open (fix contract 2026-11-09): the tap opens the sheet there.
         com.fariin.app.data.PostReplyRules.alertTarget(message.data["kind"], message.data["cid"], message.data["mid"])?.let { (cid, mid) ->
-            if (Push.pushOn(applicationContext) && PushRouter.activeChatId != cid) NotificationPoster.postReplyAlert(applicationContext,
+            if (Push.pushOn(applicationContext)) NotificationPoster.postReplyAlert(applicationContext,
                 message.notification?.title ?: message.data["t"] ?: "Fariin", message.notification?.body ?: message.data["b"] ?: "New reply", cid, mid,
-                message.data["rid"].orEmpty(), message.data["aid"].orEmpty(), message.data["kind"].orEmpty())
+                message.data["rid"].orEmpty(), message.data["aid"].orEmpty(), message.data["kind"].orEmpty(),
+                act = message.data["act"].orEmpty(), wcid = message.data["wcid"].orEmpty(), wmid = message.data["wmid"].orEmpty())
             return
         }
         val p = PushData.parse(message.data, message.notification?.title, message.notification?.body)

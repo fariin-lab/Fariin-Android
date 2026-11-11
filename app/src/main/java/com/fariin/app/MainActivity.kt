@@ -494,12 +494,40 @@ class MainActivity : ComponentActivity() {
         // A reply alert drawn by Android (app closed) brings the push's own `cid`, `mid` and `kind`.
         com.fariin.app.data.PostReplyRules.alertTarget(intent?.getStringExtra("kind"), intent?.getStringExtra("cid"),
             intent?.getStringExtra("mid"))?.let { (cid, mid) ->
+            val kind = intent?.getStringExtra("kind").orEmpty()
             intent?.removeExtra("kind")
-            // "Replied to your comment" (the push's own `rid` / `aid`): the sheet opens on it.
-            com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value =
-                com.fariin.app.data.PostReplyRules.focusOf(mid, intent?.getStringExtra("rid"), intent?.getStringExtra("aid"))
-            com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
-            PushRouter.pendingOpen.value = cid
+            val rid = intent?.getStringExtra("rid")
+            val aid = intent?.getStringExtra("aid")
+            // Push data contract (2026-11-09): `act` is the Activity item, read once tapped; a quote in
+            // a public channel carries where it is (`wcid`, `wmid`).
+            val act = intent?.getStringExtra("act")?.takeIf { it.isNotEmpty() }
+            val wcid = intent?.getStringExtra("wcid")?.takeIf { kind == "postQuote" && com.fariin.app.channel.ChannelRules.safeId(it) }
+            val wmid = intent?.getStringExtra("wmid")?.takeIf { wcid != null && com.fariin.app.channel.ChannelRules.safeId(it) }
+            listOf("act", "wcid", "wmid").forEach { intent?.removeExtra(it) }
+            lifecycleScope.launch {
+                if (act != null) com.fariin.app.data.ActivityFeed.markRead(listOf(act))
+            }
+            lifecycleScope.launch {
+                // Checked first (iOS OpenGate): a deleted post or channel says so instead of a dead screen.
+                val gate = com.fariin.app.data.OpenGate.check(wcid ?: cid, if (wcid != null) wmid else mid)
+                if (gate != com.fariin.app.data.OpenGate.Result.OPEN) {
+                    com.fariin.app.data.OpenGate.notice(gate).takeIf { it.isNotEmpty() }?.let { com.fariin.app.ui.components.Snack.show(it) }
+                    return@launch
+                }
+                if (wcid != null) {
+                    // The quoting message, in that public channel.
+                    PushRouter.pendingMid.value = wmid?.let { com.fariin.app.push.PushOpen(wcid, it, android.os.SystemClock.elapsedRealtime()) }
+                    PushRouter.pendingOpen.value = wcid
+                    return@launch
+                }
+                // "Replied to your comment" (the push's own `rid` / `aid`): the sheet opens on it. A
+                // quote without a public place opens my post's sheet on Quotes.
+                com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value =
+                    com.fariin.app.data.PostReplyRules.focusOf(mid, rid, aid)
+                com.fariin.app.ui.channels.PostQuotesSheet.pendingTab = if (kind == "postQuote") 1 else 0
+                com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = cid to mid
+                PushRouter.pendingOpen.value = cid
+            }
             return
         }
         val cid = intent?.getStringExtra(PushRouter.EXTRA_OPEN_CID)?.takeIf { it.isNotEmpty() } ?: return

@@ -263,7 +263,9 @@ object NotificationPoster {
      */
     @SuppressLint("MissingPermission")
     fun postReplyAlert(c: Context, title: String, body: String, cid: String, mid: String, rid: String = "", aid: String = "",
-                       /** The push kind: a reaction gets its own notification, not the reply's (audit A14). */ kind: String = "") {
+                       /** The push kind: a reaction gets its own notification, not the reply's (audit A14). */ kind: String = "",
+                       /** The Activity item (marked read on tap) and, for a quote in a public channel, where it is. */
+                       act: String = "", wcid: String = "", wmid: String = "") {
         ensureChannels(c)
         val nmc = NotificationManagerCompat.from(c)
         if (!nmc.areNotificationsEnabled()) return
@@ -274,6 +276,13 @@ object NotificationPoster {
             // "Replied to your comment": the comment it opens on.
             if (rid.isNotEmpty()) putExtra(EXTRA_REPLIES_RID, rid)
             if (aid.isNotEmpty()) putExtra(EXTRA_REPLIES_AID, aid)
+            // The same keys a system-drawn alert's tap carries, so one route opens both.
+            putExtra("kind", kind); putExtra("cid", cid); putExtra("mid", mid)
+            if (rid.isNotEmpty()) putExtra("rid", rid)
+            if (aid.isNotEmpty()) putExtra("aid", aid)
+            if (act.isNotEmpty()) putExtra("act", act)
+            if (wcid.isNotEmpty()) putExtra("wcid", wcid)
+            if (wmid.isNotEmpty()) putExtra("wmid", wmid)
         }
         val tap = PendingIntent.getActivity(c, ("r$cid/$mid/$rid").hashCode(), open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
