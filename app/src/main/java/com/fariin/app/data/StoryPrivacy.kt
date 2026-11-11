@@ -438,6 +438,7 @@ object StoryMutes {
     fun wipe(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).remove("storyViewReceipts").apply()
         StoryReceiptPrefs.stop()
+        StoryOneTimeUsed.wipe(ctx)
         _set.value = emptySet()
         loaded = false
     }

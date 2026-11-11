@@ -127,10 +127,19 @@ object StoryList {
         myName: String,
         myPhoto: String?,
         nowMs: Long = System.currentTimeMillis(),
+        /** Everyone on my account block list, chat or no chat (iOS BlockList.snapshot.entries). */
+        accountBlocked: Set<String> = emptySet(),
+        /** One-time stories already watched on this phone (iOS StoryPrefs.isOneTimeUsed). */
+        oneTimeUsed: Set<String> = emptySet(),
     ): StoriesState {
-        val blocked = convs.filter { !it.isGroup && it.isBlockedByMe(me) }.map { it.otherUid(me) }.toSet()
+        val blocked = convs.filter { !it.isGroup && it.isBlockedByMe(me) }.map { it.otherUid(me) }.toSet() + accountBlocked
+        // Anyone whose 1:1 chat with me is still an unanswered request (iOS requestAuthors): their
+        // own ring only, never a group story (being in the group is the tie).
+        val requestAuthors = convs.filter { !it.isGroup && it.startedBy.isNotEmpty() && !it.accepted }.map { it.otherUid(me) }.toSet()
         val byRing = stories.distinctBy { it.id }.filter { it.expiresAtMs > nowMs }
             .filter { s -> !blocked.contains(s.authorUid) }
+            .filter { s -> !(s.ringKey == s.authorUid && s.authorUid in requestAuthors) }
+            .filter { s -> !(s.oneTime && s.authorUid != me && s.id in oneTimeUsed) }
             .groupBy { it.ringKey }
         var mine: StoryGroup? = null
         val others = mutableListOf<StoryGroup>()
@@ -185,8 +194,8 @@ object StoryList {
  * `users/{me}/storyContexts` seen watermarks. Read only: opening a story (which marks it seen)
  * is not built yet.
  *
- * TODO (iOS has these): channel stories, the official channel's story, one-time stories already
- * used on this device, the local per-story seen flags, hidden authors, the 24-hour expiry timer.
+ * Also the expiry tick, one-time stories already used on this phone and account blocks (iOS rebuild).
+ * TODO (iOS has these): the local per-story seen flags.
  */
 class StoriesRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -202,6 +211,20 @@ class StoriesRepository(
             val asked = mutableSetOf<String>()
             var heard = 0
 
+            // iOS scheduleExpiryTick: nothing in Firestore changes when a story's time runs out, so
+            // the list rebuilds itself just after the next expiry.
+            var expiryTick: kotlinx.coroutines.Job? = null
+            fun build(): StoriesState {
+                val all = byToken + byLegacy + mine + channels
+                val now = System.currentTimeMillis()
+                expiryTick?.cancel()
+                all.asSequence().map { it.expiresAtMs }.filter { it > now }.minOrNull()?.let { next ->
+                    expiryTick = launch { kotlinx.coroutines.delay(next - now + 1_000); trySend(build()) }
+                }
+                return StoryList.build(me, all, convs(), profiles, watermarks, myName(), myPhoto(), now,
+                    BlockList.snapshot.entries.keys, StoryOneTimeUsed.ids.value.keys)
+            }
+
             fun rebuild() {
                 if (heard != 7) return
                 val all = byToken + byLegacy + mine + channels
@@ -215,11 +238,11 @@ class StoriesRepository(
                         val snap = runCatching { db.collection("users").document(u).get().await() }.getOrNull()
                         if (snap != null && snap.exists()) {
                             profiles[u] = (snap.getString("name") ?: "") to snap.getString("photoUrl")
-                            trySend(StoryList.build(me, byToken + byLegacy + mine + channels, convs(), profiles, watermarks, myName(), myPhoto()))
+                            trySend(build())
                         }
                     }
                 }
-                trySend(StoryList.build(me, all, convs(), profiles, watermarks, myName(), myPhoto()))
+                trySend(build())
             }
 
             fun parse(docs: List<DocumentSnapshot>) = docs.mapNotNull { d -> d.data?.let { StoryList.parse(d.id, it) } }
@@ -246,6 +269,9 @@ class StoriesRepository(
             // Followed channels' stories (iOS channelStoryIds): one more source for the same rings.
             ChannelStories.start(me)
             launch { ChannelStories.stories.collect { channels = it; rebuild() } }
+            // A block made from a profile, or a one-time story just watched: the list follows at once.
+            launch { BlockList.state.collect { rebuild() } }
+            launch { StoryOneTimeUsed.ids.collect { rebuild() } }
             awaitClose { regs.forEach { it.remove() } }
         }
 }
