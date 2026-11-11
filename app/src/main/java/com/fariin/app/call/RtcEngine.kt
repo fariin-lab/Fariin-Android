@@ -127,6 +127,8 @@ class RtcEngine(
             videoSender = conn.addTrack(it, listOf(CallWire.STREAM_ID))
         }
         if (cameraOn) startCamera()
+        applyDataSaver(onWifiNow())
+        watchNetwork()
         if (isCaller) {
             acceptChannel = conn.createDataChannel(CallWire.ACCEPT_CHANNEL, DataChannel.Init().apply { ordered = true })
                 ?.also { watch(it) }
@@ -287,6 +289,7 @@ class RtcEngine(
             // Back to the camera's own size and rate.
             videoSource?.adaptOutputFormat(1280, 720, 30)
             tuneSender(null, keepSharp = false)
+            saverOnWifi?.let { applyDataSaver(it) }
             localVideo?.setEnabled(camera)
             if (camera) startCamera()
         }
@@ -303,9 +306,76 @@ class RtcEngine(
             val p = s.parameters
             p.degradationPreference = if (keepSharp) livekit.org.webrtc.RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
                 else livekit.org.webrtc.RtpParameters.DegradationPreference.BALANCED
-            p.encodings.forEach { it.maxFramerate = fps }
+            p.encodings.forEach {
+                it.maxFramerate = fps
+                // A screen share keeps its full size and rate: Use Less Data never halves it (iOS).
+                if (keepSharp) { it.maxBitrateBps = null; it.scaleResolutionDownBy = null }
+            }
             s.parameters = p
         } catch (e: Exception) { Log.w(TAG, "sender tune failed", e) }
+    }
+
+    // ------------------------------------------------------------------ Use Less Data
+
+    /** The network the saver was last applied for; null until the call is open. */
+    private var saverOnWifi: Boolean? = null
+    private var netCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    private fun onWifiNow(): Boolean = runCatching {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+    }.getOrDefault(false)
+
+    /**
+     * iOS CallService.applyDataSaver (Settings > Storage and Data > Use Less Data): when the saver is
+     * on for this network, audio is capped near 24 kbps and video at 300 kbps and half size; off, the
+     * caps come away again, so a call that moved from cellular to Wi-Fi gets its full picture back.
+     * Never on a screen share (half size makes its text unreadable).
+     */
+    private fun applyDataSaver(onWifi: Boolean) {
+        if (pc == null) return
+        saverOnWifi = onWifi
+        val pref = context.getSharedPreferences("fariin_calls", Context.MODE_PRIVATE).getString("calls.lessData", "never")
+        val on = com.fariin.app.ui.settings.SettingsRules.lessDataNow(pref, onWifi)
+        audioSender?.let { s ->
+            try {
+                val p = s.parameters
+                p.encodings.forEach { it.maxBitrateBps = if (on) 24_000 else null }
+                s.parameters = p
+            } catch (e: Exception) { Log.w(TAG, "audio saver failed", e) }
+        }
+        if (screenCapturer != null) return
+        videoSender?.let { s ->
+            try {
+                val p = s.parameters
+                p.encodings.forEach {
+                    it.maxBitrateBps = if (on) 300_000 else null
+                    it.scaleResolutionDownBy = if (on) 2.0 else null
+                }
+                s.parameters = p
+            } catch (e: Exception) { Log.w(TAG, "video saver failed", e) }
+        }
+    }
+
+    /** iOS path monitor: the saver follows the network the call is on now (Wi-Fi and cellular, both ways). */
+    private fun watchNetwork() {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(n: android.net.Network, caps: android.net.NetworkCapabilities) {
+                val wifi = caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                    caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+                mainHandler.post { if (netCallback === this && saverOnWifi != wifi) applyDataSaver(wifi) }
+            }
+        }
+        if (runCatching { cm.registerDefaultNetworkCallback(cb) }.isSuccess) netCallback = cb
+    }
+
+    private fun unwatchNetwork() {
+        val cb = netCallback ?: return
+        netCallback = null
+        runCatching { context.getSystemService(android.net.ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) }
     }
 
     /** The display at most 1280 on its long side (960 below a high-end phone), even numbers. */
@@ -359,6 +429,7 @@ class RtcEngine(
     private var remoteVideoSeen = 0
 
     fun close() {
+        unwatchNetwork()
         if (held) { held = false; audioModule?.setSpeakerMute(false); pc?.setAudioPlayout(true); pc?.setAudioRecording(true) }
         stopScreen()
         stopCamera()
