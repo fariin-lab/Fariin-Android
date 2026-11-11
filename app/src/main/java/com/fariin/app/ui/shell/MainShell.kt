@@ -254,6 +254,8 @@ fun MainShell(
     val haze = remember { HazeState() }
     // Android 13+ with glass allowed: real liquid glass (lens refraction at the rim, colour vibrancy,
     // a specular edge) from the backdrop library; Android 12 keeps the frosted blur; below, solid.
+    // HIGH phones only. Tried on the mid-range Pixel 5 (owner 2026-11-11): scroll frames 90th 16 -> 21 ms,
+    // 99th 22 -> 28 ms, and the rows still read through it; the frosted blur stays there.
     val liquid = com.fariin.app.ui.components.GlassQuality.liquid(glass)
     val backdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
 
