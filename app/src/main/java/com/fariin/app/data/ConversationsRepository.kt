@@ -35,7 +35,9 @@ class ConversationsRepository(
     fun listen(uid: String, limit: Long = PAGE_SIZE): Flow<State> = callbackFlow {
         // The phone's copy first (iOS ConversationsDiskCache), so a cold start draws the list at
         // once, offline too. Its previews are still sealed; the rows open them as they draw.
+        com.fariin.app.StartClock.mark("repo.listen")
         val saved = if (useDiskCache) withContext(Dispatchers.IO) { LocalCache.loadChats(uid) } else emptyList()
+        com.fariin.app.StartClock.mark("repo.saved ${saved.size}")
         if (saved.isEmpty()) trySend(State.Loading)
         // Seeded too, so a chat opened from the saved list draws as itself (a channel as a channel) at once.
         else trySend(State.Loaded(saved.map { (id, d) -> ThreadSeed.noteConv(id, d); Conversation.fromFirestore(id, d) }, fromCache = true))

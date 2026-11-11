@@ -143,6 +143,14 @@ class FariinCrypto(
         wipeIdentity()
     }
 
+    /** Off the main thread at app start: the sodium library, my stored keypair and the cached peer
+     *  keys, so the chat list's first rows do not pay for them while the first frame is built. */
+    fun prewarm() {
+        runCatching { nacl.randomBytes(1) }
+        warmIfNeeded()
+        runCatching { keysSince() }
+    }
+
     /** Synchronous warm start on the first decrypt: stored keypair + every cached peer key. */
     private fun warmIfNeeded() {
         if (didWarm) return

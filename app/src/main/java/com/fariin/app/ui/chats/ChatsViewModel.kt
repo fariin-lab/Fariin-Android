@@ -112,24 +112,40 @@ class ChatsViewModel(
         // A chat with only a draft (or a call going on) stays listed (iOS visible).
         .combine(com.fariin.app.local.Drafts.map.map { it.keys }.distinctUntilChanged()
             .combine(LiveCallRow.live) { d, call -> LiveCallRow.cid(me, call)?.let { d + it } ?: d }) { s, k -> s to k }
-        .map { (s, keep) ->
-            when (s) {
-                ConversationsRepository.State.Loading -> ChatsUiState(loading = true)
-                is ConversationsRepository.State.Loaded ->
-                    ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me, keep).let { list ->
-                        // A closed chat whose newest message ran out on the timer: the preview is
-                        // blanked until the server rewrites the summary (iOS burnedIfDue).
-                        val now = System.currentTimeMillis().toDouble()
-                        list.map { com.fariin.app.data.Disappearing.burnedIfDue(it, now) }
-                    },
-                        requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) },
-                        archived = s.conversations.filter { it.isArchived(me) && !it.isCleared(me) && !ChatList.isIncomingRequest(it, me) }
-                            .sortedByDescending { it.displayUpdatedAt(me) },
-                        all = s.conversations)
-                is ConversationsRepository.State.Failed -> ChatsUiState(loading = false, error = s.message)
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatsUiState())
+        .map { (s, keep) -> uiOf(s, keep) }
+        // The first value is the phone's saved list when it is already in memory (read on its own
+        // thread at app start), so the very first frame draws the chats: the list used to wait for
+        // the whole screen to be built before it even asked (Pixel 2026-11-11, ~150 ms of a 0.54 s
+        // cold start). The live flow takes over at once with the same rows.
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), seeded())
+
+    private fun uiOf(s: ConversationsRepository.State, keep: Set<String>): ChatsUiState = when (s) {
+        ConversationsRepository.State.Loading -> ChatsUiState(loading = true)
+        is ConversationsRepository.State.Loaded ->
+            ChatsUiState(loading = false, chats = ChatList.visible(s.conversations, me, keep).let { list ->
+                // A closed chat whose newest message ran out on the timer: the preview is
+                // blanked until the server rewrites the summary (iOS burnedIfDue).
+                val now = System.currentTimeMillis().toDouble()
+                list.map { com.fariin.app.data.Disappearing.burnedIfDue(it, now) }
+            },
+                requests = s.conversations.filter { ChatList.isIncomingRequest(it, me) },
+                archived = s.conversations.filter { it.isArchived(me) && !it.isCleared(me) && !ChatList.isIncomingRequest(it, me) }
+                    .sortedByDescending { it.displayUpdatedAt(me) },
+                all = s.conversations)
+        is ConversationsRepository.State.Failed -> ChatsUiState(loading = false, error = s.message)
+    }
+
+    /** The saved list as the flow would show it, if it is in memory now; else the loading state. */
+    private fun seeded(): ChatsUiState = runCatching {
+        val saved = com.fariin.app.local.LocalCache.peekChats(me)
+        if (saved.isNullOrEmpty()) return@runCatching ChatsUiState()
+        var convs = saved.map { (id, d) -> Conversation.fromFirestore(id, d) }
+        val followed = com.fariin.app.channel.ChannelFollows.conversations().filter { f -> convs.none { it.id == f.id } }
+        convs = convs + followed
+        val hidden = com.fariin.app.data.LeaveUndo.hidden.value
+        convs = convs.filter { it.id !in hidden && !com.fariin.app.data.FormerGroups.hides(it) }
+        uiOf(ConversationsRepository.State.Loaded(convs, fromCache = true), com.fariin.app.local.Drafts.map.value.keys)
+    }.getOrDefault(ChatsUiState())
 
     /** Asks the server to delete what is due, then waits for the next expiry; something due that
      *  the server has not rewritten yet gets another look every 30 s. */

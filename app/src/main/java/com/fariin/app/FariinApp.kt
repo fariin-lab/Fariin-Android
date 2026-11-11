@@ -31,6 +31,7 @@ import java.io.File
 class FariinApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        StartClock.mark("app.start")
         // A launcher icon pick the app died before finishing leaves two icons; finish it.
         runCatching { com.fariin.app.ui.settings.AppIcons.heal(this) }
         // The picture loader, set ONCE before any screen draws. It was set by MainActivity's content,
@@ -58,6 +59,7 @@ class FariinApp : Application() {
                     }
                     .build()
         }
+        StartClock.mark("coil")
         CoroutineSafety.install()   // an uncaught server refusal in a coroutine no longer closes the app
         // Not needed for the first frame (owner 2026-11-09: the app felt heavy to open; the reference
         // app keeps start-up to the minimum and does the rest after): the sent sound off the main
@@ -72,12 +74,15 @@ class FariinApp : Application() {
             getSharedPreferences(f, MODE_PRIVATE).all }
             // Messages I deleted for me: read once here, not by the first chat that opens.
             runCatching { com.fariin.app.data.HiddenMessages.load(this) } }, "prefs-prefetch").apply { isDaemon = true }.start() }, PREFS_PREFETCH_DELAY_MS)
+        StartClock.mark("prefs+reactionart")
         com.fariin.app.ui.thread.DecodedPictures.init(this)
         com.fariin.app.ui.thread.StickerLottie.init(this)
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.ui.thread.Emoji3DArt.preload(this) }, 4_000)
+        StartClock.mark("stickers")
         com.fariin.app.data.ContactNames.init(this)
         com.fariin.app.data.MsgPolicy.init(this)     // Message Requests on/off, as of the last open
         com.fariin.app.data.AppFeatures.init(this)   // the admin panel's switches, as of the last open
+        StartClock.mark("features")
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // The benchmark build (release code, debug key, never shipped) may use the local backend too.
         // Asked only when the flag file is there: the package manager call is a binder round trip
@@ -103,6 +108,7 @@ class FariinApp : Application() {
         }
         // App Check (iOS AppCheckSetup): every Firebase call carries a token proving it comes from
         // this app on a real phone. Not on the local backend, which has no App Check.
+        StartClock.mark("firebase")
         if (!local) com.fariin.app.system.AppCheckSetup.install(debuggable || resources.getBoolean(R.bool.fariin_debug_appcheck))
         if (local) {
             FirebaseAuth.getInstance().useEmulator(HOST, 9099)
@@ -115,6 +121,7 @@ class FariinApp : Application() {
             usingLocalBackend = true
             Log.i("FariinApp", "Using the LOCAL test backend at $HOST")
         }
+        StartClock.mark("appcheck")
         // A call this phone was in when the app last died is ended for the other phone (CallManager).
         // Only when a call was really left open: touching CallManager loads the whole call stack,
         // ~46 ms of every cold start on the Pixel, almost always to find nothing.
@@ -123,17 +130,24 @@ class FariinApp : Application() {
         // Slow networks: a photo download gives up after 2 minutes (default 10) so the bubble shows
         // its "Try again" disc instead of a ring that never ends; uploads keep the 10 minute window.
         runCatching { FirebaseStorage.getInstance().maxDownloadRetryTimeMillis = 120_000 }
+        StartClock.mark("storage")
         CrashReports.start(this, debuggable)
         // The phone's own copies (chat list, newest messages, drafts, the send queue) and the
         // app-wide front/back hooks (presence, reconnect).
+        StartClock.mark("crash")
         com.fariin.app.local.LocalCache.init(this)
         // The saved chat list, read and opened now on its own thread (owner 2026-11-09: "close the app
         // and open, never comfortable"). The list asked for it only after its first frame was built,
         // and the launch logo waited ~140 ms more for the disk; now it is in memory by then.
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            Thread({ runCatching { com.fariin.app.local.LocalCache.loadChats(uid) } }, "chats-prefetch")
+            Thread({
+                runCatching { com.fariin.app.local.LocalCache.loadChats(uid) }
+                // The keys too (sodium load, Keystore unwrap): the first rows' previews need them.
+                runCatching { com.fariin.app.data.CryptoHub.get(this).prewarm() }
+            }, "chats-prefetch")
                 .apply { priority = Thread.MAX_PRIORITY }.start()
         }
+        StartClock.mark("localcache")
         com.fariin.app.local.Drafts.init(this)
         com.fariin.app.local.SendQueue.init(this)
         // The time zone rules and date formats load on first use, about 100 ms on a cheap phone,
@@ -145,12 +159,14 @@ class FariinApp : Application() {
                 com.fariin.app.data.ThreadLogic.timeLabel(now, false)
             }
         }, "warm-dates").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
+        StartClock.mark("drafts+queue")
         AppLifecycle.install(this)
         // "Waiting for network" / "Connecting" in the chat list title (iOS ConnectionStatus).
         com.fariin.app.data.ConnectionStatus.start(this)
         // Settings that the rest of the app reads: my privacy map (presence, read receipts, typing)
         // and my private block list follow whoever is signed in; App Lock and Screen Security
         // watch every activity.
+        StartClock.mark("lifecycle+conn")
         com.fariin.app.data.PrivacySettings.init(this)
         com.fariin.app.data.Disappearing.init(this)
         FirebaseAuth.getInstance().addAuthStateListener { a ->
@@ -160,11 +176,14 @@ class FariinApp : Application() {
             com.fariin.app.data.PrivacySettings.follow(uid)
             com.fariin.app.data.BlockList.follow(uid)
         }
+        StartClock.mark("privacy+auth")
         com.fariin.app.security.AppLock.install(this)
         // Update campaigns: the last answer shows at once, then the server is asked (iOS AppUpdateGate).
+        StartClock.mark("applock")
         if (!local) com.fariin.app.system.AppUpdateGate.start(this)
         // The home screen widget follows App Lock and Message Preview as they are switched.
         android.os.Handler(mainLooper).postDelayed({ com.fariin.app.system.FariinWidget.init(this) }, 1_500)
+        StartClock.mark("app.end")
     }
 
     companion object {
@@ -174,6 +193,14 @@ class FariinApp : Application() {
         /** True when this run talks to the local emulators, never the real project. */
         @Volatile var usingLocalBackend = false
             private set
+    }
+}
+
+/** Start-up timing marks in logcat (tag FariinStart): ms since this process began. */
+object StartClock {
+    fun mark(step: String) {
+        if (android.os.Build.VERSION.SDK_INT >= 24)
+            Log.i("FariinStart", "$step ${android.os.SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis()}")
     }
 }
 

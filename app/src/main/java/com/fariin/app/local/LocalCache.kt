@@ -80,6 +80,9 @@ object LocalCache {
 
     // ------------------------------------------------------------------ chat list
 
+    /** The saved chat list if it is already in memory (never touches the disk). */
+    fun peekChats(uid: String): List<Pair<String, Map<String, Any?>>>? = chatsMemo?.takeIf { it.first == uid }?.second
+
     fun loadChats(uid: String): List<Pair<String, Map<String, Any?>>> {
         chatsMemo?.let { (u, l) -> if (u == uid) return l }
         val f = dir(uid)?.let { File(it, "chats.bin") } ?: return emptyList()

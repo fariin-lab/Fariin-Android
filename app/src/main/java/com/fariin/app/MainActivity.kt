@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity() {
     @Volatile private var keepSplash = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartClock.mark("activity.start")
         val splash = with(androidx.core.splashscreen.SplashScreen) { installSplashScreen() }
         super.onCreate(savedInstanceState)
         com.fariin.app.data.LeaveUndo.onFailure = { com.fariin.app.ui.components.Snack.show(it, long = true) }
@@ -118,6 +119,7 @@ class MainActivity : ComponentActivity() {
         if (debuggable && intent.getBooleanExtra("callDemo", false)) {
             com.fariin.app.ui.call.CallActivity.startDemo(this, intent.getStringExtra("callScreen") ?: "voice")
         }
+        StartClock.mark("activity.beforeContent")
         setContent {
             FariinTheme {
               androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
@@ -129,6 +131,7 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) { keepSplash = false }
                     DemoApp(demoThread)
                 } else {
+                    remember { StartClock.mark("compose.first"); 0 }
                     val initial = remember { auth.currentUser?.uid }
                     val uid by auth.uid.collectAsState(initial = initial)
                     val me = uid
@@ -189,7 +192,9 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun SignedIn(me: String) {
+        remember { StartClock.mark("signedIn.start"); 0 }
         val crypto = remember { CryptoHub.get(applicationContext) }
+        remember { StartClock.mark("crypto.made"); 0 }
         // Key bootstrap as iOS RootView does it: load (or, only when this phone has none, make and
         // store) the keypair, then publish it if the server copy differs. A key store that cannot be
         // read is never taken as "no key", so a readable key is never replaced.
@@ -246,7 +251,9 @@ class MainActivity : ComponentActivity() {
             dismissButton = { androidx.compose.material3.TextButton({ com.fariin.app.call.CallScreenAccess.later(ctx); askFullScreen = false }) { androidx.compose.material3.Text("Not Now") } },
         )
         val decryptor = remember(crypto) { CryptoDecryptor(crypto) }
+        remember { StartClock.mark("vm.before"); 0 }
         val vm: ChatsViewModel = viewModel(key = "chats-$me") { ChatsViewModel(me, crypto = crypto) }
+        remember { StartClock.mark("vm.made"); 0 }
         // Held as a State and read only where it is used (owner's Pixel 2026-11-09, trace of a group
         // open: every list update, a dozen while a chat opens, recomposed this whole screen, the nav
         // host and the chat list with it, 16 times in a second). Now only the list itself does.
@@ -255,7 +262,12 @@ class MainActivity : ComponentActivity() {
         val activity = LocalContext.current as? android.app.Activity
         LaunchedEffect(chatsLoading) {
             if (!chatsLoading) {
+                StartClock.mark("chats.loaded")
                 keepSplash = false
+                androidx.compose.runtime.withFrameNanos { }
+                StartClock.mark("frame1")
+                androidx.compose.runtime.withFrameNanos { }
+                StartClock.mark("frame2")
                 // "Fully drawn" in the system log = the chat list is up (the start-up number we track).
                 activity?.reportFullyDrawn()
             }
