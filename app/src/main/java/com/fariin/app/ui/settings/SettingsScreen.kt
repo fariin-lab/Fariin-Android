@@ -315,6 +315,9 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
                     modifier = Modifier.profilePhotoSource(photo))
             }
             Spacer(Modifier.height(12.dp))
+            // iOS: the picture opens the photo, the name and @username under it open Edit.
+            Column(Modifier.clickable(onClickLabel = "Edit profile", onClick = onEdit),
+                horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(profile?.name?.ifEmpty { null } ?: "You", fontSize = 26.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = c.label, maxLines = 1,
@@ -326,6 +329,7 @@ private fun ProfileHeader(profile: MyProfile?, photo: com.fariin.app.ui.photo.Pr
             }
             val h = profile?.handle.orEmpty()
             if (h.isNotEmpty()) Text("@$h", fontSize = 17.sp, color = c.secondary, modifier = Modifier.padding(top = 2.dp))
+            }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Capsule("Edit profile", onEdit, Modifier.weight(1f))
