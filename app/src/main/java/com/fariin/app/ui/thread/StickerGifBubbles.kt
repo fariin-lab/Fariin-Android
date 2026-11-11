@@ -536,6 +536,11 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
         state = state ?: androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState(),
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalItemSpacing = 2.dp) {
         val items = list ?: emptyList()
+        // Still loading (a new phone has no cached list): grey tiles, so the grid reads as coming,
+        // not as empty (the first open on a new account sat blank ~8 s, overnight test 2026-11-10).
+        if (list == null) items(12, key = { "wait$it" }) {
+            Box(Modifier.fillMaxWidth().aspectRatio(1f).background(c.secondary.copy(alpha = 0.15f)))
+        }
         items(items.size, key = { items[it].id }) { i ->
             val g = items[i]
             // Square tiles, cropped (iOS b5232314d: w x w), not each GIF at its own shape.
