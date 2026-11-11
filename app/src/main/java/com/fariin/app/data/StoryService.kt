@@ -269,13 +269,13 @@ class StoryService(
             doc.set(payload).await()
             val urls = coroutineScope {
                 val main = async {
-                    if (isVideo) mainRef.putFile(media.video!!.file, StorageMetadata.Builder().setContentType("video/mp4").build()).await()
-                    else mainRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+                    awaitOrCancel(if (isVideo) mainRef.putFile(media.video!!.file, StorageMetadata.Builder().setContentType("video/mp4").build())
+                        else mainRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()))
                     mainRef.downloadUrl.await().toString()
                 }
                 val thumb = async {
                     if (!isVideo) return@async ""
-                    thumbRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+                    awaitOrCancel(thumbRef.putBytes(media.jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()))
                     thumbRef.downloadUrl.await().toString()
                 }
                 main.await() to thumb.await()
@@ -301,6 +301,11 @@ class StoryService(
             runCatching { doc.delete().await() }
             throw e
         }
+    }
+
+    /** Cancel Upload (iOS cancelUpload): a cancelled post stops its Storage transfer too. */
+    private suspend fun awaitOrCancel(t: com.google.firebase.storage.UploadTask) {
+        try { t.await() } catch (e: kotlinx.coroutines.CancellationException) { t.cancel(); throw e }
     }
 
     /**

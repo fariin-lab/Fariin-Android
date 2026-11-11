@@ -96,7 +96,9 @@ object StoryOutbox {
     suspend fun resume(c: Context, me: String, convs: List<Conversation>) = pass.withLock { resumeOnce(c, me, convs) }
 
     private suspend fun resumeOnce(c: Context, me: String, convs: List<Conversation>) {
+        // Oldest ticket first, so the waiting parts of a long video still post in order.
         val dirs = root(c).listFiles().orEmpty().filter { it.isDirectory && it.name !in active }
+            .sortedBy { d -> runCatching { JSONObject(File(d, "ticket.json").readText()).optLong("first") }.getOrDefault(0L) }
         for (dir in dirs) {
             val o = runCatching { JSONObject(File(dir, "ticket.json").readText()) }.getOrNull()
             // Unreadable, another account's, or too old to still be news: never posted under anyone.
@@ -147,6 +149,9 @@ object StoryOutbox {
                 dir.deleteRecursively()
             } catch (e: StoryService.PostRefused) {
                 dir.deleteRecursively()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                dir.deleteRecursively()   // Cancel Upload during a retry: never resumed again
+                throw e
             } catch (e: Exception) {
                 android.util.Log.w("StoryOutbox", "resume failed, kept for later", e)
             } finally {

@@ -264,7 +264,10 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     val myMenu = listOf(
         RowAction("Add Story", R.drawable.ic_stories) { addStory() },
         RowAction("Posted Stories", R.drawable.ic_stories_stack) { posted = true },
-    )
+    ) + (if (upload == StoryUploads.State.Uploading) listOf(
+        // iOS cancelUpload: the story going up stops and is thrown away.
+        RowAction("Cancel Upload", R.drawable.ic_sf_xmark, destructive = true) { StoryUploads.cancel() },
+    ) else emptyList())
     // Glow: the Glowing grid's cards, the viewer door for them, and the page behind its heading.
     val glowOn = live && com.fariin.app.data.AppFeatures.glow
     val glowState by com.fariin.app.data.Glow.state.collectAsState()
