@@ -403,7 +403,12 @@ fun ChatListScreen(
     val listScrolls by remember { androidx.compose.runtime.derivedStateOf { listState.canScrollForward || listState.canScrollBackward } }
     LaunchedEffect(atTop, listScrolls) { if (atTop || !listScrolls) fabShown = true }
     val anim = com.fariin.app.ui.components.animationsOn()
-    val rowPlace = remember(anim) { com.fariin.app.ui.components.Motion.itemOffset }
+    // Rows glide to new places only once the list has settled (owner 2026-11-11, frame by frame on
+    // the Pixel: right after the splash the official row and late summaries arrived and every row
+    // below slid down, so the list looked drawn in front of you). The first 1.5 s they just land.
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(1_500); settled = true }
+    val rowPlace = remember(anim, settled) { if (settled) com.fariin.app.ui.components.Motion.itemOffset else null }
     // The new-account card's height (owner 2026-11-04: the camera and pencil sat on top of it). The
     // FABs rise to sit above the card while it shows and slide back down when it goes.
     var gsHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }

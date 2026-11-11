@@ -95,6 +95,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         com.fariin.app.data.LeaveUndo.onFailure = { com.fariin.app.ui.components.Snack.show(it, long = true) }
         splash.setKeepOnScreenCondition { keepSplash }
+        // The splash goes in one frame, no fade (owner 2026-11-11: the list seemed to draw itself
+        // in, white to full, the reference app just appears).
+        splash.setOnExitAnimationListener { it.remove(); enableEdgeToEdge() }   // the splash left a grey status bar scrim
         window.decorView.postDelayed({ keepSplash = false }, SPLASH_MAX_MS)
         enableEdgeToEdge()
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
