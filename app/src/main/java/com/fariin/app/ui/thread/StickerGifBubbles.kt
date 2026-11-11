@@ -240,7 +240,12 @@ internal fun GifRow(m: Message, shape: Shape, fill: Color, hasHeader: Boolean, h
             // Played as its small MP4 on the video chip (GifVideo), its still under it; a GIF with no
             // MP4 (not from Giphy) plays as the picture, as before.
             val hasMp4 = remember(m.imageUrl) { GifVideo.mp4Of(m.imageUrl) != null }
-            GifMp4(m.imageUrl, autoplay(), Modifier.fillMaxSize()) {
+            // Not while the chat slides in: starting the video decoder took ~32 ms on the Pixel inside the
+            // open (owner's friend's mid-range phone opened chats in ~0.6 s, 2026-11-11). The still slides
+            // in; the GIF plays once the page has landed. Read through derivedStateOf so the slide's
+            // frames do not recompose every bubble.
+            val landed by remember { androidx.compose.runtime.derivedStateOf { !com.fariin.app.ui.components.PageMotion.moving } }
+            GifMp4(m.imageUrl, autoplay() && landed, Modifier.fillMaxSize()) {
                 if (hasMp4) AsyncImage(com.fariin.app.media.GifLoader.still(LocalContext.current, m.imageUrl ?: ""), contentDescription = "GIF",
                     imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else AsyncImage(animatedRequest(m.imageUrl, autoplay()), contentDescription = "GIF", imageLoader = com.fariin.app.media.GifLoader.get(LocalContext.current),
