@@ -519,7 +519,8 @@ private fun GifGrid(list: List<StickerGifRules.Gif>?, padding: PaddingValues, qu
         }
         return
     }
-    val play = autoplay()
+    // Stills only while the panel slides (ThreadScreen LocalPanelMoving); the videos start once it stands.
+    val play = autoplay() && !LocalPanelMoving.current
     val changes by GifLists.changes.collectAsState()
     // iOS grid (2026-11-07): 3 columns edge to edge (no side margin), 2 apart both ways, square
     // corners; the top and bottom padding stay as they were.

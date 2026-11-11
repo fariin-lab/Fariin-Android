@@ -3045,7 +3045,10 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
     val full = if (kb > 0) kb else restPx + defaultKb
     // The height the slot holds the field at, as a bottom offset like the keyboard's.
     val reserve = remember { androidx.compose.animation.core.Animatable(0f) }
+    // Off while the panel rises or falls: the GIF videos wait for it (LocalPanelMoving).
+    val moving = remember { androidx.compose.runtime.mutableStateOf(true) }
     LaunchedEffect(open, toKeys, full) {
+        moving.value = true
         when {
             open -> {
                 // From the keys: at once (they stand there, the panel takes their place). From rest
@@ -3065,6 +3068,7 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
                         reserve.snapTo(from + (to - from) * com.fariin.app.ui.components.Motion.PageEase.transform((v / PANEL_OPEN_MS).coerceAtMost(1f)))
                     }
                 }
+                moving.value = false
             }
             toKeys -> {
                 // Held while the keys rise under it; let go once they are up (or after a beat if they never came).
@@ -3094,8 +3098,17 @@ private fun PanelSlot(open: Boolean, toKeys: Boolean, onKeysUp: () -> Unit, cont
         // slot, so the panel starts 8 lower and ends at the screen's edge, exactly where the keys sit
         // (owner 2026-11-10: with the panel open the field lost its space and sat on the panel).
         layout(p.width, h) { p.place(0, 8.dp.roundToPx()) }
-    }) { content(panelH) }
+    }) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalPanelMoving provides moving.value) { content(panelH) }
+    }
 }
+
+/**
+ * On while the sticker panel slides up from rest or back down. The GIF tiles show their stills
+ * meanwhile and start their videos once it stands: a dozen players set up in the rise's own frames
+ * stalled it for ~300 ms and it came up in two or three jumps (owner's Pixel 2026-11-10).
+ */
+internal val LocalPanelMoving = androidx.compose.runtime.compositionLocalOf { false }
 
 /** The message list's padding: the composer's height as measured earlier in this same layout pass
  *  (ThreadContent), so the keyboard and the sticker panel move the list in the same frame. */
