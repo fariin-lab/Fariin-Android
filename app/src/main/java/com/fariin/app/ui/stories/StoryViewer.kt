@@ -1263,7 +1263,13 @@ private fun StoryPage(
                 // iOS UserView: 38 photo, 13 to the name, name 14 semibold, the age 13 at 70% under it;
                 // my story keeps the age beside the name and the audience under both.
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    // iOS UserView onProfile: the photo and name open the poster's profile over the viewer
+                    // (not my own story, Fariin's or a channel's).
+                    val profileTap = !mine && story.authorUid.isNotEmpty() && !com.fariin.app.data.OfficialStories.isOfficial(story) &&
+                        !com.fariin.app.data.ChannelStories.isFollowerStory(story, me)
+                    Row(Modifier.weight(1f).then(if (profileTap) Modifier.clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,
+                    ) { onRepostAuthor(story.authorUid) } else Modifier), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(group.photoUrl, 38.dp, squircle = group.key.startsWith(StoryGroup.GROUP_PREFIX),
                             kind = com.fariin.app.ui.components.AvatarKind.of(group.key.startsWith(StoryGroup.GROUP_PREFIX), false))
                         Spacer(Modifier.width(13.dp))
@@ -1348,7 +1354,7 @@ private fun StoryPage(
                                 if (!mine && !official) androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("Hide Stories") },
                                     leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
-                                    onClick = { menu = false; onHide(story.authorUid) },
+                                    onClick = { menu = false; onHide(story.ringKey) },
                                 )
                                 if (!mine && !official) item("Report", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report), Color(0xFFFF3B30), "report")
                             }
@@ -1547,6 +1553,11 @@ private fun ReplyBar(
     var text by remember(story.id) { mutableStateOf("") }
     var liked by remember(story.id) { mutableStateOf(false) }
     var focused by remember(story.id) { mutableStateOf(false) }
+    // The story holds still while the field is in use OR a draft is in it: closing the keyboard
+    // with Back no longer lets the story move on and take the typed reply with it.
+    val holding = focused || text.isNotEmpty()
+    LaunchedEffect(holding) { onFocus(holding) }
+    DisposableEffect(Unit) { onDispose { onFocus(false) } }
     LaunchedEffect(story.id, showLike) { if (showLike) liked = !service.myReaction(story.id).isNullOrEmpty() }
     val focus = LocalFocusManager.current
     // The keyboard closed by Back or its own button: the field gives up focus too, or the react
@@ -1599,7 +1610,7 @@ private fun ReplyBar(
                         textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Color.White),
                         modifier = Modifier.fillMaxWidth().focusRequester(fr)
                             .focusProperties { canFocus = armed }
-                            .onFocusChanged { focused = it.isFocused; if (!it.isFocused) armed = false; onFocus(it.isFocused) },
+                            .onFocusChanged { focused = it.isFocused; if (!it.isFocused) armed = false },
                     )
                     if (!armed) Box(Modifier.matchParentSize().clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null,

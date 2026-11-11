@@ -20,7 +20,7 @@ object StoryRings {
     fun forGroup(cid: String, name: String, photo: String?, s: StoriesState, hidden: Set<String>): StoryGroup? {
         val key = StoryGroup.GROUP_PREFIX + cid
         s.others.firstOrNull { it.key == key && it.stories.isNotEmpty() }?.let { g ->
-            return if (g.stories.first().authorUid in hidden) null else g
+            return if (g.key in hidden) null else g   // hidden by its ring key, as the Stories list
         }
         val mine = s.mine?.stories?.filter { it.groupId == cid }.orEmpty()
         if (mine.isEmpty()) return null

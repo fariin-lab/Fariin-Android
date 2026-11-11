@@ -258,7 +258,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
     fun hiddenMenu(g: StoryGroup) = listOf(
         RowAction("Send Message", R.drawable.ic_menu_chat) { sendMessage(g) },
         RowAction("Unhide Story", R.drawable.ic_stories) {
-            g.stories.firstOrNull()?.authorUid?.let { com.fariin.app.data.StoryMutes.setHidden(context, it, false) }
+            com.fariin.app.data.StoryMutes.setHidden(context, g.key, false)
         },
     )
     val myMenu = listOf(
@@ -558,7 +558,7 @@ private fun StoriesScreen(me: String, conversations: List<Conversation>, profile
             text = { Text("New story updates from ${g.name.ifEmpty { "this person" }} won't appear at the top of the stories list anymore.") },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    g.stories.firstOrNull()?.authorUid?.let { com.fariin.app.data.StoryMutes.setHidden(context, it, true) }
+                    com.fariin.app.data.StoryMutes.setHidden(context, g.key, true)
                     hideTarget = null
                 }) { Text("Hide Stories", color = c.red) }
             },

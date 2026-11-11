@@ -454,9 +454,10 @@ object StoryMutes {
     fun parse(s: String): Set<String> = s.split(' ').filter { it.isNotEmpty() }.toSet()
     fun join(s: Set<String>): String = s.joinToString(" ")
 
-    /** Splits the rings into what the list shows and the Hidden Stories list (iOS visibleFriends / hiddenFriends). */
+    /** Splits the rings into what the list shows and the Hidden Stories list (iOS visibleFriends / hiddenFriends).
+     *  Keyed by the ring (iOS bucket userId): a person's uid, or "g:<gid>" for a group, never the first poster. */
     fun split(groups: List<StoryGroup>, hidden: Set<String>): Pair<List<StoryGroup>, List<StoryGroup>> =
-        groups.partition { g -> g.stories.firstOrNull()?.authorUid?.let { it !in hidden } ?: true }
+        groups.partition { g -> g.key !in hidden }
 }
 
 /** Posted Stories (iOS PostedStoriesView): the filter and the folders by audience, pure. */
