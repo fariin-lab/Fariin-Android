@@ -87,6 +87,8 @@ object Forwarder {
         data class Album(val parts: List<MediaSender.AlbumPart>) : Payload()
         data class Voice(val bytes: ByteArray) : Payload()
         data class Doc(val prep: FilePrep) : Payload()
+        data class Sticker(val ref: com.fariin.app.data.StickerRef) : Payload()
+        data class Gif(val gif: com.fariin.app.data.StickerGifRules.Gif) : Payload()
         object Text : Payload()
     }
 
@@ -100,6 +102,10 @@ object Forwarder {
             val poster = posterUrl?.let { runCatching { bytes(it, posterEnc) }.getOrNull() }
             return VideoPrep.describe(clip, poster) ?: throw SourceUnavailable()
         }
+        // A sticker or a GIF has no words and no media kind: it went down the text path, sent
+        // nothing, and still said "Forwarded" (overnight test 2026-11-10). Each goes as itself.
+        if (m.isSticker) return Payload.Sticker(com.fariin.app.data.StickerRef(m.stickerPack!!, m.stickerId!!, m.stickerEmoji.orEmpty(), m.stickerAnimated))
+        if (m.isGif) return Payload.Gif(com.fariin.app.data.StickerGifRules.Gif(m.id, m.imageUrl!!, m.width ?: 200.0, m.height ?: 200.0))
         return when (m.mediaKind) {
             // iOS forwards a photo at .high quality.
             Message.MediaKind.PHOTO -> Payload.Photo(PhotoPrep.fromBytes(bytes(m.imageUrl, m.enc), MediaRules.PhotoQuality.HIGH)
@@ -137,6 +143,10 @@ object Forwarder {
             is Payload.Doc -> sender.file((payload as Payload.Doc).prep, fwd, clientId, ts)
             Payload.Text -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
                 .sendForwardedText(m.text, fwd, fwdChannelJson, source)
+            is Payload.Sticker -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+                .sendSticker((payload as Payload.Sticker).ref, null)
+            is Payload.Gif -> ThreadRepository(target, me, crypto, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+                .sendGif((payload as Payload.Gif).gif, null)
         }
     }
 }
