@@ -393,17 +393,30 @@ class FirestorePeople(
         )
         // iOS ChatService.createGroup: every switch goes in as given, never e2ee.
         for ((k, v) in permissions) if (k != "e2ee") data[k] = v
-        ref.set(data).await()
+        // iOS: not awaited. The write is on this phone at once and the chat opens; offline the await
+        // held "Create" busy until the network came back. A refusal is said when the server answers.
+        ref.set(data).addOnFailureListener {
+            com.fariin.app.ui.components.Snack.show("Could not create the group. Try again.")
+        }
         CryptoHub.notePlainGroup(ref.id)
-        systemMessage(ref.id, "${mine?.name?.ifEmpty { null } ?: "Someone"} created the group")
-        if (photo != null) try {
-            val jpeg = squareJpeg(photo, 640, 80)
-            if (jpeg != null) {
-                val sref = FirebaseStorage.getInstance().reference.child("profiles/group_${ref.id}.jpg")
-                sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
-                ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
-            }
-        } catch (_: Exception) {}
+        // The "created" line, queued right behind the group (same order on the server).
+        val text = "${mine?.name?.ifEmpty { null } ?: "Someone"} created the group"
+        val batch = db.batch()
+        batch.set(conv(ref.id).collection("messages").document(), mapOf("text" to text, "authorId" to me, "type" to "system",
+            "createdAt" to FieldValue.serverTimestamp()))
+        batch.update(conv(ref.id), mapOf("lastMessage" to text, "lastSender" to me, "updatedAt" to FieldValue.serverTimestamp()))
+        batch.commit()
+        // The photo goes up behind the open chat.
+        if (photo != null) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val jpeg = squareJpeg(photo, 640, 80)
+                if (jpeg != null) {
+                    val sref = FirebaseStorage.getInstance().reference.child("profiles/group_${ref.id}.jpg")
+                    sref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+                    ref.update(mapOf("avatarUrl" to sref.downloadUrl.await().toString(), "updatedAt" to FieldValue.serverTimestamp())).await()
+                }
+            } catch (_: Exception) {}
+        }
         return ref.id
     }
 
@@ -443,10 +456,16 @@ class FirestorePeople(
             update["bannedUids"] = FieldValue.arrayRemove(*lifted.toTypedArray())
         }
         val text = "${profile(me)?.shownName ?: "Someone"} added ${GroupRules.addedWho(ok.map { it.shownName })}"
+        // iOS canNotice: a member the message rule would refuse (announcement mode, or muted) still
+        // adds, only without the "added" line; the refused line took the whole batch down with it.
+        val canNotice = GroupAdmins.announcementBlock(d, me) == null &&
+            !MemberRestrict.isMuted(d, me, System.currentTimeMillis().toDouble())
         val batch = db.batch()
-        batch.set(conv(cid).collection("messages").document(), mapOf("text" to text, "authorId" to me, "type" to "system",
-            "createdAt" to FieldValue.serverTimestamp()))
-        update["lastMessage"] = text; update["lastSender"] = me
+        if (canNotice) {
+            batch.set(conv(cid).collection("messages").document(), mapOf("text" to text, "authorId" to me, "type" to "system",
+                "createdAt" to FieldValue.serverTimestamp()))
+            update["lastMessage"] = text; update["lastSender"] = me
+        }
         batch.update(conv(cid), update)
         batch.commit().await()
         return if (refused.isEmpty()) null else GroupRules.refusedSentence(refused.map { it.shownName })
@@ -671,13 +690,8 @@ object GroupRules {
      */
     fun canEditInfo(me: String, data: Map<String, Any?>, nowMs: Double = System.currentTimeMillis().toDouble()): Boolean {
         if (me.isEmpty()) return false
-        val mod = data["mod"] as? Map<*, *>
-        val state = mod?.get("state") as? String ?: "ok"
-        if (state == "ended" || state == "disabled") return false
-        if (state == "suspended") {
-            val until = (mod?.get("until") as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble() ?: 0.0
-            if (until <= 0 || until > nowMs) return false
-        }
+        // GroupMod.blocksSending: ended (endedAt, as iOS reads it), disabled, or suspended and not over.
+        if (GroupMod.blocksSending(data, nowMs)) return false
         val owner = data["createdBy"] as? String ?: ""
         if (owner.isNotEmpty() && owner == me) return true
         val admins = (data["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()

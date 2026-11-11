@@ -97,6 +97,8 @@ import com.fariin.app.ui.settings.SettingsRow
 import com.fariin.app.ui.settings.SettingsSection
 import com.fariin.app.ui.settings.Trailing
 import com.fariin.app.ui.theme.Fariin
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -633,13 +635,18 @@ private fun GroupMembersPage(cid: String, me: String, onBack: () -> Unit, push: 
         if (!searching || handlesAsked) return@LaunchedEffect
         handlesAsked = true
         val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-        for (uid in g.users.take(200)) {
-            val h = runCatching { db.collection("users").document(uid).get().await().getString("handle") }.getOrNull()
-            if (!h.isNullOrEmpty()) handles[uid] = h
-        }
+        // All at once, not one after another: in a big group the @names came in many seconds late.
+        kotlinx.coroutines.coroutineScope {
+            g.users.take(200).map { uid ->
+                async { uid to runCatching { db.collection("users").document(uid).get().await().getString("handle") }.getOrNull() }
+            }.awaitAll()
+        }.forEach { (uid, h) -> if (!h.isNullOrEmpty()) handles[uid] = h }
     }
     val closed = team.closed
-    val canAdd = !closed && (team.may(me, Right.INVITE_USERS) || (doc["membersCanAdd"] == true && me in team.users))
+    // iOS canAdd: not closed (ended, suspended, disabled); the right, or members by the switch unless
+    // an admin restricted me from adding.
+    val canAdd = !closed && me in team.users && !com.fariin.app.data.GroupMod.blocksSending(doc) &&
+        com.fariin.app.data.GroupWelcome.canAdd(me, doc)
     val canInvite = !closed && team.may(me, Right.INVITE_USERS)
     val list = com.fariin.app.data.GroupMembers.search(g, me, query, handles, adminsFirst)
     val sections = com.fariin.app.data.GroupMembers.sections(list, { com.fariin.app.data.GroupMembers.shownName(g, it, me) }, adminsFirst)

@@ -145,8 +145,11 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
         // Until the server answers, a chat whose whole history fitted on its first page last time is
         // taken as still complete, so its welcome card is there from the first frame (HistoryStart).
         canLoadOlder = s.canLoadOlder && !(startKnown && !s.synced && s.messages.size < ThreadRepository.PAGE_SIZE),
-        sendBlocked = (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupAdmins.announcementBlock(s.conv, me) else null)
+        // An ended, suspended or disabled group first (iOS groupModBlocked), then announcement mode.
+        sendBlocked = (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupMod.sendBlock(s.conv) else null)
+            ?: (if (conv?.isGroup == true && channel == null) com.fariin.app.data.GroupAdmins.announcementBlock(s.conv, me) else null)
             ?: vm.repo.sendBlockedReason(listed ?: conv),
+        sendBlockedByMod = conv?.isGroup == true && channel == null && com.fariin.app.data.GroupMod.blocksSending(s.conv),
         cid = cid,
         otherDeleted = conv?.isGroup != true && channel == null &&
             (s.otherDeleted || conv?.isDeletedAccount(conv.otherUid(me)) == true),

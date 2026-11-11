@@ -263,7 +263,8 @@ internal fun MessageMenu(
             )
         }
         val mine = m.reactions[ui.me]
-        MessageMenuOverlay(source, rows, reactable = !m.deleted && m.sendState == null && !m.isSystem && !m.isCall, mine = mine,
+        MessageMenuOverlay(source, rows, reactable = !m.deleted && m.sendState == null && !m.isSystem && !m.isCall &&
+                !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me), mine = mine,
             onReact = { e -> actions.onReact(m, MessageRules.nextReaction(mine, e)) },
             onDismiss = onDismiss, preview = preview, onLifted = onLifted, onLanded = onLanded)
         return
@@ -277,7 +278,8 @@ internal fun MessageMenu(
         shape = com.fariin.app.ui.components.SheetShape,
     ) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            val reactable = !m.deleted && m.sendState == null && !m.isSystem && !m.isCall   // iOS canReact: never a call record
+            val reactable = !m.deleted && m.sendState == null && !m.isSystem && !m.isCall &&   // iOS canReact: never a call record
+                !com.fariin.app.data.GroupAdmins.reactionsHeldBack(ui.groupDoc, ui.me)   // nor when an admin turned mine off
             if (reactable) {
                 val mine = m.reactions[ui.me]
                 Row(

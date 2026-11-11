@@ -444,9 +444,19 @@ class ThreadRepository(
         // Chat History for new members hidden before I joined (iOS historyStart): the chat starts
         // when I came in, as a new group would. My own messages are always there.
         val historyStart = if (Wire.isGroupCid(cid)) GroupManage.historyStart(_state.value.conv, me) else null
+        // iOS notForMe: an old end-to-end group message sealed without me, sent before I came in
+        // (memberSince + 5 s), is not mine to read; it goes instead of drawing as a lock. One sealed by
+        // a phone that had not seen me join yet stays (the lock), as iOS.
+        val joinedAt = if (Wire.isGroupCid(cid))
+            Conversation.millis((_state.value.conv["memberSince"] as? Map<*, *>)?.get(me)) else 0.0
         for (d in olderDocs.values + liveDocs.values) {
             var m = parse(d)
             if (historyStart != null && m.hasServerTime && m.createdAtMillis < historyStart && m.authorId != me) continue
+            if (Wire.isGroupCid(cid)) {
+                val raw = d.get("text") as? String ?: ""
+                if (raw.startsWith("encg1:") && crypto.groupEnvelopeSkipsMe(raw, cid) &&
+                    (joinedAt <= 0 || m.createdAtMillis < joinedAt + 5000)) continue
+            }
             // The disappearing timer: the server's stamp only (iOS). Due = off the screen now, from
             // the saved copy too; the server deletes it for both people.
             if (m.expiresAtMillis != null) {

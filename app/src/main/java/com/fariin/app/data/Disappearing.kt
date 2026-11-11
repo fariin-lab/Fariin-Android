@@ -156,13 +156,8 @@ object Disappearing {
     fun canChangeInGroup(conv: Map<String, Any?>, me: String, nowMs: Double = System.currentTimeMillis().toDouble()): Boolean {
         if (me.isEmpty()) return false
         // Closed: ended by its owner, or disabled / suspended by Fariin (the same test as Edit Group).
-        val mod = conv["mod"] as? Map<*, *>
-        val state = mod?.get("state") as? String ?: "ok"
-        if (state == "ended" || state == "disabled") return false
-        if (state == "suspended") {
-            val until = (mod?.get("until") as? com.google.firebase.Timestamp)?.toDate()?.time?.toDouble() ?: 0.0
-            if (until <= 0 || until > nowMs) return false
-        }
+        // GroupMod.blocksSending: ended (endedAt, as iOS reads it), disabled, or suspended and not over.
+        if (GroupMod.blocksSending(conv, nowMs)) return false
         return PinRules.adminCan(conv, me, "changeInfo")
     }
 

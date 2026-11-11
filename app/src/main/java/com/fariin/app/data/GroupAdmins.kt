@@ -42,7 +42,7 @@ object GroupAdmins {
                     if (a is String && b is String) a to b else null
                 }?.toMap() ?: emptyMap()
                 fun list(k: String) = (d[k] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-                val state = (d["mod"] as? Map<*, *>)?.get("state") as? String ?: "ok"
+                val state = GroupMod.state(d)
                 return Team(
                     owner = d["createdBy"] as? String ?: "",
                     users = list("users"),
@@ -151,13 +151,38 @@ object GroupAdmins {
         return membersMaySend(d, kind)
     }
 
-    /** heldBackText: "Admins turned off photos in this group.", or null when it may go. */
-    fun heldBack(d: Map<String, Any?>, me: String, kind: SendKind): String? =
-        if (maySend(d, me, kind)) null else "Admins turned off ${kind.words} in this group."
+    /** The per-member restriction that holds [kind] back (iOS sendHeldBack's first argument); none for location. */
+    fun restrictionFor(kind: SendKind): MemberRestrict.R? = when (kind) {
+        SendKind.PHOTOS, SendKind.VIDEOS -> MemberRestrict.R.SEND_PHOTOS
+        SendKind.FILES -> MemberRestrict.R.SEND_FILES
+        SendKind.LINKS -> MemberRestrict.R.SEND_LINKS
+        SendKind.VOICE -> MemberRestrict.R.SEND_VOICE
+        SendKind.STICKERS, SendKind.GIFS -> MemberRestrict.R.SEND_STICKERS
+        SendKind.POLLS -> MemberRestrict.R.SEND_POLLS
+        SendKind.LOCATION -> null
+    }
 
-    /** attachMediaOffText: photos AND videos both off closes the photo grid. */
-    fun mediaOff(d: Map<String, Any?>, me: String): String? =
-        if (!maySend(d, me, SendKind.PHOTOS) && !maySend(d, me, SendKind.VIDEOS)) "Photos and videos are off in this group." else null
+    /**
+     * heldBackText: "Admins turned off photos in this group." (the group's switch), else "An admin has
+     * turned off photos for you." (a restriction on me alone), or null when it may go.
+     */
+    fun heldBack(d: Map<String, Any?>, me: String, kind: SendKind, nowMs: Double = System.currentTimeMillis().toDouble()): String? {
+        if (!isGroup(d)) return null
+        if (!maySend(d, me, kind)) return "Admins turned off ${kind.words} in this group."
+        val r = restrictionFor(kind) ?: return null
+        return if (MemberRestrict.isRestricted(d, me, r, nowMs)) "An admin has turned off ${kind.words} for you." else null
+    }
+
+    /** attachMediaOffText: photos AND videos both off (for everyone, or for me alone) closes the photo grid. */
+    fun mediaOff(d: Map<String, Any?>, me: String, nowMs: Double = System.currentTimeMillis().toDouble()): String? {
+        if (heldBack(d, me, SendKind.PHOTOS, nowMs) == null || heldBack(d, me, SendKind.VIDEOS, nowMs) == null) return null
+        return if (!maySend(d, me, SendKind.PHOTOS) || !maySend(d, me, SendKind.VIDEOS)) "Photos and videos are off in this group."
+            else "An admin has turned off photos and videos for you."
+    }
+
+    /** reactionsHeldBack: an admin turned reactions off for me; the app offers none then. */
+    fun reactionsHeldBack(d: Map<String, Any?>, me: String, nowMs: Double = System.currentTimeMillis().toDouble()): Boolean =
+        isGroup(d) && MemberRestrict.isRestricted(d, me, MemberRestrict.R.SEND_REACTIONS, nowMs)
 
     private val LINK = Regex("(?si).*(https?://|www[.]).*")
 
