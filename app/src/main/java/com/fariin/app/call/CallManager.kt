@@ -136,6 +136,10 @@ object CallManager {
     private var appliedRestart = 0
     private var restartRequestsSeen = 0
     private var restartRequestsSent = 0
+    /** When the relay list the live connection was built with was fetched (iOS pcIceServersFetchedAt). */
+    private var engineIceAt = 0L
+    private var relayRefreshTries = 0
+    private var relayRefreshTriedAt = 0L
     private var lastPeerBeat = 0.0
     /** When (this phone's clock) their beat last changed, and when the server last took one of mine. */
     private var peerBeatChangedAt = 0L
@@ -656,6 +660,7 @@ object CallManager {
         })
         self = e
         if (!e.open(servers.ifEmpty { CallWire.FALLBACK_STUN }, relayOnly, isCaller, micOn = !_ui.value.muted, cameraOn = camera)) { e.close(); return null }
+        engineIceAt = if (servers === iceServers) iceAt else System.currentTimeMillis()
         engine = e
         edit { it.copy(localVideo = e.localVideo, frontCamera = e.frontCamera) }
         return e
@@ -743,7 +748,33 @@ object CallManager {
                     Log.i(TAG, "peer heartbeat silent 30 s, ending")
                     remoteEnded(EndReason.FAILED)
                 }
+                if (callId == id) refreshRelayIfAging(id)
             }
+        }
+    }
+
+    /**
+     * iOS refreshRelayIfAging: relay credentials last 2 hours, so 100 minutes after the connection's
+     * list was fetched a fresh one is set on it and ICE restarts (the caller restarts, the callee
+     * asks). Never onto a list without a relay; at most 2 tries per call, 2 minutes apart.
+     */
+    private fun refreshRelayIfAging(id: String) {
+        if (status.phase != CallPhase.ACTIVE || !mediaReady || engineIceAt == 0L) return
+        val now = System.currentTimeMillis()
+        if (now - engineIceAt < 100 * 60_000L) return
+        if (now - relayRefreshTriedAt < 120_000L || relayRefreshTries >= 2) return
+        relayRefreshTries++; relayRefreshTriedAt = now
+        Log.i(TAG, "relay list is ${(now - engineIceAt) / 60_000} min old, refreshing mid-call")
+        main.launch {
+            val fresh = withTimeoutOrNull(6000) { signaling.fetchIceServers() }
+            if (fresh.isNullOrEmpty() || !CallWire.hasRelay(fresh)) return@launch
+            iceServers = fresh; iceAt = System.currentTimeMillis()
+            if (callId != id || status.phase != CallPhase.ACTIVE) return@launch
+            val e = engine ?: return@launch
+            if (!e.setServers(fresh)) return@launch
+            engineIceAt = iceAt
+            if (status.isCaller) restartIce()
+            else { restartRequestsSent++; signaling.update(id, mapOf("restartRequest" to restartRequestsSent)) }
         }
     }
 
@@ -1116,6 +1147,7 @@ object CallManager {
         pendingRemote.clear(); localBuffer.clear(); offerSdp = null
         preNegotiated = false; heldAnswer = null; preJob?.cancel(); preJob = null; earlyOut = false
         negotiationVersion = 0; appliedRestart = 0; restartRequestsSeen = 0; restartRequestsSent = 0
+        engineIceAt = 0L; relayRefreshTries = 0; relayRefreshTriedAt = 0L
         lastPeerBeat = 0.0; peerBeatChangedAt = 0L; myBeatAckedAt = 0L
     }
 
