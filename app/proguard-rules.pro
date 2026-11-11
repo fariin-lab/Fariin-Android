@@ -34,6 +34,9 @@
 -keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
 -dontwarn org.webrtc.**
 -dontwarn livekit.org.webrtc.**
+# LiveKit 2.30's WebRTC uses jni_zero; JniZeroJni is generated only for multiplexed JNI builds and
+# is named from JniZero.setJniClassLoader, which this build never calls.
+-dontwarn livekit.org.jni_zero.JniZeroJni
 
 # ---- Sign-in: Credential Manager, Sign in with Google ----
 -if class androidx.credentials.CredentialManager
