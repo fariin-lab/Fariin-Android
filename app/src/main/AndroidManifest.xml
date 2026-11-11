@@ -133,6 +133,22 @@
                 <data android:host="wchat" />
             </intent-filter>
         </activity>
+        <!-- fariin.com/<name> on Android 9-11 (pathAdvancedPattern above is Android 12+ only). The
+             older pattern syntax cannot say "one segment", so this claims every fariin.com path;
+             MainActivity hands the site's own pages on to the browser (ExternalLinks.isSitePage).
+             Enabled only before Android 12 (res/values-v31/bools_links.xml). -->
+        <activity-alias android:name=".NameLinksLegacy" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="@bool/legacy_name_links">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="fariin.com" />
+                <data android:host="www.fariin.com" />
+                <data android:pathPattern="/..*" />
+            </intent-filter>
+        </activity-alias>
         <!-- Settings > Appearance > App Icon (ui/settings/AppIconPage.kt): one launcher entry per
              icon, only the chosen one enabled. Each carries the launcher long-press shortcuts and
              the Direct Share target (system/), which live on the launcher entry. -->
