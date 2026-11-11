@@ -681,14 +681,15 @@ fun ContactInfoScreen(api: PeopleApi, uid: String, conv: Conversation?, onBack: 
             LaunchedEffect(uid) { com.fariin.app.data.VerifiedPeople.warm(vCtx.applicationContext, uid) }
             val vKinds by com.fariin.app.data.VerifiedPeople.kinds.collectAsState()
             val vKind = com.fariin.app.data.VerifiedPeople.badge(vKinds, uid)
+            // Hold the name or the @username to copy it (iOS ui-batch-1111).
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center)
+                com.fariin.app.ui.components.CopyOnHold(name) { Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.label, textAlign = TextAlign.Center) }
                 if (vKind != null || person?.verified == true) {
                     Spacer(Modifier.width(6.dp))
                     com.fariin.app.ui.components.VerifiedSeal(if (vKind != null && com.fariin.app.data.VerifiedPeople.isGold(vKind)) androidx.compose.ui.graphics.Color(0xFFE8B21E) else c.blue, Modifier.size(20.dp), "Verified")
                 }
             }
-            person?.handle?.takeIf { it.isNotEmpty() }?.let { Text("@$it", fontSize = 16.sp, color = c.secondary) }
+            person?.handle?.takeIf { it.isNotEmpty() }?.let { com.fariin.app.ui.components.CopyOnHold("@$it") { Text("@$it", fontSize = 16.sp, color = c.secondary) } }
             Spacer(Modifier.height(16.dp))
             // Spread over the width: with Search too, five circles at a fixed 28 dp gap ran past the
             // edge and the last label wrapped letter by letter into a tall empty band.
