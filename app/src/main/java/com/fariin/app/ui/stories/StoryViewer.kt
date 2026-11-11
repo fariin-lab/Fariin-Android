@@ -675,6 +675,15 @@ fun StoryViewer(
     fun previousGroup() {
         if (pager.currentPage > 0) scope.launch { pager.animateScrollToPage(pager.currentPage - 1, animationSpec = turnSpec) }
     }
+    /** A story taken out of the viewer (deleted, no longer mine to see, expired): its ring shrinks,
+     *  an emptied ring goes, and the last one closes the viewer. */
+    fun dropStory(id: String) {
+        val gi = groups.indexOfFirst { g -> g.stories.any { it.id == id } }
+        if (gi < 0) return
+        val left = groups[gi].stories.filter { it.id != id }
+        if (left.isEmpty()) { if (groups.size == 1) close() else groups.removeAt(gi) }
+        else groups[gi] = groups[gi].copy(stories = left)
+    }
 
     /** Where the card is on screen right now, in this window's pixels. */
     fun visibleRect(): Rect {
@@ -791,6 +800,8 @@ fun StoryViewer(
                         // Fariin's own story: seen on this phone and one view document, no receipt to anyone.
                         if (com.fariin.app.data.OfficialStories.isOfficial(s)) { com.fariin.app.data.OfficialStories.recordView(context, s, receipts); return@StoryPage }
                         if (s.authorUid != me && marked.add(s.id)) {
+                            // A one-time story leaves my list on this phone now (iOS isOneTimeUsed).
+                            if (s.oneTime) com.fariin.app.data.StoryOneTimeUsed.mark(context, s)
                             val wm = watermarks[s.ringKey]
                             if (StoryRules.advancesWatermark(wm, s.createdAtMs)) watermarks[s.ringKey] = s.createdAtMs + 1
                             // Waits for the switch when it is not known yet; still unknown = no receipt.
@@ -837,6 +848,11 @@ fun StoryViewer(
                         else com.fariin.app.data.StoryPrivacyRules.canReply(s, contacts)
                     },
                     ownerBar = { s -> s.groupId != null && com.fariin.app.data.GroupStoryRules.canSeeViews(s, me, convs) },
+                    // iOS GroupStoryStaff: who may take a member's group story down, and the menu rows that follow.
+                    mayDelete = { s -> com.fariin.app.data.GroupStoryRules.mayDelete(s.groupId, me, convs) },
+                    onGone = { s -> dropStory(s.id) },
+                    maySave = { s -> com.fariin.app.data.GroupStoryRules.othersMaySave(s, com.fariin.app.data.OfficialStories.isOfficial(s), convs, me) },
+                    noReport = { s -> com.fariin.app.data.GroupStoryRules.noReport(s.groupId, convs) },
                     receipts = receipts,
                     onShown = onShown,
                     onMediaLoaded = { pageLoaded[it] = true },
@@ -1043,11 +1059,7 @@ fun StoryViewer(
                     confirmDelete = null
                     scope.launch {
                         if (!service.deleteStory(s.id)) { toast = "Couldn't delete. Check your connection and try again."; return@launch }
-                        val gi = groups.indexOfFirst { g -> g.stories.any { it.id == s.id } }
-                        if (gi < 0) return@launch
-                        val left = groups[gi].stories.filter { it.id != s.id }
-                        if (left.isEmpty()) { if (groups.size == 1) close() else groups.removeAt(gi) }
-                        else groups[gi] = groups[gi].copy(stories = left)
+                        dropStory(s.id)
                     }
                 }) { Text("Delete", color = Color(0xFFFF3B30)) }
             },
@@ -1092,6 +1104,14 @@ private fun StoryPage(
     onShown: (Story) -> Unit,
     /** The poster's bar and the viewers sheet: my story, or a group story of a group I own or run (iOS hasOwnerBar). */
     ownerBar: (Story) -> Boolean = { false },
+    /** A group's owner, or an admin with Delete messages (the rules' groupStoryModerator). */
+    mayDelete: (Story) -> Boolean = { false },
+    /** The story on screen was deleted, stopped reaching me, or expired: drop it. */
+    onGone: (Story) -> Unit = {},
+    /** Save for somebody else's story (iOS othersMaySave): Fariin's own, or a passable group story. */
+    maySave: (Story) -> Boolean = { false },
+    /** The group switched reporting off (iOS groupNoReport). */
+    noReport: (Story) -> Boolean = { false },
     onHide: (String) -> Unit,
     onNotify: (uid: String, name: String) -> Unit = { _, _ -> },
     /** The "..." menu's other rows (iOS UserView.moreItems): "save", "viewers", "share", "report". */
@@ -1131,6 +1151,20 @@ private fun StoryPage(
     // Receipt only the story actually on screen and loaded (iOS markSeenItem).
     LaunchedEffect(story.id, active, loaded) { if (active && loaded) onSeen(story) }
     LaunchedEffect(story.id, active) { if (active) onShown(story) }
+    // iOS LiveStoryWatch: the story on screen leaves the viewer the moment it is deleted, stops
+    // reaching me, or runs out its time while open (never Fariin's own, which lives elsewhere).
+    // A story of mine still uploading (no media yet) is left alone.
+    if (active && !com.fariin.app.data.OfficialStories.isOfficial(story) && story.mediaUrl.isNotEmpty()) {
+        val goneNow by rememberUpdatedState(onGone)
+        DisposableEffect(story.id) {
+            val stop = service.watchGone(story.id, story.authorUid) { goneNow(story) }
+            onDispose { stop() }
+        }
+        LaunchedEffect(story.id) {
+            val left = story.expiresAtMs - System.currentTimeMillis()
+            if (story.expiresAtMs > 0) { if (left > 0) kotlinx.coroutines.delay(left); goneNow(story) }
+        }
+    }
     LaunchedEffect(story.id, loaded) { if (loaded) onMediaLoaded(story.id) }
 
     // Photo clock: 5 s of shown time, standing still while paused or held.
@@ -1328,9 +1362,12 @@ private fun StoryPage(
                                         leadingIcon = { Icon(icon, contentDescription = null, tint = tint ?: androidx.compose.material3.LocalContentColor.current, modifier = Modifier.size(22.dp)) },
                                         onClick = { menu = false; onMenuAction(story, key) })
                                 }
-                                // Fariin's own story offers Save and nothing else (iOS StorySaveSeam).
+                                // Somebody else's story offers Save when iOS othersMaySave does: Fariin's own,
+                                // or a group story from a public group that allows copying (iOS StorySaveSeam).
                                 val official = com.fariin.app.data.OfficialStories.isOfficial(story)
-                                if (official) item("Save", ImageVector.vectorResource(R.drawable.ic_save_down), null, "save")
+                                // The group's own staff neither hide nor report its stories (iOS StoryGroupStaffSeam.isStaff).
+                                val staff = !mine && mayDelete(story)
+                                if (!mine && maySave(story)) item("Save", ImageVector.vectorResource(R.drawable.ic_save_down), null, "save")
                                 // My own story (iOS): Save, Edit viewers, and Share when it went to Everyone.
                                 if (mine) {
                                     item("Save", ImageVector.vectorResource(R.drawable.ic_save_down), null, "save")
@@ -1351,12 +1388,12 @@ private fun StoryPage(
                                 }
                                 // Somebody else's story that anyone may pass on (the repost rule): Share Story.
                                 if (!mine && !official && canRepost(story)) item("Share Story", ImageVector.vectorResource(R.drawable.ic_link_share), null, "share")
-                                if (!mine && !official) androidx.compose.material3.DropdownMenuItem(
+                                if (!mine && !official && !staff) androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("Hide Stories") },
                                     leadingIcon = { Icon(androidx.compose.ui.res.painterResource(com.fariin.app.R.drawable.ic_eye_off), contentDescription = null, modifier = Modifier.size(22.dp)) },
                                     onClick = { menu = false; onHide(story.ringKey) },
                                 )
-                                if (!mine && !official) item("Report", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report), Color(0xFFFF3B30), "report")
+                                if (!mine && !official && !staff && !noReport(story)) item("Report", ImageVector.vectorResource(com.fariin.app.R.drawable.ic_report), Color(0xFFFF3B30), "report")
                             }
                         }
                     }
@@ -1392,9 +1429,10 @@ private fun StoryPage(
                 .graphicsLayer { alpha = chrome() }
                 .navigationBarsPadding().imePadding(),
         ) {
-            // Only the author deletes (rules): a group's owner and admins get the bar without the bin.
+            // The author deletes; so does a group's owner or an admin with Delete messages (the rules'
+            // groupStoryModerator, iOS GroupStoryStaff.mayDelete). Other admins get the bar without the bin.
             if (poster) OwnerBar(story, summaries[story.id], onViews = { onOpenViewers(story.id) },
-                onDelete = if (mine) ({ onDelete(story) }) else null)
+                onDelete = if (mine || mayDelete(story)) ({ onDelete(story) }) else null)
             else if (com.fariin.app.data.OfficialStories.isOfficial(story)) OfficialStoryButton(story, onLink)
             // A followed channel's story (iOS ChannelStoryFooter): nobody messages the channel from it;
             // views, reposts and likes for everyone, and Share.

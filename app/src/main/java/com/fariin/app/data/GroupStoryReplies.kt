@@ -65,6 +65,37 @@ object GroupStoryRules {
     fun isStaff(c: Conversation?, me: String): Boolean =
         c != null && me.isNotEmpty() && (c.createdBy == me || me in c.admins)
 
+    /**
+     * iOS GroupStoryStaff.mayDelete, the rules' groupStoryModerator word for word: a member who is the
+     * owner, or an admin with no rights entry (legacy, all rights) or one that lists deleteMessages.
+     */
+    fun mayDelete(groupId: String?, me: String, convs: List<Conversation>): Boolean {
+        if (groupId.isNullOrEmpty() || me.isEmpty()) return false
+        val c = convs.firstOrNull { it.id == groupId && it.isGroup } ?: return false
+        if (me !in c.users) return false
+        if (c.createdBy == me) return true
+        if (me !in c.admins) return false
+        return c.adminRights[me]?.contains("deleteMessages") ?: true
+    }
+
+    /**
+     * iOS othersMaySave: never a screenshot-blocked story; Fariin's own; a group story only from a
+     * public group that does not forbid copying, not one-time, and not from someone who blocked me.
+     */
+    fun othersMaySave(s: Story, official: Boolean, convs: List<Conversation>, me: String): Boolean {
+        if (s.captureProtected) return false
+        if (official) return true
+        val gid = s.groupId?.takeIf { it.isNotEmpty() } ?: return false
+        val c = convs.firstOrNull { it.id == gid } ?: return false
+        if (!c.isPublicGroup || s.oneTime || c.restrictLegacy) return false
+        val blockedMe = convs.any { !it.isGroup && it.users.contains(s.authorUid) && it.users.contains(me) && it.isBlockedByMe(s.authorUid) }
+        return !blockedMe
+    }
+
+    /** iOS GroupStoryStaff.noReport: the group switched reporting off. */
+    fun noReport(groupId: String?, convs: List<Conversation>): Boolean =
+        !groupId.isNullOrEmpty() && convs.firstOrNull { it.id == groupId }?.noReport == true
+
     /** The poster, or the group's owner and admins: they get the poster's bar and the Views | Replies sheet. */
     fun canSeeViews(s: Story, me: String, convs: List<Conversation>): Boolean {
         if (me.isEmpty()) return false

@@ -119,6 +119,37 @@ class StoryService(
     fun watchViews(storyId: String, onChange: () -> Unit): ListenerRegistration =
         db.collection("stories").document(storyId).collection("views").addSnapshotListener { s, _ -> if (s != null) onChange() }
 
+    /**
+     * iOS watchStoryGone: [onGone] once the story on screen is deleted, or no longer reaches me (the
+     * rules refuse the read after Edit Viewers dropped me; a public story is then checked through its
+     * mirror). Server answers only, so a cache miss never closes a story. Returns the stop.
+     */
+    fun watchGone(storyId: String, authorUid: String, onGone: () -> Unit): () -> Unit {
+        var stopped = false
+        var fired = false
+        var reg: ListenerRegistration? = null
+        val gone = { if (!stopped && !fired) { fired = true; onGone() } }
+        fun denied(e: Exception) = (e as? com.google.firebase.firestore.FirebaseFirestoreException)?.code ==
+            com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+        reg = db.collection("stories").document(storyId).addSnapshotListener { snap, err ->
+            if (stopped) return@addSnapshotListener
+            if (err != null) {
+                if (!denied(err)) return@addSnapshotListener
+                reg?.remove()
+                reg = if (authorUid.isEmpty()) { gone(); null } else db.collection("users").document(authorUid)
+                    .collection("publicStories").document(storyId).addSnapshotListener { m, e2 ->
+                        if (e2 != null) { if (denied(e2)) gone(); return@addSnapshotListener }
+                        if (m == null || m.metadata.isFromCache) return@addSnapshotListener
+                        if (!m.exists()) gone()
+                    }
+                return@addSnapshotListener
+            }
+            if (snap == null || snap.metadata.isFromCache) return@addSnapshotListener
+            if (!snap.exists()) gone()
+        }
+        return { stopped = true; reg?.remove(); reg = null }
+    }
+
     private fun summaryOf(data: Map<String, Any?>, who: (String) -> Pair<String, String?>): StoryViewSummary? {
         val count = (data["count"] as? Number)?.toInt() ?: if (data["repostCount"] is Number) 0 else return null
         val recent = (data["recent"] as? List<*>)?.filterIsInstance<String>()?.take(3)?.map { u ->
