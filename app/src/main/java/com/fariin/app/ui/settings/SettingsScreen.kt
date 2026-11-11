@@ -406,8 +406,11 @@ private fun AccountPage(
                 header = "Account",
                 footer = "Saves your profile, devices and privacy settings to a text file you can share or keep. Messages are not included.",
             ) {
+                val exporting by AccountReport.exporting.collectAsState()
                 SettingsRow("Your Account Data", trailing = Trailing.NONE, last = true,
-                    badge = NewBadgeSpots.ACCOUNT_ACCOUNT_DATA) {
+                    badge = NewBadgeSpots.ACCOUNT_ACCOUNT_DATA,
+                    accessory = if (exporting) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) {
+                    if (exporting) return@SettingsRow
                     exportScope.launch {
                         try { AccountReport.share(ctx) } catch (e: Exception) { toast(ctx, e.message ?: "Could not load everything. Check your connection and try again.") }
                     }
