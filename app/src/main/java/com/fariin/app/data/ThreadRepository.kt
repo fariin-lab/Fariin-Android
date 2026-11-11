@@ -716,7 +716,7 @@ class ThreadRepository(
         return try { ref.get(Source.SERVER).await().exists() } catch (_: Exception) { false }
     }
 
-    /** Tap a failed bubble: send the same words again under a new clientId. */
+    /** Tap a failed bubble: send the same words again under the same clientId. */
     fun retry(m: Message) {
         val id = m.clientId ?: return
         if (SendQueue.isInFlight(id)) return
@@ -731,8 +731,12 @@ class ThreadRepository(
             return
         }
         if (m.mediaKind != null) { rebuild(); return }
-        // iOS deliver: a retry keeps the queued entry's mentions.
-        sendText(m.text, null, m.mentions)
+        // iOS resend: the same clientId (dropped if the first try did land after all), with its
+        // quoted reply, its mentions and its bold. It used to go as a new plain message.
+        val tap = maxOf(System.currentTimeMillis().toDouble(), lastTap + 1).also { lastTap = it }
+        val fmt = TextFormat.serialize(m.bold, m.text.length)?.takeIf { Wire.isGroupCid(cid) }
+        val e = SendQueue.Entry(id, cid, m.text, tap, m.replyTo?.id, m.replyTo?.authorId, m.replyTo?.text, m.mentions, fmt = fmt)
+        drive(e, checkFirst = true, sendScope, save = true)
     }
 
     /** A failed media send this process can still re-drive (its prepared bytes are held). */
