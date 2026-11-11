@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -90,6 +91,8 @@ object Push {
                 }
             }
             if (!pushOn(app)) return@launch
+            // A token a Log Out retired goes first, so it is never saved under the new account.
+            kotlinx.coroutines.withTimeoutOrNull(10_000) { retirePending(app) }
             val token = try { FirebaseMessaging.getInstance().token.await() } catch (_: Exception) { null }
             if (!token.isNullOrEmpty()) saveToken(token, uid)
         }
@@ -119,10 +122,11 @@ object Push {
      * Stop push to this phone: its token off both homes, BEFORE Auth signs out (the writes need it),
      * retried, as iOS `unregister`. Without it a signed-out phone keeps getting the account's banners.
      */
-    suspend fun unregister(c: Context) {
-        if (com.fariin.app.FariinApp.usingLocalBackend) return
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val token = try { FirebaseMessaging.getInstance().token.await() } catch (_: Exception) { null } ?: return
+    /** True once the token is off the account; false when it may still be listed there. */
+    suspend fun unregister(c: Context): Boolean {
+        if (com.fariin.app.FariinApp.usingLocalBackend) return true
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return false
+        val token = try { FirebaseMessaging.getInstance().token.await() } catch (_: Exception) { null } ?: return false
         val db = FirebaseFirestore.getInstance()
         val doc = db.collection("users").document(uid)
         repeat(3) { attempt ->
@@ -133,12 +137,38 @@ object Push {
                     mapOf("fcmTokens" to FieldValue.arrayRemove(token), ANDROID_FIELD to FieldValue.arrayRemove(token)),
                     SetOptions.merge())
                 batch.commit().await()
-                return
+                return true
             } catch (_: Exception) {
-                if (attempt == 2) return
+                if (attempt == 2) return false
                 delay(400)
             }
         }
+        return false
+    }
+
+    private const val RETIRE = "token.retire"
+    private val retireLock = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Log Out could not take this phone's token off the account (offline, or no answer in time):
+     * the token itself is deleted, so the old account's pushes stop reaching this phone. Remembered
+     * until it works; the next sign-in finishes it first and then saves a new token.
+     */
+    fun retireToken(c: Context) {
+        if (com.fariin.app.FariinApp.usingLocalBackend) return
+        val app = c.applicationContext
+        prefs(app).edit().putBoolean(RETIRE, true).apply()
+        scope.launch { retirePending(app) }
+    }
+
+    /** True when no retired token is left waiting. */
+    private suspend fun retirePending(app: Context): Boolean = retireLock.withLock {
+        if (!prefs(app).getBoolean(RETIRE, false)) return@withLock true
+        try {
+            FirebaseMessaging.getInstance().deleteToken().await()
+            prefs(app).edit().remove(RETIRE).apply()
+            true
+        } catch (_: Exception) { false }
     }
 
     /** Sign-out wipes the local switch and the explainer stays answered (iOS SessionWipe keeps

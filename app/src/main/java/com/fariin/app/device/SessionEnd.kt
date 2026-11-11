@@ -26,6 +26,13 @@ object SessionEnd {
     /** True while Log Out runs, so the app shows "Logging out…" instead of standing still. */
     val signingOut = kotlinx.coroutines.flow.MutableStateFlow(false)
 
+    /**
+     * Set just before the Log Out that follows "schedule deletion" (iOS DeleteAccountView runs
+     * SessionWipe with no kept account): nothing is kept on this phone for a return. The identity
+     * key still stays, so a restore within the grace period reads old messages.
+     */
+    @Volatile var forDeletion = false
+
     suspend fun signOut(c: Context) {
         signingOut.value = true
         try { signOutSteps(c) } finally { signingOut.value = false }
@@ -46,8 +53,15 @@ object SessionEnd {
         // iOS SessionWipe: "offline" goes out while the account can still write it.
         step(uid, "presence") { com.fariin.app.data.Presence.set(online = false, context = c) }
         step(uid, "device record") { DeviceRegistry.removeThisDevice() }
-        step(uid, "push token") { Push.unregister(c) }
-        if (endAuth(uid)) wipe(c, keepFor = uid)
+        val deleting = forDeletion.also { forDeletion = false }
+        var tokenOff = false
+        step(uid, "push token") { tokenOff = Push.unregister(c) }
+        if (endAuth(uid)) {
+            // Offline, the token could not come off the account: the token itself is retired, so
+            // the account's pushes stop reaching this phone; the next sign-in gets a new one.
+            if (!tokenOff) Push.retireToken(c)
+            wipe(c, keepFor = if (deleting) null else uid)
+        }
     }
 
     private const val KEPT_PREFS = "fariin_session"
@@ -137,8 +151,10 @@ object SessionEnd {
         // The server already ended this session, so nothing can wait: the count goes into the notice.
         droppedByRevoke = unsentCount()
         DeviceRegistry.forgetAfterRevoke()
-        step(uid, "push token") { Push.unregister(c) }
+        var tokenOff = false
+        step(uid, "push token") { tokenOff = Push.unregister(c) }
         if (!endAuth(uid)) return false
+        if (!tokenOff) Push.retireToken(c)
         wipe(c)
         return true
     }
@@ -170,7 +186,11 @@ object SessionEnd {
         // texts, opened media and faces. None of it survives into the next account (iOS SessionWipe).
         val prefs = c.getSharedPreferences(KEPT_PREFS, Context.MODE_PRIVATE)
         if (keepFor.isNullOrEmpty()) { prefs.edit().remove(KEPT_KEY).apply(); com.fariin.app.local.LocalCache.wipe() }
-        else prefs.edit().putString(KEPT_KEY, keepFor).apply()   // per account on disk, so nobody else reads it
+        else {
+            prefs.edit().putString(KEPT_KEY, keepFor).apply()   // per account on disk, so nobody else reads it
+            // iOS SessionWipe keeps only the chat list; the opened messages (decrypted text) always go.
+            com.fariin.app.local.LocalCache.wipeThreads()
+        }
         com.fariin.app.local.Drafts.clear()
         com.fariin.app.local.SendQueue.wipe()
         com.fariin.app.crypto.SafetyKeyLog.wipe()   // the next account starts its own key record (iOS)
@@ -178,6 +198,8 @@ object SessionEnd {
         com.fariin.app.data.StickerFavorites.wipe(c)   // the account keeps its backup
         com.fariin.app.ui.auth.GateMemory.clear(c)   // the next account waits for its checks
         com.fariin.app.ui.call.LiveGroupCalls.stopAll()   // the live group-call watchers belong to the account
+        com.fariin.app.data.StoryPrivacyStore.stop()   // a return to the same account listens again
+        com.fariin.app.auth.Passkeys.lastList = null   // the next account never sees this one's passkeys
         if (keepFor.isNullOrEmpty()) com.fariin.app.media.ChatMedia.wipe(c)
         try { coil3.SingletonImageLoader.get(c).let { it.diskCache?.clear(); it.memoryCache?.clear() } } catch (_: Exception) {}
         com.fariin.app.ui.thread.DecodedPictures.clear()   // decoded chat photos held in memory
@@ -203,7 +225,9 @@ object SessionEnd {
         com.fariin.app.data.Disappearing.defaultSeconds = 0
         com.fariin.app.data.CallsSeen.wipe(c)
         com.fariin.app.media.AutoSaveMedia.wipe(c)
-        com.fariin.app.local.AtRest.forgetKey()
+        // The kept chat list is sealed with this key: it stays while there is a kept list, or the
+        // list could never be read again. A different account's sign-in wipes the list (claimKept).
+        if (keepFor.isNullOrEmpty()) com.fariin.app.local.AtRest.forgetKey()
     }
 
 }

@@ -127,6 +127,8 @@ internal fun DeleteAccountFlow(profile: MyProfile?, onDone: () -> Unit, onSignOu
                 }
                 val due = AccountDeletion.schedule(code, text)
                 Toast.makeText(app, "Deletion scheduled for ${fmt.format(Date(due))}", Toast.LENGTH_LONG).show()
+                // Nothing of this account is kept on the phone (iOS wipes it at once here).
+                com.fariin.app.device.SessionEnd.forDeletion = true
                 onSignOut()
             } catch (e: Exception) {
                 val msg = AuthRepository.messageFor(e)

@@ -129,6 +129,19 @@ object LocalCache {
         schedule("q:$uid", f, json.hashCode()) { json }
     }
 
+    /**
+     * Plain Log Out: the chat list stays for the same account's return (SessionEnd keepFor), but
+     * the opened messages are decrypted text and go, as iOS removes ThreadMessageCache.
+     */
+    fun wipeThreads() {
+        synchronized(lock) {
+            generation++
+            for (j in pendingWrites.values) j.cancel()
+            pendingWrites.clear(); lastWritten.clear(); threadMemo.clear(); chatsMemo = null
+            root?.listFiles()?.forEach { File(it, "threads").deleteRecursively() }
+        }
+    }
+
     /** Sign-out: these are opened messages, so they never outlive the session (iOS removeAll). */
     fun wipe() {
         synchronized(lock) {
