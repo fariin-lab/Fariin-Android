@@ -399,6 +399,9 @@ private fun FloatingTabBar(
             shape = { shape },
             effects = {
                 vibrancy()
+                // Blurred again (owner 2026-11-11, his picture of the glass he wants: what passes under
+                // shows as soft colour, never as rows, under a milky surface with a bright shining rim).
+                blur(12.dp.toPx())
                 lens(14.dp.toPx(), 28.dp.toPx())
             },
             shadow = null,
@@ -434,7 +437,7 @@ private fun FloatingTabBar(
             // line, then the bright inner rim.
             .border(0.5.dp, if (c.dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.12f), shape)
             .padding(0.5.dp)
-            .border(1.dp, border, shape)
+            .border(1.5.dp, border, shape)
             .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
@@ -532,5 +535,5 @@ private const val CALLS_FIRST_LOAD_DELAY_MS = 1_500L
 
 /** The tab bar's frosted surface over the list (was 0.86 / 0.84: too thick to see the rows pass). */
 // More solid, still glass (owner 2026-11-11, his Pixel photo: the rows read through the tab bar).
-private const val TAB_FROST_LIGHT = 0.86f
-private const val TAB_FROST_DARK = 0.86f
+private const val TAB_FROST_LIGHT = 0.66f
+private const val TAB_FROST_DARK = 0.70f
