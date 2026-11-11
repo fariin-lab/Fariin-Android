@@ -40,7 +40,7 @@ val LocalOpenChat = staticCompositionLocalOf<(Conversation) -> Unit> { {} }
 class ThreadViewModel(cid: String, me: String, crypto: FariinCrypto, context: Context) : ViewModel() {
     init { HiddenMessages.load(context) }
     val repo = ThreadRepository(cid, me, crypto, viewModelScope, media = ChatMedia(context, cid, crypto)).also { it.start() }
-    override fun onCleared() { repo.stop() }
+    override fun onCleared() { repo.stop(); repo.stopChannelSync() }
 }
 
 /** The live chat for [cid]: listener, receipts, send, and mark read like iOS. */
@@ -368,7 +368,7 @@ fun ThreadRoute(cid: String, me: String, crypto: FariinCrypto, onBack: () -> Uni
     // The run of voice notes the player follows when one ends, also after this chat is left (iOS handOff).
     LaunchedEffect(ui.cid, ui.messages) { vm.repo.media?.let { com.fariin.app.media.VoiceRun.publish(ui.cid, ui.messages, it) } }
     CompositionLocalProvider(LocalChatMedia provides vm.repo.media, LocalUploadCancel provides uploadCancel) {
-        ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlder, onRetry = vm.repo::retry,
+        ThreadScreen(ui, onBack = onBack, onSend = vm.repo::sendText, onLoadOlder = vm.repo::loadOlderPage, onRetry = vm.repo::retry,
             onSendPhoto = { uri -> vm.repo.sendPhoto(app, uri) }, onSendVoice = vm.repo::sendVoice, actions = actions,
             onSendPick = { uris, caption, once -> vm.repo.sendPick(app, uris, caption, once) },
             onSendFile = { uri -> vm.repo.sendDocument(app, uri) { notice = it } },

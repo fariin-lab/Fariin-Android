@@ -175,6 +175,7 @@ class ThreadRepository(
         // Texts still owed from before a kill or an outage: drawn as sending, and driven again.
         for (e in SendQueue.pending(me, cid)) resend(e)
         startListeners()
+        startChannelSync()
     }
 
     /** Back in front or back online (iOS reattachIfDead): a listener that died is made again,
@@ -191,6 +192,7 @@ class ThreadRepository(
             attachPresence(Wire.otherUid(cid, me))
         }
         for (e in SendQueue.pending(me, cid)) if (!SendQueue.isInFlight(e.clientId)) resend(e)
+        chSync?.reattach()
     }
 
     /** "Try Again" on a failed first load: the message listeners are made again, once. */
@@ -449,7 +451,8 @@ class ThreadRepository(
         // a phone that had not seen me join yet stays (the lock), as iOS.
         val joinedAt = if (Wire.isGroupCid(cid))
             Conversation.millis((_state.value.conv["memberSince"] as? Map<*, *>)?.get(me)) else 0.0
-        for (d in olderDocs.values + liveDocs.values) {
+        // A synced channel draws its store (ChannelSync); everything else the window and older pages.
+        for (d in chSync?.docsOrNull() ?: (olderDocs.values + liveDocs.values)) {
             var m = parse(d)
             if (historyStart != null && m.hasServerTime && m.createdAtMillis < historyStart && m.authorId != me) continue
             if (Wire.isGroupCid(cid)) {
@@ -1771,7 +1774,7 @@ class ThreadRepository(
         repeat(maxPages) {
             if (_state.value.messages.any { it.id == id }) return true
             if (!_state.value.canLoadOlder) return false
-            loadOlder()
+            loadOlderPage()
             // loadOlder runs on its own; wait for that page to land.
             var waited = 0
             while ((_state.value.loadingOlder || waited == 0) && waited < 100) { delay(50); waited++ }
@@ -1926,6 +1929,33 @@ class ThreadRepository(
                 }
             } while (readOwed)
         }
+    }
+
+    // ------------------------------------------------------------------ channel sync (CN-03)
+
+    /** A channel its member or follower opened follows its change counter (ChannelSync). */
+    @Volatile private var chSync: ChannelSync? = null
+
+    private fun startChannelSync() {
+        if (chSync != null || _state.value.former || !Wire.isGroupCid(cid) || !isChannelChat()) return
+        val member = CryptoHub.listedConversation(cid)?.users?.contains(me) == true
+        if (!member && !com.fariin.app.channel.ChannelFollows.follows(cid)) return   // a visitor: the window path
+        chSync = ChannelSync(cid, me, convRef, scope, PAGE_SIZE,
+            held = { (olderDocs.values + liveDocs.values).toList() },
+            onChange = { loaded -> rebuild(loaded) },
+            setOlder = { loading, can -> _state.update { it.copy(loadingOlder = loading ?: it.loadingOlder, canLoadOlder = can ?: it.canLoadOlder) } },
+        ).also { it.start() }
+    }
+
+    /** The list's "older" request: a synced channel reads its next hole, anything else [loadOlder]. */
+    fun loadOlderPage() {
+        if (chSync?.loadOlder() == true) return
+        loadOlder()
+    }
+
+    /** The screen is gone: the channel's listeners end (its store stays for the next open). */
+    fun stopChannelSync() {
+        chSync?.stop(); chSync = null
     }
 
     companion object {

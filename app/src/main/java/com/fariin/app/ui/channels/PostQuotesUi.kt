@@ -104,6 +104,8 @@ object PostQuotesSheet {
     @Volatile var startTab = 0
     /** The post's replies were off when its bar was tapped: the sheet opens as Quotes only. */
     @Volatile var startOff = false
+    /** The tab [pendingReplies] opens on: 1 for a quote (push or Activity row), else 0 Replies. */
+    @Volatile var pendingTab = 0
     /** A reply alert tapped (cid to post id): the chat opens that post's Replies once it is on screen. */
     val pendingReplies = MutableStateFlow<Pair<String, String>?>(null)
     /** The comment such an alert is about ("X replied to your comment"): the sheet opens on it. */

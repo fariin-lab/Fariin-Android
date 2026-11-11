@@ -42,7 +42,7 @@ fun NavGraphBuilder.peopleRoutes(
                         com.fariin.app.ui.channels.PostQuotesSheet.pendingFocus.value = com.fariin.app.data.ActivityRules.focus(i)
                         com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = i.cid to i.mid
                         nav.navigate("thread/${i.cid}") { launchSingleTop = true }
-                    } else com.fariin.app.data.OpenGate.notice(gate).takeIf { it.isNotEmpty() }?.let {
+                    } else com.fariin.app.data.OpenGate.notice(gate).also { com.fariin.app.ui.channels.PostQuotesSheet.pendingTab = 0 }.takeIf { it.isNotEmpty() }?.let {
                         com.fariin.app.ui.components.Snack.show(it)
                     }
                 }

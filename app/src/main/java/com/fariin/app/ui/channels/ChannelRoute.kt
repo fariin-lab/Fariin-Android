@@ -206,15 +206,9 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
     val follows = entries.containsKey(cid)
     val role = ChannelRules.role(info, me, follows)
     LaunchedEffect(follows) { if (follows) joining = false }
-    val entry = entries[cid]
     // Read marks go forward as posts land (users/{me}/channels/{cid}.read).
     LaunchedEffect(role, info.postCount) { if (role == ChannelRules.Role.FOLLOWER) ChannelService.markRead(cid, info.postCount) }
-    // Each post I see counts once (channelViews; a visitor of a public channel counts too).
-    val counted = remember(cid) { HashSet<String>() }
-    LaunchedEffect(messages.size) {
-        val fresh = messages.filter { !it.isSystem && !it.deleted && it.sendState == null && counted.add(it.id) }.map { it.id }
-        if (fresh.isNotEmpty()) try { ChannelService.views(cid, fresh) } catch (_: Exception) { counted.removeAll(fresh.toSet()) }
-    }
+    // Views: only the posts that come on screen count (ThreadScreen -> ChannelViewQueue).
     @Suppress("UNUSED_VARIABLE") val tick = rx.size + pending.size + served.size + bias.size
     // An uploaded emoji taken off the admin list leaves the long-press bar and "More".
     val retired = com.fariin.app.ui.thread.rememberRetired()
@@ -223,7 +217,7 @@ fun rememberChannelThread(cid: String, me: String, doc: Map<String, Any?>, messa
         info = info.copy(followerCount = ChannelFollows.adjusted(cid, info.followerCount)),
         role = role,
         guest = role == ChannelRules.Role.VISITOR,
-        muted = entry?.isMuted() ?: false,
+        muted = ChannelService.mutedFor(cid, doc, me),
         canReact = ChannelRules.canReact(info, role, guest = false),
         offered = ChannelRules.offered(info.reactMode, liveList),
         pickable = ChannelRules.pickable(info.reactMode, liveList),

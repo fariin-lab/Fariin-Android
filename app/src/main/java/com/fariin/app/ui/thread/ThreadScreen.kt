@@ -436,6 +436,20 @@ private fun ThreadContent(
         if (i >= 0) (ui.messages.size - 1 - i) to saved!!.offset else null
     }
     val listState = rememberLazyListState(placedAtOpen?.first ?: 0, placedAtOpen?.second ?: 0)
+    // A channel's posts count as seen when they come ON SCREEN (iOS onViewportRows + ChannelViewQueue):
+    // followers and admins, and a visitor of a public channel; a private channel's visitor is refused.
+    val countViews = ui.channel != null && (!ui.channel.guest || ui.channel.info.isPublic)
+    val viewRows = androidx.compose.runtime.rememberUpdatedState(ui.messages)
+    LaunchedEffect(ui.cid, countViews) {
+        if (!countViews) return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.mapNotNull { it.key as? String } }
+            .collect { keys ->
+                if (keys.isEmpty()) return@collect
+                val want = keys.toHashSet()
+                val ids = viewRows.value.filter { it.rowId in want && !it.isSystem && !it.deleted && it.sendState == null }.map { it.id }
+                com.fariin.app.channel.ChannelViewQueue.note(ui.cid, ids)
+            }
+    }
     val peopleNav = com.fariin.app.ui.people.LocalPeopleNav.current
     // Forward picker (media worker: ForwardSheet.kt).
     var forwardFor by remember { mutableStateOf<Message?>(null) }
@@ -840,7 +854,9 @@ private fun ThreadContent(
         com.fariin.app.ui.channels.PostQuotesSheet.pendingReplies.value = null
         if (!actions.onEnsureLoaded(mid) || c != ui.cid) return@LaunchedEffect
         val post = uiNow.value.messages.firstOrNull { it.id == mid } ?: return@LaunchedEffect
-        com.fariin.app.ui.channels.PostQuotesSheet.startTab = 0
+        // A quote (push or Activity row) opens on Quotes; everything else on Replies.
+        com.fariin.app.ui.channels.PostQuotesSheet.startTab = com.fariin.app.ui.channels.PostQuotesSheet.pendingTab
+        com.fariin.app.ui.channels.PostQuotesSheet.pendingTab = 0
         com.fariin.app.ui.channels.PostQuotesSheet.open.value = post
     }
     // The Quotes sheet a post's "N Quotes" bar opens (PostQuotesUi.kt).

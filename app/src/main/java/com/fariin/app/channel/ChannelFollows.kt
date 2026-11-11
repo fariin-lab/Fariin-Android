@@ -35,7 +35,8 @@ object ChannelFollows {
     /** A pick on screen before the server has it (cid -> mid -> emoji, "" = taken back). */
     private val _pending = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
     val pending: StateFlow<Map<String, Map<String, String>>> = _pending
-    /** Counts the server answered for a post, until the post's own document catches up. */
+    /** Counts the server answered for a post, held [SERVED_HOLD_MS] (iOS answerHolds, 75 s), then the
+     *  post's own counts show again: the minute batch writes the totals onto the post by then. */
     private val _served = MutableStateFlow<Map<String, Map<String, Int>>>(emptyMap())
     val served: StateFlow<Map<String, Map<String, Int>>> = _served
     /** My follow (+1) or leave (-1) until the channel's stored followerCount moves (ChannelCountBias). */
@@ -49,6 +50,11 @@ object ChannelFollows {
     private var followRx: Map<String, Map<String, String>> = emptyMap()
     private var adminRx: Map<String, Map<String, String>> = emptyMap()
     private val storedAtBias = HashMap<String, Int>()
+    /** Which answer each `_served` entry is, so an older timer never drops a newer answer. */
+    private val servedToken = HashMap<String, Long>()
+    private var servedClock = 0L
+    private val main by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+    private const val SERVED_HOLD_MS = 75_000L
 
     fun entry(cid: String): Entry? = _entries.value[cid]
     fun follows(cid: String): Boolean = _entries.value.containsKey(cid)
@@ -97,6 +103,10 @@ object ChannelFollows {
         adminRxReg?.remove(); adminRxReg = null
         docRegs.values.forEach { it.remove() }; docRegs.clear()
         _entries.value = emptyMap(); _docs.value = emptyMap(); _rx.value = emptyMap(); _pending.value = emptyMap()
+        // The next account never sees this one's served counts or follower-count guesses.
+        _served.value = emptyMap(); _bias.value = emptyMap()
+        synchronized(servedToken) { servedToken.clear() }
+        storedAtBias.clear()
         followRx = emptyMap(); adminRx = emptyMap()
         uid = null
     }
@@ -154,13 +164,23 @@ object ChannelFollows {
         _pending.update { it + (cid to ((it[cid] ?: emptyMap()) + (mid to (emoji ?: "")))) }
 
     fun settle(cid: String, mid: String, counts: Map<String, Int>?, confirmed: String?) {
+        // An answer that lands after sign-out belongs to the old account.
+        if (uid == null) return
         _pending.update { p -> p + (cid to ((p[cid] ?: emptyMap()) - mid)) }
         _rx.update { r ->
             val m = (r[cid] ?: emptyMap()).toMutableMap()
             if (confirmed == null) m.remove(mid) else m[mid] = confirmed
             r + (cid to m)
         }
-        if (counts != null) _served.update { s -> s + ("$cid/$mid" to counts) }
+        if (counts != null) {
+            val key = "$cid/$mid"
+            val token = synchronized(servedToken) { (++servedClock).also { servedToken[key] = it } }
+            _served.update { s -> s + (key to counts) }
+            main.postDelayed({
+                val still = synchronized(servedToken) { (servedToken[key] == token).also { if (it) servedToken.remove(key) } }
+                if (still) _served.update { s -> s - key }
+            }, SERVED_HOLD_MS)
+        }
     }
 
     fun dropPending(cid: String, mid: String) = _pending.update { p -> p + (cid to ((p[cid] ?: emptyMap()) - mid)) }

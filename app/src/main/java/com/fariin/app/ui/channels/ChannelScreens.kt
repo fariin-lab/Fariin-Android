@@ -144,11 +144,12 @@ fun FindChannelsScreen(me: String, onBack: () -> Unit, onOpen: (String) -> Unit)
                     item {
                         // A plain list: no card, no footer (design A).
                         Column {
-                            shown.forEachIndexed { i, r ->
-                                // The line starts under the name, not under the photo.
-                                if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(start = 80.dp))
+                            // No lines between rows (find-channels design A, item 12).
+                            shown.forEach { r ->
                                 @Suppress("UNUSED_VARIABLE") val b = bias.size
-                                val mine = entries.containsKey(r.cid) || justFollowed.contains(r.cid)
+                                // Followed, just followed, or one I run (owner/admin: in its `users`, no follow entry).
+                                val mine = entries.containsKey(r.cid) || justFollowed.contains(r.cid) ||
+                                    com.fariin.app.data.CryptoHub.listedConversation(r.cid)?.users?.contains(me) == true
                                 DiscoverRow(r, mine, onOpen = { onOpen(r.cid) }) {
                                     justFollowed.add(r.cid)
                                     scope.launch {

@@ -118,7 +118,7 @@ fun ChannelPageRoute(cid: String, me: String, onBack: () -> Unit, onLeft: () -> 
     // The visitor's preview already carries the admins in its count; the document does not.
     val shown = if (doc["channel"] == true) ChannelRules.subscriberCount(ChannelFollows.adjusted(cid, base.followerCount), base.users.size)
     else ChannelFollows.adjusted(cid, preview?.shownCount ?: base.followerCount)
-    ChannelPage(base, shown, ChannelRules.role(base, me, entries.containsKey(cid)), entries[cid]?.isMuted() ?: false, onBack, onLeft,
+    ChannelPage(base, shown, ChannelRules.role(base, me, entries.containsKey(cid)), ChannelService.mutedFor(cid, doc, me), onBack, onLeft,
         team = com.fariin.app.channel.ChannelAdmins.Team.from(doc), me = me, manage = manage,
         onSearch = if (fromChat) ({ com.fariin.app.ui.thread.InChatSearchLink.searchFromInfo(cid, onBack) }) else null)
 }

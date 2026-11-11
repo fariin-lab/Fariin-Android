@@ -133,7 +133,7 @@ fun ActivityScreen(onBack: () -> Unit, onOpen: (ActivityItem) -> Unit) {
                             com.fariin.app.push.PushRouter.pendingOpen.value = item.whereCid
                         }
                         // A quote elsewhere: my post's sheet, on Quotes.
-                        item.isQuote -> { com.fariin.app.ui.channels.PostQuotesSheet.startTab = 1; onOpen(item) }
+                        item.isQuote -> { com.fariin.app.ui.channels.PostQuotesSheet.pendingTab = 1; onOpen(item) }
                         else -> onOpen(item)
                     }
                 } }
