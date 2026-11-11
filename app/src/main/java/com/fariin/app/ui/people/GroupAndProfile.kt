@@ -593,7 +593,9 @@ fun NewGroupScreen(api: PeopleApi, chats: List<Conversation>, onBack: () -> Unit
                                     "membersCanEditInfo" to false, "onlyAdminsCall" to !canCall, "membersCanShareLink" to false)
                                 val cid = api.createGroup(title, chosen.map { it.uid }, photo, perms)
                                 // After "created the group", as iOS: the timer and its notice for everyone.
-                                if (timer > 0) api.setDisappear(cid, timer)
+                                // Not awaited (iOS: a detached task), so Create does not wait on the network.
+                                if (timer > 0) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+                                    .launch { runCatching { api.setDisappear(cid, timer) } }
                                 // "New group" on the new-account card is done.
                                 com.fariin.app.ui.chats.GetStartedStore.markDone(gsCtx, com.fariin.app.ui.chats.GetStartedCard.NEW_GROUP)
                                 onCreated(cid)
@@ -1089,7 +1091,9 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 Spacer(Modifier.weight(1f))
             }
             SettingsSection {
-                if (iAmAdmin && team.may(me, com.fariin.app.data.GroupAdmins.Right.INVITE_USERS)) Row(Modifier.fillMaxWidth().clickable { adding = true }
+                // iOS canAdd: an admin with the right, or a member when "Add members" is on; never closed.
+                if (iAmMember && !team.closed && !com.fariin.app.data.GroupMod.blocksSending(conv) &&
+                    com.fariin.app.data.GroupWelcome.canAdd(me, conv)) Row(Modifier.fillMaxWidth().clickable { adding = true }
                     .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(c.fieldFill), contentAlignment = Alignment.Center) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_plus_ios), null, tint = c.label, modifier = Modifier.size(24.dp))
@@ -1132,7 +1136,7 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 }
             }
             if (iAmMember && owner == me) SettingsSection {
-                val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
+                val ended = com.fariin.app.data.GroupMod.ended(conv)
                 if (!ended) SettingsRow("End Group", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_xmark_circle)), titleColor = c.red, trailing = Trailing.NONE) { askEnd = true }
                 // iOS (owner 2026-11-08): the owner clears every message for everyone; the group stays.
                 SettingsRow(if (clearingAll) "Clearing…" else "Clear Messages", icon = rememberVectorPainter(ImageVector.vectorResource(R.drawable.ic_sf_eraser)),
@@ -1208,7 +1212,7 @@ private fun GroupCirclesRow(cid: String, me: String, conv: Map<String, Any?>, me
     }
     val groupCall by com.fariin.app.call.GroupCall.ui.collectAsState()
     val oneCall by com.fariin.app.call.CallManager.ui.collectAsState()
-    val ended = (conv["mod"] as? Map<*, *>)?.get("state") == "ended"
+    val ended = com.fariin.app.data.GroupMod.ended(conv)
     val mayStart = com.fariin.app.call.GroupCallWire.mayStart(conv, me)
     // On a call in another app too (iOS busyElsewhere with CallKit): the phone's own call state.
     val systemCall = rememberSystemCallActive()
