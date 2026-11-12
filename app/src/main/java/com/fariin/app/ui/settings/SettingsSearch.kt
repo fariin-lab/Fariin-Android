@@ -156,6 +156,7 @@ internal object SettingsIndex {
         row("Block User", pr + "Blocked Users", "block user person add blocked", PAGE_BLOCKED)
         row("Always Relay Calls", pr, "always relay calls ip address hide server", PAGE_PRIVACY)
         page("Disappearing Messages", pr, "disappearing messages timer auto delete default", PAGE_DISAPPEAR_DEFAULT)
+        page("Backup PIN", pr, "backup pin restore messages reinstall new phone key", PAGE_KEY_BACKUP)
         page("App Lock", pr, "app lock fingerprint face unlock passcode pin lock", PAGE_APP_LOCK)
         row("Auto-Lock", pr + "App Lock", "auto lock timer immediately minutes", PAGE_APP_LOCK)
         row("Screen Security", pr + "App Lock", "screen security screenshot recent apps hide", PAGE_APP_LOCK)

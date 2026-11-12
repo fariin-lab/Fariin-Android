@@ -127,5 +127,13 @@ object KeyBackup {
         return st
     }
 
+    /** Once per account on this phone: someone with no backup is asked to make one. */
+    suspend fun shouldNudge(ctx: Context, uid: String): Boolean {
+        if (prefs(ctx).getBoolean("nudged.$uid", false)) return false
+        val st = status(ctx, uid) ?: return false
+        return !st.exists
+    }
+    fun nudged(ctx: Context, uid: String) = prefs(ctx).edit().putBoolean("nudged.$uid", true).apply()
+
     fun skip(ctx: Context, uid: String, st: Status) = prefs(ctx).edit().putLong("skip.$uid", st.updatedAt).apply()
 }

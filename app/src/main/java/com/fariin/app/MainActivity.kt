@@ -258,12 +258,31 @@ class MainActivity : ComponentActivity() {
             }, onSkip = { com.fariin.app.crypto.KeyBackup.skip(ctx, me, st); restoreOffer = null })
             return
         }
+        // Once: no backup yet. Asked a while after start, never on top of another question.
+        var nudge by remember { mutableStateOf(false) }
+        var backupPage by remember { mutableStateOf(false) }
+        LaunchedEffect(me) {
+            kotlinx.coroutines.delay(20_000)
+            if (com.fariin.app.crypto.KeyBackup.shouldNudge(ctx, me)) nudge = true
+        }
+        if (backupPage) {
+            androidx.activity.compose.BackHandler { backupPage = false }
+            com.fariin.app.ui.settings.KeyBackupPage { backupPage = false }
+            return
+        }
         var explain by remember { mutableStateOf(Push.needsExplainer(ctx)) }
         // Android 14+: a call can only take over the screen (lock screen, app closed) when the person
         // has allowed "full screen notifications" for Fariin; outside the Play Store it starts off,
         // and a call then rang with nothing to answer (owner's Pixel 2026-11-05). Asked once, the way
         // calling apps do; "Not now" is remembered.
         var askFullScreen by remember { mutableStateOf(com.fariin.app.call.CallScreenAccess.shouldAsk(ctx)) }
+        if (nudge && !explain && !askFullScreen) com.fariin.app.ui.components.GlassAlert(
+            onDismissRequest = { com.fariin.app.crypto.KeyBackup.nudged(ctx, me); nudge = false },
+            title = { androidx.compose.material3.Text("Keep your messages") },
+            text = { androidx.compose.material3.Text("Set a Backup PIN so your older messages come back if you delete Fariin or change phones.") },
+            confirmButton = { androidx.compose.material3.TextButton({ com.fariin.app.crypto.KeyBackup.nudged(ctx, me); nudge = false; backupPage = true }) { androidx.compose.material3.Text("Set Up") } },
+            dismissButton = { androidx.compose.material3.TextButton({ com.fariin.app.crypto.KeyBackup.nudged(ctx, me); nudge = false }) { androidx.compose.material3.Text("Not Now") } },
+        )
         if (askFullScreen && !explain) com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = { com.fariin.app.call.CallScreenAccess.later(ctx); askFullScreen = false },
             title = { androidx.compose.material3.Text("Show calls on your screen") },
