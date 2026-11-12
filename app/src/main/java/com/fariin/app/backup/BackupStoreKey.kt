@@ -36,6 +36,19 @@ object BackupStoreKey {
         }
     }
 
+    /** The media key (backup media, iOS 7687219ef): one per account, kept like the store key under "m:<uid>". */
+    suspend fun mediaKey(ctx: Context, uid: String, random: (Int) -> ByteArray): ByteArray = getOrMake(ctx, "m:$uid", random)
+
+    /** A restored backup's media key becomes this account's (so the next backup reuses its files). */
+    suspend fun adoptMediaKey(ctx: Context, uid: String, key: ByteArray) = lock.withLock {
+        prefs(ctx).edit().putString("store.m:$uid", B64.encode(key)).apply()
+        runCatching {
+            val all = readAll(ctx).put("m:$uid", B64.encode(key))
+            Blockstore.getClient(ctx).storeBytes(StoreBytesData.Builder().setKey(KEY)
+                .setBytes(all.toString().toByteArray(Charsets.UTF_8)).setShouldBackupToCloud(true).build()).await()
+        }
+    }
+
     /** The key to back up with: the existing one, or a new one written to both places. */
     suspend fun getOrMake(ctx: Context, uid: String, random: (Int) -> ByteArray): ByteArray {
         find(ctx, uid)?.let { return it }

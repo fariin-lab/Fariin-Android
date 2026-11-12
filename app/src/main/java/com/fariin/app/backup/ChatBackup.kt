@@ -23,6 +23,7 @@ import kotlinx.coroutines.sync.withLock
  */
 object ChatBackup {
     /** ON in test builds (the owner's Pixel and testers), OFF in store releases until the owner's test passes. */
+    private const val MEDIA_SET = "md"
     @Volatile var ENABLED: Boolean = false   // set at start from R.bool.fariin_test_build (FariinApp)
     private val lock = Mutex()
 
@@ -34,6 +35,9 @@ object ChatBackup {
     fun frequency(ctx: Context, uid: String): String = prefs(ctx).getString("freq.$uid", "off") ?: "off"
     fun setFrequency(ctx: Context, uid: String, f: String) { prefs(ctx).edit().putString("freq.$uid", f).apply(); BackupWorker.schedule(ctx, uid) }
     fun mobileData(ctx: Context, uid: String): Boolean = prefs(ctx).getBoolean("cell.$uid", false)
+    /** Include Videos (off by default, both apps): videos are the big part of a backup. */
+    fun includeVideos(ctx: Context, uid: String): Boolean = prefs(ctx).getBoolean("videos.$uid", false)
+    fun setIncludeVideos(ctx: Context, uid: String, on: Boolean) = prefs(ctx).edit().putBoolean("videos.$uid", on).apply()
     fun setMobileData(ctx: Context, uid: String, on: Boolean) { prefs(ctx).edit().putBoolean("cell.$uid", on).apply(); BackupWorker.schedule(ctx, uid) }
 
     /** The password / 64-digit key wrap kept on this phone (the Argon2 result and its salt), so
@@ -101,32 +105,51 @@ object ChatBackup {
         val c = CryptoHub.get(ctx)
         return try {
             val storeKey = BackupStoreKey.getOrMake(ctx, uid) { c.randomBytes(it) }
-            val built = BackupArchive.build(c, uid, storeKey, passwordWrap(ctx, uid))
-            val set = built.made.toString()
             val before = Drive.list(tok)
+            // Media first (iOS 7687219ef): md- files belong to no set; one already there is only listed.
+            val mediaKey = BackupStoreKey.mediaKey(ctx, uid) { c.randomBytes(it) }
+            val items = BackupMedia.collect(ctx, c, uid, mediaKey, includeVideos(ctx, uid))
+            val have = before.filter { it.name.startsWith("md-") }.associateBy { it.name }
             var size = 0L
+            val listed = ArrayList<Map<String, Any?>>()
+            for (it in items) {
+                if (it.name !in have) {
+                    val bytes = BackupMedia.seal(c, it) ?: continue
+                    Drive.upload(tok, it.name, MEDIA_SET, bytes); size += bytes.size
+                } else size += have[it.name]!!.size
+                listed.add(it.entry)
+            }
+            val built = BackupArchive.build(c, uid, storeKey, passwordWrap(ctx, uid),
+                mapOf("mediaKey" to com.fariin.app.crypto.B64.encode(mediaKey), "media" to listed))
+            val set = built.made.toString()
             for ((name, bytes) in built.files) { Drive.upload(tok, name, set, bytes); size += bytes.size }
-            // The new set is whole (its header went last): every older file goes.
-            for (f in before) if (f.set != set) Drive.delete(tok, f.id)
+            // The new set is whole (its header went last): every older set goes, and media no longer listed.
+            val keep = listed.mapNotNull { it["n"] as? String }.toSet()
+            for (f in before) when {
+                f.name.startsWith("md-") -> if (f.name !in keep) Drive.delete(tok, f.id)
+                f.set != set -> Drive.delete(tok, f.id)
+            }
             prefs(ctx).edit().putLong("last.$uid", built.made).putLong("size.$uid", size).apply()
             Result.Done
         } catch (e: Exception) { Result.Failed(words(e)) }
     }
 
-    class Found(val made: Long, val size: Long, val needsPassword: Boolean, internal val files: Map<String, String>, internal val header: BackupArchive.Header)
+    class Found(val made: Long, val size: Long, val needsPassword: Boolean, internal val files: Map<String, String>,
+                internal val header: BackupArchive.Header, internal val media: Map<String, String> = emptyMap())
 
     /** The newest finished backup in the person's Drive, or null. */
     suspend fun find(ctx: Context, uid: String, token: String): Found? {
         if (!ENABLED) return null
         val all = Drive.list(token)
-        val bySet = all.filter { it.set != null }.groupBy { it.set!! }
+        val bySet = all.filter { it.set != null && it.set != MEDIA_SET }.groupBy { it.set!! }
         for ((_, files) in bySet.entries.sortedByDescending { it.key.toLongOrNull() ?: 0L }) {
             val head = files.firstOrNull { it.name == "header.json" } ?: continue   // unfinished set
             val header = BackupArchive.readHeader(Drive.download(token, head.id)) ?: continue
             val storeKey = BackupStoreKey.find(ctx, uid)
             val canStore = storeKey != null && header.store != null
             return Found(header.made, files.sumOf { it.size }, !canStore && header.hasPassword,
-                files.associate { it.name to it.id }, header)
+                files.associate { it.name to it.id }, header,
+                all.filter { it.name.startsWith("md-") }.associate { it.name to it.id })
         }
         return null
     }
@@ -143,6 +166,16 @@ object ChatBackup {
         if (!whole) return "Some chats couldn't be restored. Try again on Wi-Fi."
         LocalDb.setMeta(uid, "restored", found.made.toString())
         LocalDb.setMeta(uid, "restore.waiting", "")
+        // Media after messages and chats (both apps): the backup's media key becomes ours, then
+        // each file goes where this app keeps opened media. A missing or bad one is skipped.
+        BackupArchive.lastManifest?.let { mo ->
+            val mk = mo.optString("mediaKey").takeIf { it.isNotEmpty() }?.let { com.fariin.app.crypto.B64.decode(it) } ?: return null
+            BackupStoreKey.adoptMediaKey(ctx, uid, mk)
+            val list = mo.optJSONArray("media") ?: return null
+            @Suppress("UNCHECKED_CAST")
+            val entries = (0 until list.length()).mapNotNull { Canonical.decode(list.getJSONObject(it).toString()) as? Map<String, Any?> }
+            BackupMedia.place(ctx, c, uid, mk, entries) { n -> found.media[n]?.let { id -> runCatching { Drive.download(token, id) }.getOrNull() } }
+        }
         return null
     }
 }

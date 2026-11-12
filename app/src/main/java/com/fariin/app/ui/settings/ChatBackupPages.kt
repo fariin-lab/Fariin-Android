@@ -62,6 +62,7 @@ internal fun ChatBackupPage(pop: () -> Unit) {
     var size by remember { mutableStateOf(ChatBackup.lastSize(ctx, uid)) }
     var freq by remember { mutableStateOf(ChatBackup.frequency(ctx, uid)) }
     var cell by remember { mutableStateOf(ChatBackup.mobileData(ctx, uid)) }
+    var videos by remember { mutableStateOf(ChatBackup.includeVideos(ctx, uid)) }
     var hasPw by remember { mutableStateOf(ChatBackup.hasPassword(ctx, uid)) }
     var busy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
@@ -130,10 +131,10 @@ internal fun ChatBackupPage(pop: () -> Unit) {
                 Text(if (busy) "Cancel" else "Back Up Now", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                     color = if (busy) c.label else c.onAccent)
             }
-            Text("Locked so only you can open it. Fariin can't read your backup. Photos and videos are not included yet.",
+            Text("Locked so only you can open it. Fariin can't read your backup.",
                 fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
         }
-        SettingsSection(footer = "Backups run on Wi-Fi unless you allow mobile data.") {
+        SettingsSection(footer = "Backups run on Wi-Fi unless you allow mobile data. Photos and voice messages on this phone are included; videos only if you turn them on.") {
             androidx.compose.foundation.layout.Box {
                 SettingsRow("Automatic Backup", value = when (freq) { "daily" -> "Daily"; "weekly" -> "Weekly"; else -> "Off" }) { freqOpen = true }
                 com.fariin.app.ui.components.GlassDropdown(freqOpen, onDismissRequest = { freqOpen = false }, containerColor = c.card) {
@@ -143,7 +144,8 @@ internal fun ChatBackupPage(pop: () -> Unit) {
                     }
                 }
             }
-            SwitchRow("Use Mobile Data", cell, last = true) { cell = it; ChatBackup.setMobileData(ctx, uid, it) }
+            SwitchRow("Use Mobile Data", cell) { cell = it; ChatBackup.setMobileData(ctx, uid, it) }
+            SwitchRow("Include Videos", videos, last = true) { videos = it; ChatBackup.setIncludeVideos(ctx, uid, it) }
         }
         SettingsSection(footer = if (hasPw) "You need this password to restore on a new phone."
             else "Without a password, a new phone can restore only from this phone's Google backup.") {

@@ -248,6 +248,8 @@ private fun SettingsHome(profile: MyProfile?, push: (String) -> Unit, scroll: an
                     badge = NewBadgeSpots.APPEARANCE) { push(PAGE_APPEARANCE) }
                 SettingsRow("Chats", painterResource(R.drawable.ic_settings_chats),
                     badge = NewBadgeSpots.CHATS) { push(PAGE_CHATS) }
+                // Its own row under Chats (owner 2026-11-12, as iOS).
+                if (com.fariin.app.backup.ChatBackup.ENABLED) SettingsRow("Chat Backup", painterResource(R.drawable.ic_set_backup)) { push(PAGE_CHAT_BACKUP) }
                 SettingsRow("Stories", painterResource(R.drawable.ic_stories_stack),
                     badge = NewBadgeSpots.STORIES) { push(PAGE_STORIES) }
                 SettingsRow("Privacy & Security", painterResource(R.drawable.ic_privacy),

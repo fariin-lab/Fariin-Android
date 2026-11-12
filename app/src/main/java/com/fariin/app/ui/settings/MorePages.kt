@@ -492,10 +492,6 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         if (com.fariin.app.data.MsgPolicy.chatKeyVisible) SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
             SettingsRow("Chat Key", value = keyValue, last = true, badge = NewBadgeSpots.CHATS_CHAT_KEY) { push(PAGE_CHAT_KEY) }
         }
-        // Chat Backup (device-storage plan phase 3), hidden until the Drive setup is done.
-        if (com.fariin.app.backup.ChatBackup.ENABLED) SettingsSection(footer = "A copy of your chats in your own Google Drive.") {
-            SettingsRow("Chat Backup", last = true) { push(PAGE_CHAT_BACKUP) }
-        }
         if (com.fariin.app.backup.ChatTransfer.ENABLED) SettingsSection(footer = "Move your chats to a new phone, Android or iPhone.") {
             SettingsRow("Transfer Chats", last = true) { push(PAGE_TRANSFER) }
         }

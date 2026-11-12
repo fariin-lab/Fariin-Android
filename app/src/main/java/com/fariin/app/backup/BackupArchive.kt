@@ -40,7 +40,8 @@ object BackupArchive {
      * item 7); a chat with any message that would not convert keeps no mark in the archive.
      */
     /** [passwordWrap] = (Argon2id key, its salt) when the person set a backup password or 64-digit key. */
-    fun build(c: FariinCrypto, uid: String, storeKey: ByteArray, passwordWrap: Pair<ByteArray, ByteArray>?): Built {
+    fun build(c: FariinCrypto, uid: String, storeKey: ByteArray, passwordWrap: Pair<ByteArray, ByteArray>?,
+              extraManifest: Map<String, Any?> = emptyMap()): Built {
         val made = System.currentTimeMillis()
         val archiveKey = c.randomBytes(32)
         val chats = LocalDb.rawChats(uid)
@@ -77,7 +78,7 @@ object BackupArchive {
         }
         files["chats.bin"] = seal(c, archiveKey, chatLines.toString().toByteArray(Charsets.UTF_8))
         files["manifest.bin"] = seal(c, archiveKey, Canonical.encode(
-            mapOf("chunks" to chunks, "count" to count, "made" to made, "uid" to uid)).toByteArray(Charsets.UTF_8))
+            mapOf("chunks" to chunks, "count" to count, "made" to made, "uid" to uid) + extraManifest).toByteArray(Charsets.UTF_8))
         val wrapped = LinkedHashMap<String, Any?>()
         wrapped["store"] = B64.encode(seal(c, storeKey, archiveKey))
         var kdf: Map<String, Any?>? = null
@@ -122,9 +123,13 @@ object BackupArchive {
      * Files the archive into the phone's history: chats first, then every chunk (rows already
      * here win). True only when every message the manifest counts was read (then "restored").
      */
+    /** The opened manifest of the last [restore] (its optional "media" / "mediaKey"). */
+    @Volatile var lastManifest: org.json.JSONObject? = null
+
     fun restore(c: FariinCrypto, uid: String, key: ByteArray, fetch: (String) -> ByteArray?): Boolean {
         val manifest = fetch("manifest.bin")?.let { open(c, key, it) } ?: return false
         val mo = org.json.JSONObject(manifest.toString(Charsets.UTF_8))
+        lastManifest = mo
         val count = mo.getInt("count")
         val chunks = mo.getJSONArray("chunks").let { a -> (0 until a.length()).map { a.getString(it) } }
         val chatsPlain = fetch("chats.bin")?.let { open(c, key, it) } ?: return false

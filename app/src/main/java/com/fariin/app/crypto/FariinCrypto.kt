@@ -186,6 +186,7 @@ class FariinCrypto(
     /** The argon2id step of the PIN backup (the same library as everything else here). */
     fun pinHash(outLen: Int, pin: ByteArray, salt: ByteArray, ops: Long, mem: Long): ByteArray? = nacl.pwhash(outLen, pin, salt, ops, mem)
     fun randomBytes(n: Int): ByteArray = nacl.randomBytes(n)
+    fun genericHash(outLen: Int, input: ByteArray, key: ByteArray): ByteArray? = nacl.genericHash(outLen, input, key)
     fun sealWith(key: ByteArray, plain: ByteArray): Pair<ByteArray, ByteArray>? {
         val n = nacl.randomBytes(NaCl.NONCE_BYTES)
         return nacl.secretBoxEasy(plain, n, key)?.let { n to it }

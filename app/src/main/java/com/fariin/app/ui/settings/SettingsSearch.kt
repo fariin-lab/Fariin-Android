@@ -88,6 +88,8 @@ internal object SettingsIndex {
         card(NOT, "notifications", "notifications push alerts sound vibrate preview", PAGE_NOTIFS)
         card(AP, "appearance", "appearance theme dark mode light mode night colors look", PAGE_APPEARANCE)
         card(CH, "chats", "chats messages save to photos camera roll history", PAGE_CHATS)
+        if (com.fariin.app.backup.ChatBackup.ENABLED) page("Chat Backup", emptyList(), "chat backup google drive restore copy password new phone", PAGE_CHAT_BACKUP)
+        if (com.fariin.app.backup.ChatTransfer.ENABLED) page("Transfer Chats", listOf(CH), "transfer move chats new phone qr code iphone android", PAGE_TRANSFER)
         card(ST, "stories", "stories status story audience who can see", PAGE_STORIES)
         card(PR, "privacy", "privacy security who can see last seen blocked app lock", PAGE_PRIVACY)
         card(SD, "storage", "storage data cache download network usage media", PAGE_STORAGE)

@@ -25,6 +25,8 @@ interface NaCl {
     /** crypto_secretbox_easy: returns MAC(16) || ciphertext. */
     fun secretBoxEasy(message: ByteArray, nonce: ByteArray, key: ByteArray): ByteArray?
     fun secretBoxOpenEasy(box: ByteArray, nonce: ByteArray, key: ByteArray): ByteArray?
+    /** BLAKE2b (crypto_generichash) keyed with [key]: [outLen] bytes. */
+    fun genericHash(outLen: Int, input: ByteArray, key: ByteArray): ByteArray?
     /** Argon2id (crypto_pwhash, ALG_ARGON2ID13): [outLen] bytes from a PIN. Slow on purpose. */
     fun pwhash(outLen: Int, password: ByteArray, salt: ByteArray, ops: Long, mem: Long): ByteArray?
 
@@ -77,6 +79,11 @@ class SodiumNaCl(private val s: Sodium) : NaCl {
         if (nonce.size != NaCl.NONCE_BYTES || key.size != NaCl.SECRETBOX_KEY_BYTES) return null
         val out = ByteArray(message.size + NaCl.MAC_BYTES)
         return if (s.crypto_secretbox_easy(out, message, message.size.toLong(), nonce, key) == 0) out else null
+    }
+
+    override fun genericHash(outLen: Int, input: ByteArray, key: ByteArray): ByteArray? {
+        val out = ByteArray(outLen)
+        return if (s.crypto_generichash(out, outLen, input, input.size.toLong(), key, key.size) == 0) out else null
     }
 
     override fun pwhash(outLen: Int, password: ByteArray, salt: ByteArray, ops: Long, mem: Long): ByteArray? {

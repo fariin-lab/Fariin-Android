@@ -236,6 +236,10 @@ object LocalDb {
             "AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT $limit",
             arrayOf(cid, beforeMs.toString(), System.currentTimeMillis().toString())).asReversed()
 
+    /** One stored message, or null. */
+    fun message(uid: String, cid: String, id: String): Message? =
+        read(uid, "SELECT id, body, deleted, created_at, sender FROM messages WHERE cid = ? AND id = ?", arrayOf(cid, id)).firstOrNull()
+
     /** Rows the server no longer has (a removed message): gone from here too. */
     fun forget(uid: String, cid: String, ids: Collection<String>) {
         if (ids.isEmpty()) return
