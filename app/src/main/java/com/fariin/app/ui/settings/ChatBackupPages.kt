@@ -102,39 +102,66 @@ internal fun ChatBackupPage(pop: () -> Unit) {
         if (set) { hasPw = true; run() }   // a fresh backup carries the new lock (both apps)
     }); return }
 
-    // Owner 2026-11-12, the minimal page (iOS 093874382): a centred status, one capsule, then settings.
+    // Owner 2026-11-12 ("too basic", after looking at the reference app on his Pixel): a status card
+    // that says what the backup holds, real progress while it runs, the Google Drive it lives in,
+    // then the settings and the password in its own section. Our own look and words.
+    val live by ChatBackup.progress.collectAsState()
+    val what = remember(last) { ChatBackup.contents(ctx, uid) }
+    val account = remember(last) { ChatBackup.account(ctx, uid) }
     ScrollPage("Chat Backup", pop) {
-        Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            androidx.compose.foundation.layout.Box(Modifier.size(76.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.fieldFill),
-                contentAlignment = androidx.compose.ui.Alignment.Center) {
-                androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_cloud_up_fill),
-                    null, tint = c.secondary, modifier = Modifier.size(38.dp))
+        SettingsSection {
+            Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                androidx.compose.foundation.layout.Box(Modifier.size(64.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(if (last > 0) c.accent else c.fieldFill), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_cloud_up_fill),
+                        null, tint = if (last > 0) c.onAccent else c.secondary, modifier = Modifier.size(32.dp))
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(if (last > 0) "Backed up " + android.text.format.DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(),
+                        android.text.format.DateUtils.MINUTE_IN_MILLIS).toString().replaceFirstChar { it.lowercase() } else "No backup yet",
+                    fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center)
+                Text(if (last > 0) android.text.format.DateFormat.getMediumDateFormat(ctx).format(java.util.Date(last)) + ", " +
+                        android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(last)) + " · " + sizeWords(size)
+                    else "Keep your chats safe if you lose or change this phone.", fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center)
+                // Counted from this build on: an older backup shows no line rather than "0 messages".
+                if (last > 0 && what[0] > 0) {
+                    val parts = listOfNotNull(
+                        "%,d messages".format(what[0]),
+                        what[1].takeIf { it > 0 }?.let { "%,d photos".format(it) },
+                        what[2].takeIf { it > 0 }?.let { "%,d voice messages".format(it) },
+                        what[3].takeIf { it > 0 }?.let { "%,d videos".format(it) })
+                    Text(parts.joinToString(" · "), fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center)
+                }
+                // While it runs: what it is doing and how far, instead of a spinner alone.
+                if (busy) {
+                    Spacer(Modifier.height(6.dp))
+                    androidx.compose.material3.LinearProgressIndicator(progress = { live?.fraction ?: 0f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                        color = c.accent, trackColor = c.fieldFill, drawStopIndicator = {})
+                    Text((live?.step ?: "Getting ready…") + "  " + ((live?.fraction ?: 0f) * 100).toInt() + "%",
+                        fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center)
+                }
+                note?.let { Text(it, fontSize = 14.sp, color = c.red, textAlign = TextAlign.Center) }
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(48.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape).background(if (busy) c.fieldFill else c.accent)
+                    .clickable {
+                        if (busy) { job?.cancel(); busy = false; return@clickable }
+                        if (ChatBackup.restoreWaiting(ctx, uid)) confirmReplace = true else run()
+                    }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    Text(if (busy) "Cancel" else "Back Up Now", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                        color = if (busy) c.label else c.onAccent)
+                }
             }
-            Spacer(Modifier.height(4.dp))
-            Text(if (last > 0) "Last backup" else "No backup yet", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.label)
-            Text(if (last > 0) android.text.format.DateUtils.getRelativeDateTimeString(ctx, last,
-                    android.text.format.DateUtils.MINUTE_IN_MILLIS, android.text.format.DateUtils.WEEK_IN_MILLIS, 0).toString() + " · " + sizeWords(size)
-                else "Keep your chats safe if you lose this phone.", fontSize = 15.sp, color = c.secondary, textAlign = TextAlign.Center)
-            if (busy) Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                com.fariin.app.ui.components.FariinSpinner(size = 16.dp)
-                Text("Backing up…", fontSize = 15.sp, color = c.secondary)
-            }
-            note?.let { Text(it, fontSize = 14.sp, color = c.red, textAlign = TextAlign.Center) }
-            Spacer(Modifier.height(10.dp))
-            androidx.compose.foundation.layout.Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(50.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape).background(if (busy) c.fieldFill else c.accent)
-                .clickable {
-                    if (busy) { job?.cancel(); busy = false; return@clickable }
-                    if (ChatBackup.restoreWaiting(ctx, uid)) confirmReplace = true else run()
-                }, contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text(if (busy) "Cancel" else "Back Up Now", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (busy) c.label else c.onAccent)
-            }
-            Text("Locked so only you can open it. Fariin can't read your backup.",
-                fontSize = 13.sp, color = c.secondary, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
         }
-        SettingsSection(footer = "Backups run on Wi-Fi unless you allow mobile data. Photos and voice messages on this phone are included; videos only if you turn them on.") {
+        SettingsSection(header = "Google Drive", footer = "Your backup sits in a private Fariin folder in this Google account. It counts toward its storage.") {
+            SettingsRow("Account", value = account ?: "Chosen at your first backup", trailing = Trailing.NONE)
+            SettingsRow("Manage Google Storage", trailing = Trailing.OUT_LINK, last = true) {
+                runCatching { com.fariin.app.ui.browser.BrowserActivity.open(ctx, "https://one.google.com/storage") }
+            }
+        }
+        SettingsSection(header = "Backup Settings", footer = "Backups run on Wi-Fi unless you allow mobile data. Videos are the largest part, so they are left out unless you include them.") {
             androidx.compose.foundation.layout.Box {
                 SettingsRow("Automatic Backup", value = when (freq) { "daily" -> "Daily"; "weekly" -> "Weekly"; else -> "Off" }) { freqOpen = true }
                 com.fariin.app.ui.components.GlassDropdown(freqOpen, onDismissRequest = { freqOpen = false }, containerColor = c.card) {
@@ -147,9 +174,11 @@ internal fun ChatBackupPage(pop: () -> Unit) {
             SwitchRow("Use Mobile Data", cell) { cell = it; ChatBackup.setMobileData(ctx, uid, it) }
             SwitchRow("Include Videos", videos, last = true) { videos = it; ChatBackup.setIncludeVideos(ctx, uid, it) }
         }
-        SettingsSection(footer = if (hasPw) "You need this password to restore on a new phone."
-            else "Without a password, a new phone can restore only from this phone's Google backup.") {
-            SwitchRow("Backup Password", hasPw, last = !hasPw) { on -> if (on) pwPage = true else confirmPwOff = true }
+        SettingsSection(header = "Security", footer = if (hasPw) "You need this password to restore on a new phone, Android or iPhone."
+            else "Your backup is always locked. A password also lets you restore on a new phone without this phone's Google backup, or on an iPhone.") {
+            SwitchRow("Backup Password", hasPw, last = !hasPw) { on ->
+                if (on) pwPage = true else confirmPwOff = true
+            }
             if (hasPw) SettingsRow("Change Password", last = true) { pwPage = true }
         }
     }

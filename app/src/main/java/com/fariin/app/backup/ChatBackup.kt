@@ -75,6 +75,17 @@ object ChatBackup {
         else -> "The backup didn't finish. It will try again."
     }
 
+    /** What a running backup is doing, for the page: a step line and 0..1. */
+    data class Progress(val step: String, val fraction: Float)
+    val progress = kotlinx.coroutines.flow.MutableStateFlow<Progress?>(null)
+
+    /** What the last backup held: messages, photos, voice notes, videos. */
+    fun contents(ctx: Context, uid: String): IntArray = prefs(ctx).getString("what.$uid", null)
+        ?.split(",")?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray() ?: intArrayOf(0, 0, 0, 0)
+
+    /** The Google account the backup is in (asked from Drive once, then kept). */
+    fun account(ctx: Context, uid: String): String? = prefs(ctx).getString("acct.$uid", null)
+
     /** Asks the sign-in gate to look again (the Restore circle). */
     val reopen = kotlinx.coroutines.flow.MutableStateFlow(0)
 
@@ -104,6 +115,8 @@ object ChatBackup {
         }
         val c = CryptoHub.get(ctx)
         return try {
+            progress.value = Progress("Getting ready…", 0f)
+            runCatching { Drive.accountEmail(tok) }.getOrNull()?.let { prefs(ctx).edit().putString("acct.$uid", it).apply() }
             val storeKey = BackupStoreKey.getOrMake(ctx, uid) { c.randomBytes(it) }
             val before = Drive.list(tok)
             // Media first (iOS 7687219ef): md- files belong to no set; one already there is only listed.
@@ -112,13 +125,18 @@ object ChatBackup {
             val have = before.filter { it.name.startsWith("md-") }.associateBy { it.name }
             var size = 0L
             val listed = ArrayList<Map<String, Any?>>()
+            val fresh = items.count { it.name !in have }
+            var sent = 0
             for (it in items) {
                 if (it.name !in have) {
+                    sent++
+                    progress.value = Progress("Uploading photos and voice messages $sent of $fresh", 0.1f + 0.7f * sent / maxOf(1, fresh))
                     val bytes = BackupMedia.seal(c, it) ?: continue
                     Drive.upload(tok, it.name, MEDIA_SET, bytes); size += bytes.size
                 } else size += have[it.name]!!.size
                 listed.add(it.entry)
             }
+            progress.value = Progress("Saving messages…", 0.85f)
             val built = BackupArchive.build(c, uid, storeKey, passwordWrap(ctx, uid),
                 mapOf("mediaKey" to com.fariin.app.crypto.B64.encode(mediaKey), "media" to listed))
             val set = built.made.toString()
@@ -129,9 +147,12 @@ object ChatBackup {
                 f.name.startsWith("md-") -> if (f.name !in keep) Drive.delete(tok, f.id)
                 f.set != set -> Drive.delete(tok, f.id)
             }
-            prefs(ctx).edit().putLong("last.$uid", built.made).putLong("size.$uid", size).apply()
+            val slots = listed.groupingBy { it["slot"] as? String }.eachCount()
+            prefs(ctx).edit().putLong("last.$uid", built.made).putLong("size.$uid", size)
+                .putString("what.$uid", "${built.count},${slots["image"] ?: 0},${slots["audio"] ?: 0},${slots["video"] ?: 0}").apply()
             Result.Done
         } catch (e: Exception) { Result.Failed(words(e)) }
+        finally { progress.value = null }
     }
 
     class Found(val made: Long, val size: Long, val needsPassword: Boolean, internal val files: Map<String, String>,

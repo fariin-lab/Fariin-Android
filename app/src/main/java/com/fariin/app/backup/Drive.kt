@@ -61,6 +61,12 @@ object Drive {
         bytes
     }
 
+    /** The Google account the token belongs to (Drive's about.user). */
+    suspend fun accountEmail(token: String): String? = runCatching {
+        JSONObject(call(token, "GET", "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)").toString(Charsets.UTF_8))
+            .optJSONObject("user")?.optString("emailAddress")?.ifEmpty { null }
+    }.getOrNull()
+
     /** Every file of the app folder, with its backup set (appProperties.set). */
     suspend fun list(token: String): List<DriveFile> {
         val out = ArrayList<DriveFile>()

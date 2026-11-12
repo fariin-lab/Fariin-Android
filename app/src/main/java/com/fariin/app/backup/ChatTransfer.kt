@@ -42,12 +42,18 @@ object ChatTransfer {
     private fun folder(uid: String, tid: String) = FirebaseStorage.getInstance().reference.child("transfer/$uid/$tid")
 
     /** OLD phone: builds and uploads, then returns the QR text. */
-    suspend fun send(ctx: Context, uid: String): String {
+    suspend fun send(ctx: Context, uid: String, progress: (Float) -> Unit = {}): String {
         val c = CryptoHub.get(ctx)
         val key = c.randomBytes(32)
         val tid = b64url(c.randomBytes(16))
+        progress(0.05f)
         val built = BackupArchive.build(c, uid, key, null)
-        for ((name, bytes) in built.files) folder(uid, tid).child(name).putBytes(bytes).await()   // header.json is last
+        progress(0.3f)
+        var i = 0
+        for ((name, bytes) in built.files) {   // header.json is last
+            folder(uid, tid).child(name).putBytes(bytes).await()
+            i++; progress(0.3f + 0.7f * i / built.files.size)
+        }
         return "fariin-transfer:v1:$tid:${b64url(key)}:${built.files.size}"
     }
 
