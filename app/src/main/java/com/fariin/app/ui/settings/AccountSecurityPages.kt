@@ -38,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
@@ -98,7 +99,8 @@ internal fun accountSecurityRoute(page: String, push: (String) -> Unit, pop: () 
 @Composable
 internal fun CardField(
     value: String, placeholder: String, secret: Boolean = false, keyboard: KeyboardType = KeyboardType.Text,
-    enabled: Boolean = true, last: Boolean = true, imeDone: (() -> Unit)? = null, onChange: (String) -> Unit,
+    enabled: Boolean = true, last: Boolean = true, imeDone: (() -> Unit)? = null,
+    focus: androidx.compose.ui.focus.FocusRequester? = null, onChange: (String) -> Unit,
 ) {
     val c = Fariin.colors
     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp)) {
@@ -111,7 +113,7 @@ internal fun CardField(
             keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else keyboard, autoCorrectEnabled = false,
                 imeAction = if (imeDone != null) androidx.compose.ui.text.input.ImeAction.Go else androidx.compose.ui.text.input.ImeAction.Default),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { imeDone?.invoke() }),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier),
         )
     }
     if (!last) HorizontalDivider(thickness = 0.5.dp, color = c.separator)

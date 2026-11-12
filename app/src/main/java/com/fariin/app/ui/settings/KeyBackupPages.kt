@@ -91,7 +91,9 @@ internal fun KeyBackupPage(pop: () -> Unit) {
         ScrollPage(if (on == true) "Change PIN" else "Backup PIN", { editing = false; pin = ""; again = ""; error = null },
             action = { BarAction("Save", ok, busy = busy) { save() } }) {
             SettingsSection(header = "New PIN", footer = "At least ${KeyBackup.MIN_PIN} digits. Write it down somewhere safe: if you forget it, your older messages cannot be brought back.") {
-                CardField(pin, "PIN", secret = true, keyboard = KeyboardType.NumberPassword, last = false) { v -> pin = v.filter { it.isDigit() }.take(32) }
+                val first = remember { androidx.compose.ui.focus.FocusRequester() }
+                LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+                CardField(pin, "PIN", secret = true, keyboard = KeyboardType.NumberPassword, last = false, focus = first) { v -> pin = v.filter { it.isDigit() }.take(32) }
                 CardField(again, "Confirm PIN", secret = true, keyboard = KeyboardType.NumberPassword, imeDone = { save() }) { v -> again = v.filter { it.isDigit() }.take(32) }
             }
             ErrorNote(error ?: pinProblem(pin, again).takeIf { pin.length >= KeyBackup.MIN_PIN || again.isNotEmpty() })
@@ -172,7 +174,9 @@ fun KeyRestoreScreen(status: KeyBackup.Status, onRestored: () -> Unit, onSkip: (
                 fontSize = 16.sp, color = c.secondary, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             if (!gone) Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
-                CardField(pin, "Backup PIN", secret = true, keyboard = KeyboardType.NumberPassword, enabled = !busy, imeDone = { restore() }) { v ->
+                val f = remember { androidx.compose.ui.focus.FocusRequester() }
+                LaunchedEffect(Unit) { kotlinx.coroutines.delay(300); runCatching { f.requestFocus() } }
+                CardField(pin, "Backup PIN", secret = true, keyboard = KeyboardType.NumberPassword, enabled = !busy, imeDone = { restore() }, focus = f) { v ->
                     pin = v.filter { it.isDigit() }.take(32)
                 }
             }
