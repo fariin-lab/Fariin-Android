@@ -81,9 +81,20 @@ object CryptoHub {
 
 /** The chat list's preview opener: the real decrypt, with the iOS sentinels ("…", the lock). */
 class CryptoDecryptor(private val crypto: FariinCrypto) : MessageDecryptor {
+    /**
+     * D5 (device-storage plan, same as iOS c4a7f23a7): a private chat whose server summary has no
+     * words falls back to the newest text this phone stored, when that is at least as new. Never a
+     * channel or a public group (their summary stays the server's).
+     */
+    private fun local(conv: Conversation): String? {
+        if (conv.isChannel || (conv.isGroup && conv.isPublicGroup)) return null
+        val (text, at) = com.fariin.app.local.LocalDb.summary(conv.id) ?: return null
+        return text.takeIf { it.isNotEmpty() && at + 2_000 >= conv.updatedAtMillis.toLong() }
+    }
+
     override fun previewText(conv: Conversation, me: String): String? {
         val raw = conv.lastMessageCipher
-        if (raw.isEmpty()) return null
+        if (raw.isEmpty()) return local(conv)
         // Released keys on the conversation itself open an old sealed group line (Crypto.swift rk).
         if (conv.isGroup && conv.releasedKeys.isNotEmpty()) crypto.noteReleased(conv.id, conv.releasedKeys)
         return crypto.decrypt(raw, conv.id, conv.lastSender)
@@ -94,7 +105,7 @@ class CryptoDecryptor(private val crypto: FariinCrypto) : MessageDecryptor {
 
     override fun peekPreview(conv: Conversation, me: String): String? {
         val raw = conv.lastMessageCipher
-        if (raw.isEmpty()) return null
+        if (raw.isEmpty()) return local(conv)
         return crypto.cachedDecrypt(raw, conv.id, conv.lastSender) ?: ChatList.PEEK_MISS
     }
 

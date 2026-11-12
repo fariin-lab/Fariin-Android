@@ -252,6 +252,7 @@ class MainActivity : ComponentActivity() {
         // Disappearing messages that ran out while the app was closed leave the phone's history.
         LaunchedEffect(me) {
             com.fariin.app.local.LocalDb.purgeExpired(me)
+            com.fariin.app.local.LocalDb.warmSummaries(me)
             // Phase 4's one-time copy of every private chat (off until config/features.historyPull).
             com.fariin.app.local.HistoryPull.kick(ctx, me)
             com.fariin.app.local.InboxSync.kick(ctx, me)

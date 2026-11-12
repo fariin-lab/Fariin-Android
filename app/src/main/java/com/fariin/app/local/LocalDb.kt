@@ -156,6 +156,24 @@ object LocalDb {
      * still on the phone (a group skips deleted ones, an expired one never counts), and body = JSON
      * {text, type, authorId, deleted, readAt}; readAt (my read mark) is kept as it was.
      */
+    /** Each chat's newest stored text and time, in memory for the chat list (D5 overlay). */
+    private val summaries = ConcurrentHashMap<String, Pair<String, Long>>()
+
+    /** The newest text this phone has for [cid] and its time, or null. Never touches the disk. */
+    fun summary(cid: String): Pair<String, Long>? = summaries[cid]
+
+    /** Reads every chat's summary into memory once (off the main thread, at start). */
+    fun warmSummaries(uid: String) {
+        io.launch {
+            for (r in rawChats(uid)) {
+                val cid = r["cid"] as? String ?: continue
+                val at = (r["last_at"] as? Number)?.toLong() ?: continue
+                val text = runCatching { org.json.JSONObject(r["body"] as? String ?: "").optString("text") }.getOrDefault("")
+                summaries[cid] = text to at
+            }
+        }
+    }
+
     private fun refreshSummary(db: SQLiteDatabase, cid: String) {
         val now = System.currentTimeMillis().toString()
         val group = com.fariin.app.crypto.Wire.isGroupCid(cid)
@@ -169,9 +187,10 @@ object LocalDb {
                 val deleted = c.getInt(2) == 1
                 val text = if (deleted) "" else runCatching { org.json.JSONObject(c.getString(1)).optString("t") }.getOrDefault("")
                 v.put("last_id", c.getString(0)); v.put("last_at", c.getLong(3))
+                summaries[cid] = text to c.getLong(3)
                 v.put("body", org.json.JSONObject().put("text", text).put("type", c.getString(5) ?: "text")
                     .put("authorId", c.getString(4) ?: "").put("deleted", deleted).put("readAt", readAt ?: org.json.JSONObject.NULL).toString())
-            } else { v.putNull("last_id"); v.putNull("last_at") }
+            } else { v.putNull("last_id"); v.putNull("last_at"); summaries.remove(cid) }
             if (db.update("chats", v, "cid = ?", arrayOf(cid)) == 0) { v.put("cid", cid); db.insert("chats", null, v) }
         }
     }
