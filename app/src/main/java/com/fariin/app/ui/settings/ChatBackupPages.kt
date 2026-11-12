@@ -118,8 +118,12 @@ internal fun ChatBackupPage(pop: () -> Unit) {
                         null, tint = if (last > 0) c.onAccent else c.secondary, modifier = Modifier.size(32.dp))
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(if (last > 0) "Backed up " + android.text.format.DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(),
-                        android.text.format.DateUtils.MINUTE_IN_MILLIS).toString().replaceFirstChar { it.lowercase() } else "No backup yet",
+                Text(when {
+                        last <= 0 -> "No backup yet"
+                        System.currentTimeMillis() - last < 60_000 -> "Backed up just now"
+                        else -> "Backed up " + android.text.format.DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(),
+                            android.text.format.DateUtils.MINUTE_IN_MILLIS).toString().replaceFirstChar { it.lowercase() }
+                    },
                     fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = c.label, textAlign = TextAlign.Center)
                 Text(if (last > 0) android.text.format.DateFormat.getMediumDateFormat(ctx).format(java.util.Date(last)) + ", " +
                         android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(last)) + " · " + sizeWords(size)
