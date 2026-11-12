@@ -64,10 +64,11 @@ object BackupMedia {
         return out
     }
 
-    fun seal(c: FariinCrypto, item: Item): ByteArray? {
+    /** Null when the item cannot be read or does not fit in memory on this phone (it is skipped). */
+    fun seal(c: FariinCrypto, item: Item): ByteArray? = try {
         val (n, box) = c.sealWith(item.itemKey, item.file.readBytes()) ?: return null
-        return n + box
-    }
+        n + box
+    } catch (_: OutOfMemoryError) { null } catch (_: Exception) { null }
 
     /**
      * Restore: each entry's file opened and put where this app looks for it (Android keeps every

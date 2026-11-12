@@ -26,6 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -40,6 +43,9 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 internal const val PAGE_CHAT_BACKUP = "chats:backup"
+
+/** "1 video", "3 videos", "1,240 messages". */
+private fun count(n: Int, word: String) = "%,d %s".format(n, if (n == 1) word else word + "s")
 
 private fun sizeWords(b: Long): String = when {
     b >= 1_000_000 -> "%.1f MB".format(b / 1_000_000.0)
@@ -112,11 +118,7 @@ internal fun ChatBackupPage(pop: () -> Unit) {
         SettingsSection {
             Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                androidx.compose.foundation.layout.Box(Modifier.size(64.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(if (last > 0) c.accent else c.fieldFill), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_cloud_up_fill),
-                        null, tint = if (last > 0) c.onAccent else c.secondary, modifier = Modifier.size(32.dp))
-                }
+                BackupBadge(busy = busy, hasBackup = last > 0, doneAt = last)
                 Spacer(Modifier.height(2.dp))
                 Text(when {
                         last <= 0 -> "No backup yet"
@@ -131,10 +133,10 @@ internal fun ChatBackupPage(pop: () -> Unit) {
                 // Counted from this build on: an older backup shows no line rather than "0 messages".
                 if (last > 0 && what[0] > 0) {
                     val parts = listOfNotNull(
-                        "%,d messages".format(what[0]),
-                        what[1].takeIf { it > 0 }?.let { "%,d photos".format(it) },
-                        what[2].takeIf { it > 0 }?.let { "%,d voice messages".format(it) },
-                        what[3].takeIf { it > 0 }?.let { "%,d videos".format(it) })
+                        count(what[0], "message"),
+                        what[1].takeIf { it > 0 }?.let { count(it, "photo") },
+                        what[2].takeIf { it > 0 }?.let { count(it, "voice message") },
+                        what[3].takeIf { it > 0 }?.let { count(it, "video") })
                     Text(parts.joinToString(" · "), fontSize = 14.sp, color = c.secondary, textAlign = TextAlign.Center)
                 }
                 // While it runs: what it is doing and how far, instead of a spinner alone.
@@ -347,5 +349,78 @@ fun ChatBackupGate(me: String) {
             dismissButton = { TextButton({ db.setMeta(me, "backup.asked", "later:" + System.currentTimeMillis()); step = "" }) { Text("Not Now", color = c.accent) } },
             containerColor = c.card)
         else -> {}
+    }
+}
+
+
+/**
+ * The status card's badge (owner 2026-11-12): while a backup runs, the cloud's arrow keeps rising
+ * out of it; when one finishes, the cloud turns into a tick with a small bounce and a tap of the
+ * phone, then settles back to the cloud.
+ */
+@Composable
+private fun BackupBadge(busy: Boolean, hasBackup: Boolean, doneAt: Long) {
+    val c = Fariin.colors
+    val view = androidx.compose.ui.platform.LocalView.current
+    var wasBusy by remember { mutableStateOf(false) }
+    var celebrating by remember { mutableStateOf(false) }
+    val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+    androidx.compose.runtime.LaunchedEffect(busy, doneAt) {
+        if (busy) { wasBusy = true; return@LaunchedEffect }
+        if (!wasBusy) return@LaunchedEffect
+        wasBusy = false
+        if (!hasBackup || System.currentTimeMillis() - doneAt > 60_000) return@LaunchedEffect   // it stopped, not finished
+        celebrating = true
+        view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM
+            else android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        pop.snapTo(0.7f)
+        pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 500f))
+        kotlinx.coroutines.delay(1800)
+        celebrating = false
+    }
+    // The arrow's climb while busy: rises a few dp, fades out at the top, starts again.
+    // Only runs while busy, so the page draws nothing once the backup is done.
+    val t = if (busy) {
+        val rise = androidx.compose.animation.core.rememberInfiniteTransition(label = "backupRise")
+        rise.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing)), label = "riseT").value
+    } else 0f
+    val filled = hasBackup || busy || celebrating
+    androidx.compose.foundation.layout.Box(Modifier.size(64.dp)
+        .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
+        .clip(androidx.compose.foundation.shape.CircleShape)
+        .background(if (filled) c.accent else c.fieldFill), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        androidx.compose.animation.AnimatedContent(celebrating, transitionSpec = {
+            (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) +
+                androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.6f)) togetherWith
+                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+        }, label = "badge") { done ->
+            if (done) androidx.compose.material3.Icon(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_checkmark),
+                "Backed up", tint = c.onAccent, modifier = Modifier.size(30.dp))
+            else androidx.compose.foundation.Canvas(Modifier.size(36.dp)) {
+                val ink = if (filled) c.onAccent else c.secondary
+                val w = size.width; val h = size.height
+                // The cloud: three lobes and a flat base.
+                val cloud = androidx.compose.ui.graphics.Path().apply {
+                    addOval(androidx.compose.ui.geometry.Rect(w * 0.06f, h * 0.38f, w * 0.44f, h * 0.76f))
+                    addOval(androidx.compose.ui.geometry.Rect(w * 0.24f, h * 0.18f, w * 0.72f, h * 0.66f))
+                    addOval(androidx.compose.ui.geometry.Rect(w * 0.54f, h * 0.36f, w * 0.94f, h * 0.76f))
+                    addRect(androidx.compose.ui.geometry.Rect(w * 0.25f, h * 0.52f, w * 0.75f, h * 0.76f))
+                }
+                drawPath(cloud, ink)
+                // The arrow cut out of it, climbing while busy.
+                val dy = if (busy) -h * 0.22f * t else 0f
+                val alpha = if (busy) (1f - t).coerceIn(0f, 1f) * 0.9f + 0.1f else 1f
+                val bg = if (filled) c.accent else c.fieldFill
+                val stem = h * 0.22f
+                val cx = w / 2f; val top = h * 0.40f + dy
+                drawLine(bg.copy(alpha = alpha), androidx.compose.ui.geometry.Offset(cx, top), androidx.compose.ui.geometry.Offset(cx, top + stem), w * 0.08f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(bg.copy(alpha = alpha), androidx.compose.ui.geometry.Offset(cx, top), androidx.compose.ui.geometry.Offset(cx - w * 0.09f, top + h * 0.09f), w * 0.08f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(bg.copy(alpha = alpha), androidx.compose.ui.geometry.Offset(cx, top), androidx.compose.ui.geometry.Offset(cx + w * 0.09f, top + h * 0.09f), w * 0.08f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
     }
 }

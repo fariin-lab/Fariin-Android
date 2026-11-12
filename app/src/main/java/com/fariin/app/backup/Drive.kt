@@ -90,6 +90,8 @@ object Drive {
     }
 
     suspend fun upload(token: String, name: String, set: String, bytes: ByteArray, uid: String): String {
+        // Drive's one-request upload takes 5 MB at most: anything bigger (a video) goes the resumable way.
+        if (bytes.size > 1024 * 1024) return resumable(token, name, set, bytes, uid)
         val boundary = "fariin" + System.nanoTime()
         val meta = JSONObject().put("name", name).put("parents", org.json.JSONArray().put("appDataFolder"))
             .put("appProperties", JSONObject().put("set", set).put("uid", uid)).toString()
@@ -101,6 +103,42 @@ object Drive {
         val r = call(token, "POST", "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", body,
             "multipart/related; boundary=$boundary")
         return JSONObject(r.toString(Charsets.UTF_8)).getString("id")
+    }
+
+    /** Drive's resumable upload: open a session, then send the bytes in 8 MB pieces. */
+    private suspend fun resumable(token: String, name: String, set: String, bytes: ByteArray, uid: String): String = withContext(Dispatchers.IO) {
+        val meta = JSONObject().put("name", name).put("parents", org.json.JSONArray().put("appDataFolder"))
+            .put("appProperties", JSONObject().put("set", set).put("uid", uid)).toString().toByteArray()
+        val open = URL("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id").openConnection() as HttpURLConnection
+        open.requestMethod = "POST"; open.doOutput = true; open.connectTimeout = 20_000; open.readTimeout = 60_000
+        open.setRequestProperty("Authorization", "Bearer $token")
+        open.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+        open.setRequestProperty("X-Upload-Content-Type", "application/octet-stream")
+        open.setRequestProperty("X-Upload-Content-Length", bytes.size.toString())
+        open.outputStream.use { it.write(meta) }
+        if (open.responseCode !in 200..299) throw DriveError(open.responseCode, open.errorStream?.use { it.readBytes() }?.toString(Charsets.UTF_8)?.take(300) ?: "")
+        val session = open.getHeaderField("Location") ?: throw DriveError(500, "no upload session")
+        open.disconnect()
+        val piece = 8 * 1024 * 1024
+        var at = 0
+        while (true) {
+            val end = minOf(at + piece, bytes.size)
+            val c = URL(session).openConnection() as HttpURLConnection
+            c.requestMethod = "PUT"; c.doOutput = true; c.connectTimeout = 20_000; c.readTimeout = 120_000
+            c.setFixedLengthStreamingMode(end - at)
+            c.setRequestProperty("Content-Range", "bytes $at-${end - 1}/${bytes.size}")
+            c.outputStream.use { it.write(bytes, at, end - at) }
+            val code = c.responseCode
+            if (code == 200 || code == 201) {
+                val id = JSONObject(c.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8)).getString("id")
+                c.disconnect(); return@withContext id
+            }
+            if (code != 308) { val e = c.errorStream?.use { it.readBytes() }?.toString(Charsets.UTF_8)?.take(300) ?: ""; c.disconnect(); throw DriveError(code, e) }
+            // 308: Drive says how much it has; continue from there.
+            at = c.getHeaderField("Range")?.substringAfterLast('-')?.toIntOrNull()?.plus(1) ?: end
+            c.disconnect()
+        }
+        @Suppress("UNREACHABLE_CODE") ""
     }
 
     suspend fun download(token: String, id: String): ByteArray =

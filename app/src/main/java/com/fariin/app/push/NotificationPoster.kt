@@ -129,8 +129,11 @@ object NotificationPoster {
         // A channel post (owner 2026-11-10: "it looks like somebody sent me a 1:1 message"): not a
         // conversation (Android crops a conversation's face to a circle and offers Reply, which a
         // follower cannot), but the channel's own notification: its name, the post, its rounded-
-        // square photo, and only Mark as Read.
-        if (spec.isChannel) {
+        // square photo, and only Mark as Read. Also when the push did not say "channel" but this phone
+        // knows the chat is one (owner 2026-11-12: VE3's post offered Reply).
+        val knownChannel = com.fariin.app.data.CryptoHub.listedConversation(spec.key)?.isChannel == true ||
+            com.fariin.app.channel.ChannelFollows.docs.value[spec.key]?.get("channel") == true
+        if (spec.isChannel || knownChannel) {
             b.setContentTitle(spec.title)
                 .setContentText(spec.line)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(spec.line))

@@ -44,7 +44,9 @@ object ChatBackup {
      *  daily backups need nothing typed. Never leaves the phone. */
     fun hasPassword(ctx: Context, uid: String): Boolean = prefs(ctx).contains("pw.$uid")
     private fun passwordWrap(ctx: Context, uid: String): Pair<ByteArray, ByteArray>? {
-        val k = prefs(ctx).getString("pw.$uid", null)?.let { com.fariin.app.crypto.B64.decode(it) } ?: return null
+        // Sealed with this phone's Keystore key (local/AtRest), never readable as stored.
+        val k = prefs(ctx).getString("pw.$uid", null)?.let { com.fariin.app.crypto.B64.decode(it) }
+            ?.let { com.fariin.app.local.AtRest.open(it) } ?: return null
         val s = prefs(ctx).getString("pwsalt.$uid", null)?.let { com.fariin.app.crypto.B64.decode(it) } ?: return null
         return k to s
     }
@@ -55,7 +57,8 @@ object ChatBackup {
             val c = CryptoHub.get(ctx)
             val salt = c.randomBytes(16)
             val pk = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { BackupArchive.passwordKey(c, password, salt) } ?: return
-            e.putString("pw.$uid", com.fariin.app.crypto.B64.encode(pk)).putString("pwsalt.$uid", com.fariin.app.crypto.B64.encode(salt))
+            val sealed = com.fariin.app.local.AtRest.seal(pk) ?: return
+            e.putString("pw.$uid", com.fariin.app.crypto.B64.encode(sealed)).putString("pwsalt.$uid", com.fariin.app.crypto.B64.encode(salt))
         }
         e.apply()
     }
@@ -123,13 +126,21 @@ object ChatBackup {
             Drive.Auth.Failed -> return Result.Failed("Fariin can't reach your Google Drive.")
         }
         val c = CryptoHub.get(ctx)
+        // Google's access pass lasts about an hour: a long backup asks for a fresh one (silent once
+        // allowed) when Drive says it ran out, and carries on.
+        var live = tok
+        suspend fun <T> drive(op: suspend (String) -> T): T = try { op(live) } catch (e: Drive.DriveError) {
+            if (e.code != 401) throw e
+            live = (Drive.authorize(ctx) as? Drive.Auth.Token)?.value ?: throw e
+            op(live)
+        }
         return try {
             progress.value = Progress("Getting ready…", 0f)
-            runCatching { Drive.accountEmail(tok) }.getOrNull()?.let { prefs(ctx).edit().putString("acct.$uid", it).apply() }
+            runCatching { drive { t -> Drive.accountEmail(t) } }.getOrNull()?.let { prefs(ctx).edit().putString("acct.$uid", it).apply() }
             val storeKey = BackupStoreKey.getOrMake(ctx, uid) { c.randomBytes(it) }
             // Only this Fariin account's files: other accounts on the same Google Drive keep theirs
             // (owner 2026-11-12, three accounts on one phone). Untagged files are from before the tag.
-            val before = Drive.list(tok).filter { it.uid == uid || it.uid == null }
+            val before = drive { t -> Drive.list(t) }.filter { it.uid == uid || it.uid == null }
             // Media first (iOS 7687219ef): md- files belong to no set; one already there is only listed.
             val mediaKey = BackupStoreKey.mediaKey(ctx, uid) { c.randomBytes(it) }
             val items = BackupMedia.collect(ctx, c, uid, mediaKey, includeVideos(ctx, uid))
@@ -147,7 +158,7 @@ object ChatBackup {
                     // Bytes, as the reference app shows them (owner 2026-11-12): "Uploading 74.6 MB of 88.0 MB".
                     progress.value = Progress("Uploading ${mb(doneBytes)} of ${mb(total)}", 0.1f + 0.7f * f)
                     val bytes = BackupMedia.seal(c, it) ?: continue
-                    Drive.upload(tok, it.name, MEDIA_SET, bytes, uid); size += bytes.size
+                    drive { t -> Drive.upload(t, it.name, MEDIA_SET, bytes, uid) }; size += bytes.size
                 } else size += have[it.name]!!.size
                 listed.add(it.entry)
             }
@@ -155,12 +166,12 @@ object ChatBackup {
             val built = BackupArchive.build(c, uid, storeKey, passwordWrap(ctx, uid),
                 mapOf("mediaKey" to com.fariin.app.crypto.B64.encode(mediaKey), "media" to listed))
             val set = built.made.toString()
-            for ((name, bytes) in built.files) { Drive.upload(tok, name, set, bytes, uid); size += bytes.size }
+            for ((name, bytes) in built.files) { drive { t -> Drive.upload(t, name, set, bytes, uid) }; size += bytes.size }
             // The new set is whole (its header went last): every older set goes, and media no longer listed.
             val keep = listed.mapNotNull { it["n"] as? String }.toSet()
             for (f in before) when {
-                f.name.startsWith("md-") -> if (f.name !in keep) Drive.delete(tok, f.id)
-                f.set != set -> Drive.delete(tok, f.id)
+                f.name.startsWith("md-") -> if (f.name !in keep) drive { t -> Drive.delete(t, f.id) }
+                f.set != set -> drive { t -> Drive.delete(t, f.id) }
             }
             val slots = listed.groupingBy { it["slot"] as? String }.eachCount()
             prefs(ctx).edit().putLong("last.$uid", built.made).putLong("size.$uid", size)
@@ -198,8 +209,9 @@ object ChatBackup {
         val cache = HashMap<String, ByteArray>()
         for ((name, id) in found.files) runCatching { cache[name] = Drive.download(token, id) }
         val whole = BackupArchive.restore(c, uid, key) { cache[it] }
+        // Only a whole restore closes the offer: a dropped connection must leave Restore there to try again.
+        if (!whole) return "Some chats couldn't be restored. Check your connection and tap Restore again."
         LocalDb.setMeta(uid, "restore.checked", found.made.toString())
-        if (!whole) return "Some chats couldn't be restored. Try again on Wi-Fi."
         LocalDb.setMeta(uid, "restored", found.made.toString())
         LocalDb.setMeta(uid, "restore.waiting", "")
         // Media after messages and chats (both apps): the backup's media key becomes ours, then
