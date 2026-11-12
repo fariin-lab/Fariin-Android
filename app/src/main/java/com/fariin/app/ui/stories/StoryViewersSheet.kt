@@ -502,22 +502,9 @@ internal fun ViewersSheet(
         }
     }
 
-    // The sheet's own palette: the skeleton reads `dark`, and nothing here follows the app's light mode.
-    CompositionLocalProvider(LocalFariinColors provides Fariin.colors.copy(dark = true, label = Color.White, bg = SheetFill)) {
-        Box(Modifier.fillMaxSize().onSizeChanged { screenH = maxOf(1f, it.height.toFloat()) }) {
-            Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .fillMaxHeight(StorySheetGeometry.HEIGHT_FRACTION + (TALL_FRACTION - StorySheetGeometry.HEIGHT_FRACTION) * sheet.up.value.coerceIn(0f, 1f))
-                    .onSizeChanged { sheetH = maxOf(1f, it.height.toFloat()) }
-                    .graphicsLayer { translationY = (1f - sheet.fraction) * sheetH }
-                    .rowSwipe(rowSwipe)
-                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(SheetFill)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { focus.clearFocus() }
-                    .navigationBarsPadding(),
-            ) {
-                // Grabber, tabs and search: a pull anywhere on them moves the sheet.
-                Column(
-                    Modifier.fillMaxWidth().pointerInput(Unit) {
+    // One pull for the whole sheet (owner 2026-11-12: "only the top lets me swipe it down"): the
+    // header and the empty or loading space below it; a list hands its pull over through listPull.
+    val sheetDrag = Modifier.pointerInput(sheet, growPx) {
                         var start = 1f
                         val tracker = VelocityTracker()
                         detectVerticalDragGestures(
@@ -537,8 +524,24 @@ internal fun ViewersSheet(
                             },
                             onDragCancel = { sheet.settleOpen(0f) },
                         )
-                    },
-                ) {
+                    }
+
+    // The sheet's own palette: the skeleton reads `dark`, and nothing here follows the app's light mode.
+    CompositionLocalProvider(LocalFariinColors provides Fariin.colors.copy(dark = true, label = Color.White, bg = SheetFill)) {
+        Box(Modifier.fillMaxSize().onSizeChanged { screenH = maxOf(1f, it.height.toFloat()) }) {
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .fillMaxHeight(StorySheetGeometry.HEIGHT_FRACTION + (TALL_FRACTION - StorySheetGeometry.HEIGHT_FRACTION) * sheet.up.value.coerceIn(0f, 1f))
+                    .onSizeChanged { sheetH = maxOf(1f, it.height.toFloat()) }
+                    .graphicsLayer { translationY = (1f - sheet.fraction) * sheetH }
+                    .rowSwipe(rowSwipe)
+                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(SheetFill)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { focus.clearFocus() }
+                    .navigationBarsPadding(),
+            ) {
+                // Grabber, tabs and search: a pull anywhere on them moves the sheet.
+                Column(
+                    Modifier.fillMaxWidth().then(sheetDrag)) {
                     Box(Modifier.padding(top = 8.dp).align(Alignment.CenterHorizontally).size(38.dp, 5.dp)
                         .clip(RoundedCornerShape(2.5.dp)).background(Color.White.copy(alpha = 0.28f)))
                     Row(Modifier.padding(start = 18.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -574,8 +577,8 @@ internal fun ViewersSheet(
                             replies = replies.filter { it.id != r.id }
                             loadScope.launch { runCatching { com.fariin.app.data.GroupStoryReplies.delete(storyId, r.id) } }
                         })
-                    list == null && !failed && knownViews != 0 -> ViewersSkeleton(knownViews ?: 6)
-                    list == null || list.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 24.dp)) {
+                    list == null && !failed && knownViews != 0 -> Box(Modifier.fillMaxWidth().weight(1f).then(sheetDrag)) { ViewersSkeleton(knownViews ?: 6) }
+                    list == null || list.isEmpty() -> Box(Modifier.fillMaxWidth().weight(1f).then(sheetDrag).padding(horizontal = 24.dp)) {
                         Text(
                             when {
                                 failed -> buildAnnotatedString { append("Couldn't load viewers. Trying again…") }

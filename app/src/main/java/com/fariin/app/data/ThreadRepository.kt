@@ -1475,7 +1475,7 @@ class ThreadRepository(
         require(cipher.size < MediaRules.STORAGE_CHAT_LIMIT) { "file too large" }
         // Cloudflare R2 while config/features.r2Media is on (iOS 9bbac4e65): signed by mediaSign;
         // Storage stays the way if R2 refuses, so a send never fails on it.
-        if (com.fariin.app.data.AppFeatures.r2Media && path.startsWith("chat/") && cipher.size <= 70L * 1024 * 1024) {
+        if (com.fariin.app.data.AppFeatures.r2Media && com.fariin.app.media.R2Media.allowed(path) && cipher.size <= 70L * 1024 * 1024) {
             com.fariin.app.media.R2Media.put(path, cipher)?.let { link -> return link }
         }
 

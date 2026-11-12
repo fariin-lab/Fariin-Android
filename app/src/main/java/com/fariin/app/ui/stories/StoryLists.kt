@@ -801,6 +801,7 @@ fun ShareStoryAudiencePage(
 @Composable
 private fun PostStoryButton(title: String, ready: Boolean, busy: Boolean, onClick: () -> Unit) {
     val c = Fariin.colors
+    val view = androidx.compose.ui.platform.LocalView.current
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
     val squeeze by androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.88f else 1f,
@@ -810,7 +811,12 @@ private fun PostStoryButton(title: String, ready: Boolean, busy: Boolean, onClic
             .graphicsLayer { scaleX = squeeze; scaleY = squeeze; alpha = if (pressed) 0.85f else 1f }
             .clip(RoundedCornerShape(26.dp))
             .background(if (ready) c.accent else c.accent.copy(alpha = 0.35f))
-            .clickable(interactionSource = press, indication = null, enabled = ready, onClick = onClick),
+            .clickable(interactionSource = press, indication = null, enabled = ready) {
+                // iOS ShareStorySheet: a success tap the moment a story (or a repost) is posted.
+                view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM
+                    else android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                onClick()
+            },
         contentAlignment = Alignment.Center,
     ) {
         if (busy) com.fariin.app.ui.components.FariinSpinner(size = 22.dp, color = c.onAccent)

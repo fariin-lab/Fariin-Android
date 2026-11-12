@@ -14,6 +14,14 @@ import java.net.URL
  * switch says, so each app reads the other's; uploading to R2 waits for config/features.r2Media.
  */
 object R2Media {
+    /**
+     * R2 holds group and channel media only (owner 2026-11-12). A 1:1 chat's id has a "_" in it:
+     * its end-to-end encrypted media stays on Storage until delivered (30 days at most), and the
+     * server refuses an R2 "put" for it anyway.
+     */
+    fun allowed(path: String): Boolean =
+        path.startsWith("chat/") && !path.removePrefix("chat/").substringBefore('/').contains('_')
+
     const val PREFIX = "r2:"
     fun isR2(url: String?) = url?.startsWith(PREFIX) == true
     fun keyOf(url: String) = url.removePrefix(PREFIX)

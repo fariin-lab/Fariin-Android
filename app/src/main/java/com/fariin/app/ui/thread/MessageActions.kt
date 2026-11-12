@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -612,28 +613,56 @@ internal fun ComposerBar(title: String, text: String, thumb: (@Composable () -> 
 }
 
 /**
- * The reply / edit / quote banner inside the message box (iOS composer banner): the accent bar, the
- * picture if any, "Reply to X" over the words, and a grey round X. No card of its own; the box is the card.
+ * The reply / edit / quote banner inside the message box (owner 2026-11-12, after comparing with the
+ * reference app): the quote sits in its own tinted card with a coloured bar, the name alone in that
+ * colour ("You" for my own), a small icon and what it is ("Voice message (0:04)", "Photo"), the
+ * picture at the end, and a small plain X in the corner instead of a grey disc.
  */
 @Composable
-internal fun ComposerBanner(title: String, text: String, thumb: (@Composable () -> Unit)? = null, onClose: () -> Unit) {
+internal fun ComposerBanner(title: String, text: String, thumb: (@Composable () -> Unit)? = null,
+                            color: Color? = null, icon: Int? = null, onClose: () -> Unit) {
     val c = Fariin.colors
-    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(3.dp).height(36.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(c.label))
-        if (thumb != null) {
-            Spacer(Modifier.width(10.dp))
-            thumb()
+    val tone = color ?: c.blue
+    Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 4.dp)
+        .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
+        .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(tone.copy(alpha = 0.10f)),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(4.dp).fillMaxHeight().background(tone))
+        Column(Modifier.weight(1f).padding(start = 10.dp, top = 7.dp, bottom = 7.dp)) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tone, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(ImageVector.vectorResource(icon), null, tint = c.secondary, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(text, fontSize = 14.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
-        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(text, fontSize = 15.sp, color = c.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Box(Modifier.size(30.dp).clip(CircleShape).background(c.secondary.copy(alpha = 0.75f)).clickable(onClickLabel = "Cancel", onClick = onClose),
+        if (thumb != null) Box(Modifier.padding(start = 8.dp)) { thumb() }
+        Box(Modifier.align(Alignment.Top).size(32.dp).clickable(onClickLabel = "Cancel", onClick = onClose),
             contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.bg, modifier = Modifier.size(14.dp))
+            Icon(ImageVector.vectorResource(R.drawable.ic_sf_xmark), "Cancel", tint = c.secondary, modifier = Modifier.size(14.dp))
         }
     }
 }
+
+/** The small icon before a reply's line: what kind of message it is (none for plain text). */
+internal fun replyIcon(r: Message): Int? = when {
+    r.deleted -> null
+    r.poll != null -> R.drawable.ic_sf_chart_bar_fill
+    r.type == "gif" -> R.drawable.ic_gif
+    r.isCall -> if (r.callVideo) R.drawable.ic_call_video else null
+    r.type == "audio" || r.audioUrl != null -> R.drawable.ic_mic
+    r.type == "video" || r.videoUrl != null -> R.drawable.ic_video_fill
+    r.type == "image" || r.type == "album" || r.imageUrl != null -> R.drawable.ic_sf_photo
+    r.type == "file" || r.fileUrl != null -> R.drawable.ic_file
+    else -> null
+}
+
+/** A reply's line: a voice note carries its length, "Voice message (0:04)". */
+internal fun replyLine(r: Message, plain: String): String =
+    if ((r.type == "audio" || r.audioUrl != null) && r.text.isEmpty() && (r.duration ?: 0.0) > 0)
+        "Voice message (" + com.fariin.app.media.MediaRules.durationLabel(r.duration!!) + ")" else plain
 
 /** The jump-to-bottom arrow with the count of new messages below the reader (iOS jump button). */
 @Composable

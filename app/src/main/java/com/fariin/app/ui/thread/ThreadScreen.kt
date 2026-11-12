@@ -1407,9 +1407,11 @@ private fun ThreadContent(
                 // card (owner 2026-11-08, iOS): not a second card floating above it.
                 var banner: (@Composable () -> Unit)? = null
                 replyTo?.let { r ->
-                    banner = { ComposerBanner(if (r.authorId == ui.me) "Reply to yourself" else "Reply to ${ui.names[r.authorId] ?: ui.title}",
-                        com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText,
-                        thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp) }) else null) { replyTo = null } }
+                    banner = { ComposerBanner(if (r.authorId == ui.me) "You" else ui.names[r.authorId] ?: ui.title,
+                        replyLine(r, com.fariin.app.data.CardRules.previewWord(r.text) ?: r.bodyText),
+                        thumb = if (hasReplyThumb(r)) ({ ReplyThumb(r, 36.dp) }) else null,
+                        color = if (r.authorId == ui.me) null else senderColor(r.authorId),
+                        icon = replyIcon(r)) { replyTo = null } }
                 }
                 editing?.let { e -> banner = { ComposerBanner("Edit message", e.text) { editing = null } } }
                 // A channel post quoted into this chat (iOS .quote banner): waits above the composer
@@ -1831,7 +1833,7 @@ private fun channelChipsInside(m: Message): Boolean =
         com.fariin.app.data.CardRules.location(m.text) == null && com.fariin.app.data.CardRules.contact(m.text) == null
 
 /** BubblePalette.senderColor: the sum of the uid's characters into a fixed palette. */
-private fun senderColor(uid: String): Color = senderPalette[uid.sumOf { it.code } % senderPalette.size]
+internal fun senderColor(uid: String): Color = senderPalette[uid.sumOf { it.code } % senderPalette.size]
 
 /** The list key of a short chat's top-up row (ThreadContent's shortFill). */
 private const val FILL_KEY = "shortFill"
@@ -1867,7 +1869,9 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
     // A channel post is wide (iOS MessageRowLayout `wide`): the row less 44 for the share arrow.
     val screenW = LocalConfiguration.current.screenWidthDp.toFloat()
     val maxW = (if (ui.channel != null && !m.deleted) com.fariin.app.media.MediaRules.channelPostWidth(screenW, failed)
-        else screenW * 0.72f).dp
+        // A voice note is wider (owner 2026-11-12, measured against the reference app: 80% of the
+        // screen there, 64% here), so its wave is long enough to read and drag.
+        else screenW * (if (m.mediaKind == Message.MediaKind.VOICE && !m.viewOnce && !m.deleted) 0.80f else 0.72f)).dp
     val big = 18.dp
     val small = 6.dp
     // An unopened view-once card is rounder, 22 on every corner (OnceBubble.kt); opened, the run shape.
@@ -1976,7 +1980,7 @@ private fun MessageRow(ui: ThreadUi, m: Message, g: ThreadLogic.RowGeometry, is2
             }
             m.replyTo?.takeIf { !m.deleted && !it.isStatus }?.let { ReplyQuote(it, ui, chromeMe) }
             if (kind == Message.MediaKind.VOICE) {
-                VoiceBody(m, ui.cid, isMe, maxW * 0.89f - 26.dp) { Meta(m, tick, isMe, is24h) }
+                VoiceBody(m, ui.cid, isMe, maxW - 26.dp) { Meta(m, tick, isMe, is24h) }
                 return@Column
             }
             if (kind == Message.MediaKind.FILE) {
@@ -2714,11 +2718,9 @@ private fun Composer(
                 }
                 Spacer(Modifier.width(8.dp))
                 // The pill: 40 at one line, corners of 20 (a capsule until it grows), the field 14 in.
-                Column(Modifier.weight(1f).floating(RoundedCornerShape(if (banner != null) 24.dp else 20.dp))) {
-                if (banner != null) {
-                    banner()
-                    HorizontalDivider(thickness = 0.5.dp, color = c.separator, modifier = Modifier.padding(horizontal = 12.dp))
-                }
+                // With a reply open the box is solid, so the messages behind never show through it.
+                Column(Modifier.weight(1f).floating(RoundedCornerShape(if (banner != null) 20.dp else 20.dp), fill = if (banner != null) c.card else null)) {
+                if (banner != null) banner()
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = COMPOSER_BUTTON),
                     verticalAlignment = Alignment.Bottom,

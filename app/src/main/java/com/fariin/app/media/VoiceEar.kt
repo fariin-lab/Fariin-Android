@@ -58,6 +58,23 @@ internal object VoiceEar {
         sm.registerListener(l, s, SensorManager.SENSOR_DELAY_NORMAL)
     }
 
+    /**
+     * The app went to the background (owner 2026-11-12: the note "stopped" on leaving the app; his
+     * hand over the sensor had moved it to the earpiece). Away from the app the note keeps playing
+     * on the loudspeaker and the sensor is not watched, as the reference app does.
+     */
+    fun away() {
+        listener?.let { sensors?.unregisterListener(it) }
+        listener = null
+        app?.let { if (atEar) set(it, false) }
+    }
+
+    /** Back in front with a note still playing: watch the sensor again. */
+    fun back(context: Context) {
+        val current = player ?: return
+        if (current()?.isPlaying == true) watch(context, current)
+    }
+
     /** The note closed: stop watching and put the sound back where it was. */
     fun stop() {
         listener?.let { sensors?.unregisterListener(it) }

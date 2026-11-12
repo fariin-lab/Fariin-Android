@@ -434,14 +434,17 @@ internal fun VoiceBody(m: Message, cid: String, isMe: Boolean, width: Dp, meta: 
                         // iOS: works before the first play too; the spot is kept and play starts there.
                         if (mine) VoicePlayer.seek(m.rowId, f) else if (durMs > 0) VoicePlayer.stash(m.rowId, (f * durMs).toLong())
                     }
-                    // iOS speedPill: shown always, not only once playing (a pill that appears later
-                    // grows the bubble), and it sets the chat's speed before the first play too.
+                    // The speed pill only while this note is playing or paused part-way (owner
+                    // 2026-11-12, as the reference app): the rest of the time the wave has the room.
+                    // The bubble has a fixed width, so it never grows when the pill comes.
+                    if (mine && (playing || (progress > 0f && progress < 0.999f))) {
                     Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.width(40.dp).height(22.dp).clip(RoundedCornerShape(50)).background(tint.copy(alpha = 0.2f))
                             .clickable { VoicePlayer.cycleRate(cid) },
                         contentAlignment = Alignment.Center,
                     ) { Text(MediaRules.rateLabel(rate), fontSize = 12.sp, color = tint) }
+                    }
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {

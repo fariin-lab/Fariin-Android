@@ -45,6 +45,7 @@ object AppLifecycle : DefaultLifecycleObserver {
 
     override fun onStart(owner: LifecycleOwner) {
         inFront = true
+        com.fariin.app.media.VoiceEar.back(app)   // a note still playing: raise to ear again
         if (FirebaseAuth.getInstance().currentUser == null) return
         // Notifications of disappearing messages that ran out while the app was away.
         runCatching { com.fariin.app.push.NotificationPoster.pruneExpired(app) }
@@ -60,6 +61,7 @@ object AppLifecycle : DefaultLifecycleObserver {
 
     override fun onStop(owner: LifecycleOwner) {
         inFront = false
+        com.fariin.app.media.VoiceEar.away()   // out of the app: loudspeaker, sensor off
         Drafts.flush()
         if (FirebaseAuth.getInstance().currentUser == null) return
         scope.launch { Presence.set(online = false, context = app) }
