@@ -269,6 +269,11 @@ fun CallScreen(
                 left = if (onMinimize != null && s.phase != CallPhase.INCOMING && s.phase != CallPhase.ENDED) {
                     { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_sf_collapse), "Minimize call", 48.dp) { chrome.touch(); onMinimize() } }
                 } else null,
+                // My camera is the big view (the tile was tapped): the flip glyph lived only on the
+                // small card, so it moves to the header's free circle (owner 2026-11-12, iOS 7191449d2).
+                right = if (mineBig && local != null && ui.cameraOn) {
+                    { HeaderCircle(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.fariin.app.R.drawable.ic_flip_camera), "Flip camera", 48.dp) { chrome.touch(); onFlip() } }
+                } else null,
                 // The No answer sheet carries the name and the reason itself (design B, owner 2026-11-09).
                 modifier = Modifier.alpha(if (s.phase == CallPhase.ENDED && ui.noAnswer) 0f else shown).semantics { isTraversalGroup = true; traversalIndex = -2f },
                 // No shade over the flat colour and the photo (owner 2026-11-06: it read as a
