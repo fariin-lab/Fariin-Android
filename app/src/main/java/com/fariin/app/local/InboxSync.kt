@@ -45,7 +45,9 @@ object InboxSync {
         val msgs = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
         while (true) {
             val snap = msgs.orderBy("createdAt", Query.Direction.ASCENDING)
-                .whereGreaterThan("createdAt", com.google.firebase.Timestamp(java.util.Date(mark)))
+                // >= the mark (iOS finding 2026-11-12): a message in the mark's own millisecond that
+                // committed later is read again instead of skipped for good (filing is idempotent).
+                .whereGreaterThanOrEqualTo("createdAt", com.google.firebase.Timestamp(java.util.Date(mark)))
                 .limit(PAGE).get(Source.SERVER).await()
             if (snap.isEmpty) return
             val page = snap.documents.map { d ->
@@ -54,10 +56,11 @@ object InboxSync {
             if (page.any { (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: the next kick tries again
             if (!LocalDb.saveNow(me, cid, page)) return
             val newest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.maxOrNull() ?: return
+            val before = mark
             mark = maxOf(mark, newest)
             LocalDb.setSyncedUpTo(me, cid, mark)
             Cursors.advance(cid, mark)
-            if (snap.size() < PAGE) return
+            if (snap.size() < PAGE || mark == before) return
         }
     }
 }

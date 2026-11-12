@@ -240,6 +240,78 @@ object LocalDb {
         }
     }
 
+    // ------------------------------------------------------------------ backup archive (phase 3)
+
+    val MESSAGE_COLUMNS = listOf("cid", "id", "created_at", "sender", "type", "deleted", "edited_at", "expires_at", "body", "updated_at")
+    val CHAT_COLUMNS = listOf("cid", "last_id", "last_at", "unread", "delivered_up_to", "synced_up_to", "oldest_pulled", "body")
+
+    private fun cell(c: android.database.Cursor, i: Int): Any? = when (c.getType(i)) {
+        android.database.Cursor.FIELD_TYPE_NULL -> null
+        android.database.Cursor.FIELD_TYPE_INTEGER -> c.getLong(i)
+        android.database.Cursor.FIELD_TYPE_FLOAT -> c.getDouble(i)
+        else -> c.getString(i)
+    }
+
+    /** Every chats row, column -> value (one consistent read, before the messages). */
+    fun rawChats(uid: String): List<Map<String, Any?>> {
+        val db = db(uid) ?: return emptyList()
+        return runCatching {
+            db.rawQuery("SELECT ${CHAT_COLUMNS.joinToString()} FROM chats", null).use { c ->
+                val out = ArrayList<Map<String, Any?>>()
+                while (c.moveToNext()) out.add(CHAT_COLUMNS.mapIndexed { i, k -> k to cell(c, i) }.toMap())
+                out
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Every message row, oldest first, handed to [each] one at a time (a big history never sits in memory whole). */
+    fun eachRawMessage(uid: String, each: (Map<String, Any?>) -> Unit) {
+        val db = db(uid) ?: return
+        db.rawQuery("SELECT ${MESSAGE_COLUMNS.joinToString()} FROM messages ORDER BY created_at, cid, id", null).use { c ->
+            while (c.moveToNext()) each(MESSAGE_COLUMNS.mapIndexed { i, k -> k to cell(c, i) }.toMap())
+        }
+    }
+
+    /** Restore: rows already here win (INSERT OR IGNORE); returns how many messages were filed. */
+    fun importMessages(uid: String, rows: List<Map<String, Any?>>): Int {
+        val db = db(uid) ?: return 0
+        var n = 0
+        db.beginTransaction()
+        try {
+            for (r in rows) {
+                val v = ContentValues()
+                for (k in MESSAGE_COLUMNS) when (val x = r[k]) {
+                    null -> v.putNull(k); is Number -> v.put(k, x.toLong()); else -> v.put(k, x.toString())
+                }
+                if (db.insertWithOnConflict("messages", null, v, SQLiteDatabase.CONFLICT_IGNORE) != -1L) n++
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return n
+    }
+
+    /** Restore: a chats row merges; synced_up_to = the larger (null in the archive never lowers one). */
+    fun importChats(uid: String, rows: List<Map<String, Any?>>) {
+        val db = db(uid) ?: return
+        for (r in rows) {
+            val cid = r["cid"] as? String ?: continue
+            val had = mark(db, cid)
+            val theirs = (r["synced_up_to"] as? Number)?.toLong()
+            val v = ContentValues()
+            for (k in CHAT_COLUMNS) if (k != "cid" && k != "synced_up_to") when (val x = r[k]) {
+                null -> {}; is Number -> v.put(k, x.toLong()); else -> v.put(k, x.toString())
+            }
+            if (had != null || theirs != null) v.put("synced_up_to", maxOf(had ?: Long.MIN_VALUE, theirs ?: Long.MIN_VALUE))
+            if (db.update("chats", v, "cid = ?", arrayOf(cid)) == 0) { v.put("cid", cid); db.insert("chats", null, v) }
+            runCatching { refreshSummary(db, cid) }
+        }
+    }
+
+    /** Any message at all on this phone for this account (the restore offer looks at META first). */
+    fun hasAnyMessage(uid: String): Boolean = db(uid)?.let { d ->
+        runCatching { d.rawQuery("SELECT 1 FROM messages LIMIT 1", null).use { it.moveToFirst() } }.getOrDefault(false)
+    } ?: false
+
     /** Account deletion: the whole file goes. */
     fun deleteFor(uid: String) {
         helpers.remove(uid)?.close()
