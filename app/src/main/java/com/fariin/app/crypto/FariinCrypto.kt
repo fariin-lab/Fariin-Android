@@ -39,6 +39,11 @@ class FariinCrypto(
     var onPeerKeyChanged: (uid: String) -> Unit = {},
     /** When this phone's key store was made (ms), for a keypair older than the keys-since stamp. */
     private val keyStoreMadeAt: () -> Long? = { null },
+    /** The automatic backup (Android: Block Store; iOS: iCloud Keychain): read before a new keypair
+     *  is ever made, written once the keypair is known, forgotten with the account. */
+    private val backupLoad: suspend (uid: String) -> KeyBlockStore.Saved? = { null },
+    private val backupSave: suspend (uid: String, sk: ByteArray, pk: ByteArray, made: Long) -> Unit = { _, _, _, _ -> },
+    private val backupForget: suspend (uid: String) -> Unit = {},
 ) {
     val wire = Wire(nacl)
 
@@ -59,6 +64,9 @@ class FariinCrypto(
             PeerKeys(PrefsKeyValueStore(context.getSharedPreferences("fariin_crypto_public", Context.MODE_PRIVATE))),
             directory, currentUid, groupIsPlain,
             keyStoreMadeAt = { KeystoreSecretStore.Made.at() },
+            backupLoad = { uid -> KeyBlockStore.load(context.applicationContext, uid) },
+            backupSave = { uid, sk, pk, made -> KeyBlockStore.save(context.applicationContext, uid, sk, pk, made) },
+            backupForget = { uid -> KeyBlockStore.delete(context.applicationContext, uid) },
         )
     }
 
@@ -76,11 +84,33 @@ class FariinCrypto(
     /** Load (or make, store and publish) this account's keypair. Idempotent and single-flight,
      *  so two first-launch callers can never make two keypairs. */
     suspend fun ensureReady() {
-        if (mySecretKey != null) return
-        readyMutex.withLock { if (mySecretKey == null) initKeys() }
+        if (mySecretKey != null) { backUpOnce(); return }
+        readyMutex.withLock {
+            if (mySecretKey != null) return@withLock
+            // No key on this phone (a reinstall, a new phone): the backup's key first, never a new
+            // one while an old one can be had (owner 2026-11-11, his key lost on the Pixel).
+            val uid = currentUid()
+            val restored = if (uid != null && secrets.lookup(skName(uid)) is SecretStore.Lookup.NotFound &&
+                secrets.lookup(LEGACY_SK) is SecretStore.Lookup.NotFound)
+                runCatching { kotlinx.coroutines.withTimeoutOrNull(4_000) { backupLoad(uid) } }.getOrNull() else null
+            initKeys(restored)
+        }
+        backUpOnce()
     }
 
-    private fun initKeys() {
+    @Volatile private var backedUp = false
+
+    /** Once a run: the keypair in the automatic backup (a write of the same bytes is harmless). */
+    private fun backUpOnce() {
+        if (backedUp) return
+        val uid = currentUid() ?: return
+        val sk = mySecretKey ?: return
+        val pk = myPublicKey ?: return
+        backedUp = true
+        scope.launch { runCatching { backupSave(uid, sk, pk, keysSince() ?: 0L) }.onFailure { backedUp = false } }
+    }
+
+    private fun initKeys(restored: KeyBlockStore.Saved? = null) {
         val uid = currentUid() ?: throw CryptoException("ensureReady() called before sign-in")
         for (k in listOf(skName(uid), pkName(uid), LEGACY_SK, LEGACY_PK)) {
             if (secrets.lookup(k) is SecretStore.Lookup.Unreadable) throw CryptoException("key store not readable right now")
@@ -96,6 +126,14 @@ class FariinCrypto(
                 sk = legacy.first; pk = legacy.second
                 secrets.set(skName(uid), B64.encode(sk)); secrets.set(pkName(uid), B64.encode(pk))
                 secrets.delete(LEGACY_SK); secrets.delete(LEGACY_PK)
+            }
+            restored != null && restored.sk.size == NaCl.SECRET_KEY_BYTES &&
+                nacl.boxPublicKey(restored.sk).contentEquals(restored.pk) &&
+                secrets.set(skName(uid), B64.encode(restored.sk)) && secrets.set(pkName(uid), B64.encode(restored.pk)) -> {
+                // The same key as before the reinstall: every older message opens again.
+                sk = restored.sk; pk = restored.pk
+                if (restored.made > 0) { secrets.set(sinceName(uid), restored.made.toString()); keysSinceCache = uid to restored.made }
+                else { secrets.set(sinceName(uid), "0"); keysSinceCache = uid to 0L }
             }
             else -> {
                 val kp = nacl.boxKeyPair()
@@ -133,13 +171,14 @@ class FariinCrypto(
 
     /** Sign-out: forget in memory; the stored key is KEPT (keys are per uid). */
     fun wipeIdentity() {
-        mySecretKey = null; myPublicKey = null; keysSinceCache = null
+        mySecretKey = null; myPublicKey = null; keysSinceCache = null; backedUp = false
         pubCache.clear(); didWarm = false; opened.clear()
     }
 
     /** Account deletion: the stored key goes too. */
     fun destroyIdentity(uid: String) {
         listOf(skName(uid), pkName(uid), sinceName(uid), LEGACY_SK, LEGACY_PK).forEach { secrets.delete(it) }
+        scope.launch { runCatching { backupForget(uid) } }   // a deleted account leaves no key behind
         wipeIdentity()
     }
 

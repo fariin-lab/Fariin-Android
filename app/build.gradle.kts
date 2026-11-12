@@ -203,6 +203,8 @@ dependencies {
     // Maps for Share Location and the location card (ui/thread/LocationMaps.kt): the phone's own map
     // engine in Play Services, as iOS uses the system map. Only a thin client ships in the APK.
     implementation("com.google.android.gms:play-services-maps:20.1.0")
+    // The identity key's automatic backup (crypto/KeyBlockStore.kt).
+    implementation("com.google.android.gms:play-services-auth-blockstore:16.4.0")
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     // The real org.json for the local-cache codec tests (Android ships it; plain JVM tests do not).
