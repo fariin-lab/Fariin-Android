@@ -240,6 +240,24 @@ class MainActivity : ComponentActivity() {
         }
         // The first-run notifications ask, a sheet over the chat list once it is up (below).
         val ctx = LocalContext.current
+        // A PIN backup whose key is not this phone's (a reinstall, a new phone): offer it once, over
+        // everything. Restored, the app starts again so every screen reads with the old key.
+        var restoreOffer by remember { mutableStateOf<com.fariin.app.crypto.KeyBackup.Status?>(null) }
+        LaunchedEffect(me) {
+            runCatching { crypto.ensureReady() }
+            restoreOffer = com.fariin.app.crypto.KeyBackup.shouldOffer(ctx, me)
+        }
+        restoreOffer?.let { st ->
+            com.fariin.app.ui.settings.KeyRestoreScreen(st, onRestored = {
+                com.fariin.app.local.LocalCache.wipeThreads()
+                val again = packageManager.getLaunchIntentForPackage(packageName)?.addFlags(
+                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                if (again != null) startActivity(again)
+                finishAffinity()
+                Runtime.getRuntime().exit(0)
+            }, onSkip = { com.fariin.app.crypto.KeyBackup.skip(ctx, me, st); restoreOffer = null })
+            return
+        }
         var explain by remember { mutableStateOf(Push.needsExplainer(ctx)) }
         // Android 14+: a call can only take over the screen (lock screen, app closed) when the person
         // has allowed "full screen notifications" for Fariin; outside the Play Store it starts off,

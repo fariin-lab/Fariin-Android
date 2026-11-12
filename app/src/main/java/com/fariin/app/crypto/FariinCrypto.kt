@@ -175,6 +175,45 @@ class FariinCrypto(
         pubCache.clear(); didWarm = false; opened.clear()
     }
 
+    /** This account's keypair and when it was made, for the PIN backup ([KeyBackup]). */
+    suspend fun identityForBackup(): Triple<ByteArray, ByteArray, Long>? {
+        runCatching { ensureReady() }
+        val sk = mySecretKey ?: return null
+        val pk = myPublicKey ?: return null
+        return Triple(sk.copyOf(), pk.copyOf(), keysSince() ?: 0L)
+    }
+
+    /** The argon2id step of the PIN backup (the same library as everything else here). */
+    fun pinHash(outLen: Int, pin: ByteArray, salt: ByteArray, ops: Long, mem: Long): ByteArray? = nacl.pwhash(outLen, pin, salt, ops, mem)
+    fun randomBytes(n: Int): ByteArray = nacl.randomBytes(n)
+    fun sealWith(key: ByteArray, plain: ByteArray): Pair<ByteArray, ByteArray>? {
+        val n = nacl.randomBytes(NaCl.NONCE_BYTES)
+        return nacl.secretBoxEasy(plain, n, key)?.let { n to it }
+    }
+    fun openWith(key: ByteArray, nonce: ByteArray, box: ByteArray): ByteArray? = nacl.secretBoxOpenEasy(box, nonce, key)
+
+    /**
+     * The PIN backup's key takes the place of the one this phone made (a reinstall, a new phone):
+     * stored, dated from when it was first made, and published again, so every older message opens.
+     * False when the pair does not belong together; nothing changes then.
+     */
+    fun adoptIdentity(sk: ByteArray, pk: ByteArray, made: Long): Boolean {
+        val uid = currentUid() ?: return false
+        if (sk.size != NaCl.SECRET_KEY_BYTES || !nacl.boxPublicKey(sk).contentEquals(pk)) return false
+        if (!secrets.set(skName(uid), B64.encode(sk)) || !secrets.set(pkName(uid), B64.encode(pk))) return false
+        val since = if (made > 0) made else 0L
+        secrets.set(sinceName(uid), since.toString())
+        synchronized(this) {
+            mySecretKey = sk; myPublicKey = pk; pubCache[uid] = pk
+            keysSinceCache = uid to since
+            opened.clear(); fileOpenSeen.clear()
+        }
+        backedUp = false
+        scope.launch { directory.publishIfChanged(uid, B64.encode(pk)) }
+        backUpOnce()
+        return true
+    }
+
     /** Account deletion: the stored key goes too. */
     fun destroyIdentity(uid: String) {
         listOf(skName(uid), pkName(uid), sinceName(uid), LEGACY_SK, LEGACY_PK).forEach { secrets.delete(it) }

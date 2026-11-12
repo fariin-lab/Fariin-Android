@@ -157,6 +157,7 @@ internal fun privacyRoute(page: String, push: (String) -> Unit, pop: () -> Unit)
         page == PAGE_BLOCKED -> BlockedUsersPage(pop)
         page == PAGE_MY_REPORTS -> MyReportsPage(pop)
         page == PAGE_APP_LOCK -> AppLockPage(pop)
+        page == PAGE_KEY_BACKUP -> KeyBackupPage(pop)
         // The default timer for new chats I start (iOS PrivacySettingsView, same key).
         page == PAGE_DISAPPEAR_DEFAULT -> com.fariin.app.ui.people.DisappearingMessagesPage(
             com.fariin.app.data.Disappearing.defaultSeconds, onBack = pop, forNewChats = true) { com.fariin.app.data.Disappearing.defaultSeconds = it; pop() }
@@ -202,6 +203,13 @@ private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
                 badge = NewBadgeSpots.PRIVACY_DISAPPEARING) {
                 push(PAGE_DISAPPEAR_DEFAULT)
             }
+        }
+        // The chat key backup with a PIN (2026-11-12): older messages come back after a reinstall.
+        SettingsSection(footer = "Bring your older messages back if you delete Fariin or change phones.") {
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            var backupOn by remember { mutableStateOf(uid?.let { com.fariin.app.crypto.KeyBackup.cachedOn(ctx, it) }) }
+            LaunchedEffect(uid) { uid?.let { u -> com.fariin.app.crypto.KeyBackup.status(ctx, u)?.let { backupOn = it.exists } } }
+            SettingsRow("Backup PIN", value = when (backupOn) { true -> "On"; false -> "Off"; null -> null }, last = true) { push(PAGE_KEY_BACKUP) }
         }
         SettingsSection(footer = "Require your fingerprint, face or phone PIN to unlock Fariin.") {
             SettingsRow("App Lock", value = if (AppLock.enabled(ctx)) "On" else "Off", last = true,
