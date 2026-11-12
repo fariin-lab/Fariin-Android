@@ -248,7 +248,12 @@ class MainActivity : ComponentActivity() {
             com.fariin.app.crypto.KeyBackup.check(ctx, me)
         }
         // Disappearing messages that ran out while the app was closed leave the phone's history.
-        LaunchedEffect(me) { com.fariin.app.local.LocalDb.purgeExpired(me) }
+        LaunchedEffect(me) {
+            com.fariin.app.local.LocalDb.purgeExpired(me)
+            // Phase 4's one-time copy of every private chat (off until config/features.historyPull).
+            com.fariin.app.local.HistoryPull.kick(ctx, me)
+            com.fariin.app.local.InboxSync.kick(ctx, me)
+        }
         restoreOffer?.let { st ->
             com.fariin.app.ui.settings.KeyRestoreScreen(st, onRestored = {
                 com.fariin.app.local.LocalCache.wipeThreads()

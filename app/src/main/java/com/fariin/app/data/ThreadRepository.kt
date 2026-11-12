@@ -572,7 +572,15 @@ class ThreadRepository(
         if (live) LocalCache.saveThread(me, cid, if (isChannelChat()) sorted.filter { !it.deleted } else sorted)
         // Every message this chat has opened goes into the phone's history (phase 1: the server
         // still keeps everything; only rows that changed are written).
-        if (live) com.fariin.app.local.LocalDb.save(me, cid, sorted)
+        if (live) {
+            // The no-gap rule's inputs: the oldest server row read in one unbroken run (the live
+            // window plus the older pages, all contiguous from the newest), and whether the server
+            // said there is nothing older.
+            val oldestRead = if (chSync == null) (liveDocs.values + olderDocs.values)
+                .mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull() else null
+            com.fariin.app.local.LocalDb.save(me, cid, sorted, cursor = !isChannelChat() && chSync == null,
+                oldestFiledMs = oldestRead, reachedStart = !_state.value.canLoadOlder)
+        }
         scheduleBurn(Disappearing.nextExpiry(stamped, now))
         if (due.isNotEmpty()) burn(due)
     }

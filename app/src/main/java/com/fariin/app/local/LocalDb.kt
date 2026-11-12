@@ -68,7 +68,15 @@ object LocalDb {
         !m.id.startsWith("fariin-")
 
     /** Write what changed of [messages] (any order), off the main thread. */
-    fun save(uid: String, cid: String, messages: List<Message>) {
+    /**
+     * [cursor]: may this chat's delivery cursor move (not a channel). The NO-GAP rule (iOS ced63a4fd,
+     * both apps): chats.synced_up_to is the only thing that moves the cursor, and it moves only when
+     * what was filed joins the mark with no hole: [reachedStart] (the server's history was read to
+     * its first message) or [oldestFiledMs] (the oldest server row read in one unbroken run down from
+     * the newest) is at or before the existing mark. No mark and not at the start = vouch for nothing.
+     */
+    fun save(uid: String, cid: String, messages: List<Message>, cursor: Boolean = false,
+             oldestFiledMs: Long? = null, reachedStart: Boolean = false) {
         val rows = messages.filter(::keepable)
         if (rows.isEmpty()) return
         val changed = rows.filter { written["$uid/$cid/${it.id}"] != it.hashCode() }
@@ -91,8 +99,64 @@ object LocalDb {
                     }
                     db.setTransactionSuccessful()
                 } finally { db.endTransaction() }
+                // Stored for good: the mark (and the cursor the server deletes by) may move, no hole allowed.
+                if (cursor) {
+                    val newest = rows.maxOf { it.createdAtMillis.toLong() }
+                    val mark = mark(db, cid)
+                    if (reachedStart || (mark != null && oldestFiledMs != null && oldestFiledMs <= mark)) {
+                        val next = maxOf(mark ?: 0L, newest)
+                        if (mark == null || next > mark) setMark(db, cid, next)
+                        Cursors.advance(cid, next)
+                    }
+                }
             }.onFailure { for (m in changed) written.remove("$uid/$cid/${m.id}") }
         }
+    }
+
+    /** The same write as [save], done now on the caller's thread; true once committed. */
+    fun saveNow(uid: String, cid: String, messages: List<Message>): Boolean {
+        val rows = messages.filter(::keepable)
+        if (rows.isEmpty()) return true
+        val db = db(uid) ?: return false
+        val now = System.currentTimeMillis()
+        return runCatching {
+            db.beginTransaction()
+            try {
+                for (m in rows) {
+                    db.insertWithOnConflict("messages", null, ContentValues().apply {
+                        put("cid", cid); put("id", m.id); put("created_at", m.createdAtMillis.toLong())
+                        put("sender", m.authorId); put("type", m.type); put("deleted", if (m.deleted) 1 else 0)
+                        m.expiresAtMillis?.let { put("expires_at", it.toLong()) } ?: putNull("expires_at")
+                        put("body", if (m.deleted) "{}" else LocalJson.encodeMessage(m).toString()); put("updated_at", now)
+                    }, SQLiteDatabase.CONFLICT_REPLACE)
+                    written["$uid/$cid/${m.id}"] = m.hashCode()
+                }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            true
+        }.getOrDefault(false)
+    }
+
+    fun meta(uid: String, key: String): String? = db(uid)?.let { d ->
+        runCatching { d.rawQuery("SELECT value FROM meta WHERE key = ?", arrayOf(key)).use { c -> if (c.moveToFirst()) c.getString(0) else null } }.getOrNull()
+    }
+
+    fun setMeta(uid: String, key: String, value: String) {
+        db(uid)?.let { d -> runCatching { d.insertWithOnConflict("meta", null, ContentValues().apply { put("key", key); put("value", value) }, SQLiteDatabase.CONFLICT_REPLACE) } }
+    }
+
+    fun syncedUpTo(uid: String, cid: String): Long? = db(uid)?.let { runCatching { mark(it, cid) }.getOrNull() }
+
+    fun setSyncedUpTo(uid: String, cid: String, ms: Long) { db(uid)?.let { runCatching { setMark(it, cid, ms) } } }
+
+    private fun mark(db: SQLiteDatabase, cid: String): Long? =
+        db.rawQuery("SELECT synced_up_to FROM chats WHERE cid = ?", arrayOf(cid)).use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+        }
+
+    private fun setMark(db: SQLiteDatabase, cid: String, ms: Long) {
+        if (db.update("chats", ContentValues().apply { put("synced_up_to", ms) }, "cid = ?", arrayOf(cid)) == 0)
+            db.insert("chats", null, ContentValues().apply { put("cid", cid); put("synced_up_to", ms) })
     }
 
     private fun read(uid: String, sql: String, args: Array<String>): List<Message> {

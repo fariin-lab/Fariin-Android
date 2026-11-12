@@ -54,6 +54,8 @@ object AppLifecycle : DefaultLifecycleObserver {
         reconnect()
         // Back in front: chats that moved while away are warmed before they are opened.
         com.fariin.app.data.ChatHistoryPreloader.retry()
+        // ...and filed into the phone's history, opened or not (device-storage phase 2).
+        FirebaseAuth.getInstance().currentUser?.uid?.let { com.fariin.app.local.InboxSync.kick(app, it) }
     }
 
     override fun onStop(owner: LifecycleOwner) {

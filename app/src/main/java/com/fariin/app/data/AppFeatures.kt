@@ -25,6 +25,8 @@ object AppFeatures {
     /** Glow: the Glowing grid on Stories, the Glow button and "Glow Story" on a profile, the
      *  Glowers · Glowing card on My Profile. Off by default (owner 2026-10-10, hidden). */
     val glow: Boolean get() = value("glow", false)
+    /** Device-storage plan phase 4: each phone copies its private chats' whole history once. */
+    val historyPull: Boolean get() = value("historyPull", false)
     /** Insights: the card on My Profile, the only way into the Insights page. */
     val insights: Boolean get() = value("insights", false)
     /** The My Profile card under the header in Settings (owner 2026-10-11: hidden). */
