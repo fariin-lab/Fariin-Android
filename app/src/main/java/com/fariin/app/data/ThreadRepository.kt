@@ -588,7 +588,8 @@ class ThreadRepository(
             val serverDocs = if (olderFromCache) liveDocs.values.toList() else (liveDocs.values + olderDocs.values)
             val times = serverDocs.filter { !it.metadata.hasPendingWrites() }.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }
             val unopened = sorted.any { !it.deleted && (it.text == "\u2026" || it.text == Wire.LOCKED) }
-            val vouch = windowFromServer && !unopened && chSync == null && !isChannelChat() && times.isNotEmpty()
+            // 1:1 only (owner 2026-11-12): every group stays on the server, so it never vouches.
+            val vouch = windowFromServer && !unopened && chSync == null && !isChannelChat() && !Wire.isGroupCid(cid) && times.isNotEmpty()
             com.fariin.app.local.LocalDb.save(me, cid, sorted, cursor = vouch,
                 oldestFiledMs = times.minOrNull(), newestFiledMs = times.maxOrNull(),
                 reachedStart = !_state.value.canLoadOlder && !olderFromCache)

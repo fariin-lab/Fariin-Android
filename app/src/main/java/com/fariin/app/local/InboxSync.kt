@@ -32,7 +32,8 @@ object InboxSync {
         job = scope.launch {
             val crypto = CryptoHub.get(ctx)
             for (c in CryptoHub.listedAll()) {
-                if (c.isChannel || (c.isGroup && c.isPublicGroup) || !c.users.contains(me)) continue
+                // 1:1 only (owner 2026-11-12): groups and channels stay on the server.
+                if (c.isChannel || c.isGroup || !c.users.contains(me)) continue
                 val mark = LocalDb.syncedUpTo(me, c.id) ?: continue
                 if (c.updatedAtMillis.toLong() <= mark) continue
                 runCatching { follow(me, c.id, mark, crypto) }

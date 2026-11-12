@@ -38,7 +38,8 @@ object HistoryPull {
             delay(10_000)   // after the start's own work
             val crypto = CryptoHub.get(ctx)
             for (c in CryptoHub.listedAll()) {
-                if (c.isChannel || (c.isGroup && c.isPublicGroup) || !c.users.contains(me)) continue
+                // 1:1 only (owner 2026-11-12): groups and channels stay on the server.
+                if (c.isChannel || c.isGroup || !c.users.contains(me)) continue
                 if (LocalDb.meta(me, "pull.${c.id}") == "done") continue
                 runCatching { pull(me, c.id, crypto) }
                 delay(500)
