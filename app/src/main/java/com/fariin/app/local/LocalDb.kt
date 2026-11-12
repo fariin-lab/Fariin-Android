@@ -99,6 +99,7 @@ object LocalDb {
                     }
                     db.setTransactionSuccessful()
                 } finally { db.endTransaction() }
+                runCatching { refreshSummary(db, cid) }
                 // Stored for good: the mark (and the cursor the server deletes by) may move, no hole allowed.
                 if (cursor) {
                     val newest = rows.maxOf { it.createdAtMillis.toLong() }
@@ -133,6 +134,7 @@ object LocalDb {
                 }
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
+            runCatching { refreshSummary(db, cid) }
             true
         }.getOrDefault(false)
     }
@@ -148,6 +150,31 @@ object LocalDb {
     fun syncedUpTo(uid: String, cid: String): Long? = db(uid)?.let { runCatching { mark(it, cid) }.getOrNull() }
 
     fun setSyncedUpTo(uid: String, cid: String, ms: Long) { db(uid)?.let { runCatching { setMark(it, cid, ms) } } }
+
+    /**
+     * The chats row's summary (D5, same as iOS c4a7f23a7): last_id / last_at = the newest message
+     * still on the phone (a group skips deleted ones, an expired one never counts), and body = JSON
+     * {text, type, authorId, deleted, readAt}; readAt (my read mark) is kept as it was.
+     */
+    private fun refreshSummary(db: SQLiteDatabase, cid: String) {
+        val now = System.currentTimeMillis().toString()
+        val group = com.fariin.app.crypto.Wire.isGroupCid(cid)
+        val sql = "SELECT id, body, deleted, created_at, sender, type FROM messages WHERE cid = ? AND (expires_at IS NULL OR expires_at > ?)" +
+            (if (group) " AND deleted = 0" else "") + " ORDER BY created_at DESC LIMIT 1"
+        db.rawQuery(sql, arrayOf(cid, now)).use { c ->
+            val oldBody = db.rawQuery("SELECT body FROM chats WHERE cid = ?", arrayOf(cid)).use { o -> if (o.moveToFirst()) o.getString(0) else null }
+            val readAt = runCatching { oldBody?.let { org.json.JSONObject(it).opt("readAt") } }.getOrNull()
+            val v = ContentValues()
+            if (c.moveToFirst()) {
+                val deleted = c.getInt(2) == 1
+                val text = if (deleted) "" else runCatching { org.json.JSONObject(c.getString(1)).optString("t") }.getOrDefault("")
+                v.put("last_id", c.getString(0)); v.put("last_at", c.getLong(3))
+                v.put("body", org.json.JSONObject().put("text", text).put("type", c.getString(5) ?: "text")
+                    .put("authorId", c.getString(4) ?: "").put("deleted", deleted).put("readAt", readAt ?: org.json.JSONObject.NULL).toString())
+            } else { v.putNull("last_id"); v.putNull("last_at") }
+            if (db.update("chats", v, "cid = ?", arrayOf(cid)) == 0) { v.put("cid", cid); db.insert("chats", null, v) }
+        }
+    }
 
     private fun mark(db: SQLiteDatabase, cid: String): Long? =
         db.rawQuery("SELECT synced_up_to FROM chats WHERE cid = ?", arrayOf(cid)).use { c ->
@@ -196,14 +223,14 @@ object LocalDb {
         for (id in ids) written.remove("$uid/$cid/$id")
         io.launch {
             val db = db(uid) ?: return@launch
-            runCatching { for (id in ids) db.delete("messages", "cid = ? AND id = ?", arrayOf(cid, id)) }
+            runCatching { for (id in ids) db.delete("messages", "cid = ? AND id = ?", arrayOf(cid, id)); refreshSummary(db, cid) }
         }
     }
 
     /** "Clear chat" on this phone: every row of the chat goes. */
     fun clearChat(uid: String, cid: String) {
         written.keys.removeAll { it.startsWith("$uid/$cid/") }
-        io.launch { db(uid)?.let { runCatching { it.delete("messages", "cid = ?", arrayOf(cid)) } } }
+        io.launch { db(uid)?.let { runCatching { it.delete("messages", "cid = ?", arrayOf(cid)); refreshSummary(it, cid) } } }
     }
 
     /** Disappearing messages leave the file when they leave the screen. */
