@@ -28,6 +28,8 @@ object UploadProgress {
     private val _settled = MutableStateFlow<Set<String>>(emptySet())
     val settled: StateFlow<Set<String>> = _settled.asStateFlow()
     fun set(key: String, f: Float) = _map.update { it + (key to f.coerceIn(0f, 1f)) }
+    /** Never backwards (a video: compression fills 0-30%, the upload 30-100%, iOS 9a754ac29). */
+    fun raise(key: String, f: Float) = _map.update { m -> m + (key to maxOf(m[key] ?: 0f, f.coerceIn(0f, 1f))) }
     fun done(key: String) {
         _map.update { it - key }
         _settled.update { s -> (if (s.size >= 400) s.drop(100).toSet() else s) + key }

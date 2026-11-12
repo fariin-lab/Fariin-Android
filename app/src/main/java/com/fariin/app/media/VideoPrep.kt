@@ -39,13 +39,15 @@ class VideoPrep(
         /** Limits.videoMessageBytes: storage.rules `chat/` takes 64 MB. */
         const val MAX_BYTES = 64L * 1024 * 1024
 
-        suspend fun fromUri(context: Context, uri: Uri, outDir: File, id: String): VideoPrep? {
+        /** [onProgress] gets the compression's 0..1 (a long clip takes minutes; the ring shows it). */
+        suspend fun fromUri(context: Context, uri: Uri, outDir: File, id: String, onProgress: ((Float) -> Unit)? = null): VideoPrep? {
             val out = File(outDir, "send-$id.mp4")
             val cut = VideoTrim.take(uri)
             // A trimmed clip must go trimmed: if the full re-encode fails (some phones and the
             // emulator have no encoder for it), the cut alone is tried before the uncut original.
             val shortSide = if (SentQuality.videoHd(context, uri)) 1080 else 540
-            val ok = transcode(context, uri, out, cut, shortSide = shortSide) || (cut != null && transcode(context, uri, out, cut, resize = false))
+            val ok = transcode(context, uri, out, cut, shortSide = shortSide, onProgress = onProgress) ||
+                (cut != null && transcode(context, uri, out, cut, resize = false, onProgress = onProgress))
             val file = if (ok && out.length() > 0) out else copyOriginal(context, uri, out) ?: return null
             if (file.length() > MAX_BYTES) { file.delete(); return null }
             return describe(file)
@@ -79,7 +81,8 @@ class VideoPrep(
         }
 
         /** [cut] is the editor's kept range in ms; when the cut cannot be made the whole original goes (iOS exportTrimmed nil). */
-        private suspend fun transcode(context: Context, uri: Uri, out: File, cut: LongRange?, resize: Boolean = true, shortSide: Int = 540): Boolean = withContext(Dispatchers.Main) {
+        private suspend fun transcode(context: Context, uri: Uri, out: File, cut: LongRange?, resize: Boolean = true, shortSide: Int = 540,
+                                      onProgress: ((Float) -> Unit)? = null): Boolean = withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val t = Transformer.Builder(context)
                     .setMuxerFactory(NoLocationMuxerFactory())   // never the place it was filmed
@@ -108,7 +111,18 @@ class VideoPrep(
                 } catch (_: Exception) {
                     if (cont.isActive) cont.resume(false)
                 }
-                cont.invokeOnCancellation { runCatching { t.cancel() } }
+                // The export's own progress, read every 250 ms on the Transformer's thread (main).
+                val tick = android.os.Handler(android.os.Looper.getMainLooper())
+                val holder = androidx.media3.transformer.ProgressHolder()
+                val poll = object : Runnable {
+                    override fun run() {
+                        if (!cont.isActive) return
+                        if (t.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) onProgress?.invoke(holder.progress / 100f)
+                        tick.postDelayed(this, 250)
+                    }
+                }
+                if (onProgress != null) tick.post(poll)
+                cont.invokeOnCancellation { tick.removeCallbacks(poll); runCatching { t.cancel() } }
             }
         }
 

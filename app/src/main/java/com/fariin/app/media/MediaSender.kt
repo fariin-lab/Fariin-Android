@@ -175,7 +175,9 @@ class MediaSender(
         onAnnounced(msgRef.id)
         val clip = v.file.readBytes()
         val (cipher, meta) = sealBytes(clip, members)
-        val url = uploadRetrying(cipher, MediaRules.videoPath(cid, msgRef.id), progress(clientId))
+        // The ring's last 70% (the first 30% was the compression, VideoPrep).
+        val url = uploadRetrying(cipher, MediaRules.videoPath(cid, msgRef.id),
+            clientId?.let { id -> { f: Float -> UploadProgress.raise(id, 0.3f + 0.7f * f) } })
         media?.store(url, clip)
         msgRef.update(MediaMessages.attachVideo(url, meta, FieldValue.delete())).await()
         com.fariin.app.media.ChatSounds.sent()

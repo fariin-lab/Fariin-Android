@@ -921,7 +921,10 @@ class ThreadRepository(
                 val chunkKinds = idx.map { kinds[it] }
                 runMediaSend(clientId) {
                     if (chunk.size == 1 && chunkKinds[0]) {
-                        val v = VideoPrep.fromUri(context, chunk[0], m.localDir(), clientId) ?: error("video not readable or over 64 MB")
+                        // The ring's first 30% is the compression (a long clip took minutes with a still ring).
+                        val v = VideoPrep.fromUri(context, chunk[0], m.localDir(), clientId) {
+                            com.fariin.app.media.UploadProgress.raise(clientId, 0.3f * it)
+                        } ?: error("video not readable or over 64 MB")
                         val poster = File(m.localDir(), "poster-$clientId.jpg").also { it.writeBytes(v.poster.jpeg) }
                         // The server's copy keeps drawing this poster until its own has loaded (no blur step).
                         localFiles[clientId] = poster.absolutePath
