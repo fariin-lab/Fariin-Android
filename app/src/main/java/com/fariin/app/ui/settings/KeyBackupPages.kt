@@ -3,6 +3,8 @@ package com.fariin.app.ui.settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,11 +55,35 @@ private const val ABOUT = "Your messages are end-to-end encrypted, so only your 
     "With a Backup PIN, that key is saved locked with your PIN. If you delete Fariin or move to a new phone, " +
     "the PIN brings your older messages back. Fariin never sees your PIN and cannot reset it."
 
-private fun pinProblem(pin: String, again: String): String? = when {
-    pin.any { !it.isDigit() } -> "Use numbers only."
-    pin.length < KeyBackup.MIN_PIN -> "Use at least ${KeyBackup.MIN_PIN} digits."
-    again.isNotEmpty() && again != pin -> "The PINs do not match."
+private const val MIN_PASSWORD = 8
+private const val MAX_SECRET = 64
+
+/** PINs anyone tries first (2026-11-12, both apps): one digit repeated, a straight run up or down, or these. */
+private val EASY_PINS = setOf("121212", "112233", "000000", "123123", "696969", "202020", "147258", "159753")
+
+internal fun pinIsEasy(pin: String): Boolean {
+    if (pin.isEmpty() || pin.any { !it.isDigit() }) return false
+    if (pin.all { it == pin[0] }) return true
+    val steps = pin.zipWithNext { a, b -> (b - a + 10) % 10 }.toSet()
+    if (steps == setOf(1) || steps == setOf(9)) return true
+    return pin in EASY_PINS
+}
+
+private fun pinProblem(pin: String, again: String, password: Boolean): String? = when {
+    !password && pin.any { !it.isDigit() } -> "Use numbers only."
+    !password && pin.length < KeyBackup.MIN_PIN -> "Use at least ${KeyBackup.MIN_PIN} digits."
+    password && pin.length < MIN_PASSWORD -> "Use at least $MIN_PASSWORD characters."
+    !password && pinIsEasy(pin) -> "This PIN is easy to guess. Pick another."
+    again.isNotEmpty() && again != pin -> if (password) "The passwords do not match." else "The PINs do not match."
     else -> null
+}
+
+/** "Use a password instead" / "Use a PIN instead" under a PIN field. */
+@Composable
+private fun SecretKindLink(password: Boolean, onToggle: () -> Unit) {
+    val c = Fariin.colors
+    Text(if (password) "Use a PIN instead" else "Use a password instead", fontSize = 15.sp, color = c.accent,
+        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle).padding(horizontal = 8.dp, vertical = 6.dp))
 }
 
 /** Privacy > Backup PIN: make, change or turn off the PIN that locks the chat key backup. */
@@ -70,15 +96,18 @@ internal fun KeyBackupPage(pop: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
     var pin by remember { mutableStateOf("") }
     var again by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmOff by remember { mutableStateOf(false) }
+    var confirmReplace by remember { mutableStateOf(false) }
     val c = Fariin.colors
-    LaunchedEffect(Unit) { KeyBackup.status(ctx, uid)?.let { on = it.exists } }
+    var other by remember { mutableStateOf<KeyBackup.Status?>(null) }
+    LaunchedEffect(Unit) { KeyBackup.status(ctx, uid)?.let { on = it.exists }; other = KeyBackup.restorable(ctx, uid) }
 
     if (editing) {
         BackHandler { editing = false; pin = ""; again = ""; error = null }
-        val ok = pin.length >= KeyBackup.MIN_PIN && again == pin && pinProblem(pin, again) == null
+        val ok = pin.length >= (if (password) MIN_PASSWORD else KeyBackup.MIN_PIN) && again == pin && pinProblem(pin, again, password) == null
         fun save() {
             if (!ok || busy) return
             busy = true; error = null
@@ -90,13 +119,22 @@ internal fun KeyBackupPage(pop: () -> Unit) {
         }
         ScrollPage(if (on == true) "Change PIN" else "Backup PIN", { editing = false; pin = ""; again = ""; error = null },
             action = { BarAction("Save", ok, busy = busy) { save() } }) {
-            SettingsSection(header = "New PIN", footer = "At least ${KeyBackup.MIN_PIN} digits. Write it down somewhere safe: if you forget it, your older messages cannot be brought back.") {
+            SettingsSection(header = if (password) "New password" else "New PIN",
+                footer = (if (password) "At least $MIN_PASSWORD characters." else "At least ${KeyBackup.MIN_PIN} digits.") +
+                    " Write it down somewhere safe: if you forget it, your older messages cannot be brought back.") {
                 val first = remember { androidx.compose.ui.focus.FocusRequester() }
-                LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-                CardField(pin, "PIN", secret = true, keyboard = KeyboardType.NumberPassword, last = false, focus = first) { v -> pin = v.filter { it.isDigit() }.take(32) }
-                CardField(again, "Confirm PIN", secret = true, keyboard = KeyboardType.NumberPassword, imeDone = { save() }) { v -> again = v.filter { it.isDigit() }.take(32) }
+                LaunchedEffect(password) { runCatching { first.requestFocus() } }
+                // key(): the keyboard type changes with the kind, so each kind gets fresh fields.
+                androidx.compose.runtime.key(password) {
+                    val kb = if (password) KeyboardType.Password else KeyboardType.NumberPassword
+                    val clean: (String) -> String = { v -> (if (password) v else v.filter { it.isDigit() }).take(MAX_SECRET) }
+                    CardField(pin, if (password) "Password" else "PIN", secret = true, keyboard = kb, last = false, focus = first) { v -> pin = clean(v) }
+                    CardField(again, if (password) "Confirm password" else "Confirm PIN", secret = true, keyboard = kb, imeDone = { save() }) { v -> again = clean(v) }
+                }
             }
-            ErrorNote(error ?: pinProblem(pin, again).takeIf { pin.length >= KeyBackup.MIN_PIN || again.isNotEmpty() })
+            SecretKindLink(password) { password = !password; pin = ""; again = ""; error = null }
+            ErrorNote(error ?: pinProblem(pin, again, password).takeIf {
+                pin.length >= (if (password) MIN_PASSWORD else KeyBackup.MIN_PIN) || again.isNotEmpty() })
         }
         return
     }
@@ -105,7 +143,10 @@ internal fun KeyBackupPage(pop: () -> Unit) {
         SettingsSection(footer = ABOUT) {
             when (on) {
                 true -> {
-                    SettingsRow("Change PIN", trailing = Trailing.NONE, titleColor = c.accent) { editing = true }
+                    // The backup holds a key this phone does not have (Skip was tapped after sign-in).
+                    other?.let { st -> SettingsRow("Restore Messages", trailing = Trailing.NONE, titleColor = c.accent) { KeyBackup.ask.value = st } }
+                    // The backup still holds an older key: replacing it loses those messages for good.
+                    SettingsRow("Change PIN", trailing = Trailing.NONE, titleColor = c.accent) { if (other != null) confirmReplace = true else editing = true }
                     SettingsRow("Turn Off", trailing = Trailing.NONE, titleColor = c.red, last = true,
                         accessory = if (busy) ({ com.fariin.app.ui.components.FariinSpinner(size = 20.dp) }) else null) { if (!busy) confirmOff = true }
                 }
@@ -116,6 +157,11 @@ internal fun KeyBackupPage(pop: () -> Unit) {
         }
         ErrorNote(error)
     }
+    if (confirmReplace) GlassAlert(onDismissRequest = { confirmReplace = false },
+        title = { Text("Replace your backup?") },
+        text = { Text("Your backup still holds the key to your older messages. A new PIN saves this phone's key instead, and those messages can never be restored. Restore them first if you can.") },
+        confirmButton = { TextButton({ confirmReplace = false; editing = true }) { Text("Replace", color = c.red) } },
+        dismissButton = { TextButton({ confirmReplace = false }) { Text("Cancel", color = c.accent) } }, containerColor = c.card)
     if (confirmOff) GlassAlert(onDismissRequest = { confirmOff = false },
         title = { Text("Turn off Backup PIN?") },
         text = { Text("The saved key is deleted. If you delete Fariin or change phones, your older messages will not come back.") },
@@ -138,6 +184,7 @@ fun KeyRestoreScreen(status: KeyBackup.Status, onRestored: () -> Unit, onSkip: (
     val scope = rememberCoroutineScope()
     val c = Fariin.colors
     var pin by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(
         if (status.lockedUntil > System.currentTimeMillis()) lockedWords(status.lockedUntil) else null) }
@@ -145,7 +192,7 @@ fun KeyRestoreScreen(status: KeyBackup.Status, onRestored: () -> Unit, onSkip: (
     BackHandler(onBack = onSkip)
 
     fun restore() {
-        if (busy || pin.length < KeyBackup.MIN_PIN) return
+        if (busy || pin.length < (if (password) MIN_PASSWORD else KeyBackup.MIN_PIN)) return
         busy = true; note = null
         scope.launch {
             when (val r = KeyBackup.restore(ctx, uid, pin)) {
@@ -161,7 +208,11 @@ fun KeyRestoreScreen(status: KeyBackup.Status, onRestored: () -> Unit, onSkip: (
         }
     }
 
-    Box(Modifier.fillMaxSize().background(c.bgSecondary)) {
+    // The keyboard opens only when the PIN box is tapped, and a tap anywhere else puts it away
+    // (owner 2026-11-12: it came up by itself with no way to close it).
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    Box(Modifier.fillMaxSize().background(c.bgSecondary)
+        .pointerInput(Unit) { detectTapGestures { focus.clearFocus() } }) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()
             .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -174,15 +225,18 @@ fun KeyRestoreScreen(status: KeyBackup.Status, onRestored: () -> Unit, onSkip: (
                 fontSize = 16.sp, color = c.secondary, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             if (!gone) Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
-                val f = remember { androidx.compose.ui.focus.FocusRequester() }
-                LaunchedEffect(Unit) { kotlinx.coroutines.delay(300); runCatching { f.requestFocus() } }
-                CardField(pin, "Backup PIN", secret = true, keyboard = KeyboardType.NumberPassword, enabled = !busy, imeDone = { restore() }, focus = f) { v ->
-                    pin = v.filter { it.isDigit() }.take(32)
+                // Digits by default; the link below switches to a full keyboard for a password backup.
+                androidx.compose.runtime.key(password) {
+                    CardField(pin, if (password) "Backup password" else "Backup PIN", secret = true,
+                        keyboard = if (password) KeyboardType.Password else KeyboardType.NumberPassword, enabled = !busy, imeDone = { restore() }) { v ->
+                        pin = (if (password) v else v.filter { it.isDigit() }).take(MAX_SECRET)
+                    }
                 }
             }
+            if (!gone) SecretKindLink(password) { password = !password; pin = ""; note = null }
             note?.let { Text(it, fontSize = 14.sp, color = if (gone) c.secondary else c.red, textAlign = TextAlign.Center) }
             Spacer(Modifier.height(4.dp))
-            val can = !gone && pin.length >= KeyBackup.MIN_PIN
+            val can = !gone && pin.length >= (if (password) MIN_PASSWORD else KeyBackup.MIN_PIN)
             if (!gone) Box(Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
                 .background(if (can || busy) c.accent else c.fieldFill).clickable(enabled = can && !busy) { restore() },
                 contentAlignment = Alignment.Center) {

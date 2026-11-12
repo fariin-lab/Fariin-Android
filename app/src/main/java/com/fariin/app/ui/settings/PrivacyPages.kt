@@ -205,7 +205,7 @@ private fun PrivacyPage(push: (String) -> Unit, pop: () -> Unit) {
             }
         }
         // The chat key backup with a PIN (2026-11-12): older messages come back after a reinstall.
-        SettingsSection(footer = "Bring your older messages back if you delete Fariin or change phones.") {
+        if (com.fariin.app.crypto.KeyBackup.ENABLED) SettingsSection(footer = "Bring your older messages back if you delete Fariin or change phones.") {
             val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
             var backupOn by remember { mutableStateOf(uid?.let { com.fariin.app.crypto.KeyBackup.cachedOn(ctx, it) }) }
             LaunchedEffect(uid) { uid?.let { u -> com.fariin.app.crypto.KeyBackup.status(ctx, u)?.let { backupOn = it.exists } } }

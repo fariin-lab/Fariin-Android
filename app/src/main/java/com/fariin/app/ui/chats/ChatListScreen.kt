@@ -878,7 +878,14 @@ fun ChatListScreen(
         val gsVersion = GetStartedStore.version.intValue
         val gsShown = !state.loading && state.error == null && !searching && !selecting && !showArchive && filter == FILTER_ALL &&
             GetStartedStore.accountIsNew() && state.chats.count { !it.isChannel } < GetStartedStore.CHAT_LIMIT
-        val gsCards = remember(gsVersion, gsShown, myPhoto) { if (gsShown) GetStartedStore.cards(appCtx, me, hasPhoto = !myPhoto.isNullOrEmpty()) else emptyList() }
+        // After Skip on the restore screen, Restore leads the card (owner 2026-11-12), for any
+        // account: the card then shows even when it was closed or the account is not new.
+        val restoreLater by com.fariin.app.crypto.KeyBackup.later.collectAsState()
+        val restoreSpot = restoreLater != null && !state.loading && !searching && !selecting && !showArchive && filter == FILTER_ALL
+        val gsCards = remember(gsVersion, gsShown, myPhoto, restoreSpot) {
+            val base = if (gsShown) GetStartedStore.cards(appCtx, me, hasPhoto = !myPhoto.isNullOrEmpty()) else emptyList()
+            if (restoreSpot) (listOf(GetStartedCard.RESTORE) + base).take(4) else base
+        }
         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = com.fariin.app.ui.shell.bottomBarInset())
             .then(androidx.compose.ui.Modifier.onSizeChanged { gsHeightPx = if (gsCards.isNotEmpty()) it.height else 0 })) {
             if (gsCards.isNotEmpty()) GetStartedBanner(gsCards,
@@ -888,10 +895,12 @@ fun ChatListScreen(
                         GetStartedCard.INVITE -> com.fariin.app.ui.settings.shareInvite(screenCtx, myHandle)
                         GetStartedCard.ADD_PHOTO -> people.editProfile()
                         GetStartedCard.CHAT_COLOR -> { com.fariin.app.ui.settings.SettingsLink.request(com.fariin.app.ui.settings.PAGE_CHAT_COLOR); onSettings() }
+                        GetStartedCard.RESTORE -> com.fariin.app.crypto.KeyBackup.later.value?.let { com.fariin.app.crypto.KeyBackup.ask.value = it }
                     }
                 },
-                onRemove = { GetStartedStore.remove(appCtx, me, it) },
+                onRemove = { if (it == GetStartedCard.RESTORE) com.fariin.app.crypto.KeyBackup.dismissLater(appCtx, me) else GetStartedStore.remove(appCtx, me, it) },
                 onHideAll = {
+                    if (restoreLater != null) com.fariin.app.crypto.KeyBackup.dismissLater(appCtx, me)
                     GetStartedStore.finish(appCtx, me); gsUndo = true
                     scope.launch { kotlinx.coroutines.delay(5_000); gsUndo = false }
                 })
@@ -941,8 +950,9 @@ fun ChatListScreen(
                             single != null && (singleKind == DeleteKind.LEAVE_GROUP || singleKind == DeleteKind.LEAVE_CHANNEL) -> {
                                 val title = single.displayName(me)
                                 com.fariin.app.data.LeaveUndo.start(single.id, title) { ChatListActions.leave(me, single.id) }
-                                Snack.show(if (singleKind == DeleteKind.LEAVE_CHANNEL) "You left the channel." else "You left the group.", "Undo",
-                                    durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+                                Snack.undo(if (singleKind == DeleteKind.LEAVE_CHANNEL) "You left the channel." else "You left the group.",
+                                    single.photoUrl(me), singleKind == DeleteKind.LEAVE_CHANNEL,
+                                    com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
                             }
                             single != null && singleKind == DeleteKind.UNFOLLOW -> scope.launch {
                                 val ok = ChatListActions.deleteByKind(me, single)

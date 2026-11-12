@@ -1,6 +1,13 @@
 package com.fariin.app.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -87,7 +94,9 @@ fun FariinTopBar(
 object Snack {
     data class Event(val message: String, val action: String? = null, val onAction: (() -> Unit)? = null, val long: Boolean = false,
                      /** Shown this long, then gone (the Undo of a leave lives 5 s, iOS LeaveGroupUndo). */
-                     val durationMs: Long? = null)
+                     val durationMs: Long? = null,
+                     /** The group's photo before the words (iOS leave bar), a squircle for a channel. */
+                     val photo: String? = null, val squircle: Boolean = false, val showPhoto: Boolean = false)
 
     internal val events = MutableSharedFlow<Event>(extraBufferCapacity = 8)
 
@@ -97,15 +106,22 @@ object Snack {
     fun show(message: String, action: String? = null, long: Boolean = false, durationMs: Long? = null, onAction: (() -> Unit)? = null) {
         events.tryEmit(Event(message, action, onAction, long, durationMs))
     }
+
+    /** The leave / delete Undo (iOS leaveUndoBar): a ring counting the seconds down, then the photo. */
+    fun undo(message: String, photo: String?, squircle: Boolean, durationMs: Long, onUndo: () -> Unit) {
+        events.tryEmit(Event(message, "Undo", onUndo, false, durationMs, photo, squircle, showPhoto = true))
+    }
 }
 
 /** Put once at the root, over everything: snackbars rise above the navigation bar and keyboard. */
 @Composable
 fun SnackHost(bottomOffset: androidx.compose.ui.unit.Dp = 80.dp) {
     val host = remember { SnackbarHostState() }
+    val current = remember { androidx.compose.runtime.mutableStateOf<Snack.Event?>(null) }
     LaunchedEffect(Unit) {
         Snack.events.collect { e ->
             host.currentSnackbarData?.dismiss()
+            current.value = e
             val ms = e.durationMs
             val r = if (ms != null) kotlinx.coroutines.withTimeoutOrNull(ms) {
                 host.showSnackbar(e.message, e.action, withDismissAction = false, duration = SnackbarDuration.Indefinite)
@@ -117,11 +133,66 @@ fun SnackHost(bottomOffset: androidx.compose.ui.unit.Dp = 80.dp) {
     val active = host.currentSnackbarData != null
     androidx.compose.runtime.SideEffect { Snack.showing.value = active }
     Box(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(bottom = bottomOffset), contentAlignment = Alignment.BottomCenter) {
-        // The action word in the bar's own text colour: Material's default is its purple
-        // inverse-primary, which is no colour of this app (iOS is black and white).
-        SnackbarHost(host) { data ->
-            androidx.compose.material3.Snackbar(data, actionColor = androidx.compose.material3.MaterialTheme.colorScheme.inverseOnSurface,
-                actionContentColor = androidx.compose.material3.MaterialTheme.colorScheme.inverseOnSurface)
+        SnackbarHost(host) { data -> SnackPill(data, current.value) }
+    }
+}
+
+/**
+ * The iOS small pop-up (owner 2026-11-12): a 40 dp capsule hugging its words, quiet grey (a medium
+ * grey by day, a dark grey at night), white words, the action word in semibold at the end. A timed
+ * Undo starts with a ring counting the seconds down, then the group's photo (iOS leaveUndoBar).
+ */
+@Composable
+private fun SnackPill(data: androidx.compose.material3.SnackbarData, e: Snack.Event?) {
+    val c = Fariin.colors
+    val fill = if (c.dark) androidx.compose.ui.graphics.Color(0xFF2B2B2B) else androidx.compose.ui.graphics.Color(0xFF595959)
+    val white = androidx.compose.ui.graphics.Color.White
+    val action = data.visuals.actionLabel
+    val timed = e != null && e.showPhoto && e.durationMs != null && e.message == data.visuals.message
+    val shadowInk = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.15f)
+    androidx.compose.foundation.layout.Row(
+        Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            .shadow(8.dp, CircleShape, ambientColor = shadowInk, spotColor = shadowInk)
+            .clip(CircleShape).background(fill)
+            .then(if (action != null) Modifier.clickable { data.performAction() } else Modifier)
+            .height(40.dp)
+            .padding(start = if (timed) 8.dp else 18.dp, end = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+    ) {
+        if (timed && e != null) {
+            CountdownRing(e.durationMs ?: 5_000L, white)
+            Avatar(e.photo, 24.dp, squircle = e.squircle, kind = AvatarKind.of(true, e.squircle))
+        }
+        Text(data.visuals.message, fontSize = 15.sp, color = white, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false))
+        if (action != null) Text(action, fontSize = 15.sp, color = white,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+/** A 24 dp ring that empties over [ms], the whole seconds left in its middle rolling down. */
+@Composable
+private fun CountdownRing(ms: Long, ink: androidx.compose.ui.graphics.Color) {
+    val left = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(Unit) {
+        left.animateTo(0f, androidx.compose.animation.core.tween(ms.toInt(), easing = androidx.compose.animation.core.LinearEasing))
+    }
+    val secs = kotlin.math.ceil(left.value * ms / 1000f).toInt().coerceAtLeast(0)
+    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.size(24.dp)) {
+            val w = 2.dp.toPx()
+            val tl = androidx.compose.ui.geometry.Offset(w / 2, w / 2)
+            val sz = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
+            drawArc(ink.copy(alpha = 0.3f), 0f, 360f, false, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+            drawArc(ink, -90f, 360f * left.value, false, tl, sz,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+        }
+        androidx.compose.animation.AnimatedContent(secs, transitionSpec = {
+            (androidx.compose.animation.slideInVertically { -it / 2 } + androidx.compose.animation.fadeIn()) togetherWith
+                (androidx.compose.animation.slideOutVertically { it / 2 } + androidx.compose.animation.fadeOut())
+        }, label = "undoSecs") { n ->
+            Text("$n", fontSize = 11.sp, color = ink, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
         }
     }
 }

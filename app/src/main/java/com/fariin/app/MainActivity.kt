@@ -242,10 +242,10 @@ class MainActivity : ComponentActivity() {
         val ctx = LocalContext.current
         // A PIN backup whose key is not this phone's (a reinstall, a new phone): offer it once, over
         // everything. Restored, the app starts again so every screen reads with the old key.
-        var restoreOffer by remember { mutableStateOf<com.fariin.app.crypto.KeyBackup.Status?>(null) }
+        val restoreOffer by com.fariin.app.crypto.KeyBackup.ask.collectAsState()
         LaunchedEffect(me) {
             runCatching { crypto.ensureReady() }
-            restoreOffer = com.fariin.app.crypto.KeyBackup.shouldOffer(ctx, me)
+            com.fariin.app.crypto.KeyBackup.check(ctx, me)
         }
         restoreOffer?.let { st ->
             com.fariin.app.ui.settings.KeyRestoreScreen(st, onRestored = {
@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
                 if (again != null) startActivity(again)
                 finishAffinity()
                 Runtime.getRuntime().exit(0)
-            }, onSkip = { com.fariin.app.crypto.KeyBackup.skip(ctx, me, st); restoreOffer = null })
+            }, onSkip = { com.fariin.app.crypto.KeyBackup.skip(ctx, me, st) })
             return
         }
         // Once: no backup yet. Asked a while after start, never on top of another question.
@@ -276,7 +276,10 @@ class MainActivity : ComponentActivity() {
         // and a call then rang with nothing to answer (owner's Pixel 2026-11-05). Asked once, the way
         // calling apps do; "Not now" is remembered.
         var askFullScreen by remember { mutableStateOf(com.fariin.app.call.CallScreenAccess.shouldAsk(ctx)) }
-        if (nudge && !explain && !askFullScreen) com.fariin.app.ui.components.GlassAlert(
+        // Never over a call (iOS 2026-11-12: it came up on top of a live call): it waits until the
+        // call, ringing or live, one-to-one or group, is over.
+        val inCall = com.fariin.app.ui.call.ongoingCallShown()
+        if (nudge && !explain && !askFullScreen && !inCall) com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = { com.fariin.app.crypto.KeyBackup.nudged(ctx, me); nudge = false },
             title = { androidx.compose.material3.Text("Keep your messages") },
             text = { androidx.compose.material3.Text("Set a Backup PIN so your older messages come back if you delete Fariin or change phones.") },
@@ -711,13 +714,18 @@ private class ShellMotion {
 private fun HeldChats(state: State<ChatsUiState>, covered: Boolean, content: @Composable (ChatsUiState) -> Unit) {
     val moving by remember { androidx.compose.runtime.derivedStateOf { com.fariin.app.ui.components.PageMotion.moving } }
     val held = remember { androidx.compose.runtime.mutableStateOf(state.value) }
-    // Also held while a page covers the list (2026-11-12, owner's Pixel: every message arriving in
-    // an open chat rebuilt the hidden list under it, the open chat's slow frames). Caught up once,
-    // the moment the list is on top again, before the page slides off it.
-    val wasCovered = remember { booleanArrayOf(covered) }
-    val uncovered = wasCovered[0] && !covered
-    wasCovered[0] = covered
-    if (uncovered || (!moving && !covered)) held.value = state.value
+    val lastHeld = remember { longArrayOf(0L) }
+    // While a page covers the list (2026-11-12, owner's Pixel: every message arriving in an open
+    // chat rebuilt the hidden list under it, the open chat's slow frames): at most one update a
+    // second, so a flood costs one rebuild a second and the list is never more than a second
+    // behind when it shows again (no row jumping into place after Back).
+    val latest = state.value
+    if (!moving && !covered) held.value = latest
+    else if (covered && !moving) LaunchedEffect(latest) {
+        val wait = 1_000L - (android.os.SystemClock.uptimeMillis() - lastHeld[0])
+        if (wait > 0) kotlinx.coroutines.delay(wait)
+        held.value = latest; lastHeld[0] = android.os.SystemClock.uptimeMillis()
+    }
     content(held.value)
 }
 

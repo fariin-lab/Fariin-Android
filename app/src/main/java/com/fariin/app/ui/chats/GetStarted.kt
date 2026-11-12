@@ -43,10 +43,14 @@ import com.fariin.app.R
 
 /** iOS GetStartedCard: the four things a new account can do from the chat list. */
 enum class GetStartedCard(val title: String, val iconRes: Int) {
-    NEW_GROUP("New group", com.fariin.app.R.drawable.ic_gs_members),
-    INVITE("Invite friends", com.fariin.app.R.drawable.ic_invite_friends),
-    ADD_PHOTO("Add photo", com.fariin.app.R.drawable.ic_account),
-    CHAT_COLOR("Bubble color", com.fariin.app.R.drawable.ic_set_appearance),
+    // The filled shapes iOS draws (person.2.fill, envelope.fill, person.crop.circle.fill,
+    // paintpalette.fill), as our own drawings (owner 2026-11-12: the Android card looked different).
+    NEW_GROUP("New group", com.fariin.app.R.drawable.ic_gs_people_fill),
+    INVITE("Invite friends", com.fariin.app.R.drawable.ic_gs_envelope_fill),
+    ADD_PHOTO("Add photo", com.fariin.app.R.drawable.ic_sf_person_crop_circle_fill),
+    CHAT_COLOR("Bubble color", com.fariin.app.R.drawable.ic_gs_palette_fill),
+    /** Only after Skip on the restore screen: the second chance (owner 2026-11-12). Never stored. */
+    RESTORE("Restore", com.fariin.app.R.drawable.ic_sf_lock_fill),
 }
 
 /**
@@ -72,7 +76,7 @@ object GetStartedStore {
         if (hasPhoto) addTo(c, "$uid.done", GetStartedCard.ADD_PHOTO)
         val removed = p(c).getStringSet("$uid.removed", emptySet()).orEmpty()
         val seen = p(c).getStringSet("$uid.seen", emptySet()).orEmpty()
-        return GetStartedCard.entries.filter { it.name !in removed && it.name !in seen }
+        return GetStartedCard.entries.filter { it != GetStartedCard.RESTORE && it.name !in removed && it.name !in seen }
     }
 
     // DONE STEPS (owner 2026-11-04: "when a task finishes it needs to show the user"): a done step
@@ -149,7 +153,7 @@ fun GetStartedBanner(cards: List<GetStartedCard>, onTap: (GetStartedCard) -> Uni
                             }).padding(vertical = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(54.dp).floating(CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(if (card == GetStartedCard.NEW_GROUP) ImageVector.vectorResource(com.fariin.app.R.drawable.ic_gs_members) else ImageVector.vectorResource(card.iconRes), null, tint = c.label, modifier = Modifier.size(26.dp))
+                                Icon(ImageVector.vectorResource(card.iconRes), null, tint = c.label, modifier = Modifier.size(26.dp))
                                 androidx.compose.animation.AnimatedVisibility(done, Modifier.align(Alignment.BottomEnd),
                                     enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn()) {
                                     Box(Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF34C759)), contentAlignment = Alignment.Center) {

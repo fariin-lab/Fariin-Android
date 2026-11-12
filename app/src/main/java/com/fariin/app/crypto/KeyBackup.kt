@@ -22,6 +22,11 @@ import org.json.JSONObject
  *   PIN bytes = the digits as UTF-8. Box = secretbox(JSON {"v":1,"sk","pk","made"}), base64 fields.
  */
 object KeyBackup {
+    /** OFF (owner 2026-11-12): private chats move to the phone with backups in the person's own
+     *  Google Drive, the reference app's way. Hidden, not deleted: no Privacy row, no search entry,
+     *  no restore offer, no reminder. The server functions and stored backups stay until he says. */
+    const val ENABLED = false
+
     const val MIN_PIN = 6
     private const val OPS = 3L
     private const val MEM = 64L * 1024 * 1024
@@ -108,6 +113,7 @@ object KeyBackup {
         if (sk == null || pk == null || !crypto.adoptIdentity(sk, pk, j.optLong("made", 0L)))
             return Restore.Failed("This backup cannot be opened.")
         prefs(ctx).edit().remove("skip.$uid").apply()
+        later.value = null
         return Restore.Done
     }
 
@@ -115,25 +121,48 @@ object KeyBackup {
         AccountCall.run("keyBackupDelete"); remember(ctx, uid, false); null
     } catch (e: AccountCallError) { e.message }
 
-    /**
-     * After sign-in: a backup whose key is not the one on this phone (a reinstall, a new phone)
-     * is offered once per backup; "Skip" is remembered for that backup only.
-     */
-    suspend fun shouldOffer(ctx: Context, uid: String): Status? {
-        val mine = CryptoHub.get(ctx).myPublicKeyB64 ?: return null
-        val st = status(ctx, uid) ?: return null
-        if (!st.exists || st.pk == null || st.pk == mine) return null
-        if (prefs(ctx).getLong("skip.$uid", -1L) == st.updatedAt) return null
-        return st
-    }
-
     /** Once per account on this phone: someone with no backup is asked to make one. */
     suspend fun shouldNudge(ctx: Context, uid: String): Boolean {
+        if (!ENABLED) return false
         if (prefs(ctx).getBoolean("nudged.$uid", false)) return false
         val st = status(ctx, uid) ?: return false
         return !st.exists
     }
     fun nudged(ctx: Context, uid: String) = prefs(ctx).edit().putBoolean("nudged.$uid", true).apply()
 
-    fun skip(ctx: Context, uid: String, st: Status) = prefs(ctx).edit().putLong("skip.$uid", st.updatedAt).apply()
+    /** The restore screen is up for this backup (after sign-in, from the bar, or from Privacy). */
+    val ask = kotlinx.coroutines.flow.MutableStateFlow<Status?>(null)
+    /** After Skip: the chat list's "Restore older messages" bar, a second chance until its X. */
+    val later = kotlinx.coroutines.flow.MutableStateFlow<Status?>(null)
+
+    fun skip(ctx: Context, uid: String, st: Status) {
+        prefs(ctx).edit().putLong("skip.$uid", st.updatedAt).apply()
+        ask.value = null
+        if (prefs(ctx).getLong("laterOff.$uid", -1L) != st.updatedAt) later.value = st
+    }
+
+    /** The bar's X: this backup is not offered again on its own (Privacy still has it). */
+    fun dismissLater(ctx: Context, uid: String) {
+        later.value?.let { prefs(ctx).edit().putLong("laterOff.$uid", it.updatedAt).apply() }
+        later.value = null
+    }
+
+    /** After sign-in: the full screen for a new backup, or the bar for one skipped before. */
+    suspend fun check(ctx: Context, uid: String) {
+        if (!ENABLED) { ask.value = null; later.value = null; return }
+        val mine = CryptoHub.get(ctx).myPublicKeyB64 ?: return
+        val st = status(ctx, uid) ?: return
+        if (!st.exists || st.pk == null || st.pk == mine) { later.value = null; return }
+        val p = prefs(ctx)
+        when {
+            p.getLong("skip.$uid", -1L) != st.updatedAt -> ask.value = st
+            p.getLong("laterOff.$uid", -1L) != st.updatedAt -> later.value = st
+        }
+    }
+
+    /** A backup this phone could still take (for the Backup PIN page's Restore row). */
+    suspend fun restorable(ctx: Context, uid: String): Status? {
+        val mine = CryptoHub.get(ctx).myPublicKeyB64 ?: return null
+        return status(ctx, uid)?.takeIf { it.exists && it.pk != null && it.pk != mine }
+    }
 }

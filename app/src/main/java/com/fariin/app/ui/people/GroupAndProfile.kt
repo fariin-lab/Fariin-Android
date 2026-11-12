@@ -828,9 +828,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                 com.fariin.app.ui.components.GlassAlertAction("Leave", com.fariin.app.ui.components.GlassAlertStyle.Red) {
                     // iOS LeaveGroupUndo: out of the list and the screen at once, Undo for 5 s, then the real leave.
                     com.fariin.app.data.LeaveUndo.start(cid, conv["title"] as? String ?: "the group") { api.leaveGroup(cid) }
-                    com.fariin.app.ui.components.Snack.show("You left the group.", "Undo", durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) {
-                        com.fariin.app.data.LeaveUndo.undo()
-                    }
+                    com.fariin.app.ui.components.Snack.undo("You left the group.", conv["photoUrl"] as? String, false,
+                        com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
                     onLeft()
                 },
                 com.fariin.app.ui.components.GlassAlertAction("Cancel") { },
@@ -1129,8 +1128,8 @@ fun GroupInfoScreen(api: PeopleApi, conv: Map<String, Any?>, cid: String, chats:
                                 com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(me)
                                     .collection("blockedGroups").document(cid).set(mapOf("at" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
                             }
-                            com.fariin.app.ui.components.Snack.show("You left the group.", "Undo",
-                                durationMs = com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
+                            com.fariin.app.ui.components.Snack.undo("You left the group.", conv["photoUrl"] as? String, false,
+                                com.fariin.app.data.LeaveUndo.WINDOW_MS) { com.fariin.app.data.LeaveUndo.undo() }
                             onLeft()
                         }))
                 }
