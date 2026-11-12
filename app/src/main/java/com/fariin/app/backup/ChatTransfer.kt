@@ -18,7 +18,8 @@ import kotlinx.coroutines.tasks.await
  * the folder in the same order, header.json last; the server sweeps anything older than an hour.
  */
 object ChatTransfer {
-    const val ENABLED = false
+    /** ON in test builds (the owner's Pixel and testers), OFF in store releases until the owner's test passes. */
+    @Volatile var ENABLED: Boolean = false   // set at start from R.bool.fariin_test_build (FariinApp)
 
     class Code(val tid: String, val key: ByteArray, val files: Int)
 

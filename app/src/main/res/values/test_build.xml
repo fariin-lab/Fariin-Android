@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Store builds: chat backup and transfer stay off until the owner's test passes. -->
+<resources>
+    <bool name="fariin_test_build">false</bool>
+</resources>

@@ -138,6 +138,10 @@ class FariinApp : Application() {
         StartClock.mark("crash")
         com.fariin.app.local.LocalCache.init(this)
         com.fariin.app.local.LocalDb.init(this)
+        // Chat backup and transfer: on in test builds, off in store builds (res/values/test_build.xml).
+        val testBuild = resources.getBoolean(R.bool.fariin_test_build)
+        com.fariin.app.backup.ChatBackup.ENABLED = testBuild
+        com.fariin.app.backup.ChatTransfer.ENABLED = testBuild
         // The saved chat list, read and opened now on its own thread (owner 2026-11-09: "close the app
         // and open, never comfortable"). The list asked for it only after its first frame was built,
         // and the launch logo waited ~140 ms more for the disk; now it is in memory by then.

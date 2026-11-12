@@ -22,7 +22,8 @@ import kotlinx.coroutines.sync.withLock
  *  - "restored" only when every counted message was read.
  */
 object ChatBackup {
-    const val ENABLED = false
+    /** ON in test builds (the owner's Pixel and testers), OFF in store releases until the owner's test passes. */
+    @Volatile var ENABLED: Boolean = false   // set at start from R.bool.fariin_test_build (FariinApp)
     private val lock = Mutex()
 
     private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences("fariin_backup", Context.MODE_PRIVATE)
