@@ -205,6 +205,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-maps:20.1.0")
     // The identity key's automatic backup (crypto/KeyBlockStore.kt).
     implementation("com.google.android.gms:play-services-auth-blockstore:16.4.0")
+    // Chat backup to the person's own Google Drive (app folder only, drive.appdata): the
+    // authorization prompt (backup/DriveAuth.kt).
+    implementation("com.google.android.gms:play-services-auth:21.1.1")
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
     // The real org.json for the local-cache codec tests (Android ships it; plain JVM tests do not).
