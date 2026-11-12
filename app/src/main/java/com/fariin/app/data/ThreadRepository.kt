@@ -1470,6 +1470,12 @@ class ThreadRepository(
     /** End-to-end encrypted bytes go up as application/octet-stream (storage.rules `chat/`). */
     private suspend fun upload(cipher: ByteArray, path: String): String {
         require(cipher.size < MediaRules.STORAGE_CHAT_LIMIT) { "file too large" }
+        // Cloudflare R2 while config/features.r2Media is on (iOS 9bbac4e65): signed by mediaSign;
+        // Storage stays the way if R2 refuses, so a send never fails on it.
+        if (com.fariin.app.data.AppFeatures.r2Media && path.startsWith("chat/") && cipher.size <= 70L * 1024 * 1024) {
+            com.fariin.app.media.R2Media.put(path, cipher)?.let { link -> return link }
+        }
+
         val ref = FirebaseStorage.getInstance().reference.child(path)
         val task = ref.putBytes(cipher, StorageMetadata.Builder().setContentType("application/octet-stream").build())
         // Cancel stops the transfer itself, not only the wait for it.
@@ -1732,6 +1738,14 @@ class ThreadRepository(
                 marked = try { ref.update(strip).await(); true } catch (_: Exception) { false }
             }
             for (u in blobs) try { FirebaseStorage.getInstance().getReferenceFromUrl(u).delete().await() } catch (_: Exception) {}
+            // R2 files (iOS): removed through mediaSign's delete, author only, while the doc still names them.
+            if (data["authorId"] as? String == me) {
+                val r2 = buildList {
+                    for (k in listOf("imageUrl", "videoUrl", "thumbUrl", "audioUrl", "fileUrl")) (data[k] as? String)?.let(::add)
+                    (data["album"] as? List<*>)?.forEach { a -> (a as? Map<*, *>)?.let { m -> (m["imageUrl"] as? String)?.let(::add); (m["videoUrl"] as? String)?.let(::add) } }
+                }.filter { com.fariin.app.media.R2Media.isR2(it) }
+                for (u in r2) com.fariin.app.media.R2Media.delete(u)
+            }
             if (!marked) ref.delete().await()
             // iOS deleteMessage -> removePinnedMessage: a pin must not outlive what it points at.
             if (m.id in PinRules.pinnedIds(_state.value.conv)) try { unpin(m.id) } catch (_: Exception) {}

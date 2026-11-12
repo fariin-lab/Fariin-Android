@@ -27,6 +27,8 @@ object AppFeatures {
     val glow: Boolean get() = value("glow", false)
     /** Device-storage plan phase 4: each phone copies its private chats' whole history once. */
     val historyPull: Boolean get() = value("historyPull", false)
+    /** New chat media goes to Cloudflare R2 (both apps flip together; reading r2: links is always on). */
+    val r2Media: Boolean get() = value("r2Media", false)
     /** Insights: the card on My Profile, the only way into the Insights page. */
     val insights: Boolean get() = value("insights", false)
     /** The My Profile card under the header in Settings (owner 2026-10-11: hidden). */

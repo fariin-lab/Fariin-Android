@@ -84,9 +84,14 @@ class ChatMedia(
             val f = key(url)
             if (VideoStream.copyCached(context, url, f)) return f
         }
-        val ref = try { FirebaseStorage.getInstance().getReferenceFromUrl(url) } catch (_: Exception) { null }
+        val ref = if (R2Media.isR2(url)) null else try { FirebaseStorage.getInstance().getReferenceFromUrl(url) } catch (_: Exception) { null }
         val cipher = try {
-            if (ref != null) fetchWithProgress(ref, url) else fetchByUrl(url)
+            when {
+                // Cloudflare R2 (iOS 9bbac4e65): signed by mediaSign, the same ring and size cap.
+                R2Media.isR2(url) -> R2Media.get(url, MediaRules.MAX_DOWNLOAD) { done, total -> MediaDownloads.progress(url, done, total) }
+                ref != null -> fetchWithProgress(ref, url)
+                else -> fetchByUrl(url)
+            }
         } catch (e: Exception) {
             // Why a picture stays on its retry button (the kind of failure only, never the address).
             android.util.Log.w("ChatMedia", "download failed: ${e.javaClass.simpleName} ${(e as? com.google.firebase.storage.StorageException)?.errorCode ?: ""}")
