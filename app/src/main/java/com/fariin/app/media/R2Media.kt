@@ -55,7 +55,8 @@ object R2Media {
     }
 
     /** Uploads [bytes] to chat/{cid}/{file}; returns the "r2:" link, or null. Create-only. */
-    suspend fun put(key: String, bytes: ByteArray, contentType: String = "application/octet-stream"): String? {
+    suspend fun put(key: String, bytes: ByteArray, contentType: String = "application/octet-stream",
+                    onProgress: ((Float) -> Unit)? = null): String? {
         val (signed, ct) = sign("put", key, bytes.size.toLong(), contentType) ?: return null
         return withContext(Dispatchers.IO) {
             val c = URL(signed).openConnection() as HttpURLConnection
@@ -64,7 +65,15 @@ object R2Media {
             c.setFixedLengthStreamingMode(bytes.size)
             c.setRequestProperty("Content-Type", ct ?: contentType)
             try {
-                c.outputStream.use { it.write(bytes) }
+                // Written in pieces so the bubble's ring fills as the bytes go (iOS didSendBodyData).
+                c.outputStream.use { out ->
+                    var at = 0
+                    while (at < bytes.size) {
+                        val n = minOf(64 * 1024, bytes.size - at)
+                        out.write(bytes, at, n); at += n
+                        onProgress?.invoke(at.toFloat() / bytes.size)
+                    }
+                }
                 if (c.responseCode in 200..299) link(key) else null
             } finally { c.disconnect() }
         }
