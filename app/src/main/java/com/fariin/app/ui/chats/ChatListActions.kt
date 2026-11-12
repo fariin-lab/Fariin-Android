@@ -77,6 +77,8 @@ object ChatListActions {
     /** Delete for me: the chat empties and leaves my list until something new arrives (iOS deleteForMe). */
     suspend fun deleteForMe(me: String, c: Conversation): Boolean =
         merge(me, c.id, mapOf("clearedAt" to mapOf(me to System.currentTimeMillis().toDouble()), "unreadCount" to mapOf(me to 0)))
+            // The phone's own copy of the chat goes too (device-storage phase 1).
+            .also { ok -> if (ok) { com.fariin.app.local.LocalDb.clearChat(me, c.id); com.fariin.app.local.LocalCache.forgetThread(me, c.id) } }
 
     /** iOS ChatService.clearMyMessages: every message I sent in [cid], deleted, 450 a batch. */
     suspend fun clearMyMessages(me: String, cid: String): Boolean = runCatching {
