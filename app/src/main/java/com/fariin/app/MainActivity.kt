@@ -287,8 +287,9 @@ class MainActivity : ComponentActivity() {
         var askFullScreen by remember { mutableStateOf(com.fariin.app.call.CallScreenAccess.shouldAsk(ctx)) }
         // Never over a call (iOS 2026-11-12: it came up on top of a live call): it waits until the
         // call, ringing or live, one-to-one or group, is over.
-        val inCall = com.fariin.app.ui.call.ongoingCallShown()
-        if (nudge && !explain && !askFullScreen && !inCall) com.fariin.app.ui.components.GlassAlert(
+        // Read only while the reminder is due: reading the call state here made this whole screen
+        // follow every call-state change.
+        if (nudge && !explain && !askFullScreen && !com.fariin.app.ui.call.ongoingCallShown()) com.fariin.app.ui.components.GlassAlert(
             onDismissRequest = { com.fariin.app.crypto.KeyBackup.nudged(ctx, me); nudge = false },
             title = { androidx.compose.material3.Text("Keep your messages") },
             text = { androidx.compose.material3.Text("Set a Backup PIN so your older messages come back if you delete Fariin or change phones.") },
