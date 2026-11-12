@@ -83,6 +83,7 @@ internal fun moreRoute(page: String, push: (String) -> Unit, pop: () -> Unit): B
         page == PAGE_NOTIFS -> NotificationsPage(pop)
         page == PAGE_CHATS -> ChatsSettingsPage(push, pop)
         page == PAGE_QUICK -> QuickReactionPage(pop)
+        page == PAGE_CHAT_BACKUP -> ChatBackupPage(pop)
         page == PAGE_STORAGE -> StorageDataPage(push, pop)
         page == PAGE_LESS_DATA -> ChoicePage("Use Less Data", "fariin_calls", "calls.lessData", "never", SettingsRules.lessData,
             "Lowers call quality to save data. Applies from your next call.", pop)
@@ -489,6 +490,10 @@ private fun ChatsSettingsPage(push: (String) -> Unit, pop: () -> Unit) {
         // Hidden with the Chat Key itself (admin panel chatKeyVisible, iOS ChatsSettingsView).
         if (com.fariin.app.data.MsgPolicy.chatKeyVisible) SettingsSection(footer = "A private number you can share. Anyone who knows it can message and call you directly.") {
             SettingsRow("Chat Key", value = keyValue, last = true, badge = NewBadgeSpots.CHATS_CHAT_KEY) { push(PAGE_CHAT_KEY) }
+        }
+        // Chat Backup (device-storage plan phase 3), hidden until the Drive setup is done.
+        if (com.fariin.app.backup.ChatBackup.ENABLED) SettingsSection(footer = "A copy of your chats in your own Google Drive.") {
+            SettingsRow("Chat Backup", last = true) { push(PAGE_CHAT_BACKUP) }
         }
         SettingsSection(footer = "Automatically save received photos to your gallery.") {
             SwitchRow("Save to Photos", savePhotos, last = true, badge = NewBadgeSpots.CHATS_SAVE_TO_PHOTOS) { savePhotos = it; p.edit().putBoolean(com.fariin.app.media.AutoSaveMedia.KEY, it).apply() }

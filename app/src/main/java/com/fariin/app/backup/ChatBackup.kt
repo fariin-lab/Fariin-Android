@@ -28,6 +28,32 @@ object ChatBackup {
     private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences("fariin_backup", Context.MODE_PRIVATE)
 
     fun lastBackup(ctx: Context, uid: String): Long = prefs(ctx).getLong("last.$uid", 0L)
+
+    /** How often: "daily" (default once on), "weekly" or "off". */
+    fun frequency(ctx: Context, uid: String): String = prefs(ctx).getString("freq.$uid", "off") ?: "off"
+    fun setFrequency(ctx: Context, uid: String, f: String) { prefs(ctx).edit().putString("freq.$uid", f).apply(); BackupWorker.schedule(ctx, uid) }
+    fun mobileData(ctx: Context, uid: String): Boolean = prefs(ctx).getBoolean("cell.$uid", false)
+    fun setMobileData(ctx: Context, uid: String, on: Boolean) { prefs(ctx).edit().putBoolean("cell.$uid", on).apply(); BackupWorker.schedule(ctx, uid) }
+
+    /** The password / 64-digit key wrap kept on this phone (the Argon2 result and its salt), so
+     *  daily backups need nothing typed. Never leaves the phone. */
+    fun hasPassword(ctx: Context, uid: String): Boolean = prefs(ctx).contains("pw.$uid")
+    private fun passwordWrap(ctx: Context, uid: String): Pair<ByteArray, ByteArray>? {
+        val k = prefs(ctx).getString("pw.$uid", null)?.let { com.fariin.app.crypto.B64.decode(it) } ?: return null
+        val s = prefs(ctx).getString("pwsalt.$uid", null)?.let { com.fariin.app.crypto.B64.decode(it) } ?: return null
+        return k to s
+    }
+    suspend fun setPassword(ctx: Context, uid: String, password: String?) {
+        val e = prefs(ctx).edit()
+        if (password.isNullOrEmpty()) e.remove("pw.$uid").remove("pwsalt.$uid")
+        else {
+            val c = CryptoHub.get(ctx)
+            val salt = c.randomBytes(16)
+            val pk = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { BackupArchive.passwordKey(c, password, salt) } ?: return
+            e.putString("pw.$uid", com.fariin.app.crypto.B64.encode(pk)).putString("pwsalt.$uid", com.fariin.app.crypto.B64.encode(salt))
+        }
+        e.apply()
+    }
     fun lastSize(ctx: Context, uid: String): Long = prefs(ctx).getLong("size.$uid", 0L)
 
     sealed class Result {
@@ -51,7 +77,7 @@ object ChatBackup {
      * Makes a backup now. [automatic] runs the safety rules (no history, a waiting restore); a
      * manual Back Up Now asks the person first in that case (the screen's job).
      */
-    suspend fun backUp(ctx: Context, uid: String, password: String?, automatic: Boolean, token: String? = null): Result = lock.withLock {
+    suspend fun backUp(ctx: Context, uid: String, automatic: Boolean, token: String? = null): Result = lock.withLock {
         if (!ENABLED) return Result.Failed("Chat backup is not on yet.")
         if (automatic && (!LocalDb.hasSyncedMarks(uid) || restoreWaiting(ctx, uid))) return Result.NothingToBackUp
         val tok = token ?: when (val a = Drive.authorize(ctx)) {
@@ -62,7 +88,7 @@ object ChatBackup {
         val c = CryptoHub.get(ctx)
         return try {
             val storeKey = BackupStoreKey.getOrMake(ctx, uid) { c.randomBytes(it) }
-            val built = BackupArchive.build(c, uid, storeKey, password)
+            val built = BackupArchive.build(c, uid, storeKey, passwordWrap(ctx, uid))
             val set = built.made.toString()
             val before = Drive.list(tok)
             var size = 0L

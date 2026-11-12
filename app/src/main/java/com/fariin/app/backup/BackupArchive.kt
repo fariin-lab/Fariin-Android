@@ -39,7 +39,8 @@ object BackupArchive {
      * Builds the whole archive from the phone's history. Chats rows are read FIRST (safety review
      * item 7); a chat with any message that would not convert keeps no mark in the archive.
      */
-    fun build(c: FariinCrypto, uid: String, storeKey: ByteArray, password: String?): Built {
+    /** [passwordWrap] = (Argon2id key, its salt) when the person set a backup password or 64-digit key. */
+    fun build(c: FariinCrypto, uid: String, storeKey: ByteArray, passwordWrap: Pair<ByteArray, ByteArray>?): Built {
         val made = System.currentTimeMillis()
         val archiveKey = c.randomBytes(32)
         val chats = LocalDb.rawChats(uid)
@@ -80,9 +81,8 @@ object BackupArchive {
         val wrapped = LinkedHashMap<String, Any?>()
         wrapped["store"] = B64.encode(seal(c, storeKey, archiveKey))
         var kdf: Map<String, Any?>? = null
-        if (!password.isNullOrEmpty()) {
-            val salt = c.randomBytes(16)
-            val pk = passwordKey(c, password, salt) ?: error("argon2 failed")
+        if (passwordWrap != null) {
+            val (pk, salt) = passwordWrap
             wrapped["password"] = B64.encode(seal(c, pk, archiveKey))
             kdf = mapOf("mem" to MEM, "ops" to OPS, "salt" to B64.encode(salt))
         }
