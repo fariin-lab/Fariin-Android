@@ -813,8 +813,7 @@ private fun PostStoryButton(title: String, ready: Boolean, busy: Boolean, onClic
             .background(if (ready) c.accent else c.accent.copy(alpha = 0.35f))
             .clickable(interactionSource = press, indication = null, enabled = ready) {
                 // iOS ShareStorySheet: a success tap the moment a story (or a repost) is posted.
-                view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM
-                    else android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                com.fariin.app.ui.components.SuccessHaptic.play(view.context)
                 onClick()
             },
         contentAlignment = Alignment.Center,

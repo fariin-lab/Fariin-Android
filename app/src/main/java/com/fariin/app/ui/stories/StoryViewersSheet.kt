@@ -169,10 +169,22 @@ internal class ViewersSheetState(private val scope: CoroutineScope) {
     /** A sideways drag on the row or the sheet: it starts where the row stands now. */
     fun swipeBegin() { hold(); swipeFrom = row.value }
     fun swipeTo(dx: Float, fullDist: Float, last: Int) = rowTo(rubberBand(swipeFrom - dx / fullDist, last))
-    /** Let go: the nearest card to where the fling would stop, then that story is the live one. */
+    /**
+     * Let go: ONE card per swipe, as iOS pages it (owner 2026-11-12: "it runs too much, I just want
+     * the next one"). A flick or a drag past a third of a card goes to the neighbour on that side,
+     * never further; a short slow drag goes back. The spring starts no faster than two cards a second.
+     */
     fun swipeEnd(vx: Float, fullDist: Float, stories: List<Story>, onLanded: (String) -> Unit) {
         val cardsPerSec = -vx / fullDist
-        pageTo(StorySheetGeometry.snapIndex(row.value, cardsPerSec, stories.size), stories, cardsPerSec, onLanded)
+        val from = kotlin.math.round(swipeFrom).toInt()
+        val moved = row.value - from
+        val step = when {
+            cardsPerSec > 0.8f || moved > 0.33f -> 1
+            cardsPerSec < -0.8f || moved < -0.33f -> -1
+            else -> 0
+        }
+        val target = (from + step).coerceIn(0, maxOf(0, stories.lastIndex))
+        pageTo(target, stories, cardsPerSec.coerceIn(-2f, 2f), onLanded)
     }
 
     /** Open fraction, kept inside 0..1 for drawing (a release velocity can carry a spring past). */

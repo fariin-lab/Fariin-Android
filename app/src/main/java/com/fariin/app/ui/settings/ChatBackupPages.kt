@@ -371,8 +371,7 @@ private fun BackupBadge(busy: Boolean, hasBackup: Boolean, doneAt: Long) {
         wasBusy = false
         if (!hasBackup || System.currentTimeMillis() - doneAt > 60_000) return@LaunchedEffect   // it stopped, not finished
         celebrating = true
-        view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM
-            else android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        com.fariin.app.ui.components.SuccessHaptic.play(view.context)
         pop.snapTo(0.7f)
         pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 500f))
         kotlinx.coroutines.delay(1800)
