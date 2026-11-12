@@ -228,6 +228,7 @@ fun RestoreAccountPage(handle: String, dueMs: Long, onRestored: () -> Unit) {
             }
             // The server removed the account; this phone's keys and copies go too.
             CryptoHub.get(ctx).destroyIdentity(uid)
+            com.fariin.app.local.LocalDb.deleteFor(uid)   // the phone's message history goes with the account
             SessionEnd.deletedNow(ctx)
         }
     })

@@ -8,6 +8,9 @@
         <exclude domain="sharedpref" path="fariin_crypto_public.xml" />
         <exclude domain="sharedpref" path="fariin_accounts.xml" />
         <exclude domain="sharedpref" path="fariin_device_sessions.xml" />
+        <!-- The phone's message history (fariin-local-<uid>.db, plaintext): only our own chat
+             backup may carry it, never a system backup (device-storage plan 2026-11-12). -->
+        <exclude domain="database" path="." />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="fariin_crypto_identity.xml" />

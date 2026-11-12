@@ -247,6 +247,8 @@ class MainActivity : ComponentActivity() {
             runCatching { crypto.ensureReady() }
             com.fariin.app.crypto.KeyBackup.check(ctx, me)
         }
+        // Disappearing messages that ran out while the app was closed leave the phone's history.
+        LaunchedEffect(me) { com.fariin.app.local.LocalDb.purgeExpired(me) }
         restoreOffer?.let { st ->
             com.fariin.app.ui.settings.KeyRestoreScreen(st, onRestored = {
                 com.fariin.app.local.LocalCache.wipeThreads()

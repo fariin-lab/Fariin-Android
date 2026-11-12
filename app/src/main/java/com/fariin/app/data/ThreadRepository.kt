@@ -107,6 +107,8 @@ class ThreadRepository(
     /** Raw docs by id, so a key arriving later can re-open them. */
     private val liveDocs = LinkedHashMap<String, DocumentSnapshot>()
     private val olderDocs = LinkedHashMap<String, DocumentSnapshot>()
+    /** Older messages drawn from the phone's own history before the server's page lands (phase 1). */
+    private val dbOlder = java.util.concurrent.ConcurrentHashMap<String, Message>()
     /** One listener per older page, so an edit, delete or reaction on an older message shows at once. */
     private val olderRegs = ArrayList<ListenerRegistration>()
     /** The ids each older page last held, to drop a message the server deleted from that page. */
@@ -154,7 +156,11 @@ class ThreadRepository(
             // A disappearing message that ran out while the chat was closed never draws (iOS
             // ThreadRepository cold open), not even for a frame.
             val now = System.currentTimeMillis().toDouble()
-            val saved = LocalCache.loadThread(me, cid).filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
+            // The phone's own history first (device-storage plan phase 1), the old sealed copy
+            // only until the database has this chat.
+            val fromDb = com.fariin.app.local.LocalDb.newest(me, cid, com.fariin.app.local.LocalCache.THREAD_CAP)
+            val saved = (fromDb.ifEmpty { LocalCache.loadThread(me, cid) })
+                .filter { !HiddenMessages.isHidden(it.id) && !Disappearing.isExpired(it, now) }
             if (saved.isNotEmpty()) {
                 // Owner's Pixel 2026-11-09: a first open after launch slid in empty and the rows came
                 // a beat later, a second open was full at once. The saved rows now draw on the first
@@ -389,6 +395,17 @@ class ThreadRepository(
         val s = _state.value
         if (!s.canLoadOlder || s.loadingOlder || !s.loaded) return
         val oldest = (liveDocs.values + olderDocs.values).mapNotNull { it.getTimestamp("createdAt") }.minOrNull() ?: return
+        // The phone's own history (device-storage plan phase 1, same rule as iOS): used for an
+        // older page only when the server cannot answer (offline, or nothing in 8 s). Online the
+        // server stays the authority, so a message deleted for everyone never comes back from a
+        // stale copy before phase 2's events exist.
+        fun fromDb() {
+            val oldestHeldMs = minOf(oldest.toDate().time, dbOlder.values.minOfOrNull { it.createdAtMillis.toLong() } ?: Long.MAX_VALUE)
+            val rows = com.fariin.app.local.LocalDb.older(me, cid, oldestHeldMs, PAGE_SIZE.toInt())
+            if (rows.isEmpty()) return
+            for (m in rows) if (!HiddenMessages.isHidden(m.id)) dbOlder[m.id] = m
+            rebuild()
+        }
         _state.update { it.copy(loadingOlder = true) }
         val page = olderPageIds.size
         olderPageIds.add(emptySet())
@@ -407,8 +424,17 @@ class ThreadRepository(
                 // An empty first answer from the phone's own copy waits for the server's (a one-shot
                 // read would have asked the server first).
                 if (first && snap.metadata.isFromCache && snap.isEmpty) return@addSnapshotListener
+                // Offline (the answer came from the cache): the phone's history fills in behind it.
+                if (first && snap.metadata.isFromCache) fromDb()
                 if (first) {
                     first = false
+                    // Rows the database drew (while offline) for this span that the server no longer has: gone.
+                    if (!snap.metadata.isFromCache && snap.documents.isNotEmpty() && dbOlder.isNotEmpty()) {
+                        val lo = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull() ?: 0L
+                        val hi = oldest.toDate().time
+                        val gone = dbOlder.values.filter { it.createdAtMillis.toLong() in lo..hi && it.id !in ids }.map { it.id }
+                        if (gone.isNotEmpty()) { gone.forEach { dbOlder.remove(it) }; com.fariin.app.local.LocalDb.forget(me, cid, gone) }
+                    }
                     var added = 0
                     for (d in snap.documents) {
                         if (!liveDocs.containsKey(d.id) && !olderDocs.containsKey(d.id)) added++
@@ -442,6 +468,7 @@ class ThreadRepository(
                 first = false
                 reg.remove(); olderRegs.remove(reg)
                 _state.update { it.copy(loadingOlder = false) }
+                fromDb()   // no answer at all: the phone's own history
             }
         }
     }
@@ -512,6 +539,16 @@ class ThreadRepository(
             all[m.rowId] = m
             if (d.metadata.hasPendingWrites()) unconfirmed.add(m.rowId)
         }
+        // The phone's own older history (phase 1), under the same rules as a server row; a server
+        // row with the same id always wins.
+        if (chSync == null) for (m in dbOlder.values) {
+            if (all.containsKey(m.rowId) || liveDocs.containsKey(m.id) || olderDocs.containsKey(m.id)) continue
+            if (historyStart != null && m.createdAtMillis < historyStart && m.authorId != me) continue
+            if (Disappearing.isExpired(m, now) || HiddenMessages.isHidden(m.id)) continue
+            if (wontOpenHere(m, keysSince)) continue
+            if (m.authorId != me && BlockList.hides(m.authorId, m.createdAtMillis)) continue
+            all[m.rowId] = m
+        }
         newestUnopened?.let { n ->
             all[KEYS_NOTICE_ID] = Message(id = KEYS_NOTICE_ID, authorId = "", text = KEYS_NOTICE, type = "system",
                 createdAtMillis = n.createdAtMillis, hasServerTime = true)
@@ -533,6 +570,9 @@ class ThreadRepository(
         // A channel never shows a deleted post: its saved copy leaves them out, so the 60 kept rows
         // reach back to real posts (VE3: the newest 60 were all deleted, every open began empty).
         if (live) LocalCache.saveThread(me, cid, if (isChannelChat()) sorted.filter { !it.deleted } else sorted)
+        // Every message this chat has opened goes into the phone's history (phase 1: the server
+        // still keeps everything; only rows that changed are written).
+        if (live) com.fariin.app.local.LocalDb.save(me, cid, sorted)
         scheduleBurn(Disappearing.nextExpiry(stamped, now))
         if (due.isNotEmpty()) burn(due)
     }
