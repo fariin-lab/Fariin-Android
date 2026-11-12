@@ -43,6 +43,11 @@ object InboxSync {
     private suspend fun follow(me: String, cid: String, from: Long, crypto: com.fariin.app.crypto.FariinCrypto) {
         var mark = from
         val msgs = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
+        // When I joined (groups): only a message from before that may be "not for me" for good.
+        val joinedAt = runCatching {
+            val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid).get().await()
+            com.fariin.app.data.Conversation.millis((conv.get("memberSince") as? Map<*, *>)?.get(me))
+        }.getOrDefault(0.0)
         while (true) {
             val snap = msgs.orderBy("createdAt", Query.Direction.ASCENDING)
                 // >= the mark (iOS finding 2026-11-12): a message in the mark's own millisecond that
@@ -53,7 +58,12 @@ object InboxSync {
             val page = snap.documents.map { d ->
                 Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             }
-            if (page.any { (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: the next kick tries again
+            // A group message sealed without me from before I joined can never open: it never holds the
+            // mark (iOS 3c04a99d7), or a late-joined group would never get one.
+            val notForMe = snap.documents.filter { d -> val raw = d.getString("text") ?: ""
+                joinedAt > 0 && (d.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) < joinedAt + 5000 &&
+                raw.startsWith(com.fariin.app.crypto.Wire.ENCG1) && crypto.groupEnvelopeSkipsMe(raw, cid) }.mapTo(HashSet()) { it.id }
+            if (page.any { it.id !in notForMe && (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: the next kick tries again
             if (!LocalDb.saveNow(me, cid, page)) return
             val newest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.maxOrNull() ?: return
             val before = mark

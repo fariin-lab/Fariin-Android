@@ -48,6 +48,11 @@ object HistoryPull {
 
     private suspend fun pull(me: String, cid: String, crypto: com.fariin.app.crypto.FariinCrypto) {
         val msgs = FirebaseFirestore.getInstance().collection("conversations").document(cid).collection("messages")
+        // When I joined (groups): only a message from before that may be "not for me" for good.
+        val joinedAt = runCatching {
+            val conv = FirebaseFirestore.getInstance().collection("conversations").document(cid).get().await()
+            com.fariin.app.data.Conversation.millis((conv.get("memberSince") as? Map<*, *>)?.get(me))
+        }.getOrDefault(0.0)
         val note = LocalDb.meta(me, "pull.$cid")?.split("|")
         var t0 = note?.getOrNull(1)?.toLongOrNull()
         var oldest = note?.getOrNull(0)?.toLongOrNull()
@@ -67,7 +72,12 @@ object HistoryPull {
             val page = snap.documents.map { d ->
                 Message.fromFirestore(d.id, d.data ?: emptyMap(), cid) { raw, author -> crypto.decrypt(raw, cid, author) }
             }
-            if (page.any { (it.text == "\u2026" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: try again later
+            // A group message sealed without me from before I joined can never open: it never holds the
+            // mark (iOS 3c04a99d7), or a late-joined group would never get one.
+            val notForMe = snap.documents.filter { d -> val raw = d.getString("text") ?: ""
+                joinedAt > 0 && (d.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE) < joinedAt + 5000 &&
+                raw.startsWith(com.fariin.app.crypto.Wire.ENCG1) && crypto.groupEnvelopeSkipsMe(raw, cid) }.mapTo(HashSet()) { it.id }
+            if (page.any { it.id !in notForMe && (it.text == "…" || it.text == com.fariin.app.crypto.Wire.LOCKED) && !it.deleted }) return   // keys not in yet: try again later
             if (!LocalDb.saveNow(me, cid, page)) return
             val pageOldest = snap.documents.mapNotNull { it.getTimestamp("createdAt")?.toDate()?.time }.minOrNull()
             if (pageOldest != null) { oldest = pageOldest; LocalDb.setMeta(me, "pull.$cid", "$oldest|$t0") }
