@@ -176,7 +176,12 @@ internal fun ChatBackupPage(pop: () -> Unit) {
                 }
             }
             SwitchRow("Use Mobile Data", cell) { cell = it; ChatBackup.setMobileData(ctx, uid, it) }
-            SwitchRow("Include Videos", videos, last = true) { videos = it; ChatBackup.setIncludeVideos(ctx, uid, it) }
+            // With what it would add, so turning it on is a choice made knowing the size.
+            var vBytes by remember { mutableStateOf(-1L) }
+            androidx.compose.runtime.LaunchedEffect(Unit) { vBytes = ChatBackup.videoBytes(ctx, uid) }
+            SwitchRow(if (vBytes > 0) "Include Videos (${sizeWords(vBytes)})" else "Include Videos", videos, last = true) {
+                videos = it; ChatBackup.setIncludeVideos(ctx, uid, it)
+            }
         }
         SettingsSection(header = "Security", footer = if (hasPw) "You need this password to restore on a new phone, Android or iPhone."
             else "Your backup is always locked. A password also lets you restore on a new phone without this phone's Google backup, or on an iPhone.") {

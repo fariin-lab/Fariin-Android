@@ -44,7 +44,8 @@ object Drive {
         Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(data).accessToken
     }.getOrNull()
 
-    class DriveFile(val id: String, val name: String, val set: String?, val size: Long)
+    /** [uid] = the Fariin account the file belongs to (several accounts can share one Google Drive). */
+    class DriveFile(val id: String, val name: String, val set: String?, val size: Long, val uid: String? = null)
 
     class DriveError(val code: Int, message: String) : Exception(message)
 
@@ -79,17 +80,19 @@ object Drive {
             val files = o.optJSONArray("files")
             for (i in 0 until (files?.length() ?: 0)) {
                 val f = files!!.getJSONObject(i)
-                out.add(DriveFile(f.getString("id"), f.getString("name"), f.optJSONObject("appProperties")?.optString("set"), f.optLong("size")))
+                val props = f.optJSONObject("appProperties")
+                out.add(DriveFile(f.getString("id"), f.getString("name"), props?.optString("set"), f.optLong("size"),
+                    props?.optString("uid")?.ifEmpty { null }))
             }
             page = o.optString("nextPageToken").ifEmpty { null }
         } while (page != null)
         return out
     }
 
-    suspend fun upload(token: String, name: String, set: String, bytes: ByteArray): String {
+    suspend fun upload(token: String, name: String, set: String, bytes: ByteArray, uid: String): String {
         val boundary = "fariin" + System.nanoTime()
         val meta = JSONObject().put("name", name).put("parents", org.json.JSONArray().put("appDataFolder"))
-            .put("appProperties", JSONObject().put("set", set)).toString()
+            .put("appProperties", JSONObject().put("set", set).put("uid", uid)).toString()
         val body = java.io.ByteArrayOutputStream().apply {
             write("--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n--$boundary\r\nContent-Type: application/octet-stream\r\n\r\n".toByteArray())
             write(bytes)

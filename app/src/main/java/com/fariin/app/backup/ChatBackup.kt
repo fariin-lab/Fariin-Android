@@ -83,6 +83,15 @@ object ChatBackup {
     fun contents(ctx: Context, uid: String): IntArray = prefs(ctx).getString("what.$uid", null)
         ?.split(",")?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 4 }?.toIntArray() ?: intArrayOf(0, 0, 0, 0)
 
+    /** What Include Videos would add: the videos already saved on this phone, in bytes. */
+    suspend fun videoBytes(ctx: Context, uid: String): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val c = CryptoHub.get(ctx)
+            val key = BackupStoreKey.mediaKey(ctx, uid) { c.randomBytes(it) }
+            BackupMedia.collect(ctx, c, uid, key, true).filter { it.entry["slot"] == "video" }.sumOf { it.file.length() }
+        }.getOrDefault(0L)
+    }
+
     /** The Google account the backup is in (asked from Drive once, then kept). */
     fun account(ctx: Context, uid: String): String? = prefs(ctx).getString("acct.$uid", null)
 
@@ -118,21 +127,27 @@ object ChatBackup {
             progress.value = Progress("Getting ready…", 0f)
             runCatching { Drive.accountEmail(tok) }.getOrNull()?.let { prefs(ctx).edit().putString("acct.$uid", it).apply() }
             val storeKey = BackupStoreKey.getOrMake(ctx, uid) { c.randomBytes(it) }
-            val before = Drive.list(tok)
+            // Only this Fariin account's files: other accounts on the same Google Drive keep theirs
+            // (owner 2026-11-12, three accounts on one phone). Untagged files are from before the tag.
+            val before = Drive.list(tok).filter { it.uid == uid || it.uid == null }
             // Media first (iOS 7687219ef): md- files belong to no set; one already there is only listed.
             val mediaKey = BackupStoreKey.mediaKey(ctx, uid) { c.randomBytes(it) }
             val items = BackupMedia.collect(ctx, c, uid, mediaKey, includeVideos(ctx, uid))
             val have = before.filter { it.name.startsWith("md-") }.associateBy { it.name }
             var size = 0L
             val listed = ArrayList<Map<String, Any?>>()
-            val fresh = items.count { it.name !in have }
-            var sent = 0
+            val freshItems = items.filter { it.name !in have }
+            val total = freshItems.sumOf { it.file.length() }.coerceAtLeast(1L)
+            var doneBytes = 0L
+            fun mb(b: Long) = "%.1f MB".format(b / 1_000_000.0)
             for (it in items) {
                 if (it.name !in have) {
-                    sent++
-                    progress.value = Progress("Uploading photos and voice messages $sent of $fresh", 0.1f + 0.7f * sent / maxOf(1, fresh))
+                    doneBytes += it.file.length()
+                    val f = doneBytes.toFloat() / total
+                    // Bytes, as the reference app shows them (owner 2026-11-12): "Uploading 74.6 MB of 88.0 MB".
+                    progress.value = Progress("Uploading ${mb(doneBytes)} of ${mb(total)}", 0.1f + 0.7f * f)
                     val bytes = BackupMedia.seal(c, it) ?: continue
-                    Drive.upload(tok, it.name, MEDIA_SET, bytes); size += bytes.size
+                    Drive.upload(tok, it.name, MEDIA_SET, bytes, uid); size += bytes.size
                 } else size += have[it.name]!!.size
                 listed.add(it.entry)
             }
@@ -140,7 +155,7 @@ object ChatBackup {
             val built = BackupArchive.build(c, uid, storeKey, passwordWrap(ctx, uid),
                 mapOf("mediaKey" to com.fariin.app.crypto.B64.encode(mediaKey), "media" to listed))
             val set = built.made.toString()
-            for ((name, bytes) in built.files) { Drive.upload(tok, name, set, bytes); size += bytes.size }
+            for ((name, bytes) in built.files) { Drive.upload(tok, name, set, bytes, uid); size += bytes.size }
             // The new set is whole (its header went last): every older set goes, and media no longer listed.
             val keep = listed.mapNotNull { it["n"] as? String }.toSet()
             for (f in before) when {
@@ -161,7 +176,7 @@ object ChatBackup {
     /** The newest finished backup in the person's Drive, or null. */
     suspend fun find(ctx: Context, uid: String, token: String): Found? {
         if (!ENABLED) return null
-        val all = Drive.list(token)
+        val all = Drive.list(token).filter { it.uid == uid || it.uid == null }
         val bySet = all.filter { it.set != null && it.set != MEDIA_SET }.groupBy { it.set!! }
         for ((_, files) in bySet.entries.sortedByDescending { it.key.toLongOrNull() ?: 0L }) {
             val head = files.firstOrNull { it.name == "header.json" } ?: continue   // unfinished set

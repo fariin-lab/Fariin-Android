@@ -129,6 +129,8 @@ object BackupArchive {
     fun restore(c: FariinCrypto, uid: String, key: ByteArray, fetch: (String) -> ByteArray?): Boolean {
         val manifest = fetch("manifest.bin")?.let { open(c, key, it) } ?: return false
         val mo = org.json.JSONObject(manifest.toString(Charsets.UTF_8))
+        // Another Fariin account's backup (same Google Drive or iCloud) is never filed into this one.
+        if (mo.optString("uid").let { it.isNotEmpty() && it != uid }) return false
         lastManifest = mo
         val count = mo.getInt("count")
         val chunks = mo.getJSONArray("chunks").let { a -> (0 until a.length()).map { a.getString(it) } }
