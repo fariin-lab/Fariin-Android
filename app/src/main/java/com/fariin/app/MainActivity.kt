@@ -454,7 +454,7 @@ class MainActivity : ComponentActivity() {
                 translationX = shell.shift * size.width
             }.then(if (onTop) Modifier else Modifier.clearAndSetSemantics { })) {
                 CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides shellBack) {
-                    HeldChats(chatsState) { listChats -> MainShell(me, listChats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }, onRetryChats = vm::retry) }
+                    HeldChats(chatsState, covered = !onTop) { listChats -> MainShell(me, listChats, decryptor, onSignOut = { lifecycleScope.launch { SessionEnd.signOut(applicationContext) } }, onRetryChats = vm::retry) }
                 }
                 if (!onTop) Box(Modifier.fillMaxSize().pointerInput(Unit) {
                     awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
@@ -708,10 +708,16 @@ private class ShellMotion {
  * rebuilt every row under the sliding page; the news lands the moment the page does.
  */
 @Composable
-private fun HeldChats(state: State<ChatsUiState>, content: @Composable (ChatsUiState) -> Unit) {
+private fun HeldChats(state: State<ChatsUiState>, covered: Boolean, content: @Composable (ChatsUiState) -> Unit) {
     val moving by remember { androidx.compose.runtime.derivedStateOf { com.fariin.app.ui.components.PageMotion.moving } }
     val held = remember { androidx.compose.runtime.mutableStateOf(state.value) }
-    if (!moving) held.value = state.value
+    // Also held while a page covers the list (2026-11-12, owner's Pixel: every message arriving in
+    // an open chat rebuilt the hidden list under it, the open chat's slow frames). Caught up once,
+    // the moment the list is on top again, before the page slides off it.
+    val wasCovered = remember { booleanArrayOf(covered) }
+    val uncovered = wasCovered[0] && !covered
+    wasCovered[0] = covered
+    if (uncovered || (!moving && !covered)) held.value = state.value
     content(held.value)
 }
 
