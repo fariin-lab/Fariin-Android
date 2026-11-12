@@ -167,9 +167,9 @@ internal fun ChatBackupPage(pop: () -> Unit) {
         }
         SettingsSection(header = "Backup Settings", footer = "Backups run on Wi-Fi unless you allow mobile data. Videos are the largest part, so they are left out unless you include them.") {
             androidx.compose.foundation.layout.Box {
-                SettingsRow("Automatic Backup", value = when (freq) { "daily" -> "Daily"; "weekly" -> "Weekly"; else -> "Off" }) { freqOpen = true }
+                SettingsRow("Automatic Backup", value = when (freq) { "daily" -> "Daily"; "weekly" -> "Weekly"; "monthly" -> "Monthly"; else -> "Off" }) { freqOpen = true }
                 com.fariin.app.ui.components.GlassDropdown(freqOpen, onDismissRequest = { freqOpen = false }, containerColor = c.card) {
-                    listOf("daily" to "Daily", "weekly" to "Weekly", "off" to "Off").forEach { (k, label) ->
+                    listOf("daily" to "Daily", "weekly" to "Weekly", "monthly" to "Monthly", "off" to "Off").forEach { (k, label) ->
                         DropdownMenuItem(text = { Text(label, color = c.label, fontWeight = if (k == freq) FontWeight.SemiBold else FontWeight.Normal) },
                             onClick = { freqOpen = false; freq = k; ChatBackup.setFrequency(ctx, uid, k) })
                     }
