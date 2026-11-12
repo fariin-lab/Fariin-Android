@@ -143,6 +143,7 @@ class FariinApp : Application() {
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
             Thread({
                 runCatching { com.fariin.app.local.LocalCache.loadChats(uid) }
+                runCatching { com.fariin.app.local.LocalCache.loadFollows(uid) }
                 // The keys too (sodium load, Keystore unwrap): the first rows' previews need them.
                 runCatching { com.fariin.app.data.CryptoHub.get(this).prewarm() }
             }, "chats-prefetch")

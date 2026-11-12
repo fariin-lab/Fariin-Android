@@ -98,6 +98,30 @@ object LocalCache {
         schedule("chats:$uid", f, kept.hashCode()) { LocalJson.encodeChats(kept) }
     }
 
+    // ------------------------------------------------------------------ followed channels
+
+    /** Followed channels for the first frame (iOS d15f501ef): my follow entries and each channel's
+     *  document, saved like the chat list, so a channel row never pops in after the list. */
+    @Volatile private var followsMemo: Triple<String, List<Pair<String, Map<String, Any?>>>, List<Pair<String, Map<String, Any?>>>>? = null
+
+    fun loadFollows(uid: String): Pair<List<Pair<String, Map<String, Any?>>>, List<Pair<String, Map<String, Any?>>>> {
+        followsMemo?.let { (u, e, d) -> if (u == uid) return e to d }
+        val base = dir(uid) ?: return emptyList<Pair<String, Map<String, Any?>>>() to emptyList()
+        fun read(name: String) = readSealed(File(base, name))?.let { runCatching { LocalJson.decodeChats(it) }.getOrNull() } ?: emptyList()
+        val e = read("follows.bin"); val d = read("follow_docs.bin")
+        followsMemo = Triple(uid, e, d)
+        return e to d
+    }
+
+    fun peekFollows(uid: String) = followsMemo?.takeIf { it.first == uid }?.let { it.second to it.third }
+
+    fun saveFollows(uid: String, entries: List<Pair<String, Map<String, Any?>>>, docs: List<Pair<String, Map<String, Any?>>>) {
+        followsMemo = Triple(uid, entries, docs)
+        val base = dir(uid) ?: return
+        schedule("follows:$uid", File(base, "follows.bin"), entries.hashCode()) { LocalJson.encodeChats(entries) }
+        schedule("followdocs:$uid", File(base, "follow_docs.bin"), docs.hashCode()) { LocalJson.encodeChats(docs) }
+    }
+
     // ------------------------------------------------------------------ messages
 
     fun loadThread(uid: String, cid: String): List<Message> {
@@ -150,7 +174,7 @@ object LocalCache {
         synchronized(lock) {
             generation++
             for (j in pendingWrites.values) j.cancel()
-            pendingWrites.clear(); lastWritten.clear(); threadMemo.clear(); chatsMemo = null
+            pendingWrites.clear(); lastWritten.clear(); threadMemo.clear(); chatsMemo = null; followsMemo = null
             root?.deleteRecursively()
         }
     }

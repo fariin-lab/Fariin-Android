@@ -59,10 +59,36 @@ object ChannelFollows {
     fun entry(cid: String): Entry? = _entries.value[cid]
     fun follows(cid: String): Boolean = _entries.value.containsKey(cid)
 
+    /**
+     * The saved follow list and channel documents, before the listeners answer (iOS d15f501ef: a
+     * followed channel popped into the chat list 0.15 s after the first frame and pushed the rows
+     * below down). Kept until the live answers replace them.
+     */
+    fun seedFromDisk(me: String) {
+        if (_entries.value.isNotEmpty() || _docs.value.isNotEmpty()) return
+        val (e, d) = com.fariin.app.local.LocalCache.peekFollows(me) ?: com.fariin.app.local.LocalCache.loadFollows(me)
+        if (e.isEmpty()) return
+        _entries.value = e.associate { (cid, m) -> cid to Entry(
+            read = (m["read"] as? Number)?.toInt() ?: 0, muted = m["muted"] as? Boolean ?: false,
+            mutedUntil = (m["mutedUntil"] as? Number)?.toDouble() ?: 0.0,
+            pinned = m["pinned"] as? Boolean ?: false, archived = m["archived"] as? Boolean ?: false,
+            at = (m["at"] as? Number)?.toDouble() ?: 0.0) }
+        _docs.value = d.toMap()
+    }
+
+    private fun saveToDisk() {
+        val me = uid ?: return
+        val e = _entries.value.map { (cid, x) -> cid to mapOf<String, Any?>("read" to x.read, "muted" to x.muted,
+            "mutedUntil" to x.mutedUntil, "pinned" to x.pinned, "archived" to x.archived, "at" to x.at) }
+        val d = _docs.value.filterKeys { it in _entries.value }.toList()
+        com.fariin.app.local.LocalCache.saveFollows(me, e, d)
+    }
+
     fun start(me: String) {
         if (uid == me && listReg != null) return
         stop()
         uid = me
+        seedFromDisk(me)
         val db = FirebaseFirestore.getInstance()
         listReg = db.collection("users").document(me).collection("channels").limit(MAX_ENTRIES)
             .addSnapshotListener { snap, _ ->
@@ -83,6 +109,7 @@ object ChannelFollows {
                     )
                 }
                 _entries.value = next
+                if (!snap.metadata.isFromCache) saveToDisk()
                 followRx = rx
                 mergeRx()
                 attachDocs(next)
@@ -131,6 +158,7 @@ object ChannelFollows {
                     if (storedAtBias[cid] != null && storedAtBias[cid] != stored) { storedAtBias.remove(cid); _bias.update { it - cid } }
                 }
                 _docs.update { it + (cid to d) }
+                if (s?.metadata?.isFromCache == false) saveToDisk()
                 // iOS attachDocListener: the channel's shared wallpaper lands now, not when the chat opens.
                 runCatching { com.google.firebase.FirebaseApp.getInstance().applicationContext }.getOrNull()
                     ?.let { com.fariin.app.data.ChatLookStore.syncGroupWallpaper(it, cid, d["wallpaper"] as? String) }

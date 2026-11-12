@@ -140,6 +140,7 @@ class ChatsViewModel(
         val saved = com.fariin.app.local.LocalCache.peekChats(me)
         if (saved.isNullOrEmpty()) return@runCatching ChatsUiState()
         var convs = saved.map { (id, d) -> Conversation.fromFirestore(id, d) }
+        com.fariin.app.channel.ChannelFollows.seedFromDisk(me)
         val followed = com.fariin.app.channel.ChannelFollows.conversations().filter { f -> convs.none { it.id == f.id } }
         convs = convs + followed
         val hidden = com.fariin.app.data.LeaveUndo.hidden.value
